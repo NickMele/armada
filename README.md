@@ -30,7 +30,7 @@ Every verb takes `--json`.
 
 ## Install
 
-Not yet published. Once it is (phase 6):
+Not yet published. Once it is (phase 7):
 
 ```sh
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh

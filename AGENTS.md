@@ -126,14 +126,14 @@ no-mistakes axi run --intent "<what the user set out to accomplish>"
 
 From phase 3, charkit has its own `char.yml`.
 
-**Through phase 7: the gate runs the raw tools** — `ruff`, `mypy`, `pytest`.
+**Through phase 6: the gate runs the raw tools** — `ruff`, `mypy`, `pytest`.
 `tests/test_dogfood.py` runs `char check --json` and asserts it agrees. So a broken
 `char check` is one failing test, not an unmergeable repository. Do not wire `char check`
 into the gate itself yet.
 
-**Once phase 7 lands, `char check` becomes the gate.** That is the end state — the interim
+**Once phase 6 lands, `char check` becomes the gate.** That is the end state — the interim
 arrangement exists only because a bug in a half-built tool should not be able to lock its own
-repo. Phase 7 is Chariot adopting charkit, so at that point a real repo is already trusting
+repo. Phase 6 is Chariot adopting charkit, so at that point a real repo is already trusting
 `char check` as its merge gate. See `ARCHITECTURE.md` §2.6.
 
 ---

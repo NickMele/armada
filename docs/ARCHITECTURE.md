@@ -106,7 +106,7 @@ planner does not remove the reactive scheduler; it relocates it into the shell, 
 pure test suite cannot reach it — and §11 of the plan names exactly the bug that would hide
 there: *"the scheduler deadlocks when two exclusive resources overlap under load."* That is
 the one class of failure a greenfield build structurally cannot catch, because there is no
-continuous real-repo validation until phase 7. Making it reachable in a unit test is the
+continuous real-repo validation until phase 6. Making it reachable in a unit test is the
 highest-leverage thing this principle buys.
 
 **Two further benefits.** Every `(state, event) → (state, actions)` transition can be logged,
@@ -369,7 +369,7 @@ git; `backend/` and `web/` are the source repo's package directories, so a hardc
 means the `components:` abstraction did not take.
 
 *Why permanent:* from phase 3 onward the plan runs charkit **against** the Chariot checkout
-in read-only parallel to compare verdicts, and phase 7 is a Chariot PR. Pasting a real
+in read-only parallel to compare verdicts, and phase 6 is a Chariot PR. Pasting a real
 Chariot path into `src/` to reproduce a mismatch is an entirely ordinary thing to do, and
 this is what catches it.
 
@@ -397,17 +397,17 @@ consequence is recorded in §1.6: since the package version carries no compatibi
 
 ---
 
-### 2.6 Dogfooding: a test through phase 7, the gate after it
+### 2.6 Dogfooding: a test through phase 6, the gate after it
 
 This is staged deliberately. The end state is charkit gating itself with itself; the interim
 arrangement exists only while charkit is still being built.
 
-**Phases 3–7 — dogfooding is a test.** charkit has its own `char.yml` from phase 3. The gate
+**Phases 3–6 — dogfooding is a test.** charkit has its own `char.yml` from phase 3. The gate
 runs the **raw tools** — `ruff`, `mypy`, `pytest`. A single test, `tests/test_dogfood.py`,
 runs `char check --json` and asserts it reaches the same verdict and that every check id
 resolves.
 
-**Once phase 7 lands — `char check` becomes the gate.** Phase 7 is Chariot adopting charkit:
+**Once phase 6 lands — `char check` becomes the gate.** Phase 6 is Chariot adopting charkit:
 `scripts/char/check.py` deleted, the dependency taken, `char check --all` green. That is the
 point at which a real repository is already trusting `char check` as its own merge gate — so
 it is trustworthy enough for this one. The dogfood test is then replaced by the real thing,
@@ -420,7 +420,7 @@ exercised so they rot, they demand careful judgment at the moment of least judgm
 `--skip=lint,test` in your shell history does not stay confined to emergencies.
 
 Deferring the flip is not giving up the forcing function — break `char check` during phases
-3–7 and the dogfood test fails, so you still cannot merge until you fix it. What it buys is
+3–6 and the dogfood test fails, so you still cannot merge until you fix it. What it buys is
 that a bug in a tool still under construction cannot lock its own repository, during exactly
 the period when such bugs are most likely.
 
@@ -451,9 +451,9 @@ production once. Two are named in the plan ("load-bearing comments about two Pla
 traps"). The ones that are *not* commented are the danger: a bug fix looks like an
 unremarkable three-line conditional, and nobody reviewing a rewrite notices it is missing.
 This matters more here than in a normal rewrite, because charkit gives up continuous
-real-repo validation until phase 7 — so knowledge lost cannot be re-derived by running the
-thing. You would rediscover those bugs in the one PR the plan already says to budget extra
-time for.
+real-repo validation until phase 6 — so knowledge lost cannot be re-derived by running the
+thing. You would rediscover those bugs in phase 6, the one PR the plan already flags as
+carrying the most rework.
 
 **Why the split.** *Structural guarantees beat policed ones* — the plan's own argument for
 building greenfield, applied one level deeper. Structural contamination becomes very hard
@@ -472,7 +472,7 @@ and the scheduler tests change shape because the scheduler did.
 
 | Question | Answer | Reasoning kept |
 |---|---|---|
-| Public or private | **Public** | Phase 6 publishes to PyPI and the install story is a `curl` one-liner, so it is public in effect regardless — a public package with a private source repo has no issue tracker and no source link. Also makes Actions free. |
+| Public or private | **Public** | Phase 7 publishes to PyPI and the install story is a `curl` one-liner, so it is public in effect regardless — a public package with a private source repo has no issue tracker and no source link. Also makes Actions free. |
 | License | **Apache-2.0** | Explicit patent grant, clears corporate legal review, no adoption cost. |
 | CI | **Both** — `no-mistakes` primary, minimal Actions matrix alongside | Actions supplies the one thing a local gate cannot: a machine that is not yours, and Linux as well as macOS. Process groups, signals and file locks are load-bearing; verifying real process-group kill only on macOS leaves the platform most users are on untested. Free on a public repo. `no-mistakes` keeps the agent review step, which is the only actual review in a solo repo. |
 | Typing | **mypy strict** from commit one | Cheap now, expensive to retrofit onto 3,000 lines. The architecture leans on it: the three seams are Protocols and the reducer's `State`/`Event`/`Action` types are the scheduler's real specification. |
