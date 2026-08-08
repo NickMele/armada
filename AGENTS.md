@@ -9,6 +9,10 @@ repo's tech stack. Python 3.12+, POSIX only.
 
 1. **`docs/PLAN.md`** — the complete specification. Phases, config shape, the six verbs.
 2. **`docs/ARCHITECTURE.md`** — the principles and, more importantly, *why* each exists.
+3. **`docs/traps.md`** — measured environment behaviour. Read the relevant section **before**
+   designing anything that depends on how a tool behaves, and add to it when you discover
+   something surprising. Every entry was measured rather than read, because the ones that
+   matter are the cases where the documentation and the behaviour differ.
 
 If you are about to argue with a rule, argue with its rationale in `ARCHITECTURE.md`. If a
 rule has no rationale recorded, that is a bug in the document — say so.

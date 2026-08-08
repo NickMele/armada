@@ -117,8 +117,19 @@ pnpm/npm workspaces ever genuinely bites, the fix is `checkout`, not an invented
 
 ```python
 workspace_id = sha1(realpath(workspace_root)).hexdigest()[:8]
-project_id   = sha1(git rev-parse --git-common-dir).hexdigest()[:8]
+project_id   = sha1(realpath(git rev-parse --git-common-dir)).hexdigest()[:8]
 ```
+
+> **`realpath` on the second line is load-bearing and was missing from an earlier draft.**
+> `git rev-parse --git-common-dir` returns a path *relative to cwd* — `.git` from the repo
+> root, `../.git` from a subdirectory — so hashing it directly yields a different project id
+> depending on where the command was run. That silently breaks `--project` scoping, the
+> registry's project filter, and the guarantee that worktrees group with their parent. Verify
+> this behaviour before changing the line; it is not obvious from the command's name.
+
+Known and accepted: because the id derives from a path inside the parent checkout, moving or
+deleting that checkout regroups every surviving worktree. It only affects the grouping key,
+which owns nothing (below), and it is recoverable by recomputation.
 
 - **workspace id** — owns ports, containers, networks, processes, locks. One per checkout.
 - **project id** — owns nothing. Purely the grouping key: every worktree shares one
@@ -147,9 +158,13 @@ primitive in the project.
 
 **Images are here because leaving them out makes `clean` wrong at the largest scale.** The
 source repo already sweeps orphaned images and records roughly 2.1 GB per production app
-build — the single biggest thing a stale workspace holds. char does not build images itself,
-so stamping means passing the label through to compose, and `clean` removes by label like
-everything else.
+build — the single biggest thing a stale workspace holds.
+
+**But only images char causes to be *built*.** A pulled image such as `postgres:16` is shared
+with everything else on the machine and was never char's to remove. Built images are stamped
+through `build.labels` in the compose document char generates (§6.0). An earlier draft said
+stamping meant "passing the label through to compose" — `docker compose` has no `--label`
+flag, so that was wrong; the label reaches the image through the generated document instead.
 
 ### 2.4 What every child process inherits
 
@@ -296,8 +311,8 @@ components:
   postgres:
     run:
       driver: compose
-      file: docker-compose.yml
-      ports: { pg: 5432 }        # remapped into this workspace's block
+      file: [docker-compose.yml]   # a list — repos often run base + override
+      ports: { pg: 5432 }          # remapped into this workspace's block (§6.0)
 
   # BOTH axes
   api:
@@ -696,8 +711,81 @@ real component and check names.
 
 | Driver | Behavior |
 |--------|----------|
-| `compose` | Shells out to `docker compose` with a project name derived from the workspace id, port mappings rewritten into the claimed block, `--label char.workspace=<id>` so `clean` finds everything. |
-| `command` | Spawns detached in its own process group, records the pid, waits on the ready-check, kills the whole group on `down`. Covers Tilt, `pnpm dev`, `manage.py runserver`, a Procfile line — anything. |
+| `compose` | **Resolve → transform → emit.** See §6.0 — this is not a matter of adding flags to `docker compose`. |
+| `command` | Spawns detached in its own process group, records the pid, waits on the ready-check, kills the whole group on `down`. Covers a supervisor, `pnpm dev`, `manage.py runserver`, a Procfile line — anything. |
+
+### 6.0 The compose driver
+
+An earlier draft specified this as *"shells out to `docker compose` with a project name
+derived from the workspace id, port mappings rewritten into the claimed block,
+`--label char.workspace=<id>`."* **Two thirds of that is impossible.** `docker compose` has no
+`--label` flag, and port mappings cannot be rewritten from the command line at all. Only the
+project name was achievable. See §6.2 for what was measured.
+
+The mechanism is four steps:
+
+```
+1. RESOLVE   docker compose -f <base…> -p char-<id> \
+                 --project-directory <workspace-root> config
+             → one canonical document, with interpolation, extends:, anchors
+               and relative paths already resolved
+
+2. TRANSFORM ports[].published      → the claimed block
+             labels.char.workspace  → <id>          (every service)
+             build.labels.char.workspace → <id>      (services that build)
+
+3. EMIT      .char/compose.yml
+
+4. RUN       docker compose -f .char/compose.yml -p char-<id> \
+                 --project-directory <workspace-root> up -d
+```
+
+**Why generate a whole file rather than an override.** Because an override cannot do the one
+thing it would be for: compose **appends** to `ports:` rather than replacing, so the base
+port stays published and every workspace still binds it — the exact collision this project
+exists to prevent. The `!override` tag fixes that only on Compose ≥ 2.24.4 and **silently
+does nothing below it**, reverting to base ports with no error.
+
+**Why char never parses compose semantics.** Step 1 hands that entire problem to compose
+itself. char rewrites two keys in a document compose has already normalised, which is why
+this works on any version and why `extends:`, YAML anchors and `${VAR}` interpolation are not
+char's problem.
+
+`.char/compose.yml` is generated, gitignored, and removed by `clean` along with the rest of
+`.char/` (§4.2). It is also inspectable and diffable, which is what makes a wrong port
+obvious rather than mysterious.
+
+**Ownership falls out.** Containers and networks carry both `com.docker.compose.project=char-<id>`
+(compose applies it automatically from `-p`) and `char.workspace=<id>` (from the transform).
+`clean` uses the latter, so it stays driver-agnostic.
+
+**Images, narrowed.** char labels only images it causes to be *built*, via `build.labels`. A
+pulled image such as `postgres:16` is shared with the rest of the machine and was never
+char's to remove. This corrects an earlier claim in §2.3 that stamping meant "passing the
+label through to compose" — it does not — and it matches the evidence, which is ~2.1 GB per
+production app **build**.
+
+**`file:` accepts a list.** Repos commonly already run base-plus-override, and step 1 must
+receive the same file set they do. char also ignores ambient `COMPOSE_FILE` and
+`COMPOSE_PROJECT_NAME`, passing `-f` and `-p` explicitly every time, so the result does not
+depend on the caller's environment.
+
+### 6.2 Measured Docker behaviour — do not re-derive
+
+Verified against Docker Compose v2.24.3 during phase 0. Each of these was found by testing,
+not by reading documentation, and each would have cost a phase-4 debugging session.
+
+| # | Behaviour | Consequence |
+|---|---|---|
+| 1 | `docker compose up` has **no `--label` flag** | Container labels can only come from the compose document |
+| 2 | An override file **appends** to `ports:` — base `5432:5432` plus override `5460:5432` publishes **both** | An override cannot remap a port. This is the trap that makes §6.0 necessary |
+| 3 | The `!override` tag requires Compose ≥ 2.24.4 and **silently reverts to base values below it**, with no error | A version floor is not a sufficient guard when the failure below it is silent |
+| 4 | `docker compose config` **bakes the project name into generated network names** | `-p char-<id>` must be passed on the *resolve* step, not only the run step, or networks are named for the directory |
+| 5 | `config` resolves `build.context` to an **absolute** path | Emitting into `.char/` is safe, provided `--project-directory` is the workspace root |
+| 6 | Override merging **does** work for `labels:` and `build.labels:` | Labels were never the hard part; ports were |
+
+A running list of measured environment behaviour lives in [`traps.md`](traps.md). Add to it
+whenever a phase discovers something that a reasonable person would have assumed otherwise.
 
 Tilt is just a long-running command with a ready-check:
 
@@ -798,7 +886,7 @@ all fail together. If adding a fixture creates no new way to be wrong, it is dec
 | Fixture | Axis it owns | Failure it catches that nothing else does |
 |---|---|---|
 | `django-next` *(real)* | Maximal case — polyglot monorepo, supervisor, checks running *inside* containers, 3s→15min cost spread, **and the only fixture with a `commands:` block** (§4.5) | Schema can't express a real complex repo; `commands:` unexercised until phase 6, when it is load-bearing |
-| `multi-lang` *(real)* | The second repo — a genuinely different runtime pairing | Abstraction is Django/Next-shaped |
+| `multi-lang` *(representative)* | A genuinely different runtime pairing | Abstraction is Django/Next-shaped |
 | `go-service` | Low end — one component, one binary, one Postgres, no monorepo, **plus one secret from one provider** (§4.7) | **Over-structuring.** A trivial repo needing 40 lines of config — and secrets that only work in a complex config are secrets nobody will adopt |
 | `pnpm-monorepo` | Many components, **zero** services, turbo already present, **plus a declared nested workspace** (§4.6) — so the fixture is a root manifest *and* a nested `char.yml` | Component-per-package globbing; also honestly answers "is char redundant where turbo exists?" Additionally: overlap detection, manifest-only roots, and discovery returning the same answer from any depth |
 | `rails-monolith` | `setup:` as a *sequence* (bundle → db:create → migrate → seed); two services with real dependency ordering | `setup:` modeled as a single string; `needs:` ordering that only works for one service |
@@ -807,11 +895,27 @@ all fail together. If adding a fixture creates no new way to be wrong, it is dec
 **Cost is low because fixtures are configs, not checkouts.** You don't need a Rails app — you
 need a plausible `char.yml` for one plus a golden resolved snapshot.
 
-**Evidentiary weight differs, though.** The first two are real and verifiable against actual
-repos. The other four are representative and prove *schema shape only* — a hypothetical
-config cannot surface a runtime surprise. That is fine for what they are for (catching an
-abstraction that fits only one repo), but six green fixtures must not be read as "validated
-against six repos."
+**Evidentiary weight differs, and it is weaker than an earlier draft of this section
+claimed.** `multi-lang` was originally marked *(real)* — "the second repo" — but no such
+repository was ever identified, so it is representative like the other four. **Exactly one
+fixture, `django-next`, is drawn from a real repo.** The remaining five prove *schema shape
+only*; a hypothetical config cannot surface a runtime surprise. Six green fixtures must never
+be read as "validated against six repos" — the honest reading is "validated against one repo
+and five thought experiments."
+
+**This weakens the plan's top-rated risk, and the weakening is not cosmetic.** §11 rates
+overfitting to a single repo as the highest risk in the project, and names the fixture set as
+its mitigation. That mitigation now rests on one real data point. Two consequences follow:
+
+- Phase 8 — "the only test that matters" — is no longer a confirmation of something the
+  fixtures already suggested. It is the **first** contact with a second real repo, and
+  therefore the first opportunity to discover that the abstraction is Django+Next-shaped.
+  Budget for it failing.
+- If a genuinely different second repo becomes available before phase 1 finishes, promoting
+  `multi-lang` back to real is the single highest-value change available to this plan.
+
+Phase 8's target repository is also unnamed. If it ever turns out to be the same repo a
+fixture was drawn from, the final validation is circular and does not count.
 
 Greenfield was chosen over extract-through-Chariot for two reasons beyond contamination:
 
