@@ -1067,12 +1067,48 @@ subsequent phase.
 ### Phase 4 — Services: `up` / `down`
 
 Both drivers, five ready-check kinds, `needs:` ordering, `owns:`, everything started
-recorded into `owned.json`, port remapping into the claimed block. Plus **secret resolution
-and injection** (§4.7) — this is the phase where there is finally something to inject into.
+recorded into `owned.json`, port remapping via the generated compose document (§6.0). Plus
+**secret resolution and injection** (§4.7) — this is the phase where there is finally
+something to inject into.
+
+**And the `commands:` dispatcher (§4.5), whole.** An earlier draft of this plan shipped the
+`commands:` *schema* in phase 1 and *consumed* it in phase 6 without any phase building it —
+for a feature §4.5 itself calls critical path, since it is the entire mechanism by which
+Chariot keeps `worktrees` / `tickets` / `design` / `baselines` while giving up `check` and
+`servers`. The surface is small but touches several subsystems:
+
+- transparent argv passthrough and the child's exit code
+- `env:` layering over the inherited environment, including `${port.NAME}` substitution
+- `stdio:` — `pipe` or `inherit`, defaulting to `pipe` when secrets are granted
+- `secrets:` grants
+- `owns:` **evaluated as a selector** at `clean` time — a distinct code path from reading
+  `owned.json`, because a command runs ad hoc and has no "while it was up" window to record
+  against
+
+It lands here rather than in phase 3 because `secrets:` is its last dependency and arrives in
+this phase. Everything else it needs — port claiming, the spawn wrapper, `clean` — exists by
+the end of phase 3.
+
+> **Phase 4 is now the heaviest phase in the plan.** Both drivers, five ready-check kinds,
+> compose document generation, secrets, and the dispatcher. Split it across several
+> review-sized PRs; §0.2 already makes review the binding constraint rather than phase
+> boundaries.
+
+> **Considered and rejected: moving phase 5 after Chariot adoption.** Adoption needs `check`,
+> `up`/`down`/`clean`, `init` and `commands:` — not the evidence scanner, `agents-md` or the
+> MCP server, whose real consumer is phase 8. Reordering would buy real-repo validation a
+> phase sooner. It loses on one point, and it is decisive: Chariot would then adopt charkit
+> without `config verify`, which §5 calls load-bearing. One hand-written config could survive
+> that; everything after it would not.
 
 **Done when:** a scratch repo with a bare `docker-compose.yml` plus a long-running command
 comes up, gets ready-checked, and tears down completely — `docker ps` and `lsof` clean
 afterwards.
+
+**And when a `commands:` entry dispatches correctly:** subcommands and flags reach the child
+untouched (`char worktrees sweep --dry-run`), the child's exit code comes back, `env:` layers
+over the inherited environment, and a declared `owns:` selector is reclaimed by `char clean`
+after the command has already exited.
 
 **And when the secret path is proven negatively:** a service is granted a secret from a stub
 provider, comes up with the value in its environment, and the value appears in **none** of
