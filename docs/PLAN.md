@@ -157,14 +157,86 @@ everything else is config. **Every verb takes `--json`.**
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent. | `READY` `FAILED` |
 | `char up` | Services running and ready-checked. Records what it started into `owned.json`. | `UP` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` |
-| `char check` | Lint / format / test. Scoped, scheduled, locked, ceilinged. `--detach` / `--status` / `--wait`. | `PASS` `FAIL` `ABORTED` `DEAD` `TIMEOUT` |
-| `char clean` | Release everything this workspace owns. | `CLEAN` |
-| `char status` | What's running, what's mine, what's stale, what a run is doing now. | informational |
+| `char check` | Lint / format / test. Scoped, scheduled, locked, ceilinged. `--detach` / `--status` / `--wait`. | `PASS` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
+| `char clean` | Release everything this workspace owns, including `.char/`. | `CLEAN` |
+| `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` |
 
 Plus: `char config verify`, `char agents-md [--write|--check]`, and any repo-local verbs the
 repo declares in `commands:` (§4.5) — which char dispatches but does not define.
 
-### 3.1 Scope lens
+**One spelling for failure: `FAILED`.** An earlier draft used `FAIL` for `check` and `FAILED`
+for `init` / `up` — two tokens for one idea, in the one place the project claims six verbs
+behave identically. The complete enum:
+
+```
+READY  UP  DOWN  CLEAN  PASS  OK          success
+FAILED                                     did not achieve its goal
+ABORTED  DEAD  TIMEOUT                     did not finish
+```
+
+### 3.1 The `--json` envelope
+
+**Fixed in phase 1, alongside the config contract, and for the same reason.** Four things
+consume it — the MCP server (phase 5), the dogfood test (phase 3), agents, and the golden
+snapshots — and none of them can invent it independently without the three incompatible
+answers §8 warns about.
+
+```json
+{ "schema_version": 1,
+  "verb":           "check",
+  "workspace":      "a3f91c02",
+  "status":         "FAILED",
+  "error":          null,
+  "data":           { "runs": [] } }
+```
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | One global version for the whole CLI contract. Adding a field does not bump; removing one or changing its type does. |
+| `verb` | Which verb produced this |
+| `workspace` | **Always the invoking workspace**, even under `--project` / `--all`. Other workspaces appear inside `data`, so the envelope shape never varies. |
+| `status` | The terminal state from the table above |
+| `error` | The typed error object (§1.7 of `ARCHITECTURE.md`) or `null` |
+| `data` | The per-verb body. **Defined by the phase that builds the verb**, not here. |
+
+The body is nested rather than flattened so the envelope is generically validatable — one
+schema checks the wrapper, a per-verb schema checks `data` — and so a future verb can add a
+field called `status` or `error` without colliding with the envelope.
+
+### 3.2 Selectors
+
+Check ids are derived as `<component>:<check>` (§4.1), so char always holds the complete set
+of valid selectors and never has to discover anything. `char check web:e2e`,
+`char check --component web` and `char check lint` all fall out of that set.
+
+**Partial matches are normal.** `char check test` where `api:test` exists and `web:test` does
+not runs `api:test` and exits 0.
+
+**Zero matches depend on whether the name is conventional.** These six are conventional:
+
+```
+lint   types   test   e2e   build   fmt
+```
+
+- **A conventional name matching nothing** → `PASS`, empty `data.runs`, exit 0. "This
+  workspace has no lint checks" is a real and unremarkable answer, and it is what lets an
+  orchestrating agent run `char check lint` across five workspaces without special-casing
+  the three that lack it.
+- **An unconventional name matching nothing** → `bad_invocation`, exit 2, with the available
+  selectors listed in `next_action`. Almost always a typo, and the error teaches the
+  vocabulary rather than merely rejecting.
+
+**Why char holds this small piece of policy.** Without it, "you typed it wrong" and "this
+repo has none" are indistinguishable, and both available answers are bad: exiting 0 on a typo
+means an agent reports a passing lint that never ran, while erroring on both teaches agents
+to write `char check lint || true` — which suppresses *every* error the command can raise,
+converting a local annoyance into a total loss of signal. The conventional set is also not an
+invention: §4.1's examples and all six fixtures already use exactly these names.
+
+**Growth rule: a name joins the set only when a fixture uses it.** Otherwise the list becomes
+a bikeshed.
+
+### 3.3 Scope lens
 
 `status` and `clean` are the two verbs where "just me" isn't always right. Same flag on both.
 
@@ -262,6 +334,17 @@ hand, so they cannot drift, collide, or be typo'd. Selectors that fall out for f
     logs/<component>.<check>.log
 ```
 
+**`char clean` removes `.char/` entirely.** The workspace returns to its pre-init state.
+Leaving it behind would mean `workspace.json` asserting a port block the registry no longer
+records — a stale claim, which is precisely the condition `status` exists to surface.
+`char init` is idempotent and recreates it.
+
+**Log growth is a separate problem with a separate answer.** Coupling retention to `clean`
+would mean either logs live forever or you lose the evidence from a failed run the moment you
+release a port. Instead, at the **start of each run** char reaps old run directories, keeping
+the most recent N and never touching one whose `lock` is live. N is configurable; its default
+is a convention, not a measurement.
+
 ### 4.3 `~/.char/registry.json` — machine-global
 
 The only cross-workspace state.
@@ -351,6 +434,29 @@ commands:
 `env:` is additive — the parent environment is inherited wholesale and these are layered on
 top, so a command needing `$HOME` already has it.
 
+`stdio:` is `inherit` or `pipe`, and **its default is inferred: `pipe` when the entry grants
+secrets, `inherit` otherwise.** Piping lets char scrub its output; inheriting preserves the
+child's TTY, so colours, progress bars and interactive prompts work.
+
+The default is only a default. char must not decide this by inference alone, because
+inference is wrong in both directions: a `deploy.sh` that holds a token *and* prompts for
+confirmation needs `inherit` despite its grant, and a command with no grant that fetches its
+own token internally and logs it needs `pipe` despite having none. The repo knows; char
+cannot.
+
+**`stdio: inherit` alongside a `secrets:` grant is permitted, and disables scrubbing for that
+entry.** char still writes nothing itself — the child writes straight to the terminal — but
+§4.7's practical protection does not apply. Two deliberate keys in one block is a clear
+enough signal of intent; making it an error would leave the interactive-command-with-a-token
+case unserviceable, forcing that script to fetch its own secret and putting it *outside*
+char's management rather than inside it.
+
+> **Reserved, not built: `stdio: pty`.** A pseudo-terminal gives the child a TTY while char
+> still sees the bytes, which recovers colour and progress-bar fidelity under scrubbing. It
+> is cleanly POSIX, so it costs nothing that §7 has not already given up. Output-only is
+> modest; interactive *input* — raw mode, `SIGWINCH` forwarding — is where it gets expensive,
+> and no fixture needs it yet.
+
 `owns:` behaves exactly as it does under `run:` (§6.1), with one difference: it is a
 **selector, not a record.** char stores the declaration and `char clean` *evaluates* it
 against docker and the filesystem. That works because every selector is stamped with
@@ -381,7 +487,7 @@ is also what lets Chariot keep `worktrees` / `tickets` / `design` while giving u
 **The default stays "packages are components."** A monorepo is one workspace, one port block,
 one `.char/`, and per-package work is served by the scope lens that already exists —
 `char check --component web`, `char check web:e2e`, `match:` globs scoping by changed files
-(§3.1). Reach for this section only when that is genuinely not enough.
+(§3.2, §3.3). Reach for this section only when that is genuinely not enough.
 
 The case it exists for: `apps/foo` and `apps/bar` are **separate products that happen to share
 a repo**, and foo's services, ports and lifecycle must be independent of bar's. A root config
@@ -467,6 +573,16 @@ The URI scheme selects the provider; `${ref}` is the rest of the reference.
 | **Injected via env at spawn, never argv** | argv is world-readable through `ps`. |
 | **char scrubs resolved values from everything it writes** | logs, `--json`, error messages, the live table. |
 | **There is no retrieval verb** | No `char secret get`, ever. An agent can *use* a secret by running `char up`; it cannot *obtain* one. That asymmetry is the entire point. |
+
+**char reads raw and writes scrubbed.** Scrubbing is a filter applied on the way *out*, never
+a transform on the stream. So `ready: { log: <regex> }`, any `parse:` keys and exit-code
+interpretation all see the real bytes, while the log file, `--json` and **the terminal** see
+redacted ones. Scrubbing first would break a ready-check whose regex spans a redacted value —
+`listening on postgres://.*@localhost` — and buys nothing.
+
+The terminal counts as a write: if an agent runs `char up` and char streams service output,
+that lands in the transcript. Which is why `stdio:` (§4.5) matters — char can only scrub what
+it can see.
 
 **Providers are commands, not integrations.** char must never grow 1Password, AWS or Keychain
 SDKs. A provider is a command that prints a secret to stdout — char runs it through the

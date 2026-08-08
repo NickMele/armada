@@ -213,6 +213,20 @@ tests failed" is the difference between fixing the right thing and retrying fore
 
 The class in §1.7's error object determines the code.
 
+**The envelope**, fixed in phase 1 alongside the config contract and for the same reason —
+four things consume it and none can invent it independently. Full definition in PLAN.md §3.1.
+
+```json
+{ "schema_version": 1, "verb": "check", "workspace": "a3f91c02",
+  "status": "FAILED", "error": null, "data": { } }
+```
+
+`data` is nested rather than flattened so the envelope is generically validatable — one
+schema checks the wrapper, a per-verb schema checks the body — and so a verb added later can
+carry a field named `status` or `error` without colliding. `workspace` is always the
+*invoking* workspace, even under `--project` / `--all`, so the envelope shape never varies;
+other workspaces live in `data`.
+
 **`schema_version`.** One global version for the whole CLI contract, in every payload. Bump
 rule: **adding a field does not bump; removing a field or changing its type does.** That rule
 is checkable, and it lets a consumer say "I need ≥ 1" and be right.
@@ -303,6 +317,11 @@ Four consequences for the code:
   `ps`.
 - **The renderer and log writer scrub known resolved values** before writing. This is the
   one place the value is deliberately held, so it is the one place that needs the filter.
+  **char reads raw and writes scrubbed** — ready-check regexes, `parse:` keys and exit-code
+  interpretation all see real bytes; logs, `--json` and the terminal see redacted ones.
+  Scrubbing the stream instead would break a ready-check whose regex spans a redacted value.
+  char can only scrub what it can see, which is why `stdio:` (PLAN.md §4.5) is declarable
+  per entry rather than inferred.
 - **No verb returns a secret.** There is deliberately no `char secret get`. An agent can
   *use* a secret by running `char up`; it cannot *obtain* one. That asymmetry is the point,
   and it is a property of the verb surface rather than of any implementation.
