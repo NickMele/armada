@@ -286,6 +286,37 @@ say nothing about whose fault a failure is.
 
 ---
 
+### 1.8 A resolved secret never appears in anything char writes
+
+`char.yml` declares a *reference*; char resolves it at spawn time and injects it into the
+child's environment (PLAN.md §4.7). From the architecture's point of view that creates one
+invariant, and it cuts across the renderer, the log writer and every error path:
+
+> A resolved secret value is never written to stdout, stderr, `--json`, `.char/`, or argv.
+
+Four consequences for the code:
+
+- **Resolution happens in the shell, at spawn, and the value never enters the core.** The
+  core deals in secret *names* and references. A pure function that has never seen a value
+  cannot leak one, which is most of the enforcement for free.
+- **Injection is via the child's environment, never argv** — argv is world-readable through
+  `ps`.
+- **The renderer and log writer scrub known resolved values** before writing. This is the
+  one place the value is deliberately held, so it is the one place that needs the filter.
+- **No verb returns a secret.** There is deliberately no `char secret get`. An agent can
+  *use* a secret by running `char up`; it cannot *obtain* one. That asymmetry is the point,
+  and it is a property of the verb surface rather than of any implementation.
+
+**Stated as an architecture principle rather than a feature detail** because it is an
+invariant about *output*, and §1.6 already made output a contract. Every verb answers in a
+machine-readable shape — this says what that shape may never contain.
+
+**Honest limit:** scrubbing is defense-in-depth, not a proof. It cannot defeat an encoded
+value, and char does not control commands invoked outside it. What it guarantees is that the
+default path is safe.
+
+---
+
 ## 2. SDLC principles
 
 ### 2.1 TDD, scoped

@@ -278,15 +278,41 @@ The `project` field is the whole implementation of `--project`: filter the regis
 then read each workspace's `owned.json`. Writes go through an `O_EXCL` lockfile; claims are
 idempotent by workspace id.
 
-### 4.4 Templating: exactly three substitutions, hard cap
+### 4.4 Templating: four substitutions plus one scoped read, hard cap
 
-`${port.NAME}`, `${files}`, `${component.root}`. **No conditionals, no loops, no expression
-language.**
+**Everywhere:** `${port.NAME}`, `${files}`, `${component.root}`, `${workspace.id}`.
+
+**Inside `env:` blocks only:** `${env.NAME}` — a bare read of the ambient environment.
+Unset at spawn time is a `bad_config` error naming the variable.
+
+**No conditionals, no loops, no expression language.** `${env.NAME ?? "default"}` is
+rejected by the schema, not merely undocumented.
 
 The reason is not parser cost — it is that requests arrive one at a time, each individually
 reasonable, with no natural stopping point: `${port.api}` → `${env.CI ?? 0}` → `{{#if}}` →
 `{{#each}}` → a language with no debugger, no types, and no stack traces, whose bugs are
 yours to diagnose from a YAML file at the exact moment an agent is blocked.
+
+**Why the line sits here rather than at three.** `${workspace.id}` was never really outside
+the cap — §6.1's `owns:` example already used it, so the plan contradicted itself. And a
+*bare* `${env.NAME}` is structurally a lookup from a namespace, exactly like `${port.api}`:
+there is no operator and nothing to evaluate. The slope in the paragraph above does not begin
+at the read — it begins at `??`, because the moment the read exists someone asks "what if it
+is unset," and that question has precisely two answers: a default operator, or a loud error.
+
+**So the error is the stopping point, and it has to stay one.** Unset is `bad_config`, exit
+3, naming the variable. That is what makes this a resting place rather than a first step.
+
+**One cost, accepted knowingly.** `${env.NAME}` makes `char.yml` environment-dependent —
+`config verify` can check that the reference is syntactically valid, but it cannot know
+whether the variable will exist on another machine, so a config can verify locally and fail
+in CI. Every other part of this file means the same thing everywhere. That is the price of
+the read, and it is why the read is confined to `env:` blocks.
+
+**Do not reach for `${env.NAME}` for secrets.** It requires the value to be in the ambient
+environment already, which in practice means a `.env` file or a shell `export` — a file or a
+history an agent can read. That moves the leak earlier rather than removing it. Secrets have
+their own mechanism (§4.7).
 
 **Escape hatch for repos that genuinely need more:** write a generator script that *emits*
 `char.yml`, committed and diffable. `char config verify --check` can then assert the
@@ -311,9 +337,26 @@ commands:
   worktrees:
     cmd: uv run scripts/worktrees.py
     help: Create and tear down git worktrees
+    env:
+      WORKSPACE: ${workspace.id}
+      REGISTRY: ${env.COMPANY_REGISTRY}     # bare read; unset is bad_config
+    secrets: [GITHUB_TOKEN]                 # explicit grant, §4.7
+    owns:
+      containers: "label=com.example.worktree=${workspace.id}"
+      files: [".worktrees/${workspace.id}"]
   tickets:
     cmd: uv run scripts/tickets.py
 ```
+
+`env:` is additive — the parent environment is inherited wholesale and these are layered on
+top, so a command needing `$HOME` already has it.
+
+`owns:` behaves exactly as it does under `run:` (§6.1), with one difference: it is a
+**selector, not a record.** char stores the declaration and `char clean` *evaluates* it
+against docker and the filesystem. That works because every selector is stamped with
+`${workspace.id}`, and it means no lifecycle hook and no write to `owned.json` — a command
+runs ad hoc, so there is no "while it was up" window to record against. `ports:` is not
+available here; the block is already claimed by `char init`.
 
 `char worktrees prune --dry-run` runs `uv run scripts/worktrees.py prune --dry-run` from the
 workspace root. char is a dispatcher here and nothing more: remaining argv passes through
@@ -383,6 +426,72 @@ quietly becomes a workspace instead of an error. Declaring it keeps the stray-fi
 > becomes real, the answer is an include mechanism that still resolves to a single workspace,
 > **not** nested workspaces. Named here so nobody later reaches for the wrong one.
 
+### 4.7 `secrets:` — tokens reach the process, never the transcript
+
+char is the only thing in the stack that constructs the environment for every process in the
+repo. That makes it the one place this can be fixed.
+
+**The problem.** An agent runs `char up` and a service needs `STRIPE_SECRET_KEY`. Today that
+means a `.env` file an agent will eventually read while debugging, or an `export` in a shell
+history, or — worst — a token on the command line, visible in `ps` to every process on the
+machine. And when a command echoes its environment on failure, char captures that into
+`.char/run/<id>/logs/`, which is a file agents are *expected* to read.
+
+```yaml
+secret_providers:
+  op:       { cmd: op read ${ref} }
+  aws-sm:   { cmd: aws secretsmanager get-secret-value --secret-id ${ref}
+                     --query SecretString --output text }
+  keychain: { cmd: security find-generic-password -s ${ref} -w }
+
+secrets:
+  GITHUB_TOKEN: op://Engineering/github/token
+  DB_PASSWORD:  aws-sm://prod/db#password
+
+components:
+  api:
+    run:
+      driver: command
+      cmd: manage.py runserver 0.0.0.0:${port.api}
+      secrets: [DB_PASSWORD]        # granted here, and nowhere else
+```
+
+The URI scheme selects the provider; `${ref}` is the rest of the reference.
+
+**Five properties, each load-bearing:**
+
+| | |
+|---|---|
+| **Reference, never value** | `char.yml` stays committed and diffable. It holds a pointer. |
+| **Grants are explicit and per-entry** | A `run:`, `checks:` entry or `commands:` entry names what it needs. Least privilege, and `grep -n "secrets:"` answers "what can reach this token." |
+| **Injected via env at spawn, never argv** | argv is world-readable through `ps`. |
+| **char scrubs resolved values from everything it writes** | logs, `--json`, error messages, the live table. |
+| **There is no retrieval verb** | No `char secret get`, ever. An agent can *use* a secret by running `char up`; it cannot *obtain* one. That asymmetry is the entire point. |
+
+**Providers are commands, not integrations.** char must never grow 1Password, AWS or Keychain
+SDKs. A provider is a command that prints a secret to stdout — char runs it through the
+injected `run`, captures stdout, and never logs it. That is roughly a hundred lines with no
+vendor lock-in, and it is the same instinct as §6 ("no vendor-named drivers") and §6.1
+("`owns:` instead of a plugin API"). Vault, Doppler, `pass` and a homegrown script all work
+on day one without char knowing they exist.
+
+**Never cache a resolved secret.** Caching means writing it to disk, which is a new leak
+surface. Resolve per spawn and let providers do their own session caching — `op` already
+does, and that is correctly their problem, not char's.
+
+**What this does and does not guarantee.** char guarantees the secret is never in `char.yml`,
+never in argv, never in char's own logs or `--json`, and never retrievable through any char
+verb. char *cannot* stop an agent from running `op read` itself, cannot control a command
+invoked outside char, and cannot defeat deliberate exfiltration through encoding. Scrubbing
+is defense-in-depth, not a proof.
+
+The win is narrower than "foolproof" and still large: **the default path becomes safe.** The
+agent runs `char up`, the service gets its token, and nothing the agent can read ever
+contained it. Today the default path is unsafe, and that is the actual bug.
+
+**Schema lands in phase 1; implementation in phase 4**, when `up` exists and there is
+something to inject into.
+
 ---
 
 ## 5. Bootstrap: the three-layer sandwich
@@ -422,6 +531,10 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - no `commands:` entry shadows a built-in verb (§4.5)
 - no `components[].root` or `match:` glob reaches into a declared nested workspace (§4.6),
   and every path in `workspaces:` actually contains a `char.yml`
+- every granted secret name is declared in `secrets:`, and every reference's URI scheme
+  matches a declared `secret_providers:` entry (§4.7). **Never resolves a secret** — the
+  reference is checked, the value is not fetched
+- no `${env.NAME ?? ...}` anywhere, and no `${env.NAME}` outside an `env:` block (§4.4)
 
 ### 5.1 `char agents-md`
 
@@ -505,6 +618,10 @@ of the five verbs.
   must *always* be a complete answer, or every upstream tool release breaks you.
 - **A growing MCP surface.** One thin wrapper over the same importable layer. The CLI with
   `--json` works in harnesses with no project-scoped MCP at all.
+- **Secrets management beyond injection.** §4.7 resolves a reference and injects it. char
+  does **not** store, generate, rotate, share or sync secrets, and does not implement a
+  provider — a provider is a command that prints to stdout. The moment char holds a secret at
+  rest it has become a secrets manager, and there are better ones.
 - **Windows support.** Process groups, signals and file locks are load-bearing. Say
   POSIX-only in the README's first paragraph.
 - **Multi-repo workspaces — reserved, not built.** `components[].root` is already a path;
@@ -540,7 +657,7 @@ all fail together. If adding a fixture creates no new way to be wrong, it is dec
 |---|---|---|
 | `django-next` *(real)* | Maximal case — polyglot monorepo, supervisor, checks running *inside* containers, 3s→15min cost spread, **and the only fixture with a `commands:` block** (§4.5) | Schema can't express a real complex repo; `commands:` unexercised until phase 6, when it is load-bearing |
 | `multi-lang` *(real)* | The second repo — a genuinely different runtime pairing | Abstraction is Django/Next-shaped |
-| `go-service` | Low end — one component, one binary, one Postgres, no monorepo | **Over-structuring.** A trivial repo needing 40 lines of config |
+| `go-service` | Low end — one component, one binary, one Postgres, no monorepo, **plus one secret from one provider** (§4.7) | **Over-structuring.** A trivial repo needing 40 lines of config — and secrets that only work in a complex config are secrets nobody will adopt |
 | `pnpm-monorepo` | Many components, **zero** services, turbo already present, **plus a declared nested workspace** (§4.6) — so the fixture is a root manifest *and* a nested `char.yml` | Component-per-package globbing; also honestly answers "is char redundant where turbo exists?" Additionally: overlap detection, manifest-only roots, and discovery returning the same answer from any depth |
 | `rails-monolith` | `setup:` as a *sequence* (bundle → db:create → migrate → seed); two services with real dependency ordering | `setup:` modeled as a single string; `needs:` ordering that only works for one service |
 | `python-ml` | No web services, **no ports at all**, a 20-minute check, GPU as a non-port exclusive resource | Port machinery that doesn't gracefully no-op; `exclusive:` that assumes "a port" |
@@ -645,6 +762,12 @@ uv package scaffolding, pytest, ruff. JSON Schema for `char.yml`. Then write all
 from the table in §8.1 under `tests/fixtures/<name>/char.yml`. Tests are schema validation
 plus a golden resolved-config snapshot for each. **No runtime.**
 
+The schema must cover the full contract, including the parts implemented later:
+`components:` (§4.1), `commands:` (§4.5), `workspaces:` (§4.6), and `secrets:` /
+`secret_providers:` (§4.7). Secrets are **schema-only in this phase** — validated and
+resolvable as references, never fetched. Everything after this phase codes against whatever
+lands here, so a key missing now is a contract change later.
+
 **Done when:** all six are expressible with no escape hatches and no fields invented on the
 spot.
 
@@ -698,11 +821,18 @@ subsequent phase.
 ### Phase 4 — Services: `up` / `down`
 
 Both drivers, five ready-check kinds, `needs:` ordering, `owns:`, everything started
-recorded into `owned.json`, port remapping into the claimed block.
+recorded into `owned.json`, port remapping into the claimed block. Plus **secret resolution
+and injection** (§4.7) — this is the phase where there is finally something to inject into.
 
 **Done when:** a scratch repo with a bare `docker-compose.yml` plus a long-running command
 comes up, gets ready-checked, and tears down completely — `docker ps` and `lsof` clean
 afterwards.
+
+**And when the secret path is proven negatively:** a service is granted a secret from a stub
+provider, comes up with the value in its environment, and the value appears in **none** of
+`.char/run/*/logs/`, `--json` output on both success and failure, `ps` output while running,
+or `.char/owned.json`. Assert on absence, with the stub returning a distinctive sentinel so
+the search is unambiguous.
 
 ### Phase 5 — Bootstrap sandwich + `agents-md` + MCP *(fans out widest)*
 

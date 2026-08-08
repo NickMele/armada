@@ -72,6 +72,7 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 | **Dependencies point inward** | `core` imports nothing concrete. `adapters` import core protocols only. `cli` is the only module importing both. Enforced by `import-linter`. |
 | **Every verb takes `--json`** | With `schema_version`, a documented exit code, and a golden snapshot. |
 | **Errors are typed** | `class` ∈ {`bad_invocation`, `bad_config`, `tool_failed`, `char_bug`}, plus `where`. `next_action` is required for `bad_config`. |
+| **Secrets never leave the shell** | Resolved values are injected into a child's env at spawn and never reach the core, argv, `--json`, logs or `.char/`. There is no verb that returns a secret. See `ARCHITECTURE.md` §1.8. |
 
 ### Exit codes
 
