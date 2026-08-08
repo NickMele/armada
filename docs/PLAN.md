@@ -84,21 +84,29 @@ state.** In practice: a checkout.
 |-------|-----------|-----|
 | A repo, cloned once | 1 | One config, one port block, one `.char/` |
 | A repo + 4 git worktrees | **5** | **The case that matters.** Same committed `char.yml`, five ids, five non-overlapping port blocks, five independent lifecycles. This is what lets five agents run concurrently on one machine. |
-| A monorepo with 8 packages | 1 | Packages are *components* inside the workspace, not workspaces |
+| A monorepo with 8 packages | 1 | Packages are *components* inside the workspace, not workspaces. **This is the default and should stay the default** — reach for §4.6 only when packages are genuinely separate products |
+| A monorepo declaring nested workspaces (§4.6) | 1 + one per declaration | The exception: `apps/foo` and `apps/bar` are separate products that happen to share a repo and need independent lifecycles |
 | Two separate `git clone`s | 2 | Separate `.git`, genuinely independent |
 
 **How the workspace root is found.** Every verb resolves it the same way, and the answer must
 be identical from anywhere inside the tree, because `workspace_id` is a hash of it:
 
-> Walk up from the caller's cwd to the **nearest ancestor containing a `char.yml`**, stopping
-> at the git root. If none is found, that is a `bad_config` error naming the directories
-> searched.
+> Walk up from the caller's cwd to the git root, collecting **every** `char.yml` found.
+>
+> - **Exactly one** → that directory is the workspace root.
+> - **Zero** → `bad_config`, naming the directories searched.
+> - **Two or more** → `bad_config`, *unless* the outer one declares the inner in
+>   `workspaces:` (§4.6). If it does, the innermost wins.
 
-Nearest-`char.yml` rather than always-the-git-root, because the two differ in exactly the
-cases that matter. In a monorepo a package directory may sit far below the root, and the git
-root of a worktree is the worktree itself — so anchoring on `char.yml` gives one rule that
-holds for both. Stopping at the git root prevents a stray `char.yml` in a parent directory
-from silently capturing an unrelated repo.
+Anchoring on `char.yml` rather than always the git root, because the two differ in exactly
+the cases that matter: in a monorepo a package may sit far below the root, and the git root
+of a worktree is the worktree itself. One rule covers both. Stopping at the git root keeps a
+stray `char.yml` in a parent directory from capturing an unrelated repo — and means a git
+submodule, which has its own git root, is correctly its own workspace for free.
+
+Collecting *all* of them rather than taking the nearest is what makes an accidental nested
+`char.yml` fail loudly instead of silently creating a second owner for the same source. The
+walk is bounded by directory depth, so it costs nothing.
 
 Do **not** rename this concept. "Workspace" already means roughly this in VS Code,
 Terraform, cargo and pnpm, so an agent arrives knowing it. Inventing vocabulary works
@@ -325,6 +333,56 @@ verbs mean the same thing everywhere.
 is also what lets Chariot keep `worktrees` / `tickets` / `design` while giving up `check` and
 `servers` (phase 6), so it is on the critical path rather than a nicety.
 
+### 4.6 `workspaces:` — nested workspaces in one repo
+
+**The default stays "packages are components."** A monorepo is one workspace, one port block,
+one `.char/`, and per-package work is served by the scope lens that already exists —
+`char check --component web`, `char check web:e2e`, `match:` globs scoping by changed files
+(§3.1). Reach for this section only when that is genuinely not enough.
+
+The case it exists for: `apps/foo` and `apps/bar` are **separate products that happen to share
+a repo**, and foo's services, ports and lifecycle must be independent of bar's. A root config
+declares them:
+
+```yaml
+# repo root char.yml
+version: 1
+workspaces: [apps/foo, apps/bar]   # separate workspaces, excluded from this one
+components:
+  shared-lib:
+    root: libs/shared
+    checks: { lint: { cmd: ruff check ${files} } }
+```
+
+Each declared path holds its own `char.yml` and becomes an ordinary workspace: its own id,
+its own port block, its own `.char/`. A root that is *nothing but* a manifest — `workspaces:`
+with no `components:` — is legal, and is the honest shape for a repo of genuinely independent
+products.
+
+**No new runtime concepts.** Two workspaces sharing a checkout is structurally identical to
+two git worktrees, which §2.2 already models as flat siblings. They share a `project_id`,
+because they *are* the same repo — so `char status --project` reporting "foo is up, bar is
+down" is the right answer, `char clean` still touches only your own workspace, and
+`char clean --project` still touches both because that is the destructive option you have to
+ask for.
+
+**The thing that is actually illegal is overlap, not nesting.** If the root also claimed
+`apps/foo` as a component root or reached into it with a `match:` glob, that subtree would
+have two owners with two ids and two port blocks — the same source and services claimed
+twice. So `config verify` asserts that no `components[].root` and no `match:` glob reaches
+into a declared nested workspace.
+
+**Why declared at the root rather than inferred.** Inferring — "any subtree containing a
+`char.yml` is automatically excluded" — needs no configuration, but it means dropping a file
+into a directory silently changes the root's behaviour, and an *accidental* `char.yml`
+quietly becomes a workspace instead of an error. Declaring it keeps the stray-file case loud
+(§2.1) while letting the deliberate case work.
+
+> **Not built: config fragments.** A different need — one workspace whose config is split
+> across per-package files for authoring reasons, rather than several workspaces. If that
+> becomes real, the answer is an include mechanism that still resolves to a single workspace,
+> **not** nested workspaces. Named here so nobody later reaches for the wrong one.
+
 ---
 
 ## 5. Bootstrap: the three-layer sandwich
@@ -362,6 +420,8 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - declared ports fit the block
 - every `match:` glob hits at least one file
 - no `commands:` entry shadows a built-in verb (§4.5)
+- no `components[].root` or `match:` glob reaches into a declared nested workspace (§4.6),
+  and every path in `workspaces:` actually contains a `char.yml`
 
 ### 5.1 `char agents-md`
 
@@ -481,7 +541,7 @@ all fail together. If adding a fixture creates no new way to be wrong, it is dec
 | `django-next` *(real)* | Maximal case — polyglot monorepo, supervisor, checks running *inside* containers, 3s→15min cost spread, **and the only fixture with a `commands:` block** (§4.5) | Schema can't express a real complex repo; `commands:` unexercised until phase 6, when it is load-bearing |
 | `multi-lang` *(real)* | The second repo — a genuinely different runtime pairing | Abstraction is Django/Next-shaped |
 | `go-service` | Low end — one component, one binary, one Postgres, no monorepo | **Over-structuring.** A trivial repo needing 40 lines of config |
-| `pnpm-monorepo` | Many components, **zero** services, turbo already present | Component-per-package globbing; also honestly answers "is char redundant where turbo exists?" |
+| `pnpm-monorepo` | Many components, **zero** services, turbo already present, **plus a declared nested workspace** (§4.6) — so the fixture is a root manifest *and* a nested `char.yml` | Component-per-package globbing; also honestly answers "is char redundant where turbo exists?" Additionally: overlap detection, manifest-only roots, and discovery returning the same answer from any depth |
 | `rails-monolith` | `setup:` as a *sequence* (bundle → db:create → migrate → seed); two services with real dependency ordering | `setup:` modeled as a single string; `needs:` ordering that only works for one service |
 | `python-ml` | No web services, **no ports at all**, a 20-minute check, GPU as a non-port exclusive resource | Port machinery that doesn't gracefully no-op; `exclusive:` that assumes "a port" |
 
