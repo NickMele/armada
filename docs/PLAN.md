@@ -399,7 +399,7 @@ of the five verbs.
 - **Multi-repo workspaces — reserved, not built.** `components[].root` is already a path;
   letting it point outside the workspace root (`root: ../api`) would get ~80% of multi-repo
   for free. Costs: a git diff *per* root rather than one, and the id can no longer be "hash
-  of one path". Worth ~2 days, only once the two-repo setup actually exists.
+  of one path". Worth doing, but only once the two-repo setup actually exists.
 
 ---
 
@@ -435,7 +435,7 @@ all fail together. If adding a fixture creates no new way to be wrong, it is dec
 | `python-ml` | No web services, **no ports at all**, a 20-minute check, GPU as a non-port exclusive resource | Port machinery that doesn't gracefully no-op; `exclusive:` that assumes "a port" |
 
 **Cost is low because fixtures are configs, not checkouts.** You don't need a Rails app — you
-need a plausible `char.yml` for one plus a golden resolved snapshot. An afternoon for all six.
+need a plausible `char.yml` for one plus a golden resolved snapshot.
 
 **Evidentiary weight differs, though.** The first two are real and verifiable against actual
 repos. The other four are representative and prove *schema shape only* — a hypothetical
@@ -597,7 +597,7 @@ A Chariot PR: delete `scripts/char/check.py` and `servers.py`, take the dependen
 **Done when:** `char check --all` is green in Chariot and the worktree flow still works end
 to end.
 
-**Budget extra time here** — seven phases of drift surface in this one PR.
+**Expect the most rework here** — seven phases of drift surface in this one PR.
 
 ### Phase 8 — The only test that matters
 
@@ -646,7 +646,7 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | **Overfitting to Chariot** — the abstraction gets shaped around Django+Next because it is the only repo the agent has seen. Isolation does *not* prevent this. | **High** | **Six fixture configs in phase 1** (§8.1). This is the single most important guard in the plan. |
-| **Seven phases of drift surface in phase 7.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against Chariot from phase 3 onward (§8.1). Budget extra time for phase 7 regardless. |
+| **Seven phases of drift surface in phase 7.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against Chariot from phase 3 onward (§8.1). Expect substantial rework in phase 7 regardless. |
 | **Crude contamination** — a Chariot path or import follows the code in during phase 2. | Med | Phase-2 acceptance test is a literal `grep -riE "chariot\|tilt\|NEXT_PUBLIC\|\.claude\|backend/\|web/" src/` returning nothing. **Phase 2 is the only phase with Chariot access.** |
 | **Config expressiveness pressure** once a second repo lands. | Med | Three substitutions, hard cap. Escape hatch is a generator script. |
 | **Registry corruption** with two agents claiming simultaneously. | Med | `O_EXCL` lockfile; claims idempotent by workspace id. |
