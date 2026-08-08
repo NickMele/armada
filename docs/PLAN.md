@@ -1064,21 +1064,37 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 
 | Path | Lines | Role in this plan |
 |------|------:|-------------------|
-| `char/check.py` | 1,632 | Harvest in phase 2. Scope → schedule → run → parse → report, run lock, live table, `--again`. Contains `CHECK_CATALOG` (replace) and load-bearing comments about two Playwright traps (translate into the fixture config, not the code). |
-| `char/_shared.py` | 140 | Harvest in phase 2. `run_fn` injection, target resolution, git worktree list. |
-| `char/worktrees.py` | 397 | Reference for phase 3. Orphan container/network sweep — note it infers ownership from compose's `working_dir` label; charkit stamps its own instead. |
-| `char/servers.py` | 321 | Reference for phase 4. Tilt-shaped; becomes config, not code. |
-| `char/__main__.py` | 345 | Reference. Typer dispatch pattern. |
+| `char/check.py` | 3,383 | Harvest in phase 2. Scope → schedule → run → parse → report, run lock, live table, `--again`. Contains `CHECK_CATALOG` (replace) and load-bearing comments about two Playwright traps (translate into the fixture config, not the code). |
+| `char/_shared.py` | 337 | Harvest in phase 2. `run_fn` injection, target resolution, git worktree list. |
+| `char/worktrees.py` | 679 | Reference for phase 3. Orphan container/network sweep — note it infers ownership from compose's `working_dir` label; charkit stamps its own instead. |
+| `char/servers.py` | 436 | Reference for phase 4. Tilt-shaped; becomes config, not code. |
+| `char/__main__.py` | 521 | Reference. Typer dispatch pattern. |
 | `char_mcp/server.py` | ~95 | Reference for phase 5. |
 | `char_test/` | 2,694 | **Harvest in phase 2 — port the cases, rebuild the harness.** `run_fn`-injected, asserts on behavior not implementation — this is the single most valuable asset. Only check-id fixtures should need editing. |
-| `char/baselines.py` | — | **Not previously listed.** No charkit verb replaces it; becomes a `commands:` entry in phase 6. Among the larger modules in the directory. |
-| `char/tickets.py` | — | Small. Becomes a `commands:` entry in phase 6. |
+| `char/baselines.py` | 762 | **Not previously listed.** No charkit verb replaces it; becomes a `commands:` entry in phase 6. Among the larger modules in the directory. |
+| `char/tickets.py` | 51 | Small. Becomes a `commands:` entry in phase 6. |
 | `bin/char` | ~25 | Copy the pattern. A bash dispatcher that resolves the git root from the *caller's* cwd at every invocation and execs `$root/scripts/char/__main__.py "$@"` — which is why one symlink works from inside any worktree. |
 
-> **The line counts above are from an earlier reading and at least one is now badly stale.**
-> `check.py` is currently ~159 KB on disk, which is several times the 1,632 lines recorded
-> here. Phase 2's harvest is therefore materially larger than this table implies. Re-measure
-> with `wc -l` before scoping that phase; do not plan against these numbers.
+> **Counts re-measured. An earlier draft of this table was uniformly stale — everything had
+> grown 1.4–2.4× since it was written.**
+>
+> | File | Earlier draft | Measured | |
+> |---|---:|---:|---|
+> | `check.py` | 1,632 | **3,383** | 2.07× |
+> | `_shared.py` | 140 | **337** | 2.4× |
+> | `worktrees.py` | 397 | **679** | 1.71× |
+> | `__main__.py` | 345 | **521** | 1.51× |
+> | `servers.py` | 321 | **436** | 1.36× |
+>
+> `scripts/char` totals **6,169** lines. `char_mcp/` and `char_test/` were not re-measured
+> and should be assumed stale by a similar factor.
+>
+> **Consequence for phase 2:** the harvest is roughly double what the plan assumed. That
+> makes the harvest step *more* valuable rather than less — twice the lines means twice the
+> uncommented bug fixes to lose in a rewrite — but it is a scope change, and phase 2 should
+> land as several review-sized PRs rather than one.
+>
+> **Re-measure before scoping any phase against this table.** It went stale once already.
 
 ---
 
@@ -1086,7 +1102,7 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 
 | Decision | Choice | Why |
 |----------|--------|-----|
-| Language | **Python** | A `curl \| sh` installer gives the same "one line, fresh machine" property `npx -y` has. The language was never the requirement. Keeps 5,649 working lines and 2,694 executable test lines. |
+| Language | **Python** | A `curl \| sh` installer gives the same "one line, fresh machine" property `npx -y` has. The language was never the requirement. Keeps 6,169 working lines in `scripts/char` alone, plus the test suite. |
 | Package name | **`charkit`** | `char` is taken on both PyPI and npm. Binary stays `char`; the package name appears once, in the bootstrap line. |
 | Distribution | **PyPI + `install.sh`** | uv provisions Python, so no bundling. Homebrew later. |
 | Supervision | **Start-and-track only** | Restart-on-crash and log aggregation are a permanent bug class for marginal gain. |
