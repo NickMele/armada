@@ -134,6 +134,11 @@ out to itself, so two callers need the same logic. It is stated anyway because t
 mode is gradual: one command function does slightly too much, and eventually the logic lives
 in the argument parser.
 
+**The source repo arrived at this independently**, which is the strongest evidence the
+principle is not merely imposed. Its `baselines.py` opens with: *"Nothing here prints or
+exits — `__main__.py` renders the report, and an MCP wrapper can call `build_report()` for
+the same data."* Same two callers, same conclusion, reached before this document existed.
+
 **The public contract is the CLI surface and the `--json` payloads. Internal modules are
 internal.** The plan originally called this "a thin wrapper over an importable library," and
 the word *library* was dropped deliberately: it invites `from charkit import ...`, which
