@@ -46,10 +46,10 @@ root: backend
 The reasoning is in `ARCHITECTURE.md` §2.4. Short version: the tool was ported out of a
 Django+Next monorepo, and this catches the port dragging that repo's specifics along with it.
 
-### 2. Only phase 2's *harvester* may read `~/Development/chariot`
+### 2. Only phase 3's *harvester* may read `~/Development/chariot`
 
-Every other phase, and phase 2's implementer, works from `docs/PLAN.md`, `ARCHITECTURE.md`,
-the fixtures, and `docs/phase2-harvest.md`.
+Every other phase, and phase 3's implementer, works from `docs/PLAN.md`, `ARCHITECTURE.md`,
+the fixtures, and `docs/harvest.md`.
 
 If a phase feels like it needs to look at that repo, **the plan is underspecified — fix the
 plan, do not peek.**

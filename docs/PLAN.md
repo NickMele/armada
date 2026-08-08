@@ -39,7 +39,7 @@ Four rules that hold for the whole project:
 - **Phase 1 must land alone.** Every later phase codes against the config contract it
   establishes. Parallel agents cannot share a decision that has not been made yet — they will
   each invent an answer and you will get three incompatible ones.
-- **Only phase 2's *harvester* may read the Chariot repo** (§9). If any other phase
+- **Only phase 3's *harvester* may read the Chariot repo** (§9). If any other phase
   feels like it needs to look, the plan is underspecified — fix the plan, don't peek.
 - **Do not relitigate §10.** Those decisions were made deliberately, with rationale recorded.
 
@@ -895,7 +895,7 @@ different defenses:
 
 | Contamination | Looks like | Defense |
 |---|---|---|
-| **Crude** | A hardcoded `backend/` path, a `tilt` import, a `.claude/worktrees` assumption | Greenfield makes it *structurally impossible* — the agent cannot see Chariot except in phase 2's harvest. Backed by a grep gate. |
+| **Crude** | A hardcoded `backend/` path, a `tilt` import, a `.claude/worktrees` assumption | Greenfield makes it *structurally impossible* — the agent cannot see Chariot except in phase 3's harvest. Backed by a grep gate. |
 | **Subtle** | An abstraction shaped around Django+Next because that is the only repo the agent ever saw | **Six fixture configs in phase 1.** Isolation does nothing here — an agent given one example generalizes from n=1 regardless of repo topology. |
 
 **The fixture set is the more important of the two and is non-optional.** Write all six
@@ -952,7 +952,7 @@ Greenfield was chosen over extract-through-Chariot for two reasons beyond contam
 repo. Fixtures catch config-model failures but not runtime ones — you would not discover
 "the scheduler deadlocks when two exclusive resources overlap under load" until phase 6.
 
-> **Read-only parallel run, from phase 2 onward.** Point charkit at the Chariot checkout,
+> **Read-only parallel run, from phase 3 onward.** Point charkit at the Chariot checkout,
 > run `char check`, and diff the verdicts against `scripts/char`'s output. This is *not* a
 > Chariot dependency and *not* a Chariot PR — zero risk to Chariot's merge gate — but it
 > restores most of the continuous validation and turns phase 6 from a cliff into a
@@ -964,8 +964,8 @@ repo. Fixtures catch config-model failures but not runtime ones — you would no
 Nothing else. This is a conversation that produces documents, not a build step.
 
 **Why this is first, and not skipped:** it is the third anti-contamination defense, and it
-catches what the other two miss. Chariot's `check.py` has a *structure* — 1,632 lines of it.
-Without stated architecture principles, phase 2's port inherits that structure by default,
+catches what the other two miss. Chariot's `check.py` has a *structure* — 3,383 lines of it.
+Without stated architecture principles, phase 3's port inherits that structure by default,
 because "make it work like it did" is the path of least resistance. Deciding the target shape
 first turns the port from a copy into **a rewrite into a known architecture**, and gives the
 reviewer an objective standard to reject against.
@@ -1001,7 +1001,7 @@ reviewer an objective standard to reject against.
 | 1 | **TDD throughout** — failing test → minimal implementation → passing test | Non-negotiable given this tool becomes a merge gate |
 | 2 | **Branch + PR per phase, never commit to main** | Chariot enforces this with a `PreToolUse` hook — port the hook on day one rather than relying on discipline |
 | 3 | **Conventional commits** | Matches Chariot's existing history (`build(family):`, `char check:`) |
-| 4 | **Merge gate = lint + typecheck + tests + the contamination grep** | The grep is the phase-2 acceptance test made permanent |
+| 4 | **Merge gate = lint + typecheck + tests + the contamination grep** | The grep is the phase-3 acceptance test made permanent |
 | 5 | **Semver from the first publish, with a changelog** | Cheap now, painful to retrofit once anything depends on it |
 | 6 | **Dogfood from phase 3 onward** | charkit gets its own `char.yml` and gates itself with itself the moment `char check` runs. Strongest available forcing function, and it makes the README example real rather than illustrative. |
 
@@ -1049,7 +1049,26 @@ their keep; note which ones did, because that record is the argument for keeping
 decision that has not been made yet — they will each invent an answer and you will get three
 incompatible ones.
 
-### Phase 2 — Rebuild the check engine, generalized *(clean-room, two agents)*
+### Phase 2 — Ownership core: `init`, `clean`, `status`
+
+Workspace id, project id, `.char/`, `~/.char/registry.json` with `O_EXCL` claiming, resource
+labeling, the process-group spawn/kill wrapper, and the scope lens.
+
+**This phase moved ahead of the check engine, and the reason is a dependency, not a
+preference.** `char check` is *scoped, scheduled, locked and ceilinged* (§3): it writes
+`.char/run/<run-id>/{lock,state.json,logs/}`, sets `CHAR_WORKSPACE` and `CHAR_RUN_ID` on
+every child (§2.4), and reaps old run directories at run start (§4.2). Every one of those
+depends on workspace resolution, the workspace id and `.char/` — all of which live here. With
+the old ordering, the check engine had to either invent its own workspace resolution and run
+lock for this phase to replace — the three-incompatible-answers failure §8 warns about — or
+ship a `check` that could not lock or scope. §2.3 calls ownership "the highest-value
+primitive in the project"; it is also the foundational one.
+
+**Done when:** two directories claim non-overlapping blocks concurrently;
+`char status --project` from either reports both; deleting one and running
+`char clean --orphaned` releases its block without disturbing the live one.
+
+### Phase 3 — Rebuild the check engine, generalized *(clean-room, two agents)*
 
 **This is a clean-room rewrite, not a copy** — see [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7
 for the full reasoning. The scheduler is a reducer and the original's is not, so the hardest
@@ -1058,11 +1077,11 @@ is more work than writing to the principles directly.
 
 | Agent | Reads | Produces |
 |---|---|---|
-| **Harvester** | `~/Development/chariot/scripts/char/` | `docs/phase2-harvest.md` — a behaviour spec plus **a written list of every trap and bug-shaped branch found**. Plus the ported test *cases*. |
+| **Harvester** | `~/Development/chariot/scripts/char/` | `docs/harvest.md` — a behaviour spec plus **a written list of every trap and bug-shaped branch found**. Plus the ported test *cases*. |
 | **Implementer** | this plan, `ARCHITECTURE.md`, the fixtures, the harvest doc, the tests. **Never opens the Chariot repo.** | `src/` |
 
 The harvest step is mandatory and is the whole reason a rewrite is safe here. The value in
-those 1,632 lines is not the code — it is the bug fixes discovered by running against a real
+those 3,383 lines is not the code — it is the bug fixes discovered by running against a real
 repo, two of which the source flags as "Playwright traps." The uncommented ones are the
 danger, and charkit has no continuous real-repo validation until phase 6, so anything lost
 would not resurface until then.
@@ -1072,19 +1091,24 @@ strip every Chariot-specific path, turbo filter and `uv run --directory` assumpt
 cases are ported, not rewritten — the assertions survive, but the harness is rebuilt around
 `Ctx` and its three seams, and the scheduler tests change shape because the scheduler did.
 
+**`needs:` on a check gates in this phase and starts in phase 4.** The end state is that a
+check needing `postgres` brings it up — one command instead of three, which matters when the
+caller is an agent. But `up` does not exist yet, so here a check whose service is not running
+fails with `bad_invocation` naming the service and telling the caller to run `char up`. Phase
+4 replaces that error with the start. This is one behaviour built in two steps, not two
+behaviours.
+
+Two consequences of `check` eventually starting services, which must be handled in phase 4:
+anything it starts is recorded in `owned.json` like any other service, so `clean` reclaims
+it; and **`check` does not stop what it started.** Stopping would risk killing a service a
+sibling workspace is using, which §2.2's flat-siblings model exists to prevent, and would
+make the next `check` pay startup cost again.
+
 **Done when:** the ported suite is green against the phase-1 fixtures, **and** the
 contamination grep (§11) returns nothing.
 
-### Phase 3 — Ownership core: `init`, `clean`, `status`
-
-Workspace id, project id, `.char/`, `~/.char/registry.json` with `O_EXCL` claiming, resource
-labeling, the process-group spawn/kill wrapper, and the scope lens.
-
-**Done when:** two directories claim non-overlapping blocks concurrently;
-`char status --project` from either reports both; deleting one and running
-`char clean --orphaned` releases its block without disturbing the live one.
-
-**Start the read-only parallel run here** (§8.1) and repeat it at the end of every
+**Start the read-only parallel run here** (§8.1) — it diffs `char check` verdicts against
+`scripts/char`, so it cannot begin before this phase — and repeat it at the end of every
 subsequent phase.
 
 ### Phase 4 — Services: `up` / `down`
@@ -1108,9 +1132,9 @@ Chariot keeps `worktrees` / `tickets` / `design` / `baselines` while giving up `
   `owned.json`, because a command runs ad hoc and has no "while it was up" window to record
   against
 
-It lands here rather than in phase 3 because `secrets:` is its last dependency and arrives in
+It lands here rather than in phase 2 because `secrets:` is its last dependency and arrives in
 this phase. Everything else it needs — port claiming, the spawn wrapper, `clean` — exists by
-the end of phase 3.
+the end of phase 2.
 
 > **Phase 4 is now the heaviest phase in the plan.** Both drivers, five ready-check kinds,
 > compose document generation, secrets, and the dispatcher. Split it across several
@@ -1231,14 +1255,14 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 
 | Path | Lines | Role in this plan |
 |------|------:|-------------------|
-| `char/check.py` | 3,383 | Harvest in phase 2. Scope → schedule → run → parse → report, run lock, live table, `--again`. Contains `CHECK_CATALOG` (replace) and load-bearing comments about Playwright traps (translate into the fixture config, not the code). **Only one of the two traps is here — the other is in `baselines.py`, so harvest both.** |
-| `char/_shared.py` | 337 | Harvest in phase 2. `run_fn` injection, target resolution, git worktree list. |
-| `char/worktrees.py` | 679 | Reference for phase 3. Orphan container/network sweep — note it infers ownership from compose's `working_dir` label; charkit stamps its own instead. |
+| `char/check.py` | 3,383 | Harvest in phase 3. Scope → schedule → run → parse → report, run lock, live table, `--again`. Contains `CHECK_CATALOG` (replace) and load-bearing comments about Playwright traps (translate into the fixture config, not the code). **Only one of the two traps is here — the other is in `baselines.py`, so harvest both.** |
+| `char/_shared.py` | 337 | Harvest in phase 3. `run_fn` injection, target resolution, git worktree list. |
+| `char/worktrees.py` | 679 | Reference for phase 2. Orphan container/network sweep — note it infers ownership from compose's `working_dir` label; charkit stamps its own instead. |
 | `char/servers.py` | 436 | Reference for phase 4. Tilt-shaped; becomes config, not code. |
 | `char/__main__.py` | 521 | Reference. Typer dispatch pattern. |
 | `char_mcp/server.py` | ~95 | Reference for phase 5. |
-| `char_test/` | 2,694 | **Harvest in phase 2 — port the cases, rebuild the harness.** `run_fn`-injected, asserts on behavior not implementation — this is the single most valuable asset. Only check-id fixtures should need editing. |
-| `char/baselines.py` | 762 | **Not previously listed. Harvest for traps in phase 2 even though the code does not move.** A Playwright snapshot review aid — pixel-diffs darwin/linux snapshot pairs and renders an HTML page for a human. Holds at least one of the two Playwright traps this table attributes to `check.py`: with the default `updateSnapshots: "missing"`, an absent snapshot is *written* and the test *passes*, so a first containerised run reported 29/29 having compared 17 brand-new images against themselves. Couples only to `_shared` (`CheckError`, `RunFn`, `default_run_fn`), so phase 6 inlines three symbols and registers it as a `commands:` entry. |
+| `char_test/` | 2,694 | **Harvest in phase 3 — port the cases, rebuild the harness.** `run_fn`-injected, asserts on behavior not implementation — this is the single most valuable asset. Only check-id fixtures should need editing. |
+| `char/baselines.py` | 762 | **Not previously listed. Harvest for traps in phase 3 even though the code does not move.** A Playwright snapshot review aid — pixel-diffs darwin/linux snapshot pairs and renders an HTML page for a human. Holds at least one of the two Playwright traps this table attributes to `check.py`: with the default `updateSnapshots: "missing"`, an absent snapshot is *written* and the test *passes*, so a first containerised run reported 29/29 having compared 17 brand-new images against themselves. Couples only to `_shared` (`CheckError`, `RunFn`, `default_run_fn`), so phase 6 inlines three symbols and registers it as a `commands:` entry. |
 | `char/tickets.py` | 51 | Small. Becomes a `commands:` entry in phase 6. |
 | `bin/char` | ~25 | Copy the pattern. A bash dispatcher that resolves the git root from the *caller's* cwd at every invocation and execs `$root/scripts/char/__main__.py "$@"` — which is why one symlink works from inside any worktree. |
 
@@ -1256,9 +1280,9 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 > `scripts/char` totals **6,169** lines. `char_mcp/` and `char_test/` were not re-measured
 > and should be assumed stale by a similar factor.
 >
-> **Consequence for phase 2:** the harvest is roughly double what the plan assumed. That
+> **Consequence for phase 3:** the harvest is roughly double what the plan assumed. That
 > makes the harvest step *more* valuable rather than less — twice the lines means twice the
-> uncommented bug fixes to lose in a rewrite — but it is a scope change, and phase 2 should
+> uncommented bug fixes to lose in a rewrite — but it is a scope change, and phase 3 should
 > land as several review-sized PRs rather than one.
 >
 > **Re-measure before scoping any phase against this table.** It went stale once already.
@@ -1287,7 +1311,7 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 |------|----------|------------|
 | **Overfitting to Chariot** — the abstraction gets shaped around Django+Next because it is the only repo the agent has seen. Isolation does *not* prevent this. | **High** | **Six fixture configs in phase 1** (§8.1). This is the single most important guard in the plan. |
 | **Six phases of drift surface in phase 6.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against Chariot from phase 3 onward (§8.1). Expect substantial rework in phase 6 regardless. |
-| **Crude contamination** — a Chariot path or import follows the code in during phase 2. | Med | Phase-2 acceptance test is a literal `grep -riE "chariot\|tilt\|NEXT_PUBLIC\|\.claude\|backend/\|web/" src/` returning nothing. **Only phase 2's harvester has Chariot access.** |
+| **Crude contamination** — a Chariot path or import follows the code in during phase 3. | Med | Phase-3 acceptance test is a literal `grep -riE "chariot\|tilt\|NEXT_PUBLIC\|\.claude\|backend/\|web/" src/` returning nothing. **Only phase 3's harvester has Chariot access.** |
 | **Config expressiveness pressure** once a second repo lands. | Med | Three substitutions, hard cap. Escape hatch is a generator script. |
 | **Registry corruption** with two agents claiming simultaneously. | Med | `O_EXCL` lockfile; claims idempotent by workspace id. |
 | **`curl \| sh` is a trust ask** and some environments block it. | Low | `uvx` and `pipx` cover anyone who will not run it. Publish the script's source in-repo. |
@@ -1298,10 +1322,10 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 
 - **Phase 0 produces documents only.** Phase 1 lands alone and ships all **six** fixtures.
   Do not fan out until the config contract is committed.
-- **Only phase 2's harvester has access to the Chariot repo.** Every other phase works from
+- **Only phase 3's harvester has access to the Chariot repo.** Every other phase works from
   this document and the fixtures. If a later phase feels like it needs to look at Chariot,
   that is a signal the plan is underspecified — fix the plan, don't peek.
-- Phases 3 and 4 parallelize moderately; **phase 5's evidence scanner is the widest fan-out**
+- Phases 2 and 4 parallelize moderately; **phase 5's evidence scanner is the widest fan-out**
   (one agent per parser).
 - What does *not* compress with more agents: live verification (containers start at the speed
   they start) and human review of each PR. Review is the binding constraint.

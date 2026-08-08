@@ -350,12 +350,12 @@ default path is safe.
 | `core/` — scheduler, scope resolution, verdict aggregation, port selection, config resolution | **Mandatory.** Failing test first, minimal implementation, passing test. |
 | `adapters/`, `cli/` | **Test-alongside.** Same PR, order not policed. |
 | Phase 1 schema | **Exempt.** The fixtures *are* the tests. |
-| Phase 2 engine | **Exempt.** The test cases arrive with the harvest (§2.7). |
+| Phase 3 engine | **Exempt.** The test cases arrive with the harvest (§2.7). |
 
 **Why scoped rather than absolute.** "TDD throughout, no exceptions" collides with two phases
 the plan has already specified. Phase 1 is explicitly design-by-example — the plan says to
 *expect the schema to change while writing the fixtures*, which is the phase working
-correctly. Phase 2 arrives with a ported suite; you cannot write a failing test first for
+correctly. Phase 3 arrives with a ported suite; you cannot write a failing test first for
 behaviour you are transcribing.
 
 A rule with a stated exception survives meeting it. An absolute rule gets quietly broken in
@@ -416,7 +416,7 @@ The gate is:
 src/`, and it must return nothing. **There is no escape hatch.** If it fires, the code
 changes, not the pattern.
 
-*What it catches:* phase 2 is the only phase permitted to read the Chariot repo, and this is
+*What it catches:* phase 3 is the only phase permitted to read the Chariot repo, and this is
 its acceptance test made permanent. `chariot` is a leftover import or path; `tilt` means a
 vendor assumption got into code rather than staying in config; `NEXT_PUBLIC` means Next.js
 knowledge was baked in; `.claude` means char assumed where worktrees live instead of asking
@@ -486,18 +486,18 @@ fixtures and phase 8 are.
 
 ---
 
-### 2.7 Phase 2 is clean-room
+### 2.7 Phase 3 is clean-room
 
-The plan called phase 2 a copy. It is a **clean-room rewrite**, split across two agents:
+The plan called phase 3 a copy. It is a **clean-room rewrite**, split across two agents:
 
 | | Reads | Produces |
 |---|---|---|
-| **Harvester** | `~/Development/chariot` | `docs/phase2-harvest.md` — a behaviour spec plus a written list of every trap and bug-shaped branch found. Plus the ported test **cases**. |
+| **Harvester** | `~/Development/chariot` | `docs/harvest.md` — a behaviour spec plus a written list of every trap and bug-shaped branch found. Plus the ported test **cases**. |
 | **Implementer** | `PLAN.md`, this document, the fixtures, the harvest doc, the tests. **Never opens the Chariot repo.** | `src/` |
 
 **Why rewrite rather than copy.** Two reasons already force it. The scheduler is a reducer
 (§1.2) and the original's almost certainly is not, so the hardest part was being rewritten
-regardless. And reshaping 1,632 lines of foreign code into `core`/`adapters`/`cli` with a
+regardless. And reshaping 3,383 lines of foreign code into `core`/`adapters`/`cli` with a
 `Ctx` and three seams is usually more work than writing to the principles directly.
 
 **Why the harvest step is mandatory.** The value in those lines is not the code — it is the
@@ -531,7 +531,7 @@ and the scheduler tests change shape because the scheduler did.
 | License | **Apache-2.0** | Explicit patent grant, clears corporate legal review, no adoption cost. |
 | CI | **Both** — `no-mistakes` primary, minimal Actions matrix alongside | Actions supplies the one thing a local gate cannot: a machine that is not yours, and Linux as well as macOS. Process groups, signals and file locks are load-bearing; verifying real process-group kill only on macOS leaves the platform most users are on untested. Free on a public repo. `no-mistakes` keeps the agent review step, which is the only actual review in a solo repo. |
 | Typing | **mypy strict** from commit one | Cheap now, expensive to retrofit onto 3,000 lines. The architecture leans on it: the three seams are Protocols and the reducer's `State`/`Event`/`Action` types are the scheduler's real specification. |
-| Python floor | **3.12** | Matches the source repo, so the phase-2 harvest needs no syntax translation. Users are unaffected — `uv` provisions the interpreter, so the floor never blocks an install. |
+| Python floor | **3.12** | Matches the source repo, so the phase-3 harvest needs no syntax translation. Users are unaffected — `uv` provisions the interpreter, so the floor never blocks an install. |
 | Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real `O_EXCL` races or real docker labels — the exact failures char exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
 | Coverage | **Gated, ratchet floor** | Floor is set by the first real measurement and may only rise; a PR that lowers coverage fails. Chosen over a fixed percentage because no project data exists to ground a number — 80 and 90 are convention, not evidence. `# pragma: no cover` with a reason comment is the escape for genuinely untestable lines. |
 

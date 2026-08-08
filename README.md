@@ -122,7 +122,7 @@ A green grep only means no *crude* contamination. The subtler failure — an abs
 around one repo because that is the only repo anyone saw — is invisible to it, and is what the
 six fixture configs exist to catch.
 
-**2. Only phase 2's harvester reads the source repo.** Everything else works from the plan,
+**2. Only phase 3's harvester reads the source repo.** Everything else works from the plan,
 the architecture document, the fixtures and the harvest notes. If some later phase feels like
 it needs to look, that means the plan is underspecified — fix the plan.
 
