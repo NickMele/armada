@@ -52,12 +52,12 @@ git). Three, because:
   of them — the fake returns whatever you told it to, and the argv-building code has no test
   at all. Mocking at the higher layer would hide precisely the bug class the tool exists to
   prevent.
-- **The filesystem must not be faked.** char depends on real `O_EXCL` semantics and real
-  mtime behaviour — those are the mechanism behind registry claiming and run-lock
-  heartbeats, and registry corruption under concurrent claims is a named risk. A fake
-  filesystem gives you a green test for your own fake's `O_EXCL` implementation and proves
-  nothing about the real one. Two threads against real files in a `tmp_path` is both more
-  faithful and less code.
+- **The filesystem must not be faked, and neither must SQLite.** Machine-global state lives
+  in `~/.char/char.db` (PLAN.md §4.3), so char depends on real transaction semantics for
+  port claims and lease acquisition, and on real files for logs and `.char/`. A fake gives
+  you a green test over your own fake's concurrency model and proves nothing about the real
+  one — in the one area where §11 names corruption under concurrent claims as a live risk.
+  Two threads against a real database in a `tmp_path` is both more faithful and less code.
 
 **Where stack diversity actually lands.** It does not land here. A Rails repo and a Go repo
 differ in *what string char runs*, not in *how char runs a string*. Most of what charkit
@@ -84,7 +84,7 @@ Config resolution, scope computation, scheduling, port selection and verdict agg
 pure functions over data. Spawning, writing, labelling and killing live at the edge. Most of
 the test suite then needs no fixture, no tmpdir and no seams — just values in, values out.
 
-**Sub-rule, scoped to the scheduler and the `O_EXCL` claim loop:** the core is a **reducer**.
+**Sub-rule, scoped to the scheduler and the claim/lease loop:** the core is a **reducer**.
 
 ```python
 def step(state: State, event: Event) -> tuple[State, list[Action]]: ...
@@ -111,8 +111,8 @@ highest-leverage thing this principle buys.
 
 **Two further benefits.** Every `(state, event) → (state, actions)` transition can be logged,
 so a production deadlock replays verbatim as a regression test. And port claiming has the
-identical shape — choosing a block is pure, the `O_EXCL` claim can lose a race, and losing
-means re-deciding — so one pattern covers the registry-corruption risk too.
+identical shape — choosing a block is pure, the claim can lose a race, and losing means
+re-deciding — so one pattern covers lease acquisition and the machine-global store too.
 
 **Costs, accepted knowingly.** What would be local variables (in-flight set, remaining
 budget, held exclusives, start times) become explicit `State` fields, which is more verbose

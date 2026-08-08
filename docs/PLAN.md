@@ -139,7 +139,7 @@ project_id   = sha1(realpath(git rev-parse --git-common-dir)).hexdigest()[:8]
 > `git rev-parse --git-common-dir` returns a path *relative to cwd* — `.git` from the repo
 > root, `../.git` from a subdirectory — so hashing it directly yields a different project id
 > depending on where the command was run. That silently breaks `--project` scoping, the
-> registry's project filter, and the guarantee that worktrees group with their parent. Verify
+> database's project filter, and the guarantee that worktrees group with their parent. Verify
 > this behaviour before changing the line; it is not obvious from the command's name.
 
 Known and accepted: because the id derives from a path inside the parent checkout, moving or
@@ -166,10 +166,41 @@ workspace id. That single fact is what makes `clean` correct, and it is the high
 primitive in the project.
 
 - Containers/networks/images: label `char.workspace=<id>`
-- Processes: tracked pid, spawned in their own process group (`start_new_session=True`),
-  killed with `os.killpg`
-- Ports: claimed blocks in `~/.char/registry.json`, released on `clean`, reaped when the
-  workspace path stops existing
+- Processes: tracked process-group id, spawned with `start_new_session=True`, killed with
+  `os.killpg`. **Recorded in `~/.char/char.db` (§4.3), not in the workspace** — a pgid
+  recorded inside a directory that gets deleted is a leaked process
+- Ports: claimed blocks in `~/.char/char.db`, released on `clean`
+
+### 2.3.1 Reaping happens automatically, at `char init`
+
+**The plan's one piece of empirical evidence is a sweep function that existed and was never
+called.** An earlier draft answered that with `char clean --orphaned` — a manual, opt-in flag
+on a verb nobody runs in a workspace they are not in. That is the same bug with a new name.
+
+So `char init` reaps first, then claims:
+
+1. **Registry pass.** Drop `workspaces` rows whose `path` no longer exists, releasing their
+   port blocks and `owned` rows.
+2. **Resource pass.** Find every container, network and image labelled `char.workspace=*`
+   whose id is not a live workspace, and remove it. Note this does **not** depend on the
+   record being intact — the label is enough — so it still works if a row was deleted by hand.
+3. **Lease pass.** Delete leases whose heartbeat has gone cold (§4.3).
+
+`init` is the right hook for three reasons: it is where the outage actually originated
+(repeated worktree create/destroy always runs `init` in the new one), it already holds the
+database open to claim a port block, and it is infrequent enough that a docker call costs
+nothing noticeable.
+
+**Reaping is reported, never silent** — in human output and under `data.reaped` in `--json`.
+A tool that removes containers without saying so is worse than one that does not remove them.
+
+`char clean --orphaned` remains, for reaping without initialising anything.
+
+**Known limit: a process leaks if its workspace is deleted while it is running.** The pgid is
+in the database, so it is *findable*, but char cannot distinguish "pgid 4212 is my orphaned
+service" from "pgid 4212 was recycled by the OS for something else" — killing on a stale pgid
+risks killing an unrelated process. char therefore reports it via `status --all` rather than
+acting on it.
 
 **Images are here because leaving them out makes `clean` wrong at the largest scale.** The
 source repo already sweeps orphaned images and records roughly 2.1 GB per production app
@@ -357,7 +388,7 @@ components:
       test:
         cmd: pytest ${files}
         timeout: 600
-        cost: 4                  # CPU slots
+        cost: 4                  # CPU slots, machine-wide (§4.3)
         needs: [postgres]
 
   # checks only — a library, never runs
@@ -374,7 +405,7 @@ components:
         scope: component         # never file-scoped
         timeout: 900
         cost: 4
-        exclusive: [browser]     # named resource, never shared
+        exclusive: [browser]     # machine-wide mutex, never shared (§4.3)
         needs: []                # boots its own servers — see §4.4
 ```
 
@@ -385,44 +416,89 @@ hand, so they cannot drift, collide, or be typo'd. Selectors that fall out for f
 `char up` starts every component with a `run:`. `char check` runs every component with
 `checks:`.
 
-### 4.2 `.char/` — gitignored, per-workspace runtime state
+### 4.2 `.char/` — gitignored, and deliberately holds nothing reclaimable
 
 ```
 .char/
-  workspace.json   id, project id, abs path, port block, created_at
-  owned.json       container ids, networks, pids, ports
   run/<run-id>/
-    lock           pid + heartbeat mtime
     state.json     per-check status, verdict
     logs/<component>.<check>.log
 ```
 
-**`char clean` removes `.char/` entirely.** The workspace returns to its pre-init state.
-Leaving it behind would mean `workspace.json` asserting a port block the registry no longer
-records — a stale claim, which is precisely the condition `status` exists to surface.
-`char init` is idempotent and recreates it.
+**One rule decides what may live here: if losing it would leak a resource, it does not belong
+in `.char/`.** A workspace directory is deleted by `rm -rf` or `git worktree remove`, neither
+of which consults char — so anything recorded only here is gone precisely when it is most
+needed. Run artifacts are safe because a run without its workspace is meaningless anyway.
 
-**Log growth is a separate problem with a separate answer.** Coupling retention to `clean`
-would mean either logs live forever or you lose the evidence from a failed run the moment you
-release a port. Instead, at the **start of each run** char reaps old run directories, keeping
-the most recent N and never touching one whose `lock` is live. N is configurable; its default
-is a convention, not a measurement.
+An earlier draft put `owned.json` here — container ids, networks, **pids**. That was the
+defect: delete the directory and the record of what to reclaim died with it, reproducing the
+plan's own motivating bug. Containers and networks survived it only by accident, because they
+carry a `char.workspace=<id>` label and are findable without any record at all. Pids are not.
+Everything reclaimable now lives in §4.3.
 
-### 4.3 `~/.char/registry.json` — machine-global
+`char clean` removes `.char/` entirely; `char init` recreates it. **Log growth is a separate
+problem with a separate answer** — coupling retention to `clean` would mean either logs live
+forever or you lose the evidence from a failed run the moment you release a port. At the start
+of each run char reaps old run directories, keeping the most recent N and never touching one
+whose run lease is live. N is configurable; its default is a convention, not a measurement.
 
-The only cross-workspace state.
+### 4.3 `~/.char/char.db` — machine-global, SQLite
 
-```json
-{ "a3f91c02": {
-    "path":       "/repo/.claude/worktrees/feature-x",
-    "project":    "7c21ab90",
-    "ports":      [5460, 5469],
-    "claimed_at": "2026-08-07T14:02:11Z" } }
+The only cross-workspace state, and the only thing that survives a workspace directory being
+deleted.
+
+```
+workspaces   id, path, project, ports, claimed_at
+owned        workspace, kind, ref          kind = container | network | image | pgid
+leases       workspace, kind, key, heartbeat, pid
+                 kind = run-lock | cpu-slot | exclusive
 ```
 
-The `project` field is the whole implementation of `--project`: filter the registry by it,
-then read each workspace's `owned.json`. Writes go through an `O_EXCL` lockfile; claims are
-idempotent by workspace id.
+The `project` column is the whole implementation of `--project`: filter by it, then read the
+`owned` rows. Claims are idempotent by workspace id.
+
+#### Why SQLite rather than a JSON file
+
+Because of **leases**, and leases exist because `char check` runs for a long time. A ten-minute
+test suite is normal in a large repo, and during those ten minutes the run holds machine-wide
+claims that renew a heartbeat every few seconds. Rewriting an entire JSON document under an
+`O_EXCL` lockfile, five workspaces at a time, for the whole of a ten-minute run, is the wrong
+shape for that write pattern — and it is exactly where §11's registry-corruption risk lives.
+SQLite is stdlib, one file, needs no daemon, and makes that risk largely disappear.
+
+#### Leases: how long-running work holds machine-wide claims
+
+```
+acquire   insert a lease row
+hold      renew heartbeat every few seconds while the work runs
+release   delete the row on exit
+reclaim   a lease whose heartbeat has gone cold is dead — take it
+```
+
+This is the pattern §4.2 previously used for the run lock — pid plus heartbeat — moved
+machine-global so it outlives the directory. Crash recovery falls out of it: a runner that
+dies stops renewing, and the next claimant reclaims. So does the deleted-mid-run case: the
+lease is in `~/.char/`, still visible and still reclaimable.
+
+**`cost:` and `exclusive:` are machine-wide, not per-run.** Ports were already claimed
+machine-globally; CPU slots and named exclusives were not, which meant five concurrent
+workspaces each granted themselves the full CPU budget and each granted themselves the same
+browser or GPU. With ten-minute runs that is sustained 5× oversubscription rather than a brief
+overlap, on exactly the "five agents on one machine" case §2.1 calls the one that matters.
+
+#### Why not a daemon
+
+A daemon would buy one thing this does not: **prompt** reaping, seconds after a directory
+vanishes rather than at the next `char init`. Everything else it offers, a lease already
+provides — and it does so without a background process to install, upgrade, crash-recover, or
+answer "is it running?" for, and without a `curl | sh` bootstrap that has to install a
+service.
+
+The reason char does not need one is that **the work process is already long-lived.** A
+detached `char check` exists for exactly as long as its run, so it can hold and renew its own
+leases. There is no state that outlives all char processes and therefore nothing for a
+resident daemon to hold. (Contrast a tool whose pipeline outlives every command that touches
+it — that shape genuinely needs a daemon. char's does not.)
 
 ### 4.4 Templating: four substitutions plus one scoped read, hard cap
 
@@ -1051,7 +1127,7 @@ incompatible ones.
 
 ### Phase 2 — Ownership core: `init`, `clean`, `status`
 
-Workspace id, project id, `.char/`, `~/.char/registry.json` with `O_EXCL` claiming, resource
+Workspace id, project id, `.char/`, `~/.char/char.db` with lease-based claiming, resource
 labeling, the process-group spawn/kill wrapper, and the scope lens.
 
 **This phase moved ahead of the check engine, and the reason is a dependency, not a
@@ -1065,8 +1141,15 @@ ship a `check` that could not lock or scope. §2.3 calls ownership "the highest-
 primitive in the project"; it is also the foundational one.
 
 **Done when:** two directories claim non-overlapping blocks concurrently;
-`char status --project` from either reports both; deleting one and running
-`char clean --orphaned` releases its block without disturbing the live one.
+`char status --project` from either reports both; and **deleting one directory outright, then
+running `char init` in a third, automatically reclaims the deleted one's block, containers and
+networks** — reported, not silently — without disturbing the live one. `char clean --orphaned`
+does the same on demand.
+
+**And when a lease survives its holder dying:** take a lease, `kill -9` the holder, and
+confirm the next claimant reclaims it once the heartbeat goes cold rather than blocking
+forever. This is the mechanism ten-minute `char check` runs depend on (§4.3), so it needs a
+test that kills something.
 
 ### Phase 3 — Rebuild the check engine, generalized *(clean-room, two agents)*
 
@@ -1313,7 +1396,7 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 | **Six phases of drift surface in phase 6.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against Chariot from phase 3 onward (§8.1). Expect substantial rework in phase 6 regardless. |
 | **Crude contamination** — a Chariot path or import follows the code in during phase 3. | Med | Phase-3 acceptance test is a literal `grep -riE "chariot\|tilt\|NEXT_PUBLIC\|\.claude\|backend/\|web/" src/` returning nothing. **Only phase 3's harvester has Chariot access.** |
 | **Config expressiveness pressure** once a second repo lands. | Med | Three substitutions, hard cap. Escape hatch is a generator script. |
-| **Registry corruption** with two agents claiming simultaneously. | Med | `O_EXCL` lockfile; claims idempotent by workspace id. |
+| **Machine-global state corruption** with several agents claiming or renewing leases simultaneously. | Low | SQLite transactions (§4.3). Was Med when this was a JSON file rewritten under an `O_EXCL` lockfile; ten-minute runs renewing heartbeats made that write pattern the contended path, which is why the store changed. |
 | **`curl \| sh` is a trust ask** and some environments block it. | Low | `uvx` and `pipx` cover anyone who will not run it. Publish the script's source in-repo. |
 
 ---

@@ -70,7 +70,7 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 |---|---|
 | **Three seams only** | `ctx.run`, `ctx.now`, `ctx.fetch`. Docker and git are adapter modules that call `ctx.run` — they are not seams. The filesystem is never faked; use `tmp_path`. |
 | **Pure core** | Decisions are functions over data. Spawning, writing, killing and labelling live in `adapters/`. |
-| **Scheduler is a reducer** | `step(state, event) -> (state, [actions])`. The core proposes, the shell attempts, failures come back as events. Applies to the scheduler and the `O_EXCL` claim loop **only** — elsewhere a plain function is a plain function. |
+| **Scheduler is a reducer** | `step(state, event) -> (state, [actions])`. The core proposes, the shell attempts, failures come back as events. Applies to the scheduler and the claim/lease loop **only** — elsewhere a plain function is a plain function. |
 | **No logic in command functions** | parse args → call core → render. Nothing else. |
 | **No ambient state** | No module-level mutable state. No `os.getcwd()`, `os.environ` or `Path.cwd()` below the entrypoint. The workspace rides on `Ctx`. |
 | **Dependencies point inward** | `core` imports nothing concrete. `adapters` import core protocols only. `cli` is the only module importing both. Enforced by `import-linter`. |
@@ -98,7 +98,7 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 | Tier | What goes here |
 |---|---|
 | `tests/unit/` | Pure core. No I/O at all. Fake `ctx.run` and **assert on the argv** — argv is where the bugs are. |
-| `tests/integration/` | Real subprocesses, real files. Process-group kill with no orphans. Concurrent `O_EXCL` claims. Docker labels verified gone after `clean`. |
+| `tests/integration/` | Real subprocesses, real files. Process-group kill with no orphans. Concurrent claims and lease reclamation. Docker labels verified gone after `clean`. |
 | `tests/e2e/` | The real CLI against scratch repos. |
 | `tests/golden/` | One JSON snapshot per verb. **Regenerate by hand** — there is deliberately no update flag. |
 
