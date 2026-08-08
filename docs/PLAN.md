@@ -135,15 +135,40 @@ makes the destructive step something you have to ask for.
 
 ### 2.3 Ownership
 
-Every port, container, network and process char creates is stamped with the workspace id.
-That single fact is what makes `clean` correct, and it is the highest-value primitive in the
-project.
+Every port, container, network, **image** and process char creates is stamped with the
+workspace id. That single fact is what makes `clean` correct, and it is the highest-value
+primitive in the project.
 
-- Containers/networks: label `char.workspace=<id>`
+- Containers/networks/images: label `char.workspace=<id>`
 - Processes: tracked pid, spawned in their own process group (`start_new_session=True`),
   killed with `os.killpg`
 - Ports: claimed blocks in `~/.char/registry.json`, released on `clean`, reaped when the
   workspace path stops existing
+
+**Images are here because leaving them out makes `clean` wrong at the largest scale.** The
+source repo already sweeps orphaned images and records roughly 2.1 GB per production app
+build — the single biggest thing a stale workspace holds. char does not build images itself,
+so stamping means passing the label through to compose, and `clean` removes by label like
+everything else.
+
+### 2.4 What every child process inherits
+
+char sets two variables in the environment of every process it spawns — services, checks and
+`commands:` entries alike. Neither is declared anywhere; both are always present:
+
+```
+CHAR_WORKSPACE=a3f91c02       this workspace's id
+CHAR_RUN_ID=<run-id>          the run this process belongs to, when inside one
+```
+
+`CHAR_RUN_ID` exists so a nested invocation can *join* the outer run rather than starting a
+second one — a child that finds it set knows it is already inside a run and inherits its
+lock rather than contending for it. The source repo already does exactly this with
+`CHAR_CHECK_RUN_ID`, including reading it back to detect nesting, so this is a confirmed
+requirement rather than a guess.
+
+Automatic rather than a substitution: it needs no declaration, nothing to typo, and it works
+for a script char has never been told anything about.
 
 ---
 
@@ -712,6 +737,7 @@ components:
       ready: { exec: "kubectl get ns example" }
       owns:
         containers: "label=io.x-k8s.kind.cluster=char-${workspace.id}"
+        images: "label=char.workspace=${workspace.id}"
         ports: [api]
         files: [".kube/char-${workspace.id}.conf"]
 ```
@@ -961,9 +987,28 @@ a repo it has never seen.
 
 ### Phase 6 — Chariot adopts it
 
-A Chariot PR: delete `scripts/char/check.py` and `servers.py`, take the dependency, keep
-`worktrees` / `tickets` / `design` as repo-local commands via a `commands:` block (§4.5),
-repoint `bin/char`.
+A Chariot PR: delete `scripts/char/check.py` and `servers.py`, take the dependency, move
+everything char does not replace into a `commands:` block (§4.5), repoint `bin/char`.
+
+**The full dispatch surface, confirmed by inspection rather than assumed:**
+
+| Chariot command | Subcommands | Disposition |
+|---|---|---|
+| `check` | passthrough | charkit `check` |
+| `stack` | start, stop, restart, open, clean | charkit `up` / `down` / `clean` — **except `open` and `restart`**, which have no charkit verb |
+| `clean` | — | charkit `clean` |
+| `worktrees` | sweep, clean, merge | `commands:` — minus the resource half, which moves to `char init` / `char clean` |
+| `tickets` | stale | `commands:` |
+| `design` | passthrough | `commands:` |
+| **`baselines`** | — | `commands:` — **not accounted for in any earlier draft of this plan**, and `baselines.py` is among the larger modules in the directory |
+
+`stack restart` is `char down && char up` and can simply go. `stack open` is repo-specific
+(it opens URLs) and becomes a `commands:` entry.
+
+Subcommands are real — `char worktrees sweep`, `char tickets stale` — so `commands:` argv
+passthrough must be transparent, as §4.5 specifies. `bin/char` execs an absolute path
+resolved from the git root with no `uv run --directory`, so commands running from the
+workspace root need no working-directory key.
 
 **Take the dependency from git, not PyPI.** `uv` supports a git source, so this phase does
 not wait on publishing — and getting a real repo onto charkit is worth more than getting the
@@ -1026,7 +1071,14 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 | `char/__main__.py` | 345 | Reference. Typer dispatch pattern. |
 | `char_mcp/server.py` | ~95 | Reference for phase 5. |
 | `char_test/` | 2,694 | **Harvest in phase 2 — port the cases, rebuild the harness.** `run_fn`-injected, asserts on behavior not implementation — this is the single most valuable asset. Only check-id fixtures should need editing. |
-| `bin/char` | ~25 | Copy the pattern. Resolves the git root from the *caller's* cwd at every invocation, which is why one symlink works from inside any worktree. |
+| `char/baselines.py` | — | **Not previously listed.** No charkit verb replaces it; becomes a `commands:` entry in phase 6. Among the larger modules in the directory. |
+| `char/tickets.py` | — | Small. Becomes a `commands:` entry in phase 6. |
+| `bin/char` | ~25 | Copy the pattern. A bash dispatcher that resolves the git root from the *caller's* cwd at every invocation and execs `$root/scripts/char/__main__.py "$@"` — which is why one symlink works from inside any worktree. |
+
+> **The line counts above are from an earlier reading and at least one is now badly stale.**
+> `check.py` is currently ~159 KB on disk, which is several times the 1,632 lines recorded
+> here. Phase 2's harvest is therefore materially larger than this table implies. Re-measure
+> with `wc -l` before scoping that phase; do not plan against these numbers.
 
 ---
 
