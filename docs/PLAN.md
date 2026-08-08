@@ -244,7 +244,7 @@ everything else is config. **Every verb takes `--json`.**
 | `char up` | Services running and ready-checked. Records what it started into `owned.json`. | `UP` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` |
 | `char check` | Lint / format / test. Scoped, scheduled, locked, ceilinged. `--detach` / `--status` / `--wait`. | `PASS` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
-| `char clean` | Release everything this workspace owns, including `.char/`. | `CLEAN` |
+| `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` |
 
 Plus: `char config scan`, `char config verify`, `char agents-md [--write|--check]`, and any
@@ -340,8 +340,15 @@ a bikeshed.
 | `--project` | every workspace sharing this `--git-common-dir` | "What's going on across everything I have open on this repo?" — the orchestrating agent's view |
 | `--all` | every workspace on the machine | "What is char holding anywhere?" |
 
-`--orphaned` is a separate, always-safe filter that composes with any scope: it only touches
-workspaces whose directory no longer exists, so it can never disturb a live agent.
+Two filters compose with any scope, on `clean`:
+
+- **`--orphaned`** — always safe. It only touches workspaces whose directory no longer exists,
+  so it can never disturb a live agent.
+- **`--artifacts`** — also removes declared `owns.files` (§6.1). Off by default because those
+  cost disk but leak nothing machine-global, and removing them makes the next `init` pay a
+  full reinstall. `char clean --artifacts --all` is the reclaim-disk answer; it is a no-op
+  under `--orphaned`, where the files are already gone with the directory.
+
 `--project` on `clean` **will** stop other worktrees' services — which is exactly why it is
 not the default.
 
@@ -396,6 +403,8 @@ components:
     root: web
     match: ["web/**"]
     setup: pnpm install --frozen-lockfile
+    owns:                        # component level — what setup: created (§6.1)
+      files: [node_modules]      # removed only by `clean --artifacts`
     checks:
       lint:  { cmd: pnpm eslint ${files}, fix: pnpm eslint --fix ${files} }
       types: { cmd: pnpm typecheck }
@@ -436,7 +445,11 @@ plan's own motivating bug. Containers and networks survived it only by accident,
 carry a `char.workspace=<id>` label and are findable without any record at all. Pids are not.
 Everything reclaimable now lives in §4.3.
 
-`char clean` removes `.char/` entirely; `char init` recreates it. **Log growth is a separate
+`char clean` removes `.char/` entirely; `char init` recreates it. **`clean` releases
+resources; it does not undo installation.** An earlier draft said it returns the workspace to
+its "pre-init state", which overclaims — `node_modules` and a populated `.venv` survive, by
+design, unless `--artifacts` is passed (§6.1). `char clean` is not `git clean -xfd` and should
+not read as if it were. **Log growth is a separate
 problem with a separate answer** — coupling retention to `clean` would mean either logs live
 forever or you lose the evidence from a failed run the moment you release a port. At the start
 of each run char reaps old run directories, keeping the most recent N and never touching one
@@ -929,6 +942,55 @@ components:
         files: [".kube/char-${workspace.id}.conf"]
 ```
 
+#### `owns:` at component level — what `setup:` created
+
+`owns:` also appears directly on a component, where it describes what **`setup:`** produced
+rather than what `run:` started. This closes a hole in §1's thesis: *"you cannot clean up what
+you never claimed, and claiming happens at init"* — but `setup:` was the one thing that
+created and never claimed.
+
+```yaml
+components:
+  api:
+    setup: [bundle install, rails db:create, rails db:migrate]
+    owns:
+      files: [node_modules, .venv]
+      release: psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'
+```
+
+**Only one of these is a genuine leak, and it is not the obvious one.** Three categories:
+
+| `setup:` creates | Lives | Leaked when the directory is deleted? |
+|---|---|---|
+| `node_modules`, `.venv`, `target/` | inside the workspace | **No** — dies with it |
+| A database inside a char-owned container | inside a labelled container | **No** — dies with the container |
+| A database on a shared server, a cloud resource | outside char entirely | **Yes** |
+
+So `rails-monolith`'s `db:create` is only a leak when Postgres is shared rather than a
+char-managed service.
+
+**`release:` is resolved at `char init` and recorded in `char.db`.** That is the whole point,
+and it is why this is not a `teardown:` key. A teardown script symmetric with `setup:` would
+live *in the workspace* — so in the orphan case, the one that actually matters, it has been
+deleted along with everything else. A resolved command string in the machine-global store runs
+from anywhere:
+
+```
+declared   psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'
+recorded   psql -h db.internal -c 'DROP DATABASE app_a3f91c02'
+run by     char clean, and char clean --orphaned, with no workspace present
+```
+
+**`files:` are removed only by `char clean --artifacts`, never by plain `clean`.** They cost
+disk but leak nothing machine-global, and deleting them means the next `init` pays a full
+reinstall — minutes an agent did not ask to spend. `--artifacts` composes with the scope lens,
+so `char clean --artifacts --all` is the reclaim-disk-on-this-machine answer. It is a no-op
+under `--orphaned`, where the directory and its files are already gone.
+
+**char never guesses which files are artifacts.** Inferring `node_modules`, `.venv`, `.next`
+from a repo scan is a stack-detection engine, which §5 rules out. They are declared, or they
+are not char's.
+
 ~60 lines instead of a plugin API, no versioned contract, and `clean` stays correct for
 resources char never created directly. If a third real driver ever proves necessary, `owns:`
 is the interface you would have designed anyway.
@@ -988,7 +1050,7 @@ all fail together. If adding a fixture creates no new way to be wrong, it is dec
 | `multi-lang` *(representative)* | A genuinely different runtime pairing | Abstraction is Django/Next-shaped |
 | `go-service` | Low end — one component, one binary, one Postgres, no monorepo, **plus one secret from one provider** (§4.7) | **Over-structuring.** A trivial repo needing 40 lines of config — and secrets that only work in a complex config are secrets nobody will adopt |
 | `pnpm-monorepo` | Many components, **zero** services, turbo already present, **plus a declared nested workspace** (§4.6) — so the fixture is a root manifest *and* a nested `char.yml` | Component-per-package globbing; also honestly answers "is char redundant where turbo exists?" Additionally: overlap detection, manifest-only roots, and discovery returning the same answer from any depth |
-| `rails-monolith` | `setup:` as a *sequence* (bundle → db:create → migrate → seed); two services with real dependency ordering | `setup:` modeled as a single string; `needs:` ordering that only works for one service |
+| `rails-monolith` | `setup:` as a *sequence* (bundle → db:create → migrate → seed); two services with real dependency ordering; **`owns.release:` for a database on a shared server** | `setup:` modeled as a single string; `needs:` ordering that only works for one service; setup that creates something `clean` cannot reach |
 | `python-ml` | No web services, **no ports at all**, a 20-minute check, GPU as a non-port exclusive resource | Port machinery that doesn't gracefully no-op; `exclusive:` that assumes "a port" |
 
 **Cost is low because fixtures are configs, not checkouts.** You don't need a Rails app — you
