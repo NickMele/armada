@@ -205,18 +205,48 @@ states per verb but never says what the process exits with. Agents read exit cod
 reliably than they parse stdout, and the difference between "your config is wrong" and "your
 tests failed" is the difference between fixing the right thing and retrying forever.
 
-| Code | Meaning | Terminal states |
-|---:|---|---|
-| `0` | success | `READY` `UP` `DOWN` `CLEAN` `PASS` |
-| `1` | the thing char ran failed on its own terms — a real result, not char's fault | `FAIL` `DEAD` |
-| `2` | bad invocation — unknown verb or flag (already Typer's default) | — |
-| `3` | bad config — `char.yml` invalid, `config verify` failed | — |
-| `4` | timeout | `TIMEOUT` |
-| `5` | aborted — lock lost, run cancelled | `ABORTED` |
-| `70` | char bug — internal error; retrying will not help | — |
-| `130` | SIGINT (shell convention, free) | — |
+**There is exactly one mapping: `exit code = f(error.class)`, or `0` when `error` is null.**
+An earlier draft had two — one from terminal state, one from error class — and asserted that
+the class won, while printing a table keyed on state. They disagreed, and nothing would have
+caught it: golden snapshots capture stdout, not exit status.
 
-The class in §1.7's error object determines the code.
+| Code | Error class | Meaning |
+|---:|---|---|
+| `0` | *(none)* | success |
+| `1` | `tool_failed` | the thing char ran failed on its own terms — a real result, not char's fault |
+| `2` | `bad_invocation` | unknown verb or flag |
+| `3` | `bad_config` | `char.yml` is wrong |
+| `4` | `timeout` | char's own deadline elapsed |
+| `5` | `aborted` | cancelled, or the run's holder died |
+| `70` | `char_bug` | internal error; retrying will not help |
+| `130` | *(signal)* | SIGINT |
+
+**Terminal state describes *what happened*; error class states *why*; the code follows the
+class.** They are not the same axis, which is why one cannot be derived from the other:
+
+| Case | State | Class | Code |
+|---|---|---|---:|
+| `char up`, `char.yml` names a compose file that does not exist | `FAILED` | `bad_config` | 3 |
+| `char check`, the tests genuinely fail | `FAILED` | `tool_failed` | 1 |
+
+Same state, different codes, and that is correct — an agent must fix the config in one case
+and read the test output in the other. `DEAD` (the run's holder died) maps to `aborted`,
+because the useful next action is the same as for a cancellation: try again.
+
+**Verified rather than assumed** (Typer 0.27.1, recorded in `traps.md`): `KeyboardInterrupt`
+already exits **130**, and usage errors already exit **2**. Those two are genuinely free. A
+report that Click collapses them to `1` was checked and is false for this version — but check
+again if the framework is upgraded, because it would be silent.
+
+`70` is not a claim to implement BSD `sysexits`. It is chosen because it sits far from char's
+own low codes *and* from the codes a child process is likely to return, so "char itself broke"
+stays distinguishable from everything else.
+
+**Broken pipe is unresolved and needs one line.** `char status | head` must not read as a
+failure. Set `SIGPIPE` to `SIG_DFL` at the entrypoint so char dies like an ordinary Unix
+tool instead of raising at interpreter shutdown. This was not measurable in the environment
+where the rest of this table was verified — treat it as a phase-2 task with a test, not as
+settled.
 
 **The envelope**, fixed in phase 1 alongside the config contract and for the same reason —
 four things consume it and none can invent it independently. Full definition in PLAN.md §3.1.
@@ -291,7 +321,13 @@ Every error carries **which class of failure it is, where, and what to do next.*
 | `bad_invocation` | the command itself was wrong | fix the command | `2` |
 | `bad_config` | `char.yml` is wrong | fix the config | `3` |
 | `tool_failed` | the underlying tool failed | that is a real result — report it | `1` |
+| `timeout` | char's own deadline elapsed | raise the timeout, or investigate why it is slow | `4` |
+| `aborted` | cancelled, or the run's holder died | try again | `5` |
 | `char_bug` | charkit broke | stop; retrying will not help | `70` |
+
+`timeout` and `aborted` are classes rather than only terminal states so that the class enum
+covers every non-zero exit. Without them the mapping in §1.6 would have holes, and a hole is
+where a second, competing mapping grows back.
 
 `next_action` is **required for `bad_config`** and optional elsewhere. That is the one class
 where char genuinely knows the fix, because it has just validated the file and knows what it
@@ -370,15 +406,22 @@ for.
 No phase branches. `main` is the only base. Each completed phase gets a git tag (`phase-1`,
 `phase-2`, …).
 
-**Why not phase branches.** Because there is no server-side merge gate, validation happens
-exactly once — when `no-mistakes` runs before push. Under phase branches, the phase→main
-merge would be the largest diff in the project and **the only one nothing ever validated**,
-which inverts the point of the gate. Re-validating it means running the agent-driven review
-step a second time over the accumulated diff.
+**Why not phase branches.** An earlier draft argued this from "there is no server-side merge
+gate, so the phase→main merge is the one diff nothing ever validates." **That premise is
+false** — §3 chose a GitHub Actions matrix two sections later, which is a server-side gate,
+and it would run on the phase merge like any other. The argument was written before the CI
+decision and never revisited.
 
-Beyond that: `main` gives one rebase base (and `no-mistakes` rebases onto base
-automatically), one merge point, and no stacked branches — which is where agent implementers
-reliably go wrong.
+What actually survives is weaker but still decisive for this project:
+
+- **One rebase base.** `no-mistakes` rebases onto base automatically; a phase branch is a
+  second moving target that someone maintains by hand.
+- **No stacked branches.** This is where agent implementers reliably go wrong, and agents are
+  doing the work.
+- **The agent review runs twice.** `no-mistakes`' review step is agent-driven and slow; a
+  phase→main merge either re-reviews the accumulated diff or is waved through.
+
+The conclusion stands; the confidence should be lower than the original phrasing implied.
 
 **Cost, accepted:** `main` can sit part-way through a phase. Tags recover per-phase rollback,
 and publishing to PyPI is tag-triggered and deliberate, so `main` being mid-phase never

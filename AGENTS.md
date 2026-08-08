@@ -81,12 +81,19 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 
 ### Exit codes
 
+**One rule: the code is a function of `error.class`, or `0` when there is no error.** Terminal
+state never determines it — `FAILED` is exit 3 when the config was wrong and exit 1 when the
+tests were.
+
 | | | | |
 |---:|---|---:|---|
-| `0` | success | `4` | timeout |
-| `1` | the tool char ran failed — a real result | `5` | aborted |
-| `2` | bad invocation | `70` | char bug |
-| `3` | bad config | `130` | SIGINT |
+| `0` | *(no error)* | `4` | `timeout` |
+| `1` | `tool_failed` | `5` | `aborted` |
+| `2` | `bad_invocation` | `70` | `char_bug` |
+| `3` | `bad_config` | `130` | SIGINT |
+
+A `commands:` child's exit code passes through **verbatim** and is not remapped. char's own
+codes can only occur when the child never ran; `data.dispatched` says which.
 
 ---
 

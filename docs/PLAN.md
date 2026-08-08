@@ -306,11 +306,17 @@ of valid selectors and never has to discover anything. `char check web:e2e`,
 **Partial matches are normal.** `char check test` where `api:test` exists and `web:test` does
 not runs `api:test` and exits 0.
 
-**Zero matches depend on whether the name is conventional.** These six are conventional:
+**Zero matches depend on whether the name is conventional.** These four are conventional:
 
 ```
-lint   types   test   e2e   build   fmt
+lint   types   test   e2e
 ```
+
+They are exactly the check names §4.1's example config uses, and nothing more. An earlier
+draft listed six, adding `build` and `fmt`, and justified the set with *"all six fixtures
+already use exactly these names"* — a claim about artifacts that do not exist yet, and one
+that also broke the growth rule stated below. `build` and `fmt` join the set the first time a
+fixture actually declares them.
 
 - **A conventional name matching nothing** → `PASS`, empty `data.runs`, exit 0. "This
   workspace has no lint checks" is a real and unremarkable answer, and it is what lets an
@@ -517,8 +523,17 @@ it — that shape genuinely needs a daemon. char's does not.)
 
 **Everywhere:** `${port.NAME}`, `${files}`, `${component.root}`, `${workspace.id}`.
 
-**Inside `env:` blocks only:** `${env.NAME}` — a bare read of the ambient environment.
-Unset at spawn time is a `bad_config` error naming the variable.
+**Two scoped placeholders, each legal in exactly one place and nowhere else:**
+
+| Placeholder | Legal only in | Unset / unmatched |
+|---|---|---|
+| `${env.NAME}` | `env:` blocks | `bad_config`, naming the variable |
+| `${ref}` | `secret_providers[].cmd` (§4.7) | schema error — a provider `cmd` without it can never resolve anything |
+
+`${ref}` is listed here because an earlier draft introduced it in §4.7 without adding it to
+the cap this section spends forty lines defending. It is a provider-template placeholder, not
+a general substitution: it is substituted with the part of a secret reference following the
+scheme, and it means nothing anywhere else.
 
 **No conditionals, no loops, no expression language.** `${env.NAME ?? "default"}` is
 rejected by the schema, not merely undocumented.
@@ -621,8 +636,22 @@ workspace root. char is a dispatcher here and nothing more: remaining argv passe
 untouched, and **the command's exit code is returned verbatim** rather than being mapped into
 char's own codes — char did not decide the outcome, so it does not get to classify it.
 
-The same three substitutions apply and no others (§4.4); `${files}` is simply never
-populated for a `commands:` entry, since there is no scope to compute.
+**That collides with char's own map, and the envelope resolves it.** char assigns meanings to
+`1`–`5` and `70` (`ARCHITECTURE.md` §1.6), so a child exiting `3` is on its face
+indistinguishable from char's own `bad_config`. Two things make it unambiguous:
+
+- **char's own error codes can only occur when the child did not run.** If the child ran at
+  all, dispatch succeeded — so any code after that point is the child's.
+- The envelope says which happened: **`data.dispatched`** is true only if the child was
+  executed, and **`data.child_exit`** records its code.
+
+Remapping the child's codes into a reserved band was considered and rejected: scripts return
+meaningful codes their own callers already depend on, and rewriting them to protect char's
+namespace breaks the thing `commands:` exists to preserve.
+
+The same four substitutions apply and no others (§4.4) — plus `${env.NAME}` inside `env:`,
+which is where env composition lives. `${files}` is simply never populated for a `commands:`
+entry, since there is no scope to compute.
 
 **A name may not shadow a built-in verb.** `config verify` rejects a `commands:` entry named
 `init`, `up`, `down`, `check`, `clean`, `status`, `config` or `agents-md`. Without that rule
@@ -1457,7 +1486,7 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 | **Overfitting to Chariot** — the abstraction gets shaped around Django+Next because it is the only repo the agent has seen. Isolation does *not* prevent this. | **High** | **Six fixture configs in phase 1** (§8.1). This is the single most important guard in the plan. |
 | **Six phases of drift surface in phase 6.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against Chariot from phase 3 onward (§8.1). Expect substantial rework in phase 6 regardless. |
 | **Crude contamination** — a Chariot path or import follows the code in during phase 3. | Med | Phase-3 acceptance test is a literal `grep -riE "chariot\|tilt\|NEXT_PUBLIC\|\.claude\|backend/\|web/" src/` returning nothing. **Only phase 3's harvester has Chariot access.** |
-| **Config expressiveness pressure** once a second repo lands. | Med | Three substitutions, hard cap. Escape hatch is a generator script. |
+| **Config expressiveness pressure** once a second repo lands. | Med | Four substitutions plus two scoped placeholders, hard cap (§4.4). Escape hatch is a generator script. |
 | **Machine-global state corruption** with several agents claiming or renewing leases simultaneously. | Low | SQLite transactions (§4.3). Was Med when this was a JSON file rewritten under an `O_EXCL` lockfile; ten-minute runs renewing heartbeats made that write pattern the contended path, which is why the store changed. |
 | **`curl \| sh` is a trust ask** and some environments block it. | Low | `uvx` and `pipx` cover anyone who will not run it. Publish the script's source in-repo. |
 

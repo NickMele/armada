@@ -23,6 +23,33 @@ shows it, and what breaks if you assume otherwise.
 
 ---
 
+## Typer / Click exit codes
+
+Measured against **Typer 0.27.1**, phase 0.
+
+### `KeyboardInterrupt` already exits 130, and usage errors already exit 2
+
+```sh
+python app.py sigint        # raises KeyboardInterrupt  -> 130
+python app.py --bogus       # unknown flag              -> 2
+python app.py clickerr      # typer.BadParameter        -> 2
+```
+
+Both are free — char does not need to catch and re-exit for them.
+
+**This entry exists because it was reported as false.** A claim that Click collapses
+`KeyboardInterrupt` into `Abort` and exits `1` was checked and does not hold for this version.
+Re-measure after any framework upgrade: if it ever became true, it would be silent, and
+`char check` interrupted by an agent would report a code meaning "the tool failed" instead of
+"you interrupted me."
+
+### Broken pipe — unmeasured, needs handling
+
+`char status | head` must not read as a failure. The intended fix is to set `SIGPIPE` to
+`SIG_DFL` at the entrypoint so char dies like an ordinary Unix tool rather than raising
+`BrokenPipeError` at interpreter shutdown. **Not measured** in the environment where the rest
+of this section was verified — treat as open, and add the measurement when it is implemented.
+
 ## Docker Compose
 
 Measured against **Docker Compose v2.24.3-desktop.1**, phase 0.
