@@ -94,9 +94,24 @@ be identical from anywhere inside the tree, because `workspace_id` is a hash of 
 > Walk up from the caller's cwd to the git root, collecting **every** `char.yml` found.
 >
 > - **Exactly one** → that directory is the workspace root.
-> - **Zero** → `bad_config`, naming the directories searched.
+> - **Zero** → `bad_config`, naming the directories searched — *but only for verbs that need
+>   a workspace; see below.*
 > - **Two or more** → `bad_config`, *unless* the outer one declares the inner in
 >   `workspaces:` (§4.6). If it does, the innermost wins.
+
+**Not every verb needs a workspace.** The rule is: *asking about this workspace requires a
+`char.yml`; asking about the machine does not.*
+
+| Requires a `char.yml` | Runs without one |
+|---|---|
+| `init` `up` `down` `check` `clean` `status` `config verify` `agents-md` | `char config scan` (§5 layer 1 — it exists to run *before* a config does) |
+| | `char status --all` |
+| | `char clean --all --orphaned` |
+
+The machine-scoped cases matter more than they look. `clean --orphaned` is most needed from
+*outside* any workspace — from a shell that happens to be anywhere — and nothing else on the
+machine reaps orphaned ports and containers. A rule that made it resolve a local workspace
+first would fail before it could do the one job only it does.
 
 Anchoring on `char.yml` rather than always the git root, because the two differ in exactly
 the cases that matter: in a monorepo a package may sit far below the root, and the git root
@@ -201,8 +216,16 @@ everything else is config. **Every verb takes `--json`.**
 | `char clean` | Release everything this workspace owns, including `.char/`. | `CLEAN` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` |
 
-Plus: `char config verify`, `char agents-md [--write|--check]`, and any repo-local verbs the
-repo declares in `commands:` (§4.5) — which char dispatches but does not define.
+Plus: `char config scan`, `char config verify`, `char agents-md [--write|--check]`, and any
+repo-local verbs the repo declares in `commands:` (§4.5) — which char dispatches but does not
+define.
+
+**`char init` means exactly one thing: make this workspace ready.** An earlier draft also
+assigned it §5's layer-1 evidence scan, which by definition runs where no `char.yml` exists —
+so that verb had two unrelated behaviours, two output shapes, and could only fail in the
+state half of it existed to serve. The scan is `char config scan`, which puts layers 1 and 3
+of the bootstrap sandwich in one namespace: **scan** produces evidence, an agent authors,
+**verify** checks the result.
 
 **One spelling for failure: `FAILED`.** An earlier draft used `FAIL` for `check` and `FAILED`
 for `init` / `up` — two tokens for one idea, in the one place the project claims six verbs
@@ -656,7 +679,7 @@ something to inject into.
 
 | Layer | Who | Produces |
 |-------|-----|----------|
-| **1. Deterministic scan** | char (`char init`) | An **evidence report**, never a config |
+| **1. Deterministic scan** | char (`char config scan`) | An **evidence report**, never a config |
 | **2. Authoring** | the agent | The `char.yml`, from evidence + schema + a worked example |
 | **3. Deterministic verify** | char (`char config verify`) | Pass/fail with fix suggestions |
 
@@ -1118,12 +1141,16 @@ the search is unambiguous.
 
 ### Phase 5 — Bootstrap sandwich + `agents-md` + MCP *(fans out widest)*
 
-The layer-1 evidence scanner is a dozen independent parsers — the most parallelizable work
-in the plan, one agent each. Plus schema/example emission, `config verify`, the managed
-AGENTS.md block, and the MCP server.
+`char config scan` — the layer-1 evidence scanner — is a dozen independent parsers, the most
+parallelizable work in the plan, one agent each. Plus schema/example emission,
+`char config verify`, the managed AGENTS.md block, and the MCP server.
+
+**`char config scan` must run in a repo with no `char.yml`.** That is the only state it is
+ever useful in, and §2.1 exempts it from workspace resolution for exactly that reason.
 
 **Done when:** an agent given only "set up char in this repo" produces a verifying config in
-a repo it has never seen.
+a repo it has never seen — `char config scan` → the agent authors → `char config verify`
+passes, with no human in the loop.
 
 ### Phase 6 — Chariot adopts it
 
