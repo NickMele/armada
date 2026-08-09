@@ -141,6 +141,14 @@ budget, held exclusives, start times) become explicit `State` fields, which is m
 to read. And a pure reducer cannot call `time.monotonic()`, so `now` is carried on every
 event and the shell sleeps until the next deadline computed from state.
 
+**One deadlock is deliberately outside the reducer's reach, and is prevented rather than
+tested.** Once `exclusive:` resources are machine-wide (PLAN.md §4.3), a cycle can span two
+*processes* — and `step()` models one run, so no unit test can construct it. The answer is to
+acquire exclusives in sorted name order, which makes a cycle impossible for any interleaving
+rather than unlikely. Recording it here because it is the one gap in the claim above: the
+reducer makes *intra-run* scheduling deadlocks unit-testable, and the *inter-run* case needed a
+different kind of answer.
+
 **This is deliberately not a general rule.** Reducers apply to the scheduler and the claim
 loop. Everywhere else in the core, a plain function is a plain function.
 

@@ -307,6 +307,7 @@ behave identically. The complete enum:
 ```
 READY  UP  DOWN  CLEAN  PASS  OK          success
 PARTIAL                                    some succeeded, some did not
+BLOCKED                                    waiting on a machine-wide lease (§4.3)
 FAILED                                     did not achieve its goal
 ABORTED  DEAD  TIMEOUT                     did not finish
 ```
@@ -706,6 +707,67 @@ This is the pattern §4.2 previously used for the run lock — pid plus heartbea
 machine-global so it outlives the directory. Crash recovery falls out of it: a runner that
 dies stops renewing, and the next claimant reclaims. So does the deleted-mid-run case: the
 lease is in `~/.char/`, still visible and still reclaimable.
+
+#### Contention: what blocks, what fails fast, and why they differ
+
+| Lease | The question it answers | Behaviour |
+|---|---|---|
+| **run lease** | "is another run already going in *my* workspace?" | **Fail fast** (§3.2.1) — you probably did not mean to start a second one |
+| **cpu-slot** | "is the machine busy?" | **Block.** A budget that errors instead of queueing is not a budget |
+| **exclusive** | "is another workspace using the browser?" | **Block** — and this is where the wait can be long |
+
+An earlier draft applied §3.2.1's fail-fast rule to the run lease and left the resources it
+was reasoned *about* unaddressed, which reintroduced the silent wait across workspaces. The
+defect was never blocking; it was blocking **invisibly and without a ceiling**.
+
+So a blocked check is **visible in the payload**, naming what it waits on and who holds it:
+
+```json
+{ "id": "web:e2e", "status": "BLOCKED",
+  "waiting_on": { "exclusive": "browser", "held_by": "7c21ab90", "since_ms": 44000 } }
+```
+
+and after an acquisition ceiling it fails with a **retryable** class:
+
+```
+status: FAILED   error.class: aborted   "browser held by 7c21ab90 for 15m"
+```
+
+That is the shape SQLite itself uses, measured in [`traps.md`](traps.md): a contending writer
+waits the full `busy_timeout` and then fails with `SQLITE_BUSY` (5), which is retryable —
+distinct from `BUSY_SNAPSHOT` (517), which arrives in microseconds and is not.
+
+#### Deadlock is prevented by construction, not detected
+
+Once exclusives are machine-wide, a cycle spans **processes**: workspace A holds `browser` and
+wants `gpu` while B holds `gpu` and wants `browser`. Neither ever releases, because release
+happens when work *finishes* and neither can *start*.
+
+**The reducer cannot catch this.** `step(state, event)` models one run; run A's state machine
+has no idea run B exists, so no unit test can construct the cycle. §1.2's argument was that
+making the scheduler a reducer puts deadlocks within reach of a unit test — this particular
+deadlock crawled out of that reach when the resources went machine-wide.
+
+> **Rule: exclusives are acquired in sorted name order, always.**
+
+That makes a cycle impossible rather than unlikely, **for every possible interleaving**. If a
+worker waits for X, everything it holds is below X — it acquires upward and has not reached X.
+Follow a supposed cycle and the awaited resource strictly increases at each step, so returning
+to the start would require X > X. No step in that argument mentions speed, arrival order or
+scheduling, which is why it is preferred over detection: timing cannot defeat it.
+
+**Verified by a cross-process integration test**: two real processes declaring the same two
+exclusives in opposite order must both complete. Without the sorting they hang — which is the
+point of testing it, since the rule is easy to write down and easy to forget.
+
+**What ordering deliberately does not fix**, and what does:
+
+| Failure | Handled by |
+|---|---|
+| Two workers stuck on each other forever | sorted acquisition — no recovery exists, so it must be impossible |
+| B waits fifteen minutes for A's slow suite | not a failure; the `BLOCKED` state makes it visible rather than silent |
+| A crashes holding `browser` | heartbeat expiry |
+| A is wedged but its heartbeat still ticks | **a hard TTL per lease, independent of heartbeat** |
 
 **`cost:` and `exclusive:` are machine-wide, not per-run.** Ports were already claimed
 machine-globally; CPU slots and named exclusives were not, which meant five concurrent
