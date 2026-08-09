@@ -410,7 +410,7 @@ file inside — daemon access is root-equivalent. No mechanism char could build 
 so promising it would be false assurance. What char *can* guarantee is that its own outputs,
 files and database never contain one.
 
-`~/.char/char.db` was missing from an earlier draft of this list, which mattered: §6.1's
+`~/.char/char.db` was missing from an earlier draft of this list, which mattered: `PLAN.md` §6.1's
 `owns.release:` is resolved at `init` and recorded there, so the obvious way to express a
 teardown command with a password wrote a plaintext credential to a machine-global store that
 survives `clean` **by design**.
@@ -772,7 +772,7 @@ when the copy and the owner disagree, the owner wins and the copy is the bug.
 | CI | **Both** — `no-mistakes` primary, minimal Actions matrix alongside | Actions supplies the one thing a local gate cannot: a machine that is not yours, and Linux as well as macOS. Process groups, signals and file locks are load-bearing; verifying real process-group kill only on macOS leaves the platform most users are on untested. Free on a public repo. `no-mistakes` keeps the agent review step, which is the only actual review in a solo repo. |
 | Typing | **The compiler** | The decision that produced "mypy strict from commit one" is satisfied for free and more strongly: there is no gradual-typing escape hatch and no `Any` leaking in from untyped dependencies. Deny `unsafe` crate-wide except where `traps.md` records a required exception. |
 | Rust edition / MSRV | **2021 edition** | MSRV pinned in `Cargo.toml`, raised deliberately. Users are unaffected either way — they receive a static binary, so no toolchain is required to run `char`. |
-| Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real `O_EXCL` races or real docker labels — the exact failures char exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
+| Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real concurrent claim races or real docker labels — the exact failures char exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
 | Coverage | **Gated, ratchet floor** | Floor is set by the first real measurement and may only rise; a PR that lowers coverage fails. Chosen over a fixed percentage because no project data exists to ground a number — 80 and 90 are convention, not evidence. `#[coverage(off)]`, or a documented exclusion, with a reason comment, is the escape for genuinely untestable lines. |
 
 ### Test tiers
@@ -780,7 +780,7 @@ when the copy and the owner disagree, the owner wins and the copy is the bug.
 | Tier | Contents | Speed |
 |---|---|---|
 | `tests/unit/` | Pure core. Scheduler reducer, scope resolution, verdict aggregation, config resolution, port selection. No I/O of any kind. | fast |
-| `tests/integration/` | Real subprocesses and real files. Process-group spawn and kill with no orphans surviving; two directories claiming ports concurrently through `O_EXCL`; compose up/down with labels verified gone. | slow |
+| `tests/integration/` | Real subprocesses and real files. Process-group spawn and kill with no orphans surviving; two directories claiming ports concurrently; compose up/down with labels verified gone. | slow |
 | `tests/e2e/` | The real CLI against scratch repos, end to end. | slowest |
 
 Integration and e2e run on both `ubuntu-latest` and `macos-latest` in the Actions matrix.

@@ -203,8 +203,9 @@ primitive in the project.
 
 - Containers/networks/images: **two** labels, `char.workspace=<id>` and
   `char.workspace_path=<realpath>` — see §2.3.1 for why the second one is not redundant
-- Processes: tracked process-group id, spawned with `start_new_session=True`, killed with
-  `os.killpg`. **Recorded in `~/.char/char.db` (§4.3), not in the workspace** — a pgid
+- Processes: tracked process-group id, spawned in a new session via `setsid` (see
+  [`traps.md`](traps.md) — **not** `process_group(0)`, which conflicts with it), killed with
+  `killpg`. **Recorded in `~/.char/char.db` (§4.3), not in the workspace** — a pgid
   recorded inside a directory that gets deleted is a leaked process
 - Ports: claimed blocks in `~/.char/char.db`, released on `clean`
 
@@ -1425,7 +1426,7 @@ of the five verbs.
 |----------|--------|-----|
 | Language | **Rust** (2021 edition) | **Reopened and re-decided in phase 0 — see below.** The reducer's `State`/`Event`/`Action` types are the scheduler's specification, and Rust is the only candidate whose compiler enforces that specification. |
 | Package name | **`charkit`** | `char` is taken on crates.io. Binary stays `char`; the package name appears once, in the bootstrap line. |
-| Distribution | **GitHub Releases + `install.sh`** | A single static binary, ~1.5 MB, no runtime to provision. Homebrew tap later. |
+| Distribution | **GitHub Releases + `install.sh`** | A single static binary — a ~2 MB floor, measured — with no runtime to provision. Homebrew tap later. |
 | Supervision | **Start-and-track only** | Restart-on-crash and log aggregation are a permanent bug class for marginal gain. |
 | Config shape | **One `components:` list** | `units` + `services` were the same thing split in two; the both-axes case read as duplication. |
 | Config format | **YAML, statically verifiable** | Generator script is the escape hatch. Starlark would force `config verify` to execute untrusted code. |
@@ -1460,7 +1461,7 @@ a deadlock there is the one bug class greenfield development structurally cannot
 establishes those types as the scheduler's specification. Only one candidate can hold that
 specification in the type system.
 
-Supporting, all measured: 4.8 ms cold start against Python's 116 ms; a 1.48 MB static binary
+Supporting, all measured: 4.8 ms cold start against Python's 116 ms; a ~2 MB static binary
 against a ~108 MB Python install; `TransactionBehavior::Immediate` as a typed argument rather
 than a driver-specific DSN string; newtypes that make `workspace_id` and `project_id`
 unconfusable when both are 8-character hex; and `rmcp` is the only MCP SDK shipping the Tasks

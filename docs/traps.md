@@ -106,7 +106,7 @@ durable handles."* This is the standard shape for exposing something like a ten-
 
 ## Rust — two required rules in the POSIX primitives
 
-Both sit in machinery §7 of the plan calls load-bearing, and both are one line you must not
+Both sit in machinery `PLAN.md` §7 calls load-bearing, and both are one line you must not
 forget. Measured 2026-08-09 against Rust 1.97.1.
 
 ### `SIGPIPE` is set to `SIG_IGN` at startup — `char status | head` panics until you fix it
@@ -309,7 +309,7 @@ docker compose -f st.yml --project-directory . config
 **If you assume otherwise:** you persist the resolved document as a debugging aid and create a
 cleartext credentials file, for every repo, including ones that never adopt char's secrets
 mechanism. Those values never passed through char, so no scrubber can redact them. This is why
-§6.0 pipes the document to `docker compose -f -` instead of writing it.
+`PLAN.md` §6.0 pipes the document to `docker compose -f -` instead of writing it.
 
 `docker compose -f -` accepts a document on stdin and produces identical resolved output —
 verified.

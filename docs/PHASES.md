@@ -50,10 +50,10 @@ all fail together. If adding a fixture creates no new way to be wrong, it is dec
 
 | Fixture | Axis it owns | Failure it catches that nothing else does |
 |---|---|---|
-| `django-next` *(real)* | Maximal case — polyglot monorepo, supervisor, checks running *inside* containers, 3s→15min cost spread, **and the only fixture with a `commands:` block** (§4.5) | Schema can't express a real complex repo; `commands:` unexercised until phase 6, when it is load-bearing |
+| `django-next` *(real)* | Maximal case — polyglot monorepo, supervisor, checks running *inside* containers, 3s→15min cost spread, **and the only fixture with a `commands:` block** (`PLAN.md` §4.5) | Schema can't express a real complex repo; `commands:` unexercised until phase 6, when it is load-bearing |
 | `multi-lang` *(representative)* | A genuinely different runtime pairing | Abstraction is Django/Next-shaped |
-| `go-service` | Low end — one component, one binary, one Postgres, no monorepo, **plus one secret from one provider** (§4.7) | **Over-structuring.** A trivial repo needing 40 lines of config — and secrets that only work in a complex config are secrets nobody will adopt |
-| `pnpm-monorepo` | Many components, **zero** services, turbo already present, **plus a declared nested workspace** (§4.6) — so the fixture is a root manifest *and* a nested `char.yml` | Component-per-package globbing; also honestly answers "is char redundant where turbo exists?" Additionally: overlap detection, manifest-only roots, and discovery returning the same answer from any depth |
+| `go-service` | Low end — one component, one binary, one Postgres, no monorepo, **plus one secret from one provider** (`PLAN.md` §4.7) | **Over-structuring.** A trivial repo needing 40 lines of config — and secrets that only work in a complex config are secrets nobody will adopt |
+| `pnpm-monorepo` | Many components, **zero** services, turbo already present, **plus a declared nested workspace** (`PLAN.md` §4.6) — so the fixture is a root manifest *and* a nested `char.yml` | Component-per-package globbing; also honestly answers "is char redundant where turbo exists?" Additionally: overlap detection, manifest-only roots, and discovery returning the same answer from any depth |
 | `rails-monolith` | `setup:` as a *sequence* (bundle → db:create → migrate → seed); two services with real dependency ordering; **`owns.release:` for a database on a shared server** | `setup:` modeled as a single string; `needs:` ordering that only works for one service; setup that creates something `clean` cannot reach |
 | `python-ml` | No web services, **no ports at all**, a 20-minute check, GPU as a non-port exclusive resource | Port machinery that doesn't gracefully no-op; `exclusive:` that assumes "a port" |
 
@@ -180,8 +180,8 @@ because a guard added at the moment it is first needed has already been unenforc
 commit before that.
 
 The schema must cover the full contract, including the parts implemented later:
-`components:` (§4.1), `commands:` (§4.5), `workspaces:` (§4.6), and `secrets:` /
-`secret_providers:` (§4.7). Secrets are **schema-only in this phase** — validated and
+`components:` (`PLAN.md` §4.1), `commands:` (`PLAN.md` §4.5), `workspaces:` (`PLAN.md` §4.6), and `secrets:` /
+`secret_providers:` (`PLAN.md` §4.7). Secrets are **schema-only in this phase** — validated and
 resolvable as references, never fetched. Everything after this phase codes against whatever
 lands here, so a key missing now is a contract change later.
 
@@ -203,13 +203,13 @@ Workspace id, project id, `.char/`, `~/.char/char.db` with lease-based claiming,
 labeling, the process-group spawn/kill wrapper, and the scope lens.
 
 **This phase moved ahead of the check engine, and the reason is a dependency, not a
-preference.** `char check` is *scoped, scheduled, locked and ceilinged* (§3): it writes
+preference.** `char check` is *scoped, scheduled, locked and ceilinged* (`PLAN.md` §3): it writes
 `.char/run/<run-id>/{lock,state.json,logs/}`, sets `CHAR_WORKSPACE` and `CHAR_RUN_ID` on
-every child (§2.4), and reaps old run directories at run start (§4.2). Every one of those
+every child (`PLAN.md` §2.4), and reaps old run directories at run start (`PLAN.md` §4.2). Every one of those
 depends on workspace resolution, the workspace id and `.char/` — all of which live here. With
 the old ordering, the check engine had to either invent its own workspace resolution and run
 lock for this phase to replace — the three-incompatible-answers failure §8 warns about — or
-ship a `check` that could not lock or scope. §2.3 calls ownership "the highest-value
+ship a `check` that could not lock or scope. `PLAN.md` §2.3 calls ownership "the highest-value
 primitive in the project"; it is also the foundational one.
 
 **Done when:** two directories claim non-overlapping blocks concurrently;
@@ -226,7 +226,7 @@ detached run accumulates them.
 
 **And when a lease survives its holder dying:** take a lease, `kill -9` the holder, and
 confirm the next claimant reclaims it once the heartbeat goes cold rather than blocking
-forever. This is the mechanism ten-minute `char check` runs depend on (§4.3), so it needs a
+forever. This is the mechanism ten-minute `char check` runs depend on (`PLAN.md` §4.3), so it needs a
 test that kills something.
 
 ### Phase 3 — Rebuild the check engine, generalized *(clean-room, two agents)*
@@ -270,7 +270,7 @@ behaviours.
 Two consequences of `check` eventually starting services, which must be handled in phase 4:
 anything it starts is recorded as `owned` rows like any other service, so `clean` reclaims
 it; and **`check` does not stop what it started.** Stopping would risk killing a service a
-sibling workspace is using, which §2.2's flat-siblings model exists to prevent, and would
+sibling workspace is using, which `PLAN.md` §2.2's flat-siblings model exists to prevent, and would
 make the next `check` pay startup cost again.
 
 **Done when:** the ported suite is green against the phase-1 fixtures, **and** the
@@ -283,13 +283,13 @@ subsequent phase.
 ### Phase 4 — Services: `up` / `down`
 
 Both drivers, five ready-check kinds, `needs:` ordering, `owns:`, everything started
-recorded as `owned` rows in `~/.char/char.db` (§4.3), port remapping via the generated compose document (§6.0). Plus
-**secret resolution and injection** (§4.7) — this is the phase where there is finally
+recorded as `owned` rows in `~/.char/char.db` (`PLAN.md` §4.3), port remapping via the generated compose document (`PLAN.md` §6.0). Plus
+**secret resolution and injection** (`PLAN.md` §4.7) — this is the phase where there is finally
 something to inject into.
 
-**And the `commands:` dispatcher (§4.5), whole.** An earlier draft of this plan shipped the
+**And the `commands:` dispatcher (`PLAN.md` §4.5), whole.** An earlier draft of this plan shipped the
 `commands:` *schema* in phase 1 and *consumed* it in phase 6 without any phase building it —
-for a feature §4.5 itself calls critical path, since it is the entire mechanism by which
+for a feature `PLAN.md` §4.5 itself calls critical path, since it is the entire mechanism by which
 Chariot keeps `worktrees` / `tickets` / `design` / `baselines` while giving up `check` and
 `servers`. The surface is small but touches several subsystems:
 
@@ -314,7 +314,7 @@ the end of phase 2.
 > `up`/`down`/`clean`, `init` and `commands:` — not the evidence scanner, `agents-md` or the
 > MCP server, whose real consumer is phase 8. Reordering would buy real-repo validation a
 > phase sooner. It loses on one point, and it is decisive: Chariot would then adopt charkit
-> without `config verify`, which §5 calls load-bearing. One hand-written config could survive
+> without `config verify`, which `PLAN.md` §5 calls load-bearing. One hand-written config could survive
 > that; everything after it would not.
 
 **Done when:** a scratch repo with a bare `docker-compose.yml` plus a long-running command
@@ -339,16 +339,18 @@ parallelizable work in the plan, one agent each. Plus schema/example emission,
 `char config verify`, the managed AGENTS.md block, and the MCP server.
 
 **`char config scan` must run in a repo with no `char.yml`.** That is the only state it is
-ever useful in, and §2.1 exempts it from workspace resolution for exactly that reason.
+ever useful in, and `PLAN.md` §2.1 exempts it from workspace resolution for exactly that reason.
 
-**The MCP server targets SDK 2.x and spec revision `2026-07-28`.** Verified in phase 0 and
+**The MCP server targets `rmcp` v3.x and spec revision `2026-07-28`.** Verified in phase 0 and
 recorded in [`traps.md`](traps.md); re-check before starting, because this moved recently.
 Three consequences:
 
-- **`FastMCP` no longer exists.** The entry point is `MCPServer`. Every pre-2.0 example and
-  tutorial is a dead template, including §9's reference implementation.
+- **§9's reference implementation is a dead template.** It is Python, written against a
+  pre-2.0 Python SDK; charkit is Rust on `rmcp`. Read it for *what* to expose, never for *how*.
+  Re-check `rmcp`'s API before starting: it shipped three major versions in five months
+  (`PLAN.md` §10.1), so recall is not current.
 - **The base protocol is stateless** — self-contained requests, per-request capability
-  negotiation, no session to hold. That happens to suit charkit: §1.3 of `ARCHITECTURE.md`
+  negotiation, no session to hold. That happens to suit charkit: `ARCHITECTURE.md` §1.3
   already says a command is *parse → call core → render*, and a stateless server is the same
   shape with a different renderer. There is no session state to design.
 - **Use the Tasks extension for `char check`, rather than inventing a polling protocol.** It
@@ -364,7 +366,7 @@ passes, with no human in the loop.
 ### Phase 6 — Chariot adopts it
 
 A Chariot PR: delete `scripts/char/check.py` and `servers.py`, take the dependency, move
-everything char does not replace into a `commands:` block (§4.5), repoint `bin/char`.
+everything char does not replace into a `commands:` block (`PLAN.md` §4.5), repoint `bin/char`.
 
 **The full dispatch surface, confirmed by inspection rather than assumed:**
 
@@ -382,7 +384,7 @@ everything char does not replace into a `commands:` block (§4.5), repoint `bin/
 (it opens URLs) and becomes a `commands:` entry.
 
 Subcommands are real — `char worktrees sweep`, `char tickets stale` — so `commands:` argv
-passthrough must be transparent, as §4.5 specifies. `bin/char` execs an absolute path
+passthrough must be transparent, as `PLAN.md` §4.5 specifies. `bin/char` execs an absolute path
 resolved from the git root with no `uv run --directory`, so commands running from the
 workspace root need no working-directory key.
 
@@ -415,11 +417,12 @@ a `~40-line` installer that selects the right one:
 
 ```sh
 curl -LsSf https://raw.githubusercontent.com/<owner>/charkit/main/install.sh | sh
-# detects uname -sm, downloads one ~1.5 MB binary, drops it on PATH
+# detects uname -sm, downloads one small static binary, drops it on PATH
 ```
 
-**There is no runtime to provision.** One static binary, measured at ~1.5 MB with every
-dependency linked, so the install is a single download and a `chmod`. Publishing to crates.io
+**There is no runtime to provision.** One static binary — measured at **2.09 MB stripped** for
+a hello-world with `rusqlite` bundled, before `clap`, `serde`, `rmcp` and `tokio`, so treat
+that as a floor and re-measure at this phase. The install is a single download and a `chmod`. Publishing to crates.io
 is a second channel for people who would rather `cargo install`; a Homebrew tap is a third,
 later.
 
@@ -441,7 +444,7 @@ Adopt char in a repo that is *not* Django + Next (a multi-language repo), using 
 ## 9. Source material
 
 The reference implementation lives at `~/Development/chariot/scripts/`. **It is Python;
-charkit is Rust** (§10.1), so every row below is a source of *behaviour*, never of code. The
+charkit is Rust** (`PLAN.md` §10.1), so every row below is a source of *behaviour*, never of code. The
 line counts indicate how much behaviour there is to harvest, not how much work the rewrite is.
 
 | Path | Lines | Role in this plan |
@@ -487,8 +490,8 @@ line counts indicate how much behaviour there is to harvest, not how much work t
 | **Overfitting to Chariot** — the abstraction gets shaped around Django+Next because it is the only repo the agent has seen. Isolation does *not* prevent this. | **High** | **Six fixture configs in phase 1** (§8.1). This is the single most important guard in the plan. |
 | **Six phases of drift surface in phase 6.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against Chariot from phase 3 onward (§8.1). Expect substantial rework in phase 6 regardless. |
 | **Crude contamination** — a Chariot path or import follows the code in during phase 3. | Med | Phase-3 acceptance test is a literal `grep -riE "chariot\|tilt\|NEXT_PUBLIC\|\.claude\|backend/\|web/" src/ tests/` returning nothing, plus a PreToolUse hook that denies the source-repo path to every agent but the harvester. **Only phase 3's harvester has Chariot access.** |
-| **Config expressiveness pressure** once a second repo lands. | Med | Four substitutions plus two scoped placeholders, hard cap (§4.4). Escape hatch is a generator script. |
-| **Machine-global state corruption** with several agents claiming or renewing leases simultaneously. | Low | SQLite transactions (§4.3). Was Med when this was a JSON file rewritten under an `O_EXCL` lockfile; ten-minute runs renewing heartbeats made that write pattern the contended path, which is why the store changed. |
+| **Config expressiveness pressure** once a second repo lands. | Med | Four substitutions plus two scoped placeholders, hard cap (`PLAN.md` §4.4). Escape hatch is a generator script. |
+| **Machine-global state corruption** with several agents claiming or renewing leases simultaneously. | Low | SQLite transactions (`PLAN.md` §4.3). Was Med when this was a JSON file rewritten under an `O_EXCL` lockfile; ten-minute runs renewing heartbeats made that write pattern the contended path, which is why the store changed. |
 | **`curl \| sh` is a trust ask** and some environments block it. | Low | `uvx` and `pipx` cover anyone who will not run it. Publish the script's source in-repo. |
 
 ---

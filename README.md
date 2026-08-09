@@ -58,7 +58,7 @@ Apache-2.0.
 5. [`AGENTS.md`](AGENTS.md) — the operational rules, in short form.
 
 `ARCHITECTURE.md` deliberately keeps the reasoning alongside every rule, because a rule
-without its reason gets discarded the first time it is inconvenient. It also records, in §2.8,
+without its reason gets discarded the first time it is inconvenient. It also records, in `ARCHITECTURE.md` §2.8,
 which document owns which fact — this README is a derived summary and is never authoritative. **If you want to change
 a principle, argue with its rationale.** If a rule turns out to have no rationale recorded,
 that is a defect in the document — please raise it.
