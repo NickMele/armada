@@ -328,7 +328,7 @@ everything else is config. **Every verb takes `--json`.**
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent. | `READY` `FAILED` |
 | `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` `PARTIAL` `FAILED` |
-| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix`. | `PASS` `PARTIAL` `BLOCKED` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
+| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix`. | `PASS` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
 | `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` `PARTIAL` `FAILED` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
@@ -348,11 +348,17 @@ for `init` / `up` — two tokens for one idea, in the one place the project clai
 behave identically. The complete enum:
 
 ```
-READY  UP  DOWN  CLEAN  PASS  OK          success
-PARTIAL                                    some succeeded, some did not
-BLOCKED                                    waiting on a machine-wide lease (§4.3)
-FAILED                                     did not achieve its goal
-ABORTED  DEAD  TIMEOUT                     did not finish
+TERMINAL — every one maps to an exit code (ARCHITECTURE.md §1.6)
+
+  READY  UP  DOWN  CLEAN  PASS  OK         success
+  PARTIAL                                  some succeeded, some did not
+  FAILED                                   did not achieve its goal
+  ABORTED  DEAD  TIMEOUT                   did not finish
+
+PROGRESS — a run in flight; never terminal, never mapped to an exit code
+
+  RUNNING                                  executing
+  WAITING                                  not executing; `waiting_on` says why
 ```
 
 ### 3.1 The `--json` envelope
@@ -424,6 +430,35 @@ char_bug  >  bad_config  >  timeout  >  aborted  >  tool_failed
 **`PARTIAL` joins the terminal states** for the case where some succeeded and some did not.
 It earns its place on `clean --all` and `up`, where "three of five worked" and "nothing
 worked" demand different actions and would otherwise both read `FAILED`.
+
+#### `RUNNING` and `WAITING` are progress, not verdicts
+
+An earlier draft listed `BLOCKED` among the *terminal* states, which broke the exit-code rule:
+`exit = f(error.class)` with no class yields **0**, so a run that acquired nothing and did
+nothing would report success — in a merge gate. It also read as a fault, when the ordinary case
+is simply waiting a turn.
+
+**A run never ends `RUNNING` or `WAITING`.** It acquires and produces a real verdict, or the
+acquisition ceiling expires and it ends `FAILED` with class `aborted` — retryable, because the
+actionable fact is that the machine was busy rather than that this check is slow.
+
+These two also fill a gap `--detach` had: every other state is terminal, so a detached run had
+nothing correct to report to `char check --status` while it was still going.
+
+**`waiting_on` carries the distinction that matters** — whether the cause is inside this
+workspace or outside it:
+
+```json
+{ "id": "api:test",  "status": "WAITING",
+  "waiting_on": { "cpu_slot": 4, "available": 2 } }
+
+{ "id": "web:e2e",   "status": "WAITING",
+  "waiting_on": { "exclusive": "browser", "held_by": "7c21ab90", "since_ms": 44000 } }
+```
+
+The first is this run's own budget and will clear on its own. The second names **another
+workspace** as the reason, which is the thing an agent cannot work out for itself and the only
+useful answer to "why has this taken fifteen minutes."''
 
 #### Ports: `port_block` is the workspace's; assignments are the component's
 
@@ -827,10 +862,10 @@ An earlier draft applied §3.2.1's fail-fast rule to the run lease and left the 
 was reasoned *about* unaddressed, which reintroduced the silent wait across workspaces. The
 defect was never blocking; it was blocking **invisibly and without a ceiling**.
 
-So a blocked check is **visible in the payload**, naming what it waits on and who holds it:
+So a waiting check is **visible in the payload**, naming what it waits on and who holds it:
 
 ```json
-{ "id": "web:e2e", "status": "BLOCKED",
+{ "id": "web:e2e", "status": "WAITING",
   "waiting_on": { "exclusive": "browser", "held_by": "7c21ab90", "since_ms": 44000 } }
 ```
 
@@ -882,7 +917,7 @@ point of testing it, since the rule is easy to write down and easy to forget.
 | Failure | Handled by |
 |---|---|
 | Two workers stuck on each other forever | sorted acquisition — no recovery exists, so it must be impossible |
-| B waits fifteen minutes for A's slow suite | not a failure; the `BLOCKED` state makes it visible rather than silent |
+| B waits fifteen minutes for A's slow suite | not a failure; `WAITING` plus `waiting_on.held_by` makes it visible and attributable rather than silent |
 | A crashes holding `browser` | heartbeat expiry |
 | A is wedged but its heartbeat still ticks | **cannot happen** — the heartbeat is renewed from the shell loop, so a wedged loop stops renewing (§4.3) |
 
