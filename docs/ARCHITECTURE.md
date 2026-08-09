@@ -533,7 +533,8 @@ link here rather than restating it, because a fact stated in four places drifts,
 already drifted into a form that cannot match anything (see below).
 
 ```sh
-grep -riE "chariot|tilt|NEXT_PUBLIC|\.claude|backend/|web/" src/ tests/ --exclude-dir=fixtures
+grep -riE "chariot|tilt|NEXT_PUBLIC|\.claude|backend/|web/" \
+     crates/ tests/ --exclude-dir=fixtures --exclude-dir=target
 ```
 
 It must return nothing. **There is no allowlist.** If it fires, the code changes, not the
@@ -545,9 +546,16 @@ pattern.
 > permanently green gate that looks correct in the rendered document. Verified. **Keep the
 > pattern in a fenced block, and nowhere else.**
 >
-> **The gate carries a test that the pattern still matches a known-bad string.** A grep that
-> cannot match is indistinguishable from a clean repository, which is exactly how this
-> survived review.
+> **The gate carries a test that the pattern still matches a known-bad string** *placed in a
+> real crate source path*. A grep that cannot match is indistinguishable from a clean
+> repository — and this has now failed twice for different reasons: once because markdown
+> escaping made the pattern unrunnable, once because it pointed at `src/`, which does not
+> exist in a Cargo workspace. The test must assert a **match**, not merely that the command
+> runs.
+
+> **Paths, not just the pattern.** Sources live at `crates/*/src/`; there is no top-level
+> `src/`. Pointing the grep at `src/` makes it warn, scan nothing, and exit 2 — which most
+> shell idioms read as "no contamination found."**
 
 **`tests/fixtures/` is exempt, and the rest of `tests/` is not.** A fixture config is *data
 describing a hypothetical repository* — the `django-next` fixture naturally says `backend/`,

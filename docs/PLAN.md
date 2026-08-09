@@ -1278,6 +1278,20 @@ char's to remove. This corrects an earlier claim in §2.3 that stamping meant "p
 label through to compose" — it does not — and it matches the evidence, which is ~2.1 GB per
 production app **build**.
 
+**Ready-check kinds — five, and this is the enumeration.** Each carries its own timeout, and
+each applies to both drivers.
+
+| Kind | Ready when |
+|---|---|
+| `http` | a GET returns 2xx |
+| `tcp` | the port accepts a connection |
+| `log` | a regex matches the service's stdout |
+| `exec` | a command exits 0 |
+| `none` | immediately on spawn — the service is fire-and-forget |
+
+An earlier rewrite of this section dropped the list while [`PHASES.md`](PHASES.md) went on
+promising "five ready-check kinds" that were then enumerated nowhere.
+
 **`file:` accepts a list.** Repos commonly already run base-plus-override, and step 1 must
 receive the same file set they do. char also ignores ambient `COMPOSE_FILE` and
 `COMPOSE_PROJECT_NAME`, passing `-f` and `-p` explicitly every time, so the result does not
