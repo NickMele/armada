@@ -376,7 +376,20 @@ say nothing about whose fault a failure is.
 child's environment (PLAN.md §4.7). From the architecture's point of view that creates one
 invariant, and it cuts across the renderer, the log writer and every error path:
 
-> A resolved secret value is never written to stdout, stderr, `--json`, `.char/`, or argv.
+> A resolved secret value is never written to **anything char writes** — stdout, stderr,
+> `--json`, `.char/`, **`~/.char/char.db`**, or argv.
+
+**The scope is deliberate, and the boundary is "what char writes."** char cannot make a
+secret unreadable to something it hands the secret to. A value injected into a container is
+in Docker's store, and anyone who can reach the daemon can `docker exec ... env` or read any
+file inside — daemon access is root-equivalent. No mechanism char could build changes that,
+so promising it would be false assurance. What char *can* guarantee is that its own outputs,
+files and database never contain one.
+
+`~/.char/char.db` was missing from an earlier draft of this list, which mattered: §6.1's
+`owns.release:` is resolved at `init` and recorded there, so the obvious way to express a
+teardown command with a password wrote a plaintext credential to a machine-global store that
+survives `clean` **by design**.
 
 Four consequences for the code:
 
