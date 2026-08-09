@@ -21,14 +21,19 @@ rule has no rationale recorded, that is a bug in the document — say so.
 
 ## Rules that are easy to break by accident
 
-### 1. Never write these strings anywhere under `src/`
+### 1. Never write these strings under `src/` or `tests/`
 
 ```
 chariot   tilt   NEXT_PUBLIC   .claude   backend/   web/
 ```
 
-A grep for them runs in the merge gate and **has no allowlist**. If it fires, the code
-changes — not the pattern.
+A grep for them runs in the merge gate over **both** directories and **has no allowlist**. If
+it fires, the code changes — not the pattern. `tests/` is in scope because phase 3 ports test
+*cases* from the source repo, which makes them the second transcription vector.
+
+**One exception: `docs/harvest.md`.** It is not greped, because its job is to describe the
+source repo and a ban would forbid recording the assumptions you are meant to strip. It has a
+different rule instead — see rule 2.
 
 This includes docstrings, comments and test fixture strings. When you need to illustrate the
 `command` driver or a component root, use neutral examples:
@@ -51,8 +56,19 @@ Django+Next monorepo, and this catches the port dragging that repo's specifics a
 Every other phase, and phase 3's implementer, works from `docs/PLAN.md`, `ARCHITECTURE.md`,
 the fixtures, and `docs/harvest.md`.
 
+**This is enforced, not requested.** A `PreToolUse` hook default-denies that path for every
+agent and allows it only for the harvester, inspecting the whole `tool_input` — so `Read`,
+`Glob`, `Grep`, and a `Bash` line containing `rg`, `find`, `cat` or `python -c` are all
+covered. If you are not the harvester, you will be denied rather than trusted.
+
 If a phase feels like it needs to look at that repo, **the plan is underspecified — fix the
 plan, do not peek.**
+
+**Writing `docs/harvest.md`?** It describes *behaviour*, never carries *implementation*.
+Prose, tables and trap descriptions; short config or regex fragments are fine; no verbatim
+implementation code. The test is: could this be pasted into `src/` and compile? Transcribed
+paths get caught downstream by the grep — pasted structure does not, and structure is the
+contamination nothing else can catch.
 
 ### 3. Check what phase you are in before writing code
 

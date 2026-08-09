@@ -1198,6 +1198,12 @@ uv package scaffolding, pytest, ruff. JSON Schema for `char.yml`. Then write all
 from the table in §8.1 under `tests/fixtures/<name>/char.yml`. Tests are schema validation
 plus a golden resolved-config snapshot for each. **No runtime.**
 
+**Also ships here: the clean-room enforcement hook.** A `PreToolUse` hook in the repo's
+`.claude/settings.json` that default-denies the source-repo path for every agent and allows it
+only for phase 3's harvester (`ARCHITECTURE.md` §2.7). It lands in phase 1 rather than phase 3
+because a guard added at the moment it is first needed has already been unenforced for every
+commit before that.
+
 The schema must cover the full contract, including the parts implemented later:
 `components:` (§4.1), `commands:` (§4.5), `workspaces:` (§4.6), and `secrets:` /
 `secret_providers:` (§4.7). Secrets are **schema-only in this phase** — validated and
@@ -1501,7 +1507,7 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 |------|----------|------------|
 | **Overfitting to Chariot** — the abstraction gets shaped around Django+Next because it is the only repo the agent has seen. Isolation does *not* prevent this. | **High** | **Six fixture configs in phase 1** (§8.1). This is the single most important guard in the plan. |
 | **Six phases of drift surface in phase 6.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against Chariot from phase 3 onward (§8.1). Expect substantial rework in phase 6 regardless. |
-| **Crude contamination** — a Chariot path or import follows the code in during phase 3. | Med | Phase-3 acceptance test is a literal `grep -riE "chariot\|tilt\|NEXT_PUBLIC\|\.claude\|backend/\|web/" src/` returning nothing. **Only phase 3's harvester has Chariot access.** |
+| **Crude contamination** — a Chariot path or import follows the code in during phase 3. | Med | Phase-3 acceptance test is a literal `grep -riE "chariot\|tilt\|NEXT_PUBLIC\|\.claude\|backend/\|web/" src/ tests/` returning nothing, plus a PreToolUse hook that denies the source-repo path to every agent but the harvester. **Only phase 3's harvester has Chariot access.** |
 | **Config expressiveness pressure** once a second repo lands. | Med | Four substitutions plus two scoped placeholders, hard cap (§4.4). Escape hatch is a generator script. |
 | **Machine-global state corruption** with several agents claiming or renewing leases simultaneously. | Low | SQLite transactions (§4.3). Was Med when this was a JSON file rewritten under an `O_EXCL` lockfile; ten-minute runs renewing heartbeats made that write pattern the contended path, which is why the store changed. |
 | **`curl \| sh` is a trust ask** and some environments block it. | Low | `uvx` and `pipx` cover anyone who will not run it. Publish the script's source in-repo. |

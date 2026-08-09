@@ -104,7 +104,7 @@ A change must clear all six:
 
 ## Two rules that trip people up
 
-**1. Certain strings may never appear under `src/`.**
+**1. Certain strings may never appear under `src/` or `tests/`.**
 
 ```
 chariot   tilt   NEXT_PUBLIC   .claude   backend/   web/
@@ -115,8 +115,13 @@ repo's specifics coming along for the ride — a hardcoded package directory, a 
 assumption that belongs in config rather than code. It runs in the gate and **there is no
 allowlist**: if it fires, the code changes, not the pattern.
 
-That includes docstrings and test fixtures. Use neutral examples — `foreman start`,
+That includes docstrings and test fixtures — `tests/` is in scope because the check engine's
+test *cases* are ported from that repo too. Use neutral examples — `foreman start`,
 `root: services/api` — when you need to illustrate a command or a component root.
+
+`docs/harvest.md` is the one exception: it exists to describe the source repo, so a ban would
+forbid recording the assumptions you are meant to strip. It carries behaviour, not
+implementation — no verbatim code.
 
 A green grep only means no *crude* contamination. The subtler failure — an abstraction shaped
 around one repo because that is the only repo anyone saw — is invisible to it, and is what the

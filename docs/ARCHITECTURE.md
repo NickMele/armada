@@ -455,9 +455,15 @@ The gate is:
 5. **import-linter** — the layers contract from §1.5
 6. **the contamination grep**
 
-**The contamination grep** is `grep -riE "chariot|tilt|NEXT_PUBLIC|\.claude|backend/|web/"
-src/`, and it must return nothing. **There is no escape hatch.** If it fires, the code
-changes, not the pattern.
+**The contamination grep** is
+`grep -riE "chariot|tilt|NEXT_PUBLIC|\.claude|backend/|web/" src/ tests/`, and it must return
+nothing. **There is no escape hatch.** If it fires, the code changes, not the pattern.
+
+**`tests/` is in scope, and an earlier draft's omission of it was a real hole.** The rule has
+always said the ban covers test fixture strings — but tests do not live in `src/`, so the
+grep never saw them. That matters more than it sounds: §9 says the source repo's test suite is
+the single most valuable asset and its *cases* are ported in phase 3. Ported tests are
+therefore the second transcription vector, and they were the unguarded one.
 
 *What it catches:* phase 3 is the only phase permitted to read the Chariot repo, and this is
 its acceptance test made permanent. `chariot` is a leftover import or path; `tilt` means a
@@ -476,6 +482,30 @@ plan itself uses as illustrations. With no allowlist, `src/` simply may not cont
 including in docstrings and test fixture strings. Use neutral examples instead (`foreman
 start`, `root: services/api`). This was chosen over an allowlist because an allowlist is a
 weakening mechanism that gets used under deadline pressure and never reviewed afterwards.
+
+*What it cannot cover, and why:* **`docs/harvest.md`.** That document is the designed conduit
+from the source repo into the implementer's context — the one place where the banned strings
+are most likely to appear and most likely to matter. It is deliberately **not** greped,
+because it legitimately has to say things like *"`check.py` assumes `uv run --directory
+backend`, which must not survive the rewrite."* Banning the word would forbid recording the
+very assumption the implementer needs to strip.
+
+So the harvest doc gets a positive rule rather than a prohibition:
+
+> **The harvest doc describes behaviour. It does not carry implementation.** Prose, tables and
+> trap descriptions; no verbatim implementation code. Short fragments of *config* or a *regex*
+> are fine. The test: could this be pasted into `src/` and compile?
+
+The reasoning is that the two contamination types have different vectors. **Transcription** —
+a Chariot path ending up in the code — is already caught downstream by the grep over `src/`
+and `tests/`. **Structure** — the shape of `check.py` reproducing itself in a rewrite — is
+carried by pasted code, and is exactly what §8.1 says no grep can catch.
+
+**This one is policed, not structural, and that is not a failure to fix.** No mechanical rule
+can distinguish a legitimate mention of the source repo from a leaked one inside a document
+whose entire job is to discuss the source repo. It is a review rule with a stated test, and
+the honest thing is to say so rather than to invent a gate that would only produce false
+confidence.
 
 *What it does not catch:* **anything subtle.** A green grep means no crude contamination and
 nothing more. The higher-severity risk — an abstraction shaped around Django+Next because
@@ -556,6 +586,30 @@ carrying the most rework.
 **Why the split.** *Structural guarantees beat policed ones* — the plan's own argument for
 building greenfield, applied one level deeper. Structural contamination becomes very hard
 when the agent typing the code has never seen the structure.
+
+#### Making it structural rather than aspirational
+
+"The implementer never opens the Chariot repo" is a sentence in a prompt, and a sentence in a
+prompt is policed, not structural — the weaker thing this section exists to reject. Three
+mechanisms, in descending order of how much weight they carry:
+
+1. **A `PreToolUse` hook, keyed on `agent_type`.** This is the only one that actually
+   enforces. Verified in phase 0: the hook input carries `agent_type` and `agent_id`, and a
+   hook denies a call by returning `permissionDecision: "deny"`. Default-deny the source-repo
+   path for **every** agent, and allow it for the harvester alone — an allowlist, so a new
+   agent added later is denied by default rather than silently permitted.
+2. **A narrow `tools:` list** on the implementer. Real but coarse: `tools:` is an allowlist
+   and cannot express paths, so it reduces surface without addressing the actual boundary.
+3. **Prompt instructions.** Documentation of intent. They are why the agent *wants* to
+   comply; they are not why it *cannot* violate.
+
+The hook must inspect `tool_input` as a whole rather than a `file_path` field, because the
+path can arrive through `Read`, `Glob`, `Grep`, or a `Bash` command containing `rg`, `find`,
+`cat`, or `python -c`. Anything less covers the polite failure and misses the interesting one.
+
+**It ships in phase 1**, with the rest of the repo scaffolding, so it exists before phase 3
+needs it. A guard added at the moment it is first needed has already been unenforced for
+every commit before that.
 
 **The test cases are ported, not rewritten.** The source suite is 2,694 lines asserting on
 behaviour rather than implementation, and the plan calls it the single most valuable asset.
