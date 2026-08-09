@@ -738,6 +738,57 @@ tools are normally driven in a monorepo.
 `match:` and resolves executables for `config verify`. §7 reserves it to point *outside* the
 workspace for multi-repo, so overloading it with a second meaning would collide with that.
 
+#### `needs:` on a check takes components *and* check ids
+
+```yaml
+core:
+  checks:
+    build: { cmd: "pnpm --filter @acme/core build", scope: component }
+ui:
+  checks:
+    types:
+      cmd: "pnpm --filter @acme/ui typecheck"
+      needs: [core:build]          # a check id — must PASS before this starts
+    test:
+      cmd: "pnpm --filter @acme/ui vitest run ${files}"
+      needs: [postgres]            # a component — the service must be running
+```
+
+**The two forms are told apart by the colon**, which is why check ids are derived as
+`<component>:<check>` and why a component name may never contain one.
+
+| `needs:` entry | Means | If unsatisfied |
+|---|---|---|
+| a **component** (`postgres`) | the service must be running | char starts it (phase 4) |
+| a **check id** (`core:build`) | that check must have **passed** in this run | see below |
+
+Four semantics, because leaving any of them to the implementer produces four different tools:
+
+- **A named check is pulled into the run even if the selector did not select it.** `char check
+  ui:types` runs `core:build` first. Selecting a check selects its prerequisites; anything else
+  makes the selector silently produce a broken run.
+- **If a prerequisite fails, its dependents do not run** and are reported `ABORTED` with a
+  message naming the failed check. They are not `FAILED` — they were never attempted, and an
+  agent must not go looking for their output.
+- **Cycles are a `bad_config`, caught statically by `config verify`.** They are unrepresentable
+  at runtime, so they must be rejected before one.
+- **Ordering does not imply exclusivity.** Two checks that both need `core:build` still run
+  concurrently once it passes, subject to the cost budget.
+
+> **This is ordering, and deliberately nothing more.** §7 rules out a build DAG with caching —
+> content hashing, output tracking, cache restore, staleness — and that line does not move. char
+> knows *"`ui:types` runs after `core:build` passes"*; it does not know what `core:build`
+> produced, whether the output changed, or whether it could have been skipped. **The moment char
+> asks whether a prerequisite's output is stale, it has become turbo, badly.**
+>
+> Honest risk, recorded because §8.1's `pnpm-monorepo` fixture exists to ask this exact
+> question: ordering is the first step of the slope §7 names. It was added because inter-check
+> ordering is real and common — `ui:types` genuinely cannot run before `core:build` — and
+> because the scheduler already holds an ordering graph for `needs:` against components, so this
+> is an edge in a graph that exists rather than a new subsystem. A repo that wants caching still
+> delegates: `cmd: turbo run build --filter=@acme/core` gets turbo's graph inside char's
+> scheduling.
+
 **`checks:` take `env:`, with the same rules as `run:` and `commands:`.** Literals plus the
 four substitutions, `${env.NAME}` reads permitted (§4.4), and the parent environment inherited
 and layered underneath.
@@ -785,7 +836,11 @@ that silently degrades into a full-tree run turns a three-second lint into a sev
 one, and does it precisely when nothing needed checking.
 
 Check ids are **derived** as `<component>:<check>` — `api:lint`, `web:e2e`. Never written by
-hand, so they cannot drift, collide, or be typo'd. Selectors that fall out for free:
+hand, so they cannot drift, collide, or be typo'd.
+
+**`:` is reserved.** Component and check names match `^[a-z0-9][a-z0-9_-]*$` and may never
+contain a colon. That is what makes a derived id unambiguous, and it is now load-bearing in a
+second place: `needs:` tells a component from a check id by the colon alone (below). Selectors that fall out for free:
 `char check web:e2e`, `char check --component web`, `char check lint`.
 
 `char up` starts every component with a `run:`. `char check` runs every component with
@@ -1388,7 +1443,7 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 
 - schema validation
 - **resolves every `cmd` and `fix`** — splits `argv[0]` and checks it is on `PATH` or is an executable file under the component root
-- `needs:` refs resolve to real components
+- `needs:` refs resolve to a real component or a real check id, and the check-id graph is acyclic
 - declared ports fit the block
 - every `match:` glob hits at least one file
 - no `commands:` entry shadows a built-in verb (§4.5)
@@ -1652,8 +1707,12 @@ of the five verbs.
 - **Inferring intent from a repo scan.** Layer 1 reports facts only.
 - **A build DAG with caching.** turbo and nx own this: task graphs over build outputs, content
   hashing, cache restore. char has none of it. It *does* schedule checks under constraints —
-  `needs:` ordering, a `cost:` budget, `exclusive:` mutexes — which is a scheduler, not a build
-  graph, and `ARCHITECTURE.md` §1.2 spends a page on getting it right. An earlier draft phrased
+  `needs:` ordering **between checks as well as against components** (§4.1), a `cost:` budget,
+  `exclusive:` mutexes — which is a scheduler, not a build graph, and `ARCHITECTURE.md` §1.2
+  spends a page on getting it right. **The line is outputs:** char knows that one check runs
+  after another passes; it never learns what a check produced, whether that output changed, or
+  whether the work could have been skipped. Content hashing, cache restore and staleness stay
+  out, and the moment any of them arrives char has become turbo, badly. An earlier draft phrased
   this non-goal as "task dependency DAG", which disclaimed something the design contains and
   would therefore have stopped nothing.
 - **A driver plugin system.** See §6.1.
