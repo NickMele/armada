@@ -48,10 +48,18 @@ express five other shapes on day one.
 schema in a way no other fixture can. Five Node monorepos teach nothing — they all pass or
 all fail together. If adding a fixture creates no new way to be wrong, it is decoration.
 
+> **A different *language* is not an axis.** `multi-lang`'s row originally read "a genuinely
+> different runtime pairing", which cannot stress the schema at all: `cmd:` is free text, so an
+> Elixir service and a Python one produce byte-for-byte identical *shapes* and differ only in
+> the strings inside them. That is §4's thesis working — stack diversity lands in config
+> *values*, never config *shape*. The row now names the three structural things that fixture
+> actually is the only one to exercise. Watch for the same mistake when adding a seventh: the
+> test is "what new way to be wrong does this create", not "what technology does this cover".
+
 | Fixture | Axis it owns | Failure it catches that nothing else does |
 |---|---|---|
 | `django-next` *(real)* | Maximal case — polyglot monorepo, supervisor, checks running *inside* containers, 3s→15min cost spread, **and the only fixture with a `commands:` block** (`PLAN.md` §4.5) | Schema can't express a real complex repo; `commands:` unexercised until phase 6, when it is load-bearing |
-| `multi-lang` *(representative)* | A genuinely different runtime pairing | Abstraction is Django/Next-shaped |
+| `multi-lang` *(representative)* | **Ready-check kinds beyond `http`** (`tcp`, `log`); a **cross-component `${port.NAME}` reference**; `owns.files` naming a path **outside** the component's `root:` | Ready-checks that only handle `http`; ports treated as a per-component namespace rather than a workspace-global one; `owns.files` assumed to sit under `root:` |
 | `go-service` | Low end — one component, one binary, one Postgres, no monorepo, **plus one secret from one provider** (`PLAN.md` §4.7) | **Over-structuring.** A trivial repo needing 40 lines of config — and secrets that only work in a complex config are secrets nobody will adopt |
 | `pnpm-monorepo` | Many components, **zero** services, turbo already present, **plus a declared nested workspace** (`PLAN.md` §4.6) — so the fixture is a root manifest *and* a nested `char.yml` | Component-per-package globbing; also honestly answers "is char redundant where turbo exists?" Additionally: overlap detection, manifest-only roots, and discovery returning the same answer from any depth |
 | `rails-monolith` | `setup:` as a *sequence* (bundle → db:create → migrate → seed) including a step needing `shell: true`; two services with real dependency ordering; **`owns.release:` for a database on a shared server** | `setup:` modeled as a single string; `needs:` ordering that only works for one service; a setup step that errors when its resource exists; setup that creates something `clean` cannot reach |

@@ -707,6 +707,12 @@ components:
 
 #### Four things the above example uses and an earlier draft never defined
 
+**`${port.NAME}` is a single workspace-global namespace**, not per-component. A component may
+reference another's port — `multi-lang`'s Rust worker builds `CONTROL_URL` from the Elixir
+service's `${port.http}` — which is the ordinary case whenever two services talk to each other.
+The cost is that **two components may not declare the same port name**; `config verify` rejects
+it, because `${port.http}` would otherwise be ambiguous with no diagnostic.
+
 **`ports: { pg: 5432 }`** — the name maps to the port **the service itself listens on**.
 char claims a host port from this workspace's block and maps it. `${port.pg}` always resolves
 to the **host** port, because that is the one anything outside the container must connect to.
@@ -1483,6 +1489,7 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - every `match:` glob hits at least one file
 - no `commands:` entry shadows a built-in verb (§4.5)
 - every `in:` names a component whose `run.driver` is `compose`
+- no two components declare the same `ports:` name — `${port.NAME}` is workspace-global
 - no entry combines `shell: true` with `${files}` — word-splitting would mangle a generated path
 
 > **Deliberately not checked: an `exclusive:` name used only once.** An earlier draft rejected
