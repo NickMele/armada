@@ -314,7 +314,7 @@ everything else is config. **Every verb takes `--json`.**
 | `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` `PARTIAL` `FAILED` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
-Plus: `char config scan`, `char config verify`, `char agents-md [--write|--check]`, and any
+Plus: `char config scan`, `char config verify`, `char agents-md [--write|--verify]`, and any
 repo-local verbs the repo declares in `commands:` (§4.5) — which char dispatches but does not
 define.
 
@@ -527,6 +527,39 @@ failed before it could establish context:
 | *(no flag)* | this checkout | "Are my services up? Is a run in flight? What ports do I hold?" |
 | `--project` | every workspace sharing this `--git-common-dir` | "What's going on across everything I have open on this repo?" — the orchestrating agent's view |
 | `--all` | every workspace on the machine | "What is char holding anywhere?" |
+
+### 3.3.1 `--dry-run`
+
+**`char init`, `char up`, `char down`, `char check` and `char clean` all take `--dry-run`.** It
+returns the ordinary envelope with `data.would_*` in place of `data.results[]`, and changes
+nothing:
+
+```
+char clean --dry-run --artifacts --all
+  would_release   ports 5460-5469 (a3f91c02), 5470-5479 (7c21ab90)
+  would_remove    4 containers, 3 networks, 2 images
+  would_delete    node_modules, .venv            (--artifacts)
+  would_report    1 external resource char does not reclaim (§6.1)
+```
+
+**char computes this from its own state and needs no help from the repo.** It knows what it
+claimed, what it labelled, and what the current scope selects. `clean --artifacts --all` is the
+case that most needs it — it deletes every declared `owns.files` on the machine and previously
+had no preview at all.
+
+**One exception, where char genuinely cannot know: a `commands:` entry.** char dispatches an
+arbitrary repo script and has no idea what it would do, so the repo declares it (§4.5):
+
+```yaml
+commands:
+  worktrees:
+    cmd: uv run scripts/worktrees.py
+    dry_run: uv run scripts/worktrees.py --dry-run     # optional
+```
+
+Omit it and `char worktrees --dry-run` reports *"this command declares no dry-run mode"* rather
+than appending a flag and hoping. Guessing a flag on someone else's script is precisely the
+mistake §5's earlier dry-invoke made.
 
 Two filters compose with any scope, on `clean`:
 
@@ -892,10 +925,16 @@ history an agent can read. That moves the leak earlier rather than removing it. 
 their own mechanism (§4.7).
 
 **Escape hatch for repos that genuinely need more:** write a generator script that *emits*
-`char.yml`, committed and diffable, and name it in a top-level `generated_by:` key.
-`char config verify --check` re-runs that command and fails if the result differs from the
-committed file — which is the only way "assert the generated file is in sync" can mean
-anything, since otherwise nothing tells `verify` what generated it. This is deliberately the same pattern as cdktf → Terraform JSON.
+`char.yml`, committed and diffable. This is deliberately the same pattern as cdktf → Terraform
+JSON.
+
+> **char does not verify that a generated file is in sync, and has no `generated_by:` key.** An
+> earlier draft added one, with `config verify --check` re-running the generator and comparing
+> byte for byte. Three problems: it made `verify` execute an arbitrary repo command, which is
+> the exact property §4.4 uses to reject Starlark; byte comparison fails on a formatter bump or
+> a generated timestamp while the config is perfectly correct; and `--check` had no coherent
+> meaning, since `verify` never modifies anything. A repo that generates its config keeps it in
+> sync the way it keeps any generated file in sync — in its own CI. This is deliberately the same pattern as cdktf → Terraform JSON.
 
 > **Considered and rejected: a Tiltfile-style Starlark config.** It is the strongest
 > objection to the above — jumping straight to a real evaluator means you never *invent*
@@ -915,6 +954,7 @@ block, sibling of `components:`, declares them:
 commands:
   worktrees:
     cmd: uv run scripts/worktrees.py
+    dry_run: uv run scripts/worktrees.py --dry-run   # optional; §3.3.1
     help: Create and tear down git worktrees
     env:
       WORKSPACE: ${workspace.id}
@@ -1189,12 +1229,36 @@ Layer 2 supplies what no scan can: which of four test scripts is canonical, whic
 slow enough to deserve `cost: 4`, which two cannot share a browser, what genuinely needs
 Postgres.
 
+**Layer 3 runs in two passes, and only the first is cheap.**
+
+```
+pass 1  STATIC     schema, references, argv[0] resolvability, glob coverage
+                   seconds; nothing is executed; failures short-circuit here
+pass 2  FOR REAL   run the check suite properly, exactly as `char check` would
+```
+
+**Pass 2 is a real run, not a simulation.** An earlier draft had verify "dry-invoke every `cmd`
+and `fix` with `--help` / `--version` / `--dry-run`", which was the worst of both worlds:
+char cannot know which of those three flags a given tool accepts, so against the fixture set it
+would either **run the Playwright suite** (`pnpm e2e` ignores unknown flags), **create a
+Kubernetes cluster** (`./scripts/kind-up.sh` likewise), or **fail a correct config** (`mix
+dialyzer` errors on an unrecognised flag). Guessing a flag is not verification.
+
+If you want to know a config works, run it. That is what pass 2 does, and it inherits `check`'s
+semantics wholesale: a check declaring `needs:` starts its services (phase 4), and **verify
+does not stop what it started** — same rule, same reason (§3, phase 3).
+
+**Consequence, stated plainly:** `char config verify` is *not* a seconds-long check. Pass 1 is,
+and catches the hallucinated script name that motivated layer 3 in the first place. Pass 2
+takes as long as the repo's checks take — which for `python-ml` is thirty minutes. An authoring
+loop that iterates on pass-1 failures stays fast; a full verify is a real build.
+
 **Layer 3 is load-bearing.** Agents *will* hallucinate config — a plausible script name that
 does not exist, a flag from a different version. `config verify` catches it in seconds
 instead of on the first real run, in a fresh worktree, at the worst moment. It checks:
 
 - schema validation
-- **dry-invokes every `cmd` and `fix`** (`--help` / `--version` / `--dry-run`)
+- **resolves every `cmd` and `fix`** — splits `argv[0]` and checks it is on `PATH` or is an executable file under the component root
 - `needs:` refs resolve to real components
 - `exclusive:` names used more than once (a lone name is a typo)
 - declared ports fit the block
@@ -1211,7 +1275,6 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - every `owns.files` path is **relative to the workspace root**; absolute paths and any `..`
   segment are rejected. `clean` deletes what these name, so `files: ["/"]` must be
   unrepresentable rather than merely discouraged
-- if `generated_by:` is set, re-running it reproduces the committed `char.yml` byte for byte
 
 ### 5.1 `char agents-md`
 
@@ -1220,7 +1283,7 @@ real component and check names.
 
 - `--write` rewrites only between `<!-- char:begin -->` / `<!-- char:end -->`; anything
   outside is untouched. No markers → appends once, at the end.
-- `--check` exits non-zero if the block is stale, so it can be an ordinary check in
+- `--verify` exits non-zero if the block is stale, so it can be an ordinary check in
   `char.yml`.
 - Bare invocation prints to stdout, for repos that do not want a managed block.
 
