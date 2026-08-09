@@ -86,10 +86,14 @@ no-mistakes axi run --intent "<what you set out to accomplish>"
 
 ## The gate
 
-`no-mistakes` is the primary gate: it runs an agent code review, then
-tests, lint and docs, then pushes and opens the PR. A GitHub Actions matrix runs alongside it
-on `ubuntu-latest` and `macos-latest` — it exists to cover the platform you are not developing
-on, since signals and process groups are exactly the things that differ.
+**The GitHub Actions matrix is the gate.** It runs on every PR across `ubuntu-latest` and
+`macos-latest`, and nothing merges without it. The two platforms matter here rather than being
+box-ticking: signals, process groups and file locks are exactly the things that differ.
+
+**`no-mistakes` is a recommended pre-flight, not a requirement.** It runs an agent code review
+plus tests, lint and docs locally, then pushes and opens the PR — so problems surface before CI
+rather than after. It is how this repo is maintained day to day and you are welcome to install
+it, but your PR is judged by the same six checks either way.
 
 A change must clear all six:
 

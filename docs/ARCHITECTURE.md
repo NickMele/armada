@@ -5,6 +5,10 @@
 > This document records **principles and the reasoning behind them**. The reasoning is the
 > load-bearing part: a rule without its reason gets discarded the first time it is
 > inconvenient. If you want to change a principle, argue with the rationale — not the rule.
+>
+> **Precedence: where this document and [`PLAN.md`](PLAN.md) disagree, this one wins.** PLAN is
+> the specification of what to build; this is the record of what was decided about how. A
+> conflict is a defect in one of them — fix it, and say which was wrong.
 
 ---
 
@@ -291,7 +295,7 @@ Three ways golden tests rot, and what is done about each:
 |---|---|
 | Auto-update reflex — a flag turns the test into "regenerate, commit, don't read" | Do not ship the flag. Regenerating by hand is annoying enough to make you look. |
 | Nondeterminism — timestamps, run ids, durations, paths, allocated ports | Largely solved by construction: `now` is injected (§1.1) and the workspace path is passed in (§1.4). Ports and run ids get a small redaction helper. |
-| Over-coverage — snapshot everything, and every intentional change is a 40-file diff nobody reads | One canonical snapshot **per verb**, not per test case. Eight files total. |
+| Over-coverage — snapshot everything, and every intentional change is a 40-file diff nobody reads | One canonical snapshot per verb and per auxiliary command, never per test case. Deliberately not stated as a count — an earlier draft said "eight files", which was already wrong against the six verbs plus `config scan`, `config verify` and `agents-md`. |
 
 Note the dependency: snapshots are what tell you *when* to bump `schema_version`. Without
 them, the version field relies on remembering, which is how version fields become

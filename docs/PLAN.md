@@ -6,6 +6,11 @@
 > **§0.1 and §0.2 are superseded by [`ARCHITECTURE.md`](ARCHITECTURE.md)**, which records what
 > was actually decided. Everything else here stands.
 >
+> **Precedence: where this document and `ARCHITECTURE.md` disagree, `ARCHITECTURE.md` wins.**
+> This is the specification of what to build; that is the record of what was decided about
+> how. A conflict between them is a defect in one of them — fix it rather than picking a side
+> silently, and say which document was wrong.
+>
 > **Binary name:** `char` · **Package name:** `charkit` (PyPI + npm, both verified free)
 > **Language:** Python 3.12+ · **Platform:** POSIX only (macOS/Linux). Not Windows.
 
@@ -243,7 +248,7 @@ everything else is config. **Every verb takes `--json`.**
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent. | `READY` `FAILED` |
 | `char up` | Services running and ready-checked. Records what it started into `owned.json`. | `UP` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` |
-| `char check` | Lint / format / test. Scoped, scheduled, locked, ceilinged. `--detach` / `--status` / `--wait`. | `PASS` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
+| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix`. | `PASS` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
 | `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` |
 
@@ -336,6 +341,42 @@ invention: §4.1's examples and all six fixtures already use exactly these names
 **Growth rule: a name joins the set only when a fixture uses it.** Otherwise the list becomes
 a bikeshed.
 
+**`--fix` runs `fix:` instead of `cmd:`** for every selected check that declares one, and
+skips those that do not. `fix:` was a config key with no flag to invoke it.
+
+### 3.2.1 One run at a time, per workspace
+
+A `char check` holds a **run lease** (§4.3) for its workspace. A second, non-nested `char
+check` **fails fast** rather than blocking:
+
+```
+error: a run is already in flight
+  run 01J8X2, pid 4212, started 3m ago
+class: bad_invocation                  exit 2
+next_action: `char check --wait` to queue, or `char check --status` to watch it
+```
+
+Blocking by default would mean an agent expecting a quick lint silently waiting out a
+fifteen-minute test suite with no output. Failing fast gives it something to act on;
+`--wait` is there when queueing is what you meant.
+
+**Nested runs join rather than contend.** A child process that finds `CHAR_RUN_ID` set
+(§2.4) is already inside a run and inherits its lease — that is what the variable is for.
+Only a genuinely independent second invocation hits this error.
+
+### 3.2.2 The envelope on error paths
+
+The envelope shape never varies (§3.1), but two fields need stating for the case where char
+failed before it could establish context:
+
+- **`workspace` is `null`** when workspace resolution is what failed — a `bad_config` for a
+  missing `char.yml`, or any machine-scoped invocation run from outside a workspace (§2.1).
+  A consumer must tolerate it; it cannot be "always the invoking workspace" when there isn't
+  one.
+- **`status` is `FAILED`** whenever `error` is non-null and no more specific terminal state
+  applies. That includes `char status`, whose only success state is `OK` and which otherwise
+  had no way to report that it failed.
+
 ### 3.3 Scope lens
 
 `status` and `clean` are the two verbs where "just me" isn't always right. Same flag on both.
@@ -392,6 +433,8 @@ components:
       ports: { api: 8000 }
       ready: { http: "http://127.0.0.1:${port.api}/healthz" }
       needs: [postgres]
+      env: { DJANGO_SETTINGS_MODULE: app.settings.dev }
+      stop: ./scripts/graceful-stop.sh    # optional; default is killpg
     checks:
       lint:
         cmd: ruff check ${files}
@@ -424,6 +467,33 @@ components:
         needs: []                # boots its own servers — see §4.4
 ```
 
+#### Four things the above example uses and an earlier draft never defined
+
+**`ports: { pg: 5432 }`** — the name maps to the port **the service itself listens on**.
+char claims a host port from this workspace's block and maps it. `${port.pg}` always resolves
+to the **host** port, because that is the one anything outside the container must connect to.
+For `driver: command` there is no mapping layer: the claimed host port *is* the port, and the
+command is expected to bind it.
+
+**Port blocks are claimed, then verified bindable.** The database (§4.3) records only what
+*char* has claimed — it knows nothing about an unrelated dev server already sitting on 5460.
+So `init` attempts to bind each port in a candidate block before claiming it, and picks
+another block if any is taken. Block size is configurable; its default is a convention, not
+a measurement.
+
+**`scope:`** takes `file` (the default) or `component`. `file` means the check receives
+`${files}`; `component` means it always runs over the whole component, which is what
+`web:e2e` needs — an end-to-end suite scoped to two changed files tests nothing.
+
+**`${files}` is the set of files changed against the merge-base with the default branch,
+plus uncommitted working-tree changes.** And the case that matters:
+
+> **If the set is empty, the check is skipped — it is never invoked with no arguments.**
+
+This is not a nicety. `ruff check` with no paths checks the entire tree; a file-scoped check
+that silently degrades into a full-tree run turns a three-second lint into a several-minute
+one, and does it precisely when nothing needed checking.
+
 Check ids are **derived** as `<component>:<check>` — `api:lint`, `web:e2e`. Never written by
 hand, so they cannot drift, collide, or be typo'd. Selectors that fall out for free:
 `char check web:e2e`, `char check --component web`, `char check lint`.
@@ -435,10 +505,15 @@ hand, so they cannot drift, collide, or be typo'd. Selectors that fall out for f
 
 ```
 .char/
+  logs/<component>.log            services — `up` is not a run, so it has no run-id
   run/<run-id>/
-    state.json     per-check status, verdict
-    logs/<component>.<check>.log
+    state.json                    per-check status, verdict
+    logs/<component>.<check>.log  checks
 ```
+
+**Services log outside `run/`** because `char up` is not a run and has no run-id. An earlier
+draft gave the only log path as `run/<run-id>/logs/`, which left `char status` reporting a
+crashed service with nowhere to point.
 
 **One rule decides what may live here: if losing it would leak a resource, it does not belong
 in `.char/`.** A workspace directory is deleted by `rm -rf` or `git worktree remove`, neither
@@ -565,8 +640,10 @@ history an agent can read. That moves the leak earlier rather than removing it. 
 their own mechanism (§4.7).
 
 **Escape hatch for repos that genuinely need more:** write a generator script that *emits*
-`char.yml`, committed and diffable. `char config verify --check` can then assert the
-generated file is in sync. This is deliberately the same pattern as cdktf → Terraform JSON.
+`char.yml`, committed and diffable, and name it in a top-level `generated_by:` key.
+`char config verify --check` re-runs that command and fails if the result differs from the
+committed file — which is the only way "assert the generated file is in sync" can mean
+anything, since otherwise nothing tells `verify` what generated it. This is deliberately the same pattern as cdktf → Terraform JSON.
 
 > **Considered and rejected: a Tiltfile-style Starlark config.** It is the strongest
 > objection to the above — jumping straight to a real evaluator means you never *invent*
@@ -772,9 +849,21 @@ vendor lock-in, and it is the same instinct as §6 ("no vendor-named drivers") a
 ("`owns:` instead of a plugin API"). Vault, Doppler, `pass` and a homegrown script all work
 on day one without char knowing they exist.
 
-**Never cache a resolved secret.** Caching means writing it to disk, which is a new leak
-surface. Resolve per spawn and let providers do their own session caching — `op` already
-does, and that is correctly their problem, not char's.
+**Never cache a resolved secret to disk.** That is the rule, and it is about *disk* — writing
+one is a new leak surface.
+
+**In memory, for the lifetime of one char process, it is cached.** A run granting the same
+secret to twenty checks would otherwise invoke the provider twenty times, which for `op` can
+mean twenty biometric prompts. One process, one resolution; the process exits and the cache
+is gone with it.
+
+**Secrets are resolved *before* the process detaches.** `char check --detach` has no terminal
+once it is detached, so a provider that prompts cannot prompt. Resolving while the terminal is
+still attached is the difference between `--detach` working with 1Password and not working at
+all.
+
+Providers still do their own session caching — `op` already does, and that remains correctly
+their problem rather than char's.
 
 **What this does and does not guarantee.** char guarantees the secret is never in `char.yml`,
 never in argv, never in char's own logs or `--json`, and never retrievable through any char
@@ -832,6 +921,12 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
   matches a declared `secret_providers:` entry (§4.7). **Never resolves a secret** — the
   reference is checked, the value is not fetched
 - no `${env.NAME ?? ...}` anywhere, and no `${env.NAME}` outside an `env:` block (§4.4)
+- no `components[].root` escapes the workspace root. Multi-repo is reserved, not built (§7),
+  and an outside-root `root:` breaks the id derivation §2.2 depends on
+- every `owns.files` path is **relative to the workspace root**; absolute paths and any `..`
+  segment are rejected. `clean` deletes what these name, so `files: ["/"]` must be
+  unrepresentable rather than merely discouraged
+- if `generated_by:` is set, re-running it reproduces the committed `char.yml` byte for byte
 
 ### 5.1 `char agents-md`
 
@@ -840,7 +935,7 @@ real component and check names.
 
 - `--write` rewrites only between `<!-- char:begin -->` / `<!-- char:end -->`; anything
   outside is untouched. No markers → appends once, at the end.
-- `--check` exits non-zero if the block is stale, so it can be a `custom` check in
+- `--check` exits non-zero if the block is stale, so it can be an ordinary check in
   `char.yml`.
 - Bare invocation prints to stdout, for repos that do not want a managed block.
 
@@ -943,6 +1038,12 @@ components:
 Ready-check kinds: `http`, `tcp`, `log` (regex on stdout), `exec` (command exits 0), `none`.
 Each with its own timeout.
 
+**`--json` means stdout carries the envelope and nothing else.** A child writing to the
+terminal would interleave with the envelope and break the parse for the one consumer that
+matters. Under `--json`, child output goes to its log file (§4.2); char's payload is the only
+thing on stdout. This is also why `run:` needs no `stdio:` key the way `commands:` does
+(§4.5) — a service is always detached and always logged, so there is nothing to choose.
+
 **Supervision depth: start-and-track only.** Spawn, ready-check, record pid, kill the group
 on `down`. Logs go to files. If a service crashes, `char status` reports it dead — char does
 **not** restart it. No log aggregation, no `char logs -f`, no restart-on-crash.
@@ -1032,7 +1133,12 @@ Each of these is a plausible-sounding feature that multiplies maintenance withou
 of the five verbs.
 
 - **Inferring intent from a repo scan.** Layer 1 reports facts only.
-- **Task dependency DAG / build caching.** turbo and nx own this. Six verbs need no build graph.
+- **A build DAG with caching.** turbo and nx own this: task graphs over build outputs, content
+  hashing, cache restore. char has none of it. It *does* schedule checks under constraints —
+  `needs:` ordering, a `cost:` budget, `exclusive:` mutexes — which is a scheduler, not a build
+  graph, and `ARCHITECTURE.md` §1.2 spends a page on getting it right. An earlier draft phrased
+  this non-goal as "task dependency DAG", which disclaimed something the design contains and
+  would therefore have stopped nothing.
 - **A driver plugin system.** See §6.1.
 - **Mandatory output parsing.** Optional `parse:` keys only. Exit code plus captured stream
   must *always* be a complete answer, or every upstream tool release breaks you.
