@@ -678,6 +678,7 @@ components:
         timeout: 120
       types: { cmd: mypy . }
       test:
+        in: api                  # runs inside api's container (§4.1)
         cmd: pytest ${files}
         timeout: 600
         cost: 4                  # CPU slots, machine-wide (§4.3)
@@ -720,6 +721,46 @@ a measurement.
 **`scope:`** takes `file` (the default) or `component`. `file` means the check receives
 `${files}`; `component` means it always runs over the whole component, which is what
 `web:e2e` needs — an end-to-end suite scoped to two changed files tests nothing.
+
+**Every check runs from the workspace root, and `${files}` paths are workspace-relative.**
+One base for everything — cwd, `${files}`, and `match:` globs all agree. This was undefined in
+an earlier draft, and it is the most-referenced undefined fact in the schema: two readings give
+two configs that both validate and one of which never runs.
+
+Workspace-relative because **the primary consumer is an agent reading output and editing
+files.** `backend/app/views.py:12` is directly actionable; `app/views.py:12` has to be prefixed
+first, and the agent has to know by how much. The cost — commands carrying `--dir`, `--filter`
+or `-C` flags — is already being paid: every fixture writes them, because that is how these
+tools are normally driven in a monorepo.
+
+**`root:` is not a working directory.** It says where a component's source lives: it scopes
+`match:` and resolves executables for `config verify`. §7 reserves it to point *outside* the
+workspace for multi-repo, so overloading it with a second meaning would collide with that.
+
+#### `in:` — running a check inside a container
+
+```yaml
+components:
+  api:
+    run: { driver: compose, file: [docker-compose.yml, docker-compose.dev.yml] }
+    checks:
+      test:
+        in: api                    # run inside this component's container
+        cmd: pytest ${files}
+```
+
+char builds the `docker compose … exec -T` invocation itself, from **the file list and project
+name it already owns**. Without this the only way to express it is to write the whole command by
+hand — which duplicates `run.file:`, is easy to get subtly wrong (omit `-T` and it allocates a
+TTY and hangs in CI), and, worst, hardcodes `char-${workspace.id}`. That is §6.0's *internal*
+naming convention; every config depending on it would freeze a private implementation detail.
+
+Two consequences: `in:` requires the named component to be `driver: compose`, and it **implies
+`needs:`** — the container has to be running, which per phase 4 means char starts it.
+
+**char passes the same workspace-relative paths and sets the working directory to the mount
+point.** It cannot verify that the repo's bind-mount matches — but a single stated convention is
+exactly what lets a repo set its mount up correctly.
 
 **`${files}` is the set of files changed against the merge-base with the default branch,
 plus uncommitted working-tree changes.** And the case that matters:
@@ -1338,6 +1379,7 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - declared ports fit the block
 - every `match:` glob hits at least one file
 - no `commands:` entry shadows a built-in verb (§4.5)
+- every `in:` names a component whose `run.driver` is `compose`
 
 > **Deliberately not checked: an `exclusive:` name used only once.** An earlier draft rejected
 > that as a typo. Since §4.3 made exclusives **machine-wide**, a name used once in a repo still
