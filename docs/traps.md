@@ -89,9 +89,41 @@ one in PLAN.md §9.
 durable handles."* This is the standard shape for exposing something like a ten-minute
 `char check` over MCP — worth using rather than inventing a bespoke polling protocol.
 
-## Typer / Click exit codes
+## Rust — two required rules in the POSIX primitives
 
-Measured against **Typer 0.27.1**, phase 0.
+Both sit in machinery §7 of the plan calls load-bearing, and both are one line you must not
+forget. Measured 2026-08-09 against Rust 1.97.1.
+
+### `SIGPIPE` is set to `SIG_IGN` at startup — `char status | head` panics until you fix it
+
+Rust's runtime ignores `SIGPIPE`, so a write to a closed pipe returns `EPIPE`, `println!`
+unwraps it, and the process **panics with exit 101 and a backtrace on stderr** — worse than
+the Python it replaced. `#[unix_sigpipe]` is not stabilised on 1.97.1.
+
+**Rule: restore the default disposition at the top of `main`,** before anything writes:
+
+```rust
+unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL); }
+```
+
+This yields exit **141** and a silent, correct death — the ordinary Unix behaviour. It is one
+of exactly two `unsafe` blocks the design permits.
+
+### `setsid` is not in `std` — detaching a process group needs `unsafe pre_exec`
+
+`Command::process_group(0)` gives a new process *group* in the **same session**. Detaching
+from the controlling terminal — which is what `char up` requires — needs `setsid` via the
+`libc` crate inside `pre_exec`. That is the second permitted `unsafe` block.
+
+**Everywhere else, `unsafe` is denied crate-wide.** Two exceptions, both recorded here, both
+in the POSIX layer, both a single call.
+
+## Typer / Click exit codes *(historical — charkit is Rust)*
+
+Measured against **Typer 0.27.1**, phase 0. **Kept because the source repo being harvested in
+phase 3 is Python**, so these remain true of the behaviour being harvested — and because the
+exit-code conclusions they produced (130 and 2 are conventional; broken pipe needs an explicit
+decision) carried over to the Rust design intact.
 
 ### `KeyboardInterrupt` already exits 130, and usage errors already exit 2
 

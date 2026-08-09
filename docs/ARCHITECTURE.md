@@ -28,14 +28,18 @@ reached through a function passed in, never imported. There are exactly three:
 They travel together with the workspace in one frozen dataclass, passed as the first
 argument:
 
-```python
-@dataclass(frozen=True)
-class Ctx:
-    workspace: Workspace
-    run: RunFn
-    now: ClockFn
-    fetch: FetchFn
+```rust
+pub struct Ctx<R: Run, C: Clock, F: Fetch> {
+    pub workspace: Workspace,
+    pub run: R,      // every subprocess
+    pub now: C,      // timeouts, heartbeats, claimed_at
+    pub fetch: F,    // http and tcp ready-checks
+}
 ```
+
+Traits rather than boxed closures, so the fake is a zero-cost substitution the compiler checks
+and the production path pays nothing for. A test constructs `Ctx<FakeRun, FixedClock,
+FakeFetch>`; nothing is patched and nothing is dynamic.
 
 **Why injection at all.** This is the one pattern worth copying wholesale from the source
 repo. Chariot's 2,694 test lines run hermetically with no mocking framework, because
@@ -61,7 +65,7 @@ git). Three, because:
   port claims and lease acquisition, and on real files for logs and `.char/`. A fake gives
   you a green test over your own fake's concurrency model and proves nothing about the real
   one — in the one area where §11 names corruption under concurrent claims as a live risk.
-  Two threads against a real database in a `tmp_path` is both more faithful and less code.
+  Two threads against a real database in a `tempfile::TempDir` is both more faithful and less code.
 
 **Where stack diversity actually lands.** It does not land here. A Rails repo and a Go repo
 differ in *what string char runs*, not in *how char runs a string*. Most of what charkit
@@ -90,9 +94,23 @@ the test suite then needs no fixture, no tmpdir and no seams — just values in,
 
 **Sub-rule, scoped to the scheduler and the claim/lease loop:** the core is a **reducer**.
 
-```python
-def step(state: State, event: Event) -> tuple[State, list[Action]]: ...
+```rust
+pub fn step(state: State, event: Event) -> (State, Vec<Action>)
 ```
+
+**`Event` and `Action` are enums, and `step` matches them exhaustively.** This is the reason
+the language decision landed where it did (PLAN.md §10.1). Adding a variant without handling
+it is `error[E0004]`, unconditionally — measured, not assumed. The types are not documentation
+of the scheduler's specification; they *are* the specification, and the compiler checks it.
+
+Two rules follow, and both exist to keep that property:
+
+- **Never add a catch-all `_ =>` arm in `step`.** It converts the compile error into silence
+  and forfeits the entire benefit. If a variant genuinely needs no action, write it out and
+  return no actions — the explicitness is the point.
+- **`State` is owned and returned, not mutated in place.** A `&mut State` reducer can be
+  called for its side effects and its return value ignored, which is how the pure core starts
+  leaking into the shell.
 
 The shell executes actions and feeds results back as events. **The core proposes, the shell
 attempts, failures return as events.**
@@ -181,12 +199,13 @@ travel together rather than as seven separate arguments.
 
 ```
 charkit/
-  core/       pure. imports stdlib and its own protocols. nothing else.
+  core/       pure. depends on std and its own traits. nothing else.
   adapters/   docker, git, filesystem, process. import core protocols only.
   cli/        the ONLY module that imports both, and wires them together.
 ```
 
-Enforced mechanically by an `import-linter` layers contract, in the merge gate from phase 1 —
+Enforced mechanically by the crate graph itself, plus a `cargo-deny`/`clippy` boundary check in
+the merge gate from phase 1 —
 before there is anything to untangle.
 
 **Why this is stated as a correction.** The plan phrased it "dependencies point one way:
@@ -224,6 +243,7 @@ caught it: golden snapshots capture stdout, not exit status.
 | `5` | `aborted` | cancelled, or the run's holder died |
 | `70` | `char_bug` | internal error; retrying will not help |
 | `130` | *(signal)* | SIGINT |
+| `141` | *(signal)* | SIGPIPE — `char status \| head` and friends |
 
 **Terminal state describes *what happened*; error class states *why*; the code follows the
 class.** They are not the same axis, which is why one cannot be derived from the other:
@@ -251,11 +271,11 @@ signal exits `128+N` and has no error class at all — `130` for SIGINT, `141` f
 State that explicitly, because the rule as written has no room for them and an implementer
 following it literally would map them into a class.
 
-**Broken pipe is measured and unresolved** (`traps.md`). `char status | head` currently exits
-**1** — Click catches `BrokenPipeError` silently — which under this table means `tool_failed`,
-so an ordinary pipe reads as a failure. Setting `SIGPIPE` to `SIG_DFL` yields **141**, which is
-correct Unix behaviour. Decide between the two before the exit map is code; either way the
-carve-out above is required.
+**Broken pipe is now resolved: `141`.** `char status | head` must not read as a failure, and
+Rust's runtime sets `SIGPIPE` to `SIG_IGN` at startup, so without intervention the process
+*panics* with exit 101 — worse than nothing. Restoring the default disposition in `main` gives
+the ordinary Unix behaviour: silent death, exit 141. That is one of exactly two `unsafe` blocks
+the design permits; both are recorded in `traps.md`.
 
 **The envelope**, fixed in phase 1 alongside the config contract and for the same reason —
 four things consume it and none can invent it independently. Full definition in PLAN.md §3.1.
@@ -433,7 +453,7 @@ What actually survives is weaker but still decisive for this project:
 The conclusion stands; the confidence should be lower than the original phrasing implied.
 
 **Cost, accepted:** `main` can sit part-way through a phase. Tags recover per-phase rollback,
-and publishing to PyPI is tag-triggered and deliberate, so `main` being mid-phase never
+and publishing a release is tag-triggered and deliberate, so `main` being mid-phase never
 ships.
 
 **Phase 1 still lands alone.** That is a sequencing rule, not a branching one, and it is
@@ -457,11 +477,11 @@ CI`). A minimal GitHub Actions workflow runs alongside it — see §3.
 
 The gate is:
 
-1. **lint** — ruff
-2. **typecheck** — mypy strict
+1. **lint** — `cargo clippy -- -D warnings`, plus `cargo fmt --check`
+2. **typecheck** — the compiler. `cargo build` failing *is* the typecheck
 3. **tests** — unit, integration and e2e tiers
 4. **coverage ratchet** — may never drop
-5. **import-linter** — the layers contract from §1.5
+5. **crate boundaries** — the layers contract from §1.5, enforced by the crate graph
 6. **the contamination grep**
 
 **The contamination grep** is
@@ -540,7 +560,7 @@ This is staged deliberately. The end state is charkit gating itself with itself;
 arrangement exists only while charkit is still being built.
 
 **Phases 3–6 — dogfooding is a test.** charkit has its own `char.yml` from phase 3. The gate
-runs the **raw tools** — `ruff`, `mypy`, `pytest`. A single test, `tests/test_dogfood.py`,
+runs the **raw tools** — `cargo clippy`, `cargo fmt --check`, `cargo test`. A single test,
 runs `char check --json` and asserts it reaches the same verdict and that every check id
 resolves.
 
@@ -561,7 +581,7 @@ Deferring the flip is not giving up the forcing function — break `char check` 
 that a bug in a tool still under construction cannot lock its own repository, during exactly
 the period when such bugs are most likely.
 
-**A caveat worth writing down:** charkit's own `char.yml` is one component, pure Python, no
+**A caveat worth writing down:** charkit's own `char.yml` is one component, pure Rust, no
 services — structurally the *simplest* fixture shape. Dogfooding therefore pulls the design
 toward that shape. "It works on charkit" is not evidence the abstraction generalises. The six
 fixtures and phase 8 are.
@@ -633,11 +653,11 @@ and the scheduler tests change shape because the scheduler did.
 
 | Question | Answer | Reasoning kept |
 |---|---|---|
-| Public or private | **Public** | Phase 7 publishes to PyPI and the install story is a `curl` one-liner, so it is public in effect regardless — a public package with a private source repo has no issue tracker and no source link. Also makes Actions free. |
+| Public or private | **Public** | Phase 7 publishes release binaries and the install story is a `curl` one-liner, so it is public in effect regardless — a public package with a private source repo has no issue tracker and no source link. Also makes Actions free. |
 | License | **Apache-2.0** | Explicit patent grant, clears corporate legal review, no adoption cost. |
 | CI | **Both** — `no-mistakes` primary, minimal Actions matrix alongside | Actions supplies the one thing a local gate cannot: a machine that is not yours, and Linux as well as macOS. Process groups, signals and file locks are load-bearing; verifying real process-group kill only on macOS leaves the platform most users are on untested. Free on a public repo. `no-mistakes` keeps the agent review step, which is the only actual review in a solo repo. |
-| Typing | **mypy strict** from commit one | Cheap now, expensive to retrofit onto 3,000 lines. The architecture leans on it: the three seams are Protocols and the reducer's `State`/`Event`/`Action` types are the scheduler's real specification. |
-| Python floor | **3.12** | Matches the source repo, so the phase-3 harvest needs no syntax translation. Users are unaffected — `uv` provisions the interpreter, so the floor never blocks an install. |
+| Typing | **The compiler** | The decision that produced "mypy strict from commit one" is satisfied for free and more strongly: there is no gradual-typing escape hatch and no `Any` leaking in from untyped dependencies. Deny `unsafe` crate-wide except where `traps.md` records a required exception. |
+| Rust edition / MSRV | **2021 edition** | MSRV pinned in `Cargo.toml`, raised deliberately. Users are unaffected either way — they receive a static binary, so no toolchain is required to run `char`. |
 | Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real `O_EXCL` races or real docker labels — the exact failures char exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
 | Coverage | **Gated, ratchet floor** | Floor is set by the first real measurement and may only rise; a PR that lowers coverage fails. Chosen over a fixed percentage because no project data exists to ground a number — 80 and 90 are convention, not evidence. `# pragma: no cover` with a reason comment is the escape for genuinely untestable lines. |
 

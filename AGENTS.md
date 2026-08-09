@@ -3,7 +3,7 @@
 Instructions for coding agents working in this repository.
 
 **charkit** is a CLI (`char`) giving coding agents one consistent vocabulary for managing a
-repo's tech stack. Python 3.12+, POSIX only.
+repo's tech stack. Rust (2021 edition), POSIX only.
 
 ## Read these first, in order
 
@@ -84,12 +84,12 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 
 | Rule | In practice |
 |---|---|
-| **Three seams only** | `ctx.run`, `ctx.now`, `ctx.fetch`. Docker and git are adapter modules that call `ctx.run` — they are not seams. The filesystem is never faked; use `tmp_path`. |
+| **Three seams only** | `ctx.run`, `ctx.now`, `ctx.fetch`. Docker and git are adapter modules that call `ctx.run` — they are not seams. The filesystem is never faked; use `tempfile::TempDir`. |
 | **Pure core** | Decisions are functions over data. Spawning, writing, killing and labelling live in `adapters/`. |
-| **Scheduler is a reducer** | `step(state, event) -> (state, [actions])`. The core proposes, the shell attempts, failures come back as events. Applies to the scheduler and the claim/lease loop **only** — elsewhere a plain function is a plain function. |
+| **Scheduler is a reducer** | `step(State, Event) -> (State, Vec<Action>)`. `Event`/`Action` are enums matched **exhaustively** — never add a `_ =>` arm, it converts a compile error into silence.. The core proposes, the shell attempts, failures come back as events. Applies to the scheduler and the claim/lease loop **only** — elsewhere a plain function is a plain function. |
 | **No logic in command functions** | parse args → call core → render. Nothing else. |
-| **No ambient state** | No module-level mutable state. No `os.getcwd()`, `os.environ` or `Path.cwd()` below the entrypoint. The workspace rides on `Ctx`. |
-| **Dependencies point inward** | `core` imports nothing concrete. `adapters` import core protocols only. `cli` is the only module importing both. Enforced by `import-linter`. |
+| **No ambient state** | No `static mut`, no global `OnceCell` holding mutable state. No `std::env::current_dir()` or `std::env::var()` below the entrypoint. The workspace rides on `Ctx`. |
+| **Dependencies point inward** | `core` imports nothing concrete. `adapters` depend on core traits only. `cli` is the only crate depending on both. Enforced by the crate graph. |
 | **Every verb takes `--json`** | Fixed envelope: `schema_version`, `verb`, `workspace`, `status`, `error`, `data`. Per-verb fields go **inside `data`**, never at the top level. One golden snapshot per verb. |
 | **One spelling for failure** | `FAILED`, never `FAIL`. Full enum: `READY` `UP` `DOWN` `CLEAN` `PASS` `OK` / `FAILED` / `ABORTED` `DEAD` `TIMEOUT`. |
 | **Errors are typed** | `class` ∈ {`bad_invocation`, `bad_config`, `tool_failed`, `timeout`, `aborted`, `char_bug`}, plus `where`. `next_action` is required for `bad_config`. The enum covers **every** non-zero exit — a hole is where a second, competing mapping grows back. |
@@ -125,8 +125,8 @@ codes can only occur when the child never ran; `data.dispatched` says which.
 | `tests/e2e/` | The real CLI against scratch repos. |
 | `tests/golden/` | One JSON snapshot per verb. **Regenerate by hand** — there is deliberately no update flag. |
 
-Coverage is gated on a ratchet: it may never drop. Use `# pragma: no cover` with a reason
-comment for genuinely untestable lines.
+Coverage is gated on a ratchet: it may never drop. Use `#[coverage(off)]` or a documented
+exclusion, with a reason comment, for genuinely untestable lines.
 
 ---
 
@@ -142,9 +142,10 @@ no-mistakes axi run --intent "<what the user set out to accomplish>"
 
 - **Commits are conventional**, scoped by module: `core`, `adapters`, `cli`, `schema`,
   `fixtures`, `docs`. Not phase numbers — they expire.
-- **`no-mistakes` is the gate.** It runs review, test, lint, then pushes and opens the PR.
-  Drive its gates; do not edit files to fix findings while a run is active. Escalate any
-  `ask-user` finding rather than deciding it yourself.
+- **The GitHub Actions matrix is the authoritative gate** — nothing merges without it.
+  **`no-mistakes` is the pre-flight you should use**: it runs an agent code review plus test
+  and lint locally, then pushes and opens the PR. Drive its gates; do not edit files to fix
+  findings while a run is active. Escalate any `ask-user` finding rather than deciding it.
 - **PRs are sized for review, not per phase.** Review is the binding constraint on this
   project. `main` sitting part-way through a phase is expected and fine.
 - **Tag each completed phase**: `git tag phase-3`.
@@ -155,7 +156,8 @@ no-mistakes axi run --intent "<what the user set out to accomplish>"
 
 From phase 3, charkit has its own `char.yml`.
 
-**Through phase 6: the gate runs the raw tools** — `ruff`, `mypy`, `pytest`.
+**Through phase 6: the gate runs the raw tools** — `cargo clippy`, `cargo fmt --check`,
+`cargo test`.
 `tests/test_dogfood.py` runs `char check --json` and asserts it agrees. So a broken
 `char check` is one failing test, not an unmergeable repository. Do not wire `char check`
 into the gate itself yet.

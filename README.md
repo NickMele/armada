@@ -33,11 +33,12 @@ Every verb takes `--json`.
 Not yet published. Once it is (phase 7):
 
 ```sh
-command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install charkit
+curl -LsSf https://raw.githubusercontent.com/<owner>/charkit/main/install.sh | sh
 ```
 
-`uv` provisions a Python interpreter itself, so this works on a machine with none.
+One static binary, roughly 1.5 MB. **There is no runtime to install** — no interpreter, no
+toolchain, nothing to provision. `cargo install charkit` is a second channel for people who
+would rather build it themselves.
 
 ## License
 
@@ -61,11 +62,10 @@ that is a defect in the document — please raise it.
 ## Setup
 
 ```sh
-uv sync
-uv run pytest
+cargo test
 ```
 
-Python 3.12 or newer.
+Rust stable, 2021 edition. The MSRV is pinned in `Cargo.toml`.
 
 ## Workflow
 
@@ -99,11 +99,11 @@ A change must clear all six:
 
 | | |
 |---|---|
-| **lint** | `ruff` |
-| **typecheck** | `mypy --strict` |
+| **lint** | `cargo clippy -- -D warnings` and `cargo fmt --check` |
+| **typecheck** | the compiler — `cargo build` failing *is* the typecheck |
 | **tests** | unit, integration and e2e |
 | **coverage** | ratchet — it may never drop |
-| **imports** | `import-linter`: `core` imports nothing concrete, `adapters` import core protocols only, `cli` is the only module importing both |
+| **crate boundaries** | `core` depends on nothing concrete, `adapters` depend on core traits only, `cli` is the only crate depending on both |
 | **contamination** | a grep, described below |
 
 ## Two rules that trip people up
@@ -144,11 +144,12 @@ at the adapter boundary is usually just asserting on your own fake.
 | Tier | Contents |
 |---|---|
 | `tests/unit/` | Pure core, no I/O. Fake `ctx.run` and **assert on the argv** — argv is where the bugs actually are. |
-| `tests/integration/` | Real subprocesses and files: process-group kill leaving no orphans, concurrent `O_EXCL` port claims, docker labels gone after `clean`. |
+| `tests/integration/` | Real subprocesses and files: process-group kill leaving no orphans, concurrent port claims and lease reclamation, docker labels gone after `clean`. |
 | `tests/e2e/` | The real CLI against scratch repos. |
 | `tests/golden/` | One JSON snapshot per verb. Regenerate by hand — there is no update flag, on purpose. |
 
-Use `# pragma: no cover` with a reason comment for genuinely untestable lines.
+Use `#[coverage(off)]` or a documented exclusion, with a reason comment, for genuinely
+untestable lines.
 
 ## Versioning
 
