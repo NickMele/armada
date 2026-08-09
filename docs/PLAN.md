@@ -1353,7 +1353,10 @@ it — that shape genuinely needs a daemon. char's does not.)
 ```toml
 cpu_slots       = 6      # default: max(1, num_cpus - 2)
 port_block_size = 10
-run_retention   = 10
+run_retention   = 10     # runs kept; see the 10 MB per-check log cap (§3.1)
+check_timeout   = 900    # per-check default, overridable per check (§4.1)
+acquire_timeout = 900    # cumulative wait for leases before FAILED/aborted (§4.3)
+docker_timeout  = 30     # char's own deadline on every docker call (§6)
 ```
 
 **`char.yml` declares how expensive a check is; this file declares how much the machine has.**
