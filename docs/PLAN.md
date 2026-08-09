@@ -1546,6 +1546,12 @@ running `char init` in a third, automatically reclaims the deleted one's block, 
 networks** — reported, not silently — without disturbing the live one. `char clean --orphaned`
 does the same on demand.
 
+**And when no process outlives its workspace.** `killpg` against a `setsid`'d group is
+verified to reach grandchildren (`traps.md`), so the assertion is that a spawned tree of three
+is zero after `down`. Add the neighbouring rule the same test protects: **every spawned child
+is waited on or explicitly reaped** — a dropped handle leaves a zombie, and a fifteen-minute
+detached run accumulates them.
+
 **And when a lease survives its holder dying:** take a lease, `kill -9` the holder, and
 confirm the next claimant reclaims it once the heartbeat goes cold rather than blocking
 forever. This is the mechanism ten-minute `char check` runs depend on (§4.3), so it needs a

@@ -307,6 +307,13 @@ here is reversible; this one has a one-way door. It matters more than usual give
 stays 0.x indefinitely (§2.5), which means the package version communicates nothing about
 compatibility, so `schema_version` is the only compatibility signal that exists.
 
+**The envelope is flushed explicitly before any exit path.** Measured: a 491-byte payload
+written through a `BufWriter` and followed by `std::process::exit` delivers **zero bytes** —
+and a 20 KB payload delivers all of them, because it exceeds the buffer capacity and bypasses
+it. So the failure is size-dependent: it passes a test with a large fixture and silently
+empties a small real payload, for the one consumer this contract exists to serve. See
+`traps.md`.
+
 **One golden snapshot per verb**, in `tests/golden/`. No `--update-snapshots` flag.
 
 These catch the one thing nothing else does: **key renames.** Every other test asserts on

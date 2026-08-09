@@ -51,9 +51,24 @@ lease or claim paths.
 
 ### WAL is a property of the file, not a driver default
 
-`journal_mode=WAL` persists in the database file once set, but no driver sets it for you. And
-`busy_timeout` defaults vary: some drivers ship 5000, others ship **0**. Both pragmas are
-required lines in char's connection setup, not tuning knobs.
+`journal_mode=WAL` persists in the database file once set, but no driver sets it for you.
+**Measured: `rusqlite`'s `Connection::open` ships `busy_timeout=5000`** — an earlier draft of
+this entry said "some drivers ship 0", which is true of other drivers and not of ours. Set both
+explicitly anyway; relying on a driver default is how it changes under you.
+
+### `SQLITE_BUSY` (5) is retryable. `SQLITE_BUSY_SNAPSHOT` (517) is not
+
+Two different failures that both print `database is locked`. Measured:
+
+| Contention | Extended code | Time to fail | Retry? |
+|---|---:|---:|---|
+| `IMMEDIATE` against a held `IMMEDIATE` | **5** | **5.21 s** — the full `busy_timeout` | **Yes.** It waited its turn and lost |
+| `DEFERRED` read, then write, with a committed writer in between | **517** | **31 µs** | **No.** The snapshot is stale; waiting cannot help |
+
+**If you assume otherwise:** you write one error handler for "database is locked" and either
+retry 517 forever, or give up on 5 when waiting would have worked. **Branch on the extended
+code, never the message.** Anything that waited the full `busy_timeout` is a genuine queue you
+lost; anything that failed in microseconds is a design error in the transaction.
 
 ## MCP
 
@@ -109,11 +124,58 @@ unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL); }
 This yields exit **141** and a silent, correct death — the ordinary Unix behaviour. It is one
 of exactly two `unsafe` blocks the design permits.
 
-### `setsid` is not in `std` — detaching a process group needs `unsafe pre_exec`
+### `setsid` is not in `std`, and it is mutually exclusive with `process_group(0)`
 
 `Command::process_group(0)` gives a new process *group* in the **same session**. Detaching
-from the controlling terminal — which is what `char up` requires — needs `setsid` via the
-`libc` crate inside `pre_exec`. That is the second permitted `unsafe` block.
+from the controlling terminal — what `char up` requires — needs `setsid` via `libc` inside
+`pre_exec`. That is the second permitted `unsafe` block.
+
+**Measured: setting both fails.** `process_group(0)` *and* `pre_exec(setsid)` on the same
+`Command` returns `Operation not permitted (os error 1)` — `setsid` fails when the caller is
+already a process-group leader, which `process_group(0)` has just made it. **Pick `setsid`
+alone.** An earlier draft of this entry stated both rules without saying they conflict.
+
+### `killpg` against a `setsid`'d group does reach grandchildren — verified
+
+The project's central cleanup claim, measured rather than assumed:
+
+```
+child pid 26860, pgid 26860, sid 26860   (own session, via pre_exec setsid)
+sh -c 'sleep 300 & sleep 300'            -> 3 processes in the group
+libc::killpg(pgid, SIGTERM)              -> rc=0
+procs in group after: 0                   <-- CLEAN
+```
+
+Phase 2's done-when depends on this and nothing had confirmed it in Rust.
+
+### `Child` dropped without `wait()` leaves a zombie
+
+```
+child exits, Child dropped without wait() -> ps stat "Z"
+```
+
+Rust's `Child` does **not** reap on drop, and the docs say so, but the consequence is easy to
+miss: char spawns services, checks, ready-probes, docker calls and secret providers. Every one
+whose handle is dropped without `wait()` leaves a `<defunct>` entry until char itself exits.
+
+**Rule: every spawned `Child` is waited on, or explicitly reaped.** A long-lived
+`char check --detach` accumulating zombies across a fifteen-minute run is the case that bites.
+
+### `std::process::exit` skips a `BufWriter` flush — and it is size-dependent
+
+```
+payload   491 bytes  ->  0 bytes delivered      <-- the entire envelope is lost
+payload 20054 bytes  ->  20054 bytes delivered  <-- passes, for the wrong reason
+```
+
+`BufWriter` flushes on `Drop`; `process::exit` does not run destructors. A write larger than
+the 8 KiB capacity bypasses the buffer and goes straight to the fd, which is why the large
+case survives.
+
+**If you assume otherwise:** you test the `--json` envelope with a big fixture, it passes, and
+a small real payload is silently emptied — for the one consumer the contract exists to serve.
+**Rule: flush explicitly before any exit path, or never write the envelope through a
+`BufWriter`.**
 
 **Everywhere else, `unsafe` is denied crate-wide.** Two exceptions, both recorded here, both
 in the POSIX layer, both a single call.
