@@ -1024,11 +1024,14 @@ The mechanism is four steps:
              labels.char.workspace_path → <realpath>
              build.labels.<both of the above>        (services that build)
 
-3. EMIT      .char/compose.yml
+3. HOLD      in memory - never written to disk (see below)
 
-4. RUN       docker compose -f .char/compose.yml -p char-<id> \
+4. RUN       <document on stdin> | docker compose -f - -p char-<id> \
                  --project-directory <workspace-root> up -d
 ```
+
+**The resolved document is never written to disk.** It exists in char's memory and on the
+compose process's stdin, and nowhere else.
 
 **Why generate a whole file rather than an override.** Because an override cannot do the one
 thing it would be for: compose **appends** to `ports:` rather than replacing, so the base
@@ -1041,9 +1044,26 @@ itself. char rewrites two keys in a document compose has already normalised, whi
 this works on any version and why `extends:`, YAML anchors and `${VAR}` interpolation are not
 char's problem.
 
-`.char/compose.yml` is generated, gitignored, and removed by `clean` along with the rest of
-`.char/` (§4.2). It is also inspectable and diffable, which is what makes a wrong port
-obvious rather than mysterious.
+**Why it is not persisted, which an earlier draft got wrong.** That draft wrote the document
+to `.char/compose.yml` and called it "inspectable and diffable." Measured: `docker compose
+config` **resolves `env_file:` and `${VAR}` interpolation and emits the values inline** —
+
+```yaml
+# from a repo's own .env, with no char involvement at all
+environment: { INLINE: sentinel-from-envfile, SECRET_TOKEN: sentinel-from-envfile }
+```
+
+— so persisting it manufactures exactly the artifact §4.7 exists to eliminate: *"a `.env` file
+an agent will eventually read while debugging."* It does so **for every repo**, including repos
+that never adopt char's secrets mechanism. Those values never passed through char, so the
+scrubber has never seen them and **structurally cannot redact them**. §1.8's invariant — a
+resolved secret is never written to `.char/` — would be violated by construction.
+
+Piping to `-f -` is verified to accept the document and produce identical resolved output.
+
+**The inspectable artifact is recovered explicitly**, not by default: `char up --dump-compose`
+writes the document for debugging and warns that it may contain resolved values. An explicit
+act with a warning is a different risk from a file that always exists.
 
 **Ownership falls out.** Containers and networks carry `com.docker.compose.project=char-<id>`
 (compose applies it automatically from `-p`) plus the two char labels from the transform —

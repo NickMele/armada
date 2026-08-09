@@ -233,6 +233,25 @@ docker compose -f docker-compose.yml config | grep context
 **Useful rather than dangerous:** it is what makes it safe to emit a generated compose file
 into a different directory, provided `--project-directory` is set to the original root.
 
+### `docker compose config` inlines `.env` and `${VAR}` secrets into its output
+
+```sh
+printf 'SECRET_TOKEN=sentinel\n' > .env
+# service has: env_file: [.env]  and  environment: {INLINE: ${SECRET_TOKEN}}
+docker compose -f st.yml --project-directory . config
+#   environment:
+#     INLINE: sentinel
+#     SECRET_TOKEN: sentinel
+```
+
+**If you assume otherwise:** you persist the resolved document as a debugging aid and create a
+cleartext credentials file, for every repo, including ones that never adopt char's secrets
+mechanism. Those values never passed through char, so no scrubber can redact them. This is why
+§6.0 pipes the document to `docker compose -f -` instead of writing it.
+
+`docker compose -f -` accepts a document on stdin and produces identical resolved output —
+verified.
+
 ### `docker compose up` has no `--label` flag
 
 ```sh
