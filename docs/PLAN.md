@@ -325,7 +325,7 @@ everything else is config. **Every verb takes `--json`.**
 
 | Verb | Contract | Terminal states |
 |------|----------|-----------------|
-| `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent. | `READY` `FAILED` |
+| `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent **in char's own state** — see §4.1. | `READY` `FAILED` |
 | `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` `PARTIAL` `FAILED` |
 | `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix`. | `PASS` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
@@ -737,6 +737,41 @@ tools are normally driven in a monorepo.
 **`root:` is not a working directory.** It says where a component's source lives: it scopes
 `match:` and resolves executables for `config verify`. §7 reserves it to point *outside* the
 workspace for multi-repo, so overloading it with a second meaning would collide with that.
+
+#### How a `cmd:` is executed, and `setup:` idempotence
+
+**Every `cmd:`, `fix:`, `stop:` and `setup:` step is argv-split by default — no shell.** char
+splits on whitespace respecting quotes, and substitutes `${files}` as **separate argv
+elements**.
+
+That default exists for one measurable reason: **char generates those paths.** Under a shell, a
+filename containing a space is word-split into two arguments, silently, on the most-used
+substitution in the schema. Argv-splitting is also what makes a hostile `char.yml` unable to
+inject a metacharacter — the same reasoning as §4.7's rule that `${ref}` is passed as a single
+argv element.
+
+**`shell: true` opts a single entry into shell interpretation**, where `|| true`, pipes,
+redirection and inline assignments all work:
+
+```yaml
+setup:
+  - bundle install
+  - { cmd: "createdb app_${workspace.id} || true", shell: true }
+  - bundle exec rails db:migrate
+```
+
+It is per-entry and visible in the diff, so a reviewer can see exactly where shell semantics
+are live. **Do not combine it with `${files}`** — that is the case the default exists to
+protect, and `config verify` warns when both appear in one entry.
+
+**`char init` is idempotent with respect to char's own state**, and that is the whole claim: one
+port block per workspace id, `.char/` recreated, one row in `char.db`. **Whether re-running a
+`setup:` step is safe is a property of the repo's commands.** A step that errors when its
+resource already exists is the repo's to make tolerant — `|| true` under `shell: true`, or a
+tool's own idempotent flag. A step that *succeeds* and does the wrong thing twice, like a seed
+that duplicates rows, is a property of that command that a human re-running it by hand hits
+identically; char does not try to fix it, and an earlier draft's per-step `once:` marker was
+removed for exactly that reason.
 
 #### `needs:` on a check takes components *and* check ids
 
@@ -1448,6 +1483,7 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - every `match:` glob hits at least one file
 - no `commands:` entry shadows a built-in verb (§4.5)
 - every `in:` names a component whose `run.driver` is `compose`
+- no entry combines `shell: true` with `${files}` — word-splitting would mangle a generated path
 
 > **Deliberately not checked: an `exclusive:` name used only once.** An earlier draft rejected
 > that as a typo. Since §4.3 made exclusives **machine-wide**, a name used once in a repo still
