@@ -328,7 +328,7 @@ everything else is config. **Every verb takes `--json`.**
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent **in char's own state** — see §4.1. | `READY` `FAILED` |
 | `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` `PARTIAL` `FAILED` |
-| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix`. | `PASS` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
+| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix` / `--files` / `--jobs`. | `PASS` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
 | `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` `PARTIAL` `FAILED` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
@@ -501,6 +501,29 @@ are services. That is what lets the two states with ports but no running service
 Check ids are derived as `<component>:<check>` (§4.1), so char always holds the complete set
 of valid selectors and never has to discover anything. `char check web:e2e`,
 `char check --component web` and `char check lint` all fall out of that set.
+
+**A bare positional accepts four things, disambiguated by characters the name grammar
+forbids** (§4.1: names match `^[a-z0-9][a-z0-9_-]*$`, so they contain no `:`, `/` or `.`):
+
+```
+char check api                        component, or a check name
+char check lint                       check name across every component
+char check api:lint                   a check id                        (has `:`)
+char check backend/api/views.py       a path                            (has `/` or `.`)
+char check backend/tests/             a path — directory
+char check --files a.py b.py          an explicit list
+```
+
+**A path selector runs the checks whose `match:` covers those files, with `${files}` set to
+exactly them.** That is the case an agent actually has — it changed one file and wants that
+file checked — and it is what stops the bypass: without it, an agent reasons that running the
+underlying tool directly is faster, and it is right. `char check <one file>` must be at least
+as fast as running the tool by hand, or agents will run the tool by hand and char stops being
+the vocabulary the project exists to provide.
+
+**A bare word that matches both a component and a check name is `bad_invocation`**, naming both
+and telling the caller to disambiguate with `--component`. Rare, and better than picking one
+silently.
 
 **Partial matches are normal.** `char check test` where `api:test` exists and `web:test` does
 not runs `api:test` and exits 0.
@@ -1090,6 +1113,27 @@ detached `char check` exists for exactly as long as its run, so it can hold and 
 leases. There is no state that outlives all char processes and therefore nothing for a
 resident daemon to hold. (Contrast a tool whose pipeline outlives every command that touches
 it — that shape genuinely needs a daemon. char's does not.)
+
+### 4.3.1 `~/.char/config.toml` — machine capacity, never committed
+
+```toml
+cpu_slots       = 6      # default: max(1, num_cpus - 2)
+port_block_size = 10
+run_retention   = 10
+```
+
+**`char.yml` declares how expensive a check is; this file declares how much the machine has.**
+They cannot be the same file: `char.yml` is committed, and a repo cannot know your core count.
+Three settings were previously described as "configurable" with no key and no home — this is
+the home.
+
+**`cpu_slots` defaults to `num_cpus - 2`, not `num_cpus`.** A budget that permits full
+saturation makes the machine feel dead even while the work is correctly bounded, because the
+editor, the agent processes and char itself all need something. Two agents running `char check`
+concurrently then contend for **one** pool rather than each assuming a whole machine — which is
+the machine-wide lease (§4.3) doing its job, and is impossible until this number exists.
+
+`char check --jobs N` overrides it for a single run.
 
 ### 4.4 Templating: four substitutions plus two scoped placeholders, hard cap
 
