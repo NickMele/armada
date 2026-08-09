@@ -177,8 +177,11 @@ a small real payload is silently emptied — for the one consumer the contract e
 **Rule: flush explicitly before any exit path, or never write the envelope through a
 `BufWriter`.**
 
-**Everywhere else, `unsafe` is denied crate-wide.** Two exceptions, both recorded here, both
-in the POSIX layer, both a single call.
+**Everywhere else, `unsafe` is denied crate-wide.** **Three** exceptions, all in `adapters`'
+POSIX process module, all a single call: `libc::signal` for SIGPIPE, `setsid` inside
+`pre_exec`, and **`libc::killpg`** — which is an unsafe extern fn and is therefore rejected by
+`#![deny(unsafe_code)]` despite appearing in this file's own verified snippet. An earlier
+version of this note said two and omitted the one the whole cleanup model depends on.
 
 ## Typer / Click exit codes *(historical — charkit is Rust)*
 

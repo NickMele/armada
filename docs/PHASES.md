@@ -214,13 +214,17 @@ primitive in the project"; it is also the foundational one.
 
 **Done when:** two directories claim non-overlapping blocks concurrently;
 `char status --project` from either reports both; and **deleting one directory outright, then
-running `char init` in a third, automatically reclaims the deleted one's block, containers and
-networks** — reported, not silently — without disturbing the live one. `char clean --orphaned`
+running `char init` in a third, automatically reclaims the deleted one's block, plus containers
+and networks created for the test with `docker run --label`** — reported, not silently — without
+disturbing the live one. `char clean --orphaned`
 does the same on demand.
 
-**And when no process outlives its workspace.** `killpg` against a `setsid`'d group is
-verified to reach grandchildren (`traps.md`), so the assertion is that a spawned tree of three
-is zero after `down`. Add the neighbouring rule the same test protects: **every spawned child
+**And when no process outlives its workspace.** `killpg` against a `setsid`'d group is verified
+to reach grandchildren (`traps.md`), so the assertion is that a spawned tree of three is zero
+after the group is killed. **Test it by spawning and killing the group directly, not via
+`char down`** — `down` and the compose driver are phase 4, so an earlier draft's criteria could
+not be run at the end of this phase. For the same reason, the labelled containers the reap pass
+removes are created with `docker run --label` in the test rather than by `char up`. Add the neighbouring rule the same test protects: **every spawned child
 is waited on or explicitly reaped** — a dropped handle leaves a zombie, and a fifteen-minute
 detached run accumulates them.
 

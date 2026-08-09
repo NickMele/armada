@@ -546,12 +546,18 @@ pattern.
 > permanently green gate that looks correct in the rendered document. Verified. **Keep the
 > pattern in a fenced block, and nowhere else.**
 >
-> **The gate carries a test that the pattern still matches a known-bad string** *placed in a
-> real crate source path*. A grep that cannot match is indistinguishable from a clean
-> repository — and this has now failed twice for different reasons: once because markdown
-> escaping made the pattern unrunnable, once because it pointed at `src/`, which does not
-> exist in a Cargo workspace. The test must assert a **match**, not merely that the command
-> runs.
+> **The gate carries a test that the pattern still matches a known-bad string.** A grep that
+> cannot match is indistinguishable from a clean repository — and this has now failed twice for
+> different reasons: once because markdown escaping made the pattern unrunnable, once because
+> it pointed at `src/`, which does not exist in a Cargo workspace. The test must assert a
+> **match**, not merely that the command runs.
+>
+> **The test builds the string at runtime and writes it to a temporary directory** — never as a
+> source literal, and never inside the repository. Written the obvious way
+> (`let known_bad = "chariot";` in `tests/`) the self-test trips the very gate it is testing,
+> the repo goes red while clean, and the documented response — *"the code changes, not the
+> pattern"* — means deleting the test. Use `format!("{}{}", "cha", "riot")` into a
+> `tempfile::TempDir`, and run the pattern against that directory.
 
 > **Paths, not just the pattern.** Sources live at `crates/*/src/`; there is no top-level
 > `src/`. Pointing the grep at `src/` makes it warn, scan nothing, and exit 2 — which most
@@ -778,7 +784,7 @@ when the copy and the owner disagree, the owner wins and the copy is the bug.
 | Public or private | **Public** | Phase 7 publishes release binaries and the install story is a `curl` one-liner, so it is public in effect regardless — a public package with a private source repo has no issue tracker and no source link. Also makes Actions free. |
 | License | **Apache-2.0** | Explicit patent grant, clears corporate legal review, no adoption cost. |
 | CI | **Both** — `no-mistakes` primary, minimal Actions matrix alongside | Actions supplies the one thing a local gate cannot: a machine that is not yours, and Linux as well as macOS. Process groups, signals and file locks are load-bearing; verifying real process-group kill only on macOS leaves the platform most users are on untested. Free on a public repo. `no-mistakes` keeps the agent review step, which is the only actual review in a solo repo. |
-| Typing | **The compiler** | The decision that produced "mypy strict from commit one" is satisfied for free and more strongly: there is no gradual-typing escape hatch and no `Any` leaking in from untyped dependencies. Deny `unsafe` crate-wide except where `traps.md` records a required exception. |
+| Typing | **The compiler** | The decision that produced "mypy strict from commit one" is satisfied for free and more strongly: there is no gradual-typing escape hatch and no `Any` leaking in from untyped dependencies. `unsafe` is denied crate-wide **except in `adapters`' POSIX process module**, which carries a documented `allow` covering exactly three calls — `libc::signal` (SIGPIPE), `setsid` inside `pre_exec`, and `libc::killpg`. An earlier draft said "exactly two" and denied `unsafe` everywhere, which rejects `killpg` — the project's central cleanup primitive, and an unsafe extern fn. |
 | Rust edition / MSRV | **2021 edition** | MSRV pinned in `Cargo.toml`, raised deliberately. Users are unaffected either way — they receive a static binary, so no toolchain is required to run `char`. |
 | Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real concurrent claim races or real docker labels — the exact failures char exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
 | Coverage | **Gated, ratchet floor** | Floor is set by the first real measurement and may only rise; a PR that lowers coverage fails. Chosen over a fixed percentage because no project data exists to ground a number — 80 and 90 are convention, not evidence. `#[coverage(off)]`, or a documented exclusion, with a reason comment, is the escape for genuinely untestable lines. |

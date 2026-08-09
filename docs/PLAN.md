@@ -168,13 +168,20 @@ pub struct ProjectId(String);
 
 ```text
 workspace_id = sha1(realpath(workspace_root))[..8]
-project_id   = sha1(realpath(`git rev-parse --git-common-dir`))[..8]
+project_id   = sha1(realpath(`git rev-parse --path-format=absolute --git-common-dir`))[..8]
 ```
 
-> **`realpath` on the second line is load-bearing and was missing from an earlier draft.**
+> **`--path-format=absolute` is load-bearing, and `realpath` alone is not enough.** Plain
 > `git rev-parse --git-common-dir` returns a path *relative to cwd* — `.git` from the repo
 > root, `../.git` from a subdirectory — so hashing it directly yields a different project id
-> depending on where the command was run. That silently breaks `--project` scoping, the
+> depending on where the command ran. Applying `realpath` looks like a fix and is not: it
+> resolves against **the calling process's** cwd, while §1.4 of `ARCHITECTURE.md` forbids
+> reading cwd below the entrypoint, so char runs git with `current_dir(workspace_root)` and
+> then resolves `../.git` against its own cwd. Wrong id, silently. Measured: with
+> `--path-format=absolute` (git ≥ 2.31) the answer is identical from every directory, and
+> `realpath` remains only to resolve symlinks. **Subtler than it looks — from inside a
+> worktree the plain form already returns an absolute path, so this fails only in a
+> subdirectory of the main checkout.** It silently breaks `--project` scoping, the
 > database's project filter, and the guarantee that worktrees group with their parent. Verify
 > this behaviour before changing the line; it is not obvious from the command's name.
 
@@ -220,7 +227,13 @@ So `char init` reaps first, then claims:
 1. **Registry pass.** Drop `workspaces` rows whose `path` no longer exists, releasing their
    port blocks and `owned` rows.
 2. **Resource pass.** Find every resource labelled `char.workspace=*`, read its
-   `char.workspace_path` label, and **`stat` that path**. Remove only if the path is gone.
+   `char.workspace_path` label, and **`stat` that path. Remove only on `ENOENT`.**
+
+   **Any other errno means "adopt or report", never remove.** Measured: `stat` on a *live*
+   directory under a mode-000 parent returns `EACCES`, which is byte-identical in failure to a
+   missing path. That is exactly the multi-user and devcontainer case this label was added for
+   — `$HOME` is 0700 on Linux — so a naive "stat failed → gone" reintroduces the bug the label
+   exists to prevent.
 3. **Lease pass.** Delete leases whose heartbeat has gone cold (§4.3).
 
 **Why pass 2 reads a path label rather than checking the database.** An earlier draft removed
@@ -241,6 +254,11 @@ The database is per-`$HOME`; the Docker daemon is per-machine. So every one of t
 
 That is §2.2's flat-siblings guarantee — `clean` must never cascade into a workspace another
 agent is using — reintroduced by the very mechanism added to fix the plan's motivating bug.
+
+**`clean` filters on both labels, not the id alone.** `workspace_id` is 32 bits, and every
+`owns:` selector in §6.1 is id-only — so a collision would have `char clean` in one workspace
+destroy another's live containers, the single thing §2.2's flat-siblings model exists to
+prevent. The path label already exists; using it costs nothing and closes it.
 
 Stamping the path makes pass 2 **self-sufficient**: it stats a real directory and consults
 nothing. "Labelled, no row, but the path exists" is now **adopt or report, never remove.**
@@ -989,6 +1007,12 @@ confirmation needs `inherit` despite its grant, and a command with no grant that
 own token internally and logs it needs `pipe` despite having none. The repo knows; char
 cannot.
 
+**`--json` overrides `stdio:` and forces `pipe`.** With `inherit` the child writes to char's
+own stdout, and char then writes the envelope to the same descriptor — so the one consumer the
+envelope exists for receives interleaved child output and JSON. §6's rule that "`--json` means
+stdout carries the envelope and nothing else" applies to dispatched commands too; `stdio:`
+chooses between `inherit` and `pipe` only when char is not emitting a machine-readable payload.
+
 **`stdio: inherit` alongside a `secrets:` grant is permitted, and disables scrubbing for that
 entry.** char still writes nothing itself — the child writes straight to the terminal — but
 §4.7's practical protection does not apply. Two deliberate keys in one block is a clear
@@ -1276,10 +1300,16 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - schema validation
 - **resolves every `cmd` and `fix`** — splits `argv[0]` and checks it is on `PATH` or is an executable file under the component root
 - `needs:` refs resolve to real components
-- `exclusive:` names used more than once (a lone name is a typo)
 - declared ports fit the block
 - every `match:` glob hits at least one file
 - no `commands:` entry shadows a built-in verb (§4.5)
+
+> **Deliberately not checked: an `exclusive:` name used only once.** An earlier draft rejected
+> that as a typo. Since §4.3 made exclusives **machine-wide**, a name used once in a repo still
+> excludes every other workspace on the machine — which is the entire point of the change. The
+> rule survived it unrevisited and would now reject §4.1's own example (`exclusive: [browser]`,
+> used once) and the `python-ml` fixture's single GPU. A typo'd exclusive name is now harmless:
+> it names a mutex nobody else contends for.
 - no `components[].root` or `match:` glob reaches into a declared nested workspace (§4.6),
   and every path in `workspaces:` actually contains a `char.yml`
 - every granted secret name is declared in `secrets:`, and every reference's URI scheme
@@ -1439,7 +1469,7 @@ components:
       owns:
         containers: "label=io.x-k8s.kind.cluster=char-${workspace.id}"
         images: "label=char.workspace=${workspace.id}"
-        # char stamps char.workspace_path alongside; declared selectors need only the id
+        # declared selectors may use the id alone; char's own filters use BOTH labels
         ports: [api]
         files: [".kube/char-${workspace.id}.conf"]
 ```
