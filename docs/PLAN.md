@@ -1356,11 +1356,16 @@ resolved secret is never written to `.char/` — would be violated by constructi
 
 Piping to `-f -` is verified to accept the document and produce identical resolved output.
 
-**The inspectable artifact is recovered explicitly**, not by default: `char up --dump-compose`
-writes the document for debugging, **with every `environment:` and `env_file:` value replaced
-by `<redacted>`**. The flag exists to inspect the port and label transform, which is the only
-thing it is actually for — dumping the values would be `char secret get` spelled differently,
-and it is exactly the flag an error message would suggest to a stuck agent.
+**There is deliberately no `--dump-compose` flag either.** A draft added one, redacting every
+`environment:` and `env_file:` value — but what survives redaction is a port map and two
+labels, and both are already reported: ports in `data.results[].ports` (§3.1), labels by
+`docker inspect`. It bought a fourth call site for the scrubber and a file path an error
+message would helpfully suggest to a stuck agent, in exchange for information available two
+other ways.
+
+When `up` goes wrong, the port transform is visible in `data.results[].ports`, what the
+container actually received is visible in `docker inspect`, and what char *would* do is visible
+in `char up --dry-run` (§3.3.1).
 
 **Ownership falls out.** Containers and networks carry `com.docker.compose.project=char-<id>`
 (compose applies it automatically from `-p`) plus the two char labels from the transform —
