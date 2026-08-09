@@ -23,6 +23,40 @@ shows it, and what breaks if you assume otherwise.
 
 ---
 
+## MCP
+
+Verified against the live specification and SDK, phase 0.
+
+### The base protocol is stateless as of spec revision `2026-07-28`
+
+The specification states the base protocol as *"JSON-RPC message format, **stateless,
+self-contained requests**, per-request capability negotiation."* There is no long-lived
+session to hold between requests.
+
+Nuance worth keeping: this does **not** mean initialization vanished entirely. Extensions are
+*"negotiated during initialization"*, and `InitializationOptions` still exists in the SDK. A
+report phrased as "no initialize, no sessions" is right about the base protocol and overstated
+as a general claim.
+
+### Python SDK 2.0 removed `FastMCP`
+
+```sh
+uv run --with mcp python -c "import mcp.server as s; print(dir(s))"
+# mcp 2.0.0
+# FastMCP  -> ModuleNotFoundError
+# MCPServer -> present
+```
+
+**If you assume otherwise:** you follow any tutorial or existing server written against
+`FastMCP` and it fails at import. Every pre-2.0 MCP example is a dead template, including the
+one in PLAN.md §9.
+
+### The Tasks extension exists for long-running operations
+
+*"Asynchronous execution of long-running operations, with polling, mid-flight input, and
+durable handles."* This is the standard shape for exposing something like a ten-minute
+`char check` over MCP — worth using rather than inventing a bespoke polling protocol.
+
 ## Typer / Click exit codes
 
 Measured against **Typer 0.27.1**, phase 0.

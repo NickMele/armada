@@ -1346,6 +1346,22 @@ parallelizable work in the plan, one agent each. Plus schema/example emission,
 **`char config scan` must run in a repo with no `char.yml`.** That is the only state it is
 ever useful in, and §2.1 exempts it from workspace resolution for exactly that reason.
 
+**The MCP server targets SDK 2.x and spec revision `2026-07-28`.** Verified in phase 0 and
+recorded in [`traps.md`](traps.md); re-check before starting, because this moved recently.
+Three consequences:
+
+- **`FastMCP` no longer exists.** The entry point is `MCPServer`. Every pre-2.0 example and
+  tutorial is a dead template, including §9's reference implementation.
+- **The base protocol is stateless** — self-contained requests, per-request capability
+  negotiation, no session to hold. That happens to suit charkit: §1.3 of `ARCHITECTURE.md`
+  already says a command is *parse → call core → render*, and a stateless server is the same
+  shape with a different renderer. There is no session state to design.
+- **Use the Tasks extension for `char check`, rather than inventing a polling protocol.** It
+  exists for exactly this — asynchronous long-running operations with polling, mid-flight
+  input and durable handles — and a real check runs well past ten minutes. Align
+  `--detach` / `--status` / `--wait` with it rather than shipping two different
+  long-operation idioms for the same run.
+
 **Done when:** an agent given only "set up char in this repo" produces a verifying config in
 a repo it has never seen — `char config scan` → the agent authors → `char config verify`
 passes, with no human in the loop.
@@ -1434,7 +1450,7 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 | `char/worktrees.py` | 679 | Reference for phase 2. Orphan container/network sweep — note it infers ownership from compose's `working_dir` label; charkit stamps its own instead. |
 | `char/servers.py` | 436 | Reference for phase 4. Tilt-shaped; becomes config, not code. |
 | `char/__main__.py` | 521 | Reference. Typer dispatch pattern. |
-| `char_mcp/server.py` | ~95 | Reference for phase 5. |
+| `char_mcp/server.py` | ~95 | **Do not use as a template.** Written against a pre-2.0 MCP SDK; `FastMCP` no longer exists (`docs/traps.md`). Read it for *what* to expose, never for *how*. |
 | `char_test/` | 2,694 | **Harvest in phase 3 — port the cases, rebuild the harness.** `run_fn`-injected, asserts on behavior not implementation — this is the single most valuable asset. Only check-id fixtures should need editing. |
 | `char/baselines.py` | 762 | **Not previously listed. Harvest for traps in phase 3 even though the code does not move.** A Playwright snapshot review aid — pixel-diffs darwin/linux snapshot pairs and renders an HTML page for a human. Holds at least one of the two Playwright traps this table attributes to `check.py`: with the default `updateSnapshots: "missing"`, an absent snapshot is *written* and the test *passes*, so a first containerised run reported 29/29 having compared 17 brand-new images against themselves. Couples only to `_shared` (`CheckError`, `RunFn`, `default_run_fn`), so phase 6 inlines three symbols and registers it as a `commands:` entry. |
 | `char/tickets.py` | 51 | Small. Becomes a `commands:` entry in phase 6. |
