@@ -112,7 +112,7 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 | **No ambient state** | No `static mut`, no global `OnceCell` holding mutable state. No `std::env::current_dir()` or `std::env::var()` below the entrypoint. The workspace rides on `Ctx`. |
 | **Dependencies point inward** | `core` imports nothing concrete. `adapters` depend on core traits only. `cli` is the only crate depending on both. Enforced by the crate graph. |
 | **Every verb takes `--json`** | Fixed envelope: `schema_version`, `verb`, `workspace`, `status`, `error`, `data`. Per-verb fields go **inside `data`**, never at the top level, and every plural verb uses `data.results[]` (PLAN.md §3.1). One golden snapshot per verb. |
-| **One spelling for failure** | `FAILED`, never `FAIL`. Terminal: `READY` `UP` `DOWN` `CLEAN` `PASS` `OK` / `PARTIAL` / `FAILED` / `ABORTED` `DEAD` `TIMEOUT`. Progress, never terminal and never mapped to an exit code: `RUNNING` `WAITING` (with `waiting_on`). |
+| **One spelling for failure** | `FAILED`, never `FAIL`. Terminal: `READY` `UP` `DOWN` `CLEAN` `PASS` `OK` `SKIPPED` / `PARTIAL` / `FAILED` / `ABORTED` `DEAD` `TIMEOUT`. Progress, never terminal and never mapped to an exit code: `RUNNING` `WAITING` (with `waiting_on`). |
 | **Errors are typed** | `class` ∈ {`bad_invocation`, `bad_config`, `tool_failed`, `timeout`, `aborted`, `char_bug`}, plus `where`. `next_action` is required for `bad_config`. The enum covers **every** non-zero exit — a hole is where a second, competing mapping grows back. |
 | **Secrets never leave the shell** | Resolved values are injected into a child's env at spawn and never reach the core, argv, `--json`, logs or `.char/`. There is no verb that returns a secret. See `ARCHITECTURE.md` §1.8. |
 

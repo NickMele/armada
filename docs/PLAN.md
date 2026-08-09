@@ -329,7 +329,7 @@ everything else is config. **Every verb takes `--json`.**
 | `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` `PARTIAL` `FAILED` |
 | `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix` / `--files` / `--jobs`. | `PASS` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
-| `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` `PARTIAL` `FAILED` |
+| `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases — and remove `.char/`. Declared `release:` commands are **reported, never run** (§6.1). Build artifacts only with `--artifacts` (§6.1). | `CLEAN` `PARTIAL` `FAILED` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
 Plus: `char config scan`, `char config verify`, `char agents-md [--write|--verify]`, and any
@@ -351,6 +351,7 @@ behave identically. The complete enum:
 TERMINAL — every one maps to an exit code (ARCHITECTURE.md §1.6)
 
   READY  UP  DOWN  CLEAN  PASS  OK         success
+  SKIPPED                                  nothing to do; exit 0, not PARTIAL
   PARTIAL                                  some succeeded, some did not
   FAILED                                   did not achieve its goal
   ABORTED  DEAD  TIMEOUT                   did not finish
@@ -444,6 +445,13 @@ actionable fact is that the machine was busy rather than that this check is slow
 
 These two also fill a gap `--detach` had: every other state is terminal, so a detached run had
 nothing correct to report to `char check --status` while it was still going.
+
+**`--status` exits on the success of the query, not on the verdict of the run.** An in-flight
+run answers `status: RUNNING`, exit **0** — the query worked. This is the one place where exit
+0 does not mean "the thing you asked about is fine", so it is stated rather than left to be
+discovered: **a gate must use `--wait`, never `--status`.** `--status` is for a human or an
+agent polling; `--wait` blocks and exits on the run's real class. Exit codes from `--status`
+are about the query — `2` for an unknown run id, `3` if the config no longer parses.
 
 **`waiting_on` carries the distinction that matters** — whether the cause is inside this
 workspace or outside it:
@@ -632,19 +640,10 @@ claimed, what it labelled, and what the current scope selects. `clean --artifact
 case that most needs it — it deletes every declared `owns.files` on the machine and previously
 had no preview at all.
 
-**One exception, where char genuinely cannot know: a `commands:` entry.** char dispatches an
-arbitrary repo script and has no idea what it would do, so the repo declares it (§4.5):
-
-```yaml
-commands:
-  worktrees:
-    cmd: uv run scripts/worktrees.py
-    dry_run: uv run scripts/worktrees.py --dry-run     # optional
-```
-
-Omit it and `char worktrees --dry-run` reports *"this command declares no dry-run mode"* rather
-than appending a flag and hoping. Guessing a flag on someone else's script is precisely the
-mistake §5's earlier dry-invoke made.
+**`commands:` entries take no `--dry-run`.** §4.5 passes remaining argv through **untouched**,
+and its own example is `char worktrees prune --dry-run` reaching the script unchanged — so a
+`dry_run:` key would have char intercept a flag that belongs to the child. A dispatched
+command's flags are the child's; `--dry-run` applies to the five verbs char owns.
 
 Two filters compose with any scope, on `clean`:
 
@@ -773,11 +772,45 @@ workspace for multi-repo, so overloading it with a second meaning would collide 
 splits on whitespace respecting quotes, and substitutes `${files}` as **separate argv
 elements**.
 
-That default exists for one measurable reason: **char generates those paths.** Under a shell, a
-filename containing a space is word-split into two arguments, silently, on the most-used
-substitution in the schema. Argv-splitting is also what makes a hostile `char.yml` unable to
-inject a metacharacter — the same reasoning as §4.7's rule that `${ref}` is passed as a single
-argv element.
+**The reason is a trust boundary, and an earlier draft of this paragraph had it backwards.**
+`char.yml` is *fully trusted* — you cloned the repo and ran char against it, and `cmd: rm -rf /`
+needs no metacharacter to be destructive. Argv-splitting buys nothing there. It matters for the
+values that cross a boundary **into** a command:
+
+| Value | Comes from | Trusted? |
+|---|---|---|
+| `cmd:` itself | the config author | yes — running char is the trust decision |
+| **`${files}`** | **filenames on the branch being checked** | **no** |
+| `${ref}` | the config, into a provider command | treated as untrusted (§4.7 rule 1) |
+
+**`${files}` is the dangerous one, and it is measured, not theoretical.** A filename may contain
+`;`, `$(…)` or a quote — POSIX permits it, git emits it raw under `-z`, and under a shell it
+executes:
+
+```
+sub/semi;echo INJECTED.py   →  ;echo INJECTED   runs as a separate command
+sub/dollar$(id).py          →  $(id)            runs, and its output is substituted
+```
+
+Anyone who can push a branch to a repo using char then has **arbitrary code execution on every
+machine that runs `char check` on it** — the verb agents call most.
+
+> **`shell: true` combined with `${files}` is rejected by the schema.** Not a warning, not a
+> `config verify` check, not a runtime guard: unrepresentable. A warning is advice, and this is
+> the difference between a config being wrong and a machine being owned.
+
+**`${files}` must stand alone as a whole token.** `ruff check ${files}` is legal;
+`ruff check --stdin-filename=${files}` is `bad_config`. The placeholder expands to *n*
+arguments, and *n* arguments cannot be pasted inside one — a schema-checkable rule that
+removes the only case where the expansion has no meaning.
+
+**char reads the file list NUL-delimited and never splits it itself** — `git diff -z`, `git
+ls-files -z`, `git status -z`. Newline is a legal character in a POSIX filename, so a
+line-oriented read of git's output turns one file into two nonexistent ones. Because argv
+carries the values with no re-parsing, a filename with a newline in it survives end to end.
+
+Under a shell, `${files}` is also word-split, so a filename containing a space silently becomes
+two arguments — the same substitution failing quietly even without malice.
 
 **`shell: true` opts a single entry into shell interpretation**, where `|| true`, pipes,
 redirection and inline assignments all work:
@@ -790,8 +823,12 @@ setup:
 ```
 
 It is per-entry and visible in the diff, so a reviewer can see exactly where shell semantics
-are live. **Do not combine it with `${files}`** — that is the case the default exists to
-protect, and `config verify` warns when both appear in one entry.
+are live. **`shell: true` is never permitted on `secret_providers[].cmd`** (§4.7 rule 1 exists
+to keep `${ref}` out of a shell), and never in an entry using `${files}` — the schema forbids
+both combinations outright.
+
+**`shell: true` is not a security boundary and must not be described as one.** It is an
+ergonomic escape for `|| true` and pipes in a config you already trust.
 
 **`char init` is idempotent with respect to char's own state**, and that is the whole claim: one
 port block per workspace id, `.char/` recreated, one row in `char.db`. **Whether re-running a
@@ -834,6 +871,13 @@ Four semantics, because leaving any of them to the implementer produces four dif
 - **If a prerequisite fails, its dependents do not run** and are reported `ABORTED` with a
   message naming the failed check. They are not `FAILED` — they were never attempted, and an
   agent must not go looking for their output.
+
+  **A cascaded `ABORTED` never sets `error.class`.** Per-check status and the run's error
+  class are separate channels (§3.1), and the run's class comes from *why the run ended*: a
+  prerequisite that failed its own tests ends the run at `tool_failed`, exit 1. Letting the
+  cascade set `aborted` would exit 5 — the retryable class — for a deterministic test failure,
+  telling a merge gate to try again on a bug that will fail identically forever. `aborted` is
+  reserved for the run being stopped from outside it: SIGINT, or the acquisition ceiling.
 - **Cycles are a `bad_config`, caught statically by `config verify`.** They are unrepresentable
   at runtime, so they must be rejected before one.
 - **Ordering does not imply exclusivity.** Two checks that both need `core:build` still run
@@ -873,7 +917,7 @@ components:
     run: { driver: compose, file: [docker-compose.yml, docker-compose.dev.yml] }
     checks:
       test:
-        in: api                    # run inside this component's container
+        in: api                    # the compose *service* named `api`
         cmd: pytest ${files}
 ```
 
@@ -883,8 +927,22 @@ hand — which duplicates `run.file:`, is easy to get subtly wrong (omit `-T` an
 TTY and hangs in CI), and, worst, hardcodes `char-${workspace.id}`. That is §6.0's *internal*
 naming convention; every config depending on it would freeze a private implementation detail.
 
-Two consequences: `in:` requires the named component to be `driver: compose`, and it **implies
-`needs:`** — the container has to be running, which per phase 4 means char starts it.
+**`in:` names a compose service, not a component.** A component's compose files routinely
+define several services — `api`, `worker`, `migrate` — and `docker compose exec` needs one of
+them, so a component name would leave char guessing. The service must be defined by the
+**enclosing** component's `run.file:` list, which `config verify` checks against the resolved
+document (§6.0 step 1) — so a typo'd or deleted service is a `bad_config` in pass 1 rather
+than an exec failure at runtime. That the example reads `in: api` under component `api` is the
+common case, not the rule.
+
+Two consequences: the enclosing component must be `driver: compose`, and `in:` **implies
+`needs:`** on it — the container has to be running, which per phase 4 means char starts it.
+
+**A check with `in:` may not be granted `secrets:`.** It is `bad_config`, because the only way
+to hand a value to an exec'd process is `docker compose exec -e KEY=value`, which puts the
+value **in argv** — readable by anyone who can run `ps` on the host, and recorded in the
+daemon's exec inspect. That violates §1.8 outright. A container's environment is compose's
+job: the service already has what it needs from the `environment:` the repo declared.
 
 **char passes the same workspace-relative paths and sets the working directory to the mount
 point.** It cannot verify that the repo's bind-mount matches — but a single stated convention is
@@ -894,6 +952,12 @@ exactly what lets a repo set its mount up correctly.
 plus uncommitted working-tree changes.** And the case that matters:
 
 > **If the set is empty, the check is skipped — it is never invoked with no arguments.**
+
+**Skipped is `SKIPPED`, a terminal state that maps to exit 0 and does not make a run
+`PARTIAL`.** It needs its own token: `PASS` would claim the tool ran and approved, and
+`ABORTED` would claim something went wrong. Nothing went wrong — there was nothing to check.
+`results[]` carries `{"status": "SKIPPED", "reason": "no matching files"}` so an agent that
+expected a check to run can tell "no files matched" from "never selected".
 
 This is not a nicety. `ruff check` with no paths checks the entire tree; a file-scoped check
 that silently degrades into a full-tree run turns a three-second lint into a several-minute
@@ -992,6 +1056,16 @@ is already stale. That is the lease pattern exactly.
 ```
 acquire   insert a lease row
 hold      renew the heartbeat from the shell's event loop
+
+          INVARIANT: the shell's event loop never blocks. It selects over child
+          output, timers and signals; it never waits on a child, never holds a
+          SQLite transaction across a poll, and never calls a blocking read.
+          Child waiting is a non-blocking reap. This is what makes "wedged but
+          still heartbeating" unrepresentable rather than merely unlikely: a
+          wedged loop is a loop that stopped selecting, and a loop that stopped
+          selecting stopped renewing. Every blocking call added to that loop
+          weakens the reclaim guarantee, so it is a review rule, not a style
+          preference.
 release   delete the row on exit
 reclaim   a lease whose heartbeat has gone cold is dead — take it
 ```
@@ -1042,7 +1116,15 @@ So a waiting check is **visible in the payload**, naming what it waits on and wh
   "waiting_on": { "exclusive": "browser", "held_by": "7c21ab90", "since_ms": 44000 } }
 ```
 
-and after an acquisition ceiling it fails with a **retryable** class:
+**The ceiling is 15 minutes of cumulative waiting per check, and it is configurable** —
+`acquire_timeout` in `~/.char/config.toml` (§4.3.1), machine-global like everything else about
+resource budget. It counts time spent waiting to acquire, not time spent running; a check that
+waits 14 minutes and then runs for an hour is not affected. It exists so that an abandoned
+lease whose holder died between heartbeat and reap cannot hang a merge gate indefinitely, and
+15 minutes is chosen to be longer than any legitimate exclusive hold in the fixture set
+(`web:e2e`, the longest, is ~6 minutes) and short enough that a human notices.
+
+After it expires the check fails with a **retryable** class:
 
 ```
 status: FAILED   error.class: aborted   "browser held by 7c21ab90 for 15m"
@@ -1092,7 +1174,7 @@ point of testing it, since the rule is easy to write down and easy to forget.
 | Two workers stuck on each other forever | sorted acquisition — no recovery exists, so it must be impossible |
 | B waits fifteen minutes for A's slow suite | not a failure; `WAITING` plus `waiting_on.held_by` makes it visible and attributable rather than silent |
 | A crashes holding `browser` | heartbeat expiry |
-| A is wedged but its heartbeat still ticks | **cannot happen** — the heartbeat is renewed from the shell loop, so a wedged loop stops renewing (§4.3) |
+| A is wedged but its heartbeat still ticks | **cannot happen, given the invariant below** |
 
 **`cost:` and `exclusive:` are machine-wide, not per-run.** Ports were already claimed
 machine-globally; CPU slots and named exclusives were not, which meant five concurrent
@@ -1186,8 +1268,8 @@ JSON.
 
 > **char does not verify that a generated file is in sync, and has no `generated_by:` key.** An
 > earlier draft added one, with `config verify --check` re-running the generator and comparing
-> byte for byte. Three problems: it made `verify` execute an arbitrary repo command, which is
-> the exact property §4.4 uses to reject Starlark; byte comparison fails on a formatter bump or
+> byte for byte. Three problems: it made `verify` execute an arbitrary repo command **in order to
+> read the config**, which is the exact property §4.4 uses to reject Starlark; byte comparison fails on a formatter bump or
 > a generated timestamp while the config is perfectly correct; and `--check` had no coherent
 > meaning, since `verify` never modifies anything. A repo that generates its config keeps it in
 > sync the way it keeps any generated file in sync — in its own CI. This is deliberately the same pattern as cdktf → Terraform JSON.
@@ -1197,8 +1279,15 @@ JSON.
 > conditionals, you inherit them, so there is no slope to slip down. It loses on one
 > specific ground, and it is the ground this project stands on: the primary author and
 > reader of this file is an agent. YAML can be schema-constrained on write and parsed on
-> read; Starlark must be *executed* to know what it means, which means `char config verify`
-> would have to run untrusted repo code — killing layer 3 of the bootstrap sandwich (§5).
+> read; Starlark must be *executed* to know what it means.
+>
+> **The distinction, since verify's pass 2 does run repo code (§5):** pass 2 runs the commands
+> the config *declares*, which is precisely what `char check` does — running them is the point,
+> and a repo's own checks are trusted by definition. Starlark would mean executing repo code to
+> learn **what the config says at all**. That kills pass 1: there is no static pass over a
+> program, so the schema constrains nothing, `char agents-md` cannot render without evaluating,
+> and the seconds-long feedback loop that makes layer 3 usable disappears. The cheap pass is
+> the one worth protecting.
 
 ### 4.5 `commands:` — repo-local verbs char does not own
 
@@ -1210,7 +1299,6 @@ block, sibling of `components:`, declares them:
 commands:
   worktrees:
     cmd: uv run scripts/worktrees.py
-    dry_run: uv run scripts/worktrees.py --dry-run   # optional; §3.3.1
     help: Create and tear down git worktrees
     env:
       WORKSPACE: ${workspace.id}
@@ -1454,10 +1542,9 @@ closing it.
    resolved value registered to scrub against, so a chatty provider — `set -x`, `--debug` —
    leaks through a path structurally incapable of redaction. Report the provider name, its
    exit code, and a fixed message.
-4. **`owns.release:` records a *reference*, resolved at `clean` time — never a resolved
-   value.** §6.1's whole point is that the command survives the workspace directory; recording
-   the credential inline would put a plaintext secret in `char.db` permanently. `owns:`
-   therefore takes a `secrets:` grant like any other entry.
+4. **`owns.release:` is recorded and reported, never executed** (§6.1). char therefore never
+   resolves anything on that path, which is what keeps `char.db` free of secrets and secret
+   references alike. `owns:` takes no `secrets:` grant.
 5. **The detach handoff must not use char's own environment.** §4.7 resolves before detaching,
    and §4.5 inherits the parent environment wholesale to every child — so putting resolved
    values in char's own env would silently grant every secret to every child and void
@@ -1503,6 +1590,14 @@ Postgres.
 ```
 pass 1  STATIC     schema, references, argv[0] resolvability, glob coverage
                    seconds; nothing is executed; failures short-circuit here
+
+                   argv[0] resolvability applies to argv-split entries only.
+                   Under `shell: true` there is no argv[0] to resolve — the
+                   string is a program in a language char does not parse, and
+                   `VAR=x exec "$TOOL"` has no first word that is a command.
+                   verify reports those entries as `unchecked`, with a count,
+                   rather than guessing or silently passing them. That count
+                   is the honest cost of `shell: true` and is worth seeing.
 pass 2  FOR REAL   run the check suite properly, exactly as `char check` would
 ```
 
@@ -1534,7 +1629,7 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - no `commands:` entry shadows a built-in verb (§4.5)
 - every `in:` names a component whose `run.driver` is `compose`
 - no two components declare the same `ports:` name — `${port.NAME}` is workspace-global
-- no entry combines `shell: true` with `${files}` — word-splitting would mangle a generated path
+- *(the schema already makes `shell: true` with `${files}` unrepresentable — see §4.1)*
 
 > **Deliberately not checked: an `exclusive:` name used only once.** An earlier draft rejected
 > that as a typo. Since §4.3 made exclusives **machine-wide**, a name used once in a repo still
@@ -1609,8 +1704,10 @@ compose process's stdin, and nowhere else.
 **Why generate a whole file rather than an override.** Because an override cannot do the one
 thing it would be for: compose **appends** to `ports:` rather than replacing, so the base
 port stays published and every workspace still binds it — the exact collision this project
-exists to prevent. The `!override` tag fixes that only on Compose ≥ 2.24.4 and **silently
-does nothing below it**, reverting to base ports with no error.
+exists to prevent. The `!override` tag fixes that on Compose ≥ 2.24.4 and is **silently ignored below
+it** — you get the appended base port, and a collision, with no error. Depending on a merge
+feature that fails silently in the older direction is not something to build a design on when
+a repo's developers are, normally, on different Compose versions.
 
 **Why char never parses compose semantics.** Step 1 hands that entire problem to compose
 itself. char rewrites two keys in a document compose has already normalised, which is why
@@ -1716,7 +1813,7 @@ created and never claimed.
 ```yaml
 components:
   api:
-    setup: [bundle install, rails db:create, rails db:migrate]
+    setup: ["bundle install", "rails db:create", "rails db:migrate"]
     owns:
       files: [node_modules, .venv]
       release: psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'
@@ -1761,14 +1858,12 @@ from anywhere:
 ```
 declared   psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'
 recorded   psql -h db.internal -c 'DROP DATABASE app_a3f91c02'
-           + the secret *references* it was granted - never their values
-reported   by char status --all when the workspace is gone — never executed
+           reported   by char status --all when the workspace is gone — never executed
 ```
 
 **Only the command and the references are recorded.** Recording a resolved credential would
 put a plaintext secret in `char.db` permanently, surviving `clean` by design — which is why
-`ARCHITECTURE.md` §1.8's invariant now names that database explicitly. `owns:` takes a `secrets:` grant like any
-other entry, and `clean` resolves it when it runs.
+`ARCHITECTURE.md` §1.8's invariant now names that database explicitly. 
 
 **`files:` are removed only by `char clean --artifacts`, never by plain `clean`.** They cost
 disk but leak nothing machine-global, and deleting them means the next `init` pays a full

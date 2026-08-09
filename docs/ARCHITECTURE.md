@@ -153,8 +153,11 @@ event and the shell sleeps until the next deadline computed from state.
 **One deadlock is deliberately outside the reducer's reach, and is prevented rather than
 tested.** Once `exclusive:` resources are machine-wide (PLAN.md §4.3), a cycle can span two
 *processes* — and `step()` models one run, so no unit test can construct it. The answer is to
-acquire exclusives in sorted name order, which makes a cycle impossible for any interleaving
-rather than unlikely. Recording it here because it is the one gap in the claim above: the
+**acquire exclusives before cpu-slots, in sorted name order, and never hold a slot while
+waiting on an exclusive** — which makes a cycle impossible for any interleaving rather than
+unlikely. Both halves are required: sorting orders exclusives against each other, but `cost:`
+slots are *also* machine-wide leases, so ordering within one class leaves a cross-class cycle
+open (PLAN.md §4.3). Recording it here because it is the one gap in the claim above: the
 reducer makes *intra-run* scheduling deadlocks unit-testable, and the *inter-run* case needed a
 different kind of answer.
 
@@ -291,8 +294,8 @@ following it literally would map them into a class.
 **Broken pipe is now resolved: `141`.** `char status | head` must not read as a failure, and
 Rust's runtime sets `SIGPIPE` to `SIG_IGN` at startup, so without intervention the process
 *panics* with exit 101 — worse than nothing. Restoring the default disposition in `main` gives
-the ordinary Unix behaviour: silent death, exit 141. That is one of exactly two `unsafe` blocks
-the design permits; both are recorded in `traps.md`.
+the ordinary Unix behaviour: silent death, exit 141. That is one of exactly three `unsafe` blocks
+the design permits; all three are recorded in `traps.md`.
 
 **The envelope**, fixed in phase 1 alongside the config contract and for the same reason —
 four things consume it and none can invent it independently. Full definition in PLAN.md §3.1.

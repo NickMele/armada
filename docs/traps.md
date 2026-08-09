@@ -121,14 +121,14 @@ the Python it replaced. `#[unix_sigpipe]` is not stabilised on 1.97.1.
 unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL); }
 ```
 
-This yields exit **141** and a silent, correct death — the ordinary Unix behaviour. It is one
-of exactly two `unsafe` blocks the design permits.
+This yields exit **141** and a silent, correct death — the ordinary Unix behaviour. It is one of the three `unsafe`
+blocks the design permits.
 
 ### `setsid` is not in `std`, and it is mutually exclusive with `process_group(0)`
 
 `Command::process_group(0)` gives a new process *group* in the **same session**. Detaching
 from the controlling terminal — what `char up` requires — needs `setsid` via `libc` inside
-`pre_exec`. That is the second permitted `unsafe` block.
+`pre_exec`. That is the second of three permitted `unsafe` blocks.
 
 **Measured: setting both fails.** `process_group(0)` *and* `pre_exec(setsid)` on the same
 `Command` returns `Operation not permitted (os error 1)` — `setsid` fails when the caller is
@@ -234,7 +234,10 @@ signal-derived codes, covering `130` and `141` together.
 
 ## Docker Compose
 
-Measured against **Docker Compose v2.24.3-desktop.1**, phase 0.
+Measured against **Docker Compose v5.3.1**, 2026-08-09. **An earlier version of this section
+was headed v2.24.3-desktop.1, which is not what is installed** — so every entry below was
+re-run against v5.3.1 before being trusted. Four reproduced unchanged; one is version-dependent
+and is marked.
 
 ### An override file appends to `ports:` — it does not replace
 
@@ -251,24 +254,25 @@ every workspace still binds the base port, and concurrent workspaces collide —
 failure charkit exists to prevent. It looks like it worked, because the new port is also
 published.
 
-### The `!override` tag needs Compose ≥ 2.24.4 and is silently *ignored* below it
+### The `!override` tag is version-dependent — and that is why char does not rely on it
 
 ```sh
 # override.yml:  ports: !override ["5460:5432"]
 docker compose -f docker-compose.yml -f override.yml config
-# on 2.24.3 → published: "5432"  AND  published: "5460"
-#             the tag is ignored; ordinary append merging happens
+
+# v5.3.1  → published: "5460"                    the tag works
+# v2.24.3 → published: "5432" AND "5460"         the tag is IGNORED, silently
 ```
 
-**Corrected 2026-08-09.** An earlier version of this entry recorded the result as
-`published: "5432"` alone — base values, override discarded. That is wrong and does not
-reproduce; the tag is ignored entirely, so you get the append behaviour documented above. The
-conclusion is unchanged and slightly stronger: below 2.24.4 you get a port collision with no
-error.
+**This entry has been wrong twice, in the file whose whole rule is re-run rather than
+re-trust.** First it recorded base-values-only, from a `grep` that showed one match. Then it
+asserted the tag is ignored full stop, from a version that is no longer installed.
 
-**This entry was wrong in the one file whose stated rule is "re-run rather than re-trust."**
-The original was recorded from a `grep` that showed only the first match. Re-run every command
-in this file before relying on it; at least one has already failed to reproduce.
+**What survives is the design conclusion, and it survives on the *plain* override behaviour
+above, not on this tag.** char generates a whole document precisely so it never depends on a
+merge feature whose behaviour changes between versions and fails silently in the older
+direction. If a repo's developers are split across Compose versions — which is normal — an
+override-based design is correct on some machines and collides on others.
 
 **If you assume otherwise:** a version floor looks like a sufficient guard. It is not, because
 the failure below the floor is silent — one stale CI image or one developer on an older
@@ -316,6 +320,29 @@ mechanism. Those values never passed through char, so no scrubber can redact the
 
 `docker compose -f -` accepts a document on stdin and produces identical resolved output —
 verified.
+
+### `${files}` under a shell is arbitrary code execution
+
+```sh
+# these filenames are legal on POSIX and git emits them raw under -z
+sub/semi;echo INJECTED.py
+sub/dollar$(id).py
+
+sh -c "eslint $FILES"
+#   ;echo INJECTED  -> runs as a separate command
+#   $(id)           -> runs, and its output is substituted into the argument
+```
+
+Measured. **`${files}` is the only substitution whose values come from outside the trust
+boundary** — filenames are written by whoever pushed the branch, and `char check` on a pull
+request is the ordinary case.
+
+**If you assume otherwise:** you offer `shell: true` as a convenience, someone uses it in a
+check with `${files}`, and anyone who can push a branch has code execution on every machine
+that checks it. This is why the schema makes that combination **unrepresentable** rather than
+warning about it (`PLAN.md` §4.1).
+
+Also non-malicious and silent: a filename containing a space is word-split into two arguments.
 
 ### `docker compose up` has no `--label` flag
 
