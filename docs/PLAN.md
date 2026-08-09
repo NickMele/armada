@@ -680,6 +680,7 @@ components:
       test:
         in: api                  # runs inside api's container (§4.1)
         cmd: pytest ${files}
+        env: { DJANGO_SETTINGS_MODULE: app.settings.test }
         timeout: 600
         cost: 4                  # CPU slots, machine-wide (§4.3)
         needs: [postgres]
@@ -736,6 +737,18 @@ tools are normally driven in a monorepo.
 **`root:` is not a working directory.** It says where a component's source lives: it scopes
 `match:` and resolves executables for `config verify`. §7 reserves it to point *outside* the
 workspace for multi-repo, so overloading it with a second meaning would collide with that.
+
+**`checks:` take `env:`, with the same rules as `run:` and `commands:`.** Literals plus the
+four substitutions, `${env.NAME}` reads permitted (§4.4), and the parent environment inherited
+and layered underneath.
+
+An earlier draft gave `env:` to `run:` and `commands:` and not to `checks:`, which reads as an
+oversight rather than a decision — all three spawn a process, and no rationale anywhere defended
+the exclusion. It bites nearly every real repo: `MIX_ENV=test`, `DJANGO_SETTINGS_MODULE`,
+`RAILS_ENV=test`, `NODE_ENV=test`. The available workarounds all leak — prefixing `cmd` with an
+assignment requires `cmd` to be shell-interpreted, which nothing states and §4.7 rule 1
+deliberately avoids elsewhere; putting it in `run.env:` is the wrong scope and impossible for a
+component with no `run:` at all, which `python-ml` has three of.
 
 #### `in:` — running a check inside a container
 
