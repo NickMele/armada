@@ -261,6 +261,7 @@ caught it: golden snapshots capture stdout, not exit status.
 | `3` | `bad_config` | `char.yml` is wrong |
 | `4` | `timeout` | char's own deadline elapsed |
 | `5` | `aborted` | cancelled, or the run's holder died |
+| `6` | `environment` | the machine char runs on is broken — nothing is wrong with the repo |
 | `70` | `char_bug` | internal error; retrying will not help |
 | `130` | *(signal)* | SIGINT |
 | `141` | *(signal)* | SIGPIPE — `char status \| head` and friends |
@@ -379,7 +380,22 @@ Every error carries **which class of failure it is, where, and what to do next.*
 | `tool_failed` | the underlying tool failed | that is a real result — report it | `1` |
 | `timeout` | char's own deadline elapsed | raise the timeout, or investigate why it is slow | `4` |
 | `aborted` | cancelled, or the run's holder died | try again | `5` |
+| `environment` | Docker is down, the disk is full, `char.db` is unreadable | **fix the machine, then retry unchanged** | `6` |
 | `char_bug` | charkit broke | stop; retrying will not help | `70` |
+
+**`environment` exists because §1.6's own argument demands it.** That argument is *"the
+difference between 'your config is wrong' and 'your tests failed' is the difference between
+fixing the right thing and retrying forever"* — and it leaves out the third case, "nothing is
+wrong with your repo, the machine is." Without the class, a dead Docker daemon is
+`tool_failed`, exit 1, whose documented response above is *"that is a real result — report
+it."* An agent then reports that the tests failed when Docker Desktop is not running, and a
+human goes looking in the wrong repository. Measured members: daemon unreachable, `docker`
+absent from `PATH`, `SQLITE_FULL` (13), `SQLITE_CANTOPEN` (14), `SQLITE_CORRUPT` (11), and
+char's own timeout on a docker call.
+
+It is the one class where the correct retry is **the identical command, after a human fixes
+something char cannot** — which is why it must not share an exit code with `tool_failed`
+(don't retry) or `aborted` (retry immediately).
 
 `timeout` and `aborted` are classes rather than only terminal states so that the class enum
 covers every non-zero exit. Without them the mapping in §1.6 would have holes, and a hole is

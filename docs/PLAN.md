@@ -204,12 +204,18 @@ makes the destructive step something you have to ask for.
 
 ### 2.3 Ownership
 
-Every port, container, network, **image** and process char creates is stamped with the
-workspace id. That single fact is what makes `clean` correct, and it is the highest-value
+Every port, container, network, **volume**, **image** and process char creates is stamped
+with the workspace id. That single fact is what makes `clean` correct, and it is the highest-value
 primitive in the project.
 
-- Containers/networks/images: **two** labels, `char.workspace=<id>` and
-  `char.workspace_path=<realpath>` — see §2.3.1 for why the second one is not redundant
+- Containers/networks/**volumes**/images: **two** labels, `char.workspace=<id>` and
+  `char.workspace_path=<realpath>` — see §2.3.1 for why the second one is not redundant.
+  **Networks and volumes must be stamped separately from services**, because compose does not
+  propagate a service's labels to the network or the named volumes it creates from the same
+  document — measured, and it is the founding bug of this project reappearing inside its own
+  design (`traps.md`). Volumes were absent from this vocabulary entirely until a review found
+  it; a named volume outlives `down`, outlives the container, and is invisible to every filter
+  char would use to find it.
 - Processes: tracked process-group id, spawned in a new session via `setsid` (see
   [`traps.md`](traps.md) — **not** `process_group(0)`, which conflicts with it), killed with
   `killpg`. **Recorded in `~/.char/char.db` (§4.3), not in the workspace** — a pgid
@@ -276,16 +282,48 @@ unreapable by the new logic, which is precisely the orphan class the tool exists
 database open to claim a port block, and it is infrequent enough that a docker call costs
 nothing noticeable.
 
+**`clean` has a fixed order, because a SIGKILL part-way through must not make things worse.**
+Kill the process group and remove labelled resources **before** deleting any row: a row deleted
+first leaves a live process with no record, which is the unreclaimable state this whole section
+exists to prevent, while a resource removed first leaves a stale row that the next `init` reaps
+for free. Ordering is cheap and the asymmetry is total — one direction degrades to a leak, the
+other to a no-op.
+
+```
+1. leases      release this workspace's (so nothing new starts)
+2. processes   killpg TERM -> grace -> KILL, confirm gone
+3. docker      containers, then networks and volumes, then built images
+4. ports       release the block
+5. rows        delete owned/workspaces rows
+6. .char/      remove the directory
+```
+
 **Reaping is reported, never silent** — in human output and under `data.reaped` in `--json`.
 A tool that removes containers without saying so is worse than one that does not remove them.
 
 `char clean --orphaned` remains, for reaping without initialising anything.
 
-**Known limit: a process leaks if its workspace is deleted while it is running.** The pgid is
-in the database, so it is *findable*, but char cannot distinguish "pgid 4212 is my orphaned
-service" from "pgid 4212 was recycled by the OS for something else" — killing on a stale pgid
-risks killing an unrelated process. char therefore reports it via `status --all` rather than
-acting on it.
+**A run whose workspace is deleted under it must notice, because every symptom is
+misleading.** Measured: writes to an already-open log fd **succeed silently** into an unlinked
+inode, opening a new file gives `ENOENT`, `getcwd()` gives `ENOENT`, and spawning a child gives
+rc 128 with `fatal: Unable to read current working directory`. So the run continues, its logs
+go nowhere, and every remaining check reports `tool_failed` with an opaque git error rather
+than the actual cause. char stats the workspace root before each check dispatch — one syscall —
+and on `ENOENT` ends the run `ABORTED` with class `environment` naming the deleted path. Also
+measured: `git worktree remove` succeeds with no `--force` and no complaint while a process is
+running inside it, so the deletion vector this project is built around is entirely silent.
+
+**A process whose workspace was deleted is reclaimable, given `boot_id` and `pid_started_at`
+(§4.3).** The naive version cannot distinguish "pgid 4212 is my orphaned service" from "pgid
+4212 was recycled by the OS", so it can only report. Recording the boot id and the process
+start time alongside the pgid makes recycling detectable: same boot, same start time, it is
+ours and `killpg` is safe; anything else is stale and the row is dropped. Without them every
+pgid row survives a reboot as a permanent phantom leak in `status --all`.
+
+**Pass 1 removes a `workspaces` row only on `ENOENT`, exactly like pass 2.** The rule was
+stated for pass 2 and left implicit for pass 1, which is the same defect in the cheaper half: a
+live workspace on a network mount that is momentarily unavailable answers `EACCES` or `EIO`,
+and dropping its row releases a port block it is still using.
 
 **Images are here because leaving them out makes `clean` wrong at the largest scale.** The
 source repo already sweeps orphaned images and records roughly 2.1 GB per production app
@@ -425,8 +463,12 @@ touches N workspaces. So they share one array shape, learned once:
 cannot disagree:
 
 ```
-char_bug  >  bad_config  >  timeout  >  aborted  >  tool_failed
+char_bug  >  environment  >  bad_config  >  timeout  >  aborted  >  tool_failed
 ```
+
+`environment` sits second because it invalidates everything below it: when Docker is down or
+the disk is full, the four failures underneath are consequences, and reporting one of them
+sends the caller to fix a repo that is fine.
 
 **`where` has two grammars, and the class picks which.** For `bad_config` it is a path into
 the config — `char.yml:components.api.checks.lint.cmd` — because the actionable thing is the
@@ -458,6 +500,13 @@ actionable fact is that the machine was busy rather than that this check is slow
 
 These two also fill a gap `--detach` had: every other state is terminal, so a detached run had
 nothing correct to report to `char check --status` while it was still going.
+
+**Captured output is capped at 10 MB per check, head and tail retained with the middle
+elided.** `run_retention` is a count of runs, not a size, so nothing bounded a single run: a
+`commands:` entry writing gigabytes to stdout under `stdio: pipe` fills the disk with char
+faithfully copying every byte, and the disk-full failure then lands on the state store. The
+cap is stated in `results[].log` when it trips, so a truncated log never reads as a complete
+one.
 
 **`--status` is the one place the envelope's top-level `status` may be a progress state.**
 Everywhere else it is terminal by definition (§3.1). The exception is confined to one flag,
@@ -512,8 +561,12 @@ that without probing every unassigned port, and the answer would be stale on emi
 them `from` and `to` rather than a two-element array removes the "span or list?" ambiguity.
 
 **Port state is probed at report time, never remembered.** A claim recorded at `init` says
-nothing about what is bound days later, and §4.1's bindability probe can itself be defeated
-(`SO_REUSEADDR`, see [`traps.md`](traps.md)). `CONFLICT` is the only way a port taken by a
+nothing about what is bound days later, and the bindability probe has a measured blind spot:
+**an IPv6-only listener is invisible to an IPv4 probe**, and `localhost` resolving to `::1` is
+what modern Node does. So char probes **both** `127.0.0.1` and `[::1]` and treats either
+`EADDRINUSE` as taken. `SO_REUSEPORT` on both sides remains undetectable and is a stated limit,
+not a bug. An earlier draft named `SO_REUSEADDR` as the defeating case and cited
+[`traps.md`](traps.md) for a measurement that was not there; `SO_REUSEADDR` does not defeat it. `CONFLICT` is the only way a port taken by a
 non-char process reaches a caller instead of surfacing as a mysterious bind failure. It costs
 one `connect()` per declared port.
 
@@ -676,6 +729,15 @@ Two filters compose with any scope, on `clean`:
   cost disk but leak nothing machine-global, and removing them makes the next `init` pay a
   full reinstall. `char clean --artifacts --all` is the reclaim-disk answer; it is a no-op
   under `--orphaned`, where the files are already gone with the directory.
+
+**`--all` skips any workspace holding a live lease, and reports what it skipped.** `--all` is
+every workspace on this machine, so on the five-concurrent-agents premise this project is built
+around, the unguarded version stops four live stacks and deletes their `node_modules` while
+their agents are mid-run. §3.3 already warns that `--project` "will stop other worktrees'
+services — which is exactly why it is not the default"; `--all` is strictly broader and had no
+such guard. The check is one query against `leases`, and skipping is right rather than
+refusing: reclaiming disk from the eleven idle workspaces is still the thing you asked for.
+`--force` overrides, because "I know, stop them" is a real intent.
 
 `--project` on `clean` **will** stop other worktrees' services — which is exactly why it is
 not the default.
@@ -1050,10 +1112,39 @@ deleted.
 
 ```
 workspaces   id, path, project, ports, claimed_at
-owned        workspace, kind, ref          kind = container | network | image | pgid
-leases       workspace, kind, key, heartbeat, pid
+owned        workspace, kind, ref, boot_id, started_at
+                 kind = container | network | volume | image | pgid
+leases       workspace, kind, key, heartbeat_mono, boot_id, pid, pid_started_at
                  kind = run-lock | cpu-slot | exclusive
+
+PRAGMA user_version = 1        written at creation; see below
 ```
+
+**`heartbeat_mono` is a monotonic reading, not a wall clock.** `ARCHITECTURE.md` §1.1 gives
+`now` three jobs and one of them is heartbeat staleness — but a backwards NTP step, or a laptop
+resuming after four hours, makes a live holder's heartbeat look arbitrarily cold on a wall
+clock, and a stolen exclusive is exactly the outcome this section rejected a TTL to avoid:
+*two workspaces hold one mutex with no error anywhere.* Staleness is measured on
+`CLOCK_MONOTONIC`, which does not step; `claimed_at` stays wall clock because it is only ever
+displayed. Monotonic readings are meaningless across a reboot, which is what `boot_id` is for.
+
+**`boot_id` and `pid_started_at` are what make a pgid reclaimable.** Without them, every
+`owned` pgid row survives a reboot as an unreclaimable "possible leak" that `status --all`
+reports forever, because char cannot tell a recycled pid from its own. With them it can: a row
+whose `boot_id` is not the current one is stale by definition, and a live pid whose start time
+differs from the recorded one is a different process. That turns "report forever" into "reap
+safely", and it is the same liveness cross-check that makes a lease's `pid` trustworthy.
+
+**`PRAGMA user_version` is a presence sentinel, and it exists because the failure it catches is
+silent.** Measured: delete `char.db` while a process holds it open under WAL and that process
+keeps reading and writing a consistent world through the unlinked inode, while the next process
+creates a fresh file at the same path and hands out a port block the first one already holds.
+Neither errors. A zero-length `char.db` — an interrupted write, a synced-home conflict copy —
+is worse still: it reports `no such table`, which is indistinguishable from a fresh install. So:
+**a database with no `user_version` where rows were expected is `environment`, not a fresh
+install**, and char says the state store is gone rather than quietly issuing a duplicate claim.
+The bind probe does not save you here — a workspace that ran `init` then `down` holds its block
+with nothing bound.
 
 The `project` column is the whole implementation of `--project`: filter by it, then read the
 `owned` rows. Claims are idempotent by workspace id.
@@ -1126,6 +1217,16 @@ A wedged holder therefore blocks until killed, and `char status --all` names it 
 has held. **Residual gap, stated rather than papered over:** a loop that keeps turning while
 achieving nothing is a char bug, not a wedge, and no lease mechanism catches it.
 
+**The run lease covers `init`, `up`, `down`, `clean` and `check` — every mutating verb, not
+just `check`.** One per workspace, taken for the duration. Two agents in the same worktree is
+the ordinary case this project assumes, and without it their `init` runs interleave setup steps
+against the same tree, or one's `clean` tears down what the other's `up` is mid-way through
+starting. `status` takes nothing: it reads.
+
+**A verb that cannot take the run lease fails fast rather than queueing** (§3.2.1), naming the
+holder — because unlike a cpu-slot, waiting on it means waiting for an entire other run, and
+the caller almost always wants to know rather than to wait. `check --wait` is the opt-in.
+
 This is the pattern §4.2 previously used for the run lock — pid plus heartbeat — moved
 machine-global so it outlives the directory. Crash recovery falls out of it: a runner that
 dies stops renewing, and the next claimant reclaims. So does the deleted-mid-run case: the
@@ -1167,6 +1268,23 @@ status: FAILED   error.class: aborted   "browser held by 7c21ab90 for 15m"
 That is the shape SQLite itself uses, measured in [`traps.md`](traps.md): a contending writer
 waits the full `busy_timeout` and then fails with `SQLITE_BUSY` (5), which is retryable —
 distinct from `BUSY_SNAPSHOT` (517), which arrives in microseconds and is not.
+
+**Four more extended codes arrive through the identical error type and mean something else
+entirely.** `SQLITE_FULL` (13), `SQLITE_CANTOPEN` (14) and `SQLITE_CORRUPT` (11) are all class
+`environment` — the machine is broken, not the config and not the tool. Branch on the extended
+code, never the message, and never let one of these fall into the retry path that 5 belongs to:
+retrying a claim against a full disk is an infinite loop.
+
+**Under a full disk the system looks healthy from the lease's point of view**, which is why
+this needs saying. Measured: a claim fails with `SQLITE_FULL` while a *smaller* subsequent
+write still succeeds — so heartbeats keep renewing, nothing looks stale, nothing gets reclaimed,
+and every new claim fails. Report `environment` on the first `SQLITE_FULL` rather than treating
+it as contention.
+
+**Corruption is not detected where you would expect it.** Measured: `BEGIN IMMEDIATE` succeeds
+on a corrupt file and `SQLITE_CORRUPT` surfaces only when the damaged page is touched — so a
+lease acquire can get part-way in. Treat it as `environment` wherever it appears rather than
+assuming a clean transaction boundary.
 
 #### Deadlock is prevented by construction, not detected
 
@@ -1730,7 +1848,33 @@ real component and check names.
 | Driver | Behavior |
 |--------|----------|
 | `compose` | **Resolve → transform → emit.** See §6.0 — this is not a matter of adding flags to `docker compose`. |
-| `command` | Spawns detached in its own process group, records the pid, waits on the ready-check, kills the whole group on `down`. Covers a supervisor, `pnpm dev`, `manage.py runserver`, a Procfile line — anything. |
+| `command` | Spawns detached in its own process group, records the pid, waits on the ready-check, kills the whole group on `down` — **SIGTERM, 10s grace, then SIGKILL**. Covers a supervisor, `pnpm dev`, `manage.py runserver`, a Procfile line — anything. |
+
+**The escalation is unconditional, not a retry.** Measured: `killpg(SIGTERM)` against a group
+whose leader runs `trap '' TERM` kills nothing — 3 processes before, 3 after — because children
+inherit an ignored disposition across `fork` and `exec`. One uncooperative leader immunises its
+whole group, and sending SIGTERM again achieves exactly as much as the first one did. `down`
+reports `DOWN` only after the group is confirmed gone.
+
+**One case escalation does not fix:** a service that calls `setsid` itself — ordinary
+daemonizing — leaves the tracked group, so its recorded pgid is not the one it runs under and
+no `killpg` reaches it. That is detected after the fact, by the port still being bound once
+`down` claims success, and reported. Phase 2's done-when ("no process outlives its workspace")
+must be tested against a SIGTERM-ignoring service and a self-`setsid` one; a cooperative
+`sleep` passes while proving nothing.
+
+**Every docker invocation carries char's own timeout — default 30s, `docker_timeout` in
+`~/.char/config.toml`.** The CLI has none: measured against a socket that accepts and never
+replies, `docker ps` and `docker compose up -d` were both still running at 30 seconds with no
+output. The invocation that matters most is the `docker ps` in `init`'s reap pass, because
+without a timeout a hung daemon wedges *every new workspace on the machine*, including the verb
+whose job is recovery. A timeout on a docker call is class `environment`, not `timeout` — the
+repo is fine, the machine is not.
+
+**char probes the daemon before doing compose work.** Measured: `docker compose config`
+returns 0 against a dead daemon, because it is client-side — so §6.0's steps 1 through 3 all
+succeed and char discovers the daemon is gone only at step 4, having done everything else
+first. One `docker version` up front turns that into an immediate `environment` failure.
 
 ### 6.0 The compose driver
 
@@ -1752,6 +1896,8 @@ The mechanism is four steps:
              labels.char.workspace      → <id>       (every service)
              labels.char.workspace_path → <realpath>
              build.labels.<both of the above>        (services that build)
+             networks.<n>.labels.<both>              TOP-LEVEL, not inherited
+             volumes.<n>.labels.<both>               TOP-LEVEL, not inherited
 
 3. HOLD      in memory - never written to disk (see below)
 
