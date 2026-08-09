@@ -501,9 +501,18 @@ Blocking by default would mean an agent expecting a quick lint silently waiting 
 fifteen-minute test suite with no output. Failing fast gives it something to act on;
 `--wait` is there when queueing is what you meant.
 
-**Nested runs join rather than contend.** A child process that finds `CHAR_RUN_ID` set
-(§2.4) is already inside a run and inherits its lease — that is what the variable is for.
-Only a genuinely independent second invocation hits this error.
+**Nested runs join rather than contend — but only within the same workspace.** A child that
+finds `CHAR_RUN_ID` set (§2.4) joins the outer run and inherits its lease **if and only if
+`CHAR_WORKSPACE` equals the workspace it just resolved**. Otherwise it clears both variables and
+starts an independent run.
+
+That condition is load-bearing. §4.5 inherits the parent environment *wholesale*, so both
+variables reach every child — including a `char check` invoked in a **different** workspace: a
+nested workspace (§4.6), a `commands:` script that changes directory, a monorepo
+sub-invocation. Without the workspace check such a child skips its own lease and reports the
+parent's id, which allows two concurrent runs in one workspace — the exact thing this section
+exists to prevent, failing only under nesting and therefore only rarely and
+nondeterministically.
 
 ### 3.2.2 The envelope on error paths
 
@@ -1054,7 +1063,14 @@ components:
 ```
 
 Each declared path holds its own `char.yml` and becomes an ordinary workspace: its own id,
-its own port block, its own `.char/`. A root that is *nothing but* a manifest — `workspaces:`
+its own port block, its own `.char/`.
+
+**A nested workspace inherits nothing.** Its `char.yml` is complete on its own —
+`secret_providers:`, `secrets:`, `commands:` and `components:` are *not* inherited from the
+root, and a nested config that needs a provider declares it. "An ordinary workspace" is meant
+literally: the only thing the root contributes is permission for it to exist. Inheritance was
+left unstated in an earlier draft, which meant every reader had to guess, and the two obvious
+guesses produce different configs. A root that is *nothing but* a manifest — `workspaces:`
 with no `components:` — is legal, and is the honest shape for a repo of genuinely independent
 products.
 
