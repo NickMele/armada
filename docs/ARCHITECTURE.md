@@ -504,15 +504,36 @@ The gate is:
 5. **crate boundaries** — the layers contract from §1.5, enforced by the crate graph
 6. **the contamination grep**
 
-**The contamination grep** is
-`grep -riE "chariot|tilt|NEXT_PUBLIC|\.claude|backend/|web/" src/ tests/`, and it must return
-nothing. **There is no escape hatch.** If it fires, the code changes, not the pattern.
+**The contamination grep.** This document is its **single owner** — PLAN, AGENTS and README
+link here rather than restating it, because a fact stated in four places drifts, and this one
+already drifted into a form that cannot match anything (see below).
 
-**`tests/` is in scope, and an earlier draft's omission of it was a real hole.** The rule has
-always said the ban covers test fixture strings — but tests do not live in `src/`, so the
-grep never saw them. That matters more than it sounds: §9 says the source repo's test suite is
-the single most valuable asset and its *cases* are ported in phase 3. Ported tests are
-therefore the second transcription vector, and they were the unguarded one.
+```sh
+grep -riE "chariot|tilt|NEXT_PUBLIC|\.claude|backend/|web/" src/ tests/ --exclude-dir=fixtures
+```
+
+It must return nothing. **There is no allowlist.** If it fires, the code changes, not the
+pattern.
+
+> **A copy of this pattern in a markdown table cell is unrunnable.** Table cells require `|`
+> to be escaped as `\|`, which renders as a pipe to a human but is a *literal* pipe in an
+> ERE — so the pattern searches for one long string and matches nothing, ever. That is a
+> permanently green gate that looks correct in the rendered document. Verified. **Keep the
+> pattern in a fenced block, and nowhere else.**
+>
+> **The gate carries a test that the pattern still matches a known-bad string.** A grep that
+> cannot match is indistinguishable from a clean repository, which is exactly how this
+> survived review.
+
+**`tests/fixtures/` is exempt, and the rest of `tests/` is not.** A fixture config is *data
+describing a hypothetical repository* — the `django-next` fixture naturally says `backend/`,
+because the repo it models has one, and that is the fixture doing its job. Ported test *cases*,
+which are the reason `tests/` was covered at all, live elsewhere under `tests/` and stay
+covered.
+
+**Why `tests/` is covered at all:** §9 calls the source repo's test suite the single most
+valuable asset and its *cases* are ported in phase 3, which makes them the second
+transcription vector. An earlier draft greped `src/` only and missed them entirely.
 
 *What it catches:* phase 3 is the only phase permitted to read the Chariot repo, and this is
 its acceptance test made permanent. `chariot` is a leftover import or path; `tilt` means a

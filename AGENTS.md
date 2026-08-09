@@ -27,8 +27,9 @@ rule has no rationale recorded, that is a bug in the document — say so.
 chariot   tilt   NEXT_PUBLIC   .claude   backend/   web/
 ```
 
-A grep for them runs in the merge gate over **both** directories and **has no allowlist**. If
-it fires, the code changes — not the pattern. `tests/` is in scope because phase 3 ports test
+A grep runs in the merge gate over both directories and **has no allowlist**. If it fires, the
+code changes — not the pattern. **The pattern itself lives in `ARCHITECTURE.md` §2.4 and is
+stated nowhere else**, including here — a copy inside a markdown table is unrunnable. `tests/` is in scope because phase 3 ports test
 *cases* from the source repo, which makes them the second transcription vector.
 
 **One exception: `docs/harvest.md`.** It is not greped, because its job is to describe the
@@ -45,8 +46,15 @@ root: services/api
 
 # no - these fail the gate
 cmd: tilt up --stream
-root: backend
+match: ["backend/**"]
 ```
+
+Note the pattern is `backend/` **with a slash** — bare `root: backend` does not match it. Do
+not rely on that; use neutral names regardless.
+
+**`tests/fixtures/` is exempt.** A fixture config describes a hypothetical repo, so naming
+that repo's real directories is the fixture working. Everything else under `tests/` is
+covered.
 
 The reasoning is in `ARCHITECTURE.md` §2.4. Short version: the tool was ported out of a
 Django+Next monorepo, and this catches the port dragging that repo's specifics along with it.

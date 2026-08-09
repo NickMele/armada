@@ -117,10 +117,12 @@ chariot   tilt   NEXT_PUBLIC   .claude   backend/   web/
 The check engine was ported out of a Django+Next monorepo, and this grep is what stops that
 repo's specifics coming along for the ride — a hardcoded package directory, a vendor
 assumption that belongs in config rather than code. It runs in the gate and **there is no
-allowlist**: if it fires, the code changes, not the pattern.
+allowlist**: if it fires, the code changes, not the pattern. The exact pattern lives in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 and is deliberately stated only there.
 
-That includes docstrings and test fixtures — `tests/` is in scope because the check engine's
-test *cases* are ported from that repo too. Use neutral examples — `foreman start`,
+That includes docstrings and ported test cases — `tests/` is in scope for exactly that reason.
+`tests/fixtures/` is exempt, because a fixture config describes a hypothetical repo and naming
+that repo's directories is the fixture working. Use neutral examples — `foreman start`,
 `root: services/api` — when you need to illustrate a command or a component root.
 
 `docs/harvest.md` is the one exception: it exists to describe the source repo, so a ban would
