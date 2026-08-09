@@ -175,7 +175,8 @@ Every port, container, network, **image** and process char creates is stamped wi
 workspace id. That single fact is what makes `clean` correct, and it is the highest-value
 primitive in the project.
 
-- Containers/networks/images: label `char.workspace=<id>`
+- Containers/networks/images: **two** labels, `char.workspace=<id>` and
+  `char.workspace_path=<realpath>` — see §2.3.1 for why the second one is not redundant
 - Processes: tracked process-group id, spawned with `start_new_session=True`, killed with
   `os.killpg`. **Recorded in `~/.char/char.db` (§4.3), not in the workspace** — a pgid
   recorded inside a directory that gets deleted is a leaked process
@@ -191,10 +192,39 @@ So `char init` reaps first, then claims:
 
 1. **Registry pass.** Drop `workspaces` rows whose `path` no longer exists, releasing their
    port blocks and `owned` rows.
-2. **Resource pass.** Find every container, network and image labelled `char.workspace=*`
-   whose id is not a live workspace, and remove it. Note this does **not** depend on the
-   record being intact — the label is enough — so it still works if a row was deleted by hand.
+2. **Resource pass.** Find every resource labelled `char.workspace=*`, read its
+   `char.workspace_path` label, and **`stat` that path**. Remove only if the path is gone.
 3. **Lease pass.** Delete leases whose heartbeat has gone cold (§4.3).
+
+**Why pass 2 reads a path label rather than checking the database.** An earlier draft removed
+any resource whose id had no row, claiming this "does not depend on the record being intact —
+the label is enough." That is backwards, and dangerously so. `workspace_id` is
+`sha1(realpath(path))[..8]` — a **one-way hash** — so from a label alone char cannot recover
+the path and cannot ask whether that workspace still exists. The only way to answer was to
+consult the database, which makes **a missing row indistinguishable from a dead workspace.**
+
+The database is per-`$HOME`; the Docker daemon is per-machine. So every one of these deleted a
+*running* workspace's containers:
+
+| Situation | Result under the old rule |
+|---|---|
+| A second user account on the same machine | Their running stack removed |
+| A devcontainer or CI user with its own `$HOME` | Same |
+| `char.db` deleted, corrupted, or on a synced home directory | **Your own** running stack removed |
+
+That is §2.2's flat-siblings guarantee — `clean` must never cascade into a workspace another
+agent is using — reintroduced by the very mechanism added to fix the plan's motivating bug.
+
+Stamping the path makes pass 2 **self-sufficient**: it stats a real directory and consults
+nothing. "Labelled, no row, but the path exists" is now **adopt or report, never remove.**
+
+Two costs, accepted: one extra label per resource, and the workspace path becomes visible in
+`docker inspect` to anyone on the machine. Hashing the path instead would hide it but destroy
+the only property that matters — you cannot `stat` a hash.
+
+**This is why the label vocabulary had to be settled before phase 1.** It is stamped into
+every resource char ever creates; changing it later leaves everything created beforehand
+unreapable by the new logic, which is precisely the orphan class the tool exists to prevent.
 
 `init` is the right hook for three reasons: it is where the outage actually originated
 (repeated worktree create/destroy always runs `init` in the new one), it already holds the
@@ -990,8 +1020,9 @@ The mechanism is four steps:
                and relative paths already resolved
 
 2. TRANSFORM ports[].published      → the claimed block
-             labels.char.workspace  → <id>          (every service)
-             build.labels.char.workspace → <id>      (services that build)
+             labels.char.workspace      → <id>       (every service)
+             labels.char.workspace_path → <realpath>
+             build.labels.<both of the above>        (services that build)
 
 3. EMIT      .char/compose.yml
 
@@ -1014,9 +1045,10 @@ char's problem.
 `.char/` (§4.2). It is also inspectable and diffable, which is what makes a wrong port
 obvious rather than mysterious.
 
-**Ownership falls out.** Containers and networks carry both `com.docker.compose.project=char-<id>`
-(compose applies it automatically from `-p`) and `char.workspace=<id>` (from the transform).
-`clean` uses the latter, so it stays driver-agnostic.
+**Ownership falls out.** Containers and networks carry `com.docker.compose.project=char-<id>`
+(compose applies it automatically from `-p`) plus the two char labels from the transform —
+`char.workspace` and `char.workspace_path` (§2.3). `clean` uses the char labels, so it stays
+driver-agnostic, and reaping stats the path rather than trusting the database (§2.3.1).
 
 **Images, narrowed.** char labels only images it causes to be *built*, via `build.labels`. A
 pulled image such as `postgres:16` is shared with the rest of the machine and was never
@@ -1091,6 +1123,7 @@ components:
       owns:
         containers: "label=io.x-k8s.kind.cluster=char-${workspace.id}"
         images: "label=char.workspace=${workspace.id}"
+        # char stamps char.workspace_path alongside; declared selectors need only the id
         ports: [api]
         files: [".kube/char-${workspace.id}.conf"]
 ```
