@@ -222,8 +222,8 @@ Two things to note, and neither is what was predicted:
   shutdown. The predicted mechanism does not occur.
 - **Exit 1 is `tool_failed`** under char's own map, so `char status | head` currently reads as
   "the tool failed" to anything checking exit codes.
-- `SIGPIPE=SIG_DFL` gives the correct Unix behaviour and a code that **appears in no exit-code
-  table in any charkit document**. Note the stdlib explicitly warns against this setting; the
+- `SIGPIPE=SIG_DFL` gives the correct Unix behaviour and code **141**, which `ARCHITECTURE.md`
+  §1.6 now carries in its exit table alongside the signal carve-out. Note the stdlib explicitly warns against this setting; the
   warning is about libraries that need to observe the error, which char does not.
 
 Whichever is chosen, the "exit code = `f(error.class)`" rule needs an explicit carve-out for

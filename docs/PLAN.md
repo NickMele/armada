@@ -14,6 +14,27 @@
 > **Binary name:** `char` · **Package name:** `charkit` (PyPI + npm, both verified free)
 > **Language:** Rust (2021 edition) · **Platform:** POSIX only (macOS/Linux). Not Windows.
 
+## Contents
+
+| § | | Read it when |
+|---|---|---|
+| **1** | What this is | Once, for orientation |
+| **2** | Core concepts — workspace, identities, ownership, reaping, child env | **Always.** Everything depends on it |
+| **3** | The verb surface — verbs, `--json` envelope, `data.results[]`, selectors, scope lens | **Always** |
+| **4** | Configuration — `char.yml`, `.char/`, `char.db`, templating, `commands:`, nested workspaces, `secrets:` | **Always.** §4.1 is the schema |
+| **5** | Bootstrap: the three-layer sandwich | Only for the evidence scanner or `config verify` |
+| **6** | Service drivers — compose, command, `owns:` | Only for `up` / `down` / `clean` |
+| **7** | Non-goals | Before proposing a feature |
+| **8** | Phases, and the fixture set | **Your phase only** |
+| **9** | Source material | Phase 3's harvester only |
+| **10** | Decisions made — do not relitigate. §10.1 is the language decision | Before arguing with one |
+| **11** | Risks | Once |
+| **12** | Notes for the implementing agent | Once |
+
+Companion documents, in precedence order — see `ARCHITECTURE.md` §2.8:
+[`traps.md`](traps.md) (measured) › [`ARCHITECTURE.md`](ARCHITECTURE.md) (decided) ›
+this file (specified) › [`AGENTS.md`](../AGENTS.md) (derived).
+
 ---
 
 ## 0. Start here
@@ -24,7 +45,7 @@
 
 Read §2 (concepts), §4 (config) and §8 (phases) first — you need the shape of the thing to
 have a useful conversation about how to build it. Then work through **Phase 0 — Foundations**
-(§8) together:
+(§8, and the numbered subsections 0.1–0.4 that live *inside* it) together:
 
 1. Walk the human through the recommended architecture principles (0.1) and SDLC principles
    (0.2). Your job is to explain the *reasoning* and invite disagreement, not to collect
@@ -137,12 +158,15 @@ pnpm/npm workspaces ever genuinely bites, the fix is `checkout`, not an invented
 
 ### 2.2 Two derived identities
 
+Distinct newtypes, not two `String` aliases — both are 8 hex characters, and passing one where
+the other belongs must not compile:
+
 ```rust
-// Distinct newtypes, not two String aliases — both are 8 hex chars and
-// passing one where the other belongs must not compile.
 pub struct WorkspaceId(String);
 pub struct ProjectId(String);
+```
 
+```text
 workspace_id = sha1(realpath(workspace_root))[..8]
 project_id   = sha1(realpath(`git rev-parse --git-common-dir`))[..8]
 ```
@@ -283,11 +307,11 @@ everything else is config. **Every verb takes `--json`.**
 | Verb | Contract | Terminal states |
 |------|----------|-----------------|
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent. | `READY` `FAILED` |
-| `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `FAILED` `TIMEOUT` |
-| `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` |
-| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix`. | `PASS` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
-| `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` |
-| `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` |
+| `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `FAILED` `TIMEOUT` |
+| `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` `PARTIAL` `FAILED` |
+| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix`. | `PASS` `PARTIAL` `BLOCKED` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
+| `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` `PARTIAL` `FAILED` |
+| `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
 Plus: `char config scan`, `char config verify`, `char agents-md [--write|--check]`, and any
 repo-local verbs the repo declares in `commands:` (§4.5) — which char dispatches but does not
@@ -439,7 +463,7 @@ already use exactly these names"* — a claim about artifacts that do not exist 
 that also broke the growth rule stated below. `build` and `fmt` join the set the first time a
 fixture actually declares them.
 
-- **A conventional name matching nothing** → `PASS`, empty `data.runs`, exit 0. "This
+- **A conventional name matching nothing** → `PASS`, empty `data.results[]`, exit 0. "This
   workspace has no lint checks" is a real and unremarkable answer, and it is what lets an
   orchestrating agent run `char check lint` across five workspaces without special-casing
   the three that lack it.
@@ -789,7 +813,7 @@ leases. There is no state that outlives all char processes and therefore nothing
 resident daemon to hold. (Contrast a tool whose pipeline outlives every command that touches
 it — that shape genuinely needs a daemon. char's does not.)
 
-### 4.4 Templating: four substitutions plus one scoped read, hard cap
+### 4.4 Templating: four substitutions plus two scoped placeholders, hard cap
 
 **Everywhere:** `${port.NAME}`, `${files}`, `${component.root}`, `${workspace.id}`.
 
@@ -1231,7 +1255,7 @@ environment: { INLINE: sentinel-from-envfile, SECRET_TOKEN: sentinel-from-envfil
 — so persisting it manufactures exactly the artifact §4.7 exists to eliminate: *"a `.env` file
 an agent will eventually read while debugging."* It does so **for every repo**, including repos
 that never adopt char's secrets mechanism. Those values never passed through char, so the
-scrubber has never seen them and **structurally cannot redact them**. §1.8's invariant — a
+scrubber has never seen them and **structurally cannot redact them**. `ARCHITECTURE.md` §1.8's invariant — a
 resolved secret is never written to `.char/` — would be violated by construction.
 
 Piping to `-f -` is verified to accept the document and produce identical resolved output.
@@ -1258,47 +1282,11 @@ receive the same file set they do. char also ignores ambient `COMPOSE_FILE` and
 `COMPOSE_PROJECT_NAME`, passing `-f` and `-p` explicitly every time, so the result does not
 depend on the caller's environment.
 
-### 6.2 Measured Docker behaviour — do not re-derive
-
-Verified against Docker Compose v2.24.3 during phase 0. Each of these was found by testing,
-not by reading documentation, and each would have cost a phase-4 debugging session.
-
-| # | Behaviour | Consequence |
-|---|---|---|
-| 1 | `docker compose up` has **no `--label` flag** | Container labels can only come from the compose document |
-| 2 | An override file **appends** to `ports:` — base `5432:5432` plus override `5460:5432` publishes **both** | An override cannot remap a port. This is the trap that makes §6.0 necessary |
-| 3 | The `!override` tag requires Compose ≥ 2.24.4 and **silently reverts to base values below it**, with no error | A version floor is not a sufficient guard when the failure below it is silent |
-| 4 | `docker compose config` **bakes the project name into generated network names** | `-p char-<id>` must be passed on the *resolve* step, not only the run step, or networks are named for the directory |
-| 5 | `config` resolves `build.context` to an **absolute** path | Emitting into `.char/` is safe, provided `--project-directory` is the workspace root |
-| 6 | Override merging **does** work for `labels:` and `build.labels:` | Labels were never the hard part; ports were |
-
-A running list of measured environment behaviour lives in [`traps.md`](traps.md). Add to it
-whenever a phase discovers something that a reasonable person would have assumed otherwise.
-
-Tilt is just a long-running command with a ready-check:
-
-```yaml
-components:
-  stack:
-    run:
-      driver: command
-      cmd: tilt up --stream
-      ready: { http: "http://localhost:10350/" }
-      stop: tilt down
-```
-
-Ready-check kinds: `http`, `tcp`, `log` (regex on stdout), `exec` (command exits 0), `none`.
-Each with its own timeout.
-
-**`--json` means stdout carries the envelope and nothing else.** A child writing to the
-terminal would interleave with the envelope and break the parse for the one consumer that
-matters. Under `--json`, child output goes to its log file (§4.2); char's payload is the only
-thing on stdout. This is also why `run:` needs no `stdio:` key the way `commands:` does
-(§4.5) — a service is always detached and always logged, so there is nothing to choose.
-
-**Supervision depth: start-and-track only.** Spawn, ready-check, record pid, kill the group
-on `down`. Logs go to files. If a service crashes, `char status` reports it dead — char does
-**not** restart it. No log aggregation, no `char logs -f`, no restart-on-crash.
+> **Measured Docker behaviour lives in [`traps.md`](traps.md), which owns it.** An earlier
+> draft reproduced all six measurements here, which meant two copies of a fact whose whole
+> value is being trustworthy — and `traps.md`'s own rule is *re-run rather than re-trust*.
+> Read the Docker Compose section there before designing anything that depends on how
+> compose behaves.
 
 ### 6.1 `owns:` — the extension point instead of a plugin API
 
@@ -1369,7 +1357,7 @@ run by     char clean and char clean --orphaned, with no workspace present,
 
 **Only the command and the references are recorded.** Recording a resolved credential would
 put a plaintext secret in `char.db` permanently, surviving `clean` by design — which is why
-§1.8's invariant now names that database explicitly. `owns:` takes a `secrets:` grant like any
+`ARCHITECTURE.md` §1.8's invariant now names that database explicitly. `owns:` takes a `secrets:` grant like any
 other entry, and `clean` resolves it when it runs.
 
 **`files:` are removed only by `char clean --artifacts`, never by plain `clean`.** They cost
@@ -1699,7 +1687,7 @@ the end of phase 2.
 
 > **Phase 4 is now the heaviest phase in the plan.** Both drivers, five ready-check kinds,
 > compose document generation, secrets, and the dispatcher. Split it across several
-> review-sized PRs; §0.2 already makes review the binding constraint rather than phase
+> review-sized PRs; `ARCHITECTURE.md` §2.2 already makes review the binding constraint rather than phase
 > boundaries.
 
 > **Considered and rejected: moving phase 5 after Chariot adoption.** Adoption needs `check`,
@@ -1909,8 +1897,8 @@ and left unhandled:
 | Go | `build` and `vet` both pass. The event is **silently dropped** |
 
 `ARCHITECTURE.md` §1.2 spends a page establishing that the scheduler must be a reducer because
-a deadlock there is the one bug class greenfield development structurally cannot catch, and §3
-calls those types "the scheduler's real specification." Only one candidate can hold that
+a deadlock there is the one bug class greenfield development structurally cannot catch, and `ARCHITECTURE.md` §1.2
+establishes those types as the scheduler's specification. Only one candidate can hold that
 specification in the type system.
 
 Supporting, all measured: 4.8 ms cold start against Python's 116 ms; a 1.48 MB static binary

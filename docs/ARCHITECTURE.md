@@ -10,6 +10,15 @@
 > the specification of what to build; this is the record of what was decided about how. A
 > conflict is a defect in one of them — fix it, and say which was wrong.
 
+## Contents
+
+| § | | |
+|---|---|---|
+| **1** | Architecture principles | 1.1 seams · 1.2 pure core & the reducer · 1.3 no logic in commands · 1.4 no ambient state · 1.5 dependencies inward · 1.6 machine-readable output & exit codes · 1.7 typed failures · 1.8 secrets |
+| **2** | SDLC principles | 2.1 TDD scope · 2.2 branching · 2.3 commits · 2.4 the merge gate & contamination grep · 2.5 versioning · 2.6 dogfooding · 2.7 phase 3 clean-room · **2.8 document ownership & precedence** |
+| **3** | Decisions recorded, and the test tiers | |
+| **4** | What was deliberately not decided | |
+
 ---
 
 ## 1. Architecture principles
@@ -265,7 +274,7 @@ Same state, different codes, and that is correct — an agent must fix the confi
 and read the test output in the other. `DEAD` (the run's holder died) maps to `aborted`,
 because the useful next action is the same as for a cancellation: try again.
 
-**Verified rather than assumed** (Typer 0.27.1, recorded in `traps.md`): `KeyboardInterrupt`
+**Verified rather than assumed** — though against Typer 0.27.1, *before* the language decision, so this is now evidence about conventions rather than about charkit's own stack (`traps.md` marks it historical): `KeyboardInterrupt`
 already exits **130**, and usage errors already exit **2**. Those two are genuinely free. A
 report that Click collapses them to `1` was checked and is false for this version — but check
 again if the framework is upgraded, because it would be silent.
@@ -702,6 +711,55 @@ Rewriting it from scratch discards the valuable part and keeps the cheap part. O
 caveat: it is built around `run_fn` injection and charkit uses three seams behind a `Ctx`, so
 it is **port the cases, rewrite the harness** — the assertions survive, the setup does not,
 and the scheduler tests change shape because the scheduler did.
+
+---
+
+### 2.8 Which document owns which fact
+
+Every defect found in the second review round was the same shape: **a fact stated in several
+documents, where one copy drifted.** The contamination grep drifted into a pattern that could
+not match. The error-class enum lost two members in the document agents read first. A deleted
+file stayed cited as live in six places. None was a reasoning error; all were duplication.
+
+So two rules, and the second is the one that prevents rather than resolves.
+
+#### Precedence, when two documents disagree
+
+```
+traps.md            measured    — beats everything; it is the only document with evidence
+ARCHITECTURE.md     decided     — how, and why
+PLAN.md             specified   — what to build
+PHASES.md           sequenced   — in what order
+AGENTS.md README.md derived     — never authoritative, ever
+```
+
+A disagreement is a **defect in the lower document**, not a judgement call. Fix it, and say
+which one was wrong.
+
+#### Single ownership
+
+| Fact | Owner |
+|---|---|
+| Contamination grep pattern and its scope | `ARCHITECTURE.md` §2.4 |
+| Exit-code map and the signal carve-out | `ARCHITECTURE.md` §1.6 |
+| Error classes | `ARCHITECTURE.md` §1.7 |
+| `schema_version` and its bump rule | `ARCHITECTURE.md` §1.6 |
+| The merge gate's checks | `ARCHITECTURE.md` §2.4 |
+| Test tiers | `ARCHITECTURE.md` §3 |
+| Harvester / implementer split | `ARCHITECTURE.md` §2.7 |
+| `--json` envelope and `data.results[]` | `PLAN.md` §3.1 |
+| Terminal-state enum | `PLAN.md` §3 |
+| Measured environment behaviour | `traps.md` |
+
+> **A derived document may not state a fact that is absent upstream.** `AGENTS.md` and
+> `README.md` are summaries: they may restate an owner's fact in shorter form, and they may
+> link. They may not be the only place something is written down — if a rule exists only in a
+> derived document, it does not exist.
+
+**Where a summary is allowed to remain**, it is because agents read `AGENTS.md` first and
+sending them elsewhere for the exit-code map on every lookup is a worse trade than one
+maintained copy. That is a deliberate exception, and it is why the precedence order exists:
+when the copy and the owner disagree, the owner wins and the copy is the bug.
 
 ---
 

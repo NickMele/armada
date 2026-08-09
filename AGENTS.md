@@ -17,6 +17,15 @@ repo's tech stack. Rust (2021 edition), POSIX only.
 If you are about to argue with a rule, argue with its rationale in `ARCHITECTURE.md`. If a
 rule has no rationale recorded, that is a bug in the document — say so.
 
+**This file is a derived summary and is never authoritative.** Where it disagrees with an
+upstream document, the upstream document is right and this one is the bug. Precedence and the
+table of which document owns which fact are in `ARCHITECTURE.md` §2.8:
+
+```
+traps.md > ARCHITECTURE.md > PLAN.md > PHASES.md > AGENTS.md / README.md
+measured   decided           specified  sequenced   derived
+```
+
 ---
 
 ## Rules that are easy to break by accident
@@ -94,7 +103,7 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 |---|---|
 | **Three seams only** | `ctx.run`, `ctx.now`, `ctx.fetch`. Docker and git are adapter modules that call `ctx.run` — they are not seams. The filesystem is never faked; use `tempfile::TempDir`. |
 | **Pure core** | Decisions are functions over data. Spawning, writing, killing and labelling live in `adapters/`. |
-| **Scheduler is a reducer** | `step(State, Event) -> (State, Vec<Action>)`. `Event`/`Action` are enums matched **exhaustively** — never add a `_ =>` arm, it converts a compile error into silence.. The core proposes, the shell attempts, failures come back as events. Applies to the scheduler and the claim/lease loop **only** — elsewhere a plain function is a plain function. |
+| **Scheduler is a reducer** | `step(State, Event) -> (State, Vec<Action>)`. `Event`/`Action` are enums matched **exhaustively** — never add a `_ =>` arm, it converts a compile error into silence. The core proposes, the shell attempts, failures come back as events. Applies to the scheduler and the claim/lease loop **only** — elsewhere a plain function is a plain function. |
 | **No logic in command functions** | parse args → call core → render. Nothing else. |
 | **No ambient state** | No `static mut`, no global `OnceCell` holding mutable state. No `std::env::current_dir()` or `std::env::var()` below the entrypoint. The workspace rides on `Ctx`. |
 | **Dependencies point inward** | `core` imports nothing concrete. `adapters` depend on core traits only. `cli` is the only crate depending on both. Enforced by the crate graph. |
