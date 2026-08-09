@@ -23,6 +23,38 @@ shows it, and what breaks if you assume otherwise.
 
 ---
 
+## SQLite — the lease mechanism depends on these
+
+Measured 2026-08-09. **Language-neutral: every one of these applies whatever charkit is
+written in.** This is the machinery `PLAN.md` §4.3 rests on.
+
+### `BEGIN IMMEDIATE` is mandatory. `busy_timeout` cannot substitute for it
+
+A DEFERRED transaction that reads and *then* writes fails the moment another writer committed
+in between — **after 0.0 ms, with `busy_timeout=5000` set and WAL enabled**:
+
+```
+DEFERRED upgrade: OperationalError('database is locked') after 0.0 ms
+IMMEDIATE:        succeeded
+```
+
+The error is `SQLITE_BUSY_SNAPSHOT` and it is **non-retryable by design** — the reader's
+snapshot is stale, so no amount of waiting can rescue it. `busy_timeout` never applies.
+
+**If you assume otherwise:** you write the obvious lease code — read the lease row, decide,
+write it back — inside a default transaction. It works in every test with one writer, and
+fails nondeterministically under exactly the contention the lease design exists to handle.
+Setting `busy_timeout` looks like the fix and does nothing.
+
+**Rule: any transaction that may write starts with `BEGIN IMMEDIATE`.** No exceptions in the
+lease or claim paths.
+
+### WAL is a property of the file, not a driver default
+
+`journal_mode=WAL` persists in the database file once set, but no driver sets it for you. And
+`busy_timeout` defaults vary: some drivers ship 5000, others ship **0**. Both pragmas are
+required lines in char's connection setup, not tuning knobs.
+
 ## MCP
 
 Verified against the live specification and SDK, phase 0.
