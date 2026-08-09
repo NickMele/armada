@@ -7,11 +7,11 @@ repo's tech stack. Rust (2021 edition), POSIX only.
 
 ## Read these first, in order
 
-1. **`docs/PHASES.md`** — its §8.1, then **your phase only**. It tells you what you are
-   building and how you will know it is done.
-2. **`docs/PLAN.md`** — the contract. Always read its §2 (concepts), §3 (verbs and the
-   `--json` envelope) and §4 (configuration). Read its §5 and §6 only if your phase touches
-   the bootstrap sandwich or the service drivers.
+1. **`docs/PHASES.md`** — `PHASES.md` §8.1, then **your phase only**. It tells you what you
+   are building and how you will know it is done.
+2. **`docs/PLAN.md`** — the contract. Always read `PLAN.md` §2 (concepts), `PLAN.md` §3 (verbs
+   and the `--json` envelope) and `PLAN.md` §4 (configuration). Read `PLAN.md` §5 and
+   `PLAN.md` §6 only if your phase touches the bootstrap sandwich or the service drivers.
 3. **`docs/ARCHITECTURE.md`** — the principles and, more importantly, *why* each exists.
 4. **`docs/traps.md`** — measured environment behaviour. Read the relevant section **before**
    designing anything that depends on how a tool behaves, and add to it when you discover
