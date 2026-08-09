@@ -335,8 +335,8 @@ fixture actually declares them.
 repo has none" are indistinguishable, and both available answers are bad: exiting 0 on a typo
 means an agent reports a passing lint that never ran, while erroring on both teaches agents
 to write `char check lint || true` — which suppresses *every* error the command can raise,
-converting a local annoyance into a total loss of signal. The conventional set is also not an
-invention: §4.1's examples and all six fixtures already use exactly these names.
+converting a local annoyance into a total loss of signal. The set is drawn from §4.1's example
+config and nothing else; the fixtures do not exist yet and cannot justify anything.
 
 **Growth rule: a name joins the set only when a fixture uses it.** Otherwise the list becomes
 a bikeshed.

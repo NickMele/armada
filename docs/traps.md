@@ -77,12 +77,31 @@ Re-measure after any framework upgrade: if it ever became true, it would be sile
 `char check` interrupted by an agent would report a code meaning "the tool failed" instead of
 "you interrupted me."
 
-### Broken pipe — unmeasured, needs handling
+### Broken pipe — measured, and both options are wrong by default
 
-`char status | head` must not read as a failure. The intended fix is to set `SIGPIPE` to
-`SIG_DFL` at the entrypoint so char dies like an ordinary Unix tool rather than raising
-`BrokenPipeError` at interpreter shutdown. **Not measured** in the environment where the rest
-of this section was verified — treat as open, and add the measurement when it is implemented.
+```sh
+#            app.py | head -2
+# Typer default        -> exit 1    , 0 bytes stderr
+# SIGPIPE=SIG_DFL      -> exit 141  , 0 bytes stderr
+```
+
+**Corrected 2026-08-09.** An earlier version of this entry said the behaviour "was not
+measurable in the environment where the rest of this section was verified." It measures in
+about a minute; the earlier attempt was defeated by `PIPESTATUS` not populating in the
+harness, not by anything about Python. Use `set -o pipefail` in a subshell and read `$?`.
+
+Two things to note, and neither is what was predicted:
+
+- Click **catches `BrokenPipeError` silently** — no traceback, no "Exception ignored" at
+  shutdown. The predicted mechanism does not occur.
+- **Exit 1 is `tool_failed`** under char's own map, so `char status | head` currently reads as
+  "the tool failed" to anything checking exit codes.
+- `SIGPIPE=SIG_DFL` gives the correct Unix behaviour and a code that **appears in no exit-code
+  table in any charkit document**. Note the stdlib explicitly warns against this setting; the
+  warning is about libraries that need to observe the error, which char does not.
+
+Whichever is chosen, the "exit code = `f(error.class)`" rule needs an explicit carve-out for
+signal-derived codes, covering `130` and `141` together.
 
 ## Docker Compose
 
@@ -103,13 +122,24 @@ every workspace still binds the base port, and concurrent workspaces collide —
 failure charkit exists to prevent. It looks like it worked, because the new port is also
 published.
 
-### The `!override` tag needs Compose ≥ 2.24.4 and fails silently below it
+### The `!override` tag needs Compose ≥ 2.24.4 and is silently *ignored* below it
 
 ```sh
 # override.yml:  ports: !override ["5460:5432"]
 docker compose -f docker-compose.yml -f override.yml config
-# on 2.24.3 → published: "5432"    (base value, no error, no warning)
+# on 2.24.3 → published: "5432"  AND  published: "5460"
+#             the tag is ignored; ordinary append merging happens
 ```
+
+**Corrected 2026-08-09.** An earlier version of this entry recorded the result as
+`published: "5432"` alone — base values, override discarded. That is wrong and does not
+reproduce; the tag is ignored entirely, so you get the append behaviour documented above. The
+conclusion is unchanged and slightly stronger: below 2.24.4 you get a port collision with no
+error.
+
+**This entry was wrong in the one file whose stated rule is "re-run rather than re-trust."**
+The original was recorded from a `grep` that showed only the first match. Re-run every command
+in this file before relying on it; at least one has already failed to reproduce.
 
 **If you assume otherwise:** a version floor looks like a sufficient guard. It is not, because
 the failure below the floor is silent — one stale CI image or one developer on an older

@@ -246,11 +246,16 @@ again if the framework is upgraded, because it would be silent.
 own low codes *and* from the codes a child process is likely to return, so "char itself broke"
 stays distinguishable from everything else.
 
-**Broken pipe is unresolved and needs one line.** `char status | head` must not read as a
-failure. Set `SIGPIPE` to `SIG_DFL` at the entrypoint so char dies like an ordinary Unix
-tool instead of raising at interpreter shutdown. This was not measurable in the environment
-where the rest of this table was verified — treat it as a phase-2 task with a test, not as
-settled.
+**Signals are the one carve-out from `exit code = f(error.class)`.** A process killed by a
+signal exits `128+N` and has no error class at all — `130` for SIGINT, `141` for SIGPIPE.
+State that explicitly, because the rule as written has no room for them and an implementer
+following it literally would map them into a class.
+
+**Broken pipe is measured and unresolved** (`traps.md`). `char status | head` currently exits
+**1** — Click catches `BrokenPipeError` silently — which under this table means `tool_failed`,
+so an ordinary pipe reads as a failure. Setting `SIGPIPE` to `SIG_DFL` yields **141**, which is
+correct Unix behaviour. Decide between the two before the exit map is code; either way the
+carve-out above is required.
 
 **The envelope**, fixed in phase 1 alongside the config contract and for the same reason —
 four things consume it and none can invent it independently. Full definition in PLAN.md §3.1.
