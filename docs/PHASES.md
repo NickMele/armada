@@ -227,9 +227,14 @@ and networks created for the test with `docker run --label`** — reported, not 
 disturbing the live one. `char clean --orphaned`
 does the same on demand.
 
-**And when no process outlives its workspace.** `killpg` against a `setsid`'d group is verified
-to reach grandchildren (`traps.md`), so the assertion is that a spawned tree of three is zero
-after the group is killed. **Test it by spawning and killing the group directly, not via
+**And when no process outlives its workspace — tested against an *uncooperative* service.**
+`killpg` against a `setsid`'d group is verified to reach grandchildren (`traps.md`), so the
+assertion is that a spawned tree of three is zero after the group is killed. **A cooperative
+`sleep` passes this while proving nothing**: measured, a leader running `trap '' TERM` leaves
+3 of 3 alive after `killpg(SIGTERM)`, because children inherit an ignored disposition across
+`fork` and `exec`. So the suite needs three cases — cooperative, SIGTERM-ignoring (must die on
+the SIGKILL escalation), and self-`setsid` (must be *detected and reported*, since no `killpg`
+can reach it). **Test it by spawning and killing the group directly, not via
 `char down`** — `down` and the compose driver are phase 4, so an earlier draft's criteria could
 not be run at the end of this phase. For the same reason, the labelled containers the reap pass
 removes are created with `docker run --label` in the test rather than by `char up`. Add the neighbouring rule the same test protects: **every spawned child
@@ -331,7 +336,16 @@ the end of phase 2.
 
 **Done when:** a scratch repo with a bare `docker-compose.yml` plus a long-running command
 comes up, gets ready-checked, and tears down completely — `docker ps` and `lsof` clean
-afterwards.
+afterwards, **and `docker network ls` and `docker volume ls` filtered by `char.workspace` are
+both empty.** The last clause is the one that would have caught the bug this criterion was
+written without: compose does not propagate service labels to networks or volumes, so a suite
+that only checks `docker ps` passes while the founding leak accumulates.
+
+**And when the environment failures are exercised, not just the happy path:** Docker daemon
+unreachable reports class `environment` and exit 6 rather than `tool_failed`; a docker call
+against a hung socket hits char's own timeout instead of blocking forever; and `char.db`
+deleted mid-run is detected via the `user_version` sentinel rather than silently issuing a
+duplicate port block.
 
 **And when a `commands:` entry dispatches correctly:** subcommands and flags reach the child
 untouched (`char worktrees sweep --dry-run`), the child's exit code comes back, `env:` layers
