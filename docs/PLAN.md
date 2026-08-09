@@ -328,7 +328,7 @@ everything else is config. **Every verb takes `--json`.**
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent **in char's own state** — see §4.1. | `READY` `FAILED` |
 | `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` `PARTIAL` `FAILED` |
-| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix` / `--files` / `--jobs`. | `PASS` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
+| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix` / `--files` / `--jobs`. | `PASS` `SKIPPED` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
 | `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases — and remove `.char/`. Declared `release:` commands are **reported, never run** (§6.1). Build artifacts only with `--artifacts` (§6.1). | `CLEAN` `PARTIAL` `FAILED` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
@@ -428,9 +428,22 @@ cannot disagree:
 char_bug  >  bad_config  >  timeout  >  aborted  >  tool_failed
 ```
 
+**`where` has two grammars, and the class picks which.** For `bad_config` it is a path into
+the config — `char.yml:components.api.checks.lint.cmd` — because the actionable thing is the
+line to edit. For every other class it is the id from `results[]` — `api:lint` — because the
+actionable thing is the check. An agent can tell them apart by the `char.yml:` prefix, and
+does not need to: `next_action` is required for `bad_config` and says what to do.
+
 **`PARTIAL` joins the terminal states** for the case where some succeeded and some did not.
 It earns its place on `clean --all` and `up`, where "three of five worked" and "nothing
 worked" demand different actions and would otherwise both read `FAILED`.
+
+**`check` never reports `PARTIAL`.** One failing check fails the run — that is what a merge
+gate needs, and "three of five passed" is not a different action from "none passed" when the
+action is *fix the failing one*. `results[]` itemises exactly which, so nothing is lost by
+saying it once at the top. A whole run where every selected check was `SKIPPED` reports
+`SKIPPED`, not `PASS`: nothing ran, and claiming approval for that is the failure mode §4.1's
+empty-`${files}` rule exists to prevent.
 
 #### `RUNNING` and `WAITING` are progress, not verdicts
 
@@ -446,12 +459,22 @@ actionable fact is that the machine was busy rather than that this check is slow
 These two also fill a gap `--detach` had: every other state is terminal, so a detached run had
 nothing correct to report to `char check --status` while it was still going.
 
+**`--status` is the one place the envelope's top-level `status` may be a progress state.**
+Everywhere else it is terminal by definition (§3.1). The exception is confined to one flag,
+because a query about a run reports the run's state, and `RUNNING` is the true answer.
+
 **`--status` exits on the success of the query, not on the verdict of the run.** An in-flight
 run answers `status: RUNNING`, exit **0** — the query worked. This is the one place where exit
 0 does not mean "the thing you asked about is fine", so it is stated rather than left to be
 discovered: **a gate must use `--wait`, never `--status`.** `--status` is for a human or an
 agent polling; `--wait` blocks and exits on the run's real class. Exit codes from `--status`
 are about the query — `2` for an unknown run id, `3` if the config no longer parses.
+
+**`results[].id` is a different grammar per verb, and that is intended.** It is a check id
+for `check`, a component name for `init`/`up`/`down`, a workspace id for `clean --all`. One
+field, because the *shape* is what an agent learns once — iterate `results[]`, read `status`,
+read `error` — and the id is opaque to that loop. It is only ever compared against ids from
+the same verb's payload.
 
 **`waiting_on` carries the distinction that matters** — whether the cause is inside this
 workspace or outside it:
@@ -663,7 +686,15 @@ not the default.
 
 ### 4.1 `char.yml` — committed
 
-**One `components:` list.** A component is a named thing that may have source to check
+**Defaults, because an unstated default is a per-implementer decision.** `version: 1` is
+required — a config with no version is `bad_config`, since the whole point of the key is to
+exist before it is needed. `cost:` defaults to **1**. `scope:` defaults to **file**.
+`shell:` defaults to **false**. `check.timeout:` defaults to **900 seconds**, overridable
+per check and machine-wide as `check_timeout` in `~/.char/config.toml` (§4.3.1) — a check with
+no deadline is a hung merge gate, so the default is a real number rather than "none".
+`ready.timeout:` defaults to 60 (§6.0).
+
+**One `components:` mapping.** A component is a named thing that may have source to check
 (`checks:`), a process to run (`run:`), or both. Do not split these into separate `units:`
 and `services:` blocks — they are two *axes*, not two kinds of thing, and splitting them
 makes the both-axes case (an API server) read as duplication.
@@ -682,7 +713,7 @@ components:
 
   # BOTH axes
   api:
-    root: backend                # may point outside the workspace root (reserved, see §7)
+    root: services/api           # must stay inside the workspace root (§5)
     match: ["backend/**"]        # scoping by changed files
     setup: uv sync               # what `char init` runs
     run:
@@ -749,7 +780,10 @@ a measurement.
 
 **`scope:`** takes `file` (the default) or `component`. `file` means the check receives
 `${files}`; `component` means it always runs over the whole component, which is what
-`web:e2e` needs — an end-to-end suite scoped to two changed files tests nothing.
+`web:e2e` needs — an end-to-end suite scoped to two changed files tests nothing. **A
+`scope: component` check containing `${files}` is `bad_config`**, not a silent empty
+expansion: the two say opposite things, and quietly honouring one of them is how you get a
+suite that appears to run and covers nothing.
 
 **Every check runs from the workspace root, and `${files}` paths are workspace-relative.**
 One base for everything — cwd, `${files}`, and `match:` globs all agree. This was undefined in
@@ -1228,6 +1262,18 @@ the machine-wide lease (§4.3) doing its job, and is impossible until this numbe
 | `${env.NAME}` | `env:` blocks | `bad_config`, naming the variable |
 | `${ref}` | `secret_providers[].cmd` (§4.7) | schema error — a provider `cmd` without it can never resolve anything |
 
+**The cap says what char *substitutes*, not what may appear.** Under `shell: true`,
+`${HOME}` is ordinary shell syntax and char passes it through **untouched** — banning it would
+mean char policing a language it explicitly declined to parse. Under argv-split, which is the
+default, an unrecognised `${…}` is `bad_config`: nothing would ever expand it, so it can only
+be a typo or a placeholder someone expected char to know. One rule, two behaviours, and the
+behaviour follows from whether anything downstream can interpret it:
+
+| | `${port.api}` | `${HOME}` |
+|---|---|---|
+| argv-split (default) | char substitutes | **`bad_config`** — nothing expands it |
+| `shell: true` | char substitutes | passed through; the shell expands it |
+
 `${ref}` is listed here because an earlier draft introduced it in §4.7 without adding it to
 the cap this section spends forty lines defending. It is a provider-template placeholder, not
 a general substitution: it is substituted with the part of a secret reference following the
@@ -1471,6 +1517,11 @@ components:
 
 The URI scheme selects the provider; `${ref}` is the rest of the reference.
 
+**Provider names are URI schemes, so they use the scheme grammar — `^[a-z0-9][a-z0-9+.-]*$`
+— not the name grammar used for components and checks.** The difference is one character:
+`_` is legal in a component name and illegal in a scheme, so `aws_sm:` would be a provider
+that can never be referenced. Narrower grammar, caught at parse.
+
 **Five properties, each load-bearing:**
 
 | | |
@@ -1642,12 +1693,22 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - every granted secret name is declared in `secrets:`, and every reference's URI scheme
   matches a declared `secret_providers:` entry (§4.7). **Never resolves a secret** — the
   reference is checked, the value is not fetched
-- no `${env.NAME ?? ...}` anywhere, and no `${env.NAME}` outside an `env:` block (§4.4)
-- no `components[].root` escapes the workspace root. Multi-repo is reserved, not built (§7),
-  and an outside-root `root:` breaks the id derivation §2.2 depends on
-- every `owns.files` path is **relative to the workspace root**; absolute paths and any `..`
-  segment are rejected. `clean` deletes what these name, so `files: ["/"]` must be
-  unrepresentable rather than merely discouraged
+- no `components[].root` escapes the workspace root. **The schema rejects a leading `/` and a
+  leading `..`; verify owns this rule because only verify can normalise `a/../../b`** — and an
+  outside-root `root:` breaks the id derivation §2.2 depends on. Multi-repo is reserved (§7)
+- `owns.files` paths that survive normalisation still land outside the workspace when the
+  name is a symlink. verify resolves each one and rejects it if the target escapes; the schema
+  cannot, and `clean` deletes what these name
+
+> **Four rules that read like verify checks are enforced by the schema instead**, because they
+> are properties of a single string or key with nothing to cross-reference: `shell: true`
+> combined with `${files}`; `owns.files` being relative with no `..` and no leading `/`; a
+> `commands:` entry shadowing a built-in verb; and `${env.NAME}` placement plus the `??` ban.
+> The rule is worth stating in general form, because it decides where every future check
+> goes: **if it needs a second part of the document, or the filesystem, it is verify; if it
+> can be decided from the value in front of you, it is the schema.** A schema rejection is a
+> parse error at every entry point, including the ones nobody remembered to route through
+> verify.
 
 ### 5.1 `char agents-md`
 
@@ -1765,7 +1826,22 @@ each applies to both drivers.
 | `none` | immediately on spawn — the service is fire-and-forget |
 
 An earlier rewrite of this section dropped the list while [`PHASES.md`](PHASES.md) went on
-promising "five ready-check kinds" that were then enumerated nowhere.
+promising "five ready-check kinds" that were then enumerated nowhere. Naming five kinds is not
+a spec, so here is the encoding:
+
+```yaml
+ready: { http: "http://127.0.0.1:${port.api}/healthz", timeout: 60 }
+ready: { tcp: pg }              # a declared port NAME, not a number
+ready: { log: "listening on" }  # an unanchored regex over the service's stdout
+ready: { exec: "pg_isready -q" }
+ready: { none: true }
+```
+
+**Exactly one kind key, plus an optional `timeout:` in seconds — default 60.** A mapping with
+two kind keys is `bad_config` rather than a precedence rule nobody would remember. `tcp:`
+takes a port *name* because a number would be the pre-claim port, which is never the one the
+service is on. `ready:` omitted defaults to `{ none: true }`, and `char up` then reports `UP`
+on spawn — which is why the fixtures that have a real health endpoint declare one.
 
 **`file:` accepts a list.** Repos commonly already run base-plus-override, and step 1 must
 receive the same file set they do. char also ignores ambient `COMPOSE_FILE` and
@@ -1777,6 +1853,23 @@ depend on the caller's environment.
 > value is being trustworthy — and `traps.md`'s own rule is *re-run rather than re-trust*.
 > Read the Docker Compose section there before designing anything that depends on how
 > compose behaves.
+
+#### The three `owns:` key sets
+
+`owns:` appears in three places and they are **not** the same set. Enumerated, because "like
+any other entry" was doing work no reader could check:
+
+| Key | under `run:` | at component level | under `commands:` |
+|---|:--:|:--:|:--:|
+| `containers` `networks` `images` | yes | — | yes |
+| `ports` | yes | — | **no** (§4.5) |
+| `files` | yes | yes | yes |
+| `release` | yes | yes | yes |
+
+Component-level `owns:` records what `setup:` created and therefore has no runtime handles;
+`commands:` cannot own ports because it never claims a block. `release:` is recorded and
+reported, never executed, everywhere it appears — so it takes no `secrets:` grant anywhere
+(§4.7 rule 4).
 
 ### 6.1 `owns:` — the extension point instead of a plugin API
 
@@ -1936,7 +2029,7 @@ of the five verbs.
 | Package name | **`charkit`** | `char` is taken on crates.io. Binary stays `char`; the package name appears once, in the bootstrap line. |
 | Distribution | **GitHub Releases + `install.sh`** | A single static binary — a ~2 MB floor, measured — with no runtime to provision. Homebrew tap later. |
 | Supervision | **Start-and-track only** | Restart-on-crash and log aggregation are a permanent bug class for marginal gain. |
-| Config shape | **One `components:` list** | `units` + `services` were the same thing split in two; the both-axes case read as duplication. |
+| Config shape | **One `components:` mapping** | `units` + `services` were the same thing split in two; the both-axes case read as duplication. |
 | Config format | **YAML, statically verifiable** | Generator script is the escape hatch. Starlark would force `config verify` to execute untrusted code. |
 | Driver extensibility | **`owns:`, not a plugin API** | Gets the one real benefit of a custom driver at ~60 lines. |
 | Concept naming | **Keep "workspace"** | Already means this in VS Code / Terraform / cargo / pnpm. Do not invent vocabulary for concepts that already have names. |
