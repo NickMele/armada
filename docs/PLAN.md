@@ -12,7 +12,7 @@
 > silently, and say which document was wrong.
 >
 > **Binary name:** `char` · **Package name:** `charkit` (PyPI + npm, both verified free)
-> **Language:** Python 3.12+ · **Platform:** POSIX only (macOS/Linux). Not Windows.
+> **Language:** Rust (2021 edition) · **Platform:** POSIX only (macOS/Linux). Not Windows.
 
 ---
 
@@ -135,9 +135,14 @@ pnpm/npm workspaces ever genuinely bites, the fix is `checkout`, not an invented
 
 ### 2.2 Two derived identities
 
-```python
-workspace_id = sha1(realpath(workspace_root)).hexdigest()[:8]
-project_id   = sha1(realpath(git rev-parse --git-common-dir)).hexdigest()[:8]
+```rust
+// Distinct newtypes, not two String aliases — both are 8 hex chars and
+// passing one where the other belongs must not compile.
+pub struct WorkspaceId(String);
+pub struct ProjectId(String);
+
+workspace_id = sha1(realpath(workspace_root))[..8]
+project_id   = sha1(realpath(`git rev-parse --git-common-dir`))[..8]
 ```
 
 > **`realpath` on the second line is load-bearing and was missing from an earlier draft.**
@@ -559,6 +564,24 @@ claims that renew a heartbeat every few seconds. Rewriting an entire JSON docume
 `O_EXCL` lockfile, five workspaces at a time, for the whole of a ten-minute run, is the wrong
 shape for that write pattern — and it is exactly where §11's registry-corruption risk lives.
 SQLite is stdlib, one file, needs no daemon, and makes that risk largely disappear.
+
+#### Connection setup is not optional
+
+Three settings, every connection, no exceptions — see [`traps.md`](traps.md) for the
+measurements behind each:
+
+```rust
+conn.pragma_update(None, "journal_mode", "WAL")?;   // property of the file, never a default
+conn.pragma_update(None, "busy_timeout", 5000)?;    // driver defaults vary, some are 0
+// and every transaction that may write:
+let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+```
+
+`TransactionBehavior::Immediate` is a typed argument rather than a connection-string flag,
+which is one of the reasons the language decision landed where it did (§10.1) — the obvious
+API is the correct one. A DEFERRED transaction that reads and then writes fails after **0 ms**
+with `SQLITE_BUSY_SNAPSHOT`, which `busy_timeout` cannot rescue because the reader's snapshot
+is already stale. That is the lease pattern exactly.
 
 #### Leases: how long-running work holds machine-wide claims
 
@@ -1286,7 +1309,7 @@ reviewer an objective standard to reject against.
 | **License, if public** | Apache-2.0 / MIT / none | Apache-2.0 adds a patent grant and clears corporate legal at no adoption cost. Only matters if public. |
 | **CI** | GitHub Actions / local gate only / both | Actions is free for public repos, and unlike Chariot there is no billing constraint. Real CI matters more for a package other repos depend on. |
 | **Typing strictness** | mypy strict / basic / none | Strict from commit one is cheap; retrofitting onto 3,000 lines is not. |
-| **Python floor** | 3.12 / 3.11 | 3.12 matches Chariot. Lower only if a target repo's environment forces it. |
+| **Rust edition / MSRV** | 2021 edition | Pin an MSRV in `Cargo.toml` and raise it deliberately. Users are unaffected either way — they receive a static binary, so no toolchain is required to run `char`. |
 | **Test layers** | unit only / unit + a real-subprocess integration tier | Principle 1 makes unit tests hermetic — which means **nothing exercises real process-group kill** unless you deliberately add a small integration tier. Recommend adding one: it covers the exact failure char exists to prevent. |
 | **Coverage** | gated / report-only | Chariot runs report-only; same is probably right here. |
 
@@ -1300,7 +1323,7 @@ a recorded answer. **No source files exist yet.**
 
 ### Phase 1 — Repo skeleton + **six** config fixtures *(must land alone)*
 
-uv package scaffolding, pytest, ruff. JSON Schema for `char.yml`. Then write all six configs
+Cargo workspace scaffolding, `clippy`, `rustfmt`. JSON Schema for `char.yml`. Then write all six configs
 from the table in §8.1 under `tests/fixtures/<name>/char.yml`. Tests are schema validation
 plus a golden resolved-config snapshot for each. **No runtime.**
 
@@ -1358,8 +1381,18 @@ test that kills something.
 
 **This is a clean-room rewrite, not a copy** — see [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7
 for the full reasoning. The scheduler is a reducer and the original's is not, so the hardest
-part was being rewritten regardless; and reshaping foreign code into `core`/`adapters`/`cli`
-is more work than writing to the principles directly.
+part was being rewritten regardless.
+
+**The language change makes this structural rather than policed.** The source is Python; the
+target is Rust. Copying is not merely forbidden, it is impossible — there is no line that
+could be pasted across even by an implementer trying to. §8.1 argues that structural
+guarantees beat policed ones; this is the strongest form of that available, and it arrived as
+a side effect of the language decision rather than by design.
+
+It also changes what "port the test cases" can mean. The assertions survive as **data** —
+given this config and these recorded command outputs, expect this verdict — while the harness
+is new in every respect. Extract them as a table the Rust suite drives, not as translated
+test functions.
 
 | Agent | Reads | Produces |
 |---|---|---|
@@ -1373,9 +1406,7 @@ danger, and charkit has no continuous real-repo validation until phase 6, so any
 would not resurface until then.
 
 Substantively: replace `CHECK_CATALOG` with the config loader, `domain` with `component`, and
-strip every Chariot-specific path, turbo filter and `uv run --directory` assumption. Test
-cases are ported, not rewritten — the assertions survive, but the harness is rebuilt around
-`Ctx` and its three seams, and the scheduler tests change shape because the scheduler did.
+strip every Chariot-specific path, turbo filter and interpreter-directory assumption.
 
 **`needs:` on a check gates in this phase and starts in phase 4.** The end state is that a
 check needing `postgres` brings it up — one command instead of three, which matters when the
@@ -1503,7 +1534,7 @@ passthrough must be transparent, as §4.5 specifies. `bin/char` execs an absolut
 resolved from the git root with no `uv run --directory`, so commands running from the
 workspace root need no working-directory key.
 
-**Take the dependency from git, not PyPI.** `uv` supports a git source, so this phase does
+**Take the dependency as a locally built binary, not a release.** cargo builds one from the checkout, so this phase does
 not wait on publishing — and getting a real repo onto charkit is worth more than getting the
 packaging right first. Publishing follows in phase 7, with a consumer already attached.
 
@@ -1527,20 +1558,24 @@ to end.
 
 ### Phase 7 — Publish
 
-PyPI as `charkit` with `bin: char`. The ~40-line installer:
+Cross-compiled static binaries on GitHub Releases for `darwin`/`linux` × `arm64`/`amd64`, plus
+a `~40-line` installer that selects the right one:
 
 ```sh
-command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install charkit     # provisions a Python if the machine has none
+curl -LsSf https://raw.githubusercontent.com/<owner>/charkit/main/install.sh | sh
+# detects uname -sm, downloads one ~1.5 MB binary, drops it on PATH
 ```
 
-No bundling needed — uv installs Python itself, so this is dependency-free from the user's
-side at ~2 MB rather than a 15–40 MB PyInstaller binary with macOS signing overhead.
-Homebrew tap is a nice second channel, later.
+**There is no runtime to provision.** One static binary, measured at ~1.5 MB with every
+dependency linked, so the install is a single download and a `chmod`. Publishing to crates.io
+is a second channel for people who would rather `cargo install`; a Homebrew tap is a third,
+later.
 
-Chariot's git dependency is repointed at the published package as part of this phase.
+Chariot's git dependency is repointed at a released binary as part of this phase.
 
-**Done when:** a clean machine with no Python runs the one-liner and gets a working `char`.
+**Done when:** a clean machine with no toolchain of any kind runs the one-liner and gets a
+working `char`. Verify on a container with neither Rust nor Python installed — the whole point
+of the binary is that neither is required.
 
 ### Phase 8 — The only test that matters
 
@@ -1553,7 +1588,9 @@ Adopt char in a repo that is *not* Django + Next (a multi-language repo), using 
 
 ## 9. Source material
 
-The reference implementation lives at `~/Development/chariot/scripts/`:
+The reference implementation lives at `~/Development/chariot/scripts/`. **It is Python;
+charkit is Rust** (§10.1), so every row below is a source of *behaviour*, never of code. The
+line counts indicate how much behaviour there is to harvest, not how much work the rewrite is.
 
 | Path | Lines | Role in this plan |
 |------|------:|-------------------|
@@ -1595,15 +1632,65 @@ The reference implementation lives at `~/Development/chariot/scripts/`:
 
 | Decision | Choice | Why |
 |----------|--------|-----|
-| Language | **Python** | A `curl \| sh` installer gives the same "one line, fresh machine" property `npx -y` has. The language was never the requirement. Keeps 6,169 working lines in `scripts/char` alone, plus the test suite. |
-| Package name | **`charkit`** | `char` is taken on both PyPI and npm. Binary stays `char`; the package name appears once, in the bootstrap line. |
-| Distribution | **PyPI + `install.sh`** | uv provisions Python, so no bundling. Homebrew later. |
+| Language | **Rust** (2021 edition) | **Reopened and re-decided in phase 0 — see below.** The reducer's `State`/`Event`/`Action` types are the scheduler's specification, and Rust is the only candidate whose compiler enforces that specification. |
+| Package name | **`charkit`** | `char` is taken on crates.io. Binary stays `char`; the package name appears once, in the bootstrap line. |
+| Distribution | **GitHub Releases + `install.sh`** | A single static binary, ~1.5 MB, no runtime to provision. Homebrew tap later. |
 | Supervision | **Start-and-track only** | Restart-on-crash and log aggregation are a permanent bug class for marginal gain. |
 | Config shape | **One `components:` list** | `units` + `services` were the same thing split in two; the both-axes case read as duplication. |
 | Config format | **YAML, statically verifiable** | Generator script is the escape hatch. Starlark would force `config verify` to execute untrusted code. |
 | Driver extensibility | **`owns:`, not a plugin API** | Gets the one real benefit of a custom driver at ~60 lines. |
 | Concept naming | **Keep "workspace"** | Already means this in VS Code / Terraform / cargo / pnpm. Do not invent vocabulary for concepts that already have names. |
 | Build order | **Greenfield repo, Chariot last** | Isolation requested; keeps Chariot's merge gate out of the blast radius. |
+
+### 10.1 Why the language was reopened, and what decided it
+
+This row previously read **Python**, on two grounds. Both were written before decisions that
+invalidated them, which is why it was reopened rather than relitigated.
+
+| Original ground | What happened to it |
+|---|---|
+| *"Keeps 6,169 working lines, plus the test suite"* | **Void.** §2.7 of `ARCHITECTURE.md` made phase 3 a clean-room rewrite and forbade the harvest document from carrying implementation. Zero lines transfer regardless of language. |
+| *"The language was never the requirement"* | True — and it argues the choice is *free*, not that Python is right. |
+
+A third assumption also failed: the owner is not a Python developer, so familiarity favoured
+nothing. With every original ground gone, the decision was made on measured properties.
+
+**What decided it.** The same reducer was written in four languages, an `Event` variant added,
+and left unhandled:
+
+| | Result |
+|---|---|
+| **Rust** | `error[E0004]: non-exhaustive patterns` — unconditionally |
+| TypeScript, Python + mypy strict | Caught only via return-type pressure; a `void`/`None` reducer compiles clean |
+| Go | `build` and `vet` both pass. The event is **silently dropped** |
+
+`ARCHITECTURE.md` §1.2 spends a page establishing that the scheduler must be a reducer because
+a deadlock there is the one bug class greenfield development structurally cannot catch, and §3
+calls those types "the scheduler's real specification." Only one candidate can hold that
+specification in the type system.
+
+Supporting, all measured: 4.8 ms cold start against Python's 116 ms; a 1.48 MB static binary
+against a ~108 MB Python install; `TransactionBehavior::Immediate` as a typed argument rather
+than a driver-specific DSN string; newtypes that make `workspace_id` and `project_id`
+unconfusable when both are 8-character hex; and `rmcp` is the only MCP SDK shipping the Tasks
+extension.
+
+**The cost accepted, stated plainly.** `rmcp` released three major versions in five months —
+v1.0.0 in March, v2.0.0 in June, v3.0.0 in July, one month apart. Go's SDK has had no breaking
+major since September 2025. That churn is real and ongoing.
+
+It is accepted because the blast radius is bounded **by decisions already made**: §7 makes a
+growing MCP surface a non-goal, and §1.3 of `ARCHITECTURE.md` means the MCP server calls the
+same core functions the CLI does. A breaking `rmcp` release therefore hits one adapter module
+behind a protocol boundary — never the core, the scheduler, or the CLI. Pin the version;
+upgrade deliberately.
+
+Two further costs go in [`traps.md`](traps.md) as rules, because both sit in machinery §7 calls
+load-bearing: Rust sets `SIGPIPE` to `SIG_IGN` at startup, so `char status | head` panics until
+fixed; and `setsid` is not in `std`, so detaching a process group needs `unsafe pre_exec`.
+
+**Do not reopen this again without new measured evidence.** It has been examined twice, by
+independent analyses reaching the same conclusion from different reasoning.
 
 ---
 
