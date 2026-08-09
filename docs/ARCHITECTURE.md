@@ -1,6 +1,6 @@
 # charkit — architecture
 
-> **Status:** agreed in Phase 0 (§8 of [PLAN.md](PLAN.md)). No source code exists yet.
+> **Status:** agreed in Phase 0 (see [`PHASES.md`](PHASES.md)). No source code exists yet.
 >
 > This document records **principles and the reasoning behind them**. The reasoning is the
 > load-bearing part: a rule without its reason gets discarded the first time it is
@@ -73,7 +73,7 @@ git). Three, because:
   in `~/.char/char.db` (PLAN.md §4.3), so char depends on real transaction semantics for
   port claims and lease acquisition, and on real files for logs and `.char/`. A fake gives
   you a green test over your own fake's concurrency model and proves nothing about the real
-  one — in the one area where §11 names corruption under concurrent claims as a live risk.
+  one — in the one area where [`PHASES.md`](PHASES.md) §11 names corruption under concurrent claims as a live risk.
   Two threads against a real database in a `tempfile::TempDir` is both more faithful and less code.
 
 **Where stack diversity actually lands.** It does not land here. A Rails repo and a Go repo
@@ -134,7 +134,7 @@ merely an architectural smell.
 
 So the choice was never "reactive versus simple." It was **where the reactive part lives**. A
 planner does not remove the reactive scheduler; it relocates it into the shell, where the
-pure test suite cannot reach it — and §11 of the plan names exactly the bug that would hide
+pure test suite cannot reach it — and [`PHASES.md`](PHASES.md) §11 names exactly the bug that would hide
 there: *"the scheduler deadlocks when two exclusive resources overlap under load."* That is
 the one class of failure a greenfield build structurally cannot catch, because there is no
 continuous real-repo validation until phase 6. Making it reachable in a unit test is the
@@ -555,7 +555,7 @@ because the repo it models has one, and that is the fixture doing its job. Porte
 which are the reason `tests/` was covered at all, live elsewhere under `tests/` and stay
 covered.
 
-**Why `tests/` is covered at all:** §9 calls the source repo's test suite the single most
+**Why `tests/` is covered at all:** [`PHASES.md`](PHASES.md) §9 calls the source repo's test suite the single most
 valuable asset and its *cases* are ported in phase 3, which makes them the second
 transcription vector. An earlier draft greped `src/` only and missed them entirely.
 
@@ -593,7 +593,7 @@ So the harvest doc gets a positive rule rather than a prohibition:
 The reasoning is that the two contamination types have different vectors. **Transcription** —
 a Chariot path ending up in the code — is already caught downstream by the grep over `src/`
 and `tests/`. **Structure** — the shape of `check.py` reproducing itself in a rewrite — is
-carried by pasted code, and is exactly what §8.1 says no grep can catch.
+carried by pasted code, and is exactly what [`PHASES.md`](PHASES.md) §8.1 says no grep can catch.
 
 **This one is policed, not structural, and that is not a failure to fix.** No mechanical rule
 can distinguish a legitimate mention of the source repo from a leaked one inside a document

@@ -7,9 +7,13 @@ repo's tech stack. Rust (2021 edition), POSIX only.
 
 ## Read these first, in order
 
-1. **`docs/PLAN.md`** — the complete specification. Phases, config shape, the six verbs.
-2. **`docs/ARCHITECTURE.md`** — the principles and, more importantly, *why* each exists.
-3. **`docs/traps.md`** — measured environment behaviour. Read the relevant section **before**
+1. **`docs/PHASES.md`** — §8.1, then **your phase only**. It tells you what you are building
+   and how you will know it is done.
+2. **`docs/PLAN.md`** — the contract: §2 concepts, §3 verbs and the `--json` envelope, §4
+   configuration. Read §5 and §6 only if your phase touches the bootstrap sandwich or the
+   service drivers.
+3. **`docs/ARCHITECTURE.md`** — the principles and, more importantly, *why* each exists.
+4. **`docs/traps.md`** — measured environment behaviour. Read the relevant section **before**
    designing anything that depends on how a tool behaves, and add to it when you discover
    something surprising. Every entry was measured rather than read, because the ones that
    matter are the cases where the documentation and the behaviour differ.
@@ -89,9 +93,9 @@ contamination nothing else can catch.
 
 ### 3. Check what phase you are in before writing code
 
-- **Phase 0** produces documents only. If a source file appears, the phase went wrong.
+- **Phase 0 is complete.** It produced these documents.
 - **Phase 1** must land alone, and ships all six fixture configs. Do not fan out until the
-  config contract is committed.
+  config contract is committed. Full sequencing in [`docs/PHASES.md`](docs/PHASES.md).
 
 ---
 

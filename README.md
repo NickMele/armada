@@ -50,9 +50,12 @@ Apache-2.0.
 
 ## Start here
 
-1. [`docs/PLAN.md`](docs/PLAN.md) — the complete specification. Phases, config shape, verbs.
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the principles **and why each one exists**.
-3. [`AGENTS.md`](AGENTS.md) — the operational rules, in short form.
+1. [`docs/PLAN.md`](docs/PLAN.md) — the contract: concepts, verbs, config schema, drivers.
+2. [`docs/PHASES.md`](docs/PHASES.md) — what gets built, in what order, and the fixture set.
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the principles **and why each one exists**.
+4. [`docs/traps.md`](docs/traps.md) — measured environment behaviour; read before designing
+   anything that depends on how a tool behaves.
+5. [`AGENTS.md`](AGENTS.md) — the operational rules, in short form.
 
 `ARCHITECTURE.md` deliberately keeps the reasoning alongside every rule, because a rule
 without its reason gets discarded the first time it is inconvenient. It also records, in §2.8,
