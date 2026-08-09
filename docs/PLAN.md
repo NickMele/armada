@@ -596,7 +596,7 @@ components:
     owns:                        # component level — what setup: created (§6.1)
       files: [node_modules]      # removed only by `clean --artifacts`
     checks:
-      lint:  { cmd: pnpm eslint ${files}, fix: pnpm eslint --fix ${files} }
+      lint:  { cmd: "pnpm eslint ${files}", fix: "pnpm eslint --fix ${files}" }
       types: { cmd: pnpm typecheck }
       test:  { cmd: pnpm vitest run, cost: 2 }
       e2e:
@@ -723,10 +723,32 @@ is already stale. That is the lease pattern exactly.
 
 ```
 acquire   insert a lease row
-hold      renew heartbeat every few seconds while the work runs
+hold      renew the heartbeat from the shell's event loop
 release   delete the row on exit
 reclaim   a lease whose heartbeat has gone cold is dead — take it
 ```
+
+**Renewal happens in the shell loop that steps the reducer — not a background timer.** That
+single placement decision is what makes a hard TTL unnecessary. A background timer keeps
+ticking while the scheduler is wedged, so the lease looks healthy forever and you need an
+expiry to catch it; a loop-driven heartbeat simply stops, and the existing cold-heartbeat path
+handles it.
+
+The loop already exists: §1.2 of `ARCHITECTURE.md` has the shell sleeping until the next
+deadline computed from state, so it wakes on a schedule regardless of how long any child runs.
+A thirty-minute check does not stall it.
+
+**There is deliberately no TTL.** An earlier draft added one for "wedged but still
+heartbeating", and no value can work: the fixtures contain a 1800-second check and a
+900-second `e2e` holding `exclusive: [browser]`, so a TTL long enough not to fire on a healthy
+job is useless as wedge detection — and when it fires wrongly on an exclusive, **two
+workspaces hold one mutex with no error anywhere.** That is worse than the visible hang it
+replaces, and it repeats the mistake §2.3.1 avoids for orphaned pgids: acting on state char
+cannot prove is stale.
+
+A wedged holder therefore blocks until killed, and `char status --all` names it and how long it
+has held. **Residual gap, stated rather than papered over:** a loop that keeps turning while
+achieving nothing is a char bug, not a wedge, and no lease mechanism catches it.
 
 This is the pattern §4.2 previously used for the run lock — pid plus heartbeat — moved
 machine-global so it outlives the directory. Crash recovery falls out of it: a runner that
@@ -773,7 +795,17 @@ has no idea run B exists, so no unit test can construct the cycle. §1.2's argum
 making the scheduler a reducer puts deadlocks within reach of a unit test — this particular
 deadlock crawled out of that reach when the resources went machine-wide.
 
-> **Rule: exclusives are acquired in sorted name order, always.**
+> **Rule: acquire `exclusive:` first, in sorted name order, then `cost:` slots — and never
+> hold a slot while waiting on an exclusive.**
+
+**Both halves matter, and an earlier draft only had the first.** Sorting orders exclusives
+against each other, but `cost:` slots are *also* machine-wide leases and were outside that
+order — so A could hold eight slots and wait on `browser` while B held `browser` and waited on
+slots. A cycle across two lease *classes*, untouched by sorting them within one. The proof
+below holds only inside a totally-ordered class, and it was asserted across all of them.
+
+Acquiring exclusives first closes it: a run waiting on an exclusive holds **nothing** a
+slot-waiter needs. Release in reverse.
 
 That makes a cycle impossible rather than unlikely, **for every possible interleaving**. If a
 worker waits for X, everything it holds is below X — it acquires upward and has not reached X.
@@ -792,7 +824,7 @@ point of testing it, since the rule is easy to write down and easy to forget.
 | Two workers stuck on each other forever | sorted acquisition — no recovery exists, so it must be impossible |
 | B waits fifteen minutes for A's slow suite | not a failure; the `BLOCKED` state makes it visible rather than silent |
 | A crashes holding `browser` | heartbeat expiry |
-| A is wedged but its heartbeat still ticks | **a hard TTL per lease, independent of heartbeat** |
+| A is wedged but its heartbeat still ticks | **cannot happen** — the heartbeat is renewed from the shell loop, so a wedged loop stops renewing (§4.3) |
 
 **`cost:` and `exclusive:` are machine-wide, not per-run.** Ports were already claimed
 machine-globally; CPU slots and named exclusives were not, which meant five concurrent
@@ -978,7 +1010,7 @@ workspaces: [apps/foo, apps/bar]   # separate workspaces, excluded from this one
 components:
   shared-lib:
     root: libs/shared
-    checks: { lint: { cmd: ruff check ${files} } }
+    checks: { lint: { cmd: "ruff check ${files}" } }
 ```
 
 Each declared path holds its own `char.yml` and becomes an ordinary workspace: its own id,
@@ -1023,10 +1055,10 @@ machine. And when a command echoes its environment on failure, char captures tha
 
 ```yaml
 secret_providers:
-  op:       { cmd: op read ${ref} }
-  aws-sm:   { cmd: aws secretsmanager get-secret-value --secret-id ${ref}
-                     --query SecretString --output text }
-  keychain: { cmd: security find-generic-password -s ${ref} -w }
+  op:       { cmd: "op read ${ref}" }
+  aws-sm:   { cmd: "aws secretsmanager get-secret-value --secret-id ${ref}
+                     --query SecretString --output text" }
+  keychain: { cmd: "security find-generic-password -s ${ref} -w" }
 
 secrets:
   GITHUB_TOKEN: op://Engineering/github/token
@@ -1341,7 +1373,6 @@ components:
     setup: [bundle install, rails db:create, rails db:migrate]
     owns:
       files: [node_modules, .venv]
-      secrets: [DB_ADMIN]        # granted to release:, resolved at clean time
       release: psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'
 ```
 
@@ -1356,8 +1387,27 @@ components:
 So `rails-monolith`'s `db:create` is only a leak when Postgres is shared rather than a
 char-managed service.
 
-**`release:` is resolved at `char init` and recorded in `char.db`.** That is the whole point,
-and it is why this is not a `teardown:` key. A teardown script symmetric with `setup:` would
+**`release:` is recorded, reported, and never executed by char.** An earlier draft had `clean`
+run it — including under `--orphaned`, from outside any workspace, resolving granted secrets at
+that moment. That made the most destructive operation in the tool run under the flag §3.3
+documents as *"always safe… it can never disturb a live agent."*
+
+The plan already faces this exact choice for orphaned process groups and answers it correctly
+(§2.3.1): **report it, do not act on state char cannot prove is stale.** A stale
+`DROP DATABASE` is strictly more dangerous than a stale `kill`, so the same answer applies with
+more force.
+
+```
+char status --all
+  workspace a3f91c02 (directory deleted) declared an external resource
+  char did not reclaim:
+      psql -h db.internal -c 'DROP DATABASE app_a3f91c02'
+```
+
+Two mechanisms disappear with it: `char.db` never stores a secret *reference*, and
+`ARCHITECTURE.md` §1.8's invariant needs no clause about them.
+
+It is still recorded at `char init` rather than read from the repo at `clean` time — A teardown script symmetric with `setup:` would
 live *in the workspace* — so in the orphan case, the one that actually matters, it has been
 deleted along with everything else. A resolved command string in the machine-global store runs
 from anywhere:
@@ -1366,8 +1416,7 @@ from anywhere:
 declared   psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'
 recorded   psql -h db.internal -c 'DROP DATABASE app_a3f91c02'
            + the secret *references* it was granted - never their values
-run by     char clean and char clean --orphaned, with no workspace present,
-           resolving those references at that moment
+reported   by char status --all when the workspace is gone — never executed
 ```
 
 **Only the command and the references are recorded.** Recording a resolved credential would

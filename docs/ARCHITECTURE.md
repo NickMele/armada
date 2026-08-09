@@ -410,10 +410,10 @@ file inside — daemon access is root-equivalent. No mechanism char could build 
 so promising it would be false assurance. What char *can* guarantee is that its own outputs,
 files and database never contain one.
 
-`~/.char/char.db` was missing from an earlier draft of this list, which mattered: `PLAN.md` §6.1's
-`owns.release:` is resolved at `init` and recorded there, so the obvious way to express a
-teardown command with a password wrote a plaintext credential to a machine-global store that
-survives `clean` **by design**.
+`~/.char/char.db` is named explicitly because it is machine-global and survives `clean` by
+design, so anything written there is written for good. It holds no secret and no secret
+reference: `PLAN.md` §6.1's `owns.release:` is recorded and *reported*, never executed, so char
+never resolves anything on that path.
 
 Four consequences for the code:
 
