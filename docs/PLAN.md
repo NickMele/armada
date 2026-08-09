@@ -18,7 +18,9 @@
 
 ## 0. Start here
 
-**Do not write any code yet. Phase 0 is a working session with the human.**
+> **Phase 0 is complete.** It was a working session with the human and produced
+> `ARCHITECTURE.md`, `AGENTS.md`, `traps.md` and the README's contributing section. The
+> numbered steps below are kept as the record of what it did. **Start at §8, Phase 1.**
 
 Read §2 (concepts), §4 (config) and §8 (phases) first — you need the shape of the thing to
 have a useful conversation about how to build it. Then work through **Phase 0 — Foundations**
@@ -281,7 +283,7 @@ everything else is config. **Every verb takes `--json`.**
 | Verb | Contract | Terminal states |
 |------|----------|-----------------|
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent. | `READY` `FAILED` |
-| `char up` | Services running and ready-checked. Records what it started into `owned.json`. | `UP` `FAILED` `TIMEOUT` |
+| `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` |
 | `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix`. | `PASS` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
 | `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases, declared `release:` commands — and remove `.char/`. Build artifacts only with `--artifacts` (§6.1). | `CLEAN` |
@@ -835,7 +837,7 @@ char's management rather than inside it.
 `owns:` behaves exactly as it does under `run:` (§6.1), with one difference: it is a
 **selector, not a record.** char stores the declaration and `char clean` *evaluates* it
 against docker and the filesystem. That works because every selector is stamped with
-`${workspace.id}`, and it means no lifecycle hook and no write to `owned.json` — a command
+`${workspace.id}`, and it means no lifecycle hook and no `owned` row written — a command
 runs ad hoc, so there is no "while it was up" window to record against. `ports:` is not
 available here; the block is already claimed by `char init`.
 
@@ -1596,7 +1598,7 @@ fails with `bad_invocation` naming the service and telling the caller to run `ch
 behaviours.
 
 Two consequences of `check` eventually starting services, which must be handled in phase 4:
-anything it starts is recorded in `owned.json` like any other service, so `clean` reclaims
+anything it starts is recorded as `owned` rows like any other service, so `clean` reclaims
 it; and **`check` does not stop what it started.** Stopping would risk killing a service a
 sibling workspace is using, which §2.2's flat-siblings model exists to prevent, and would
 make the next `check` pay startup cost again.
@@ -1611,7 +1613,7 @@ subsequent phase.
 ### Phase 4 — Services: `up` / `down`
 
 Both drivers, five ready-check kinds, `needs:` ordering, `owns:`, everything started
-recorded into `owned.json`, port remapping via the generated compose document (§6.0). Plus
+recorded as `owned` rows in `~/.char/char.db` (§4.3), port remapping via the generated compose document (§6.0). Plus
 **secret resolution and injection** (§4.7) — this is the phase where there is finally
 something to inject into.
 
@@ -1626,7 +1628,7 @@ Chariot keeps `worktrees` / `tickets` / `design` / `baselines` while giving up `
 - `stdio:` — `pipe` or `inherit`, defaulting to `pipe` when secrets are granted
 - `secrets:` grants
 - `owns:` **evaluated as a selector** at `clean` time — a distinct code path from reading
-  `owned.json`, because a command runs ad hoc and has no "while it was up" window to record
+  the `owned` table, because a command runs ad hoc and has no "while it was up" window to record
   against
 
 It lands here rather than in phase 2 because `secrets:` is its last dependency and arrives in
@@ -1657,7 +1659,7 @@ after the command has already exited.
 **And when the secret path is proven negatively:** a service is granted a secret from a stub
 provider, comes up with the value in its environment, and the value appears in **none** of
 `.char/run/*/logs/`, `--json` output on both success and failure, `ps` output while running,
-or `.char/owned.json`. Assert on absence, with the stub returning a distinctive sentinel so
+or `~/.char/char.db`. Assert on absence, with the stub returning a distinctive sentinel so
 the search is unambiguous.
 
 ### Phase 5 — Bootstrap sandwich + `agents-md` + MCP *(fans out widest)*

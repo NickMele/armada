@@ -115,6 +115,7 @@ tests were.
 | `1` | `tool_failed` | `5` | `aborted` |
 | `2` | `bad_invocation` | `70` | `char_bug` |
 | `3` | `bad_config` | `130` | SIGINT |
+| | | `141` | SIGPIPE |
 
 A `commands:` child's exit code passes through **verbatim** and is not remapped. char's own
 codes can only occur when the child never ran; `data.dispatched` says which.

@@ -174,8 +174,8 @@ promised on any surface, but the CLI and `--json` are the ones intended to be de
 
 Stated in a form that can actually be violated visibly:
 
-> **No module-level mutable state. No `os.getcwd()`, `os.environ` or `Path.cwd()` below the
-> entrypoint.**
+> **No `static mut` and no global `OnceCell`/`LazyLock` holding mutable state. No
+> `std::env::current_dir()` and no `std::env::var()` below the entrypoint.**
 
 The workspace is resolved once, at the entrypoint, and passed explicitly thereafter (it rides
 on `Ctx`, §1.1).
@@ -492,8 +492,15 @@ Cheap, matches the source repo's existing history, and feeds the changelog (§2.
 
 ### 2.4 The merge gate
 
-`no-mistakes` is the primary gate (`intent, rebase, review, test, document, lint, push, PR,
-CI`). A minimal GitHub Actions workflow runs alongside it — see §3.
+**The GitHub Actions matrix is the authoritative gate** — it runs on every PR and nothing
+merges without it (§3). **`no-mistakes` is the pre-flight**, not a requirement: it runs an
+agent code review plus test, lint and docs locally, then pushes and opens the PR, so problems
+surface before CI rather than after. It is how this repo is maintained day to day, it is
+installable by anyone, and a contributor who skips it is judged by the same checks.
+
+An earlier draft of this section called `no-mistakes` "the primary gate", which contradicted
+both README and AGENTS.md — and the precedence rule only covers PLAN ↔ ARCHITECTURE, so
+nothing resolved it.
 
 The gate is:
 
@@ -700,7 +707,7 @@ and the scheduler tests change shape because the scheduler did.
 | Typing | **The compiler** | The decision that produced "mypy strict from commit one" is satisfied for free and more strongly: there is no gradual-typing escape hatch and no `Any` leaking in from untyped dependencies. Deny `unsafe` crate-wide except where `traps.md` records a required exception. |
 | Rust edition / MSRV | **2021 edition** | MSRV pinned in `Cargo.toml`, raised deliberately. Users are unaffected either way — they receive a static binary, so no toolchain is required to run `char`. |
 | Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real `O_EXCL` races or real docker labels — the exact failures char exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
-| Coverage | **Gated, ratchet floor** | Floor is set by the first real measurement and may only rise; a PR that lowers coverage fails. Chosen over a fixed percentage because no project data exists to ground a number — 80 and 90 are convention, not evidence. `# pragma: no cover` with a reason comment is the escape for genuinely untestable lines. |
+| Coverage | **Gated, ratchet floor** | Floor is set by the first real measurement and may only rise; a PR that lowers coverage fails. Chosen over a fixed percentage because no project data exists to ground a number — 80 and 90 are convention, not evidence. `#[coverage(off)]`, or a documented exclusion, with a reason comment, is the escape for genuinely untestable lines. |
 
 ### Test tiers
 
