@@ -104,6 +104,27 @@ one in PLAN.md §9.
 durable handles."* This is the standard shape for exposing something like a ten-minute
 `char check` over MCP — worth using rather than inventing a bespoke polling protocol.
 
+## Ports — what a bind probe can and cannot see
+
+### An IPv6-only listener is invisible to an IPv4 bind probe
+
+| Holder | IPv4 `bind()` probe |
+|---|---|
+| `0.0.0.0`, `127.0.0.1`, `::` (v4-mapped) | `EADDRINUSE` — correctly detected |
+| **`::1` only, `IPV6_V6ONLY`** | **succeeds — reports FREE** |
+| `SO_REUSEPORT` on holder **and** probe | **succeeds — reports FREE** |
+| `SO_REUSEPORT` on holder, plain probe | `EADDRINUSE` |
+
+**`SO_REUSEADDR` does not defeat the probe** — an earlier draft of `PLAN.md` §3.1 said it did,
+and cited this file for a measurement that was never here. What defeats it is an IPv6-only
+listener, and modern Node resolving `localhost` to `::1` makes that the ordinary dev server
+rather than an exotic case.
+
+So a probe must bind **both** `127.0.0.1` and `[::1]` and treat either `EADDRINUSE` as taken,
+and `char status` must connect on both families before reporting `RESERVED`. `SO_REUSEPORT` on
+both sides remains undetectable; nothing char does prevents that, so it is a known limit rather
+than a bug to fix.
+
 ## Rust — two required rules in the POSIX primitives
 
 Both sit in machinery `PLAN.md` §7 calls load-bearing, and both are one line you must not
@@ -147,6 +168,23 @@ procs in group after: 0                   <-- CLEAN
 ```
 
 Phase 2's done-when depends on this and nothing had confirmed it in Rust.
+
+### `killpg(SIGTERM)` kills nothing if the group leader ignores SIGTERM
+
+```
+pgid=95793   before=3   after killpg(SIGTERM)=3   after killpg(SIGKILL)=1
+```
+
+The leader ran `trap '' TERM`, and children inherit an *ignored* disposition across `fork` and
+`exec` — so one uncooperative leader immunises its whole group. The earlier entry above proves
+`killpg` reaches grandchildren; it used a cooperative `sleep`, so it proves the group
+mechanism and says nothing about the stop policy. **SIGTERM, wait a grace period, then
+SIGKILL** — an unconditional escalation, not a retry, because a process that ignores SIGTERM
+ignores the second one too.
+
+Worse and not fixable this way: a service that calls `setsid` itself — ordinary daemonizing —
+leaves the tracked group entirely, so its pgid is not the one recorded and no `killpg` reaches
+it. That case is detected by the port still being bound after `down`, not prevented.
 
 ### `Child` dropped without `wait()` leaves a zombie
 
@@ -353,6 +391,58 @@ docker compose up --help | grep -c label     # → 0
 Labels reach containers only through the compose document — `labels:` on a service, and
 `build.labels:` for images the build produces. Neither `up` nor `build` accepts them on the
 command line.
+
+### Service labels do **not** reach the network or the volumes
+
+```sh
+# a document with labels: {char.workspace: deadbeef} on the service only
+docker ps      -q --filter label=char.workspace=deadbeef   # 1
+docker network ls -q --filter label=char.workspace=deadbeef  # 0  <- char-deadbeef_default EXISTS
+docker volume  ls -q --filter label=char.workspace=deadbeef  # 0  <- char-deadbeef_pgdata  EXISTS
+```
+
+**This is the founding bug of the project, reintroduced.** §1 of `PLAN.md` cites 29 leftover
+per-worktree Docker networks exhausting the default bridge address pool. A `clean` that finds
+resources by label finds the containers and leaves the network and the volumes behind — with
+no verb that can ever locate them again, because the label they would be found by was never
+applied.
+
+The fix is in the same document, and it works:
+
+```yaml
+volumes:
+  pgdata:  { labels: { char.workspace: cafe1234 } }
+networks:
+  default: { labels: { char.workspace: cafe1234 } }
+```
+
+```sh
+docker network ls -q --filter label=char.workspace=cafe1234   # 1
+docker volume  ls -q --filter label=char.workspace=cafe1234   # 1
+```
+
+Top-level `networks:` and `volumes:` must be **stamped separately** in the transform step.
+Stamping services is not stamping the stack.
+
+### `docker compose config` succeeds with no daemon — `up` is where it fails
+
+```sh
+DOCKER_HOST=unix:///nonexistent.sock docker compose config   # rc 0
+DOCKER_HOST=unix:///nonexistent.sock docker ps               # rc 1
+```
+
+`config` is client-side. So §6.0's steps 1–3 all pass against a dead daemon and only step 4
+fails — char does its whole resolve-and-transform and discovers the daemon is gone at the end.
+Probe the daemon before starting work, and report it as an environment failure rather than as
+the stack failing to start.
+
+### The docker CLI has no client-side timeout
+
+Measured against a socket that accepts the connection and never replies: `docker ps` and
+`docker compose up -d` were both still running at 30 seconds with no output. There is no flag
+for this. **Every docker invocation needs char's own timeout**, and the one that matters most
+is the `docker ps` in `init`'s reap pass — without a timeout, a hung daemon wedges every new
+workspace on the machine, including the verb whose job is recovery.
 
 ### Override merging does work for `labels:` and `build.labels:`
 
