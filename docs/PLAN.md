@@ -304,6 +304,7 @@ behave identically. The complete enum:
 
 ```
 READY  UP  DOWN  CLEAN  PASS  OK          success
+PARTIAL                                    some succeeded, some did not
 FAILED                                     did not achieve its goal
 ABORTED  DEAD  TIMEOUT                     did not finish
 ```
@@ -336,6 +337,83 @@ answers §8 warns about.
 The body is nested rather than flattened so the envelope is generically validatable — one
 schema checks the wrapper, a per-verb schema checks `data` — and so a future verb can add a
 field called `status` or `error` without colliding with the envelope.
+
+#### `data.results[]` — because every verb is plural
+
+**Fixed in phase 1 with the envelope, for the same reason.** An earlier draft left `data`
+"defined by the phase that builds the verb", which meant the most common question after a
+failure — *which check failed, why, and where is its output* — had no specified answer on the
+verb agents call most. The argument that fixed the envelope applies verbatim here.
+
+Every verb acts on many things: `check` runs N checks, `up` starts N services, `clean --all`
+touches N workspaces. So they share one array shape, learned once:
+
+```json
+{ "schema_version": 1, "verb": "check", "workspace": "a3f91c02",
+  "status": "FAILED",
+  "error": { "class": "tool_failed", "where": "api:lint",
+             "message": "2 of 4 checks did not pass" },
+  "data": {
+    "run_id": "01J8X2",
+    "results": [
+      { "id": "web:lint", "status": "PASS",    "duration_ms": 840,
+        "log": ".char/run/01J8X2/logs/web.lint.log" },
+      { "id": "api:lint", "status": "FAILED",  "duration_ms": 3120,
+        "log": ".char/run/01J8X2/logs/api.lint.log",
+        "error": { "class": "tool_failed", "message": "ruff: 7 errors" } },
+      { "id": "web:e2e",  "status": "TIMEOUT", "duration_ms": 900000,
+        "error": { "class": "timeout", "message": "exceeded timeout: 900s" } },
+      { "id": "api:test", "status": "ABORTED", "duration_ms": 0 }
+    ],
+    "skipped": 0 } }
+```
+
+**The top-level `error` is the aggregate**, chosen by a fixed precedence so two implementations
+cannot disagree:
+
+```
+char_bug  >  bad_config  >  timeout  >  aborted  >  tool_failed
+```
+
+**`PARTIAL` joins the terminal states** for the case where some succeeded and some did not.
+It earns its place on `clean --all` and `up`, where "three of five worked" and "nothing
+worked" demand different actions and would otherwise both read `FAILED`.
+
+#### Ports: `port_block` is the workspace's; assignments are the component's
+
+```json
+"data": {
+  "port_block": { "from": 5460, "to": 5469, "claimed_at": "2026-08-09T14:02:11Z" },
+  "results": [
+    { "id": "postgres", "status": "UP",
+      "ports": { "pg":  { "port": 5460, "state": "LISTENING" } } },
+    { "id": "api", "status": "FAILED",
+      "ports": { "api": { "port": 5461, "state": "CONFLICT" } },
+      "error": { "class": "tool_failed",
+                 "message": "port 5461 held by a process char did not start" } } ] }
+```
+
+`port_block` carries **only what char actually knows and owns**: the span reserved for this
+workspace and when it was reserved. Not a count of assignments — that is derivable from
+`results[]` and duplicating it invites drift. Not a count of free ports — char cannot know
+that without probing every unassigned port, and the answer would be stale on emission. Naming
+them `from` and `to` rather than a two-element array removes the "span or list?" ambiguity.
+
+**Port state is probed at report time, never remembered.** A claim recorded at `init` says
+nothing about what is bound days later, and §4.1's bindability probe can itself be defeated
+(`SO_REUSEADDR`, see [`traps.md`](traps.md)). `CONFLICT` is the only way a port taken by a
+non-char process reaches a caller instead of surfacing as a mysterious bind failure. It costs
+one `connect()` per declared port.
+
+| State | Meaning |
+|---|---|
+| `RESERVED` | assigned to a component, nothing bound — expected after `init` or `down` |
+| `LISTENING` | bound, by the service char started |
+| `CONFLICT` | bound by something char did not start |
+
+**`init`, `up`, `down` and `status` all emit `results[]`** — `init`'s are components, the rest
+are services. That is what lets the two states with ports but no running services (`init`, and
+`down` which keeps the block) report them without a second, duplicate top-level map.
 
 ### 3.2 Selectors
 
