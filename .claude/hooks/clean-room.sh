@@ -50,40 +50,61 @@ input=$(cat)
 # file_path` reads a key of the top-level `tool_input` object and nothing
 # nested inside it. awk scans rather than matches, so a `{` or a `"` inside a
 # string cannot move the scanner's idea of where it is.
+#
+# WHY IT SPLITS ON THE QUOTE RATHER THAN WALKING CHARACTERS. `content:` and
+# `new_string:` carry whole files, and a character-at-a-time scan that builds
+# its token by concatenation is quadratic — measured here at 21 s for a 512 KB
+# `Write`, which is on its way to the 60 s hook timeout, and a hook that times
+# out is the silent permit this file exists to prevent. `RS` does the splitting
+# in C, so a string char nobody is looking for costs nothing: only structural
+# text is walked, only a sought value is accumulated, and both are short.
 field() {
 	printf '%s' "$input" | awk -v container="$1" -v key="$2" '
-		{ payload = payload $0 "\n" }
-		END {
+		BEGIN {
+			RS = "\""
 			want_depth = (container == "") ? 1 : 2
-			depth = 0; in_string = 0; escaped = 0
-			token = ""; expect_value = 0
-			n = length(payload)
+			depth = 0; in_string = 0; expect_value = 0
+			pending = ""; keep = 0; is_value = 0
+		}
+		in_string {
+			if (keep && length(pending) < 4096) pending = pending $0
+			# A closing quote preceded by an odd run of backslashes is escaped,
+			# so the string continues into the next record.
+			slashes = 0; end = length($0)
+			while (slashes < end && substr($0, end - slashes, 1) == "\\") slashes++
+			if (slashes % 2 == 1) {
+				if (keep && length(pending) < 4096) pending = pending "\""
+				next
+			}
+			in_string = 0
+			if (is_value) {
+				expect_value = 0
+				if (keep) { print pending; exit }
+			} else if (keep) last[depth] = pending
+			next
+		}
+		{
+			# Structural text only: everything the scanner does not branch on is
+			# dropped in one pass, so what is walked is a handful of characters.
+			structure = $0
+			gsub(/[^]{},:[]/, "", structure)
+			n = length(structure)
 			for (i = 1; i <= n; i++) {
-				c = substr(payload, i, 1)
-				if (in_string) {
-					if (escaped) { token = token c; escaped = 0 }
-					else if (c == "\\") { escaped = 1 }
-					else if (c == "\"") {
-						in_string = 0
-						if (expect_value) {
-							expect_value = 0
-							if (depth == want_depth && last[depth] == key &&
-							    (container == "" || holder[depth] == container)) {
-								print token; exit
-							}
-						} else { last[depth] = token }
-					}
-					else { token = token c }
-					continue
-				}
-				if (c == "\"") { in_string = 1; token = "" }
-				else if (c == "{" || c == "[") {
+				c = substr(structure, i, 1)
+				if (c == "{" || c == "[") {
 					holder[depth + 1] = (expect_value ? last[depth] : "")
 					depth++; expect_value = 0; last[depth] = ""
 				}
 				else if (c == "}" || c == "]") { depth--; expect_value = 0 }
 				else if (c == ":") expect_value = 1
 				else if (c == ",") expect_value = 0
+			}
+			in_string = 1; pending = ""; is_value = expect_value
+			if (is_value) {
+				keep = (depth == want_depth && last[depth] == key &&
+					(container == "" || holder[depth] == container))
+			} else {
+				keep = (depth == want_depth || depth == want_depth - 1)
 			}
 		}
 	'
@@ -117,6 +138,10 @@ Write | Edit | MultiEdit | NotebookEdit)
 	# known.
 	target=$(field tool_input file_path)
 	[ -n "$target" ] || target=$(field tool_input notebook_path)
+	# `field` returns the raw bytes between the quotes, so JSON's own escapes are
+	# still in them. Dropping every backslash can only make the guarded path
+	# easier to see — `Development\/chariot` is the same target written twice.
+	target=$(printf '%s' "$target" | tr -d '\\')
 	if [ -n "$target" ]; then
 		case "$target" in
 		*"$GUARDED"*) deny "$REASON" ;;

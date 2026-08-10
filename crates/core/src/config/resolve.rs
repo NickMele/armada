@@ -109,38 +109,30 @@ pub fn resolve(
     defaults: &Defaults,
     file: &str,
 ) -> Result<ResolvedConfig, CharError> {
-    let Config {
-        version,
-        components: declared_components,
-        commands: declared_commands,
-        workspaces,
-        secrets,
-        secret_providers,
-    } = config;
-
     let mut components = BTreeMap::new();
-    for (name, component) in declared_components {
-        let resolved = resolve_component(&name, component, &workspaces, defaults, file)?;
+    for (name, component) in config.components {
+        let resolved = resolve_component(&name, component, defaults, file)?;
         components.insert(name, resolved);
     }
 
     let mut commands = BTreeMap::new();
-    for (name, entry) in declared_commands {
+    for (name, entry) in config.commands {
         let resolved = resolve_command(&name, entry, file)?;
         commands.insert(name, resolved);
     }
 
-    let secret_providers = secret_providers
+    let secret_providers = config
+        .secret_providers
         .into_iter()
         .map(|(scheme, provider)| (scheme, provider.cmd))
         .collect();
 
     Ok(ResolvedConfig {
-        version,
+        version: config.version,
         components,
         commands,
-        workspaces,
-        secrets,
+        workspaces: config.workspaces,
+        secrets: config.secrets,
         secret_providers,
     })
 }
@@ -148,19 +140,12 @@ pub fn resolve(
 fn resolve_component(
     name: &str,
     component: Component,
-    workspaces: &[String],
     defaults: &Defaults,
     file: &str,
 ) -> Result<ResolvedComponent, CharError> {
-    let match_globs = match component.match_globs.clone() {
+    let match_globs = match component.match_globs {
         Some(globs) => globs,
-        None => default_match_globs(
-            name,
-            component.root.as_deref(),
-            component.checks.is_empty(),
-            workspaces,
-            file,
-        )?,
+        None => default_match_globs(component.root.as_deref(), component.checks.is_empty()),
     };
 
     let setup = component
@@ -204,7 +189,7 @@ fn resolve_component(
     })
 }
 
-/// The `match:` default: a pure function of `(root, checks, workspaces)`.
+/// The `match:` default: a pure function of `(root, checks)`.
 ///
 /// Leaving it unstated would make it a per-implementer decision — the thing
 /// PLAN.md §4.1 opens by rejecting. A component with a `root:` matches its own
@@ -216,67 +201,20 @@ fn resolve_component(
 /// decide which checks a changed file selects, so a run-only component has
 /// nothing to scope.
 ///
-/// The invariant both carve-outs serve is that **char never invents a glob
-/// `config verify` would then reject the config for**. PLAN.md §4.6 makes a
-/// glob reaching into a declared nested workspace illegal, and the defaulted
-/// glob is char's, not the author's — a config that wrote no glob at all must
-/// not fail for one. So when the subtree the default would claim contains a
-/// declared workspace, the default is subtracted down to nothing and char says
-/// so, naming the workspace. It cannot instead emit the narrowed set: `match:`
-/// has no negation, and "everything under here except `apps/site`" needs either
-/// a negative glob — inventing syntax, out of scope for phase 1 — or the
-/// sibling names, which only the filesystem has and this function may not
-/// touch. Between a glob that claims a subtree it may not and one that silently
-/// covers less than it says, char asks; `bad_config` carries a `next_action`
-/// precisely for the case where the fix is known (`ARCHITECTURE.md` §1.7).
-fn default_match_globs(
-    name: &str,
-    root: Option<&str>,
-    no_checks: bool,
-    workspaces: &[String],
-    file: &str,
-) -> Result<Vec<String>, CharError> {
+/// A declared `workspaces:` entry is not an input here, because it cannot be
+/// one: a nested workspace is not part of this workspace's file set at all
+/// (PLAN.md §4.6), so `**` means everything in *this* workspace and reaches
+/// into nothing. The overlap `config verify` rejects is a `root:` or a `match:`
+/// glob that *names* a path inside a declared workspace — which is the author's
+/// to write and never char's to infer.
+fn default_match_globs(root: Option<&str>, no_checks: bool) -> Vec<String> {
     if no_checks {
-        return Ok(Vec::new());
+        return Vec::new();
     }
-
-    if let Some(nested) = workspaces.iter().find(|w| is_under(w, root)) {
-        let base = root.unwrap_or("the workspace root");
-        return Err(CharError::bad_config(
-            ConfigWhere::Path {
-                file: file.to_string(),
-                path: format!("components.{name}"),
-            },
-            format!(
-                "`match:` cannot be defaulted here: the default for {base} would claim the declared workspace `{nested}`"
-            ),
-            "write `match:` for this component, listing only globs outside every declared `workspaces:` entry",
-        ));
-    }
-
-    Ok(vec![match root {
+    vec![match root {
         Some(root) => format!("{root}/**"),
         None => "**".to_string(),
-    }])
-}
-
-/// Is `path` strictly inside `base`, where `None` is the workspace root?
-///
-/// Strictly: a component whose `root:` *is* a declared workspace, or sits
-/// inside one, is the author's own overlap, and `config verify` names `root:`
-/// for it. This only asks whether char's own defaulted glob would swallow a
-/// workspace.
-fn is_under(path: &str, base: Option<&str>) -> bool {
-    let path = path.trim_end_matches('/');
-    match base {
-        None => !path.is_empty(),
-        Some(base) => {
-            let base = base.trim_end_matches('/');
-            path.len() > base.len() + 1
-                && path.starts_with(base)
-                && path.as_bytes()[base.len()] == b'/'
-        }
-    }
+    }]
 }
 
 fn resolve_check(
@@ -600,36 +538,15 @@ mod tests {
     }
 
     #[test]
-    fn a_defaulted_match_never_claims_a_declared_workspace() {
-        // A checked component with no `root:` in a config that declares one:
-        // the default would be `**`, which reaches into `apps/site` and would
-        // fail `config verify` (PLAN.md §4.6) for a glob the author never
-        // wrote. char refuses to invent it rather than inventing it.
-        let err = parse(
-            "version: 1\nworkspaces: [apps/site]\ncomponents:\n  app:\n    checks:\n      lint: { cmd: eslint }\n",
-            "char.yml",
-        )
-        .and_then(|c| resolve(c, &Defaults::built_in(), "char.yml"))
-        .unwrap_err();
-        assert_eq!(err.r#where, "char.yml:components.app");
-        assert!(err.message.contains("apps/site"), "{}", err.message);
-        assert!(err.next_action.is_some());
-
-        // The same for a `root:` the workspace sits under.
-        let err = parse(
-            "version: 1\nworkspaces: [apps/site]\ncomponents:\n  app:\n    root: apps\n    checks:\n      lint: { cmd: eslint }\n",
-            "char.yml",
-        )
-        .and_then(|c| resolve(c, &Defaults::built_in(), "char.yml"))
-        .unwrap_err();
-        assert_eq!(err.r#where, "char.yml:components.app");
-
-        // And nothing else changes: a root outside every declared workspace
-        // still defaults, a run-only component still gets no globs, and an
-        // author who wrote `match:` is never second-guessed.
+    fn a_declared_workspace_does_not_change_the_default() {
+        // `**` is everything in *this* workspace, and a declared workspace is
+        // not in it (PLAN.md §4.6) — so the default is the same glob whether or
+        // not the config declares one, and a checked component still needs no
+        // scoping keys.
         let cfg = resolved(
-            "version: 1\nworkspaces: [apps/site]\ncomponents:\n  core:\n    root: packages/core\n    checks:\n      lint: { cmd: eslint }\n  svc:\n    run: { driver: command, cmd: serve }\n  docs:\n    match: [\"*.md\"]\n    checks:\n      lint: { cmd: markdownlint }\n",
+            "version: 1\nworkspaces: [apps/site]\ncomponents:\n  app:\n    checks:\n      lint: { cmd: eslint }\n  core:\n    root: packages/core\n    checks:\n      lint: { cmd: eslint }\n  svc:\n    run: { driver: command, cmd: serve }\n  docs:\n    match: [\"*.md\"]\n    checks:\n      lint: { cmd: markdownlint }\n",
         );
+        assert_eq!(cfg.components["app"].match_globs, ["**"]);
         assert_eq!(cfg.components["core"].match_globs, ["packages/core/**"]);
         assert!(cfg.components["svc"].match_globs.is_empty());
         assert_eq!(cfg.components["docs"].match_globs, ["*.md"]);

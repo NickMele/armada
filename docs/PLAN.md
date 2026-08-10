@@ -1393,7 +1393,8 @@ limitation `xtask`'s block check already records.
 | Fixture | What it forced |
 |---|---|
 | `go-service` | **`match:` needed a stated default.** It is the only fixture with a component that declares neither `root:` nor `match:` — the component *is* the repo — and an unstated default is the per-implementer decision §4.1 opens by rejecting. Default: `<root>/**` when `root:` is set, `**` when it is not. |
-| `pnpm-monorepo` + `django-next` | **…and that default may never claim a declared workspace.** `django-next`'s resolved snapshot showed `postgres` — a service with no source at all — claiming `**`. Harmless there; in `pnpm-monorepo`, which declares a nested workspace, a defaulted `**` reaches into it, and §4.6 makes that overlap illegal. A config that never wrote a glob would fail `config verify` for a glob char invented. Two rules follow, and the second is the general one. A component with no `checks:` gets no globs: `match:` exists to scope checks. And when the subtree the default *would* claim contains a declared `workspaces:` entry, the default is subtracted to nothing and resolution is `bad_config` naming the workspace, with `next_action` "write `match:`". char cannot emit the narrowed set instead: `match:` has no negation, and "everything here except `apps/site`" needs either a negative glob — inventing syntax, which phase 1 does not do — or the sibling names, which only the filesystem has, and this default is a pure function of `(root, checks, workspaces)`. Between claiming a subtree it may not and silently covering less than it says, char asks. |
+| `pnpm-monorepo` + `django-next` | **…and that default had to stop at components with no checks.** `django-next`'s resolved snapshot showed `postgres` — a service with no source at all — claiming `**`. A component with no `checks:` now gets no globs: `match:` exists to scope checks, and a run-only component has nothing to scope. |
+| `pnpm-monorepo` | **…and the nested-workspace half of that question turned out to belong to §4.6, not to the default.** The worry was that in a repo declaring a nested workspace a defaulted `**` reaches into it, so a config that never wrote a glob would fail `config verify` for a glob char invented. The first attempt was to subtract declared `workspaces:` from the defaulted glob set. That is not expressible: `match:` has no negation, and "everything here except `apps/site`" needs either a negative glob — inventing syntax, which phase 1 does not do — or the sibling names, which only the filesystem has, and a default that reads the filesystem is not a default. The premise was the thing that was wrong. A declared workspace is *excluded from this one*, so `**` in the parent already means "everything in this workspace" and reaches into nothing; §4.6 now says so, and scopes verify's overlap rule to a `root:` or glob that *names* a path inside a declared workspace. The default stays a pure function of `(root, checks)`. |
 | `rails-monolith` | **`setup:` accepts a scalar or a list, and a list item may be a step object.** §4.1's examples show `setup: uv sync` and `setup: ["bundle install", …]`, so both spellings had to be legal; resolution normalises to one list of `{cmd, shell}` steps. The object form is where `shell: true` lives, which this fixture needs for `db:create \|\| true`. `owns.release:` takes the same scalar-or-list treatment, for the same reason. |
 | `python-ml` | **`acquire_timeout` was too low, twice** — see §4.3. Its GPU check holds an `exclusive:` for 1800 s, which is longer than the `web:e2e` hold the ceiling had been sized against. |
 | `multi-lang` | **`ready.exec:` is a command string, not free text.** It was going to be an unconstrained string; this fixture writes `pg_isready -q -h 127.0.0.1 -p ${port.pg}`, which is a command char dispatches and therefore subject to the same substitution rules as any other. |
@@ -2047,6 +2048,17 @@ ask for.
 have two owners with two ids and two port blocks — the same source and services claimed
 twice. So `config verify` asserts that no `components[].root` and no `match:` glob reaches
 into a declared nested workspace.
+
+**That rule is about naming the subtree, not about covering the root.** A declared workspace
+is *excluded from this one* — it is not part of the parent's file set, so the parent's file
+set is already the tree minus every declared workspace. A workspace-wide `match: ["**"]`
+therefore means "everything in **this** workspace" and reaches into nothing; there is no
+second owner and nothing for verify to reject. What verify rejects is a `root:` or a glob
+that names a path *inside* a declared workspace — `root: apps/foo`, `match: ["apps/foo/**"]`
+— because that is a claim on a subtree this workspace does not own. The distinction matters
+because `match:` has a default (§4.1.1): a root-less component's default is `**`, and a rule
+that read "no glob may cover a declared workspace" would fail configs whose author wrote no
+glob at all.
 
 **Why declared at the root rather than inferred.** Inferring — "any subtree containing a
 `char.yml` is automatically excluded" — needs no configuration, but it means dropping a file

@@ -16,6 +16,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 fn hook() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -57,6 +58,34 @@ fn run(payload: &str) -> String {
 
 fn denied(payload: &str) -> bool {
     run(payload).contains("\"permissionDecision\":\"deny\"")
+}
+
+/// Slow enough is the same as absent.
+///
+/// A `Write` carries a whole file, and an ordinary main-agent payload has no
+/// top-level `agent_type` for the scan to stop at, so the guard reads all of it.
+/// Claude Code reports a hook that exceeds its timeout as a non-blocking error
+/// and lets the tool call proceed — so a scan whose cost grows faster than the
+/// payload is a permit anyone can buy by sending a large enough file. A budget
+/// far above a linear scan and far below the timeout fails the one shape that
+/// matters, without failing on a slow machine.
+#[test]
+fn a_large_payload_does_not_slow_the_guard_into_permitting() {
+    let content = "abcdefghijklmnopqrstuvwxyz0123456789".repeat(16 * 1024);
+    let payload = format!(
+        r#"{{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{{"file_path":"docs/PLAN.md","content":"{content}"}}}}"#
+    );
+    assert!(payload.len() > 512 * 1024, "the payload must be large");
+
+    let started = Instant::now();
+    assert!(!denied(&payload));
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "the guard took {elapsed:?} on {} KB — a scan that grows faster than the \
+         payload reaches the hook timeout, and a hook that times out permits",
+        payload.len() / 1024
+    );
 }
 
 #[test]
