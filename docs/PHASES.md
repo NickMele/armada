@@ -223,6 +223,12 @@ incompatible ones.
 
 ### Phase 2 — Ownership core: `init`, `clean`, `status`, `commands:`
 
+> **✓ Complete.** What it settled, and the two defects it found in `PLAN.md`, are recorded at
+> the end of this section. The five things it had to decide — the shape of `Ctx` and the three
+> seam traits, the claim loop's own `step()`, where `~/.char/config.toml` is read, the envelope
+> renderer and its snapshots, and `char.db`'s DDL — are settled from here, because every later
+> phase codes against them.
+
 Workspace id, project id, `.char/`, `~/.char/char.db` with lease-based claiming, resource
 labeling, the process-group spawn/kill wrapper, and the scope lens.
 
@@ -285,6 +291,32 @@ while giving up `check` and `servers`. The surface is small but touches several 
 --dry-run`), the child's exit code comes back **verbatim and unremapped**, `env:` layers over
 the inherited environment, and a declared `owns:` selector is reclaimed by `char clean` after
 the command has already exited.
+
+#### What phase 2 settled
+
+Five things `PLAN.md` specified without deciding, and the answers every later phase now codes
+against:
+
+| # | Decision | Why it landed there |
+|---|---|---|
+| 1 | **`Ctx` carries three trait-bound seams**, and `Run` takes a `RunRequest` with an **already-split argv**. | The split — quote handling and `${files}` expansion — is a pure decision, so the seam never re-parses anything and a fake asserts the exact vector. That is the whole reason there are three seams and not six. |
+| 2 | **The claim loop's reducer is `step(ClaimState, ClaimEvent) -> (ClaimState, Vec<ClaimAction>)`**, with `Attempt` meaning *re-decide and try*. | `ARCHITECTURE.md` §1.2 gives the scheduler's enums as a floor; this loop needed its own, and deciding it now is what stops phase 3 inventing a second, incompatible one. Losing a port-block race and losing a lease race are the same shape, so one reducer covers both. |
+| 3 | **`~/.char/config.toml` is read once, in `adapters::machine`, called from the entrypoint.** Absence is the documented defaults; an unreadable or mistyped file is `environment`. | Keeps phase 1's property that `Defaults` is passed in and never read. `$HOME`, cwd and the environment are read in `main` and nowhere else — which is also what lets the whole suite point char at a `TempDir`. |
+| 4 | **One golden snapshot per verb under `tests/golden/`, serialized from structs, redacted for ids and paths, with no update flag.** | Measured: a `serde_json::Value` sorts object keys while struct fields emit in declaration order, so a payload routed through one comes out alphabetised and no hand-written snapshot ever matches. |
+| 5 | **`char.db` DDL as `PLAN.md` §4.3 states it**, `user_version = 1`, a namespace UUID written at creation, and `port_from`/`port_to` as two inclusive integer columns. | Leases are keyed `(kind, key)`, which makes cpu-slots and exclusives machine-wide by construction; the run lease's key is therefore the **workspace id**, or five worktrees would contend on one lease. |
+
+Plus one number `PLAN.md` never states: **the port base is 5460**, taken from `PLAN.md` §3.1's own payload
+rather than invented, with the ceiling at 32767 so a block never lands inside Linux's ephemeral
+range.
+
+#### Two defects phase 2 found in `PLAN.md`, for phase 2.5 to fix
+
+Recorded rather than fixed, because phase 2.5 is the only phase licensed to send changes back.
+
+| Defect | Where | What phase 2 did |
+|---|---|---|
+| **`owned.kind` has no `release` member**, though `PLAN.md` §6.1 requires the resolved `owns.release:` command to be recorded at `char init` into the machine-global store — a workspace-local record would be gone in the orphan case, which is the one that matters. | `PLAN.md` §4.3's `kind` list vs §6.1 | Added `release` as a `kind`. A new kind value is additive, which the 0.x rule already permits; a new table would not have been. |
+| **No port base is stated anywhere.** `PLAN.md` §3.1's payload shows `5460-5469`, `PLAN.md` §4.3.1 has `port_block_size` but nothing to add it to. | `PLAN.md` §3.1 vs §4.3.1 | Took 5460 from the payload, as a constant rather than a seventh `config.toml` key — adding a key would have been a contract change. |
 
 ### Phase 2.5 — A real repo adopts the ownership layer *(first contact)*
 

@@ -1,8 +1,10 @@
 # charkit — architecture
 
-> **Status:** agreed in Phase 0 (see [`PHASES.md`](PHASES.md)). Phase 1 has landed: the
-> `char.yml` contract exists as a schema, the structs that mirror it and six fixtures. There
-> is still no runtime — `char` has no verbs.
+> **Status:** agreed in Phase 0 (see [`PHASES.md`](PHASES.md)). Phases 1 and 2 have landed:
+> the `char.yml` contract exists as a schema, the structs that mirror it and six fixtures, and
+> the ownership layer exists behind `init`, `clean`, `status` and the `commands:` dispatcher.
+> The three seams, the reducer's shape for the claim loop and the `--json` envelope are now
+> code rather than sketches. `up`, `down` and `check` are not built.
 >
 > This document records **principles and the reasoning behind them**. The reasoning is the
 > load-bearing part: a rule without its reason gets discarded the first time it is

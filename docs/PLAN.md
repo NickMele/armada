@@ -1,6 +1,6 @@
 # charkit — implementation plan
 
-> **Status:** Phases 0 and 1 complete. This document is the complete
+> **Status:** Phases 0, 1 and 2 complete. This document is the complete
 > specification — a fresh agent should be able to execute it without any prior conversation.
 > **§4.1.1 records the five things this document left undecided and phase 1 had to settle**,
 > along with every change the six fixtures forced. The config contract is frozen from here.
@@ -41,11 +41,11 @@ this file (specified) › [`PHASES.md`](PHASES.md) (sequenced) › [`AGENTS.md`]
 
 ## 0. Start here
 
-> **Phases 0 and 1 are complete.** Phase 0 was a working session with the human and produced
+> **Phases 0, 1 and 2 are complete.** Phase 0 was a working session with the human and produced
 > `ARCHITECTURE.md`, `AGENTS.md`, `traps.md` and the README's contributing section; the
 > numbered steps below are kept as the record of what it did. Phase 1 turned §4 into a schema,
-> six fixtures and a golden snapshot each — see §4.1.1. **Start at
-> [`PHASES.md`](PHASES.md), Phase 2.**
+> six fixtures and a golden snapshot each — see §4.1.1. Phase 2 built the ownership layer on
+> top of it. **Start at [`PHASES.md`](PHASES.md), Phase 3.**
 
 Read §2 (concepts), §4 (config) and [`PHASES.md`](PHASES.md) first — you need the shape of the thing to
 have a useful conversation about how to build it. Then work through **Phase 0 — Foundations**

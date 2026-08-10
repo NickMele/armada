@@ -101,6 +101,13 @@ contamination nothing else can catch.
   resolved snapshot beside each. **What it decided, and what the fixtures forced, is
   `PLAN.md` §4.1.1** — read it before adding a config key. Full sequencing in
   [`docs/PHASES.md`](docs/PHASES.md).
+- **Phase 2 is complete.** The ownership layer exists: workspace resolution, the two derived
+  identities, `.char/`, `~/.char/char.db` with lease-based claiming, the process-group
+  spawn/kill wrapper, the scope lens, and the verbs `init` / `clean` / `status` plus the
+  `commands:` dispatcher. **What it settled — the shape of `Ctx` and the three seams, the claim
+  loop's reducer, where `~/.char/config.toml` is read, the golden-snapshot layout, and
+  `char.db`'s DDL — is recorded in [`docs/PHASES.md`](docs/PHASES.md), phase 2**, along with two
+  defects it found in `PLAN.md`. `up`, `down` and `check` are not built.
 - **Phase 2.5 is first contact with a real repo** — Chariot adopts `init`/`clean`/`status`/
   `commands:` and keeps its own `check.py`. It is allowed to send changes back to `PLAN.md`;
   every later phase is not.

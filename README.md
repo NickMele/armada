@@ -6,11 +6,12 @@ identical everywhere; everything else is config. **POSIX only — macOS and Linu
 Windows**, because process groups, signals and file locks are load-bearing here rather than
 incidental.
 
-> **Status: the contract, and no runtime.** Phases 0 and 1 are complete — the architecture and
-> working agreements are recorded, and the `char.yml` contract now exists as a JSON Schema, the
-> structs that mirror it, and six fixture configs with a golden resolved snapshot each. `char`
-> builds and answers `--version`; it has no verbs yet. See [`docs/PLAN.md`](docs/PLAN.md)
-> for the full specification and phase order.
+> **Status: the ownership layer.** Phases 0–2 are complete. The architecture and working
+> agreements are recorded; the `char.yml` contract exists as a JSON Schema, the structs that
+> mirror it, and six fixture configs with a golden resolved snapshot each; and `char init`,
+> `char clean`, `char status` and the repo's own `commands:` entries work, over a machine-global
+> store at `~/.char/char.db`. **`up`, `down` and `check` are not built yet.** See
+> [`docs/PLAN.md`](docs/PLAN.md) for the full specification and phase order.
 
 ## The idea
 
