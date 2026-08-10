@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "components": {
+    "app": {
+      "match": [
+        "**"
+      ],
+      "setup": [
+        {
+          "cmd": "go mod download",
+          "shell": false
+        }
+      ],
+      "run": {
+        "driver": "command",
+        "cmd": "go run ./cmd/server",
+        "shell": false,
+        "ports": {
+          "app": 8080
+        },
+        "ready": {
+          "kind": {
+            "http": "http://127.0.0.1:${port.app}/healthz"
+          },
+          "timeout": 60
+        },
+        "needs": [
+          {
+            "component": "postgres"
+          }
+        ],
+        "env": {
+          "DATABASE_URL": "postgres://app@127.0.0.1:${port.pg}/app"
+        },
+        "secrets": [
+          "DB_PASSWORD"
+        ]
+      },
+      "checks": {
+        "integration": {
+          "id": "app:integration",
+          "cmd": "go test -tags integration ./...",
+          "shell": false,
+          "timeout": 600,
+          "cost": 1,
+          "scope": "component",
+          "needs": [
+            {
+              "component": "postgres"
+            }
+          ],
+          "secrets": [
+            "DB_PASSWORD"
+          ]
+        },
+        "lint": {
+          "id": "app:lint",
+          "cmd": "gofmt -l ${files}",
+          "shell": false,
+          "timeout": 900,
+          "cost": 1,
+          "scope": "file"
+        },
+        "test": {
+          "id": "app:test",
+          "cmd": "go test ./...",
+          "shell": false,
+          "timeout": 900,
+          "cost": 1,
+          "scope": "component"
+        }
+      }
+    },
+    "postgres": {
+      "run": {
+        "driver": "compose",
+        "file": [
+          "docker-compose.yml"
+        ],
+        "ports": {
+          "pg": 5432
+        },
+        "ready": {
+          "kind": {
+            "tcp": "pg"
+          },
+          "timeout": 60
+        }
+      }
+    }
+  },
+  "secrets": {
+    "DB_PASSWORD": "keychain://go-service-db"
+  },
+  "secret_providers": {
+    "keychain": "security find-generic-password -s ${ref} -w"
+  }
+}

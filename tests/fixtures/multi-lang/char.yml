@@ -1,0 +1,92 @@
+# multi-lang — representative, not real.
+#
+# Axis it owns (PHASES.md §8.1): ready-check kinds beyond `http` (`tcp`, `log`,
+# `exec`), a cross-component `${port.NAME}` reference, and an `owns.files:`
+# naming a path *outside* the component's `root:`.
+#
+# A different language is deliberately NOT the axis. `cmd:` is free text, so an
+# Elixir service and a Python one produce byte-for-byte identical shapes and
+# differ only in the strings inside them — stack diversity lands in config
+# values, never config shape. The three structural things above are what this
+# fixture is the only one to exercise.
+
+version: 1
+
+components:
+
+  postgres:
+    run:
+      driver: compose
+      file: [docker-compose.yml]
+      ports: { pg: 5432 }
+      # `exec` — ready when the command exits 0. The only kind that asks the
+      # service a question rather than probing a socket.
+      ready: { exec: "pg_isready -q -h 127.0.0.1 -p ${port.pg}", timeout: 90 }
+
+  control:
+    root: apps/control
+    match: ["apps/control/**"]
+    setup: mix deps.get
+    run:
+      driver: command
+      cmd: mix phx.server
+      ports: { http: 4000 }
+      # `log` — an unanchored regex over the service's stdout. The only option
+      # for a service with no health endpoint and no port it binds promptly.
+      ready: { log: "Running ControlWeb.Endpoint", timeout: 120 }
+      needs: [postgres]
+      env:
+        MIX_ENV: dev
+        PORT: ${port.http}
+    checks:
+      lint:
+        cmd: mix format --check-formatted ${files}
+      types:
+        cmd: mix dialyzer
+        scope: component
+        timeout: 1200
+        cost: 2
+      test:
+        cmd: mix test ${files}
+        env:
+          MIX_ENV: test
+        needs: [postgres]
+        cost: 2
+
+  worker:
+    root: services/worker
+    match: ["services/worker/**"]
+    setup: cargo fetch --manifest-path services/worker/Cargo.toml
+    owns:
+      # Outside `root:`. The build cache is redirected to a shared directory at
+      # the workspace root, so a rule that assumed owned files live under the
+      # component root would leave it behind on `clean --artifacts`.
+      files: [".cache/worker-target"]
+    run:
+      driver: command
+      cmd: cargo run --manifest-path services/worker/Cargo.toml
+      ports: { worker: 7000 }
+      # `tcp` — a declared port NAME, never a number. A number would be the
+      # pre-claim port, which is never the one the service is on.
+      ready: { tcp: worker }
+      needs: [control]
+      env:
+        # A cross-component port reference: `http` is declared by `control`.
+        # `${port.NAME}` is one workspace-global namespace, which is what makes
+        # this legal and why two components may not declare the same name.
+        CONTROL_URL: http://127.0.0.1:${port.http}
+        CARGO_TARGET_DIR: .cache/worker-target
+      owns:
+        containers: "label=char.workspace=${workspace.id}"
+        images: "label=char.workspace=${workspace.id}"
+        ports: [worker]
+    checks:
+      lint:
+        cmd: cargo clippy --manifest-path services/worker/Cargo.toml -- -D warnings
+        scope: component
+        cost: 2
+      test:
+        cmd: cargo test --manifest-path services/worker/Cargo.toml
+        scope: component
+        timeout: 600
+        cost: 2

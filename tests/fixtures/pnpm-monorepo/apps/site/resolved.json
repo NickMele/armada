@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "components": {
+    "site": {
+      "match": [
+        "**"
+      ],
+      "setup": [
+        {
+          "cmd": "pnpm install --frozen-lockfile",
+          "shell": false
+        }
+      ],
+      "owns_files": [
+        "node_modules",
+        ".next"
+      ],
+      "checks": {
+        "build": {
+          "id": "site:build",
+          "cmd": "pnpm run build",
+          "shell": false,
+          "timeout": 600,
+          "cost": 2,
+          "scope": "component"
+        },
+        "lint": {
+          "id": "site:lint",
+          "cmd": "pnpm exec eslint ${files}",
+          "fix": "pnpm exec eslint --fix ${files}",
+          "shell": false,
+          "timeout": 900,
+          "cost": 1,
+          "scope": "file"
+        },
+        "types": {
+          "id": "site:types",
+          "cmd": "pnpm exec tsc --noEmit",
+          "shell": false,
+          "timeout": 300,
+          "cost": 1,
+          "scope": "component"
+        }
+      }
+    }
+  }
+}
