@@ -436,9 +436,9 @@ everything else is config. **Every verb takes `--json`.**
 | `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases — and remove `.char/`. Declared `release:` commands are **reported, never run** (§6.1). Build artifacts only with `--artifacts`; `--force` overrides the liveness guard; `--orphaned --force-rebuild` recovers an unreadable `char.db` (§4.3). | `CLEAN` `PARTIAL` `SKIPPED` `FAILED` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
-Plus: `char config scan`, `char config verify`, `char agents-md [--write|--verify]`, and any
-repo-local verbs the repo declares in `commands:` (§4.5) — which char dispatches but does not
-define.
+Plus: `char config scan`, `char config verify`, `char agents-md [--write|--verify]`,
+`char explain [<check-id>]` (§3.4), and any repo-local verbs the repo declares in `commands:`
+(§4.5) — which char dispatches but does not define.
 
 **`char init` means exactly one thing: make this workspace ready.** An earlier draft also
 assigned it §5's layer-1 evidence scan, which by definition runs where no `char.yml` exists —
@@ -578,9 +578,11 @@ faithfully copying every byte, and the disk-full failure then lands on the state
 cap is stated in `results[].log` when it trips, so a truncated log never reads as a complete
 one.
 
-**`--status` is the one place the envelope's top-level `status` may be a progress state.**
-Everywhere else it is terminal by definition (§3.1). The exception is confined to one flag,
-because a query about a run reports the run's state, and `RUNNING` is the true answer.
+**`--status` is a *read verb*, and read verbs are the one place the envelope's top-level
+`status` may be a progress state.** Everywhere else it is terminal by definition (§3.1). The
+exception is confined to the three things that only query — `char status`, `char check
+--status`, and `char explain` (§3.4) — because a query about a run reports the run's state, and
+`RUNNING` is the true answer.
 
 **`--status` exits on the success of the query, not on the verdict of the run.** An in-flight
 run answers `status: RUNNING`, exit **0** — the query worked. This is the one place where exit
@@ -850,6 +852,59 @@ refusing: reclaiming disk from the eleven idle workspaces is still the thing you
 
 `--project` on `clean` **will** stop other worktrees' services — which is exactly why it is
 not the default.
+
+---
+
+### 3.4 `char explain` — the evidence a stack trace does not carry
+
+**A failing check hands back an exit code and a stream, and the thing that makes it
+actionable is everything *around* it that only char knows.** `char explain <check-id>` emits
+that, as data. It runs no analysis, calls no model, touches no network, and mutates nothing.
+
+```
+char explain api:test          # a check id from any retained run
+char explain                   # the most recent failure in this workspace
+char explain --run 01J8X2      # a specific run, including a detached one
+```
+
+**What the caller already has** is the log — it read `results[].log`. **What it does not have,
+and cannot reconstruct:**
+
+| Evidence | Why the caller cannot get it |
+|---|---|
+| the exact argv, post-substitution | `${files}` and `${port.NAME}` resolved at dispatch; the config shows the template, not what ran |
+| cwd and the env delta (names only, never values) | composed from `env:`, the inherited environment, and grants |
+| leases held, and what it waited on and who held it | machine-global state in `char.db`, outside the workspace entirely |
+| port block and bind state at dispatch | a claim is not a binding; §3.1's probe answers this only at report time |
+| **the same check across retained runs, and whether the failure signature matches** | `run_retention` runs of history char is already keeping and never surfacing |
+| the `${files}` set, and what changed since this check last passed | requires the run history plus the merge-base at each run |
+| daemon reachable, char version, whether the environment moved | the `environment` class knows this; the log does not |
+
+**The history row is the one that changes an agent's behaviour**, and it is nearly free because
+the runs are already retained. "This check failed the same way in the last three runs, none of
+which touched its files" and "this check passed twenty minutes ago and the only change since is
+one file" are opposite problems, and a stack trace is identical in both.
+
+**The failure signature is `(check_id, exit_code, blake3(normalised tail of output))`.**
+Normalisation strips absolute paths, the workspace id, timings and pids — the things that differ
+between two runs of the same failure. It is a fingerprint for *same or different*, never a
+diagnosis, and it is deterministic so two runs of one bug always match.
+
+**`explain` is a read verb, and the read-verb rule now covers three things**: `char status`,
+`char check --status`, and `char explain`. They take no lease, they may report a progress state
+in the envelope's top-level `status` where every other verb's is terminal, and **their exit code
+describes the query, not the thing queried** — `0` for answered, `2` for an unknown run or check
+id, `3` if the config no longer parses. A gate uses `--wait`; it never reads a query's exit code
+as a verdict.
+
+**Retention is the stated limit.** `run_retention` is 10, so explain answers about the last ten
+runs and says plainly when a run has aged out rather than reporting thin evidence as complete.
+
+> **Why this and not an agent inside char.** The obvious version of this feature shells out to
+> whatever agent CLI is on `PATH` and prints prose. It is deliberately **not** what `explain`
+> is, and the reasoning is in §7 — the short version is that char's caller is already an agent,
+> and the useful thing char can do is give that agent what it cannot see rather than run a
+> second, worse one with no context.
 
 ---
 
@@ -2336,6 +2391,44 @@ of the six verbs.
 - **A driver plugin system.** See §6.1.
 - **Mandatory output parsing.** Optional `parse:` keys only. Exit code plus captured stream
   must *always* be a complete answer, or every upstream tool release breaks you.
+- **An agent inside char.** char must not call a model to diagnose, repair, or explain. It is
+  a tempting feature — `claude -p` exists, agent CLIs are already on `PATH`, and no API token is
+  needed because the user's own session provides auth — and it is still wrong here, for four
+  reasons that compound:
+
+  **char's caller is already an agent.** `char check --json` is consumed by a coding agent that
+  has the repo, the diff, the stack trace and the conversation that produced it. A subprocess
+  model gets a fresh context and none of that, so it answers worse, slower, at the caller's
+  expense. That is the whole argument; the rest is why it cannot be rescued by care.
+
+  **Availability is exactly inverted.** On a dev machine the agent CLI is present and redundant.
+  In CI — nobody watching, the case that actually needs an explanation — it is absent and
+  unauthenticated. The feature is easiest where it is least needed.
+
+  **It would breach §1.8 and §4.7.** Piping a stack trace to an external CLI sends repo content,
+  and possibly the values char scrubbed out of its own logs, to a service. The invariant is that
+  char never emits a secret it was given; a diagnosis channel that bypasses the scrubber is that
+  invariant with an exception, which is not an invariant.
+
+  **It is nondeterminism on the critical path of a merge gate.** `exit = f(error.class)`,
+  exhaustive enums, hand-regenerated golden snapshots and a measured 65 ms floor on `check` are
+  all one commitment. A 3-to-30-second call to a service that can be offline, rate-limited or
+  simply different today is the opposite commitment.
+
+  **Reserved, not forbidden — and the shape is already decided if it is ever built.** It is a
+  separate verb (`char explain --agent`), never a flag that fires on failure; it consumes
+  §3.4's bundle rather than raw output, so the scrubber still applies; it is strictly read-only,
+  printing prose and never writing a file, re-running a check, or influencing `status` or the
+  exit code; and with no agent CLI on `PATH` the behaviour is identical minus the prose. It is
+  the one layer that can be deleted without loss, which is the test it has to keep passing.
+
+  **What "self-healing" already means here, deterministically:** automatic reaping at `init` and
+  `clean` (§2.3.1), lease reclamation from a cold heartbeat (§4.3), `boot_id` liveness so a
+  reboot does not strand pgids, SIGTERM→SIGKILL escalation (§6), `--force-rebuild` for an
+  unreadable `char.db`, and the `environment` class telling a caller to fix the machine rather
+  than the repo. Repair belongs to the tools: `--fix` dispatches `ruff --fix`, and the tool
+  fixes while char runs it.
+
 - **A growing MCP surface.** One thin wrapper over the same importable layer. The CLI with
   `--json` works in harnesses with no project-scoped MCP at all.
 - **Secrets management beyond injection.** §4.7 resolves a reference and injects it. char

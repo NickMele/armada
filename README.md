@@ -29,7 +29,11 @@ directory is gone.** `docker compose down` needs the file.
 | `char clean` | Releases everything this workspace owns. |
 | `char status` | What's running, what's mine, what's stale. |
 
-Every verb takes `--json`.
+Every verb takes `--json`. Alongside them: `char config scan` / `config verify`,
+`char agents-md`, and `char explain` — which hands back the evidence a stack trace does not
+carry (the exact argv, what it waited on and who held it, whether this check failed the same
+way in the last three runs). It runs no model: char's caller is already an agent, and the
+useful thing char can do is give it what it cannot see.
 
 ## Install
 

@@ -358,7 +358,7 @@ provider, comes up with the value in its environment, and the value appears in *
 or `~/.char/char.db`. Assert on absence, with the stub returning a distinctive sentinel so
 the search is unambiguous.
 
-### Phase 5 — Bootstrap sandwich + `agents-md` + MCP *(fans out widest)*
+### Phase 5 — Bootstrap sandwich + `agents-md` + `explain` + MCP *(fans out widest)*
 
 `char config scan` — the layer-1 evidence scanner — is a dozen independent parsers, the most
 parallelizable work in the plan, one agent each. Plus schema/example emission,
@@ -384,6 +384,13 @@ Three consequences:
   input and durable handles — and a real check runs well past ten minutes. Align
   `--detach` / `--status` / `--wait` with it rather than shipping two different
   long-operation idioms for the same run.
+
+**And `char explain` returns the evidence bundle** (`PLAN.md` §3.4). It lands here rather than
+with the check engine because it is a *reader* of state phases 2–4 already produce — leases,
+run history, port claims — and building it earlier would mean building it against half of them.
+Its own done-when is the history row: **two runs of the same bug produce the same failure
+signature, and a different bug in the same check produces a different one.** That is the claim
+nothing else in the corpus tests, and it is the one an agent's behaviour changes on.
 
 **Done when:** an agent given only "set up char in this repo" produces a verifying config in
 a repo it has never seen — `char config scan` → the agent authors → `char config verify`
