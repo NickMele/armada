@@ -290,6 +290,11 @@ it; and **`check` does not stop what it started.** Stopping would risk killing a
 sibling workspace is using, which `PLAN.md` §2.2's flat-siblings model exists to prevent, and would
 make the next `check` pay startup cost again.
 
+**And when every dispatch writes its record** (`PLAN.md` §4.2): the post-substitution argv,
+the env delta by name, the `${files}` set, the leases held and anything waited on with its
+holder, and the failure signature. Written when the check runs — it cannot be recovered later,
+and `char explain` in phase 5 is a reader with nothing to read without it.
+
 **Done when:** the ported suite is green against the phase-1 fixtures, **and** the
 contamination grep (§11) returns nothing.
 
@@ -385,9 +390,14 @@ Three consequences:
   `--detach` / `--status` / `--wait` with it rather than shipping two different
   long-operation idioms for the same run.
 
-**And `char explain` returns the evidence bundle** (`PLAN.md` §3.4). It lands here rather than
-with the check engine because it is a *reader* of state phases 2–4 already produce — leases,
-run history, port claims — and building it earlier would mean building it against half of them.
+**And `char explain` returns the evidence bundle** (`PLAN.md` §3.4). The *verb* lands here
+because it reads across everything the earlier phases produce. **The dispatch record it reads
+does not** — that is written by phases 3 and 4, at the moment a check or service runs, and
+those phases carry it in their own done-whens. An earlier draft put the whole feature here on
+the reasoning that it "reads state phases 2–4 already produce", which is false for the part
+that matters: leases held, what was waited on and who held it, and the bind state at dispatch
+are all point-in-time and unrecoverable afterwards. A phase-5 verb querying for them finds
+nothing.
 Its own done-when is the history row: **two runs of the same bug produce the same failure
 signature, and a different bug in the same check produces a different one.** That is the claim
 nothing else in the corpus tests, and it is the one an agent's behaviour changes on.

@@ -867,18 +867,35 @@ char explain                   # the most recent failure in this workspace
 char explain --run 01J8X2      # a specific run, including a detached one
 ```
 
-**What the caller already has** is the log — it read `results[].log`. **What it does not have,
-and cannot reconstruct:**
+**Most of it the caller could get for itself, and being honest about which is which is what
+makes this specifiable.** Three categories:
 
-| Evidence | Why the caller cannot get it |
+| Evidence | Recoverable by the caller? |
 |---|---|
-| the exact argv, post-substitution | `${files}` and `${port.NAME}` resolved at dispatch; the config shows the template, not what ran |
-| cwd and the env delta (names only, never values) | composed from `env:`, the inherited environment, and grants |
-| leases held, and what it waited on and who held it | machine-global state in `char.db`, outside the workspace entirely |
-| port block and bind state at dispatch | a claim is not a binding; §3.1's probe answers this only at report time |
-| **the same check across retained runs, and whether the failure signature matches** | `run_retention` runs of history char is already keeping and never surfacing |
-| the `${files}` set, and what changed since this check last passed | requires the run history plus the merge-base at each run |
-| daemon reachable, char version, whether the environment moved | the `environment` class knows this; the log does not |
+| cwd | **Yes, trivially** — §4.1 fixes it at the workspace root. A constant, not a discovery |
+| env names, `env:` values | **Yes** — in the config; the inherited environment is the one it spawned char with |
+| this run's log, and prior runs' logs | **Yes** — `results[].log`, and `.char/run/<id>/logs/` is on disk |
+| argv, post-substitution | **Only by reimplementing char** — substitution, the `${files}` set, and the argv split with quote handling |
+| the failure signature | **Only by reimplementing char** — it must match the normalisation exactly or two runs of one bug stop matching |
+| **leases held, what it waited on, who held it, how long** | **No.** Point-in-time state that no longer exists |
+| **port bind state, daemon reachability at dispatch** | **No.** A probe now answers a different question than a probe then |
+
+**So the argument is not that the caller cannot get this. It is two narrower things.**
+
+**Point-in-time state is gone.** By the time anyone asks, the browser exclusive is released or
+held by somebody else, and the port that was bound is free. Only a record written *at the
+moment* has it, which is why §4.2's `state.json` carries the dispatch record rather than
+`explain` computing one on demand.
+
+**A reconstruction that disagrees is worse than none.** An agent that reimplements the
+substitution and the argv split produces a command it *believes* ran; if its quote handling
+differs in one case, it diagnoses a command that never executed and nothing reveals the
+divergence. The value here is authority — this is what actually ran — not availability.
+
+**The dispatch record is written by the phase that dispatches, not by `explain`.** The verb is
+a reader; the writing is phase 3 for checks and phase 4 for services, at the moment each one
+runs. Sequencing it the other way — a phase-5 verb querying phases 2–4's state — reads an empty
+record for everything in the third category above, which is the part worth having.
 
 **The history row is the one that changes an agent's behaviour**, and it is nearly free because
 the runs are already retained. "This check failed the same way in the last three runs, none of
@@ -1252,7 +1269,10 @@ second place: `needs:` tells a component from a check id by the colon alone (bel
 .char/
   logs/<component>.log            services — `up` is not a run, so it has no run-id
   run/<run-id>/
-    state.json                    per-check status, verdict
+    state.json                    per-check status, verdict, and the dispatch
+                                  record §3.4 reads — written when the check
+                                  runs, because most of it cannot be recovered
+                                  afterwards
     logs/<component>.<check>.log  checks
 ```
 
