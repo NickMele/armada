@@ -130,7 +130,7 @@ fn clean_all<R: Run, C: Clock, F: Fetch>(
     me: Option<&WorkspaceId>,
     holds_my_run_lease: bool,
 ) -> Result<Envelope<CleanData>, CharError> {
-    let reaped = app.reap()?;
+    let mut reaped = app.reap()?;
     let mut results = Vec::new();
     let mut skipped = Vec::new();
     let mut unreclaimed = Vec::new();
@@ -157,7 +157,7 @@ fn clean_all<R: Run, C: Clock, F: Fetch>(
         }
 
         unreclaimed.extend(collect_unreclaimed(app, row)?);
-        results.push(clean_one(app, row, filters)?);
+        results.push(clean_one(app, row, filters, &mut reaped.skipped)?);
     }
 
     let failed = results
@@ -208,12 +208,16 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     row: &WorkspaceRow,
     filters: Filters,
+    skipped: &mut Vec<String>,
 ) -> Result<ResultRow, CharError> {
     let mut released = Released::default();
-    // **Everything that would not go is named.** Counting only the successes
-    // and returning `CLEAN` regardless makes a container char could not remove
-    // indistinguishable from one it did — and reclaim that is reported and
-    // never silent is the rule this whole module is written to.
+    // **Everything that would not go is named, in one of two channels that must
+    // not merge.** `refused` is a reclaim char attempted and could not
+    // complete — a `docker rm` returning non-zero for a handle this workspace
+    // owns, or a process group still alive after SIGKILL. That is a real leak,
+    // so it fails this row. `skipped` is an enumeration char could not perform,
+    // which is the same event `plan_reap` records there and proves nothing
+    // about what this workspace still holds; it must not fail anything.
     let mut refused: Vec<String> = Vec::new();
 
     // 1. Only the *resource* leases go early, and only because holding a
@@ -235,18 +239,21 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
 
     // 3. Docker, in dependency order: a network with a container attached will
     //    not go.
-    let timeout = app.machine.docker_deadline();
-    let daemon = docker::daemon_ready(&app.ctx.run, &app.cwd(), timeout).is_ok();
+    let daemon = app.docker_ready().is_ok();
     if daemon {
         for kind in docker::Kind::ALL {
-            // A list that fails is reported and stepped over, not fatal: a
-            // concurrent `clean` in another workspace removing a container
-            // between the `ls` and the `inspect` makes `docker inspect` exit
-            // non-zero, and that must not abort the teardown of this one.
-            let found = match docker::list_labelled(&app.ctx.run, &app.cwd(), timeout, kind) {
+            // A failed enumeration is the *skipped* category, treated exactly
+            // as `plan_reap` treats it: a concurrent `clean` in another
+            // workspace removing a container between the `ls` and the
+            // `inspect` makes `docker inspect` exit non-zero, and the object
+            // that vanished was that workspace's and is already gone. Nothing
+            // of *this* workspace failed to release, so a benign race under the
+            // five concurrent worktrees this project assumes must not make the
+            // verb exit 1.
+            let found = match app.docker_list_labelled(kind) {
                 Ok(found) => found,
                 Err(error) => {
-                    refused.push(error.message.clone());
+                    skipped.push(app::skipped_enumeration(&error));
                     continue;
                 }
             };
@@ -265,7 +272,9 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
                 .map(|resource| resource.reference.clone())
                 .collect();
 
-            let removed = docker::remove(&app.ctx.run, &app.cwd(), timeout, kind, &mine);
+            // The other category: a handle this workspace owns that would not
+            // go is a leak char is about to stop tracking, so it fails the row.
+            let removed = app.docker_remove(kind, &mine);
             count_removed(kind, &removed, &mut released, &mut refused);
         }
     }
@@ -277,7 +286,7 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     // done-when exercises.
     if daemon {
         if let Some(config) = load_foreign_config(&row.path, &app.machine) {
-            released_from_selectors(app, row, &config, &mut released, &mut refused)?;
+            released_from_selectors(app, row, &config, &mut released, &mut refused, skipped)?;
         }
     }
 
@@ -349,54 +358,69 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
     config: &ResolvedConfig,
     released: &mut Released,
     refused: &mut Vec<String>,
+    skipped: &mut Vec<String>,
 ) -> Result<(), CharError> {
     let ports =
         charkit_core::ports::assign_ports(config, row.ports, "char.yml").unwrap_or_default();
-    let vars = Vars::new(row.id.as_str(), &ports, &app.inherited);
-    let timeout = app.machine.docker_deadline();
 
-    let mut selectors: Vec<(docker::Kind, &String)> = Vec::new();
-    for entry in config.commands.values() {
-        for (kind, selector) in [
-            (docker::Kind::Container, &entry.owns_containers),
-            (docker::Kind::Network, &entry.owns_networks),
-            (docker::Kind::Image, &entry.owns_images),
-        ] {
-            if let Some(selector) = selector {
-                selectors.push((kind, selector));
-            }
-        }
-    }
-    for component in config.components.values() {
-        if let Some(run) = &component.run {
-            let common = run.common();
+    // Resolved up front, so the docker calls below can take the whole `App`:
+    // they renew the heartbeat, and a template borrowing the inherited
+    // environment would pin it immutably for the length of the loop.
+    let resolved: Vec<(docker::Kind, String)> = {
+        let vars = Vars::new(row.id.as_str(), &ports, &app.inherited);
+        let at = ConfigWhere::Path {
+            file: "char.yml".to_string(),
+            path: "owns".to_string(),
+        };
+
+        let mut selectors: Vec<(docker::Kind, &String)> = Vec::new();
+        for entry in config.commands.values() {
             for (kind, selector) in [
-                (docker::Kind::Container, &common.owns_containers),
-                (docker::Kind::Network, &common.owns_networks),
-                (docker::Kind::Image, &common.owns_images),
+                (docker::Kind::Container, &entry.owns_containers),
+                (docker::Kind::Network, &entry.owns_networks),
+                (docker::Kind::Image, &entry.owns_images),
             ] {
                 if let Some(selector) = selector {
                     selectors.push((kind, selector));
                 }
             }
         }
-    }
-
-    for (kind, selector) in selectors {
-        let at = ConfigWhere::Path {
-            file: "char.yml".to_string(),
-            path: "owns".to_string(),
-        };
-        let resolved = template::substitute(selector, &vars, Site::Argv, &at)?;
-        let matched =
-            match docker::list_by_selector(&app.ctx.run, &app.cwd(), timeout, kind, &resolved) {
-                Ok(matched) => matched,
-                Err(error) => {
-                    refused.push(error.message.clone());
-                    continue;
+        for component in config.components.values() {
+            if let Some(run) = &component.run {
+                let common = run.common();
+                for (kind, selector) in [
+                    (docker::Kind::Container, &common.owns_containers),
+                    (docker::Kind::Network, &common.owns_networks),
+                    (docker::Kind::Image, &common.owns_images),
+                ] {
+                    if let Some(selector) = selector {
+                        selectors.push((kind, selector));
+                    }
                 }
-            };
-        let removed = docker::remove(&app.ctx.run, &app.cwd(), timeout, kind, &matched);
+            }
+        }
+
+        let mut resolved = Vec::with_capacity(selectors.len());
+        for (kind, selector) in selectors {
+            resolved.push((
+                kind,
+                template::substitute(selector, &vars, Site::Argv, &at)?,
+            ));
+        }
+        resolved
+    };
+
+    for (kind, selector) in resolved {
+        // Enumeration, so `skipped`; the removal below is a reclaim, so
+        // `refused`. See the two categories in `clean_one`.
+        let matched = match app.docker_list_by_selector(kind, &selector) {
+            Ok(matched) => matched,
+            Err(error) => {
+                skipped.push(app::skipped_enumeration(&error));
+                continue;
+            }
+        };
+        let removed = app.docker_remove(kind, &matched);
         count_removed(kind, &removed, released, refused);
     }
     Ok(())

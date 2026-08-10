@@ -190,6 +190,57 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         }
     }
 
+    /// Whether the daemon is reachable.
+    ///
+    /// **Every docker call char makes on its own account goes through one of
+    /// these four, and the heartbeat renews on the way back.** Renewing at each
+    /// call site instead works exactly until someone adds a fifth call site: a
+    /// hung daemon answers each of these at `docker_timeout`, two of them
+    /// exceed `COLD_MS`, and the lease is then reclaimed out from under a
+    /// holder that is alive and mid-work. Putting the renewal where the waiting
+    /// happens makes forgetting it impossible rather than unlikely.
+    pub fn docker_ready(&mut self) -> Result<(), CharError> {
+        let timeout = self.machine.docker_deadline();
+        let outcome = docker::daemon_ready(&self.ctx.run, &self.cwd(), timeout);
+        self.renew_held();
+        outcome
+    }
+
+    /// Every resource of one kind carrying char's labels.
+    pub fn docker_list_labelled(
+        &mut self,
+        kind: docker::Kind,
+    ) -> Result<Vec<LabelledResource>, CharError> {
+        let timeout = self.machine.docker_deadline();
+        let outcome = docker::list_labelled(&self.ctx.run, &self.cwd(), timeout, kind);
+        self.renew_held();
+        outcome
+    }
+
+    /// Every handle matching a declared `owns:` selector.
+    pub fn docker_list_by_selector(
+        &mut self,
+        kind: docker::Kind,
+        selector: &str,
+    ) -> Result<Vec<String>, CharError> {
+        let timeout = self.machine.docker_deadline();
+        let outcome = docker::list_by_selector(&self.ctx.run, &self.cwd(), timeout, kind, selector);
+        self.renew_held();
+        outcome
+    }
+
+    /// Remove resources by handle, best-effort per handle.
+    pub fn docker_remove(
+        &mut self,
+        kind: docker::Kind,
+        references: &[String],
+    ) -> Vec<(String, Option<CharError>)> {
+        let timeout = self.machine.docker_deadline();
+        let outcome = docker::remove(&self.ctx.run, &self.cwd(), timeout, kind, references);
+        self.renew_held();
+        outcome
+    }
+
     /// Drop a workspace's rows, keeping the leases this invocation holds.
     ///
     /// See [`Db::release_workspace`](charkit_adapters::db::Db::release_workspace):
@@ -227,18 +278,19 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         // `char init` because Docker Desktop is closed would make the ownership
         // layer unusable for the majority of repos that never start a
         // container.
-        let timeout = self.machine.docker_deadline();
-        self.renew_held();
-        match docker::daemon_ready(&self.ctx.run, &self.cwd(), timeout) {
+        match self.docker_ready() {
             Ok(()) => {
                 for kind in docker::Kind::ALL {
-                    // **A failed list is skipped, exactly as an unreachable
-                    // daemon is.** `list_labelled` lists ids and then inspects
-                    // them as a second call, and `docker inspect` exits
-                    // non-zero if any of those objects has disappeared in
-                    // between — so a concurrent `char clean` in another
-                    // workspace would otherwise fail this whole verb.
-                    match docker::list_labelled(&self.ctx.run, &self.cwd(), timeout, kind) {
+                    // **An enumeration that fails is skipped, exactly as an
+                    // unreachable daemon is** — the *skipped* category, not the
+                    // *refused* one. `list_labelled` lists ids and then
+                    // inspects them as a second call, and `docker inspect`
+                    // exits non-zero if any of those objects has disappeared in
+                    // between; the thing that vanished was somebody else's and
+                    // is already gone, so nothing char owns failed to be
+                    // reclaimed. A failed *removal* is the other category and
+                    // is never routed here.
+                    match self.docker_list_labelled(kind) {
                         Ok(found) => {
                             let stated: Vec<(LabelledResource, reap::PathStat)> = found
                                 .into_iter()
@@ -251,20 +303,11 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                             plan.resources.extend(remove);
                             plan.reported.extend(reported);
                         }
-                        Err(error) => plan
-                            .skipped
-                            .push(format!("labelled resources: {}", error.message)),
+                        Err(error) => plan.skipped.push(skipped_enumeration(&error)),
                     }
-                    // A hung daemon answers each of these at char's deadline,
-                    // and two of them put a live holder's lease over `COLD_MS`.
-                    // The heartbeat renews from the loop that waits, here as
-                    // everywhere else.
-                    self.renew_held();
                 }
             }
-            Err(error) => plan
-                .skipped
-                .push(format!("labelled resources: {}", error.message)),
+            Err(error) => plan.skipped.push(skipped_enumeration(&error)),
         }
 
         // Pass 3: cold leases.
@@ -282,8 +325,8 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// and nothing reaps until somebody creates worktree 6, which on a
     /// shrinking project is never.
     pub fn reap(&mut self) -> Result<ReapPlan, CharError> {
-        let plan = self.plan_reap()?;
-        let timeout = self.machine.docker_deadline();
+        let mut plan = self.plan_reap()?;
+        let mut survived: Vec<String> = Vec::new();
 
         for id in &plan.workspaces {
             // **Kill before forgetting, the same order `clean` uses.** Dropping
@@ -291,9 +334,21 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
             // process groups alive with no record of them anywhere, which is
             // the unreclaimable state the machine-global store exists to
             // prevent.
-            self.stop_owned_processes(id)?;
+            let stopped = self.stop_owned_processes(id)?;
+            // A group still alive after the SIGKILL escalation is the *refused*
+            // category, and it is reported here for the same reason `clean`
+            // puts it in `results[].error`: the reap plan has no per-row status
+            // to fail, but a reclaim char could not complete must never be
+            // silent.
+            survived.extend(
+                stopped
+                    .survived
+                    .iter()
+                    .map(|pgid| format!("process group {pgid} of {id} survived SIGKILL")),
+            );
             self.forget_workspace(id)?;
         }
+        plan.skipped.extend(survived);
 
         for target in &plan.resources {
             let kind = match target.kind {
@@ -306,13 +361,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                 // are recorded.
                 OwnedKind::Pgid | OwnedKind::Release => continue,
             };
-            let removed = docker::remove(
-                &self.ctx.run,
-                &self.cwd(),
-                timeout,
-                kind,
-                std::slice::from_ref(&target.reference),
-            );
+            let removed = self.docker_remove(kind, std::slice::from_ref(&target.reference));
             // Remove first, forget second: a resource removed before its row
             // leaves a stale row the next `init` reaps for free, while the
             // other order leaves a live resource nothing can find.
@@ -320,13 +369,19 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                 self.db
                     .delete_owned(&target.workspace, target.kind, &target.reference)?;
             }
-            self.renew_held();
         }
 
+        // Pass 3, as a compare-and-delete for the same reason the claim loop's
+        // reclaim is one: the rows were read once, and a holder that was at
+        // 59.9 seconds of silence when they were read renews immediately
+        // afterwards. Deleting on `(kind, key)` alone would take that now-warm
+        // lease and let a third process acquire it while the holder is still
+        // working, which is two holders of one exclusive with no error
+        // anywhere.
         let now = self.ctx.now.mono();
         for row in self.db.leases()? {
             if is_cold(row.heartbeat_mono, now, row.boot_id == self.boot_id) {
-                self.db.release_lease(row.kind, &row.key)?;
+                self.db.reclaim_lease(row.kind, &row.key, &row)?;
             }
         }
 
@@ -370,6 +425,9 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
             ) {
                 let report =
                     charkit_adapters::posix::stop_group(pgid, charkit_adapters::process::GRACE);
+                // `GRACE` per surviving group, plus a `ps` spawn each: the same
+                // waiting a docker call does, so the same renewal.
+                self.renew_held();
                 match (report.existed, report.gone) {
                     (true, true) => summary.stopped += 1,
                     // A group that survived SIGKILL is uninterruptible or
@@ -384,6 +442,20 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         }
         Ok(summary)
     }
+}
+
+/// How a failed *enumeration* is worded, wherever it happens.
+///
+/// **Two categories, and they must not merge.** char could not *look* — a list
+/// or an inspect that lost a race with another workspace's teardown — which
+/// proves nothing about what char owns and is recorded without failing
+/// anything. char could not *reclaim* — a `docker rm` that returned non-zero
+/// for a handle this workspace owns, or a process group still alive after
+/// SIGKILL — which is a real leak and fails the row that owns it. Merging them
+/// would make a benign race under five concurrent worktrees exit 1, and that is
+/// the concurrency this project is built around.
+pub fn skipped_enumeration(error: &CharError) -> String {
+    format!("labelled resources: {}", error.message)
 }
 
 /// What [`App::stop_owned_processes`] managed, and what it did not.
