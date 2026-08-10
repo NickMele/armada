@@ -882,10 +882,33 @@ makes this specifiable.** Three categories:
 
 **So the argument is not that the caller cannot get this. It is two narrower things.**
 
-**Point-in-time state is gone.** By the time anyone asks, the browser exclusive is released or
-held by somebody else, and the port that was bound is free. Only a record written *at the
-moment* has it, which is why §4.2's `state.json` carries the dispatch record rather than
-`explain` computing one on demand.
+**char writes it all down at dispatch — the model is `docker inspect`.** `inspect` can answer
+everything about a container because the daemon recorded it at create time and kept it, not
+because it recomputes anything on demand. `explain` is the same: a read of a record, never a
+computation. Anything char knows at the moment it dispatches — and it knows all of it — is
+cheap to write and impossible to recover afterwards.
+
+**Impossible to recover is the point, not a limitation.** Query `char.db` an hour later and it
+truthfully reports who holds the browser *now*, which is a different and useless answer to "what
+was `web:e2e` waiting on when it timed out." The same for a port: the probe answers about this
+instant. Live state answers a different question than the one being asked, so the record has to
+be made at the time or not at all.
+
+**Record the event sequence, not just a snapshot.** The scheduler is
+`step(State, Event) -> (State, Vec<Action>)` over exhaustive enums (`ARCHITECTURE.md` §1.2), so
+char already produces a complete ordered account of the run: every lease granted and denied,
+every spawn, every deadline, every exit. Persisting that sequence gives `explain` something
+`docker inspect` has no equivalent of — a trace that **replays through `step()`** to reproduce
+exactly what the scheduler decided and why. The reducer was chosen for compile-time
+exhaustiveness; this is the second dividend from the same decision, and it costs one append per
+event.
+
+> **Inherit `docker inspect`'s shape, not its mistake.** `inspect` dumps environment variable
+> *values*, which is a well-known way secrets escape — and the compose form of it is measured in
+> [`traps.md`](traps.md), where `config` inlines `.env` values into its output. The dispatch
+> record carries environment **names only**, and the same scrubber that guards `results[].log`
+> guards it (§4.7). A diagnosis channel that bypasses the scrubber would make §1.8's invariant
+> an invariant with an exception.
 
 **A reconstruction that disagrees is worse than none.** An agent that reimplements the
 substitution and the argv split produces a command it *believes* ran; if its quote handling

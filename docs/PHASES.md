@@ -292,7 +292,9 @@ make the next `check` pay startup cost again.
 
 **And when every dispatch writes its record** (`PLAN.md` §4.2): the post-substitution argv,
 the env delta by name, the `${files}` set, the leases held and anything waited on with its
-holder, and the failure signature. Written when the check runs — it cannot be recovered later,
+holder, the failure signature, **and the reducer's `Event` sequence for the run** — which
+replays through `step()` and is therefore the strongest single assertion available here: replay
+a recorded run and the resulting `State` must equal the one that was persisted. Written when the check runs — it cannot be recovered later,
 and `char explain` in phase 5 is a reader with nothing to read without it.
 
 **Done when:** the ported suite is green against the phase-1 fixtures, **and** the
