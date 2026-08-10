@@ -1,0 +1,26 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Cargo.lock is deliberately NOT ignored. charkit ships a binary, and a
+# committed lockfile is what makes `cargo install --locked` and the release
+# build reproducible.
+
+# charkit's own workspace state. Gitignored by design — docs/PLAN.md §4.2:
+# ".char/ holds nothing reclaimable", precisely because a workspace directory
+# gets deleted without char's involvement. Machine-global state lives in
+# ~/.char/char.db, outside any repo.
+.char/
+
+# .claude/ is deliberately NOT ignored. Phase 1 ships the PreToolUse
+# clean-room hook in .claude/settings.json (docs/ARCHITECTURE.md §2.7) and it
+# only enforces anything if it is committed.
+
+# macOS
+.DS_Store
+
+# Editors
+*.swp
+*~
+.idea/
+.vscode/
