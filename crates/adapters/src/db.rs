@@ -10,9 +10,12 @@
 //! **Connection setup is not optional**, and each of the three is a measured
 //! failure rather than a convention:
 //!
-//! - `journal_mode = WAL` is a property of the *file*, not a driver default.
-//! - `busy_timeout` is set explicitly; relying on a driver's is how it changes
-//!   under you.
+//! - `journal_mode = WAL` is a property of the *file*, not a driver default —
+//!   and switching a fresh database into it is the one statement `busy_timeout`
+//!   does **not** cover, so it carries its own wait (see [`set_wal`]).
+//! - `busy_timeout` is set explicitly, and *first*; relying on a driver's is how
+//!   it changes under you, and setting it after another statement leaves that
+//!   statement running at a timeout of zero.
 //! - **every transaction that may write is `BEGIN IMMEDIATE`.** A DEFERRED
 //!   transaction that reads and then writes fails after **0.0 ms** with
 //!   `SQLITE_BUSY_SNAPSHOT`, which `busy_timeout` cannot rescue because the
@@ -27,9 +30,13 @@ use charkit_core::ports::{choose_block, PortBlock};
 use charkit_core::registry::{LeaseRow, OwnedKind, OwnedRow, WorkspaceRow};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// The schema version this binary writes and understands.
 pub const USER_VERSION: i64 = 1;
+
+/// How long any one statement waits for a database another char is writing.
+const BUSY_TIMEOUT_MS: u64 = 5_000;
 
 /// The key the namespace UUID is stored under.
 const NAMESPACE_KEY: &str = "namespace";
@@ -90,10 +97,11 @@ impl Db {
         let path = char_home.join("char.db");
         let conn = Connection::open(&path).map_err(|e| map_sqlite(&path, e))?;
 
-        conn.pragma_update(None, "journal_mode", "WAL")
+        // `busy_timeout` goes first, because a timeout set second does nothing
+        // for the statement that ran before it.
+        conn.pragma_update(None, "busy_timeout", BUSY_TIMEOUT_MS as i64)
             .map_err(|e| map_sqlite(&path, e))?;
-        conn.pragma_update(None, "busy_timeout", 5_000)
-            .map_err(|e| map_sqlite(&path, e))?;
+        set_wal(&conn, &path)?;
         conn.pragma_update(None, "foreign_keys", true)
             .map_err(|e| map_sqlite(&path, e))?;
 
@@ -104,7 +112,7 @@ impl Db {
             )
         })?;
 
-        let db = Db { conn, path, handle };
+        let mut db = Db { conn, path, handle };
         db.migrate()?;
         Ok(db)
     }
@@ -119,7 +127,15 @@ impl Db {
     /// lower one migrates it forward in a single `BEGIN IMMEDIATE`, additively.
     /// Schema changes are additive for the whole 0.x line: new column, never a
     /// dropped or retyped one.
-    fn migrate(&self) -> Result<(), CharError> {
+    ///
+    /// **`user_version` is the flag that says the whole of creation is done, so
+    /// everything creation does commits with it.** The namespace used to be
+    /// written by a second statement after the transaction, and a sibling `char
+    /// init` starting in the same millisecond then read `user_version = 1`,
+    /// returned here early, and asked for a namespace that was not there yet —
+    /// `char.db: Query returned no rows`, from a database that was merely
+    /// half a heartbeat young.
+    fn migrate(&mut self) -> Result<(), CharError> {
         let version: i64 = self
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
@@ -141,56 +157,60 @@ impl Db {
             return Ok(());
         }
 
-        self.conn
-            .execute_batch(&format!(
-                "BEGIN IMMEDIATE;
-                 CREATE TABLE IF NOT EXISTS meta (
-                     key   TEXT PRIMARY KEY,
-                     value TEXT NOT NULL
-                 );
-                 CREATE TABLE IF NOT EXISTS workspaces (
-                     id         TEXT PRIMARY KEY,
-                     path       TEXT NOT NULL,
-                     project    TEXT,
-                     port_from  INTEGER NOT NULL,
-                     port_to    INTEGER NOT NULL,
-                     claimed_at TEXT NOT NULL
-                 );
-                 CREATE TABLE IF NOT EXISTS owned (
-                     workspace      TEXT NOT NULL,
-                     kind           TEXT NOT NULL,
-                     \"ref\"          TEXT NOT NULL,
-                     boot_id        TEXT,
-                     pid_started_at TEXT,
-                     PRIMARY KEY (workspace, kind, \"ref\")
-                 );
-                 CREATE TABLE IF NOT EXISTS leases (
-                     workspace      TEXT,
-                     kind           TEXT NOT NULL,
-                     key            TEXT NOT NULL,
-                     heartbeat_mono INTEGER NOT NULL,
-                     boot_id        TEXT NOT NULL,
-                     pid            INTEGER NOT NULL,
-                     pid_started_at TEXT,
-                     PRIMARY KEY (kind, key)
-                 );
-                 PRAGMA user_version = {USER_VERSION};
-                 COMMIT;"
-            ))
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS meta (
+                 key   TEXT PRIMARY KEY,
+                 value TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS workspaces (
+                 id         TEXT PRIMARY KEY,
+                 path       TEXT NOT NULL,
+                 project    TEXT,
+                 port_from  INTEGER NOT NULL,
+                 port_to    INTEGER NOT NULL,
+                 claimed_at TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS owned (
+                 workspace      TEXT NOT NULL,
+                 kind           TEXT NOT NULL,
+                 \"ref\"          TEXT NOT NULL,
+                 boot_id        TEXT,
+                 pid_started_at TEXT,
+                 PRIMARY KEY (workspace, kind, \"ref\")
+             );
+             CREATE TABLE IF NOT EXISTS leases (
+                 workspace      TEXT,
+                 kind           TEXT NOT NULL,
+                 key            TEXT NOT NULL,
+                 heartbeat_mono INTEGER NOT NULL,
+                 boot_id        TEXT NOT NULL,
+                 pid            INTEGER NOT NULL,
+                 pid_started_at TEXT,
+                 PRIMARY KEY (kind, key)
+             );",
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
 
         // The namespace is written once, at creation, and never again. It
         // scopes the whole reaping mechanism to one filesystem view: without
         // it, path-based reaping is actively dangerous the moment two char
         // installations share a Docker daemon, which is the ordinary
         // devcontainer setup (PLAN.md §2.3.1).
-        self.conn
-            .execute(
-                "INSERT OR IGNORE INTO meta (key, value) VALUES (?1, ?2)",
-                (NAMESPACE_KEY, random_uuid()?),
-            )
+        tx.execute(
+            "INSERT OR IGNORE INTO meta (key, value) VALUES (?1, ?2)",
+            (NAMESPACE_KEY, random_uuid()?),
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+
+        // Last inside the transaction, and committed with it: this is the
+        // announcement that the two above have happened.
+        tx.pragma_update(None, "user_version", USER_VERSION)
             .map_err(|e| map_sqlite(&self.path, e))?;
-        Ok(())
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))
     }
 
     /// This installation's namespace.
@@ -660,6 +680,41 @@ impl Db {
         )
         .map_err(|e| map_sqlite(&self.path, e))?;
         tx.commit().map_err(|e| map_sqlite(&self.path, e))
+    }
+}
+
+/// Put the file into WAL, waiting out a sibling char doing the same thing.
+///
+/// **This is the one statement `busy_timeout` does not cover, and it is
+/// measured rather than assumed.** Switching a database's journal mode takes a
+/// brief exclusive lock, and SQLite acquires that one *without* consulting the
+/// busy handler — so a `busy_timeout` of five seconds still loses instantly.
+/// Two `char init`s started together on a machine with no `char.db` yet both
+/// create the file in rollback mode and both try to convert it, and roughly one
+/// run in ten the loser reported `aborted` — "another char is writing to
+/// char.db; retry" — for a database nobody was writing to. That is the
+/// concurrent-claim guarantee failing before a claim is even attempted.
+///
+/// The wait is char's own, bounded by the same budget as every other statement,
+/// and `SQLITE_BUSY` is the only code it retries: a busy database becomes
+/// available, and a corrupt or unopenable one never does.
+fn set_wal(conn: &Connection, path: &Path) -> Result<(), CharError> {
+    let deadline = std::time::Instant::now() + Duration::from_millis(BUSY_TIMEOUT_MS);
+    loop {
+        let error = match conn.pragma_update(None, "journal_mode", "WAL") {
+            Ok(()) => return Ok(()),
+            Err(error) => error,
+        };
+        let busy = matches!(
+            &error,
+            rusqlite::Error::SqliteFailure(inner, _) if inner.extended_code == 5
+        );
+        if !busy || std::time::Instant::now() >= deadline {
+            return Err(map_sqlite(path, error));
+        }
+        // Short enough that the ordinary case — a sibling finishing its own
+        // conversion — costs one sleep, and the loop is bounded regardless.
+        std::thread::sleep(Duration::from_millis(10));
     }
 }
 

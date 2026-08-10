@@ -22,7 +22,11 @@
 //! configuration is not.
 
 use charkit_core::config::Defaults;
-use charkit_core::ctx::{Run, RunRequest};
+use charkit_core::ctx::Run;
+// The two callers below are both the non-Linux branch: Linux answers both
+// questions from `/proc` and spawns nothing.
+#[cfg(not(target_os = "linux"))]
+use charkit_core::ctx::RunRequest;
 use charkit_core::error::{CharError, ErrClass};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -183,10 +187,10 @@ pub fn boot_id(run: &impl Run, cwd: &Path) -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         let _ = (run, cwd);
-        return std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
+        std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
             .ok()
             .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
+            .filter(|s| !s.is_empty())
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -226,7 +230,7 @@ pub fn process_start_at(run: &impl Run, cwd: &Path, pid: i32) -> Option<String> 
         // split has to start after the last `)`.
         let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
         let after_comm = stat.rsplit_once(')')?.1;
-        return after_comm.split_whitespace().nth(19).map(str::to_string);
+        after_comm.split_whitespace().nth(19).map(str::to_string)
     }
 
     #[cfg(not(target_os = "linux"))]

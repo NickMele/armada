@@ -92,6 +92,48 @@ fn a_deferred_read_then_write_fails_where_an_immediate_one_succeeds() {
     immediate.commit().unwrap();
 }
 
+/// **Creating the database is itself contended**, and the test above says so by
+/// omission: it primes the schema first, so nothing covered the state every
+/// machine passes through exactly once — no `char.db` at all, and two `char
+/// init`s arriving together.
+///
+/// Both failures it guards are real and were reproducible about one run in ten
+/// on macOS. The `journal_mode = WAL` conversion takes an exclusive lock that
+/// `busy_timeout` does not cover, so the loser reported `aborted` for a
+/// database nobody was writing to; and `user_version` used to be committed one
+/// statement before the namespace, so a sibling that read it in the gap found
+/// the row missing and failed `Query returned no rows`.
+///
+/// Repeated rather than run once: this is a race, and one green pass of a race
+/// is not evidence.
+#[test]
+fn concurrent_first_opens_all_get_a_usable_database_and_one_namespace() {
+    for _ in 0..16 {
+        let home = Arc::new(tempfile::tempdir().unwrap());
+        const OPENERS: usize = 4;
+        let barrier = Arc::new(Barrier::new(OPENERS));
+        let mut handles = Vec::new();
+
+        for _ in 0..OPENERS {
+            let home = Arc::clone(&home);
+            let barrier = Arc::clone(&barrier);
+            handles.push(std::thread::spawn(move || {
+                barrier.wait();
+                Db::open(home.path())
+                    .expect("a first open must not lose to a sibling first open")
+                    .namespace()
+                    .expect("a database that exists has its namespace")
+            }));
+        }
+
+        let namespaces: Vec<String> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert!(
+            namespaces.windows(2).all(|pair| pair[0] == pair[1]),
+            "one database, one namespace: {namespaces:?}"
+        );
+    }
+}
+
 /// **Two directories claim non-overlapping blocks concurrently** — the phase's
 /// done-when, against one real database from two real threads.
 #[test]
