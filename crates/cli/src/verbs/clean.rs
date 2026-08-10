@@ -239,7 +239,21 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
 
     // 3. Docker, in dependency order: a network with a container attached will
     //    not go.
-    let daemon = app.docker_ready().is_ok();
+    // An unreachable daemon is the *skipped* category too, and recording it is
+    // what keeps this honest: with Docker closed every count below stays zero
+    // and nothing is refused, so a silent probe would let the row report
+    // `CLEAN` while the workspace's labelled containers, networks and volumes
+    // survive — and their `char.workspace_path` outlives the row, so the next
+    // reap classifies them as belonging to a live workspace and only ever
+    // reports them. That is the founding bug of this project, reached through a
+    // run that said it succeeded.
+    let daemon = match app.docker_ready() {
+        Ok(()) => true,
+        Err(error) => {
+            skipped.push(app::skipped_enumeration(&error));
+            false
+        }
+    };
     if daemon {
         for kind in docker::Kind::ALL {
             // A failed enumeration is the *skipped* category, treated exactly

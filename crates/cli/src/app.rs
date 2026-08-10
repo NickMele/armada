@@ -190,20 +190,40 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         }
     }
 
-    /// Whether the daemon is reachable.
+    /// Make one docker call with the held leases' heartbeat driven from inside
+    /// it.
     ///
-    /// **Every docker call char makes on its own account goes through one of
-    /// these four, and the heartbeat renews on the way back.** Renewing at each
-    /// call site instead works exactly until someone adds a fifth call site: a
-    /// hung daemon answers each of these at `docker_timeout`, two of them
-    /// exceed `COLD_MS`, and the lease is then reclaimed out from under a
-    /// holder that is alive and mid-work. Putting the renewal where the waiting
-    /// happens makes forgetting it impossible rather than unlikely.
-    pub fn docker_ready(&mut self) -> Result<(), CharError> {
+    /// **Every docker call char makes on its own account goes through here**,
+    /// and the renewal is handed *down* to the adapter rather than wrapped
+    /// around it. Wrapping is not enough: `docker::remove` runs one `docker rm`
+    /// per handle and `list_labelled` is an `ls` plus an `inspect`, each capped
+    /// at `docker_timeout` — so three handles against a hung daemon is ninety
+    /// seconds inside a single wrapper call, and a lease goes cold at sixty. A
+    /// renewal the adapter drives per subprocess is bounded by one call however
+    /// many an adapter function makes, and a future fifth caller inherits it
+    /// without knowing it exists.
+    fn docker_call<T>(
+        &mut self,
+        body: impl FnOnce(&R, &Path, std::time::Duration, &mut dyn FnMut()) -> T,
+    ) -> T {
+        let cwd = self.cwd();
         let timeout = self.machine.docker_deadline();
-        let outcome = docker::daemon_ready(&self.ctx.run, &self.cwd(), timeout);
-        self.renew_held();
-        outcome
+        let held = self.held.clone();
+        let db = &mut self.db;
+        let clock = &self.ctx.now;
+        let run = &self.ctx.run;
+        let mut tick = || {
+            let stamp = clock.mono();
+            for lease in &held {
+                let _ = db.renew(lease, stamp);
+            }
+        };
+        body(run, &cwd, timeout, &mut tick)
+    }
+
+    /// Whether the daemon is reachable.
+    pub fn docker_ready(&mut self) -> Result<(), CharError> {
+        self.docker_call(|run, cwd, timeout, tick| docker::daemon_ready(run, cwd, timeout, tick))
     }
 
     /// Every resource of one kind carrying char's labels.
@@ -211,10 +231,9 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         &mut self,
         kind: docker::Kind,
     ) -> Result<Vec<LabelledResource>, CharError> {
-        let timeout = self.machine.docker_deadline();
-        let outcome = docker::list_labelled(&self.ctx.run, &self.cwd(), timeout, kind);
-        self.renew_held();
-        outcome
+        self.docker_call(|run, cwd, timeout, tick| {
+            docker::list_labelled(run, cwd, timeout, kind, tick)
+        })
     }
 
     /// Every handle matching a declared `owns:` selector.
@@ -223,10 +242,9 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         kind: docker::Kind,
         selector: &str,
     ) -> Result<Vec<String>, CharError> {
-        let timeout = self.machine.docker_deadline();
-        let outcome = docker::list_by_selector(&self.ctx.run, &self.cwd(), timeout, kind, selector);
-        self.renew_held();
-        outcome
+        self.docker_call(|run, cwd, timeout, tick| {
+            docker::list_by_selector(run, cwd, timeout, kind, selector, tick)
+        })
     }
 
     /// Remove resources by handle, best-effort per handle.
@@ -235,10 +253,9 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         kind: docker::Kind,
         references: &[String],
     ) -> Vec<(String, Option<CharError>)> {
-        let timeout = self.machine.docker_deadline();
-        let outcome = docker::remove(&self.ctx.run, &self.cwd(), timeout, kind, references);
-        self.renew_held();
-        outcome
+        self.docker_call(|run, cwd, timeout, tick| {
+            docker::remove(run, cwd, timeout, kind, references, tick)
+        })
     }
 
     /// Drop a workspace's rows, keeping the leases this invocation holds.

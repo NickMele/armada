@@ -113,7 +113,12 @@ impl Kind {
 /// its whole resolve-and-transform first. Probing up front is what turns "the
 /// stack failed to start" into "Docker is not running", which is the difference
 /// between an agent fixing a repo that is fine and a human starting Docker.
-pub fn daemon_ready(run: &impl Run, cwd: &Path, timeout: Duration) -> Result<(), CharError> {
+pub fn daemon_ready(
+    run: &impl Run,
+    cwd: &Path,
+    timeout: Duration,
+    tick: &mut dyn FnMut(),
+) -> Result<(), CharError> {
     let request = RunRequest::new(
         ["docker", "version", "--format", "{{.Server.Version}}"]
             .iter()
@@ -123,7 +128,9 @@ pub fn daemon_ready(run: &impl Run, cwd: &Path, timeout: Duration) -> Result<(),
     )
     .timeout(timeout);
 
-    match run.call(&request) {
+    let outcome = run.call_with_tick(&request, tick);
+    tick();
+    match outcome {
         Ok(output) if output.ok() => Ok(()),
         Ok(output) if output.timed_out => Err(CharError {
             class: ErrClass::Environment,
@@ -158,12 +165,13 @@ pub fn list_labelled(
     cwd: &Path,
     timeout: Duration,
     kind: Kind,
+    tick: &mut dyn FnMut(),
 ) -> Result<Vec<LabelledResource>, CharError> {
     let mut argv = kind.list_argv();
     argv.push("--filter".to_string());
     argv.push(format!("label={LABEL_WORKSPACE}"));
 
-    let listed = call(run, cwd, timeout, argv)?;
+    let listed = call(run, cwd, timeout, argv, tick)?;
     let ids: Vec<String> = listed
         .lines()
         .map(str::trim)
@@ -187,7 +195,7 @@ pub fn list_labelled(
     ];
     argv.extend(ids);
 
-    let inspected = call(run, cwd, timeout, argv)?;
+    let inspected = call(run, cwd, timeout, argv, tick)?;
     Ok(inspected
         .lines()
         .filter_map(|line| parse_inspect_line(line, kind))
@@ -230,11 +238,12 @@ pub fn list_by_selector(
     timeout: Duration,
     kind: Kind,
     selector: &str,
+    tick: &mut dyn FnMut(),
 ) -> Result<Vec<String>, CharError> {
     let mut argv = kind.list_argv();
     argv.push("--filter".to_string());
     argv.push(selector.to_string());
-    Ok(call(run, cwd, timeout, argv)?
+    Ok(call(run, cwd, timeout, argv, tick)?
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
@@ -250,13 +259,14 @@ pub fn remove(
     timeout: Duration,
     kind: Kind,
     references: &[String],
+    tick: &mut dyn FnMut(),
 ) -> Vec<(String, Option<CharError>)> {
     references
         .iter()
         .map(|reference| {
             let mut argv = kind.remove_argv();
             argv.push(reference.clone());
-            (reference.clone(), call(run, cwd, timeout, argv).err())
+            (reference.clone(), call(run, cwd, timeout, argv, tick).err())
         })
         .collect()
 }
@@ -276,14 +286,29 @@ pub fn stamp(workspace: &WorkspaceId, path: &Path, namespace: &str) -> BTreeMap<
     ])
 }
 
+/// One docker subprocess, with the caller's heartbeat driven **around and
+/// through it**.
+///
+/// **The renewal belongs here rather than around the functions above**, because
+/// those make more than one call each: `remove` runs one `docker rm` per
+/// handle and `list_labelled` is an `ls` followed by an `inspect`, so a
+/// renewal placed at the adapter's edge leaves a gap bounded by the *batch*
+/// rather than by one call — three handles against a hung daemon is ninety
+/// seconds of silence, and a lease goes cold at sixty. Both halves are needed:
+/// `call_with_tick` covers one call that waits a long time (PLAN.md §4.3 puts
+/// renewal in the loop that waits), and the tick after it covers many calls
+/// that each return quickly, which no in-wait timer ever fires for.
 fn call(
     run: &impl Run,
     cwd: &Path,
     timeout: Duration,
     argv: Vec<String>,
+    tick: &mut dyn FnMut(),
 ) -> Result<String, CharError> {
     let request = RunRequest::new(argv.clone(), cwd.to_path_buf()).timeout(timeout);
-    let output = run.call(&request).map_err(|e| CharError {
+    let output = run.call_with_tick(&request, tick);
+    tick();
+    let output = output.map_err(|e| CharError {
         class: ErrClass::Environment,
         r#where: "docker".to_string(),
         message: match e.kind {
@@ -357,7 +382,14 @@ mod tests {
     #[test]
     fn listing_filters_on_the_workspace_label() {
         let run = FakeRun::with(&["", ""]);
-        list_labelled(&run, cwd(), Duration::from_secs(30), Kind::Container).unwrap();
+        list_labelled(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Container,
+            &mut || {},
+        )
+        .unwrap();
         assert_eq!(
             run.seen.borrow()[0],
             vec![
@@ -376,7 +408,14 @@ mod tests {
         // `-a` is the difference between reaping a stopped container and
         // leaving it holding its name and its volumes.
         let run = FakeRun::with(&[""]);
-        list_labelled(&run, cwd(), Duration::from_secs(30), Kind::Container).unwrap();
+        list_labelled(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Container,
+            &mut || {},
+        )
+        .unwrap();
         assert!(run.seen.borrow()[0].contains(&"-a".to_string()));
     }
 
@@ -387,7 +426,14 @@ mod tests {
             "sha256:abc\t{\"char.workspace\":\"a3f91c02\",\
              \"char.workspace_path\":\"/srv/repo\",\"char.namespace\":\"ns-1\"}\n",
         ]);
-        let found = list_labelled(&run, cwd(), Duration::from_secs(30), Kind::Image).unwrap();
+        let found = list_labelled(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Image,
+            &mut || {},
+        )
+        .unwrap();
         assert_eq!(run.seen.borrow()[1][2], "--type=image");
         assert!(run.seen.borrow()[1][4].contains(".Config.Labels"));
         assert_eq!(found.len(), 1);
@@ -399,7 +445,14 @@ mod tests {
     #[test]
     fn networks_and_volumes_read_their_labels_from_a_different_path() {
         let run = FakeRun::with(&["net1\n", "net1\t{\"char.workspace\":\"a3f91c02\"}\n"]);
-        list_labelled(&run, cwd(), Duration::from_secs(30), Kind::Network).unwrap();
+        list_labelled(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Network,
+            &mut || {},
+        )
+        .unwrap();
         let argv = run.seen.borrow()[1].clone();
         assert!(argv[4].contains("json .Labels"), "{argv:?}");
         assert!(!argv[4].contains(".Config"), "{argv:?}");
@@ -447,6 +500,7 @@ mod tests {
             Duration::from_secs(30),
             Kind::Network,
             &["net1".to_string(), "net2".to_string()],
+            &mut || {},
         );
         assert_eq!(results.len(), 2);
         assert_eq!(
@@ -456,6 +510,41 @@ mod tests {
         assert_eq!(
             run.seen.borrow()[1],
             vec!["docker", "network", "rm", "net2"]
+        );
+    }
+
+    /// The heartbeat is bounded by **one subprocess**, not by the batch. Three
+    /// handles is three `docker rm` calls, each with its own deadline, and a
+    /// renewal that only happened when `remove` returned would leave ninety
+    /// seconds of silence against a hung daemon — thirty past cold.
+    #[test]
+    fn every_subprocess_gets_a_tick_however_many_one_call_makes() {
+        let run = FakeRun::with(&["", "", ""]);
+        let mut ticks = 0;
+        remove(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Network,
+            &["net1".to_string(), "net2".to_string(), "net3".to_string()],
+            &mut || ticks += 1,
+        );
+        assert!(ticks >= 3, "one tick per `docker rm` at least, got {ticks}");
+
+        // Two calls inside one function, for the same reason.
+        let run = FakeRun::with(&["c1\n", "c1\t{\"char.workspace\":\"a3f91c02\"}\n"]);
+        let mut ticks = 0;
+        list_labelled(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Container,
+            &mut || ticks += 1,
+        )
+        .unwrap();
+        assert!(
+            ticks >= 2,
+            "the `ls` and the `inspect` both tick, got {ticks}"
         );
     }
 
@@ -471,6 +560,7 @@ mod tests {
             Duration::from_secs(30),
             Kind::Container,
             "label=com.example.worktree=a3f91c02",
+            &mut || {},
         )
         .unwrap();
         assert_eq!(found, vec!["c1", "c2"]);
@@ -504,7 +594,7 @@ mod tests {
                 })
             }
         }
-        let err = daemon_ready(&Missing, cwd(), Duration::from_secs(1)).unwrap_err();
+        let err = daemon_ready(&Missing, cwd(), Duration::from_secs(1), &mut || {}).unwrap_err();
         assert_eq!(err.class, ErrClass::Environment);
         assert_eq!(err.class.exit_code(), 6);
     }
@@ -523,7 +613,7 @@ mod tests {
                 })
             }
         }
-        let err = daemon_ready(&Hung, cwd(), Duration::from_secs(1)).unwrap_err();
+        let err = daemon_ready(&Hung, cwd(), Duration::from_secs(1), &mut || {}).unwrap_err();
         assert_eq!(err.class, ErrClass::Environment);
         assert!(err.message.contains("did not answer"));
     }
