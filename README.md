@@ -14,8 +14,11 @@ incidental.
 
 Five things go wrong in every repo, every day: starting the apps, running linters, running
 all the tests, **cleaning up after a run**, and **initialising a fresh checkout**. The last
-two are the same bug — you cannot clean up what you never claimed, and claiming happens at
-init. That observation is the whole design.
+two are the same bug — you cannot clean up what you never claimed. So char stamps every port,
+container, network, volume, image and process with the workspace that made it, and `clean`
+becomes a query rather than a memory. That is the whole design, and the property that follows
+is the one no other tool has: **char can still reclaim a workspace's resources after the
+directory is gone.** `docker compose down` needs the file.
 
 | Verb | Contract |
 |---|---|

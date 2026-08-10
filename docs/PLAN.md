@@ -89,8 +89,23 @@ It exists because five things go wrong in every repo, every day:
 | 4 | **Clean up after itself** | Nothing knows what a run created, so nothing can reliably destroy it. |
 | 5 | **Initialize the code** | At the repo root *and* in a fresh worktree — deps, env, DB, non-colliding ports. |
 
-**4 and 5 are the same bug**: you cannot clean up what you never claimed, and claiming
-happens at init. That observation is the entire design.
+**4 and 5 are the same bug**: you cannot clean up what you never claimed. That observation is
+the entire design, and the primitive it produces is **stamp at creation, reap by stamp** —
+every port, container, network, volume, image and process carries the workspace that made it,
+so `clean` is a query rather than a memory.
+
+**Said precisely, because the short version is wrong in a way that matters:** claiming does not
+all happen at `init`. `init` claims the port block; `up` creates almost everything else. What
+`init` and `clean` share is not a moment, it is the stamp — and an earlier phrasing here
+("claiming happens at init") made it into the README as the design's whole justification while
+being false for five of the six resource classes. The consequence of believing it is real: you
+hook reaping to `init` alone and never reap on shrinkage.
+
+**The one thing this primitive does not reach is the one thing worth being loud about.** A
+resource outside the machine — a cloud database, a remote namespace — is stampable only if the
+provider has labels char can filter on. `owns.release:` records those and **reports them,
+never runs them** (§6.1). So the honest scope is: char reclaims everything it created locally,
+and tells you about the rest.
 
 ### Evidence this is a real problem
 
@@ -290,7 +305,14 @@ the only property that matters — you cannot `stat` a hash.
 every resource char ever creates; changing it later leaves everything created beforehand
 unreapable by the new logic, which is precisely the orphan class the tool exists to prevent.
 
-`init` is the right hook for three reasons: it is where the outage actually originated
+**Reaping runs at `init` *and* `clean`, because `init`-only misses shrinkage entirely.** The
+argument for `init` is that repeated worktree create/destroy always runs `init` in the new one
+— true for churn, false for the last one. Delete worktree 5 of 5 and nothing reaps until
+somebody happens to create worktree 6, which on a shrinking project is never. `clean` already
+walks the same tables and is the verb whose job this is; adding the pass costs one query and
+closes the case where the leak lasts longest.
+
+`init` is still the right *primary* hook, for three reasons: it is where the outage actually originated
 (repeated worktree create/destroy always runs `init` in the new one), it already holds the
 database open to claim a port block, and it is infrequent enough that a docker call costs
 nothing noticeable.
