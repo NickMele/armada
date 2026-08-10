@@ -31,7 +31,7 @@ reached through a function passed in, never imported. There are exactly three:
 | Seam | Covers |
 |---|---|
 | `run` | every subprocess — and therefore docker, git, and every `cmd:` from `char.yml` |
-| `now` | timeouts, heartbeat mtime staleness, `claimed_at` |
+| `now` | timeouts, heartbeat staleness (monotonic), `claimed_at` (wall) |
 | `fetch` | `http` and `tcp` ready-checks |
 
 They travel together with the workspace in one frozen dataclass, passed as the first
@@ -39,9 +39,9 @@ argument:
 
 ```rust
 pub struct Ctx<R: Run, C: Clock, F: Fetch> {
-    pub workspace: Workspace,
+    pub workspace: Option<Workspace>,   // None for config scan / clean --all --orphaned
     pub run: R,      // every subprocess
-    pub now: C,      // timeouts, heartbeats, claimed_at
+    pub now: C,      // wall_rfc3339() + mono() + sleep_until(); see PLAN.md §4.3
     pub fetch: F,    // http and tcp ready-checks
 }
 ```
@@ -111,6 +111,47 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>)
 the language decision landed where it did (PLAN.md §10.1). Adding a variant without handling
 it is `error[E0004]`, unconditionally — measured, not assumed. The types are not documentation
 of the scheduler's specification; they *are* the specification, and the compiler checks it.
+
+**Which means the membership belongs here, not in the implementer's head.** An implementer
+building phase 1 from these documents found zero variants enumerated anywhere and invented
+eleven events and nine actions — and two implementers doing that produce two incompatible
+schedulers, the exact failure phase 1 exists to prevent. The set is small and it is a
+contract:
+
+```rust
+enum Event {
+    Started,                                  // the run begins
+    LeaseGranted  { check: CheckId, kind: LeaseKind },
+    LeaseDenied   { check: CheckId, kind: LeaseKind, holder: WorkspaceId },
+    ChildSpawned  { check: CheckId, pgid: Pgid },
+    ChildOutput   { check: CheckId, bytes: usize },   // for log caps, not content
+    ChildExited   { check: CheckId, code: i32 },
+    SpawnFailed   { check: CheckId, err: ErrClass },
+    Deadline      { check: CheckId },          // this check's own timeout
+    AcquireCeiling{ check: CheckId },          // acquire_timeout elapsed
+    Interrupted,                               // SIGINT
+    WorkspaceGone,                             // the root stat returned ENOENT
+}
+
+enum Action {
+    Acquire   { check: CheckId, kind: LeaseKind },
+    Release   { check: CheckId, kind: LeaseKind },
+    Spawn     { check: CheckId, argv: Vec<String>, env: EnvDelta, cwd: PathBuf },
+    Kill      { check: CheckId, escalate: bool },   // false = TERM, true = KILL
+    Renew,                                          // heartbeat every live lease
+    Sleep     { until_mono: u64 },
+    Emit      { result: CheckResult },
+    Finish    { status: Status, error: Option<Error> },
+    Reap,                                           // non-blocking child reap
+}
+```
+
+`State` is the run: the check graph with each check in one of `Pending`, `Waiting`, `Running`,
+`Done`, `Skipped`, plus the leases held and the deadlines outstanding. Nothing else — anything
+the shell can re-derive does not belong in it.
+
+**These are a floor, not a ceiling.** A phase may add a variant; it may not quietly reinterpret
+one, and a variant added without a matching arm is a compile error, which is the whole point.
 
 Two rules follow, and both exist to keep that property:
 
@@ -219,7 +260,8 @@ travel together rather than as seven separate arguments.
 
 ```
 charkit/
-  core/       pure. depends on std and its own traits. nothing else.
+  core/       pure. std, its own traits, and pure data crates (serde,
+              serde_yaml, serde_json, regex). NO I/O crate, ever.
   adapters/   docker, git, filesystem, process. import core protocols only.
   cli/        the ONLY module that imports both, and wires them together.
 ```
@@ -295,8 +337,8 @@ following it literally would map them into a class.
 **Broken pipe is now resolved: `141`.** `char status | head` must not read as a failure, and
 Rust's runtime sets `SIGPIPE` to `SIG_IGN` at startup, so without intervention the process
 *panics* with exit 101 — worse than nothing. Restoring the default disposition in `main` gives
-the ordinary Unix behaviour: silent death, exit 141. That is one of exactly three `unsafe` blocks
-the design permits; all three are recorded in `traps.md`.
+the ordinary Unix behaviour: silent death, exit 141. That is one of exactly four `unsafe` blocks
+the design permits; all four are recorded in `traps.md`.
 
 **The envelope**, fixed in phase 1 alongside the config contract and for the same reason —
 four things consume it and none can invent it independently. Full definition in PLAN.md §3.1.
@@ -803,7 +845,7 @@ when the copy and the owner disagree, the owner wins and the copy is the bug.
 | Public or private | **Public** | Phase 7 publishes release binaries and the install story is a `curl` one-liner, so it is public in effect regardless — a public package with a private source repo has no issue tracker and no source link. Also makes Actions free. |
 | License | **Apache-2.0** | Explicit patent grant, clears corporate legal review, no adoption cost. |
 | CI | **Both** — `no-mistakes` primary, minimal Actions matrix alongside | Actions supplies the one thing a local gate cannot: a machine that is not yours, and Linux as well as macOS. Process groups, signals and file locks are load-bearing; verifying real process-group kill only on macOS leaves the platform most users are on untested. Free on a public repo. `no-mistakes` keeps the agent review step, which is the only actual review in a solo repo. |
-| Typing | **The compiler** | The decision that produced "mypy strict from commit one" is satisfied for free and more strongly: there is no gradual-typing escape hatch and no `Any` leaking in from untyped dependencies. `unsafe` is denied crate-wide **except in `adapters`' POSIX process module**, which carries a documented `allow` covering exactly three calls — `libc::signal` (SIGPIPE), `setsid` inside `pre_exec`, and `libc::killpg`. An earlier draft said "exactly two" and denied `unsafe` everywhere, which rejects `killpg` — the project's central cleanup primitive, and an unsafe extern fn. |
+| Typing | **The compiler** | The decision that produced "mypy strict from commit one" is satisfied for free and more strongly: there is no gradual-typing escape hatch and no `Any` leaking in from untyped dependencies. `unsafe` is denied crate-wide **except in `adapters`' POSIX process module**, which carries a documented `allow` covering exactly four calls — `libc::signal` (SIGPIPE), `setsid` inside `pre_exec`, `libc::killpg`, and `clock_gettime` for the monotonic heartbeat column. All four live in that module; `main` restores SIGPIPE by calling `adapters::posix::restore_sigpipe()`, so `cli` contains no `unsafe` of its own. An earlier draft said "exactly two" and denied `unsafe` everywhere, which rejects `killpg` — the project's central cleanup primitive, and an unsafe extern fn. |
 | Rust edition / MSRV | **2021 edition** | MSRV pinned in `Cargo.toml`, raised deliberately. Users are unaffected either way — they receive a static binary, so no toolchain is required to run `char`. |
 | Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real concurrent claim races or real docker labels — the exact failures char exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
 | Coverage | **Gated, ratchet floor** | Floor is set by the first real measurement and may only rise; a PR that lowers coverage fails. Chosen over a fixed percentage because no project data exists to ground a number — 80 and 90 are convention, not evidence. `#[coverage(off)]`, or a documented exclusion, with a reason comment, is the escape for genuinely untestable lines. |

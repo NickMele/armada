@@ -125,7 +125,7 @@ and `char status` must connect on both families before reporting `RESERVED`. `SO
 both sides remains undetectable; nothing char does prevents that, so it is a known limit rather
 than a bug to fix.
 
-## Rust — two required rules in the POSIX primitives
+## Rust — the POSIX primitives, and the rules each one forces
 
 Both sit in machinery `PLAN.md` §7 calls load-bearing, and both are one line you must not
 forget. Measured 2026-08-09 against Rust 1.97.1.
@@ -142,14 +142,14 @@ the Python it replaced. `#[unix_sigpipe]` is not stabilised on 1.97.1.
 unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL); }
 ```
 
-This yields exit **141** and a silent, correct death — the ordinary Unix behaviour. It is one of the three `unsafe`
+This yields exit **141** and a silent, correct death — the ordinary Unix behaviour. It is one of the four `unsafe`
 blocks the design permits.
 
 ### `setsid` is not in `std`, and it is mutually exclusive with `process_group(0)`
 
 `Command::process_group(0)` gives a new process *group* in the **same session**. Detaching
 from the controlling terminal — what `char up` requires — needs `setsid` via `libc` inside
-`pre_exec`. That is the second of three permitted `unsafe` blocks.
+`pre_exec`. That is the second of four permitted `unsafe` blocks.
 
 **Measured: setting both fails.** `process_group(0)` *and* `pre_exec(setsid)` on the same
 `Command` returns `Operation not permitted (os error 1)` — `setsid` fails when the caller is
@@ -272,7 +272,7 @@ signal-derived codes, covering `130` and `141` together.
 
 ## Docker Compose
 
-Measured against **Docker Compose v5.3.1**, 2026-08-09. **An earlier version of this section
+Measured against **Docker Compose v5.3.1**, 2026-08-09. Eleven entries. **An earlier version of this section
 was headed v2.24.3-desktop.1, which is not what is installed** — so every entry below was
 re-run against v5.3.1 before being trusted. Four reproduced unchanged; one is version-dependent
 and is marked.

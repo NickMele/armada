@@ -3,7 +3,7 @@
 > **Status:** Phase 0 complete; phase 1 not started. This document is the complete
 > specification — a fresh agent should be able to execute it without any prior conversation.
 >
-> **§0.1 and §0.2 are superseded by [`ARCHITECTURE.md`](ARCHITECTURE.md)**, which records what
+> **`PHASES.md` §0.1 and §0.2 are superseded by [`ARCHITECTURE.md`](ARCHITECTURE.md)**, which records what
 > was actually decided. Everything else here stands.
 >
 > **Precedence: where this document and `ARCHITECTURE.md` disagree, `ARCHITECTURE.md` wins.**
@@ -200,9 +200,23 @@ project_id   = sha1(realpath(`git rev-parse --path-format=absolute --git-common-
 > database's project filter, and the guarantee that worktrees group with their parent. Verify
 > this behaviour before changing the line; it is not obvious from the command's name.
 
-Known and accepted: because the id derives from a path inside the parent checkout, moving or
-deleting that checkout regroups every surviving worktree. It only affects the grouping key,
-which owns nothing (below), and it is recoverable by recomputation.
+Known and accepted, and worse than an earlier draft claimed. That draft said deleting the
+parent checkout "regroups every surviving worktree… recoverable by recomputation". **Measured:
+it does not regroup — it becomes underivable.** Inside an orphaned worktree,
+`git rev-parse --path-format=absolute --git-common-dir` prints `fatal: not a git repository:
+(null)`, so there is no key to recompute:
+
+```sh
+rm -rf main/                     # the parent checkout
+cd wt && git rev-parse --path-format=absolute --git-common-dir
+# fatal: not a git repository: (null)
+```
+
+This is survivable only because `project_id` **owns nothing** (below). char therefore treats an
+underivable project as `project: null` rather than an error: `--project` scoping and the
+database's project filter stop working for that worktree, `--all` and the workspace id keep
+working, and nothing leaks. Making it fatal would take a worktree whose resources are perfectly
+reclaimable and refuse to reclaim them.
 
 - **workspace id** — owns ports, containers, networks, processes, locks. One per checkout.
 - **project id** — owns nothing. Purely the grouping key: every worktree shares one
@@ -223,21 +237,20 @@ Every port, container, network, **volume**, **image** and process char creates i
 with the workspace id. That single fact is what makes `clean` correct, and it is the highest-value
 primitive in the project.
 
-- Containers/networks/**volumes**/images: **two** labels, `char.workspace=<id>` and
-  `char.workspace_path=<realpath>` — see §2.3.1 for why the second one is not redundant.
-  **Networks and volumes must be stamped separately from services**, because compose does not
-  propagate a service's labels to the network or the named volumes it creates from the same
-  document — measured, and it is the founding bug of this project reappearing inside its own
-  design (`traps.md`). Volumes were absent from this vocabulary entirely until a review found
-  it; a named volume outlives `down`, outlives the container, and is invisible to every filter
-  char would use to find it.
+- Containers/networks/**volumes**/images: **three** labels — `char.workspace=<id>`,
+  `char.workspace_path=<realpath>` and `char.namespace=<id>` (§2.3.1) — see §2.3.1 for why the second one is not redundant.
+  **Networks and volumes must be stamped separately from services** — compose does not
+  propagate a service's labels to either (`traps.md`), so stamping services is not stamping the
+  stack. Volumes were absent from this vocabulary entirely until a review found it; a named
+  volume outlives `down`, outlives the container, and is invisible to every filter char would
+  otherwise use to find it.
 - Processes: tracked process-group id, spawned in a new session via `setsid` (see
   [`traps.md`](traps.md) — **not** `process_group(0)`, which conflicts with it), killed with
   `killpg`. **Recorded in `~/.char/char.db` (§4.3), not in the workspace** — a pgid
   recorded inside a directory that gets deleted is a leaked process
 - Ports: claimed blocks in `~/.char/char.db`, released on `clean`
 
-### 2.3.1 Reaping happens automatically, at `char init`
+### 2.3.1 Reaping happens automatically, at `char init` and `char clean`
 
 **The plan's one piece of empirical evidence is a sweep function that existed and was never
 called.** An earlier draft answered that with `char clean --orphaned` — a manual, opt-in flag
@@ -297,7 +310,7 @@ cites devcontainers as the reason for it.
 Stamping the path makes pass 2 **self-sufficient**: it stats a real directory and consults
 nothing. "Labelled, no row, but the path exists" is now **adopt or report, never remove.**
 
-Two costs, accepted: one extra label per resource, and the workspace path becomes visible in
+Two costs, accepted: two extra labels per resource, and the workspace path becomes visible in
 `docker inspect` to anyone on the machine. Hashing the path instead would hide it but destroy
 the only property that matters — you cannot `stat` a hash.
 
@@ -325,13 +338,22 @@ for free. Ordering is cheap and the asymmetry is total — one direction degrade
 other to a no-op.
 
 ```
-1. leases      release this workspace's (so nothing new starts)
+0. run lease   HELD THROUGHOUT — released last, at step 7
+1. leases      release this workspace's cpu-slots and exclusives only
 2. processes   killpg TERM -> grace -> KILL, confirm gone
 3. docker      containers, then networks and volumes, then built images
 4. ports       release the block
 5. rows        delete owned/workspaces rows
 6. .char/      remove the directory
+7. run lease   release
 ```
+
+**Step 0 is the whole point and an earlier version of this list got it backwards** — it
+released the run lease first, annotated "so nothing new starts", which is precisely what lets
+something new start. A concurrent `char up` would take the freed lease and start services into
+a workspace being torn down, which is the race the lease was extended to `clean` to close.
+Only the *resource* leases go early, and only because holding a cpu-slot while tearing down
+blocks other workspaces for no reason.
 
 **`up` records before it spawns, and this is the opposite of `clean`'s order.** `clean` kills
 before deleting rows; `up` writes the row before creating the resource. Both follow the same
@@ -408,10 +430,10 @@ everything else is config. **Every verb takes `--json`.**
 | Verb | Contract | Terminal states |
 |------|----------|-----------------|
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent **in char's own state** — see §4.1. | `READY` `FAILED` |
-| `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `FAILED` `TIMEOUT` |
+| `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `SKIPPED` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` `PARTIAL` `FAILED` |
-| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix` / `--files` / `--jobs`. | `PASS` `SKIPPED` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
-| `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases — and remove `.char/`. Declared `release:` commands are **reported, never run** (§6.1). Build artifacts only with `--artifacts` (§6.1). | `CLEAN` `PARTIAL` `FAILED` |
+| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix` / `--files` / `--all-files` / `--jobs`. | `PASS` `SKIPPED` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
+| `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases — and remove `.char/`. Declared `release:` commands are **reported, never run** (§6.1). Build artifacts only with `--artifacts`; `--force` overrides the liveness guard; `--orphaned --force-rebuild` recovers an unreadable `char.db` (§4.3). | `CLEAN` `PARTIAL` `SKIPPED` `FAILED` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
 Plus: `char config scan`, `char config verify`, `char agents-md [--write|--verify]`, and any
@@ -500,11 +522,15 @@ touches N workspaces. So they share one array shape, learned once:
         "error": { "class": "timeout", "message": "exceeded timeout: 900s" } },
       { "id": "api:test", "status": "ABORTED", "duration_ms": 0 }
     ],
-    "skipped": 0 } }
+    "results": [ ... ] } }
 ```
 
-**The top-level `error` is the aggregate**, chosen by a fixed precedence so two implementations
-cannot disagree:
+**The top-level `error` is the strict maximum over `results[]`** by a fixed precedence, so two
+implementations cannot disagree — and note what that means for the payload above: it contains a
+`TIMEOUT`, so the aggregate is `timeout` and the run exits **4**, not 1. That is deliberate. A
+gate reading 1 goes looking for a broken test; reading 4 it raises a deadline or asks why the
+suite got slow. The strictly-worse signal wins because acting on the milder one wastes the
+time the stricter one was reporting.
 
 ```
 char_bug  >  environment  >  bad_config  >  timeout  >  aborted  >  tool_failed
@@ -611,8 +637,9 @@ what modern Node does. So char probes **both** `127.0.0.1` and `[::1]` and treat
 `EADDRINUSE` as taken. `SO_REUSEPORT` on both sides remains undetectable and is a stated limit,
 not a bug. An earlier draft named `SO_REUSEADDR` as the defeating case and cited
 [`traps.md`](traps.md) for a measurement that was not there; `SO_REUSEADDR` does not defeat it. `CONFLICT` is the only way a port taken by a
-non-char process reaches a caller instead of surfacing as a mysterious bind failure. It costs
-one `connect()` per declared port.
+non-char process reaches a caller instead of surfacing as a mysterious bind failure. It costs one `bind()` attempt per declared port, on both `127.0.0.1` and `[::1]` — **not a
+`connect()`**, which answers the opposite question and reports a listening-but-idle socket as
+free.
 
 | State | Meaning |
 |---|---|
@@ -662,13 +689,16 @@ not runs `api:test` and exits 0.
 lint   types   test   e2e
 ```
 
-They are exactly the check names §4.1's example config uses, and nothing more. An earlier
+They are the check names §4.1's example config uses, minus `build` — conventional in name but not in signal, since a failed build is not a failed lint. An earlier
 draft listed six, adding `build` and `fmt`, and justified the set with *"all six fixtures
 already use exactly these names"* — a claim about artifacts that do not exist yet, and one
 that also broke the growth rule stated below. `build` and `fmt` join the set the first time a
 fixture actually declares them.
 
-- **A conventional name matching nothing** → `PASS`, empty `data.results[]`, exit 0. "This
+- **A conventional name matching nothing** → `SKIPPED`, empty `data.results[]`, exit 0. Not
+  `PASS`: the reason `SKIPPED` exists (§3.1) is that claiming approval when nothing ran is the
+  failure mode, and that argument does not care whether the reason nothing ran was zero files
+  or zero matching checks. "This
   workspace has no lint checks" is a real and unremarkable answer, and it is what lets an
   orchestrating agent run `char check lint` across five workspaces without special-casing
   the three that lack it.
@@ -869,7 +899,7 @@ components:
         needs: []                # boots its own servers — see §4.4
 ```
 
-#### Four things the above example uses and an earlier draft never defined
+#### Six things the above example uses and an earlier draft never defined
 
 **`${port.NAME}` is a single workspace-global namespace**, not per-component. A component may
 reference another's port — `multi-lang`'s Rust worker builds `CONTROL_URL` from the Elixir
@@ -1034,7 +1064,7 @@ Four semantics, because leaving any of them to the implementer produces four dif
 > produced, whether the output changed, or whether it could have been skipped. **The moment char
 > asks whether a prerequisite's output is stale, it has become turbo, badly.**
 >
-> Honest risk, recorded because §8.1's `pnpm-monorepo` fixture exists to ask this exact
+> Honest risk, recorded because [`PHASES.md`](PHASES.md) §8.1's `pnpm-monorepo` fixture exists to ask this exact
 > question: ordering is the first step of the slope §7 names. It was added because inter-check
 > ordering is real and common — `ui:types` genuinely cannot run before `core:build` — and
 > because the scheduler already holds an ordering graph for `needs:` against components, so this
@@ -1173,23 +1203,38 @@ deleted.
 
 ```
 workspaces   id, path, project, ports, claimed_at
-owned        workspace, kind, ref, boot_id, started_at
+owned        workspace, kind, ref, boot_id, pid_started_at
                  kind = container | network | volume | image | pgid
 leases       workspace, kind, key, heartbeat_mono, boot_id, pid, pid_started_at
-                 kind = run-lock | cpu-slot | exclusive
+                 kind = run | machine | cpu-slot | exclusive
+                 `machine` rows carry a NULL workspace — see clean --all (§3.3)
 
 PRAGMA user_version = 1        written at creation; see below
 ```
 
-**`heartbeat_mono` is a monotonic reading, not a wall clock.** `ARCHITECTURE.md` §1.1 gives
-`now` three jobs and one of them is heartbeat staleness — but a backwards NTP step, or a laptop
-resuming after four hours, makes a live holder's heartbeat look arbitrarily cold on a wall
-clock, and a stolen exclusive is exactly the outcome this section rejected a TTL to avoid:
-*two workspaces hold one mutex with no error anywhere.* Staleness is measured on
-`CLOCK_MONOTONIC`, which does not step; `claimed_at` stays wall clock because it is only ever
-displayed. Monotonic readings are meaningless across a reboot, which is what `boot_id` is for.
+**`heartbeat_mono` is a suspend-excluding monotonic reading, and naming the semantics matters
+more than naming a constant.** `CLOCK_MONOTONIC` means opposite things on the two platforms
+this project supports: measured on darwin it counted **4.4 days of sleep** on this machine,
+while Linux's excludes suspend. The one char wants is the one that does *not* advance while the
+machine is suspended — because the lease holder was not running either, so its heartbeat should
+not age. Rust's `Instant` already picks correctly on both (`CLOCK_UPTIME_RAW` on darwin,
+`CLOCK_MONOTONIC` on Linux, verified), so the rule is **`Instant` semantics**, and a `libc`
+call only because an `Instant` cannot be stored in a column. That is a **fourth** `unsafe`
+call, in the same POSIX module as the other three, and it is why the count is four rather than
+three.
 
-**`boot_id` and `pid_started_at` are what make a pgid reclaimable.** Without them, every
+Getting this backwards is not a small error: the sleep-counting clock makes a live holder look
+arbitrarily cold after a laptop resumes, which is the two-workspaces-one-mutex outcome this
+section rejected a TTL to avoid. `ARCHITECTURE.md` §1.1 gives `now` three jobs and one of them is heartbeat staleness — but a
+backwards NTP step makes a live holder's heartbeat look cold on a wall clock. `claimed_at`
+stays wall clock because it is only ever displayed. Monotonic readings are meaningless across a reboot, which is what `boot_id` is for.
+
+**`boot_id` and `pid_started_at` are what make a pgid reclaimable.** Sources, because "boot
+id" is not a portable concept: `sysctl kern.bootsessionuuid` on darwin (verified present and
+stable; there is no `/proc/sys/kernel/random/boot_id`) and `/proc/sys/kernel/random/boot_id` on
+Linux. `pid_started_at` comes from `ps -o lstart` on darwin, which is 1-second resolution — so
+pid reuse inside the same second is undetectable, and the check is a strong filter rather than
+a proof. Without them, every
 `owned` pgid row survives a reboot as an unreclaimable "possible leak" that `status --all`
 reports forever, because char cannot tell a recycled pid from its own. With them it can: a row
 whose `boot_id` is not the current one is stale by definition, and a live pid whose start time
@@ -1215,11 +1260,20 @@ silent.** Measured: delete `char.db` while a process holds it open under WAL and
 keeps reading and writing a consistent world through the unlinked inode, while the next process
 creates a fresh file at the same path and hands out a port block the first one already holds.
 Neither errors. A zero-length `char.db` — an interrupted write, a synced-home conflict copy —
-is worse still: it reports `no such table`, which is indistinguishable from a fresh install. So:
-**a database with no `user_version` where rows were expected is `environment`, not a fresh
-install**, and char says the state store is gone rather than quietly issuing a duplicate claim.
-The bind probe does not save you here — a workspace that ran `init` then `down` holds its block
-with nothing bound.
+is worse still: it reports `no such table`, which is indistinguishable from a fresh install. **The holder detects this; the newcomer cannot.** Measured, and it bounds what the sentinel
+can do: to the second process the unlinked case reports `user_version=0` and `no such table` —
+byte-identical to a genuine fresh install and to a zero-length file. There is no discriminating
+bit available to it, so a sentinel check there would either be a no-op or would refuse every
+real first run.
+
+What *is* available is on the holder's side: `fstat` on its own open handle returns
+`st_nlink == 0` once the file is unlinked — measured. So **a long-running verb re-checks
+`st_nlink` on each loop iteration and ends `environment` when it hits zero**, which stops the
+divergence at the process that can actually see it. The newcomer proceeding as a fresh install
+is then correct rather than merely unavoidable: by the time it matters, the holder has stopped.
+
+The bind probe does not save you either — a workspace that ran `init` then `down` holds its
+block with nothing bound.
 
 The `project` column is the whole implementation of `--project`: filter by it, then read the
 `owned` rows. Claims are idempotent by workspace id.
@@ -1268,6 +1322,10 @@ hold      renew the heartbeat from the shell's event loop
           preference.
 release   delete the row on exit
 reclaim   a lease whose heartbeat has gone cold is dead — take it
+          COLD = 60 monotonic seconds without a renewal, against a renewal
+          interval of 5s. Twelve missed renewals, because the cost of being
+          wrong is a stolen exclusive and the cost of waiting is one minute.
+          This is not a TTL: it bounds silence, not the hold.
 ```
 
 **Renewal happens in the shell loop that steps the reducer — not a background timer.** That
@@ -1292,8 +1350,15 @@ A wedged holder therefore blocks until killed, and `char status --all` names it 
 has held. **Residual gap, stated rather than papered over:** a loop that keeps turning while
 achieving nothing is a char bug, not a wedge, and no lease mechanism catches it.
 
-**The run lease covers `init`, `up`, `down`, `clean` and `check` — every mutating verb, not
-just `check`.** One per workspace, taken for the duration. Two agents in the same worktree is
+**The run lease covers `init`, `up`, `down`, `clean`, `check` and every `commands:` entry —
+everything that mutates.** `commands:` entries are included because they declare `owns:`
+selectors that `clean` later deletes; without the lease, `char worktrees clean` and `char clean`
+run concurrently over the same resources.
+
+**`--status` and `--dry-run` take no lease, on any verb.** They read. Excluding them is not a
+nicety: `--status` is a flag on `check`, and the documented remedy for "a run is already in
+flight" is *`char check --status` to watch it* — which the lease would have made fail fast with
+exit 2 in the only situation it is for. One per workspace, taken for the duration. Two agents in the same worktree is
 the ordinary case this project assumes, and without it their `init` runs interleave setup steps
 against the same tree, or one's `clean` tears down what the other's `up` is mid-way through
 starting. `status` takes nothing: it reads.
@@ -1326,25 +1391,35 @@ So a waiting check is **visible in the payload**, naming what it waits on and wh
   "waiting_on": { "exclusive": "browser", "held_by": "7c21ab90", "since_ms": 44000 } }
 ```
 
-**The ceiling is 15 minutes of cumulative waiting per check, and it is configurable** —
+**`--wait` is exempt from the ceiling.** `acquire_timeout` bounds waits char imposes — a
+cpu-slot, an exclusive — because those are queueing the caller never asked for. `--wait` is the
+caller asking, and the fixtures contain a 1800-second check, so a 900-second ceiling would turn
+"queue behind that run" into "fail `aborted` after fifteen minutes" for a run behaving exactly
+as specified. `--wait` blocks reporting `WAITING` until the lease is free or the caller
+interrupts.
+
+**The ceiling is 20 minutes of cumulative waiting per check, and it is configurable** —
 `acquire_timeout` in `~/.char/config.toml` (§4.3.1), machine-global like everything else about
 resource budget. It counts time spent waiting to acquire, not time spent running; a check that
 waits 14 minutes and then runs for an hour is not affected. It exists so that an abandoned
 lease whose holder died between heartbeat and reap cannot hang a merge gate indefinitely, and
-15 minutes is chosen to be longer than any legitimate exclusive hold in the fixture set
-(`web:e2e`, the longest, is ~6 minutes) and short enough that a human notices.
+It is sized against the longest legitimate exclusive hold in the fixture set — `web:e2e` at
+`timeout: 900`, which is exactly 15 minutes. So the ceiling must be **strictly greater**:
+`acquire_timeout` is **1200** (20 minutes). An earlier draft set it to 900 and justified it
+with "~6 minutes", a figure no fixture supports; it would have fired on a healthy merge-gate
+run, with the retryable class, for a check behaving exactly as its own fixture specifies.
 
 After it expires the check fails with a **retryable** class:
 
 ```
-status: FAILED   error.class: aborted   "browser held by 7c21ab90 for 15m"
+status: FAILED   error.class: aborted   "browser held by 7c21ab90 for 20m"
 ```
 
 That is the shape SQLite itself uses, measured in [`traps.md`](traps.md): a contending writer
 waits the full `busy_timeout` and then fails with `SQLITE_BUSY` (5), which is retryable —
 distinct from `BUSY_SNAPSHOT` (517), which arrives in microseconds and is not.
 
-**Four more extended codes arrive through the identical error type and mean something else
+**Three more extended codes arrive through the identical error type and mean something else
 entirely.** `SQLITE_FULL` (13), `SQLITE_CANTOPEN` (14) and `SQLITE_CORRUPT` (11) are all class
 `environment` — the machine is broken, not the config and not the tool. Branch on the extended
 code, never the message, and never let one of these fall into the retry path that 5 belongs to:
@@ -1430,7 +1505,7 @@ cpu_slots       = 6      # default: max(1, num_cpus - 2)
 port_block_size = 10
 run_retention   = 10     # runs kept; see the 10 MB per-check log cap (§3.1)
 check_timeout   = 900    # per-check default, overridable per check (§4.1)
-acquire_timeout = 900    # cumulative wait for leases before FAILED/aborted (§4.3)
+acquire_timeout = 1200   # cumulative wait for leases before FAILED/aborted (§4.3)
 docker_timeout  = 30     # char's own deadline on every docker call (§6)
 ```
 
@@ -1598,7 +1673,7 @@ untouched, and **the command's exit code is returned verbatim** rather than bein
 char's own codes — char did not decide the outcome, so it does not get to classify it.
 
 **That collides with char's own map, and the envelope resolves it.** char assigns meanings to
-`1`–`5` and `70` (`ARCHITECTURE.md` §1.6), so a child exiting `3` is on its face
+`1`–`6` and `70` (`ARCHITECTURE.md` §1.6), so a child exiting `3` is on its face
 indistinguishable from char's own `bad_config`. Two things make it unambiguous:
 
 - **char's own error codes can only occur when the child did not run.** If the child ran at
@@ -1611,7 +1686,9 @@ meaningful codes their own callers already depend on, and rewriting them to prot
 namespace breaks the thing `commands:` exists to preserve.
 
 The same four substitutions apply and no others (§4.4) — plus `${env.NAME}` inside `env:`,
-which is where env composition lives. `${files}` is simply never populated for a `commands:`
+which is where env composition lives. **`${files}` in a `commands:` entry is `bad_config`** —
+the schema rejects it rather than expanding it to nothing, because a silently empty expansion is
+the exact failure §4.1's empty-set rule exists to prevent. `${files}` is never populated for a `commands:`
 entry, since there is no scope to compute.
 
 **A name may not shadow a built-in verb.** `config verify` rejects a `commands:` entry named
@@ -1928,10 +2005,9 @@ real component and check names.
 | `compose` | **Resolve → transform → emit.** See §6.0 — this is not a matter of adding flags to `docker compose`. |
 | `command` | Spawns detached in its own process group, records the pid, waits on the ready-check, kills the whole group on `down` — **SIGTERM, 10s grace, then SIGKILL**. Covers a supervisor, `pnpm dev`, `manage.py runserver`, a Procfile line — anything. |
 
-**The escalation is unconditional, not a retry.** Measured: `killpg(SIGTERM)` against a group
-whose leader runs `trap '' TERM` kills nothing — 3 processes before, 3 after — because children
-inherit an ignored disposition across `fork` and `exec`. One uncooperative leader immunises its
-whole group, and sending SIGTERM again achieves exactly as much as the first one did. `down`
+**The escalation is unconditional, not a retry.** A group leader that ignores SIGTERM
+immunises its whole group, since children inherit an ignored disposition across `fork` and
+`exec` (`traps.md`), and a second SIGTERM achieves exactly as much as the first. `down`
 reports `DOWN` only after the group is confirmed gone.
 
 **One case escalation does not fix:** a service that calls `setsid` itself — ordinary
@@ -1941,18 +2017,30 @@ no `killpg` reaches it. That is detected after the fact, by the port still being
 must be tested against a SIGTERM-ignoring service and a self-`setsid` one; a cooperative
 `sleep` passes while proving nothing.
 
-**Every docker invocation carries char's own timeout — default 30s, `docker_timeout` in
-`~/.char/config.toml`.** The CLI has none: measured against a socket that accepts and never
-replies, `docker ps` and `docker compose up -d` were both still running at 30 seconds with no
-output. The invocation that matters most is the `docker ps` in `init`'s reap pass, because
-without a timeout a hung daemon wedges *every new workspace on the machine*, including the verb
-whose job is recovery. A timeout on a docker call is class `environment`, not `timeout` — the
-repo is fine, the machine is not.
+**Control-plane docker calls carry a 30s timeout; work calls carry the deadline of the thing
+they are doing.** The distinction is not cosmetic: measured, a stock `docker compose up -d`
+with `depends_on: {condition: service_healthy}` took **43 seconds**, and a `docker compose exec`
+running a check took **45**. A blanket 30s kills both and reports `environment`, exit 6 — "fix
+the machine" when nothing is wrong with it — while `check_timeout` sits at 900.
 
-**char probes the daemon before doing compose work.** Measured: `docker compose config`
-returns 0 against a dead daemon, because it is client-side — so §6.0's steps 1 through 3 all
-succeed and char discovers the daemon is gone only at step 4, having done everything else
-first. One `docker version` up front turns that into an immediate `environment` failure.
+| Call | Deadline |
+|---|---|
+| `ps`, `network ls`, `volume ls`, `inspect`, `version` | `docker_timeout`, default **30s** |
+| `compose exec` for an `in:` check | that check's `timeout:` |
+| `compose up`, `build`, `pull` | `up_timeout`, default **600s** |
+| `compose down`, `rm` | `up_timeout` |
+
+Only the first row is `environment` on expiry — those are questions, and a question that
+cannot be answered in 30 seconds means the daemon is wedged. The rest are `timeout`, class
+`timeout`, because a slow build is a slow build.
+
+**The reason a timeout exists at all is the first row.** The CLI has no client-side timeout of its own (`traps.md`), and the call that matters is the
+`docker ps` in `init`'s reap pass: without a deadline a hung daemon wedges *every new workspace
+on the machine*, including the verb whose job is recovery.
+
+**char probes the daemon with `docker version` before doing compose work**, because
+`docker compose config` returns 0 against a dead daemon (`traps.md`) — so §6.0's steps 1
+through 3 all succeed and char discovers the daemon is gone only at step 4.
 
 ### 6.0 The compose driver
 
@@ -1960,7 +2048,7 @@ An earlier draft specified this as *"shells out to `docker compose` with a proje
 derived from the workspace id, port mappings rewritten into the claimed block,
 `--label char.workspace=<id>`."* **Two thirds of that is impossible.** `docker compose` has no
 `--label` flag, and port mappings cannot be rewritten from the command line at all. Only the
-project name was achievable. See §6.2 for what was measured.
+project name was achievable. See [`traps.md`](traps.md) for what was measured.
 
 The mechanism is four steps:
 
@@ -1973,9 +2061,10 @@ The mechanism is four steps:
 2. TRANSFORM ports[].published      → the claimed block
              labels.char.workspace      → <id>       (every service)
              labels.char.workspace_path → <realpath>
-             build.labels.<both of the above>        (services that build)
-             networks.<n>.labels.<both>              TOP-LEVEL, not inherited
-             volumes.<n>.labels.<both>               TOP-LEVEL, not inherited
+             labels.char.namespace      → <ns>       (§2.3.1)
+             build.labels.<all three>                (services that build)
+             networks.<n>.labels.<all three>         TOP-LEVEL, not inherited
+             volumes.<n>.labels.<all three>          TOP-LEVEL, not inherited
 
 3. HOLD      in memory - never written to disk (see below)
 
@@ -2201,7 +2290,7 @@ is the interface you would have designed anyway.
 ## 7. Non-goals
 
 Each of these is a plausible-sounding feature that multiplies maintenance without moving any
-of the five verbs.
+of the six verbs.
 
 - **Inferring intent from a repo scan.** Layer 1 reports facts only.
 - **A build DAG with caching.** turbo and nx own this: task graphs over build outputs, content
@@ -2293,7 +2382,7 @@ unconfusable when both are 8-character hex; and `rmcp` is the only MCP SDK shipp
 extension.
 
 **The cost accepted, stated plainly.** `rmcp` released three major versions in five months —
-v1.0.0 in March, v2.0.0 in June, v3.0.0 in July, one month apart. Go's SDK has had no breaking
+v1.0.0 in March, v2.0.0 in June, v3.0.0 in July. Go's SDK has had no breaking
 major since September 2025. That churn is real and ongoing.
 
 It is accepted because the blast radius is bounded **by decisions already made**: §7 makes a
