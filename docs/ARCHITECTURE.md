@@ -1,6 +1,8 @@
 # charkit — architecture
 
-> **Status:** agreed in Phase 0 (see [`PHASES.md`](PHASES.md)). No source code exists yet.
+> **Status:** agreed in Phase 0 (see [`PHASES.md`](PHASES.md)). Phase 1 has landed: the
+> `char.yml` contract exists as a schema, the structs that mirror it and six fixtures. There
+> is still no runtime — `char` has no verbs.
 >
 > This document records **principles and the reasoning behind them**. The reasoning is the
 > load-bearing part: a rule without its reason gets discarded the first time it is
@@ -781,9 +783,16 @@ The hook must inspect `tool_input` as a whole rather than a `file_path` field, b
 path can arrive through `Read`, `Glob`, `Grep`, or a `Bash` command containing `rg`, `find`,
 `cat`, or `python -c`. Anything less covers the polite failure and misses the interesting one.
 
-**It ships in phase 1**, with the rest of the repo scaffolding, so it exists before phase 3
-needs it. A guard added at the moment it is first needed has already been unenforced for
-every commit before that.
+**It shipped in phase 1**, with the rest of the repo scaffolding, so it exists before phase 3
+needs it — `.claude/hooks/clean-room.sh`, wired in `.claude/settings.json`, with the
+regression suite in `xtask/tests/clean_room_hook.rs`. A guard added at the moment it is first
+needed has already been unenforced for every commit before that, and a guard nothing
+exercises fails in the one direction nobody notices: silently permitting.
+
+One narrowing the tests pin, because it is not obvious from the rule above: for a *writing*
+tool the guard matches the target path only, not the whole payload. This corpus cites the
+source repo by name, so a content match would deny an agent editing `PLAN.md` — ordinary
+work, and not the vector. Reading is.
 
 **The test cases are ported, not rewritten.** The source suite is 2,694 lines asserting on
 behaviour rather than implementation, and the plan calls it the single most valuable asset.
@@ -829,7 +838,16 @@ which one was wrong.
 | Harvester / implementer split | `ARCHITECTURE.md` §2.7 |
 | `--json` envelope and `data.results[]` | `PLAN.md` §3.1 |
 | Terminal-state enum | `PLAN.md` §3 |
+| The `char.yml` contract, key by key | `crates/core/schema/char.schema.json` |
+| Why the contract is shaped that way | `PLAN.md` §4 (prose) and §4.1.1 (what phase 1 settled) |
 | Measured environment behaviour | `traps.md` |
+
+The schema is the one owner that is not a document, and it outranks the prose for the reason
+every other row exists: it is the copy with the most consumers. `config verify` runs it, the
+agent authoring a config in phase 5 reads it before any Rust is involved, and the serde
+structs in `crates/core` mirror it **by hand** — nothing generates either side from the
+other, so the fixture suite is what keeps them together (`PLAN.md` §4.1.1, decision 2). A key
+in the prose that is not in the schema is a defect in the prose.
 
 > **A derived document may not state a fact that is absent upstream.** `AGENTS.md` and
 > `README.md` are summaries: they may restate an owner's fact in shorter form, and they may
@@ -873,5 +891,6 @@ Integration and e2e run on both `ubuntu-latest` and `macos-latest` in the Action
   relitigate them.
 - **Module layout below the three-package split.** `core`/`adapters`/`cli` is fixed; what
   lives inside them is a phase-1 and phase-2 concern.
-- **The `char.yml` schema.** That is phase 1's entire output, and the plan is explicit that
-  it should change while the six fixtures are being written.
+- **The `char.yml` schema.** That was phase 1's entire output, and the plan was explicit that
+  it should change while the six fixtures were being written. It did — what phase 1 settled,
+  and which fixture forced which change, is recorded in `PLAN.md` §4.1.1.

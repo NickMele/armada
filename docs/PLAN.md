@@ -30,8 +30,8 @@
 | **10** | Decisions made — do not relitigate. §10.1 is the language decision | Before arguing with one |
 | 8, 9, 11, 12 | **Moved to [`PHASES.md`](PHASES.md)** — phases, fixtures, source material, risks | Your phase only |
 
-**This document is the contract** — verbs, config schema, envelope, identities, drivers —
-frozen once phase 1 lands. Sequencing lives in [`PHASES.md`](PHASES.md).
+**This document is the contract** — verbs, config schema, envelope, identities, drivers — and
+phase 1 has landed, so it is frozen. Sequencing lives in [`PHASES.md`](PHASES.md).
 
 Companion documents, in precedence order — see `ARCHITECTURE.md` §2.8:
 [`traps.md`](traps.md) (measured) › [`ARCHITECTURE.md`](ARCHITECTURE.md) (decided) ›
@@ -41,9 +41,11 @@ this file (specified) › [`PHASES.md`](PHASES.md) (sequenced) › [`AGENTS.md`]
 
 ## 0. Start here
 
-> **Phase 0 is complete.** It was a working session with the human and produced
-> `ARCHITECTURE.md`, `AGENTS.md`, `traps.md` and the README's contributing section. The
-> numbered steps below are kept as the record of what it did. **Start at [`PHASES.md`](PHASES.md), Phase 1.**
+> **Phases 0 and 1 are complete.** Phase 0 was a working session with the human and produced
+> `ARCHITECTURE.md`, `AGENTS.md`, `traps.md` and the README's contributing section; the
+> numbered steps below are kept as the record of what it did. Phase 1 turned §4 into a schema,
+> six fixtures and a golden snapshot each — see §4.1.1. **Start at
+> [`PHASES.md`](PHASES.md), Phase 2.**
 
 Read §2 (concepts), §4 (config) and [`PHASES.md`](PHASES.md) first — you need the shape of the thing to
 have a useful conversation about how to build it. Then work through **Phase 0 — Foundations**
@@ -58,10 +60,10 @@ have a useful conversation about how to build it. Then work through **Phase 0 �
    first time it is inconvenient.
 4. Stop. Phase 1 is a separate session.
 
-Only then does building start — and phase 1 is still not the CLI. It is the repo skeleton
-plus six fixture configs and their schema. Expect the schema to change while writing them;
-that is the phase working, not a setback. Record which fixture forced which change, because
-that record is the justification for keeping the fixture.
+Only then does building start — and phase 1 was still not the CLI. It was the repo skeleton
+plus six fixture configs and their schema, and the schema was expected to change while they
+were written; that is the phase working, not a setback. **Which fixture forced which change
+is §4.1.1**, because that record is the justification for keeping the fixture.
 
 Four rules that hold for the whole project:
 
@@ -2676,7 +2678,7 @@ of the six verbs.
 ## 8. Phases
 
 > **Moved to [`PHASES.md`](PHASES.md).** Sequencing changes every phase and is read one
-> section at a time; this document is the contract and is frozen once phase 1 lands.
+> section at a time; this document is the contract, and phase 1 has landed, so it is frozen.
 
 ---
 
