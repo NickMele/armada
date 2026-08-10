@@ -1,0 +1,22 @@
+[package]
+name = "charkit-core"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "charkit's pure core: decisions as functions over data. No I/O, ever."
+
+# ARCHITECTURE.md §1.5: pure data crates only. Nothing here may open a file, a
+# socket or a process — parsing a string is not I/O, reading the file is, and
+# reading it lives in `adapters`.
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml_ng = { workspace = true }
+
+[dev-dependencies]
+# The JSON Schema validator the tests use to hold the schema and the structs to
+# each other. Test-only on purpose: which validator `char config verify` embeds
+# is phase 5's decision, and taking it here would make it phase 1's by default.
+boon = "0.6"
