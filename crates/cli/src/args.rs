@@ -275,7 +275,9 @@ mod tests {
 
     #[test]
     fn project_and_all_together_is_bad_invocation() {
-        let err = parse(&args(&["status", "--project", "--all"])).unwrap_err().error;
+        let err = parse(&args(&["status", "--project", "--all"]))
+            .unwrap_err()
+            .error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert_eq!(err.class.exit_code(), 2);
     }

@@ -160,10 +160,13 @@ codes can only occur when the child never ran; `data.dispatched` says which.
 
 | Tier | What goes here |
 |---|---|
-| `tests/unit/` | Pure core. No I/O at all. Fake `ctx.run` and **assert on the argv** — argv is where the bugs are. |
-| `tests/integration/` | Real subprocesses, real files. Process-group kill with no orphans. Concurrent claims and lease reclamation. Docker labels verified gone after `clean`. |
-| `tests/e2e/` | The real CLI against scratch repos. |
+| unit | Pure core. No I/O at all. Fake `ctx.run` and **assert on the argv** — argv is where the bugs are. |
+| integration | Real subprocesses, real files. Process-group kill with no orphans. Concurrent claims and lease reclamation. Docker labels verified gone after `clean`. |
+| e2e | The real CLI against scratch repos. |
 | `tests/golden/` | One JSON snapshot per verb. **Regenerate by hand** — there is deliberately no update flag. |
+
+**Which directory each tier lives in is `ARCHITECTURE.md` §3** — the tiers are a rule about
+what a test may touch, not three directories, and unit tests are in-module.
 
 Coverage is gated on a ratchet: it may never drop. Use `#[coverage(off)]` or a documented
 exclusion, with a reason comment, for genuinely untestable lines.

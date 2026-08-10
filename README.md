@@ -9,8 +9,9 @@ incidental.
 > **Status: the ownership layer.** Phases 0–2 are complete. The architecture and working
 > agreements are recorded; the `char.yml` contract exists as a JSON Schema, the structs that
 > mirror it, and six fixture configs with a golden resolved snapshot each; and `char init`,
-> `char clean`, `char status` and the repo's own `commands:` entries work, over a machine-global
-> store at `~/.char/char.db`. **`up`, `down` and `check` are not built yet.** See
+> `char clean`, `char status` and a repo's own `commands:` entries work, over a machine-global
+> store at `~/.char/char.db`. **`up`, `down`, `check`, `config`, `agents-md` and `explain` are
+> not built yet** — each answers `bad_invocation` saying so, and `char --help` lists them. See
 > [`docs/PLAN.md`](docs/PLAN.md) for the full specification and phase order.
 
 ## The idea
@@ -162,10 +163,12 @@ at the adapter boundary is usually just asserting on your own fake.
 
 | Tier | Contents |
 |---|---|
-| `tests/unit/` | Pure core, no I/O. Fake `ctx.run` and **assert on the argv** — argv is where the bugs actually are. |
-| `tests/integration/` | Real subprocesses and files: process-group kill leaving no orphans, concurrent port claims and lease reclamation, docker labels gone after `clean`. |
-| `tests/e2e/` | The real CLI against scratch repos. |
+| unit | Pure core, no I/O. Fake `ctx.run` and **assert on the argv** — argv is where the bugs actually are. |
+| integration | Real subprocesses and files: process-group kill leaving no orphans, concurrent port claims and lease reclamation, docker labels gone after `clean`. |
+| e2e | The real CLI against scratch repos. |
 | `tests/golden/` | One JSON snapshot per verb. Regenerate by hand — there is no update flag, on purpose. |
+
+Where each tier lives is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3.
 
 Use `#[coverage(off)]` or a documented exclusion, with a reason comment, for genuinely
 untestable lines.
