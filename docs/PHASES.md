@@ -423,6 +423,12 @@ something to inject into.
 **`secrets:` grants on `commands:` entries land here**, since this is the phase where secret
 resolution exists. The dispatcher itself shipped in phase 2 — see there for why.
 
+**And the dispatcher's own `owned` pgid row.** Phase 2 writes none for its synchronous child,
+so char SIGKILLed mid-dispatch leaves that process group running unrecorded in `PLAN.md` §4.3's
+`owned` table, with only the port probe able to find it; closing that needs the `Run` seam to
+report a pgid back, which is the same extension `up` needs to spawn and track detached
+services.
+
 > **Phase 4 is now the heaviest phase in the plan.** Both drivers, five ready-check kinds,
 > compose document generation, secrets, and the dispatcher. Split it across several
 > review-sized PRs; `ARCHITECTURE.md` §2.2 already makes review the binding constraint rather than phase
