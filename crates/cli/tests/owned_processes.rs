@@ -85,7 +85,22 @@ fn clean_stops_a_recorded_group_confirms_it_is_gone_and_counts_it() {
     let pgid = group.pgid();
     record(&machine, &workspace, ours(&workspace, pgid, &repo));
 
+    // **The reap has to happen while `char clean` is running, not after it.**
+    // This test is the group's parent, char is not — and a signalled child that
+    // nobody has waited on is a zombie that is still a member of its group. On
+    // Linux `killpg(pgid, 0)` succeeds against exactly that group and only
+    // reports `ESRCH` after the `waitpid` (measured; `posix::group_alive`), so
+    // reaping after `clean` returns means char watches the whole grace, sends
+    // its SIGKILL and still sees the group alive: `CLEAN` on darwin and
+    // `FAILED` on Linux for a group that in fact died on the first SIGTERM.
+    // Waiting concurrently is what a real orphaned service gets for free — its
+    // parent is gone, so init reaps it the moment it dies.
+    let reaper = std::thread::spawn(move || {
+        group.wait(None, &mut || {});
+    });
+
     let payload = clean(&machine, &repo);
+    reaper.join().expect("the reaper thread outlives `clean`");
     assert_eq!(payload["status"], "CLEAN", "{payload}");
     assert_eq!(
         payload["data"]["results"][0]["released"]["processes"],
@@ -93,9 +108,6 @@ fn clean_stops_a_recorded_group_confirms_it_is_gone_and_counts_it() {
         "{payload}"
     );
 
-    // Reaped by the wrapper, so the assertion below is about the group and not
-    // about a zombie this test left behind.
-    group.wait(None, &mut || {});
     assert!(!posix::group_alive(pgid), "the group survived `char clean`");
 }
 
