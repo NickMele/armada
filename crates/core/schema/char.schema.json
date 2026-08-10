@@ -182,6 +182,10 @@
           "allOf": [
             { "pattern": "\\$\\{ref\\}" },
             { "not": { "pattern": "\\$\\{files\\}" } },
+            {
+              "not": { "pattern": "\\$\\{env\\." },
+              "$comment": "`${env.NAME}` is legal only inside an env: block (PLAN.md §4.4). A provider cmd is argv-split and has no shell: key, so nothing downstream would expand it."
+            },
             { "not": { "pattern": "\\$\\{[^}]*\\?\\?" } }
           ]
         }

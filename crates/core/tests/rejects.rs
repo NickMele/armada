@@ -90,6 +90,10 @@ fn the_schema_rejects_what_the_contract_forbids() {
             "version: 1\nsecret_providers:\n  op: { cmd: \"op read\" }\n",
         ),
         (
+            "${env.NAME} in a provider cmd — argv-split, so nothing would expand it (PLAN.md §4.4)",
+            "version: 1\nsecret_providers:\n  op: { cmd: \"op read ${env.VAULT}/${ref}\" }\n",
+        ),
+        (
             "a provider with shell: true — rule 1 exists to keep ${ref} out of a shell (PLAN.md §4.7)",
             "version: 1\nsecret_providers:\n  op: { cmd: \"op read ${ref}\", shell: true }\n",
         ),

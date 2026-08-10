@@ -12,7 +12,6 @@ description = "charkit's pure core: decisions as functions over data. No I/O, ev
 # reading it lives in `adapters`.
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
 
 [dev-dependencies]
@@ -20,3 +19,7 @@ serde_yaml_ng = { workspace = true }
 # each other. Test-only on purpose: which validator `char config verify` embeds
 # is phase 5's decision, and taking it here would make it phase 1's by default.
 boon = "0.6"
+# Test-only for the same reason. Nothing here writes JSON — the resolved config
+# derives `Serialize` and the golden suite is what renders it — so which crate
+# renders the `--json` envelope stays the renderer's decision to make.
+serde_json = { workspace = true }
