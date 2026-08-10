@@ -268,9 +268,21 @@ charkit/
   cli/        the ONLY module that imports both, and wires them together.
 ```
 
-Enforced mechanically by the crate graph itself, plus a `cargo-deny`/`clippy` boundary check in
-the merge gate from phase 1 —
-before there is anything to untangle.
+Enforced mechanically by the crate graph itself, plus `cargo xtask boundaries` in the merge
+gate — before there is anything to untangle.
+
+**Why a check at all, when the graph already enforces it.** The graph enforces the *direction*:
+a cycle does not compile. Nothing stops someone adding `charkit-adapters` to `core`'s manifest,
+which compiles fine and quietly inverts the design — a one-line diff in a file nobody reads
+twice, whose consequence is that the pure core acquires I/O. The check reads `cargo metadata`,
+so it sees all three spellings of a dependency and both kinds: a core *test* reaching for
+adapters is the same leak arriving through a door marked `[dev-dependencies]`. A workspace
+member with no entry in the contract is itself a finding, so a new crate states its place in the
+layering deliberately.
+
+An earlier draft of this line named `cargo-deny`/`clippy` as the mechanism. Neither expresses
+"who may depend on whom" — `cargo-deny` is for licences and advisories — so the check is a dozen
+lines of `xtask` instead.
 
 **Why this is stated as a correction.** The plan phrased it "dependencies point one way:
 core → adapters," which reads as *the core imports the adapters* — the opposite of what
@@ -582,14 +594,26 @@ An earlier draft of this section called `no-mistakes` "the primary gate", which 
 both README and AGENTS.md — and the precedence rule only covers PLAN ↔ ARCHITECTURE, so
 nothing resolved it.
 
-The gate is:
+The gate is `.github/workflows/gate.yml`, and it is:
 
-1. **lint** — `cargo clippy -- -D warnings`, plus `cargo fmt --check`
-2. **typecheck** — the compiler. `cargo build` failing *is* the typecheck
-3. **tests** — unit, integration and e2e tiers
-4. **coverage ratchet** — may never drop
-5. **crate boundaries** — the layers contract from §1.5, enforced by the crate graph
-6. **the contamination grep**
+| | Check | How it runs |
+|---|---|---|
+| 1 | **lint** — `cargo clippy -- -D warnings`, plus `cargo fmt --check` | both platforms |
+| 2 | **typecheck** — the compiler. `cargo build` failing *is* the typecheck | both platforms |
+| 3 | **tests** — unit, integration and e2e tiers | both platforms |
+| 4 | **coverage ratchet** — may never drop | `cargo llvm-cov` against `.coverage-floor` |
+| 5 | **crate boundaries** — the layers contract from §1.5 | `cargo xtask boundaries` |
+| 6 | **the contamination grep** | inside `cargo xtask doclint` |
+
+Plus one the list did not have, because it is a claim two documents make rather than a rule:
+**the MSRV builds.** `rust-version` is read out of `Cargo.toml` and the workspace is built with
+exactly that toolchain, so "pinned, raised deliberately" (§3) is tested rather than asserted.
+Deliberately `build` and not `build --all-targets` — dev-dependencies are not part of what a
+consumer compiles, so they do not get to set the floor a source build has to clear.
+
+**The coverage floor lives in `.coverage-floor`**, one number, so raising it is a reviewable
+one-line diff rather than a value buried in a workflow. A missing floor file fails the job
+*after* printing the measurement, which is how the first one gets set.
 
 **The contamination grep.** This document is its **single owner** — PLAN, AGENTS and README
 link here rather than restating it, because a fact stated in four places drifts, and this one

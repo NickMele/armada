@@ -7,6 +7,7 @@
 //! porting them removed the whole provisioning question.
 
 mod blocks;
+mod boundaries;
 mod contamination;
 mod docs;
 mod keys;
@@ -18,11 +19,12 @@ use std::process::ExitCode;
 const USAGE: &str = "\
 cargo xtask <command>
 
-  doclint [-v]    every check below, in order
+  doclint [-v]    every documentation check below, in order
   xref            resolve every §N.N against the heading index
   blocks          parse every fenced yaml / json / sh block
   keys            config keys in examples vs prose (-v lists one-sided keys)
   contamination   the ARCHITECTURE.md §2.4 grep, over crates/ and tests/
+  boundaries      the ARCHITECTURE.md §1.5 layers contract, over the crate graph
 
 Exit: 0 clean, 1 findings, 2 could not run.
 ";
@@ -67,6 +69,16 @@ fn main() -> ExitCode {
             findings.extend(keys::check(&corpus, verbose));
             ran.push("keys");
         }
+        Some("boundaries") => match boundaries::check(&root) {
+            Ok(f) => {
+                findings.extend(f);
+                ran.push("boundaries");
+            }
+            Err(e) => {
+                eprintln!("xtask: boundaries: {e}");
+                return ExitCode::from(2);
+            }
+        },
         Some("contamination") => match contamination::check(&root, &corpus) {
             Ok(f) => {
                 findings.extend(f);
@@ -100,7 +112,11 @@ fn main() -> ExitCode {
     }
 
     if findings.is_empty() {
-        println!("clean — {} ({} files)", ran.join(", "), corpus.len());
+        println!(
+            "clean — {} (corpus: {} files)",
+            ran.join(", "),
+            corpus.len()
+        );
         return ExitCode::SUCCESS;
     }
 
