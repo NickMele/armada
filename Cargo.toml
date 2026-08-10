@@ -8,6 +8,10 @@ members = ["crates/core", "crates/adapters", "crates/cli", "xtask"]
 
 [workspace.package]
 edition = "2021"
+# The toolchain this workspace is verified against, not an aspirational floor
+# (ARCHITECTURE.md §3). Lowering it needs something that actually compiles and
+# tests the lower version — the same deliberateness raising it takes.
+rust-version = "1.97"
 license = "Apache-2.0"
 repository = "https://github.com/nickmele/charkit"
 

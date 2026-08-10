@@ -3,6 +3,7 @@ name = "charkit-core"
 version = "0.1.0"
 publish = false
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "charkit's pure core: decisions as functions over data. No I/O, ever."

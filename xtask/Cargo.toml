@@ -3,6 +3,7 @@ name = "xtask"
 version = "0.0.0"
 publish = false
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 # Dev tooling only. Never a dependency of a shipped crate, and never in the

@@ -3,6 +3,7 @@ name = "charkit"
 version = "0.1.0"
 publish = false
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "char — one consistent vocabulary for managing a repo's tech stack."
