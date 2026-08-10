@@ -112,6 +112,28 @@ fn a_bash_line_that_reaches_the_source_repo_is_denied() {
 }
 
 #[test]
+fn an_escaped_spelling_of_the_path_is_denied_on_both_paths() {
+    // JSON has two ways to write the separator, and a tool that takes a regex
+    // has a third reason to: `find -regex`, `sed s///` and `grep -E` all put a
+    // backslash in front of a slash in ordinary use. Both spellings reach the
+    // guarded repo, so both are the guarded path.
+    let one = guarded_path().replace("/Development/", "/Development\\/");
+    let two = guarded_path().replace("/Development/", "/Development\\\\/");
+
+    for spelling in [&one, &two] {
+        let reading = format!(
+            r#"{{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{{"command":"find / -regex '.*{spelling}.*'"}}}}"#
+        );
+        assert!(denied(&reading), "reading path allowed: {reading}");
+
+        let writing = format!(
+            r#"{{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{{"file_path":"{spelling}/new.py","content":"x"}}}}"#
+        );
+        assert!(denied(&writing), "writing path allowed: {writing}");
+    }
+}
+
+#[test]
 fn a_glob_or_grep_over_the_source_repo_is_denied() {
     for tool in ["Glob", "Grep"] {
         let payload = format!(

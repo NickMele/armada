@@ -110,6 +110,21 @@ field() {
 	'
 }
 
+# The one place the guarded path is matched, so a spelling that gets past one
+# call site cannot get past another.
+#
+# The text handed here is raw JSON bytes — `field` returns what is between the
+# quotes and the reading path matches the payload itself — so JSON's own escapes
+# are still in it, and `Development\/chariot` is the guarded path written a
+# second way. `find -regex`, `sed s///` and `grep -E` all put a backslash there
+# in ordinary use. Dropping every backslash before matching can only make a path
+# easier to see, never harder, so the normalisation errs towards denying. `tr`
+# and `grep` are each one pass, which is what keeps this linear on a payload
+# carrying a whole file.
+reaches_the_source_repo() {
+	printf '%s' "$1" | tr -d '\\' | grep -q -F "$GUARDED"
+}
+
 deny() {
 	# The documented deny shape. Exit 0: the decision *is* the output, and a
 	# non-zero exit here would be reported as a broken hook rather than as a
@@ -138,14 +153,10 @@ Write | Edit | MultiEdit | NotebookEdit)
 	# known.
 	target=$(field tool_input file_path)
 	[ -n "$target" ] || target=$(field tool_input notebook_path)
-	# `field` returns the raw bytes between the quotes, so JSON's own escapes are
-	# still in them. Dropping every backslash can only make the guarded path
-	# easier to see — `Development\/chariot` is the same target written twice.
-	target=$(printf '%s' "$target" | tr -d '\\')
 	if [ -n "$target" ]; then
-		case "$target" in
-		*"$GUARDED"*) deny "$REASON" ;;
-		esac
+		if reaches_the_source_repo "$target"; then
+			deny "$REASON"
+		fi
 		exit 0
 	fi
 	;;
@@ -154,7 +165,7 @@ esac
 # Everything else — Read, Glob, Grep, Bash, an MCP tool nobody listed, a tool
 # renamed between versions: the whole payload, because the path can arrive
 # anywhere in it.
-if printf '%s' "$input" | grep -q "$GUARDED"; then
+if reaches_the_source_repo "$input"; then
 	deny "$REASON"
 fi
 
