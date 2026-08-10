@@ -157,6 +157,19 @@ pub enum ResolvedRun {
     },
 }
 
+impl ResolvedRun {
+    /// The driver-independent half of the service.
+    ///
+    /// Every caller that asks about ports, `needs:`, `env:` or `owns:` wants
+    /// this and does not care which driver runs it — so the match lives here
+    /// once rather than at each of those call sites.
+    pub fn common(&self) -> &ResolvedService {
+        match self {
+            ResolvedRun::Compose { common, .. } | ResolvedRun::Command { common, .. } => common,
+        }
+    }
+}
+
 /// The parts of a service that do not depend on the driver.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedService {
