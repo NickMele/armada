@@ -1,0 +1,139 @@
+# The merge gate. ARCHITECTURE.md §2.4 owns the list of what it runs and §3
+# records why it is a matrix: it supplies the one thing a local gate cannot — a
+# machine that is not yours, and Linux as well as macOS. Process groups,
+# signals and file locks are load-bearing here, so verifying them only on the
+# platform the author happens to use leaves the platform most users are on
+# untested.
+#
+# `no-mistakes` is the pre-flight, not a substitute: it runs the same checks
+# locally plus an agent review, then opens the PR that this workflow gates.
+name: gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only. Nothing here needs to write to the repository, and a token that
+# cannot write cannot be talked into writing.
+permissions:
+  contents: read
+
+# A force-push supersedes its own in-flight run rather than racing it.
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Items 1, 2, 3, 5 and 6 of ARCHITECTURE.md §2.4's six.
+  gate:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: |
+          rustc --version
+          cargo --version
+
+      # 1. lint
+      - name: rustfmt
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      # 2. typecheck — the compiler. `cargo build` failing IS the typecheck.
+      - name: build
+        run: cargo build --workspace --all-targets
+
+      # 3. tests — every tier.
+      - name: test
+        run: cargo test --workspace
+
+      # 6. the contamination grep, run from its single source of truth in
+      #    ARCHITECTURE.md §2.4 rather than from a copy. `doclint` also resolves
+      #    every § cross-reference and parses every fenced block.
+      - name: doclint
+        run: cargo xtask doclint
+
+      # 5. crate boundaries — the layers contract from ARCHITECTURE.md §1.5.
+      - name: boundaries
+        run: cargo xtask boundaries
+
+  # The MSRV is a claim two documents make (README, ARCHITECTURE.md §3), so it
+  # is tested rather than asserted. Deliberately `build` and not `build
+  # --all-targets`: dev-dependencies are not part of what a consumer compiles,
+  # so they do not get to set the floor a source build has to clear.
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the pinned MSRV
+        id: msrv
+        run: |
+          version=$(grep -m1 '^rust-version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          test -n "$version" || { echo "no rust-version in Cargo.toml"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install it
+        run: rustup toolchain install ${{ steps.msrv.outputs.version }} --profile minimal
+
+      - name: Build with it
+        run: cargo +${{ steps.msrv.outputs.version }} build --workspace
+
+  # 4. the coverage ratchet. ARCHITECTURE.md §3: the floor is set by the first
+  # real measurement and may only rise; a PR that lowers coverage fails. The
+  # floor lives in `.coverage-floor` so raising it is a reviewable one-line diff
+  # rather than a number buried in this file.
+  #
+  # `xtask` is excluded, and the reason is that including it inverts the
+  # incentive. It is dev tooling exercised by running `cargo xtask`, not by the
+  # test suite, so measuring it means a phase that adds a new lint *lowers*
+  # coverage and fails the gate for a good change. The ratchet is about the
+  # code that ships.
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install llvm-tools
+        run: rustup component add llvm-tools-preview
+
+      - name: Cache cargo-llvm-cov
+        id: cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/cargo-llvm-cov
+          key: cargo-llvm-cov-${{ runner.os }}-v1
+
+      - name: Install cargo-llvm-cov
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cargo install --locked cargo-llvm-cov
+
+      # One measurement, printed either way. A missing floor file is a hard
+      # failure *after* the summary, so the number to commit is in the log.
+      - name: Measure and enforce the floor
+        run: |
+          if [ -f .coverage-floor ]; then
+            floor=$(cat .coverage-floor)
+          else
+            floor=0
+          fi
+          cargo llvm-cov --workspace --exclude xtask --summary-only --fail-under-lines "$floor"
+          if [ ! -f .coverage-floor ]; then
+            echo "::error::.coverage-floor is missing — commit the measured line coverage printed above"
+            exit 1
+          fi

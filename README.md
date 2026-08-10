@@ -51,7 +51,7 @@ would rather build it themselves.
 
 ## License
 
-Apache-2.0.
+Apache-2.0 — full text in [`LICENSE`](LICENSE).
 
 ---
 
