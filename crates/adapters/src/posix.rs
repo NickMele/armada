@@ -86,6 +86,14 @@ pub fn killpg(pgid: i32, signal: i32) -> io::Result<()> {
 /// Signal 0 performs the permission and existence checks without delivering
 /// anything — `ESRCH` means the group is empty, and that is how char *confirms*
 /// a kill rather than assuming one.
+///
+/// **An unreaped child of char's own is still a member of its group, and the
+/// two platforms disagree about it.** Measured: against a group whose only
+/// remaining member is a zombie, `killpg(pgid, 0)` *succeeds* on Linux
+/// (`ESRCH` only after the `waitpid`) and fails on darwin. So a caller that
+/// parented the group must reap before reading this as "empty" — which
+/// [`crate::process::ProcessGroup::stop`] does, and which is why its report
+/// describes the kill rather than the state after it.
 pub fn group_alive(pgid: i32) -> bool {
     #[allow(unsafe_code)]
     // SAFETY: as `killpg` above; signal 0 delivers nothing at all.

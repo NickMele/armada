@@ -54,7 +54,7 @@ fn settle() {
 
 #[test]
 fn killpg_against_a_setsid_group_reaches_grandchildren() {
-    let mut group = spawn("sleep 300 & sleep 300 & wait");
+    let group = spawn("sleep 300 & sleep 300 & wait");
     settle();
 
     let before = processes_in_group(group.pgid());
@@ -64,15 +64,22 @@ fn killpg_against_a_setsid_group_reaches_grandchildren() {
     );
 
     let report = posix::stop_group(group.pgid(), Duration::from_secs(2));
-    assert!(report.gone, "the group survived: {report:?}");
+    assert!(report.existed, "the group was live before the stop");
 
-    // Reap before counting. A killed direct child is a zombie until char waits
-    // on it, and `ps` lists a zombie — so counting first would measure char's
-    // own reaping discipline rather than whether `killpg` reached the tree.
-    // Measured on this machine: `kill(pid, 0)` against a zombie answers
-    // `ESRCH`, so `group_alive` says gone while `ps` still shows the entry.
-    group.stop();
+    // Reap before judging, and judge afterwards — `report.gone` cannot be the
+    // assertion here. A killed direct child is a zombie until char waits on it,
+    // that zombie is still a member of its process group, and the two platforms
+    // disagree about whether it counts: measured, `killpg(pgid, 0)` against a
+    // group whose only member is an unreaped zombie *succeeds* on Linux and
+    // fails on darwin. So before the wait, `stop_group` says gone on one
+    // platform and survived on the other; after it, both say gone. `ps` lists a
+    // zombie on both, so it has to be reaped before counting too.
+    reap(group.pid());
     settle();
+    assert!(
+        !posix::group_alive(group.pgid()),
+        "the group survived: {report:?}"
+    );
     assert_eq!(
         processes_in_group(group.pgid()),
         0,
@@ -84,7 +91,7 @@ fn killpg_against_a_setsid_group_reaches_grandchildren() {
 /// than re-trusted: SIGTERM alone leaves every one of them alive.
 #[test]
 fn a_sigterm_ignoring_leader_immunises_its_whole_group() {
-    let mut group = spawn("trap '' TERM; sleep 300 & sleep 300 & wait");
+    let group = spawn("trap '' TERM; sleep 300 & sleep 300 & wait");
     settle();
 
     let before = processes_in_group(group.pgid());
@@ -103,9 +110,14 @@ fn a_sigterm_ignoring_leader_immunises_its_whole_group() {
     // the second one too.
     let report = posix::stop_group(group.pgid(), Duration::from_millis(300));
     assert!(report.escalated, "the escalation should have been needed");
-    assert!(report.gone, "SIGKILL did not clear the group: {report:?}");
-    group.stop();
+    // Reap before judging, for the reason recorded above: until char waits on
+    // the leader SIGKILL left behind, the group still has a member on Linux.
+    reap(group.pid());
     settle();
+    assert!(
+        !posix::group_alive(group.pgid()),
+        "SIGKILL did not clear the group: {report:?}"
+    );
     assert_eq!(processes_in_group(group.pgid()), 0);
 }
 
@@ -150,7 +162,7 @@ fn a_self_setsid_service_escapes_the_group_and_is_detected_by_its_port() {
     )
     .unwrap();
 
-    let mut group = spawn(&format!("/usr/bin/perl {} & wait", script.display()));
+    let group = spawn(&format!("/usr/bin/perl {} & wait", script.display()));
 
     // Wait for the escapee to have detached and bound.
     for _ in 0..100 {
@@ -166,8 +178,14 @@ fn a_self_setsid_service_escapes_the_group_and_is_detected_by_its_port() {
         .unwrap();
 
     let report = posix::stop_group(group.pgid(), Duration::from_millis(300));
-    group.stop();
-    assert!(report.gone, "the tracked group should be empty");
+    // Reaped here rather than through `group.stop()`, for the reason recorded
+    // above and one more: the escapee inherited the leader's pipes and is still
+    // holding them open, so a `wait` that drained them would never return.
+    reap(group.pid());
+    assert!(
+        !posix::group_alive(group.pgid()),
+        "the tracked group should be empty: {report:?}"
+    );
 
     // The escapee is alive, in its own session, and `killpg` never reached it.
     assert!(
@@ -208,17 +226,22 @@ fn a_child_dropped_without_wait_leaves_a_zombie_and_the_wrapper_never_does() {
         process_state(leaked_pid)
     );
 
-    // Measured here rather than assumed, because two other tests depend on it:
-    // a **zombie answers `ESRCH` to `kill(pid, 0)`**, so char's liveness probe
-    // reports the group gone while `ps` still lists the entry. That is why
-    // those tests reap before counting — otherwise they would be measuring
-    // char's reaping discipline while claiming to measure `killpg`'s reach.
+    // The rule the three tests above depend on, and the half of it that is
+    // portable is asserted right here: **a zombie stays a member of its process
+    // group until char reaps it**, and the reap is what clears it — on both
+    // platforms, which is why those tests reap before they judge.
+    //
+    // The half that is not portable, and so is recorded rather than asserted:
+    // `killpg(pgid, 0)` against a group whose only remaining member is an
+    // unreaped zombie *succeeds* on Linux and fails on darwin. So no test may
+    // ask `stop_group` whether it emptied a group char has not waited on yet —
+    // the answer is the platform, not the kill.
+    reap(leaked_pid);
     assert!(
-        !posix::group_alive(leaked_pid),
-        "a zombie was expected to answer ESRCH to a signal-0 probe"
+        !process_state(leaked_pid).contains('Z'),
+        "the wait was expected to clear the zombie; got {:?}",
+        process_state(leaked_pid)
     );
-    // Reap it so this test leaves nothing behind either.
-    reap_any();
 
     // Now the wrapper, which waits on every path.
     let request = RunRequest::new(
@@ -247,15 +270,30 @@ fn process_state(pid: i32) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-/// Reap whatever this process has left, so one test's evidence is not the next
-/// one's noise.
-fn reap_any() {
-    let mut status = 0;
-    // SAFETY: `waitpid` with WNOHANG on -1 reaps any already-exited child and
-    // returns immediately otherwise. This is a test helper; the crate's own
-    // `unsafe` budget is unaffected.
-    #[allow(unsafe_code)]
-    unsafe {
-        while libc::waitpid(-1, &mut status, libc::WNOHANG) > 0 {}
+/// Reap one child char has already signalled, so its `<defunct>` entry stops
+/// answering the liveness probes the assertions above read.
+///
+/// **`waitpid` on that pid and never on `-1`.** These tests run as threads of
+/// one binary, so a `waitpid(-1)` here reaps whichever child exited first —
+/// including another test's group leader, which is one test silently supplying
+/// the reaping the test under it is asserting about.
+///
+/// Bounded and polling rather than blocking: a leader that survived the signal
+/// is the failure this suite exists to catch, and it should be caught by the
+/// assertion below rather than by a test that never returns.
+fn reap(pid: i32) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let mut status = 0;
+        // SAFETY: `waitpid` with WNOHANG takes a pid and a pointer to a `c_int`
+        // this frame owns, and returns immediately either way. This is a test
+        // helper; the crate's own `unsafe` budget is unaffected.
+        #[allow(unsafe_code)]
+        let rc = unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) };
+        // Reaped, or already gone (`ECHILD`). Zero means still running.
+        if rc != 0 || std::time::Instant::now() >= deadline {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(20));
     }
 }
