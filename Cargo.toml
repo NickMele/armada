@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["xtask"]
+
+# charkit's own crates (core / adapters / cli) arrive in phase 1 and join this
+# list. `xtask` landed first because the doc lint it carries checks the corpus
+# phase 1 codes against.
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/nickmele/charkit"

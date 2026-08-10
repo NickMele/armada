@@ -74,9 +74,11 @@ that is a defect in the document — please raise it.
 
 ```sh
 cargo test
+cargo xtask doclint      # the docs are a deliverable; they are linted like one
 ```
 
-Rust stable, 2021 edition. The MSRV is pinned in `Cargo.toml`.
+Rust stable, 2021 edition. The MSRV is pinned in `Cargo.toml`. `cargo xtask` needs no
+interpreter and no virtualenv — that is why the doc lint is Rust and not a script.
 
 ## Workflow
 
@@ -115,7 +117,8 @@ A change must clear all six:
 | **tests** | unit, integration and e2e |
 | **coverage** | ratchet — it may never drop |
 | **crate boundaries** | `core` depends on nothing concrete, `adapters` depend on core traits only, `cli` is the only crate depending on both |
-| **contamination** | a grep, described below |
+| **contamination** | a grep, described below — run by `cargo xtask doclint` |
+| **docs** | `cargo xtask doclint` — cross-references resolve, code blocks parse, config keys appear in both an example and prose |
 
 ## Two rules that trip people up
 

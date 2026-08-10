@@ -521,8 +521,7 @@ touches N workspaces. So they share one array shape, learned once:
       { "id": "web:e2e",  "status": "TIMEOUT", "duration_ms": 900000,
         "error": { "class": "timeout", "message": "exceeded timeout: 900s" } },
       { "id": "api:test", "status": "ABORTED", "duration_ms": 0 }
-    ],
-    "results": [ ... ] } }
+    ] } }
 ```
 
 **The top-level `error` is the strict maximum over `results[]`** by a fixed precedence, so two
@@ -614,6 +613,7 @@ useful answer to "why has this taken fifteen minutes."''
 
 #### Ports: `port_block` is the workspace's; assignments are the component's
 
+<!-- doclint: skip — a fragment, deliberately, to show data without the envelope -->
 ```json
 "data": {
   "port_block": { "from": 5460, "to": 5469, "claimed_at": "2026-08-09T14:02:11Z" },
@@ -907,7 +907,7 @@ event.
 > *values*, which is a well-known way secrets escape — and the compose form of it is measured in
 > [`traps.md`](traps.md), where `config` inlines `.env` values into its output. The dispatch
 > record carries environment **names only**, and the same scrubber that guards `results[].log`
-> guards it (§4.7). A diagnosis channel that bypasses the scrubber would make §1.8's invariant
+> guards it (§4.7). A diagnosis channel that bypasses the scrubber would make `ARCHITECTURE.md` §1.8's invariant
 > an invariant with an exception.
 
 **A reconstruction that disagrees is worse than none.** An agent that reimplements the
@@ -1241,7 +1241,7 @@ Two consequences: the enclosing component must be `driver: compose`, and `in:` *
 **A check with `in:` may not be granted `secrets:`.** It is `bad_config`, because the only way
 to hand a value to an exec'd process is `docker compose exec -e KEY=value`, which puts the
 value **in argv** — readable by anyone who can run `ps` on the host, and recorded in the
-daemon's exec inspect. That violates §1.8 outright. A container's environment is compose's
+daemon's exec inspect. That violates `ARCHITECTURE.md` §1.8 outright. A container's environment is compose's
 job: the service already has what it needs from the `environment:` the repo declared.
 
 **char passes the same workspace-relative paths and sets the working directory to the mount
@@ -1571,7 +1571,7 @@ wants `gpu` while B holds `gpu` and wants `browser`. Neither ever releases, beca
 happens when work *finishes* and neither can *start*.
 
 **The reducer cannot catch this.** `step(state, event)` models one run; run A's state machine
-has no idea run B exists, so no unit test can construct the cycle. §1.2's argument was that
+has no idea run B exists, so no unit test can construct the cycle. `ARCHITECTURE.md` §1.2's argument was that
 making the scheduler a reducer puts deadlocks within reach of a unit test — this particular
 deadlock crawled out of that reach when the resources went machine-wide.
 
@@ -2270,6 +2270,7 @@ An earlier rewrite of this section dropped the list while [`PHASES.md`](PHASES.m
 promising "five ready-check kinds" that were then enumerated nowhere. Naming five kinds is not
 a spec, so here is the encoding:
 
+<!-- doclint: skip — five alternatives for one key, not one mapping -->
 ```yaml
 ready: { http: "http://127.0.0.1:${port.api}/healthz", timeout: 60 }
 ready: { tcp: pg }              # a declared port NAME, not a number
@@ -2448,7 +2449,7 @@ of the six verbs.
   In CI — nobody watching, the case that actually needs an explanation — it is absent and
   unauthenticated. The feature is easiest where it is least needed.
 
-  **It would breach §1.8 and §4.7.** Piping a stack trace to an external CLI sends repo content,
+  **It would breach `ARCHITECTURE.md` §1.8 and §4.7.** Piping a stack trace to an external CLI sends repo content,
   and possibly the values char scrubbed out of its own logs, to a service. The invariant is that
   char never emits a secret it was given; a diagnosis channel that bypasses the scrubber is that
   invariant with an exception, which is not an invariant.

@@ -51,7 +51,7 @@ all fail together. If adding a fixture creates no new way to be wrong, it is dec
 > **A different *language* is not an axis.** `multi-lang`'s row originally read "a genuinely
 > different runtime pairing", which cannot stress the schema at all: `cmd:` is free text, so an
 > Elixir service and a Python one produce byte-for-byte identical *shapes* and differ only in
-> the strings inside them. That is §4's thesis working — stack diversity lands in config
+> the strings inside them. That is `PLAN.md` §4's thesis working — stack diversity lands in config
 > *values*, never config *shape*. The row now names the three structural things that fixture
 > actually is the only one to exercise. Watch for the same mistake when adding a seventh: the
 > test is "what new way to be wrong does this create", not "what technology does this cover".
@@ -177,7 +177,12 @@ a recorded answer. **No source files exist yet.**
 
 ### Phase 1 — Repo skeleton + **six** config fixtures *(must land alone)*
 
-Cargo workspace scaffolding, `clippy`, `rustfmt`. JSON Schema for `char.yml`. Then write all six configs
+**The workspace root and `xtask/` already exist** — they landed before this phase because the
+doc lint they carry checks the corpus this phase codes against, and it found a corrupted JSON
+payload and seven dangling cross-references on its first run. Phase 1 adds `crates/core`,
+`crates/adapters` and `crates/cli` as members; it does not create the workspace.
+
+Cargo workspace members, `clippy`, `rustfmt`. JSON Schema for `char.yml`. Then write all six configs
 from the table in §8.1 under `tests/fixtures/<name>/char.yml`. Tests are schema validation
 plus a golden resolved-config snapshot for each. **No runtime.**
 
@@ -192,6 +197,12 @@ The schema must cover the full contract, including the parts implemented later:
 `secret_providers:` (`PLAN.md` §4.7). Secrets are **schema-only in this phase** — validated and
 resolvable as references, never fetched. Everything after this phase codes against whatever
 lands here, so a key missing now is a contract change later.
+
+**`cargo xtask doclint` must stay green**, and it is a gate check. It resolves every `§`
+against the heading index, parses every fenced YAML/JSON/shell block, diffs config keys in
+examples against keys in prose, and runs `ARCHITECTURE.md` §2.4's contamination grep — reading the pattern out
+of `ARCHITECTURE.md` rather than carrying a copy, so there is still exactly one place it lives.
+A block that is deliberately unparseable carries `<!-- doclint: skip — reason -->`.
 
 **Done when:** all six are expressible with no escape hatches and no fields invented on the
 spot.

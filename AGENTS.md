@@ -52,6 +52,7 @@ different rule instead — see rule 2.
 This includes docstrings, comments and test fixture strings. When you need to illustrate the
 `command` driver or a component root, use neutral examples:
 
+<!-- doclint: skip — a yes/no pair, so the same key appears twice -->
 ```yaml
 # yes
 cmd: foreman start
@@ -160,8 +161,14 @@ exclusion, with a reason comment, for genuinely untestable lines.
 
 ## Workflow
 
+**Run `cargo xtask doclint` after editing any document.** It is a gate check. It resolves
+every `§` cross-reference, parses every fenced block with a real parser, and runs `ARCHITECTURE.md` §2.4's
+contamination grep from its single source. If a block is deliberately unparseable, mark it
+`<!-- doclint: skip — reason -->` rather than leaving a finding for everyone to scroll past.
+
 **Never commit to `main`.** Work on a feature branch, always.
 
+<!-- doclint: skip — <placeholders>, not runnable shell -->
 ```sh
 git switch -c <scope>/<short-description>
 # ... work, committing as you go ...
