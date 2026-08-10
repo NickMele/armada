@@ -127,6 +127,14 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
         .stdio(stdio);
     // No timeout: how long a repo's own command takes is the repo's business,
     // and char's deadlines exist for the calls char makes on its own account.
+    //
+    // **Known limit, stated rather than hidden.** The child runs in its own
+    // session, so char can reach its whole tree — but no `owned` pgid row is
+    // written for it, because the dispatch is synchronous and char waits. If
+    // char itself is SIGKILLed mid-dispatch, that group survives with no record
+    // and only the port probe can find it. Recording it would mean the `Run`
+    // seam reporting a pgid back, which is the extension `char up` needs in
+    // phase 4 anyway; doing it there once beats doing it twice differently.
 
     let lease = LeaseId::run(workspace.id.clone());
     let outcome = app::with_lease(app, lease.clone(), Policy::FailFast, None, |app| {
