@@ -20,10 +20,7 @@
 
 #![deny(unsafe_code)]
 
-mod app;
-mod args;
-mod render;
-mod verbs;
+use charkit::{app, args, render, verbs};
 
 use args::Invocation;
 use charkit_adapters::clock::SystemClock;

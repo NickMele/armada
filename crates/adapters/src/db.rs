@@ -869,7 +869,7 @@ mod tests {
         let (_home, mut db) = open();
         let lease = LeaseId::run(ws("aaaaaaaa"));
         db.try_acquire(&lease, 1_000, "boot-1", 42, None).unwrap();
-        db.release_lease(LeaseKind::Run, "run").unwrap();
+        db.release_lease(LeaseKind::Run, "aaaaaaaa").unwrap();
         assert_eq!(
             db.try_acquire(&lease, 2_000, "boot-1", 43, None).unwrap(),
             AcquireOutcome::Granted

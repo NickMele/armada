@@ -96,7 +96,9 @@ version = "0.1.0"
 dependencies = [
  "charkit-adapters",
  "charkit-core",
+ "rusqlite",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

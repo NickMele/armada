@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "verb": "clean",
+  "workspace": "<workspace>",
+  "status": "CLEAN",
+  "error": null,
+  "data": {
+    "reaped": {},
+    "results": [
+      {
+        "id": "<workspace>",
+        "status": "CLEAN",
+        "path": "/scratch/repo",
+        "released": {
+          "processes": 0,
+          "containers": 0,
+          "networks": 0,
+          "volumes": 0,
+          "images": 0,
+          "port_block": true,
+          "files": 0
+        }
+      }
+    ],
+    "unreclaimed": [
+      {
+        "workspace": "<workspace>",
+        "command": "psql -c 'DROP DATABASE app_<workspace>'",
+        "workspace_exists": true
+      }
+    ]
+  }
+}

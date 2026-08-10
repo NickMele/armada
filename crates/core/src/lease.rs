@@ -89,11 +89,20 @@ pub struct LeaseId {
 
 impl LeaseId {
     /// The run lease for one workspace.
+    ///
+    /// **The key is the workspace id, and that is load-bearing.** `char.db`
+    /// keys leases by `(kind, key)` because a cpu-slot and an exclusive are
+    /// machine-wide budgets — slot 3 is slot 3 for everyone, `browser` is one
+    /// browser. The run lease is the opposite: it is *per workspace*, and five
+    /// agents in five worktrees must never contend on it. A constant key here
+    /// makes the second worktree's `char init` fail with "a run is already in
+    /// flight" against a run in a different directory, which is the exact
+    /// silent-serialisation failure the flat-siblings model exists to prevent.
     pub fn run(workspace: WorkspaceId) -> Self {
         LeaseId {
+            key: workspace.as_str().to_string(),
             workspace: Some(workspace),
             kind: LeaseKind::Run,
-            key: "run".to_string(),
         }
     }
 
@@ -497,6 +506,23 @@ mod tests {
             pid: 4212,
             held_ms: 44_000,
         }
+    }
+
+    /// Five agents in five worktrees never contend on the run lease; a second
+    /// run in the *same* workspace is the only fail-fast case.
+    #[test]
+    fn the_run_lease_is_keyed_per_workspace_and_never_machine_wide() {
+        let mine = LeaseId::run(WorkspaceId::from_stored("a3f91c02"));
+        let theirs = LeaseId::run(WorkspaceId::from_stored("7c21ab90"));
+        assert_ne!(mine.key, theirs.key);
+        assert_eq!(mine.key, "a3f91c02");
+
+        // Where the opposite is true, and deliberately so: a named exclusive
+        // is one mutex for the whole machine.
+        assert_eq!(
+            LeaseId::exclusive(WorkspaceId::from_stored("a3f91c02"), "browser").key,
+            LeaseId::exclusive(WorkspaceId::from_stored("7c21ab90"), "browser").key
+        );
     }
 
     #[test]
