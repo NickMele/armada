@@ -36,7 +36,7 @@ Not yet published. Once it is (phase 7):
 curl -LsSf https://raw.githubusercontent.com/<owner>/charkit/main/install.sh | sh
 ```
 
-One static binary, roughly 1.5 MB. **There is no runtime to install** — no interpreter, no
+One static binary, measured at 2.09 MB stripped and treated as a floor (`PHASES.md`). **There is no runtime to install** — no interpreter, no
 toolchain, nothing to provision. `cargo install charkit` is a second channel for people who
 would rather build it themselves.
 

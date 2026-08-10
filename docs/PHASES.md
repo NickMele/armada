@@ -431,7 +431,7 @@ So the repo-local command shrinks to "create the worktree, then shell out to `ch
 Ownership inference from compose's `working_dir` label goes away entirely, because charkit
 stamps `char.workspace=<id>` itself.
 
-**Done when:** `char check --all` is green in Chariot and the worktree flow still works end
+**Done when:** `char check --all-files` is green in Chariot and the worktree flow still works end
 to end.
 
 **Expect the most rework here** — six phases of drift surface in this one PR.

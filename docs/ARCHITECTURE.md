@@ -663,7 +663,7 @@ runs `char check --json` and asserts it reaches the same verdict and that every 
 resolves.
 
 **Once phase 6 lands — `char check` becomes the gate.** Phase 6 is Chariot adopting charkit:
-`scripts/char/check.py` deleted, the dependency taken, `char check --all` green. That is the
+`scripts/char/check.py` deleted, the dependency taken, `char check --all-files` green. That is the
 point at which a real repository is already trusting `char check` as its own merge gate — so
 it is trustworthy enough for this one. The dogfood test is then replaced by the real thing,
 and the raw commands stay documented in the README as the fallback.
@@ -693,7 +693,7 @@ The plan called phase 3 a copy. It is a **clean-room rewrite**, split across two
 | | Reads | Produces |
 |---|---|---|
 | **Harvester** | `~/Development/chariot` | `docs/harvest.md` — a behaviour spec plus a written list of every trap and bug-shaped branch found. Plus the ported test **cases**. |
-| **Implementer** | `PLAN.md`, this document, the fixtures, the harvest doc, the tests. **Never opens the Chariot repo.** | `src/` |
+| **Implementer** | `PLAN.md`, this document, the fixtures, the harvest doc, the tests. **Never opens the Chariot repo.** | `crates/` |
 
 **Why rewrite rather than copy.** Two reasons already force it. The scheduler is a reducer
 (§1.2) and the original's almost certainly is not, so the hardest part was being rewritten

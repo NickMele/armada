@@ -181,7 +181,7 @@ From phase 3, charkit has its own `char.yml`.
 
 **Through phase 6: the gate runs the raw tools** — `cargo clippy`, `cargo fmt --check`,
 `cargo test`.
-`tests/test_dogfood.py` runs `char check --json` and asserts it agrees. So a broken
+A dogfood integration test runs `char check --json` and asserts it agrees. So a broken
 `char check` is one failing test, not an unmergeable repository. Do not wire `char check`
 into the gate itself yet.
 

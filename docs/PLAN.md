@@ -11,7 +11,7 @@
 > how. A conflict between them is a defect in one of them — fix it rather than picking a side
 > silently, and say which document was wrong.
 >
-> **Binary name:** `char` · **Package name:** `charkit` (PyPI + npm, both verified free)
+> **Binary name:** `char` · **Crate name:** `charkit` (crates.io verified free; `char` is taken)
 > **Language:** Rust (2021 edition) · **Platform:** POSIX only (macOS/Linux). Not Windows.
 
 ## Contents
@@ -266,6 +266,19 @@ agent is using — reintroduced by the very mechanism added to fix the plan's mo
 destroy another's live containers, the single thing §2.2's flat-siblings model exists to
 prevent. The path label already exists; using it costs nothing and closes it.
 
+**A third label, `char.namespace=<id>`, scopes the whole mechanism to one filesystem view.**
+The id is a UUID written into `~/.char/char.db` when it is created. Reaping considers only
+resources carrying **this** namespace; anything else is reported, never removed.
+
+Without it, path-based reaping is actively dangerous the moment two `char` installations share
+a Docker daemon — which is the ordinary devcontainer setup, where the socket is mounted through
+and the same containers are visible from both sides. A workspace at `/workspaces/repo` inside
+the container is `ENOENT` when a host-side `char init` stats it, so the host reaps a live
+workspace's containers. §2.3.1 exists because the previous version of this mechanism could
+delete a running workspace's resources; a path label that means different things in different
+mount namespaces reintroduces exactly that, and the section that introduced the path label
+cites devcontainers as the reason for it.
+
 Stamping the path makes pass 2 **self-sufficient**: it stats a real directory and consults
 nothing. "Labelled, no row, but the path exists" is now **adopt or report, never remove.**
 
@@ -297,6 +310,15 @@ other to a no-op.
 5. rows        delete owned/workspaces rows
 6. .char/      remove the directory
 ```
+
+**`up` records before it spawns, and this is the opposite of `clean`'s order.** `clean` kills
+before deleting rows; `up` writes the row before creating the resource. Both follow the same
+rule — **the failure mode must be a stale row, never an untracked resource** — and the rule
+inverts because one direction is creating and the other destroying. Spawn-then-record leaks a
+pgid if char dies in between, and a leaked pgid is exactly the unreclaimable state this section
+exists to prevent; record-then-spawn leaves a row pointing at nothing, which the next `init`
+reaps for free. The intent row is written, the resource created, then the row completed with
+the real handle.
 
 **Reaping is reported, never silent** — in human output and under `data.reaped` in `--json`.
 A tool that removes containers without saying so is worse than one that does not remove them.
@@ -730,6 +752,11 @@ Two filters compose with any scope, on `clean`:
   full reinstall. `char clean --artifacts --all` is the reclaim-disk answer; it is a no-op
   under `--orphaned`, where the files are already gone with the directory.
 
+**`--all` takes a machine lease, not a workspace one**, because it runs from outside any
+workspace and the per-workspace run lease has nothing to attach to — leaving the most
+destructive operation in the tool as the only mutating verb with no lock. The machine lease is
+one row in `leases` with a null workspace; it excludes another `--all` and nothing else.
+
 **`--all` skips any workspace holding a live lease, and reports what it skipped.** `--all` is
 every workspace on this machine, so on the five-concurrent-agents premise this project is built
 around, the unguarded version stops four live stacks and deletes their `node_modules` while
@@ -1059,6 +1086,18 @@ This is not a nicety. `ruff check` with no paths checks the entire tree; a file-
 that silently degrades into a full-tree run turns a three-second lint into a several-minute
 one, and does it precisely when nothing needed checking.
 
+**`char check --all-files` is how you ask for the whole tree, and it is not optional.** Without
+it the diff-based default has a hole that points the wrong way: on the default branch with a
+clean tree the changed set is empty, every file-scoped check reports `SKIPPED`, and `char check`
+exits **0** having verified nothing. That is a merge gate that approves everything — the worst
+possible failure for the verb this project exists to make trustworthy. It also bites on a fresh
+clone, on a detached HEAD, and under a CI shallow clone where the merge-base does not exist.
+
+`--all-files` sets `${files}` from each component's `match:` globs instead of from the diff.
+Where the merge-base cannot be computed at all, char does **not** silently fall back to it —
+that would be the same hole with an extra step. It fails `bad_invocation` naming the missing
+base and telling the caller to pass `--all-files`.
+
 Check ids are **derived** as `<component>:<check>` — `api:lint`, `web:e2e`. Never written by
 hand, so they cannot drift, collide, or be typo'd.
 
@@ -1134,6 +1173,20 @@ reports forever, because char cannot tell a recycled pid from its own. With them
 whose `boot_id` is not the current one is stale by definition, and a live pid whose start time
 differs from the recorded one is a different process. That turns "report forever" into "reap
 safely", and it is the same liveness cross-check that makes a lease's `pid` trustworthy.
+
+**`user_version` is also the compatibility check, and the rule is deliberately one-directional:
+a newer `char.db` is readable by an older `char` only if the older one recognises the version.**
+`~/.char/char.db` is machine-global and long-lived, so a machine running two charkit versions —
+one repo pinned, one fresh — is normal rather than exotic. An older binary meeting a higher
+`user_version` fails `environment` and says which version wrote it; a newer binary meeting a
+lower one migrates it forward in a single `BEGIN IMMEDIATE`, additively. Schema changes are
+additive for the whole 0.x line: new column, never a dropped or retyped one.
+
+**`char clean --orphaned --force-rebuild` is the way out of a database char cannot read.** The
+recovery path must not need the thing that is broken. It ignores `char.db` entirely, enumerates
+by label alone — `char.workspace_path` is a real path and `stat` still works — reaps what is
+unambiguously dead, and writes a fresh database. It is the one operation that trusts labels
+over rows, which is why it is explicit rather than automatic.
 
 **`PRAGMA user_version` is a presence sentinel, and it exists because the failure it catches is
 silent.** Measured: delete `char.db` while a process holds it open under WAL and that process
