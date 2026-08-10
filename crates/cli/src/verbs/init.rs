@@ -279,8 +279,6 @@ fn run_setup<R: Run, C: Clock, F: Fetch>(
                 .stdio(StdioMode::Capture);
 
             let lease = lease.clone();
-            let now = app.ctx.now.mono();
-            let _ = now;
             let outcome = {
                 // The heartbeat renews from the loop that waits, never from a
                 // timer: `bundle install` runs for minutes and a lease goes

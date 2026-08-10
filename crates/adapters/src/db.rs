@@ -187,7 +187,7 @@ impl Db {
         self.conn
             .execute(
                 "INSERT OR IGNORE INTO meta (key, value) VALUES (?1, ?2)",
-                (NAMESPACE_KEY, random_uuid()),
+                (NAMESPACE_KEY, random_uuid()?),
             )
             .map_err(|e| map_sqlite(&self.path, e))?;
         Ok(())
@@ -333,8 +333,20 @@ impl Db {
         })
     }
 
-    /// Drop a workspace row and everything it owns.
-    pub fn release_workspace(&mut self, workspace: &WorkspaceId) -> Result<(), CharError> {
+    /// Drop a workspace row and everything it owns, **except the leases the
+    /// caller is itself holding**.
+    ///
+    /// `keep` is not a convenience. `clean` tears a workspace down while
+    /// holding that workspace's own run lease, and the whole ordering rests on
+    /// that lease being held throughout and released last: a blanket
+    /// `DELETE FROM leases WHERE workspace = ?1` frees it half way through, and
+    /// a concurrent `char up` then starts services into a workspace being torn
+    /// down — the exact failure `clean`'s step 0 is written against.
+    pub fn release_workspace(
+        &mut self,
+        workspace: &WorkspaceId,
+        keep: &[LeaseId],
+    ) -> Result<(), CharError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -344,11 +356,33 @@ impl Db {
             [workspace.as_str()],
         )
         .map_err(|e| map_sqlite(&self.path, e))?;
-        tx.execute(
-            "DELETE FROM leases WHERE workspace = ?1",
-            [workspace.as_str()],
-        )
-        .map_err(|e| map_sqlite(&self.path, e))?;
+
+        let doomed: Vec<(String, String)> = {
+            let mut statement = tx
+                .prepare("SELECT kind, key FROM leases WHERE workspace = ?1")
+                .map_err(|e| map_sqlite(&self.path, e))?;
+            let rows = statement
+                .query_map([workspace.as_str()], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(|e| map_sqlite(&self.path, e))?;
+            rows.collect::<Result<_, _>>()
+                .map_err(|e| map_sqlite(&self.path, e))?
+        };
+        for (kind, key) in doomed {
+            if keep
+                .iter()
+                .any(|held| held.kind.to_string() == kind && held.key == key)
+            {
+                continue;
+            }
+            tx.execute(
+                "DELETE FROM leases WHERE kind = ?1 AND key = ?2",
+                (&kind, &key),
+            )
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        }
+
         tx.execute("DELETE FROM workspaces WHERE id = ?1", [workspace.as_str()])
             .map_err(|e| map_sqlite(&self.path, e))?;
         tx.commit().map_err(|e| map_sqlite(&self.path, e))
@@ -574,6 +608,44 @@ impl Db {
         tx.commit().map_err(|e| map_sqlite(&self.path, e))
     }
 
+    /// Reclaim a dead lease, **only if it is still the row that was observed
+    /// cold**.
+    ///
+    /// Releasing one's own row is unconditional; taking somebody else's cannot
+    /// be. The observation and the delete are two statements with a gap between
+    /// them, and in that gap the holder — which is alive, merely slow — renews.
+    /// An unconditional delete then removes a warm lease and lets two runs
+    /// proceed in one workspace with no error anywhere. Returns whether the row
+    /// was still the cold one; a `false` means the holder came back and the
+    /// caller's next attempt will see it held, which is the correct answer.
+    pub fn reclaim_lease(
+        &mut self,
+        kind: LeaseKind,
+        key: &str,
+        observed: &LeaseRow,
+    ) -> Result<bool, CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        let deleted = tx
+            .execute(
+                "DELETE FROM leases
+                 WHERE kind = ?1 AND key = ?2 AND heartbeat_mono = ?3 AND boot_id = ?4
+                   AND pid = ?5",
+                (
+                    kind.to_string(),
+                    key,
+                    observed.heartbeat_mono as i64,
+                    &observed.boot_id,
+                    observed.pid as i64,
+                ),
+            )
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))?;
+        Ok(deleted == 1)
+    }
+
     /// Release a lease, or reclaim a dead one — the same statement, and that is
     /// deliberate: reclaiming *is* releasing somebody else's row, and having
     /// one path means the reclaim cannot drift from the release.
@@ -674,23 +746,30 @@ fn environment(location: String, message: String) -> CharError {
 ///
 /// `/dev/urandom` rather than a crate: char needs sixteen random bytes exactly
 /// once in its life, at database creation.
-fn random_uuid() -> String {
+///
+/// **A read that fails is `environment` and never a fallback value.** The
+/// namespace is what keeps two char installations sharing one Docker daemon
+/// from reaping each other's resources, and a fixed stand-in makes two
+/// installations that both hit the failure compare *equal* — which is the
+/// cross-reap the label exists to prevent, arriving silently.
+fn random_uuid() -> Result<String, CharError> {
+    use std::io::Read;
     let mut bytes = [0u8; 16];
-    if let Ok(mut file) = std::fs::File::open("/dev/urandom") {
-        use std::io::Read;
-        let _ = file.read_exact(&mut bytes);
-    }
+    let mut file = std::fs::File::open("/dev/urandom")
+        .map_err(|e| environment("/dev/urandom".to_string(), format!("cannot open it: {e}")))?;
+    file.read_exact(&mut bytes)
+        .map_err(|e| environment("/dev/urandom".to_string(), format!("cannot read it: {e}")))?;
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    format!(
+    Ok(format!(
         "{}-{}-{}-{}-{}",
         &hex[0..8],
         &hex[8..12],
         &hex[12..16],
         &hex[16..20],
         &hex[20..32]
-    )
+    ))
 }
 
 #[cfg(test)]
@@ -793,7 +872,7 @@ mod tests {
         else {
             panic!()
         };
-        db.release_workspace(&ws("aaaaaaaa")).unwrap();
+        db.release_workspace(&ws("aaaaaaaa"), &[]).unwrap();
         let ClaimOutcome::Claimed(second) = db
             .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, 10, "t")
             .unwrap()
@@ -874,6 +953,51 @@ mod tests {
             db.try_acquire(&lease, 2_000, "boot-1", 43, None).unwrap(),
             AcquireOutcome::Granted
         );
+    }
+
+    /// `clean` holds the run lease of the workspace it is dismantling, and the
+    /// ordering depends on still holding it after the row is gone.
+    #[test]
+    fn releasing_a_workspace_keeps_the_lease_its_caller_is_holding() {
+        let (_home, mut db) = open();
+        let held = LeaseId::run(ws("aaaaaaaa"));
+        let slot = LeaseId {
+            workspace: Some(ws("aaaaaaaa")),
+            kind: LeaseKind::CpuSlot,
+            key: "0".to_string(),
+        };
+        db.try_acquire(&held, 1_000, "boot-1", 42, None).unwrap();
+        db.try_acquire(&slot, 1_000, "boot-1", 42, None).unwrap();
+
+        db.release_workspace(&ws("aaaaaaaa"), std::slice::from_ref(&held))
+            .unwrap();
+
+        let rows = db.leases().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, LeaseKind::Run);
+        assert!(db.workspaces().unwrap().is_empty());
+    }
+
+    /// The observation and the delete are two statements, and a holder that was
+    /// merely slow renews in the gap between them.
+    #[test]
+    fn a_reclaim_refuses_a_row_the_holder_renewed_in_the_meantime() {
+        let (_home, mut db) = open();
+        let lease = LeaseId::run(ws("aaaaaaaa"));
+        db.try_acquire(&lease, 1_000, "boot-1", 42, None).unwrap();
+        let observed = db.leases().unwrap().remove(0);
+
+        db.renew(&lease, 90_000).unwrap();
+        assert!(!db
+            .reclaim_lease(LeaseKind::Run, "aaaaaaaa", &observed)
+            .unwrap());
+        assert_eq!(db.leases().unwrap().len(), 1);
+
+        let observed = db.leases().unwrap().remove(0);
+        assert!(db
+            .reclaim_lease(LeaseKind::Run, "aaaaaaaa", &observed)
+            .unwrap());
+        assert!(db.leases().unwrap().is_empty());
     }
 
     #[test]

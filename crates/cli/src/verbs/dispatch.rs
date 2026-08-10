@@ -148,13 +148,24 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     match outcome {
         Ok(output) => {
             if stdio == StdioMode::Capture {
-                // Captured output still has to go somewhere. Under `--json` it
-                // goes to stderr, because stdout carries the envelope and
-                // nothing else.
-                let mut out = std::io::stderr();
-                let _ = out.write_all(output.stdout.as_bytes());
-                let _ = out.write_all(output.stderr.as_bytes());
-                let _ = out.flush();
+                // Captured output still has to go somewhere, and **which
+                // descriptor depends on why it was captured**. Under `--json`
+                // both streams go to stderr, because stdout carries the
+                // envelope and nothing else. A `stdio: pipe` entry without
+                // `--json` was captured only so char could hold it, not so char
+                // could move it: sending its stdout to char's stderr would make
+                // `char mycmd > out.txt` capture nothing, which is the opposite
+                // of what redirecting a command means.
+                let mut err = std::io::stderr();
+                if json {
+                    let _ = err.write_all(output.stdout.as_bytes());
+                } else {
+                    let mut out = std::io::stdout();
+                    let _ = out.write_all(output.stdout.as_bytes());
+                    let _ = out.flush();
+                }
+                let _ = err.write_all(output.stderr.as_bytes());
+                let _ = err.flush();
             }
             Ok(Output::Dispatch(Box::new(Envelope::ok(
                 "commands",

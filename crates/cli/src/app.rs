@@ -37,6 +37,12 @@ pub struct App<R: Run, C: Clock, F: Fetch> {
     pub boot_id: String,
     /// The environment char was started with, captured once.
     pub inherited: BTreeMap<String, String>,
+    /// The leases this invocation is holding right now, innermost last.
+    ///
+    /// Two things need it and neither can re-derive it: a heartbeat has to be
+    /// renewed from whatever loop is currently running, and a teardown that
+    /// deletes a workspace's leases must not delete the one it is standing on.
+    pub held: Vec<LeaseId>,
 }
 
 impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
@@ -84,6 +90,10 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
 
         let mut state = ClaimState::new(lease.clone(), policy, ceiling_ms);
         let mut event = ClaimEvent::Start;
+        // The row the last attempt saw. A reclaim deletes *that* row and no
+        // other, so a holder that renewed between the observation and the
+        // delete keeps its lease.
+        let mut observed: Option<charkit_core::registry::LeaseRow> = None;
 
         loop {
             let (next, actions) = charkit_core::lease::step(state, event);
@@ -102,10 +112,16 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                             started.as_deref(),
                         )?;
                         pending = Some(match outcome {
-                            AcquireOutcome::Granted => ClaimEvent::Granted,
+                            AcquireOutcome::Granted => {
+                                observed = None;
+                                ClaimEvent::Granted
+                            }
                             AcquireOutcome::Held(row) => {
                                 let holder = charkit_adapters::db::holder_of(&row, now);
-                                if is_cold(row.heartbeat_mono, now, row.boot_id == self.boot_id) {
+                                let cold =
+                                    is_cold(row.heartbeat_mono, now, row.boot_id == self.boot_id);
+                                observed = Some(row);
+                                if cold {
                                     ClaimEvent::HolderCold(holder)
                                 } else {
                                     ClaimEvent::Held(holder)
@@ -114,7 +130,10 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                         });
                     }
                     ClaimAction::Reclaim(_) => {
-                        self.db.release_lease(state.lease.kind, &state.lease.key)?;
+                        if let Some(row) = &observed {
+                            self.db
+                                .reclaim_lease(state.lease.kind, &state.lease.key, row)?;
+                        }
                     }
                     ClaimAction::Sleep { ms } => {
                         let until = self.ctx.now.mono().saturating_add(ms);
@@ -152,6 +171,37 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         self.db.release_lease(lease.kind, &lease.key)
     }
 
+    /// Renew every lease this invocation holds, from whatever loop is running.
+    ///
+    /// The same rule as the child-process heartbeat and for the same reason: a
+    /// lease goes cold after sixty seconds of silence, and char's own work can
+    /// take longer than that — a hung Docker daemon answers each call at the
+    /// deadline. A holder that stops renewing while it is still working gets
+    /// its lease reclaimed underneath it. A failed renewal is not fatal; the
+    /// next one, or the next attempt at whatever failed, reports it.
+    pub fn renew_held(&mut self) {
+        if self.held.is_empty() {
+            return;
+        }
+        let now = self.ctx.now.mono();
+        for lease in std::mem::take(&mut self.held) {
+            let _ = self.db.renew(&lease, now);
+            self.held.push(lease);
+        }
+    }
+
+    /// Drop a workspace's rows, keeping the leases this invocation holds.
+    ///
+    /// See [`Db::release_workspace`](charkit_adapters::db::Db::release_workspace):
+    /// `clean` dismantles a workspace while standing on that workspace's own
+    /// run lease.
+    pub fn forget_workspace(&mut self, workspace: &WorkspaceId) -> Result<(), CharError> {
+        let held = std::mem::take(&mut self.held);
+        let outcome = self.db.release_workspace(workspace, &held);
+        self.held = held;
+        outcome
+    }
+
     /// The three reap passes, **decided but not executed**.
     ///
     /// Split from [`App::reap`] so `--dry-run` previews exactly what the real
@@ -178,20 +228,38 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         // layer unusable for the majority of repos that never start a
         // container.
         let timeout = self.machine.docker_deadline();
+        self.renew_held();
         match docker::daemon_ready(&self.ctx.run, &self.cwd(), timeout) {
             Ok(()) => {
                 for kind in docker::Kind::ALL {
-                    let found = docker::list_labelled(&self.ctx.run, &self.cwd(), timeout, kind)?;
-                    let stated: Vec<(LabelledResource, reap::PathStat)> = found
-                        .into_iter()
-                        .map(|resource| {
-                            let stat = fs::stat(&resource.workspace_path);
-                            (resource, stat)
-                        })
-                        .collect();
-                    let (remove, reported) = reap::resource_pass(&stated, &self.namespace);
-                    plan.resources.extend(remove);
-                    plan.reported.extend(reported);
+                    // **A failed list is skipped, exactly as an unreachable
+                    // daemon is.** `list_labelled` lists ids and then inspects
+                    // them as a second call, and `docker inspect` exits
+                    // non-zero if any of those objects has disappeared in
+                    // between — so a concurrent `char clean` in another
+                    // workspace would otherwise fail this whole verb.
+                    match docker::list_labelled(&self.ctx.run, &self.cwd(), timeout, kind) {
+                        Ok(found) => {
+                            let stated: Vec<(LabelledResource, reap::PathStat)> = found
+                                .into_iter()
+                                .map(|resource| {
+                                    let stat = fs::stat(&resource.workspace_path);
+                                    (resource, stat)
+                                })
+                                .collect();
+                            let (remove, reported) = reap::resource_pass(&stated, &self.namespace);
+                            plan.resources.extend(remove);
+                            plan.reported.extend(reported);
+                        }
+                        Err(error) => plan
+                            .skipped
+                            .push(format!("labelled resources: {}", error.message)),
+                    }
+                    // A hung daemon answers each of these at char's deadline,
+                    // and two of them put a live holder's lease over `COLD_MS`.
+                    // The heartbeat renews from the loop that waits, here as
+                    // everywhere else.
+                    self.renew_held();
                 }
             }
             Err(error) => plan
@@ -218,7 +286,13 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         let timeout = self.machine.docker_deadline();
 
         for id in &plan.workspaces {
-            self.db.release_workspace(id)?;
+            // **Kill before forgetting, the same order `clean` uses.** Dropping
+            // the rows first would leave an orphaned workspace's recorded
+            // process groups alive with no record of them anywhere, which is
+            // the unreclaimable state the machine-global store exists to
+            // prevent.
+            self.stop_owned_processes(id)?;
+            self.forget_workspace(id)?;
         }
 
         for target in &plan.resources {
@@ -246,6 +320,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                 self.db
                     .delete_owned(&target.workspace, target.kind, &target.reference)?;
             }
+            self.renew_held();
         }
 
         let now = self.ctx.now.mono();
@@ -264,15 +339,27 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// previous boot, or one whose pid now has a different start time, is a
     /// recycled pid rather than an orphaned service — so the row is dropped and
     /// no signal is sent.
-    pub fn stop_owned_processes(&mut self, workspace: &WorkspaceId) -> Result<usize, CharError> {
+    pub fn stop_owned_processes(
+        &mut self,
+        workspace: &WorkspaceId,
+    ) -> Result<StopSummary, CharError> {
         let rows = self.db.owned(Some(workspace))?;
-        let mut stopped = 0;
+        let mut summary = StopSummary::default();
 
         for row in rows.iter().filter(|r| r.kind == OwnedKind::Pgid) {
-            let Ok(pgid) = row.reference.parse::<i32>() else {
-                self.db
-                    .delete_owned(workspace, OwnedKind::Pgid, &row.reference)?;
-                continue;
+            // **A pgid of zero is not a pgid.** `killpg(0, …)` signals the
+            // *caller's* own group, so a `0` written by any future recorder —
+            // `ProcessGroup::spawn` stores one for a child that got no new
+            // session — would have `char clean` SIGTERM and then SIGKILL char
+            // itself and everything sharing its foreground group. A row char
+            // cannot act on is dropped, exactly as an unparseable one is.
+            let pgid = match row.reference.parse::<i32>() {
+                Ok(pgid) if pgid > 0 => pgid,
+                Ok(_) | Err(_) => {
+                    self.db
+                        .delete_owned(workspace, OwnedKind::Pgid, &row.reference)?;
+                    continue;
+                }
             };
             let observed = machine::process_start_at(&self.ctx.run, &self.cwd(), pgid);
             if reap::pgid_is_ours(
@@ -283,15 +370,29 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
             ) {
                 let report =
                     charkit_adapters::posix::stop_group(pgid, charkit_adapters::process::GRACE);
-                if report.existed && report.gone {
-                    stopped += 1;
+                match (report.existed, report.gone) {
+                    (true, true) => summary.stopped += 1,
+                    // A group that survived SIGKILL is uninterruptible or
+                    // unreachable, and saying nothing about it is the silence
+                    // this whole layer is written against.
+                    (true, false) => summary.survived.push(pgid),
+                    (false, _) => {}
                 }
             }
             self.db
                 .delete_owned(workspace, OwnedKind::Pgid, &row.reference)?;
         }
-        Ok(stopped)
+        Ok(summary)
     }
+}
+
+/// What [`App::stop_owned_processes`] managed, and what it did not.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StopSummary {
+    /// Groups that existed and are gone now.
+    pub stopped: usize,
+    /// Groups still alive after SIGTERM, the grace period and SIGKILL.
+    pub survived: Vec<i32>,
 }
 
 /// Assemble the runtime. The only place `$HOME`, the cwd and the environment
@@ -333,6 +434,7 @@ pub fn build<R: Run, C: Clock, F: Fetch>(
         namespace,
         boot_id,
         inherited,
+        held: Vec::new(),
     })
 }
 
@@ -351,7 +453,9 @@ pub fn with_lease<R: Run, C: Clock, F: Fetch, T>(
     body: impl FnOnce(&mut App<R, C, F>) -> Result<T, CharError>,
 ) -> Result<T, CharError> {
     let held = app.acquire(lease, policy, ceiling_ms)?;
+    app.held.push(held.clone());
     let outcome = body(app);
+    app.held.pop();
     // Released on the failure path too: a verb that dies holding the run lease
     // would make the next invocation wait out a cold heartbeat for no reason.
     let _ = app.release(&held);

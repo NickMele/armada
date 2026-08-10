@@ -219,9 +219,20 @@ pub fn expand_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<Strin
                     "remove it — a commands: entry runs ad hoc, so char has no file scope",
                 )
             })?;
+            // **Substitute the token first, insert the filename verbatim
+            // afterwards.** Inserting and then substituting re-scans char's own
+            // placeholder syntax inside text from outside the trust boundary —
+            // filenames are written by whoever pushed the branch. A file named
+            // `${port.api}.py` would expand to a port number, and one holding
+            // any unrecognised `${…}` would fail the check `bad_config`,
+            // letting a pushed branch break the very check that would have
+            // examined it.
+            let around: Vec<String> = token
+                .split("${files}")
+                .map(|part| substitute(part, vars, Site::Argv, at))
+                .collect::<Result<_, _>>()?;
             for file in files {
-                let expanded = token.replace("${files}", file);
-                argv.push(substitute(&expanded, vars, Site::Argv, at)?);
+                argv.push(around.join(file.as_str()));
             }
         } else {
             argv.push(substitute(&token, vars, Site::Argv, at)?);
@@ -479,6 +490,27 @@ mod tests {
         assert_eq!(
             expand_argv("ruff check ${files}", &vars, &at()).unwrap(),
             vec!["ruff", "check", "sub/semi;echo INJECTED.py", "a file.py"]
+        );
+    }
+
+    /// The same trust boundary, one layer in: a filename is *data*, so char's
+    /// own placeholder syntax inside one is never re-scanned. The second name
+    /// would otherwise fail `bad_config` and take the whole check with it.
+    #[test]
+    fn a_filename_is_inserted_verbatim_and_never_re_expanded() {
+        let ports = ports();
+        let env = env();
+        let files = vec!["${port.api}.py".to_string(), "${nonsense}.py".to_string()];
+        let vars = Vars {
+            workspace_id: "a3f91c02",
+            ports: &ports,
+            component_root: None,
+            files: Some(&files),
+            env: &env,
+        };
+        assert_eq!(
+            expand_argv("ruff check src/${files}", &vars, &at()).unwrap(),
+            vec!["ruff", "check", "src/${port.api}.py", "src/${nonsense}.py"]
         );
     }
 

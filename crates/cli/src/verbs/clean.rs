@@ -38,7 +38,6 @@ use charkit_core::registry::{OwnedKind, WorkspaceRow};
 use charkit_core::scope::{self, Lens};
 use charkit_core::template::{self, Site, Vars};
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use crate::app::{self, App, RELEASED_EARLY};
 use crate::args::Common;
@@ -111,8 +110,15 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
         (_, None) => LeaseId::machine(),
     };
 
+    // **The self-exemption below is only sound when the lease char just took is
+    // *this workspace's* run lease.** Under `--all` the lease is the machine
+    // one, whose row carries a NULL workspace, so a live lease on `me` belongs
+    // to some other process — and exempting it would have `char clean --all`,
+    // run from inside a worktree, tear down the `char init` running in it.
+    let holds_my_run_lease = lease.kind == LeaseKind::Run && lease.workspace == me;
+
     let envelope = app::with_lease(app, lease, Policy::FailFast, None, |app| {
-        clean_all(app, &selected, filters, me.as_ref())
+        clean_all(app, &selected, filters, me.as_ref(), holds_my_run_lease)
     })?;
     Ok(Output::Clean(Box::new(envelope)))
 }
@@ -122,6 +128,7 @@ fn clean_all<R: Run, C: Clock, F: Fetch>(
     selected: &[WorkspaceRow],
     filters: Filters,
     me: Option<&WorkspaceId>,
+    holds_my_run_lease: bool,
 ) -> Result<Envelope<CleanData>, CharError> {
     let reaped = app.reap()?;
     let mut results = Vec::new();
@@ -143,7 +150,8 @@ fn clean_all<R: Run, C: Clock, F: Fetch>(
         // deletes their `node_modules` while their agents are mid-run.
         // Skipping is right rather than refusing: reclaiming disk from the
         // eleven idle workspaces is still the thing you asked for.
-        if !filters.force && holds_a_live_lease(app, &row.id)? && Some(&row.id) != me {
+        let mine = holds_my_run_lease && Some(&row.id) == me;
+        if !filters.force && !mine && holds_a_live_lease(app, &row.id)? {
             skipped.push(row.id.to_string());
             continue;
         }
@@ -202,6 +210,11 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     filters: Filters,
 ) -> Result<ResultRow, CharError> {
     let mut released = Released::default();
+    // **Everything that would not go is named.** Counting only the successes
+    // and returning `CLEAN` regardless makes a container char could not remove
+    // indistinguishable from one it did — and reclaim that is reported and
+    // never silent is the rule this whole module is written to.
+    let mut refused: Vec<String> = Vec::new();
 
     // 1. Only the *resource* leases go early, and only because holding a
     //    cpu-slot while tearing down blocks other workspaces for no reason.
@@ -212,7 +225,13 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     }
 
     // 2. Processes.
-    released.processes = app.stop_owned_processes(&row.id)?;
+    let stopped = app.stop_owned_processes(&row.id)?;
+    released.processes = stopped.stopped;
+    for pgid in &stopped.survived {
+        refused.push(format!(
+            "process group {pgid} was still alive after SIGKILL"
+        ));
+    }
 
     // 3. Docker, in dependency order: a network with a container attached will
     //    not go.
@@ -220,7 +239,17 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     let daemon = docker::daemon_ready(&app.ctx.run, &app.cwd(), timeout).is_ok();
     if daemon {
         for kind in docker::Kind::ALL {
-            let found = docker::list_labelled(&app.ctx.run, &app.cwd(), timeout, kind)?;
+            // A list that fails is reported and stepped over, not fatal: a
+            // concurrent `clean` in another workspace removing a container
+            // between the `ls` and the `inspect` makes `docker inspect` exit
+            // non-zero, and that must not abort the teardown of this one.
+            let found = match docker::list_labelled(&app.ctx.run, &app.cwd(), timeout, kind) {
+                Ok(found) => found,
+                Err(error) => {
+                    refused.push(error.message.clone());
+                    continue;
+                }
+            };
             // **Filters on both labels, not the id alone.** `workspace_id` is
             // 32 bits, and every `owns:` selector is id-only — so a collision
             // would have `char clean` in one workspace destroy another's live
@@ -237,13 +266,7 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
                 .collect();
 
             let removed = docker::remove(&app.ctx.run, &app.cwd(), timeout, kind, &mine);
-            let count = removed.iter().filter(|(_, error)| error.is_none()).count();
-            match kind {
-                docker::Kind::Container => released.containers += count,
-                docker::Kind::Network => released.networks += count,
-                docker::Kind::Volume => released.volumes += count,
-                docker::Kind::Image => released.images += count,
-            }
+            count_removed(kind, &removed, &mut released, &mut refused);
         }
     }
 
@@ -254,14 +277,15 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     // done-when exercises.
     if daemon {
         if let Some(config) = load_foreign_config(&row.path, &app.machine) {
-            released_from_selectors(app, row, &config, &mut released)?;
+            released_from_selectors(app, row, &config, &mut released, &mut refused)?;
         }
     }
 
     // 4 and 5. The block goes back with the row, in one transaction — two
     // statements could leave a workspace row with no block, which is a shape
-    // nothing else in the code knows how to read.
-    app.db.release_workspace(&row.id)?;
+    // nothing else in the code knows how to read. The run lease this
+    // invocation is standing on survives it, and is released last.
+    app.forget_workspace(&row.id)?;
     released.port_block = true;
 
     // 6. `.char/`. **`clean` releases resources; it does not undo
@@ -275,10 +299,47 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
         released.files = remove_artifacts(app, row)?;
     }
 
-    let mut result = ResultRow::new(row.id.to_string(), Status::Clean);
+    let status = if refused.is_empty() {
+        Status::Clean
+    } else {
+        Status::Failed
+    };
+    let mut result = ResultRow::new(row.id.to_string(), status);
     result.path = Some(row.path.display().to_string());
     result.released = Some(released);
+    if !refused.is_empty() {
+        result.error = Some(CharError {
+            class: ErrClass::ToolFailed,
+            r#where: row.id.to_string(),
+            message: refused.join("; "),
+            next_action: Some(
+                "remove what is named above by hand, then re-run `char clean`".to_string(),
+            ),
+        });
+    }
     Ok(result)
+}
+
+/// Tally one kind's removals, and name the handles that would not go.
+fn count_removed(
+    kind: docker::Kind,
+    removed: &[(String, Option<CharError>)],
+    released: &mut Released,
+    refused: &mut Vec<String>,
+) {
+    let mut count = 0;
+    for (reference, error) in removed {
+        match error {
+            None => count += 1,
+            Some(error) => refused.push(format!("{reference}: {}", error.message)),
+        }
+    }
+    match kind {
+        docker::Kind::Container => released.containers += count,
+        docker::Kind::Network => released.networks += count,
+        docker::Kind::Volume => released.volumes += count,
+        docker::Kind::Image => released.images += count,
+    }
 }
 
 /// Evaluate declared `owns:` selectors against docker.
@@ -287,6 +348,7 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
     row: &WorkspaceRow,
     config: &ResolvedConfig,
     released: &mut Released,
+    refused: &mut Vec<String>,
 ) -> Result<(), CharError> {
     let ports =
         charkit_core::ports::assign_ports(config, row.ports, "char.yml").unwrap_or_default();
@@ -326,15 +388,16 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
             path: "owns".to_string(),
         };
         let resolved = template::substitute(selector, &vars, Site::Argv, &at)?;
-        let matched = docker::list_by_selector(&app.ctx.run, &app.cwd(), timeout, kind, &resolved)?;
+        let matched =
+            match docker::list_by_selector(&app.ctx.run, &app.cwd(), timeout, kind, &resolved) {
+                Ok(matched) => matched,
+                Err(error) => {
+                    refused.push(error.message.clone());
+                    continue;
+                }
+            };
         let removed = docker::remove(&app.ctx.run, &app.cwd(), timeout, kind, &matched);
-        let count = removed.iter().filter(|(_, error)| error.is_none()).count();
-        match kind {
-            docker::Kind::Container => released.containers += count,
-            docker::Kind::Network => released.networks += count,
-            docker::Kind::Volume => released.volumes += count,
-            docker::Kind::Image => released.images += count,
-        }
+        count_removed(kind, &removed, released, refused);
     }
     Ok(())
 }
@@ -365,6 +428,22 @@ fn remove_artifacts<R: Run, C: Clock, F: Fetch>(
     };
 
     let mut removed = 0;
+    for path in declared_files(&config) {
+        let resolved = template::substitute(path, &vars, Site::Argv, &at)?;
+        if fs::remove_owned_file(&row.path, &resolved)? {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+/// Every declared `owns.files`, from all three places a repo may declare one.
+///
+/// **One collection, shared by the preview and the deletion.** `--dry-run` is
+/// the safety mechanism for `--artifacts`, so a preview built from a shorter
+/// list than the real pass deletes from is worse than no preview: it reads as a
+/// complete answer and is not one.
+fn declared_files(config: &ResolvedConfig) -> Vec<&String> {
     let mut declared: Vec<&String> = Vec::new();
     for component in config.components.values() {
         declared.extend(component.owns_files.iter());
@@ -375,14 +454,7 @@ fn remove_artifacts<R: Run, C: Clock, F: Fetch>(
     for entry in config.commands.values() {
         declared.extend(entry.owns_files.iter());
     }
-
-    for path in declared {
-        let resolved = template::substitute(path, &vars, Site::Argv, &at)?;
-        if fs::remove_owned_file(&row.path, &resolved)? {
-            removed += 1;
-        }
-    }
-    Ok(removed)
+    declared
 }
 
 /// The declared external resources char is about to stop knowing about.
@@ -458,9 +530,7 @@ fn dry<R: Run, C: Clock, F: Fetch>(
             }
         }
         if filters.artifacts {
-            preview
-                .would_delete
-                .extend(declared_files(&row.path, app, row));
+            preview.would_delete.extend(would_delete(app, row));
         }
     }
 
@@ -472,12 +542,10 @@ fn dry<R: Run, C: Clock, F: Fetch>(
     ))
 }
 
-fn declared_files<R: Run, C: Clock, F: Fetch>(
-    root: &Path,
-    app: &App<R, C, F>,
-    row: &WorkspaceRow,
-) -> Vec<String> {
-    let Some(config) = load_foreign_config(root, &app.machine) else {
+/// What `--dry-run --artifacts` would delete — the same list
+/// [`remove_artifacts`] works from, resolved the same way.
+fn would_delete<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>, row: &WorkspaceRow) -> Vec<String> {
+    let Some(config) = load_foreign_config(&row.path, &app.machine) else {
         return Vec::new();
     };
     let ports: BTreeMap<String, u16> =
@@ -487,13 +555,8 @@ fn declared_files<R: Run, C: Clock, F: Fetch>(
         file: "char.yml".to_string(),
         path: "owns.files".to_string(),
     };
-    let mut files = Vec::new();
-    for component in config.components.values() {
-        for path in &component.owns_files {
-            if let Ok(resolved) = template::substitute(path, &vars, Site::Argv, &at) {
-                files.push(resolved);
-            }
-        }
-    }
-    files
+    declared_files(&config)
+        .into_iter()
+        .filter_map(|path| template::substitute(path, &vars, Site::Argv, &at).ok())
+        .collect()
 }
