@@ -261,6 +261,40 @@ fn a_second_mutating_verb_in_one_workspace_fails_fast_naming_the_holder() {
     let _ = holder.wait();
 }
 
+/// `--json` is answered on **every** failure path, including one that fails
+/// before a verb exists to answer it.
+///
+/// A machine caller probing the six not-built-yet verbs must read the same
+/// envelope it reads everywhere else — `schema_version` and `error.class` — and
+/// not human text on stderr. The case below it, which fails later during
+/// workspace resolution, already worked; the two are here together because the
+/// gap was invisible from the inside precisely because only one was covered.
+#[test]
+fn a_parse_time_failure_answers_in_the_envelope_when_json_was_asked_for() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+
+    let output = machine.run(&repo, &["--json", "check"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|e| {
+        panic!(
+            "{e}: stdout {:?}, stderr {:?}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
+    assert_eq!(payload["schema_version"], Value::from(1));
+    assert_eq!(payload["status"], "FAILED");
+    assert_eq!(payload["error"]["class"], "bad_invocation");
+    assert_eq!(payload["workspace"], Value::Null, "resolution never ran");
+    assert_eq!(output.status.code(), Some(2));
+
+    // The case that already worked: parses fine, fails afterwards.
+    let outside = machine.outside();
+    let output = machine.run(&outside, &["--json", "bogusverb"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "bad_config");
+}
+
 fn lease_count(db: &std::path::Path) -> i64 {
     let conn = rusqlite::Connection::open(db).unwrap();
     conn.query_row("SELECT count(*) FROM leases", [], |row| row.get(0))

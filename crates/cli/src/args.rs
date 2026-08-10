@@ -54,6 +54,23 @@ pub enum Invocation {
     },
 }
 
+/// A parse failure, carrying the `--json` the parser had **already seen** when
+/// it failed.
+///
+/// Every verb takes `--json` (PLAN.md §3), including the ones this phase
+/// answers with "not built yet" — so a failure before a verb exists still has
+/// to answer in the envelope. The flag rides out with the error rather than
+/// being re-scanned from argv by the caller, because a second scan would be a
+/// second grammar: it cannot tell char's own `--json` from one belonging to a
+/// `commands:` child, which is the distinction this whole module exists to draw.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseFailure {
+    /// What went wrong.
+    pub error: CharError,
+    /// How to report it.
+    pub json: bool,
+}
+
 /// The flags more than one verb takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Common {
@@ -81,7 +98,7 @@ pub const BUILTIN_VERBS: [&str; 9] = [
 ];
 
 /// Parse an argument vector, excluding `argv[0]`.
-pub fn parse(args: &[String]) -> Result<Invocation, CharError> {
+pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
     let mut json = false;
     let mut index = 0;
 
@@ -97,7 +114,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, CharError> {
                 json = true;
                 index += 1;
             }
-            flag if flag.starts_with('-') => return Err(unknown_flag(flag)),
+            flag if flag.starts_with('-') => return Err(failure(unknown_flag(flag), json)),
             _ => break,
         }
     }
@@ -112,12 +129,15 @@ pub fn parse(args: &[String]) -> Result<Invocation, CharError> {
         "status" => {
             let common = common(rest, json, &[])?;
             if common.dry_run {
-                return Err(CharError {
-                    class: ErrClass::BadInvocation,
-                    r#where: "status".to_string(),
-                    message: "`char status` reads; there is nothing to dry-run".to_string(),
-                    next_action: Some("drop --dry-run".to_string()),
-                });
+                return Err(failure(
+                    CharError {
+                        class: ErrClass::BadInvocation,
+                        r#where: "status".to_string(),
+                        message: "`char status` reads; there is nothing to dry-run".to_string(),
+                        next_action: Some("drop --dry-run".to_string()),
+                    },
+                    common.json,
+                ));
             }
             Ok(Invocation::Status(common))
         }
@@ -145,15 +165,22 @@ pub fn parse(args: &[String]) -> Result<Invocation, CharError> {
         // not implement. Otherwise `char check` in a repo declaring a `check:`
         // command would dispatch to it — and the one guarantee the project
         // exists to provide is that the verbs mean the same thing everywhere.
-        name if BUILTIN_VERBS.contains(&name) => Err(CharError {
-            class: ErrClass::BadInvocation,
-            r#where: verb.clone(),
-            message: format!("`char {verb}` is not built yet"),
-            next_action: Some(
-                "phase 2 ships init, clean and status, plus the repo's own commands:".to_string(),
-            ),
-        }),
-        name if name.starts_with('-') => Err(unknown_flag(name)),
+        name if BUILTIN_VERBS.contains(&name) => Err(failure(
+            CharError {
+                class: ErrClass::BadInvocation,
+                r#where: verb.clone(),
+                message: format!("`char {verb}` is not built yet"),
+                next_action: Some(
+                    "phase 2 ships init, clean and status, plus the repo's own commands:"
+                        .to_string(),
+                ),
+            },
+            // The name is a built-in, so the rest is char's own argv and not a
+            // child's: `char check --json` asks for the envelope just as
+            // `char --json check` does.
+            json || rest.iter().any(|a| a == "--json"),
+        )),
+        name if name.starts_with('-') => Err(failure(unknown_flag(name), json)),
         name => Ok(Invocation::Dispatch {
             name: name.to_string(),
             argv: rest.to_vec(),
@@ -162,9 +189,12 @@ pub fn parse(args: &[String]) -> Result<Invocation, CharError> {
     }
 }
 
-fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, CharError> {
+fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, ParseFailure> {
     let mut common = Common {
-        json,
+        // Settled before the loop, so that how a failure is *reported* does not
+        // depend on where in the line the offending flag sits: `char init
+        // --turbo --json` and `char init --json --turbo` are the same failure.
+        json: json || rest.iter().any(|a| a == "--json"),
         ..Default::default()
     };
     let mut project = false;
@@ -172,22 +202,31 @@ fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, CharE
 
     for arg in rest {
         match arg.as_str() {
-            "--json" => common.json = true,
+            "--json" => {}
             "--project" => project = true,
             "--all" => all = true,
             "--dry-run" if allowed.contains(&"--dry-run") => common.dry_run = true,
             flag if allowed.contains(&flag) => {}
-            other => return Err(unknown_flag(other)),
+            other => return Err(failure(unknown_flag(other), common.json)),
         }
     }
 
-    common.lens = Lens::from_flags(project, all).ok_or_else(|| CharError {
-        class: ErrClass::BadInvocation,
-        r#where: "scope".to_string(),
-        message: "--project and --all are two different scopes".to_string(),
-        next_action: Some("pass one of them".to_string()),
+    common.lens = Lens::from_flags(project, all).ok_or_else(|| {
+        failure(
+            CharError {
+                class: ErrClass::BadInvocation,
+                r#where: "scope".to_string(),
+                message: "--project and --all are two different scopes".to_string(),
+                next_action: Some("pass one of them".to_string()),
+            },
+            common.json,
+        )
     })?;
     Ok(common)
+}
+
+fn failure(error: CharError, json: bool) -> ParseFailure {
+    ParseFailure { error, json }
 }
 
 fn unknown_flag(flag: &str) -> CharError {
@@ -236,14 +275,14 @@ mod tests {
 
     #[test]
     fn project_and_all_together_is_bad_invocation() {
-        let err = parse(&args(&["status", "--project", "--all"])).unwrap_err();
+        let err = parse(&args(&["status", "--project", "--all"])).unwrap_err().error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert_eq!(err.class.exit_code(), 2);
     }
 
     #[test]
     fn an_unknown_flag_is_bad_invocation_and_says_where_to_look() {
-        let err = parse(&args(&["init", "--turbo"])).unwrap_err();
+        let err = parse(&args(&["init", "--turbo"])).unwrap_err().error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert!(err.next_action.is_some());
     }
@@ -278,9 +317,27 @@ mod tests {
 
     #[test]
     fn a_verb_that_is_not_built_yet_says_so_rather_than_dispatching_it() {
-        let err = parse(&args(&["check"])).unwrap_err();
+        let err = parse(&args(&["check"])).unwrap_err().error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert!(err.message.contains("not built yet"));
+    }
+
+    /// A failure before a verb exists still has to be reportable in the
+    /// envelope, so the `--json` the parser saw rides out with the error —
+    /// however it was spelled, and wherever the offending flag sits.
+    #[test]
+    fn a_parse_failure_carries_out_the_json_it_had_already_seen() {
+        for words in [
+            &["--json", "check"][..],
+            &["check", "--json"][..],
+            &["--json", "init", "--turbo"][..],
+            &["init", "--turbo", "--json"][..],
+        ] {
+            let failure = parse(&args(words)).unwrap_err();
+            assert!(failure.json, "`char {}` lost --json", words.join(" "));
+            assert_eq!(failure.error.class, ErrClass::BadInvocation);
+        }
+        assert!(!parse(&args(&["check"])).unwrap_err().json);
     }
 
     /// Every built-in name is claimed, including the ones phase 2 does not

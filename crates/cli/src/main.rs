@@ -66,7 +66,10 @@ fn main() -> ExitCode {
 
     let invocation = match args::parse(&argv) {
         Ok(invocation) => invocation,
-        Err(error) => return fail(error, false),
+        // `--json` is answered even when the failure is the parse itself: the
+        // parser carries out the flag it had already seen, so a machine caller
+        // probing a verb that does not exist yet still reads an envelope.
+        Err(failure) => return fail(failure.error, failure.json),
     };
 
     match invocation {
