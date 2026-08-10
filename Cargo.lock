@@ -96,6 +96,7 @@ version = "0.1.0"
 dependencies = [
  "charkit-adapters",
  "charkit-core",
+ "serde_json",
 ]
 
 [[package]]

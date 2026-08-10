@@ -215,6 +215,33 @@ fn parse_inspect_line(line: &str, kind: Kind) -> Option<LabelledResource> {
     })
 }
 
+/// Every handle matching a **declared** `owns:` selector.
+///
+/// This is a distinct path from [`list_labelled`], and deliberately so. A
+/// `commands:` entry's `owns:` is a *selector, not a record*: the command runs
+/// ad hoc, so there is no "while it was up" window to record against, and
+/// `clean` evaluates the declaration against docker at the time it runs. The
+/// selector is passed to `--filter` verbatim after substitution, because the
+/// repo is naming resources by *its own* labels — `label=com.example.worktree=…`
+/// — which char has no vocabulary for and no business rewriting.
+pub fn list_by_selector(
+    run: &impl Run,
+    cwd: &Path,
+    timeout: Duration,
+    kind: Kind,
+    selector: &str,
+) -> Result<Vec<String>, CharError> {
+    let mut argv = kind.list_argv();
+    argv.push("--filter".to_string());
+    argv.push(selector.to_string());
+    Ok(call(run, cwd, timeout, argv)?
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
 /// Remove resources by handle. Removal is best-effort per handle: one
 /// container that will not go must not strand the network behind it.
 pub fn remove(
@@ -429,6 +456,27 @@ mod tests {
         assert_eq!(
             run.seen.borrow()[1],
             vec!["docker", "network", "rm", "net2"]
+        );
+    }
+
+    /// A declared selector reaches `--filter` verbatim: the repo is naming
+    /// resources by its own labels, which char has no vocabulary for and no
+    /// business rewriting.
+    #[test]
+    fn a_declared_selector_reaches_the_filter_untouched() {
+        let run = FakeRun::with(&["c1\nc2\n"]);
+        let found = list_by_selector(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Container,
+            "label=com.example.worktree=a3f91c02",
+        )
+        .unwrap();
+        assert_eq!(found, vec!["c1", "c2"]);
+        assert_eq!(
+            run.seen.borrow()[0].last().unwrap(),
+            "label=com.example.worktree=a3f91c02"
         );
     }
 

@@ -106,6 +106,15 @@ pub struct ReapPlan {
     /// Everything deliberately left alone, with its reason.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub reported: Vec<Reported>,
+    /// Passes that did not run, and why.
+    ///
+    /// **A pass that did not run has to say so.** "Reaping is reported, never
+    /// silent" is about more than removals: a resource pass skipped because the
+    /// Docker daemon is unreachable produces an empty `resources` list that is
+    /// indistinguishable from a clean machine, and an agent reading it
+    /// concludes there is nothing to reclaim.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<String>,
 }
 
 impl ReapPlan {
@@ -115,6 +124,7 @@ impl ReapPlan {
             && self.resources.is_empty()
             && self.leases.is_empty()
             && self.reported.is_empty()
+            && self.skipped.is_empty()
     }
 }
 

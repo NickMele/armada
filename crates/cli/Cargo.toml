@@ -17,3 +17,4 @@ path = "src/main.rs"
 [dependencies]
 charkit-adapters = { path = "../adapters" }
 charkit-core = { path = "../core" }
+serde_json.workspace = true

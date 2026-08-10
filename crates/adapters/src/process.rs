@@ -41,6 +41,13 @@ pub const CAPTURE_CAP: usize = 10 * 1024 * 1024;
 /// How often the wait loop wakes to check a deadline.
 const POLL: Duration = Duration::from_millis(10);
 
+/// How often the wait loop calls the caller's tick — the lease heartbeat.
+///
+/// Matches [`charkit_core::lease::RENEW_INTERVAL_MS`]: twelve of these fit
+/// inside the cold threshold, which is the margin that makes a missed renewal
+/// a real signal rather than a jitter artefact.
+const TICK: Duration = Duration::from_millis(charkit_core::lease::RENEW_INTERVAL_MS);
+
 /// The production [`Run`].
 ///
 /// Zero-sized: everything it needs arrives in the [`RunRequest`], which is what
@@ -51,7 +58,16 @@ pub struct RealRun;
 impl Run for RealRun {
     fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
         let mut group = ProcessGroup::spawn(request)?;
-        Ok(group.wait(request.timeout))
+        Ok(group.wait(request.timeout, &mut || {}))
+    }
+
+    fn call_with_tick(
+        &self,
+        request: &RunRequest,
+        tick: &mut dyn FnMut(),
+    ) -> Result<RunOutput, SpawnError> {
+        let mut group = ProcessGroup::spawn(request)?;
+        Ok(group.wait(request.timeout, tick))
     }
 }
 
@@ -141,12 +157,13 @@ impl ProcessGroup {
     /// pipes inline would block char in `read` while the clock ran out, and
     /// draining them only after `wait` deadlocks the moment a child fills a
     /// pipe buffer.
-    pub fn wait(&mut self, timeout: Option<Duration>) -> RunOutput {
+    pub fn wait(&mut self, timeout: Option<Duration>, tick: &mut dyn FnMut()) -> RunOutput {
         let out_reader = self.stdout.take().map(spawn_reader);
         let err_reader = self.stderr.take().map(spawn_reader);
 
         let deadline = timeout.map(|t| Instant::now() + t);
         let mut timed_out = false;
+        let mut next_tick = Instant::now() + TICK;
 
         let status = loop {
             match self.child.try_wait() {
@@ -168,6 +185,10 @@ impl ProcessGroup {
                     // exactly when a dropped handle would go unnoticed.
                     break self.child.wait().ok();
                 }
+            }
+            if Instant::now() >= next_tick {
+                tick();
+                next_tick = Instant::now() + TICK;
             }
             std::thread::sleep(POLL);
         };

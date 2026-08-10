@@ -23,7 +23,7 @@ use crate::error::{CharError, Status};
 use crate::id::{ProjectId, WorkspaceId};
 use crate::lease::WaitingOn;
 use crate::ports::{PortBlock, PortState};
-use crate::reap::{ReapPlan, Reported};
+use crate::reap::ReapPlan;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -250,11 +250,15 @@ pub struct StatusData {
     /// One row per workspace in scope.
     pub results: Vec<ResultRow>,
     /// External resources char will never reclaim, named so a human can.
+    ///
+    /// **`status` asks no daemon.** It answers from `char.db` and a port probe,
+    /// which is what makes it cheap enough to poll — and what §6.1's own
+    /// `status --all` example needs, since a declared `release:` command is a
+    /// recorded row rather than a labelled resource. Reaping is `init`'s and
+    /// `clean`'s job; a read verb that took 300 ms of docker calls in a repo
+    /// with no services would be a read verb nobody runs.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub unreclaimed: Vec<Unreclaimed>,
-    /// Labelled resources char found and deliberately left alone.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub reported: Vec<Reported>,
 }
 
 /// A declared external resource: recorded at `init`, reported here, **never

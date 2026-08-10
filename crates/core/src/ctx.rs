@@ -194,6 +194,28 @@ pub trait Run {
     /// than an error — the distinction is the whole of PLAN.md §4.5's
     /// `data.dispatched`.
     fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError>;
+
+    /// Run to completion, calling `tick` every so often while waiting.
+    ///
+    /// This is how a **lease heartbeat survives a long child** without a
+    /// background timer. PLAN.md §4.3 puts renewal in the loop that waits,
+    /// precisely so that a wedged loop stops renewing and the existing
+    /// cold-heartbeat path reclaims it — a background timer keeps ticking while
+    /// the work is wedged, so the lease looks healthy forever and you need a
+    /// TTL to catch it. `bundle install` takes minutes and a lease goes cold in
+    /// one, so without this a second agent could take the run lease out from
+    /// under a healthy `char init`.
+    ///
+    /// The default ignores the tick, which is right for a fake: nothing in a
+    /// unit test is waiting on anything.
+    fn call_with_tick(
+        &self,
+        request: &RunRequest,
+        tick: &mut dyn FnMut(),
+    ) -> Result<RunOutput, SpawnError> {
+        let _ = tick;
+        self.call(request)
+    }
 }
 
 /// Time, in the three shapes char needs.
