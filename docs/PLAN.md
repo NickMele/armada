@@ -671,10 +671,40 @@ char check --files a.py b.py          an explicit list
 
 **A path selector runs the checks whose `match:` covers those files, with `${files}` set to
 exactly them.** That is the case an agent actually has — it changed one file and wants that
-file checked — and it is what stops the bypass: without it, an agent reasons that running the
-underlying tool directly is faster, and it is right. `char check <one file>` must be at least
-as fast as running the tool by hand, or agents will run the tool by hand and char stops being
-the vocabulary the project exists to provide.
+file checked. Without it an agent reasons that running the underlying tool directly is faster,
+and it is right.
+
+> **char cannot win on latency, and the requirement that it must was wrong.** An earlier draft
+> said `char check <one file>` "must be at least as fast as running the tool by hand." It
+> cannot be, and stating an unmeetable requirement instead of a mechanism is how a known risk
+> gets treated as handled. **Measured floor, before char parses any YAML or spawns anything:**
+>
+> | | |
+> |---|---:|
+> | `git rev-parse --path-format=absolute --git-common-dir` | 12.7 ms |
+> | `git merge-base` | 19.2 ms |
+> | `git diff -z --name-only` | 17.3 ms |
+> | `git status -z` | 15.0 ms |
+> | SQLite open + WAL + `BEGIN IMMEDIATE` + commit | 0.8 ms |
+> | **total** | **~65 ms** |
+>
+> **Decision: accepted.** 65 ms is below the threshold where anyone chooses differently — the
+> tool it wraps takes hundreds of milliseconds on one file and seconds on a suite, so the
+> overhead is noise against the work. The floor is recorded so it stays a floor: a phase that
+> adds a sixth subprocess to the common path is spending from a budget, and should say so.
+>
+> **What actually prevents the bypass is not speed, it is not knowing the command.** The agent
+> that would bypass `char check api/views.py` has to know the tool, its flags, the working
+> directory it expects, the environment it needs, and which of the repo's four test runners
+> owns that path. That is the knowledge char exists to remove, and an agent that has it did not
+> need char for this repo in the first place. Speed only has to be *close enough not to
+> motivate re-deriving all of that*, and 65 ms is.
+
+**Contention does not make this worse, though it reads as if it might.** The run lease is
+per-workspace, so five agents in five worktrees never contend on it — they contend on
+cpu-slots and exclusives, which **queue** rather than refuse (§3.2.1). The only fail-fast is a
+second `char check` in the *same* workspace, which is a genuine mistake worth reporting, and
+its `next_action` names `--wait`.
 
 **A bare word that matches both a component and a check name is `bad_invocation`**, naming both
 and telling the caller to disambiguate with `--component`. Rare, and better than picking one
