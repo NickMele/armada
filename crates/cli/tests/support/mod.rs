@@ -100,6 +100,18 @@ impl Machine {
             .env_clear()
             .env("HOME", self.home.path())
             .env("PATH", std::env::var("PATH").unwrap_or_default());
+        // The one exception to the small environment, and it is not the
+        // developer's: a coverage build writes its counters to the file named
+        // by `LLVM_PROFILE_FILE`, and a binary that inherits no such variable
+        // writes `default.profraw` into its working directory instead — a
+        // scratch tempdir this suite deletes. Dropping it is why every line
+        // reachable only through the real binary reads as never executed, so
+        // the e2e tier silently stopped counting toward the coverage floor the
+        // moment there was one. Absent outside a coverage run, so this is a
+        // no-op for `cargo test`.
+        if let Ok(profile) = std::env::var("LLVM_PROFILE_FILE") {
+            command.env("LLVM_PROFILE_FILE", profile);
+        }
         command
     }
 

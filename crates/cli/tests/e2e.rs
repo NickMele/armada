@@ -12,6 +12,20 @@
 //! - a `commands:` entry's subcommands and flags reach the child untouched, its
 //!   exit code comes back verbatim, and `env:` layers over the inherited
 //!   environment.
+//!
+//! The second half of the file is the rest of the shipped surface, which the
+//! done-whens do not reach and which nothing else covers:
+//!
+//! - **the previews.** `--dry-run` is the safety mechanism for `clean
+//!   --artifacts`, so a preview listing less than the real pass deletes is worse
+//!   than no preview at all — it reads as a complete answer and is not one. Only
+//!   running both against one repo establishes that they agree.
+//! - **`init`'s two failure paths.** A `setup:` step that exits non-zero and one
+//!   that cannot be started are deliberately *different classes* — `tool_failed`
+//!   against `bad_config`, the tool's failure against the repo's statement being
+//!   wrong — and nothing else asserts the distinction survives to the envelope.
+//! - **the human renderer's two exits.** An answer goes to stdout and a failure
+//!   to stderr, so `char status | grep` is never quietly fed an error report.
 
 mod support;
 
@@ -294,6 +308,273 @@ fn a_parse_time_failure_answers_in_the_envelope_when_json_was_asked_for() {
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(payload["error"]["class"], "bad_config");
 }
+
+// ---------------------------------------------------------------------------
+// The surface the done-whens do not reach.
+// ---------------------------------------------------------------------------
+
+/// `--version` and `--help` answer before any workspace exists, which is the
+/// state someone reaching for `--help` is usually in.
+#[test]
+fn version_and_help_answer_from_outside_a_workspace() {
+    let machine = Machine::new();
+    let outside = machine.outside();
+
+    let version = machine.run(&outside, &["--version"]);
+    assert!(version.status.success());
+    assert!(
+        String::from_utf8_lossy(&version.stdout).starts_with("char "),
+        "{:?}",
+        String::from_utf8_lossy(&version.stdout)
+    );
+
+    let help = machine.run(&outside, &["--help"]);
+    assert!(help.status.success());
+    let text = String::from_utf8_lossy(&help.stdout);
+    assert!(text.contains("char init"), "{text}");
+    // The limits are stated in the usage rather than discovered by running one.
+    assert!(text.contains("Not built yet"), "{text}");
+}
+
+/// `init --dry-run` decides everything and changes nothing: no block is
+/// claimed, no `.char/` appears, and the workspace is still unknown to the
+/// store afterwards.
+#[test]
+fn init_dry_run_previews_the_claim_and_claims_nothing() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", SETUP_CONFIG);
+
+    let output = machine.run(&repo, &["init", "--dry-run", "--json"]);
+    assert!(output.status.success());
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let block = &payload["data"]["would_claim"];
+    assert!(block["from"].is_u64(), "{payload}");
+    assert_eq!(
+        payload["data"]["would_run"],
+        Value::from(vec!["api: true"]),
+        "the setup steps are previewed in order"
+    );
+
+    assert!(!repo.join(".char").exists(), ".char/ must not be created");
+    let all: Value = serde_json::from_slice(
+        &machine
+            .run(&machine.outside(), &["status", "--all", "--json"])
+            .stdout,
+    )
+    .unwrap();
+    assert_eq!(
+        all["data"]["results"].as_array().unwrap().len(),
+        0,
+        "a preview must leave the store empty: {all}"
+    );
+
+    // And the human rendering says, first, that nothing happened.
+    let human = machine.run(&repo, &["init", "--dry-run"]);
+    assert!(String::from_utf8_lossy(&human.stdout).starts_with("dry run"));
+}
+
+/// A `setup:` step that runs and fails is the **tool's** failure: char started
+/// it, so the repo's statement was right and the command was not.
+#[test]
+fn a_setup_step_that_exits_non_zero_fails_the_row_and_the_verb() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", FAILING_SETUP_CONFIG);
+
+    let output = machine.run(&repo, &["init", "--json"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["status"], "FAILED");
+    assert_eq!(payload["error"]["class"], "tool_failed");
+    assert_eq!(payload["error"]["where"], "api");
+    assert_eq!(payload["data"]["results"][0]["status"], "FAILED");
+    assert!(
+        payload["data"]["results"][0]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("exited 1"),
+        "the child's code is named: {payload}"
+    );
+    assert_eq!(output.status.code(), Some(1), "tool_failed is 1");
+
+    // The block was still claimed: the failure is the repo's command, and
+    // refusing to remember the workspace would strand the block.
+    let status: Value =
+        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(status["data"]["results"].as_array().unwrap().len(), 1);
+}
+
+/// A `setup:` step that **cannot be started** is the repo's statement being
+/// wrong rather than the machine's, so it is `bad_config` and names the
+/// program — and the human rendering of that goes to stderr, not stdout.
+#[test]
+fn a_setup_step_that_cannot_start_is_bad_config_and_prints_to_stderr() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", UNSTARTABLE_SETUP_CONFIG);
+
+    let output = machine.run(&repo, &["init", "--json"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let error = &payload["data"]["results"][0]["error"];
+    assert_eq!(error["class"], "bad_config");
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .contains("definitely-not-here"),
+        "{payload}"
+    );
+    assert!(error["next_action"].is_string());
+
+    // Human: a failed verb's report belongs on stderr, so a pipeline reading
+    // stdout is never handed an error report as if it were an answer. The row's
+    // message is printed under the row; the envelope's class is the aggregate
+    // one, which for a failed setup step is `tool_failed` whatever the row said.
+    let human = machine.run(&repo, &["init"]);
+    assert!(!human.status.success());
+    assert!(human.stdout.is_empty(), "nothing goes to stdout on failure");
+    let text = String::from_utf8_lossy(&human.stderr);
+    assert!(text.contains("could not be started"), "stderr: {text:?}");
+    assert!(text.contains("class: tool_failed"), "stderr: {text:?}");
+}
+
+/// `clean --dry-run --artifacts` previews **exactly** what the real pass then
+/// releases: the block, the declared artifact, and the external command char
+/// records and will never run.
+#[test]
+fn clean_previews_what_it_would_release_and_releases_none_of_it() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", OWNS_CONFIG);
+    machine.run(&repo, &["init"]);
+    std::fs::write(repo.join("node_modules"), "artifact").unwrap();
+
+    let output = machine.run(&repo, &["clean", "--dry-run", "--artifacts", "--json"]);
+    assert!(output.status.success());
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let data = &payload["data"];
+    assert_eq!(data["would_release"].as_array().unwrap().len(), 1);
+    assert_eq!(data["would_delete"], Value::from(vec!["node_modules"]));
+    assert!(
+        data["would_report"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("psql -c"),
+        "the recorded release command is reported, never run: {payload}"
+    );
+
+    // Nothing moved: the artifact, the row and `.char/` are all still there.
+    assert!(repo.join("node_modules").exists());
+    assert!(repo.join(".char").exists());
+    let status: Value =
+        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(status["data"]["results"].as_array().unwrap().len(), 1);
+}
+
+/// The real pass, against the same repo: the preview's list is what goes.
+#[test]
+fn clean_artifacts_deletes_the_declared_files_and_reports_the_external_command() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", OWNS_CONFIG);
+    machine.run(&repo, &["init"]);
+    std::fs::write(repo.join("node_modules"), "artifact").unwrap();
+
+    let output = machine.run(&repo, &["clean", "--artifacts", "--json"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["status"], "CLEAN");
+    let row = &payload["data"]["results"][0];
+    assert_eq!(row["released"]["files"], Value::from(1));
+    assert_eq!(row["released"]["port_block"], Value::Bool(true));
+    assert!(
+        payload["data"]["unreclaimed"][0]["command"]
+            .as_str()
+            .unwrap()
+            .starts_with("psql -c"),
+        "{payload}"
+    );
+
+    assert!(!repo.join("node_modules").exists(), "the artifact went");
+    assert!(!repo.join(".char").exists(), ".char/ went with it");
+    let status: Value =
+        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(status["data"]["results"].as_array().unwrap().len(), 0);
+}
+
+/// A stated limit rather than a silent one: `--force-rebuild` refuses, and the
+/// refusal carries the manual remedy.
+#[test]
+fn force_rebuild_refuses_and_says_what_to_do_instead() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", OWNS_CONFIG);
+
+    let output = machine.run(&repo, &["clean", "--force-rebuild", "--json"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "bad_invocation");
+    assert_eq!(payload["error"]["where"], "--force-rebuild");
+    assert!(payload["error"]["next_action"]
+        .as_str()
+        .unwrap()
+        .contains("char.db"));
+    assert_eq!(output.status.code(), Some(2));
+}
+
+/// The human renderer on the ordinary success path: `status` prints its scope,
+/// the workspace's block and what it holds, to stdout.
+#[test]
+fn status_renders_for_a_terminal_on_stdout() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", OWNS_CONFIG);
+    machine.run(&repo, &["init"]);
+
+    let output = machine.run(&repo, &["status"]);
+    assert!(output.status.success());
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(text.starts_with("scope workspace\n"), "{text}");
+    assert!(text.contains("  ports 54"), "{text}");
+    assert!(
+        text.contains("RESERVED") || text.contains("CONFLICT"),
+        "a port's probed state is spelled as the envelope spells it: {text}"
+    );
+}
+
+const SETUP_CONFIG: &str = "\
+version: 1
+components:
+  api:
+    setup: [\"true\"]
+    run:
+      driver: command
+      cmd: ./serve
+      ports: { web: 3000 }
+";
+
+const FAILING_SETUP_CONFIG: &str = "\
+version: 1
+components:
+  api:
+    setup: [\"false\"]
+";
+
+const UNSTARTABLE_SETUP_CONFIG: &str = "\
+version: 1
+components:
+  api:
+    setup: [\"./definitely-not-here\"]
+";
+
+const OWNS_CONFIG: &str = "\
+version: 1
+components:
+  api:
+    run:
+      driver: command
+      cmd: ./serve
+      ports: { web: 3000 }
+    owns:
+      files: [node_modules]
+      release: \"psql -c 'DROP DATABASE app_${workspace.id}'\"
+";
 
 fn lease_count(db: &std::path::Path) -> i64 {
     let conn = rusqlite::Connection::open(db).unwrap();

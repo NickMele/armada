@@ -217,3 +217,307 @@ pub fn error_lines(error: &CharError) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use charkit_core::envelope::{PortReport, Released, ResultRow, Unreclaimed};
+    use charkit_core::error::{ErrClass, Status};
+    use charkit_core::id::WorkspaceId;
+    use charkit_core::ports::{PortBlock, PortState};
+    use charkit_core::reap::{LeftAlone, ReapTarget, Reported};
+    use charkit_core::registry::OwnedKind;
+    use std::collections::BTreeMap;
+
+    fn workspace() -> WorkspaceId {
+        WorkspaceId::from_stored("a3f91c02")
+    }
+
+    fn block() -> PortBlock {
+        PortBlock {
+            from: 5460,
+            to: 5469,
+        }
+    }
+
+    fn failure() -> CharError {
+        CharError {
+            class: ErrClass::ToolFailed,
+            r#where: "api".to_string(),
+            message: "`npm ci` exited 1".to_string(),
+            next_action: Some("run it by hand".to_string()),
+        }
+    }
+
+    /// Every kind of decision a reap can report, so the block below renders all
+    /// five of its lists rather than whichever one a scenario happened to fill.
+    fn plan() -> ReapPlan {
+        ReapPlan {
+            workspaces: vec![WorkspaceId::from_stored("deadbeef")],
+            resources: vec![ReapTarget {
+                kind: OwnedKind::Container,
+                reference: "char-api-1".to_string(),
+                workspace: WorkspaceId::from_stored("deadbeef"),
+            }],
+            leases: vec!["run:a3f91c02".to_string()],
+            reported: vec![Reported {
+                kind: OwnedKind::Volume,
+                reference: "char-data".to_string(),
+                workspace: workspace(),
+                reason: LeftAlone::WorkspaceLive,
+            }],
+            skipped: vec!["labelled resources: docker daemon unreachable".to_string()],
+        }
+    }
+
+    #[test]
+    fn init_prints_the_block_the_ports_and_every_row() {
+        let mut row = ResultRow::new("api", Status::Failed);
+        row.error = Some(failure());
+        let envelope = Envelope::ok(
+            "init",
+            Some(workspace()),
+            Status::Ready,
+            InitData {
+                port_block: block(),
+                claimed_at: "2026-08-09T14:02:11Z".to_string(),
+                ports: BTreeMap::from([("web".to_string(), 5460)]),
+                reaped: ReapPlan::default(),
+                results: vec![row],
+            },
+        );
+
+        let text = human(&Output::Init(Box::new(envelope)));
+        assert!(text.starts_with("workspace a3f91c02  ports 5460-5469\n"));
+        assert!(text.contains("  web              5460\n"));
+        assert!(text.contains("  api              FAILED\n"));
+        // The row's own error is printed under it; the envelope's is not, and
+        // there is none here.
+        assert!(text.contains("    `npm ci` exited 1\n"));
+        assert!(!text.contains("error: "));
+    }
+
+    /// The envelope's error is printed **as well as** the rows, because a verb
+    /// that failed as a whole and a row that failed are different facts.
+    #[test]
+    fn a_failed_init_prints_the_envelopes_error_too() {
+        let envelope = Envelope::failed(
+            "init",
+            Some(workspace()),
+            failure(),
+            InitData {
+                port_block: block(),
+                claimed_at: "2026-08-09T14:02:11Z".to_string(),
+                ports: BTreeMap::new(),
+                reaped: plan(),
+                results: Vec::new(),
+            },
+        );
+
+        let text = human(&Output::Init(Box::new(envelope)));
+        assert!(text.contains("error: `npm ci` exited 1\n"));
+        assert!(text.contains("  reaped     workspace deadbeef (directory gone)\n"));
+        assert!(text.contains("  reaped     container char-api-1 (deadbeef)\n"));
+        assert!(text.contains("  reaped     lease run:a3f91c02 (heartbeat cold)\n"));
+        assert!(text.contains("  left alone volume char-data (a3f91c02) — workspace_live\n"));
+        assert!(text.contains("  not swept  labelled resources: docker daemon unreachable\n"));
+    }
+
+    #[test]
+    fn a_dry_run_says_so_before_anything_it_would_do() {
+        let envelope = Envelope::ok(
+            "init",
+            Some(workspace()),
+            Status::Ready,
+            InitDryRun {
+                would_claim: Some(block()),
+                would_run: vec!["api: npm ci".to_string()],
+                would_reap: ReapPlan::default(),
+            },
+        );
+
+        let text = human(&Output::InitDryRun(Box::new(envelope)));
+        assert!(text.starts_with("dry run — nothing was changed\n"));
+        assert!(text.contains("  would_claim     ports 5460-5469\n"));
+        assert!(text.contains("  would_run       api: npm ci\n"));
+    }
+
+    #[test]
+    fn clean_prints_what_it_released_what_it_skipped_and_what_it_will_never_reclaim() {
+        let mut row = ResultRow::new("a3f91c02", Status::Clean);
+        row.released = Some(Released {
+            processes: 1,
+            containers: 2,
+            networks: 3,
+            volumes: 4,
+            images: 5,
+            port_block: true,
+            files: 6,
+        });
+        let envelope = Envelope::ok(
+            "clean",
+            Some(workspace()),
+            Status::Clean,
+            CleanData {
+                reaped: ReapPlan::default(),
+                results: vec![row],
+                unreclaimed: vec![Unreclaimed {
+                    workspace: workspace(),
+                    command: "psql -c 'DROP DATABASE app_a3f91c02'".to_string(),
+                    workspace_exists: true,
+                }],
+                skipped: vec!["b7c20d11".to_string()],
+            },
+        );
+
+        let text = human(&Output::Clean(Box::new(envelope)));
+        assert!(text.contains(
+            "  a3f91c02   CLEAN  1 processes, 2 containers, 3 networks, 4 volumes, 5 images\n"
+        ));
+        assert!(text.contains("  skipped    b7c20d11 — it holds a live lease\n"));
+        assert!(text.contains(
+            "  char did not reclaim, and will not: psql -c 'DROP DATABASE app_a3f91c02'\n"
+        ));
+    }
+
+    /// A row char never got as far as releasing anything for prints its state
+    /// and nothing else — no empty tally.
+    #[test]
+    fn a_clean_row_with_nothing_released_prints_no_counts() {
+        let envelope = Envelope::failed(
+            "clean",
+            Some(workspace()),
+            failure(),
+            CleanData {
+                reaped: ReapPlan::default(),
+                results: vec![ResultRow::new("a3f91c02", Status::Failed)],
+                unreclaimed: Vec::new(),
+                skipped: Vec::new(),
+            },
+        );
+
+        let text = human(&Output::Clean(Box::new(envelope)));
+        assert!(text.contains("  a3f91c02   FAILED\n"));
+        assert!(!text.contains("processes"));
+        assert!(text.contains("error: `npm ci` exited 1\n"));
+    }
+
+    #[test]
+    fn a_clean_preview_labels_all_four_of_its_lists() {
+        let envelope = Envelope::ok(
+            "clean",
+            Some(workspace()),
+            Status::Clean,
+            CleanDryRun {
+                would_release: vec!["ports 5460-5469 (a3f91c02)".to_string()],
+                would_remove: vec!["container char-api-1".to_string()],
+                would_delete: vec!["node_modules".to_string()],
+                would_report: vec!["psql -c 'DROP DATABASE app_a3f91c02'".to_string()],
+            },
+        );
+
+        let text = human(&Output::CleanDryRun(Box::new(envelope)));
+        assert!(text.starts_with("dry run — nothing was changed\n"));
+        assert!(text.contains("  would_release   ports 5460-5469 (a3f91c02)\n"));
+        assert!(text.contains("  would_remove    container char-api-1\n"));
+        assert!(text.contains("  would_delete    node_modules\n"));
+        assert!(text.contains("  would_report    psql -c 'DROP DATABASE app_a3f91c02'\n"));
+    }
+
+    /// **The human spelling is the JSON spelling** (`ARCHITECTURE.md` §1.6): a
+    /// port state reads `CONFLICT` in the terminal because that is what the
+    /// envelope calls it, and a reader who learned one knows the other.
+    #[test]
+    fn status_spells_a_port_state_the_way_the_envelope_does() {
+        let mut row = ResultRow::new("a3f91c02", Status::Ok);
+        row.path = Some("/scratch/repo".to_string());
+        row.port_block = Some(block());
+        row.ports = BTreeMap::from([(
+            "web".to_string(),
+            PortReport {
+                port: 5460,
+                state: PortState::Conflict,
+            },
+        )]);
+        row.leases = vec!["run:a3f91c02".to_string()];
+        let envelope = Envelope::ok(
+            "status",
+            Some(workspace()),
+            Status::Ok,
+            StatusData {
+                scope: "workspace".to_string(),
+                results: vec![row],
+                unreclaimed: vec![Unreclaimed {
+                    workspace: WorkspaceId::from_stored("deadbeef"),
+                    command: "psql -c 'DROP DATABASE app_deadbeef'".to_string(),
+                    workspace_exists: false,
+                }],
+            },
+        );
+
+        let text = human(&Output::Status(Box::new(envelope)));
+        assert!(text.starts_with("scope workspace\n"));
+        assert!(text.contains("  a3f91c02  /scratch/repo  ports 5460-5469\n"));
+        assert!(
+            text.contains("      web          5460 CONFLICT\n"),
+            "the state is spelled as the JSON spells it, unquoted: {text}"
+        );
+        assert!(text.contains("      holds run:a3f91c02\n"));
+        assert!(
+            text.contains("  workspace deadbeef (directory deleted) declared an external"),
+            "a deleted directory is said so rather than left to be inferred: {text}"
+        );
+    }
+
+    /// A dispatched command that ran prints **nothing**: the child already
+    /// wrote its own output, and "exited 0" on top of it is noise — on stdout,
+    /// it is corruption of a pipeline the repo owns.
+    #[test]
+    fn a_dispatched_command_that_ran_adds_nothing_of_chars_own() {
+        let ran = Envelope::ok(
+            "commands",
+            Some(workspace()),
+            Status::Ok,
+            DispatchData {
+                command: "echoer".to_string(),
+                dispatched: true,
+                child_exit: Some(0),
+                argv: vec!["echo".to_string()],
+            },
+        );
+        assert_eq!(human(&Output::Dispatch(Box::new(ran))), "");
+
+        // A command that never ran is char's failure, and char says so.
+        let refused = Envelope::failed(
+            "commands",
+            Some(workspace()),
+            failure(),
+            DispatchData {
+                command: "missing".to_string(),
+                dispatched: false,
+                child_exit: None,
+                argv: Vec::new(),
+            },
+        );
+        assert_eq!(
+            human(&Output::Dispatch(Box::new(refused))),
+            "error: `npm ci` exited 1\n  where: api\n  class: tool_failed\n  next:  run it by hand\n"
+        );
+    }
+
+    /// The error class is spelled exactly as the envelope spells it, and the
+    /// remedy line is omitted rather than printed empty when there is none.
+    #[test]
+    fn an_error_without_a_remedy_prints_three_lines_and_not_four() {
+        let text = error_lines(&CharError {
+            class: ErrClass::BadInvocation,
+            r#where: "--force-rebuild".to_string(),
+            message: "not built yet".to_string(),
+            next_action: None,
+        });
+        assert_eq!(
+            text,
+            "error: not built yet\n  where: --force-rebuild\n  class: bad_invocation\n"
+        );
+    }
+}

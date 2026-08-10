@@ -831,6 +831,7 @@ fn random_uuid() -> Result<String, CharError> {
 mod tests {
     use super::*;
     use charkit_core::lease::is_cold;
+    use rusqlite::ffi;
 
     fn open() -> (tempfile::TempDir, Db) {
         let home = tempfile::tempdir().unwrap();
@@ -1076,6 +1077,53 @@ mod tests {
         assert!(db.still_linked());
         std::fs::remove_file(home.path().join("char.db")).unwrap();
         assert!(!db.still_linked());
+    }
+
+    /// **The class comes from the extended code and never from the message.**
+    /// `SQLITE_BUSY` and `SQLITE_BUSY_SNAPSHOT` both print `database is
+    /// locked`, and one of them is retryable while the other is char's own bug
+    /// — so a mapping that read the text would have the claim loop retry a
+    /// transaction that can never succeed.
+    #[test]
+    fn a_sqlite_failure_is_classified_by_its_extended_code() {
+        let path = Path::new("/scratch/char.db");
+        let mapped = |code| {
+            map_sqlite(
+                path,
+                rusqlite::Error::SqliteFailure(ffi::Error::new(code), None),
+            )
+        };
+
+        // 5, SQLITE_BUSY: a queue char lost, and the remedy is to retry.
+        let busy = mapped(5);
+        assert_eq!(busy.class, ErrClass::Aborted);
+        assert!(busy.next_action.unwrap().contains("retry"));
+
+        // 517, SQLITE_BUSY_SNAPSHOT: never retryable, and always char's bug.
+        let snapshot = mapped(517);
+        assert_eq!(snapshot.class, ErrClass::CharBug);
+        assert_eq!(snapshot.next_action, None);
+
+        // 11, 13, 14 — corrupt, full, cannot-open: the machine is broken, and
+        // the remedy names the database rather than the config.
+        for code in [11, 13, 14] {
+            let broken = mapped(code);
+            assert_eq!(broken.class, ErrClass::Environment, "code {code}");
+            assert!(
+                broken.next_action.unwrap().contains("/scratch/char.db"),
+                "code {code}"
+            );
+        }
+
+        // Anything else, including an error that is not a SQLite failure at
+        // all: environment, with no remedy char can honestly suggest.
+        let other = mapped(1);
+        assert_eq!(other.class, ErrClass::Environment);
+        assert_eq!(other.next_action, None);
+        assert_eq!(
+            map_sqlite(path, rusqlite::Error::QueryReturnedNoRows).class,
+            ErrClass::Environment
+        );
     }
 
     /// The newcomer's side of the same measurement, recorded because it bounds
