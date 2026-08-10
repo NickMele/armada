@@ -177,6 +177,11 @@ a recorded answer. **No source files exist yet.**
 
 ### Phase 1 — Repo skeleton + **six** config fixtures *(must land alone)*
 
+> **✓ Complete.** The record of what it decided, and of every change the six fixtures forced,
+> is [`PLAN.md`](PLAN.md) §4.1.1 — including the five things `PLAN.md` specified without
+> settling, and three defects the fixtures found in the corpus itself. The config contract is
+> frozen from here.
+
 **The workspace root and `xtask/` already exist** — they landed before this phase because the
 doc lint they carry checks the corpus this phase codes against, and it found a corrupted JSON
 payload and seven dangling cross-references on its first run. Phase 1 adds `crates/core`,

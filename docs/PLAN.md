@@ -1,7 +1,9 @@
 # charkit — implementation plan
 
-> **Status:** Phase 0 complete; phase 1 not started. This document is the complete
+> **Status:** Phases 0 and 1 complete. This document is the complete
 > specification — a fresh agent should be able to execute it without any prior conversation.
+> **§4.1.1 records the five things this document left undecided and phase 1 had to settle**,
+> along with every change the six fixtures forced. The config contract is frozen from here.
 >
 > **`PHASES.md` §0.1 and §0.2 are superseded by [`ARCHITECTURE.md`](ARCHITECTURE.md)**, which records what
 > was actually decided. Everything else here stands.
@@ -532,8 +534,16 @@ suite got slow. The strictly-worse signal wins because acting on the milder one 
 time the stricter one was reporting.
 
 ```
-char_bug  >  environment  >  bad_config  >  timeout  >  aborted  >  tool_failed
+char_bug > environment > bad_config > bad_invocation > timeout > aborted > tool_failed
 ```
+
+**`bad_invocation` was missing from this list until phase 1 encoded it**, and the omission was
+not cosmetic: a `check` whose service is not running fails `bad_invocation` (phase 3), so a run
+mixing one of those with an ordinary test failure had no defined maximum — the one thing this
+ordering exists to prevent. It ranks above `tool_failed` and `timeout` for the reason
+`bad_config` does — the caller has to change what they asked for before any other result means
+anything — and below `bad_config`, because a wrong config is wrong for every future invocation
+while a wrong invocation is wrong only for this one.
 
 `environment` sits second because it invalidates everything below it: when Docker is down or
 the disk is full, the four failures underneath are consequences, and reporting one of them
@@ -1286,6 +1296,154 @@ second place: `needs:` tells a component from a check id by the colon alone (bel
 `char up` starts every component with a `run:`. `char check` runs every component with
 `checks:`.
 
+### 4.1.1 What phase 1 decided, and what the fixtures forced
+
+**This section is the record of phase 1**, which is the phase that turns §4.1 from prose into a
+schema, six fixture configs and a golden resolved snapshot each. Two kinds of entry: five
+things this document specified without settling, and every change the fixtures forced while
+being written. The second kind is the more important — §8.1 of [`PHASES.md`](PHASES.md) says
+zero fixture-forced changes would be a warning sign, not a success.
+
+**Where the artifacts live.** The schema is `crates/core/schema/char.schema.json`, embedded in
+the binary with `include_str!` because phase 5 hands it to the agent that authors a config, and
+a schema the binary has to find on disk is missing in the one situation it exists for. The
+fixtures are `tests/fixtures/<name>/char.yml` with `resolved.json` beside each. That location
+is not incidental: `ARCHITECTURE.md` §2.4 exempts `tests/fixtures/` from the contamination
+grep, and a resolved snapshot of `django-next` necessarily contains that repo's directory
+names.
+
+#### The five things the spec did not decide
+
+**1. `shell:` is one flag per *entry*, covering every command string that entry dispatches.**
+An entry is a `setup:` step, a check, a `run:` block or a `commands:` entry. So a check's
+`shell: true` covers both its `cmd:` and its `fix:`; a `run:` block's covers `cmd:` and
+`stop:`. The alternative was `cmd`/`fix` as step-objects the way `setup:` entries are, and it
+was rejected on one ground: it makes `cmd:` polymorphic — a string in five places and
+`cmd: { cmd: …, shell: true }` in one — so an agent authoring a config has to ask which
+spelling applies where. The object form earns its place under `setup:` because a *list* of
+steps genuinely needs per-step data; nothing else does. The `${files}` prohibition also lands
+more naturally at check level, because file-scoping is a property of the check rather than of
+one of its two strings.
+
+The cost, stated because it is real: `shell: true` for the sake of `fix:` also gives up
+`argv[0]` resolvability on `cmd:`, which `config verify` then reports as `unchecked` (§5).
+**Reversal condition:** the first fixture that needs a shell for one string and static
+resolution for its sibling. None of the six does — `rails-monolith`'s `app:boot` needs a shell
+for `&&` and declares no `fix:` at all.
+
+**2. The JSON Schema is authoritative. Neither it nor the serde structs generates the other.**
+
+| | |
+|---|---|
+| **Authoritative** | `crates/core/schema/char.schema.json` |
+| **Mirrors it** | the `serde` structs in `crates/core/src/config/model.rs` |
+| **Keeps them together** | the fixture suite, not codegen |
+
+The schema wins because it is the artifact with the most consumers: the agent authoring a
+config in phase 5's layer 2 reads it before any Rust is involved, `config verify` runs it, and
+it is language-independent in a way the structs are not.
+
+Codegen in either direction was considered and rejected. Generating structs *from* the schema
+produces types nobody would choose to review, and the schema's load-bearing rules are
+cross-field `if`/`then` constraints no generator turns into Rust. Generating the schema *from*
+the structs makes the shipped artifact a build product of an implementation detail, and Rust
+attributes cannot express those same constraints either.
+
+So drift is prevented by tests rather than by construction, and this is the part that matters:
+every fixture is parsed by the structs **and** validated against the schema in the same run
+(`deny_unknown_fields` on one side, `additionalProperties: false` on the other), a further test
+asserts that **every property the schema declares is used by at least one fixture**, and a
+negative suite asserts that both reject the same documents. A key that exists on only one side,
+or that no repo shape asked for, fails the build.
+
+**3. `workspaces.ports` is two inclusive integer columns, `port_from` and `port_to`.** §4.3
+showed one column and §3.1's payload shows `{from, to}`; the payload was right. Claiming a
+block is an overlap query — `WHERE port_from <= ? AND port_to >= ?` — which against a packed
+string means parsing every row in the table to answer it, and a single text column invites a
+format the writer and the reader spell differently. `port_to = port_from + port_block_size - 1`,
+and the two columns map 1:1 onto the payload's `from` and `to`, so no conversion exists to get
+wrong. Phase 2 builds this.
+
+**4. `where` for a YAML parse error keeps the `bad_config` grammar: `char.yml:` and then a
+locator.** The locator is a dotted key path when char knows the key —
+`char.yml:components.api.run.cmd` — and `line:column` when the document did not parse far
+enough to have one: `char.yml:12:7`. There is no third grammar, because §3.1's rule is that the
+*class* picks the grammar, and a parse error is a `bad_config` like any other.
+
+Measured, and it is why this costs nothing: `serde_yaml_ng` reports a line and column for both
+syntax errors and typed ones, and for a typed error its message already begins with the key
+path (`components.web: unknown field 'nope'`). So the message carries the path when there is
+one and `where` carries the position, which is the directly actionable half for an agent about
+to edit the file.
+
+**5. The YAML crate is `serde_yaml_ng` 0.10**, pinned once in the workspace's
+`[workspace.dependencies]` and used by `crates/core` and by `xtask`'s doc lint alike. That is
+the point of pinning it there rather than in two manifests: the lint parses the corpus's
+examples with the parser that will actually read `char.yml`, so a doc example char would reject
+is a finding now rather than a discovery in phase 3.
+
+It is a maintained fork of the deprecated `serde_yaml`, with the API this design needs —
+`serde` derive, and `Error::location()` for decision 4. Two honest notes. It wraps
+`unsafe-libyaml`; `#![deny(unsafe_code)]` is per-crate and does not reach a dependency, so that
+is a trust decision rather than a guarantee. And it parses YAML 1.2 only, which is the known
+limitation `xtask`'s block check already records.
+
+#### What the fixtures forced
+
+| Fixture | What it forced |
+|---|---|
+| `go-service` | **`match:` needed a stated default.** It is the only fixture with a component that declares neither `root:` nor `match:` — the component *is* the repo — and an unstated default is the per-implementer decision §4.1 opens by rejecting. Default: `<root>/**` when `root:` is set, `**` when it is not. |
+| `pnpm-monorepo` + `django-next` | **…and that default had to stop at components with no checks.** `django-next`'s resolved snapshot showed `postgres` — a service with no source at all — claiming `**`. Harmless there; in `pnpm-monorepo`, which declares a nested workspace, a defaulted `**` reaches into it, and §4.6 makes that overlap illegal. A config that never wrote a glob would fail `config verify` for a glob char invented. A component with no `checks:` now gets no globs: `match:` exists to scope checks. |
+| `rails-monolith` | **`setup:` accepts a scalar or a list, and a list item may be a step object.** §4.1's examples show `setup: uv sync` and `setup: ["bundle install", …]`, so both spellings had to be legal; resolution normalises to one list of `{cmd, shell}` steps. The object form is where `shell: true` lives, which this fixture needs for `db:create \|\| true`. `owns.release:` takes the same scalar-or-list treatment, for the same reason. |
+| `python-ml` | **`acquire_timeout` was too low, twice** — see §4.3. Its GPU check holds an `exclusive:` for 1800 s, which is longer than the `web:e2e` hold the ceiling had been sized against. |
+| `multi-lang` | **`ready.exec:` is a command string, not free text.** It was going to be an unconstrained string; this fixture writes `pg_isready -q -h 127.0.0.1 -p ${port.pg}`, which is a command char dispatches and therefore subject to the same substitution rules as any other. |
+| `pnpm-monorepo` | **`.` and `./` are rejected as spellings of the workspace root.** The nested config wanted `root: .`, which means exactly what omitting `root:` means. Two spellings for one idea is how a glob starts matching in one config and not in another. |
+| `django-next` | **The `commands:` shadowing list gained `explain`** (§4.5), and both of §4.5's "inference is wrong in both directions" cases got a real entry: a grant with `stdio: inherit`, and `stdio: pipe` with no grant. |
+
+Two more changes came from encoding the contract rather than from a fixture, and both were
+holes rather than choices: **`bad_invocation` was missing from §3.1's aggregation precedence**,
+which left the maximum undefined for a run mixing it with a test failure; and **`env:` values
+must be strings on both sides**, because the parser silently coerces an unquoted YAML scalar
+into one — `DEBUG: null` would have loaded as the four-character string `null`, passed the
+structs, and failed `config verify`. Both are measured or recorded in [`traps.md`](traps.md).
+
+#### Which layer enforces what
+
+The split matters more than any individual rule, because it decides where every future check
+goes:
+
+| Layer | Decides | Example |
+|---|---|---|
+| **schema** | anything readable from one value or one entry | a name's grammar, a port's range, `shell: true` beside `${files}` |
+| **resolution** | anything needed to produce a typed value at all | a `driver:` with the wrong keys beside it; a `ready:` with two kinds |
+| **`config verify`** | anything needing a second part of the document, or the filesystem | `needs:` targets, duplicate port names, `argv[0]` on `PATH`, globs matching nothing |
+
+Resolution deliberately does **not** re-check what the schema rejects. Duplicating a rule is
+how two implementations of it drift apart, and both run over every fixture in the suite, so a
+gap between them shows up as a failing test rather than as a config that loads and then
+misbehaves.
+
+One consequence worth stating plainly: **loading a config is not verifying it.** Phase 2 reads
+`char.yml` through parse and resolve, and no schema runs at that point. That is why the
+negative suite asserts the *core* rejects everything it cannot turn into a typed value, rather
+than leaning on the schema to catch it later.
+
+**One rule the schema cannot express, and why it is verify's.** §4.4 caps substitution at four
+names, so an unrecognised `${…}` under argv-split is `bad_config`. Stating that as a pattern
+needs negative lookahead, and char validates with a Rust regex engine that has none — an
+expression using it would pass in one validator and misbehave in char's own. Every pattern in
+the schema is therefore lookaround-free, and this one rule moves to `config verify`, which can
+simply scan.
+
+#### Keys deliberately not added
+
+- **`parse:`** — §4.7 mentions "any `parse:` keys" in passing, but nothing in this document
+  defines one and no fixture needs one. A key that exists only in a subordinate clause is not a
+  key.
+- **`stdio: pty`** — reserved and not built (§4.5). No fixture needs it, so the enum has two
+  members.
+- **`once:` on a setup step** — removed in §4.1 with its reasoning; not reintroduced.
+
 ### 4.2 `.char/` — gitignored, and deliberately holds nothing reclaimable
 
 ```
@@ -1330,7 +1488,8 @@ The only cross-workspace state, and the only thing that survives a workspace dir
 deleted.
 
 ```
-workspaces   id, path, project, ports, claimed_at
+workspaces   id, path, project, port_from, port_to, claimed_at
+                 two integer columns, inclusive — see §4.1.1 decision 3
 owned        workspace, kind, ref, boot_id, pid_started_at
                  kind = container | network | volume | image | pgid
 leases       workspace, kind, key, heartbeat_mono, boot_id, pid, pid_started_at
@@ -1526,16 +1685,25 @@ caller asking, and the fixtures contain a 1800-second check, so a 900-second cei
 as specified. `--wait` blocks reporting `WAITING` until the lease is free or the caller
 interrupts.
 
-**The ceiling is 20 minutes of cumulative waiting per check, and it is configurable** —
+**The ceiling is 40 minutes of cumulative waiting per check, and it is configurable** —
 `acquire_timeout` in `~/.char/config.toml` (§4.3.1), machine-global like everything else about
 resource budget. It counts time spent waiting to acquire, not time spent running; a check that
 waits 14 minutes and then runs for an hour is not affected. It exists so that an abandoned
 lease whose holder died between heartbeat and reap cannot hang a merge gate indefinitely, and
-It is sized against the longest legitimate exclusive hold in the fixture set — `web:e2e` at
-`timeout: 900`, which is exactly 15 minutes. So the ceiling must be **strictly greater**:
-`acquire_timeout` is **1200** (20 minutes). An earlier draft set it to 900 and justified it
-with "~6 minutes", a figure no fixture supports; it would have fired on a healthy merge-gate
-run, with the retryable class, for a check behaving exactly as its own fixture specifies.
+it is sized against the longest legitimate exclusive hold in the fixture set. So the ceiling
+must be **strictly greater** than that hold: `acquire_timeout` is **2400**.
+
+**The figure has now been wrong twice, in the same way, and the fixtures caught it both
+times.** An earlier draft set it to 900 and justified it with "~6 minutes", a figure no fixture
+supported. It was then raised to 1200, sized against `web:e2e` at `timeout: 900` — but
+`python-ml`'s `train:test` holds `exclusive: [gpu]` for `timeout: 1800`, which is longer, and
+that fixture was written after the number was chosen. A ceiling of 1200 fires on a healthy GPU
+training run, with the **retryable** class, telling a merge gate to try again on a machine that
+is behaving exactly as its own fixture specifies.
+
+**The rule, so a third fixture does not repeat this:** `acquire_timeout` must exceed the
+longest `timeout:` of any check declaring an `exclusive:`. Adding a longer one is a change to
+this number, and the fixture set is where that shows up.
 
 After it expires the check fails with a **retryable** class:
 
@@ -1633,7 +1801,7 @@ cpu_slots       = 6      # default: max(1, num_cpus - 2)
 port_block_size = 10
 run_retention   = 10     # runs kept; see the 10 MB per-check log cap (§3.1)
 check_timeout   = 900    # per-check default, overridable per check (§4.1)
-acquire_timeout = 1200   # cumulative wait for leases before FAILED/aborted (§4.3)
+acquire_timeout = 2400   # cumulative wait for leases before FAILED/aborted (§4.3)
 docker_timeout  = 30     # char's own deadline on every docker call (§6)
 ```
 
@@ -1819,10 +1987,15 @@ the schema rejects it rather than expanding it to nothing, because a silently em
 the exact failure §4.1's empty-set rule exists to prevent. `${files}` is never populated for a `commands:`
 entry, since there is no scope to compute.
 
-**A name may not shadow a built-in verb.** `config verify` rejects a `commands:` entry named
-`init`, `up`, `down`, `check`, `clean`, `status`, `config` or `agents-md`. Without that rule
-a repo can silently break the one guarantee the project exists to provide — that the six
-verbs mean the same thing everywhere.
+**A name may not shadow a built-in verb.** The **schema** rejects a `commands:` entry named
+`init`, `up`, `down`, `check`, `clean`, `status`, `config`, `agents-md` or `explain` — it is a
+property of one key with nothing to cross-reference, so it belongs there rather than in
+`config verify` (§5). Without the rule a repo can silently break the one guarantee the project
+exists to provide — that the six verbs mean the same thing everywhere.
+
+**`explain` was missing from that list**, which §3.4 introduces as a verb in this same
+document; phase 1 added it. The rule's own rationale covers it exactly, so the omission was an
+oversight rather than a decision.
 
 **Why this is in the config rather than a plugin mechanism.** It is the same argument as
 §6.1: the thing a repo actually needs is a name and a command, not a lifecycle contract. This
