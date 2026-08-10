@@ -3,9 +3,13 @@
 //! The point is not that the examples look right. It is that **char's own YAML
 //! parser accepts them** — a doc example that `serde_yaml_ng` rejects is a
 //! defect no amount of reading catches, and one that a third-party opinion
-//! would answer differently is the wrong question. When phase 1 chooses the
-//! parser the binary uses, this check should follow it, so the corpus is
-//! validated by the thing that will actually read `char.yml`.
+//! would answer differently is the wrong question.
+//!
+//! Phase 1 chose that parser (`PLAN.md` §4.1.1, decision 5) and it is the one
+//! this check already used. The version is pinned once, in the workspace's
+//! `[workspace.dependencies]`, and `crates/core` takes it from there — which is
+//! what keeps "the lint parses examples with the parser that reads `char.yml`"
+//! true, rather than a comment asking two manifests to agree.
 //!
 //! Known limitation, stated rather than hidden: this checks YAML 1.2 only. The
 //! Python predecessor also ran a 1.1 parser, which is how it caught
