@@ -1,0 +1,19 @@
+[package]
+name = "charkit"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "char — one consistent vocabulary for managing a repo's tech stack."
+
+# The only crate that depends on both, and the only one that wires them
+# together (ARCHITECTURE.md §1.5).
+[[bin]]
+name = "char"
+path = "src/main.rs"
+
+[dependencies]
+charkit-adapters = { path = "../adapters" }
+charkit-core = { path = "../core" }

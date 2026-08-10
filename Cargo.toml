@@ -1,12 +1,28 @@
 [workspace]
 resolver = "2"
-members = ["xtask"]
+members = ["crates/core", "crates/adapters", "crates/cli", "xtask"]
 
-# charkit's own crates (core / adapters / cli) arrive in phase 1 and join this
-# list. `xtask` landed first because the doc lint it carries checks the corpus
-# phase 1 codes against.
+# Dependencies point inward (ARCHITECTURE.md §1.5): `core` is pure, `adapters`
+# depends on core only, `cli` is the only crate that depends on both. The crate
+# graph is the enforcement — there is no lint to forget to run.
 
 [workspace.package]
 edition = "2021"
+# The toolchain this workspace is verified against, not an aspirational floor
+# (ARCHITECTURE.md §3). Lowering it needs something that actually compiles and
+# tests the lower version — the same deliberateness raising it takes.
+rust-version = "1.97"
 license = "Apache-2.0"
 repository = "https://github.com/nickmele/charkit"
+
+# One version of the YAML parser for the whole repo, and it is deliberately the
+# same crate the binary reads `char.yml` with (PLAN.md §4.1.1, decision 5).
+# `xtask doclint` parses the corpus's examples with it, so a doc example that
+# char would reject is a finding rather than a discovery in phase 3. Stating it
+# once here is what keeps that true — a comment asking two manifests to agree
+# does not.
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml_ng = "0.10"
+regex = "1"

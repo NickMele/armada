@@ -1,0 +1,51 @@
+# go-service — the low end.
+#
+# Axis it owns (PHASES.md §8.1): one component, one binary, one Postgres, no
+# monorepo, plus one secret from one provider. The failure it catches is
+# **over-structuring** — a trivial repo needing forty lines of config, and
+# secrets that only work inside a complex config are secrets nobody adopts.
+#
+# Two things it is the only fixture to do, both of which fall out of being
+# small: a component with no `root:` and no `match:` (the component *is* the
+# repo), and a `secrets:` grant on a check rather than on a service.
+
+version: 1
+
+secret_providers:
+  keychain: { cmd: "security find-generic-password -s ${ref} -w" }
+
+secrets:
+  DB_PASSWORD: keychain://go-service-db
+
+components:
+
+  postgres:
+    run:
+      driver: compose
+      file: [docker-compose.yml]
+      ports: { pg: 5432 }
+      ready: { tcp: pg }
+
+  app:
+    setup: go mod download
+    run:
+      driver: command
+      cmd: go run ./cmd/server
+      ports: { app: 8080 }
+      ready: { http: "http://127.0.0.1:${port.app}/healthz" }
+      needs: [postgres]
+      env:
+        DATABASE_URL: postgres://app@127.0.0.1:${port.pg}/app
+      secrets: [DB_PASSWORD]
+    checks:
+      lint:
+        cmd: gofmt -l ${files}
+      test:
+        cmd: go test ./...
+        scope: component
+      integration:
+        cmd: go test -tags integration ./...
+        scope: component
+        needs: [postgres]
+        secrets: [DB_PASSWORD]
+        timeout: 600
