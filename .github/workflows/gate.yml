@@ -38,7 +38,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Toolchain
         run: |
@@ -78,7 +78,7 @@ jobs:
     name: msrv
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Read the pinned MSRV
         id: msrv
@@ -97,18 +97,24 @@ jobs:
   # real measurement and may only rise; a PR that lowers coverage fails. The
   # floor lives in `.coverage-floor` so raising it is a reviewable one-line diff
   # rather than a number buried in this file.
+  #
+  # `xtask` is excluded, and the reason is that including it inverts the
+  # incentive. It is dev tooling exercised by running `cargo xtask`, not by the
+  # test suite, so measuring it means a phase that adds a new lint *lowers*
+  # coverage and fails the gate for a good change. The ratchet is about the
+  # code that ships.
   coverage:
     name: coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install llvm-tools
         run: rustup component add llvm-tools-preview
 
       - name: Cache cargo-llvm-cov
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-llvm-cov
           key: cargo-llvm-cov-${{ runner.os }}-v1
@@ -126,7 +132,7 @@ jobs:
           else
             floor=0
           fi
-          cargo llvm-cov --workspace --summary-only --fail-under-lines "$floor"
+          cargo llvm-cov --workspace --exclude xtask --summary-only --fail-under-lines "$floor"
           if [ ! -f .coverage-floor ]; then
             echo "::error::.coverage-floor is missing — commit the measured line coverage printed above"
             exit 1
