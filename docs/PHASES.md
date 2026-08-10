@@ -205,7 +205,7 @@ their keep; note which ones did, because that record is the argument for keeping
 decision that has not been made yet — they will each invent an answer and you will get three
 incompatible ones.
 
-### Phase 2 — Ownership core: `init`, `clean`, `status`
+### Phase 2 — Ownership core: `init`, `clean`, `status`, `commands:`
 
 Workspace id, project id, `.char/`, `~/.char/char.db` with lease-based claiming, resource
 labeling, the process-group spawn/kill wrapper, and the scope lens.
@@ -245,6 +245,67 @@ detached run accumulates them.
 confirm the next claimant reclaims it once the heartbeat goes cold rather than blocking
 forever. This is the mechanism ten-minute `char check` runs depend on (`PLAN.md` §4.3), so it needs a
 test that kills something.
+
+**And the `commands:` dispatcher (`PLAN.md` §4.5), whole except secret grants.** An earlier
+draft shipped the `commands:` *schema* in phase 1 and *consumed* it in phase 6 with no phase
+building it; a later one put it in phase 4, the heaviest phase, on the reasoning that
+`secrets:` is its last dependency. **That reasoning was backwards** — a grant is a later
+addition to a dispatcher, not a prerequisite for one. Everything the dispatcher genuinely needs
+is in this phase: the spawn wrapper, port claiming, `clean`, and the run lease `commands:`
+entries now take (`PLAN.md` §4.3). Grants arrive in phase 4 and change nothing already shipped.
+
+Moving it here is what makes phase 2.5 possible, and `PLAN.md` §4.5 calls it critical path: it
+is the entire mechanism by which Chariot keeps `worktrees` / `tickets` / `design` / `baselines`
+while giving up `check` and `servers`. The surface is small but touches several subsystems:
+
+- transparent argv passthrough and the child's exit code
+- `env:` layering over the inherited environment, including `${port.NAME}` substitution
+- `stdio:` — `pipe` or `inherit`, defaulting to `pipe` when secrets are granted
+- `owns:` **evaluated as a selector** at `clean` time — a distinct code path from reading
+  the `owned` table, because a command runs ad hoc and has no "while it was up" window to record
+  against
+
+**Done when** subcommands and flags reach the child untouched (`char worktrees prune
+--dry-run`), the child's exit code comes back **verbatim and unremapped**, `env:` layers over
+the inherited environment, and a declared `owns:` selector is reclaimed by `char clean` after
+the command has already exited.
+
+### Phase 2.5 — A real repo adopts the ownership layer *(first contact)*
+
+**Chariot takes the dependency for `init` / `clean` / `status` / `commands:` only, and keeps
+its own `check.py` and `servers.py` untouched.**
+
+Everything else in this plan is validated against fixtures written by the same people who wrote
+the plan. This is the first phase where a repo that was not designed around charkit has to
+actually use it, and it happens **three phases earlier than it otherwise would** — phase 6 was
+first contact, which meant the ownership model, the port claiming, the reaping and the label
+vocabulary all reached a real repo only after `check` and `up`/`down` were built on top of them.
+
+**It is affordable precisely here and nowhere earlier.** The subsystem with the strongest
+evidence behind it is this one: the 29-leftover-networks outage (§1 of `PLAN.md`) is an
+ownership failure, not a check failure. It is also the subsystem with no incumbent inside
+Chariot to fight — `worktrees.py` does part of it badly and knows it. `check.py` and
+`servers.py` stay, so nothing the repo depends on daily is at risk.
+
+**Done when:** a Chariot worktree is created and destroyed entirely through `char init` and
+`char clean`, five worktrees coexist with non-overlapping port blocks, `char status --project`
+reports all five, and **deleting a worktree with `rm -rf` leaves nothing behind that the next
+`char init` does not reclaim** — verified with `docker network ls` and `docker volume ls`
+filtered by `char.workspace`, not by `docker ps` alone.
+
+**And when the resource half of `worktrees.py` is deleted** — not wrapped, not shimmed. If it
+survives as a `commands:` entry doing the same work, this phase proved nothing.
+
+**What it is allowed to send back.** This phase may change `PLAN.md`. It is the first real
+evidence the ownership model has ever received, and the fixture set rests on one data point
+(§8.1) which this phase is the first chance to correct. A schema change here is cheap; the same
+change discovered in phase 6 is not. Record what changed and why, in the same shape §8.1 asks
+of the fixtures.
+
+> **This phase does not read the Chariot repo under the clean-room rule** (§11) — it *modifies*
+> it, as an ordinary consumer, from the outside. The rule forbids porting Chariot's
+> implementation into charkit; it does not forbid charkit having a user. Phase 3's harvester is
+> still the only agent that may read `scripts/char/` for its contents.
 
 ### Phase 3 — Rebuild the check engine, generalized *(clean-room, two agents)*
 
@@ -311,23 +372,8 @@ recorded as `owned` rows in `~/.char/char.db` (`PLAN.md` §4.3), port remapping 
 **secret resolution and injection** (`PLAN.md` §4.7) — this is the phase where there is finally
 something to inject into.
 
-**And the `commands:` dispatcher (`PLAN.md` §4.5), whole.** An earlier draft of this plan shipped the
-`commands:` *schema* in phase 1 and *consumed* it in phase 6 without any phase building it —
-for a feature `PLAN.md` §4.5 itself calls critical path, since it is the entire mechanism by which
-Chariot keeps `worktrees` / `tickets` / `design` / `baselines` while giving up `check` and
-`servers`. The surface is small but touches several subsystems:
-
-- transparent argv passthrough and the child's exit code
-- `env:` layering over the inherited environment, including `${port.NAME}` substitution
-- `stdio:` — `pipe` or `inherit`, defaulting to `pipe` when secrets are granted
-- `secrets:` grants
-- `owns:` **evaluated as a selector** at `clean` time — a distinct code path from reading
-  the `owned` table, because a command runs ad hoc and has no "while it was up" window to record
-  against
-
-It lands here rather than in phase 2 because `secrets:` is its last dependency and arrives in
-this phase. Everything else it needs — port claiming, the spawn wrapper, `clean` — exists by
-the end of phase 2.
+**`secrets:` grants on `commands:` entries land here**, since this is the phase where secret
+resolution exists. The dispatcher itself shipped in phase 2 — see there for why.
 
 > **Phase 4 is now the heaviest phase in the plan.** Both drivers, five ready-check kinds,
 > compose document generation, secrets, and the dispatcher. Split it across several
@@ -410,8 +456,13 @@ passes, with no human in the loop.
 
 ### Phase 6 — Chariot adopts it
 
-A Chariot PR: delete `scripts/char/check.py` and `servers.py`, take the dependency, move
-everything char does not replace into a `commands:` block (`PLAN.md` §4.5), repoint `bin/char`.
+A Chariot PR: delete `scripts/char/check.py` and `servers.py`, and move everything char does not
+replace into a `commands:` block (`PLAN.md` §4.5).
+
+**The dependency, `bin/char`, the `commands:` block and the whole ownership half are already
+there** — phase 2.5 did that, and has been in daily use since. So this phase is narrower than
+it looks: it is the `check` and `up`/`down` cutover against a repo that already trusts char
+with its worktrees. The table below is the full remaining surface.
 
 **The full dispatch surface, confirmed by inspection rather than assumed:**
 

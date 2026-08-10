@@ -178,7 +178,7 @@ planner does not remove the reactive scheduler; it relocates it into the shell, 
 pure test suite cannot reach it — and [`PHASES.md`](PHASES.md) §11 names exactly the bug that would hide
 there: *"the scheduler deadlocks when two exclusive resources overlap under load."* That is
 the one class of failure a greenfield build structurally cannot catch, because there is no
-continuous real-repo validation until phase 6. Making it reachable in a unit test is the
+continuous real-repo validation until phase 2.5, and none at all for `check` until phase 6. Making it reachable in a unit test is the
 highest-leverage thing this principle buys.
 
 **Two further benefits.** Every `(state, event) → (state, actions)` transition can be logged,
@@ -704,6 +704,11 @@ runs the **raw tools** — `cargo clippy`, `cargo fmt --check`, `cargo test`. A 
 runs `char check --json` and asserts it reaches the same verdict and that every check id
 resolves.
 
+**Phase 2.5 is the first real repo, and it is not this one.** Chariot adopts
+`init`/`clean`/`status`/`commands:` there while keeping its own `check.py`, which is why the
+dogfooding arrangement below concerns `check` specifically: the ownership half has had a real
+consumer since well before phase 6.
+
 **Once phase 6 lands — `char check` becomes the gate.** Phase 6 is Chariot adopting charkit:
 `scripts/char/check.py` deleted, the dependency taken, `char check --all-files` green. That is the
 point at which a real repository is already trusting `char check` as its own merge gate — so
@@ -748,7 +753,7 @@ production once. Two are named in the plan ("load-bearing comments about two Pla
 traps"). The ones that are *not* commented are the danger: a bug fix looks like an
 unremarkable three-line conditional, and nobody reviewing a rewrite notices it is missing.
 This matters more here than in a normal rewrite, because charkit gives up continuous
-real-repo validation until phase 6 — so knowledge lost cannot be re-derived by running the
+real-repo validation for the check engine until phase 6 — so knowledge lost cannot be re-derived by running the
 thing. You would rediscover those bugs in phase 6, the one PR the plan already flags as
 carrying the most rework.
 

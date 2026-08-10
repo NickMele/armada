@@ -93,7 +93,7 @@ no-mistakes axi run --intent "<what you set out to accomplish>"
 - **PRs are sized for review, not per phase.** Review is the binding constraint on this
   project, so a phase lands as several small PRs. `main` sitting part-way through a phase is
   expected.
-- Completed phases are tagged (`phase-1`, `phase-2`, …).
+- Completed phases are tagged (`phase-1`, `phase-2`, `phase-2.5`, …).
 
 ## The gate
 

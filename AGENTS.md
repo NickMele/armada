@@ -96,6 +96,9 @@ contamination nothing else can catch.
 - **Phase 0 is complete.** It produced these documents.
 - **Phase 1** must land alone, and ships all six fixture configs. Do not fan out until the
   config contract is committed. Full sequencing in [`docs/PHASES.md`](docs/PHASES.md).
+- **Phase 2.5 is first contact with a real repo** — Chariot adopts `init`/`clean`/`status`/
+  `commands:` and keeps its own `check.py`. It is allowed to send changes back to `PLAN.md`;
+  every later phase is not.
 
 ---
 
