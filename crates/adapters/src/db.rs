@@ -1,0 +1,920 @@
+//! `~/.char/char.db` — machine-global, SQLite (PLAN.md §4.3).
+//!
+//! The only cross-workspace state, and the only thing that survives a workspace
+//! directory being deleted. **SQLite rather than a JSON file because of
+//! leases**: a ten-minute `char check` renews a heartbeat every few seconds,
+//! and rewriting a whole document under an `O_EXCL` lockfile, five workspaces
+//! at a time, for the whole of that run, is the wrong shape for that write
+//! pattern — and it is exactly where the registry-corruption risk lives.
+//!
+//! **Connection setup is not optional**, and each of the three is a measured
+//! failure rather than a convention:
+//!
+//! - `journal_mode = WAL` is a property of the *file*, not a driver default.
+//! - `busy_timeout` is set explicitly; relying on a driver's is how it changes
+//!   under you.
+//! - **every transaction that may write is `BEGIN IMMEDIATE`.** A DEFERRED
+//!   transaction that reads and then writes fails after **0.0 ms** with
+//!   `SQLITE_BUSY_SNAPSHOT`, which `busy_timeout` cannot rescue because the
+//!   reader's snapshot is already stale. That is the lease pattern exactly: the
+//!   obvious lease code works in every test with one writer and fails
+//!   nondeterministically under the contention the design exists to handle.
+
+use charkit_core::error::{CharError, ErrClass};
+use charkit_core::id::{ProjectId, WorkspaceId};
+use charkit_core::lease::{Holder, LeaseId, LeaseKind};
+use charkit_core::ports::{choose_block, PortBlock};
+use charkit_core::registry::{LeaseRow, OwnedKind, OwnedRow, WorkspaceRow};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
+use std::path::{Path, PathBuf};
+
+/// The schema version this binary writes and understands.
+pub const USER_VERSION: i64 = 1;
+
+/// The key the namespace UUID is stored under.
+const NAMESPACE_KEY: &str = "namespace";
+
+/// The machine-global store.
+#[derive(Debug)]
+pub struct Db {
+    conn: Connection,
+    path: PathBuf,
+    /// A handle on the same inode, opened with the connection.
+    ///
+    /// It exists for one measurement: **`fstat` on a process's own open handle
+    /// returns `st_nlink == 0` once the file is unlinked.** Deleting `char.db`
+    /// while a process holds it open under WAL lets that process keep reading
+    /// and writing a consistent world through the unlinked inode, while the
+    /// next process creates a fresh file at the same path and hands out a port
+    /// block the first one already holds. **Neither errors.** The holder can
+    /// detect it; the newcomer provably cannot — to it, the unlinked case is
+    /// byte-identical to a genuine fresh install.
+    handle: std::fs::File,
+}
+
+/// What claiming a port block did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClaimOutcome {
+    /// A new block was reserved.
+    Claimed(PortBlock),
+    /// This workspace already held one. **Claims are idempotent by workspace
+    /// id** — `char init` twice is one block, not two.
+    AlreadyHeld(PortBlock),
+    /// Another workspace took the block char chose between the read and the
+    /// write. The caller re-decides; that is what the claim loop's `Attempt`
+    /// action means.
+    Lost,
+    /// The machine has no free block of this size left.
+    Exhausted,
+}
+
+/// What acquiring a lease did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AcquireOutcome {
+    /// The row is ours.
+    Granted,
+    /// Someone else has it. The caller decides whether that holder is *live*
+    /// or cold — the coldness rule is pure and lives in the core.
+    Held(LeaseRow),
+}
+
+impl Db {
+    /// Open, creating the database and its schema if this is a first run.
+    pub fn open(char_home: &Path) -> Result<Self, CharError> {
+        std::fs::create_dir_all(char_home).map_err(|e| {
+            environment(
+                char_home.display().to_string(),
+                format!("cannot create {}: {e}", char_home.display()),
+            )
+        })?;
+        let path = char_home.join("char.db");
+        let conn = Connection::open(&path).map_err(|e| map_sqlite(&path, e))?;
+
+        conn.pragma_update(None, "journal_mode", "WAL")
+            .map_err(|e| map_sqlite(&path, e))?;
+        conn.pragma_update(None, "busy_timeout", 5_000)
+            .map_err(|e| map_sqlite(&path, e))?;
+        conn.pragma_update(None, "foreign_keys", true)
+            .map_err(|e| map_sqlite(&path, e))?;
+
+        let handle = std::fs::File::open(&path).map_err(|e| {
+            environment(
+                path.display().to_string(),
+                format!("cannot open char.db: {e}"),
+            )
+        })?;
+
+        let db = Db { conn, path, handle };
+        db.migrate()?;
+        Ok(db)
+    }
+
+    /// Create or upgrade the schema.
+    ///
+    /// **The compatibility rule is deliberately one-directional.**
+    /// `~/.char/char.db` is machine-global and long-lived, so a machine running
+    /// two charkit versions — one repo pinned, one fresh — is normal rather
+    /// than exotic. An older binary meeting a higher `user_version` fails
+    /// `environment` and says which version wrote it; a newer binary meeting a
+    /// lower one migrates it forward in a single `BEGIN IMMEDIATE`, additively.
+    /// Schema changes are additive for the whole 0.x line: new column, never a
+    /// dropped or retyped one.
+    fn migrate(&self) -> Result<(), CharError> {
+        let version: i64 = self
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .map_err(|e| map_sqlite(&self.path, e))?;
+
+        if version > USER_VERSION {
+            return Err(CharError {
+                class: ErrClass::Environment,
+                r#where: self.path.display().to_string(),
+                message: format!(
+                    "{} was written by a newer char (schema {version}; this one understands \
+                     {USER_VERSION})",
+                    self.path.display()
+                ),
+                next_action: Some("upgrade char, or point $HOME at a different store".to_string()),
+            });
+        }
+        if version == USER_VERSION {
+            return Ok(());
+        }
+
+        self.conn
+            .execute_batch(&format!(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE IF NOT EXISTS meta (
+                     key   TEXT PRIMARY KEY,
+                     value TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS workspaces (
+                     id         TEXT PRIMARY KEY,
+                     path       TEXT NOT NULL,
+                     project    TEXT,
+                     port_from  INTEGER NOT NULL,
+                     port_to    INTEGER NOT NULL,
+                     claimed_at TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS owned (
+                     workspace      TEXT NOT NULL,
+                     kind           TEXT NOT NULL,
+                     \"ref\"          TEXT NOT NULL,
+                     boot_id        TEXT,
+                     pid_started_at TEXT,
+                     PRIMARY KEY (workspace, kind, \"ref\")
+                 );
+                 CREATE TABLE IF NOT EXISTS leases (
+                     workspace      TEXT,
+                     kind           TEXT NOT NULL,
+                     key            TEXT NOT NULL,
+                     heartbeat_mono INTEGER NOT NULL,
+                     boot_id        TEXT NOT NULL,
+                     pid            INTEGER NOT NULL,
+                     pid_started_at TEXT,
+                     PRIMARY KEY (kind, key)
+                 );
+                 PRAGMA user_version = {USER_VERSION};
+                 COMMIT;"
+            ))
+            .map_err(|e| map_sqlite(&self.path, e))?;
+
+        // The namespace is written once, at creation, and never again. It
+        // scopes the whole reaping mechanism to one filesystem view: without
+        // it, path-based reaping is actively dangerous the moment two char
+        // installations share a Docker daemon, which is the ordinary
+        // devcontainer setup (PLAN.md §2.3.1).
+        self.conn
+            .execute(
+                "INSERT OR IGNORE INTO meta (key, value) VALUES (?1, ?2)",
+                (NAMESPACE_KEY, random_uuid()),
+            )
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        Ok(())
+    }
+
+    /// This installation's namespace.
+    pub fn namespace(&self) -> Result<String, CharError> {
+        self.conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = ?1",
+                [NAMESPACE_KEY],
+                |row| row.get(0),
+            )
+            .map_err(|e| map_sqlite(&self.path, e))
+    }
+
+    /// Whether the file char is writing still has a name.
+    ///
+    /// **A long-running verb re-checks this on each loop iteration and ends
+    /// `environment` when it goes false**, which stops the divergence at the
+    /// process that can actually see it. The newcomer proceeding as a fresh
+    /// install is then correct rather than merely unavoidable: by the time it
+    /// matters, the holder has stopped.
+    pub fn still_linked(&self) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        self.handle
+            .metadata()
+            .map(|m| m.nlink() > 0)
+            .unwrap_or(false)
+    }
+
+    /// Every claimed workspace.
+    pub fn workspaces(&self) -> Result<Vec<WorkspaceRow>, CharError> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT id, path, project, port_from, port_to, claimed_at FROM workspaces")
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(WorkspaceRow {
+                    id: WorkspaceId::from_stored(row.get::<_, String>(0)?),
+                    path: PathBuf::from(row.get::<_, String>(1)?),
+                    project: row.get::<_, Option<String>>(2)?.map(ProjectId::from_stored),
+                    ports: PortBlock {
+                        from: row.get::<_, i64>(3)? as u16,
+                        to: row.get::<_, i64>(4)? as u16,
+                    },
+                    claimed_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        rows.collect::<Result<_, _>>()
+            .map_err(|e| map_sqlite(&self.path, e))
+    }
+
+    /// Claim a port block for this workspace, idempotently.
+    ///
+    /// The choice and the write happen inside **one** `BEGIN IMMEDIATE`, which
+    /// is what makes "two directories claim non-overlapping blocks
+    /// concurrently" true rather than usually true.
+    pub fn claim_block(
+        &mut self,
+        workspace: &WorkspaceId,
+        path: &Path,
+        project: Option<&ProjectId>,
+        size: u16,
+        claimed_at: &str,
+    ) -> Result<ClaimOutcome, CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+
+        let held: Option<(i64, i64)> = tx
+            .query_row(
+                "SELECT port_from, port_to FROM workspaces WHERE id = ?1",
+                [workspace.as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|e| map_sqlite(&self.path, e))?;
+
+        if let Some((from, to)) = held {
+            // Idempotent by workspace id, but the path and project are
+            // refreshed: a checkout that moved keeps its block and gets a
+            // correct path label, which pass 2 of the reap stats.
+            tx.execute(
+                "UPDATE workspaces SET path = ?2, project = ?3 WHERE id = ?1",
+                (
+                    workspace.as_str(),
+                    path.display().to_string(),
+                    project.map(|p| p.as_str().to_string()),
+                ),
+            )
+            .map_err(|e| map_sqlite(&self.path, e))?;
+            tx.commit().map_err(|e| map_sqlite(&self.path, e))?;
+            return Ok(ClaimOutcome::AlreadyHeld(PortBlock {
+                from: from as u16,
+                to: to as u16,
+            }));
+        }
+
+        let taken: Vec<PortBlock> = {
+            let mut statement = tx
+                .prepare("SELECT port_from, port_to FROM workspaces")
+                .map_err(|e| map_sqlite(&self.path, e))?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(PortBlock {
+                        from: row.get::<_, i64>(0)? as u16,
+                        to: row.get::<_, i64>(1)? as u16,
+                    })
+                })
+                .map_err(|e| map_sqlite(&self.path, e))?;
+            rows.collect::<Result<_, _>>()
+                .map_err(|e| map_sqlite(&self.path, e))?
+        };
+
+        let Some(block) = choose_block(&taken, size) else {
+            tx.rollback().map_err(|e| map_sqlite(&self.path, e))?;
+            return Ok(ClaimOutcome::Exhausted);
+        };
+
+        let inserted = tx.execute(
+            "INSERT OR IGNORE INTO workspaces (id, path, project, port_from, port_to, claimed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (
+                workspace.as_str(),
+                path.display().to_string(),
+                project.map(|p| p.as_str().to_string()),
+                block.from as i64,
+                block.to as i64,
+                claimed_at,
+            ),
+        );
+        let inserted = inserted.map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))?;
+
+        Ok(if inserted == 1 {
+            ClaimOutcome::Claimed(block)
+        } else {
+            ClaimOutcome::Lost
+        })
+    }
+
+    /// Drop a workspace row and everything it owns.
+    pub fn release_workspace(&mut self, workspace: &WorkspaceId) -> Result<(), CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute(
+            "DELETE FROM owned WHERE workspace = ?1",
+            [workspace.as_str()],
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute(
+            "DELETE FROM leases WHERE workspace = ?1",
+            [workspace.as_str()],
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute("DELETE FROM workspaces WHERE id = ?1", [workspace.as_str()])
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))
+    }
+
+    /// Everything one workspace owns, or everything on the machine.
+    pub fn owned(&self, workspace: Option<&WorkspaceId>) -> Result<Vec<OwnedRow>, CharError> {
+        let sql = "SELECT workspace, kind, \"ref\", boot_id, pid_started_at FROM owned";
+        let mut statement = self
+            .conn
+            .prepare(&match workspace {
+                Some(_) => format!("{sql} WHERE workspace = ?1"),
+                None => sql.to_string(),
+            })
+            .map_err(|e| map_sqlite(&self.path, e))?;
+
+        let map = |row: &rusqlite::Row<'_>| {
+            let kind: String = row.get(1)?;
+            Ok((
+                OwnedKind::parse(&kind),
+                OwnedRow {
+                    workspace: WorkspaceId::from_stored(row.get::<_, String>(0)?),
+                    kind: OwnedKind::Container,
+                    reference: row.get(2)?,
+                    boot_id: row.get(3)?,
+                    pid_started_at: row.get(4)?,
+                },
+            ))
+        };
+
+        let rows: Vec<(Option<OwnedKind>, OwnedRow)> = match workspace {
+            Some(workspace) => statement
+                .query_map([workspace.as_str()], map)
+                .map_err(|e| map_sqlite(&self.path, e))?
+                .collect::<Result<_, _>>()
+                .map_err(|e| map_sqlite(&self.path, e))?,
+            None => statement
+                .query_map([], map)
+                .map_err(|e| map_sqlite(&self.path, e))?
+                .collect::<Result<_, _>>()
+                .map_err(|e| map_sqlite(&self.path, e))?,
+        };
+
+        // A row whose kind this binary does not recognise was written by a
+        // newer char. Skipping it is the forward-compatible answer: char never
+        // acts on something it cannot name, and never deletes it either.
+        Ok(rows
+            .into_iter()
+            .filter_map(|(kind, row)| kind.map(|kind| OwnedRow { kind, ..row }))
+            .collect())
+    }
+
+    /// Record something this workspace owns.
+    ///
+    /// **`up` records before it spawns, and this is the opposite of `clean`'s
+    /// order.** Both follow one rule — *the failure mode must be a stale row,
+    /// never an untracked resource* — and it inverts because one direction is
+    /// creating and the other destroying. Spawn-then-record leaks a pgid if
+    /// char dies in between; record-then-spawn leaves a row pointing at
+    /// nothing, which the next `init` reaps for free.
+    pub fn record_owned(&mut self, row: &OwnedRow) -> Result<(), CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute(
+            "INSERT OR REPLACE INTO owned (workspace, kind, \"ref\", boot_id, pid_started_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (
+                row.workspace.as_str(),
+                row.kind.to_string(),
+                &row.reference,
+                &row.boot_id,
+                &row.pid_started_at,
+            ),
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))
+    }
+
+    /// Forget something, after it has actually been removed.
+    pub fn delete_owned(
+        &mut self,
+        workspace: &WorkspaceId,
+        kind: OwnedKind,
+        reference: &str,
+    ) -> Result<(), CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute(
+            "DELETE FROM owned WHERE workspace = ?1 AND kind = ?2 AND \"ref\" = ?3",
+            (workspace.as_str(), kind.to_string(), reference),
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))
+    }
+
+    /// Drop every `owns.release:` record for a workspace, so `init` can
+    /// re-record the current declarations rather than accumulating old ones.
+    pub fn clear_kind(
+        &mut self,
+        workspace: &WorkspaceId,
+        kind: OwnedKind,
+    ) -> Result<(), CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute(
+            "DELETE FROM owned WHERE workspace = ?1 AND kind = ?2",
+            (workspace.as_str(), kind.to_string()),
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))
+    }
+
+    /// Every held lease.
+    pub fn leases(&self) -> Result<Vec<LeaseRow>, CharError> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT workspace, kind, key, heartbeat_mono, boot_id, pid, pid_started_at
+                 FROM leases",
+            )
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(LeaseRow {
+                    workspace: row
+                        .get::<_, Option<String>>(0)?
+                        .map(WorkspaceId::from_stored),
+                    kind: parse_kind(&row.get::<_, String>(1)?),
+                    key: row.get(2)?,
+                    heartbeat_mono: row.get::<_, i64>(3)? as u64,
+                    boot_id: row.get(4)?,
+                    pid: row.get::<_, i64>(5)? as i32,
+                    pid_started_at: row.get(6)?,
+                })
+            })
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        rows.collect::<Result<_, _>>()
+            .map_err(|e| map_sqlite(&self.path, e))
+    }
+
+    /// One attempt at a lease, inside one `BEGIN IMMEDIATE`.
+    pub fn try_acquire(
+        &mut self,
+        lease: &LeaseId,
+        heartbeat_mono: u64,
+        boot_id: &str,
+        pid: i32,
+        pid_started_at: Option<&str>,
+    ) -> Result<AcquireOutcome, CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+
+        let existing: Option<LeaseRow> = tx
+            .query_row(
+                "SELECT workspace, kind, key, heartbeat_mono, boot_id, pid, pid_started_at
+                 FROM leases WHERE kind = ?1 AND key = ?2",
+                (lease.kind.to_string(), &lease.key),
+                |row| {
+                    Ok(LeaseRow {
+                        workspace: row
+                            .get::<_, Option<String>>(0)?
+                            .map(WorkspaceId::from_stored),
+                        kind: parse_kind(&row.get::<_, String>(1)?),
+                        key: row.get(2)?,
+                        heartbeat_mono: row.get::<_, i64>(3)? as u64,
+                        boot_id: row.get(4)?,
+                        pid: row.get::<_, i64>(5)? as i32,
+                        pid_started_at: row.get(6)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|e| map_sqlite(&self.path, e))?;
+
+        if let Some(row) = existing {
+            tx.rollback().map_err(|e| map_sqlite(&self.path, e))?;
+            return Ok(AcquireOutcome::Held(row));
+        }
+
+        tx.execute(
+            "INSERT INTO leases
+             (workspace, kind, key, heartbeat_mono, boot_id, pid, pid_started_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            (
+                lease.workspace.as_ref().map(|w| w.as_str().to_string()),
+                lease.kind.to_string(),
+                &lease.key,
+                heartbeat_mono as i64,
+                boot_id,
+                pid as i64,
+                pid_started_at,
+            ),
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))?;
+        Ok(AcquireOutcome::Granted)
+    }
+
+    /// Renew a held lease's heartbeat.
+    ///
+    /// Called from the shell's event loop, **never from a background timer**: a
+    /// background timer keeps ticking while the scheduler is wedged, so the
+    /// lease looks healthy forever and you need a TTL to catch it. A
+    /// loop-driven heartbeat simply stops.
+    pub fn renew(&mut self, lease: &LeaseId, heartbeat_mono: u64) -> Result<(), CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute(
+            "UPDATE leases SET heartbeat_mono = ?3 WHERE kind = ?1 AND key = ?2",
+            (lease.kind.to_string(), &lease.key, heartbeat_mono as i64),
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))
+    }
+
+    /// Release a lease, or reclaim a dead one — the same statement, and that is
+    /// deliberate: reclaiming *is* releasing somebody else's row, and having
+    /// one path means the reclaim cannot drift from the release.
+    pub fn release_lease(&mut self, kind: LeaseKind, key: &str) -> Result<(), CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute(
+            "DELETE FROM leases WHERE kind = ?1 AND key = ?2",
+            (kind.to_string(), key),
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))
+    }
+}
+
+/// Describe a lease row's holder, for a `WAITING` report.
+pub fn holder_of(row: &LeaseRow, now_mono: u64) -> Holder {
+    Holder {
+        workspace: row.workspace.clone(),
+        pid: row.pid,
+        held_ms: now_mono.saturating_sub(row.heartbeat_mono),
+    }
+}
+
+fn parse_kind(text: &str) -> LeaseKind {
+    match text {
+        "machine" => LeaseKind::Machine,
+        "cpu-slot" => LeaseKind::CpuSlot,
+        "exclusive" => LeaseKind::Exclusive,
+        // `run` and anything a newer char wrote. A lease char cannot name is
+        // still a lease it must not steal, so an unknown kind is treated as the
+        // most conservative one rather than dropped.
+        _ => LeaseKind::Run,
+    }
+}
+
+/// Map a SQLite failure into char's vocabulary, **branching on the extended
+/// code and never on the message**.
+///
+/// Two failures both print `database is locked` and mean opposite things:
+/// `SQLITE_BUSY` (5) waited the full `busy_timeout` and lost, so it is
+/// retryable; `SQLITE_BUSY_SNAPSHOT` (517) failed in microseconds because the
+/// reader's snapshot is stale, and no amount of waiting can rescue it — it is a
+/// design error in the transaction.
+///
+/// Three more arrive through the identical error type and mean something else
+/// entirely. `SQLITE_FULL` (13), `SQLITE_CANTOPEN` (14) and `SQLITE_CORRUPT`
+/// (11) are `environment` — the machine is broken, not the config and not the
+/// tool. **Retrying a claim against a full disk is an infinite loop**, and
+/// measured, a full disk looks healthy from the lease's point of view: a claim
+/// fails with `SQLITE_FULL` while a *smaller* subsequent write still succeeds,
+/// so heartbeats keep renewing and nothing gets reclaimed.
+fn map_sqlite(path: &Path, error: rusqlite::Error) -> CharError {
+    let extended = match &error {
+        rusqlite::Error::SqliteFailure(inner, _) => inner.extended_code,
+        _ => 0,
+    };
+
+    let (class, next_action) = match extended {
+        // SQLITE_BUSY: a genuine queue char lost. Retryable, unchanged.
+        5 => (
+            ErrClass::Aborted,
+            Some("another char is writing to char.db; retry".to_string()),
+        ),
+        // SQLITE_BUSY_SNAPSHOT: never retryable, and always char's bug — it
+        // means a transaction read and then wrote without BEGIN IMMEDIATE.
+        517 => (ErrClass::CharBug, None),
+        11 | 13 | 14 => (
+            ErrClass::Environment,
+            Some(format!(
+                "`char clean --orphaned --force-rebuild` rebuilds {} from labels alone",
+                path.display()
+            )),
+        ),
+        _ => (ErrClass::Environment, None),
+    };
+
+    CharError {
+        class,
+        r#where: path.display().to_string(),
+        message: format!("char.db: {error}"),
+        next_action,
+    }
+}
+
+fn environment(location: String, message: String) -> CharError {
+    CharError {
+        class: ErrClass::Environment,
+        r#where: location,
+        message,
+        next_action: None,
+    }
+}
+
+/// A version-4 UUID from the operating system's entropy.
+///
+/// `/dev/urandom` rather than a crate: char needs sixteen random bytes exactly
+/// once in its life, at database creation.
+fn random_uuid() -> String {
+    let mut bytes = [0u8; 16];
+    if let Ok(mut file) = std::fs::File::open("/dev/urandom") {
+        use std::io::Read;
+        let _ = file.read_exact(&mut bytes);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..32]
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use charkit_core::lease::is_cold;
+
+    fn open() -> (tempfile::TempDir, Db) {
+        let home = tempfile::tempdir().unwrap();
+        let db = Db::open(home.path()).unwrap();
+        (home, db)
+    }
+
+    fn ws(id: &str) -> WorkspaceId {
+        WorkspaceId::from_stored(id)
+    }
+
+    #[test]
+    fn a_fresh_database_carries_the_schema_version_and_a_namespace() {
+        let (_home, db) = open();
+        let version: i64 = db
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, USER_VERSION);
+        let namespace = db.namespace().unwrap();
+        assert_eq!(namespace.len(), 36, "{namespace}");
+        assert_eq!(&namespace[14..15], "4", "version 4 nibble");
+    }
+
+    #[test]
+    fn the_namespace_survives_reopening_and_never_changes() {
+        let home = tempfile::tempdir().unwrap();
+        let first = Db::open(home.path()).unwrap().namespace().unwrap();
+        let second = Db::open(home.path()).unwrap().namespace().unwrap();
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn wal_is_actually_on_because_it_is_a_property_of_the_file() {
+        let (_home, db) = open();
+        let mode: String = db
+            .conn
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+    }
+
+    #[test]
+    fn a_database_from_a_newer_char_is_an_environment_failure_naming_the_version() {
+        let home = tempfile::tempdir().unwrap();
+        {
+            let db = Db::open(home.path()).unwrap();
+            db.conn
+                .pragma_update(None, "user_version", USER_VERSION + 7)
+                .unwrap();
+        }
+        let err = Db::open(home.path()).unwrap_err();
+        assert_eq!(err.class, ErrClass::Environment);
+        assert!(err.message.contains(&(USER_VERSION + 7).to_string()));
+    }
+
+    #[test]
+    fn two_workspaces_get_non_overlapping_blocks() {
+        let (_home, mut db) = open();
+        let a = db
+            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, 10, "t")
+            .unwrap();
+        let b = db
+            .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, 10, "t")
+            .unwrap();
+        let (ClaimOutcome::Claimed(a), ClaimOutcome::Claimed(b)) = (a, b) else {
+            panic!("both claims should have succeeded");
+        };
+        assert!(!a.overlaps(&b), "{a:?} overlaps {b:?}");
+    }
+
+    #[test]
+    fn claiming_twice_is_idempotent_by_workspace_id() {
+        let (_home, mut db) = open();
+        let first = db
+            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, 10, "t")
+            .unwrap();
+        let second = db
+            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, 10, "t")
+            .unwrap();
+        match (first, second) {
+            (ClaimOutcome::Claimed(a), ClaimOutcome::AlreadyHeld(b)) => assert_eq!(a, b),
+            other => panic!("expected claim then already-held, got {other:?}"),
+        }
+        assert_eq!(db.workspaces().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_released_block_is_reused_by_the_next_claimant() {
+        let (_home, mut db) = open();
+        let ClaimOutcome::Claimed(first) = db
+            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, 10, "t")
+            .unwrap()
+        else {
+            panic!()
+        };
+        db.release_workspace(&ws("aaaaaaaa")).unwrap();
+        let ClaimOutcome::Claimed(second) = db
+            .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, 10, "t")
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn owned_rows_round_trip_and_an_unknown_kind_is_skipped_rather_than_dropped() {
+        let (_home, mut db) = open();
+        db.record_owned(&OwnedRow {
+            workspace: ws("aaaaaaaa"),
+            kind: OwnedKind::Pgid,
+            reference: "4212".to_string(),
+            boot_id: Some("boot-1".to_string()),
+            pid_started_at: Some("whenever".to_string()),
+        })
+        .unwrap();
+        // As a newer char would have written it.
+        db.conn
+            .execute(
+                "INSERT INTO owned (workspace, kind, \"ref\") VALUES ('aaaaaaaa', 'quantum', 'q1')",
+                [],
+            )
+            .unwrap();
+
+        let rows = db.owned(Some(&ws("aaaaaaaa"))).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, OwnedKind::Pgid);
+
+        let still_there: i64 = db
+            .conn
+            .query_row("SELECT count(*) FROM owned", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(still_there, 2, "char never deletes what it cannot name");
+    }
+
+    #[test]
+    fn a_release_command_is_recorded_as_an_owned_row() {
+        let (_home, mut db) = open();
+        db.record_owned(&OwnedRow {
+            workspace: ws("aaaaaaaa"),
+            kind: OwnedKind::Release,
+            reference: "psql -c 'DROP DATABASE app_aaaaaaaa'".to_string(),
+            boot_id: None,
+            pid_started_at: None,
+        })
+        .unwrap();
+        let rows = db.owned(Some(&ws("aaaaaaaa"))).unwrap();
+        assert_eq!(rows[0].kind, OwnedKind::Release);
+        db.clear_kind(&ws("aaaaaaaa"), OwnedKind::Release).unwrap();
+        assert!(db.owned(Some(&ws("aaaaaaaa"))).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_second_claimant_sees_the_holder_rather_than_taking_the_lease() {
+        let (_home, mut db) = open();
+        let lease = LeaseId::run(ws("aaaaaaaa"));
+        assert_eq!(
+            db.try_acquire(&lease, 1_000, "boot-1", 42, None).unwrap(),
+            AcquireOutcome::Granted
+        );
+        match db.try_acquire(&lease, 2_000, "boot-1", 43, None).unwrap() {
+            AcquireOutcome::Held(row) => assert_eq!(row.pid, 42),
+            other => panic!("expected Held, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_released_lease_is_available_again() {
+        let (_home, mut db) = open();
+        let lease = LeaseId::run(ws("aaaaaaaa"));
+        db.try_acquire(&lease, 1_000, "boot-1", 42, None).unwrap();
+        db.release_lease(LeaseKind::Run, "run").unwrap();
+        assert_eq!(
+            db.try_acquire(&lease, 2_000, "boot-1", 43, None).unwrap(),
+            AcquireOutcome::Granted
+        );
+    }
+
+    #[test]
+    fn a_renewal_moves_the_heartbeat_and_keeps_a_lease_warm() {
+        let (_home, mut db) = open();
+        let lease = LeaseId::run(ws("aaaaaaaa"));
+        db.try_acquire(&lease, 1_000, "boot-1", 42, None).unwrap();
+        db.renew(&lease, 90_000).unwrap();
+        let row = &db.leases().unwrap()[0];
+        assert_eq!(row.heartbeat_mono, 90_000);
+        assert!(!is_cold(row.heartbeat_mono, 100_000, true));
+    }
+
+    /// The `st_nlink` measurement, reproduced: the holder can see that its
+    /// file has been unlinked, and that is the only side of the divergence
+    /// that can.
+    #[test]
+    fn a_holder_notices_when_its_database_is_deleted_under_it() {
+        let home = tempfile::tempdir().unwrap();
+        let db = Db::open(home.path()).unwrap();
+        assert!(db.still_linked());
+        std::fs::remove_file(home.path().join("char.db")).unwrap();
+        assert!(!db.still_linked());
+    }
+
+    /// The newcomer's side of the same measurement, recorded because it bounds
+    /// what the sentinel can do: to a second process the unlinked case is
+    /// byte-identical to a fresh install, so there is no discriminating bit
+    /// available to it.
+    #[test]
+    fn a_newcomer_cannot_tell_an_unlinked_database_from_a_fresh_one() {
+        let home = tempfile::tempdir().unwrap();
+        let holder = Db::open(home.path()).unwrap();
+        std::fs::remove_file(home.path().join("char.db")).unwrap();
+
+        let newcomer = Db::open(home.path()).unwrap();
+        assert!(newcomer.still_linked());
+        assert_ne!(
+            newcomer.namespace().unwrap(),
+            holder.namespace().unwrap(),
+            "it is a different database, and nothing told it so"
+        );
+    }
+}

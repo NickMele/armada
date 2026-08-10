@@ -102,6 +102,29 @@ pub fn parse(text: &str, file: &str) -> Result<Config, CharError> {
     Ok(config)
 }
 
+/// Read only the `workspaces:` list, tolerating everything else.
+///
+/// Workspace resolution has to ask each `char.yml` on the way up whether it
+/// declares the one below it (PLAN.md §2.1), and it has to ask **before** it
+/// knows which config is this workspace's. A full parse there would make an
+/// unrelated error in an outer config — a key phase 5 adds, a typo in a
+/// component char is not going to run — fail the inner workspace it has no
+/// authority over. So this reads one key and forms no opinion about the rest.
+///
+/// A document that does not parse at all yields an empty list, which makes the
+/// nesting undeclared and the situation `bad_config` — reported against the
+/// nesting rather than against a parse char did not need.
+pub fn declared_workspaces(text: &str) -> Vec<String> {
+    #[derive(serde::Deserialize)]
+    struct JustWorkspaces {
+        #[serde(default)]
+        workspaces: Vec<String>,
+    }
+    serde_yaml_ng::from_str::<JustWorkspaces>(text)
+        .map(|parsed| parsed.workspaces)
+        .unwrap_or_default()
+}
+
 /// Apply defaults, derive check ids, and normalise every key that has two
 /// spellings into one.
 pub fn resolve(

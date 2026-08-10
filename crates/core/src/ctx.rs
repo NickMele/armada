@@ -157,6 +157,34 @@ impl RunOutput {
     }
 }
 
+/// Why a child never started.
+///
+/// Typed rather than pre-classified, because **the same failure is a different
+/// class depending on who asked**: `docker` missing from `PATH` is
+/// `environment` — the machine is broken and the repo is fine — while a
+/// `commands:` entry whose `cmd:` is not on `PATH` is `bad_config`, and the
+/// caller is the only one that knows which it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpawnError {
+    /// `argv[0]`.
+    pub program: String,
+    /// What went wrong.
+    pub kind: SpawnErrorKind,
+    /// The operating system's account of it.
+    pub message: String,
+}
+
+/// The distinctions a caller classifies on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpawnErrorKind {
+    /// `argv[0]` is not on `PATH`.
+    NotFound,
+    /// It is there and not executable.
+    PermissionDenied,
+    /// Anything else: out of file descriptors, out of memory, a bad cwd.
+    Other,
+}
+
 /// Every subprocess.
 pub trait Run {
     /// Run to completion and report what happened.
@@ -165,7 +193,7 @@ pub trait Run {
     /// and failed is an `Ok` carrying its code, because that is a result rather
     /// than an error — the distinction is the whole of PLAN.md §4.5's
     /// `data.dispatched`.
-    fn call(&self, request: &RunRequest) -> Result<RunOutput, CharError>;
+    fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError>;
 }
 
 /// Time, in the three shapes char needs.
