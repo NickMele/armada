@@ -89,11 +89,19 @@ pub fn killpg(pgid: i32, signal: i32) -> io::Result<()> {
 ///
 /// **An unreaped child of char's own is still a member of its group, and the
 /// two platforms disagree about it.** Measured: against a group whose only
-/// remaining member is a zombie, `killpg(pgid, 0)` *succeeds* on Linux
-/// (`ESRCH` only after the `waitpid`) and fails on darwin. So a caller that
-/// parented the group must reap before reading this as "empty" — which
+/// remaining member is a zombie, `killpg(pgid, 0)` *succeeds* on Linux and
+/// fails on darwin with **`EPERM`, not `ESRCH`** — `ESRCH` arrives on both only
+/// after the `waitpid` (`docs/traps.md`). So a caller that parented the group
+/// must reap before reading this as "empty", which
 /// [`crate::process::ProcessGroup::stop`] does, and which is why its report
 /// describes the kill rather than the state after it.
+///
+/// The case char actually reclaims is an **orphan**, whose parent is gone, so
+/// init reaps it the moment it dies and both platforms agree. Note the
+/// consequence of testing `rc == 0`: a genuine `EPERM` — a group char may not
+/// signal — also reads as "not alive". char started every group it probes, so
+/// it has permission by construction; a future caller that probes a group it
+/// did not start does not, and would need to branch on the errno.
 pub fn group_alive(pgid: i32) -> bool {
     #[allow(unsafe_code)]
     // SAFETY: as `killpg` above; signal 0 delivers nothing at all.
