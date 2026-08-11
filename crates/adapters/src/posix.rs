@@ -84,8 +84,8 @@ pub fn killpg(pgid: i32, signal: i32) -> io::Result<()> {
 /// Whether any process remains in the group.
 ///
 /// Signal 0 performs the permission and existence checks without delivering
-/// anything — `ESRCH` means the group is empty, and that is how char *confirms*
-/// a kill rather than assuming one.
+/// anything, so any failure reads as "not alive" — `ESRCH` when the group is
+/// empty, and that is how char *confirms* a kill rather than assuming one.
 ///
 /// **An unreaped child of char's own is still a member of its group, and the
 /// two platforms disagree about it.** Measured: against a group whose only
