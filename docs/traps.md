@@ -24,7 +24,8 @@ between phases.
 - **An entry's evidence must have been falsified once before it is cited here.** The same entry
   rested on an assertion that could not fail, so its evidence was decoration. This file's whole
   claim is that an entry was measured rather than read, and an assertion nobody inverted is
-  neither — the general rule, and the incident, are owned by `ARCHITECTURE.md` §2.1.1.
+  neither. The general rule is owned by `ARCHITECTURE.md` §2.1.1; the incident that produced it
+  stays here, in the correction note on the zombie-group entry that suffered it.
 
 Record for each: what was measured, the version it was measured against, the command that
 shows it, and what breaks if you assume otherwise.
@@ -119,9 +120,10 @@ durable handles."* This is the standard shape for exposing something like a ten-
 
 **Measured on darwin, and not re-run on Linux.** What a `bind()` refuses is decided by the
 kernel, and the `IPV6_V6ONLY` and `SO_REUSEPORT` rows below are the two that could plausibly
-answer differently there — treat them as unverified on Linux until someone measures them, and
-do not assume this section transfers because the last kernel-level section in this file did
-not.
+answer differently there — treat them as unverified on Linux until someone measures them. Do
+not assume the section transfers untested: the zombie-only-group entry in the POSIX-primitives
+section below is the one kernel-level result in this file that *was* re-run on Linux, and it
+came back different.
 
 ### An IPv6-only listener is invisible to an IPv4 bind probe
 
@@ -463,9 +465,11 @@ failure the label exists to prevent.
 
 ## Docker Compose
 
-Measured on darwin against **Docker Compose v5.3.1**, 2026-08-09; `config` resolves, merges and
-interpolates client-side, so these are the compose CLI's behaviour rather than the host's.
-Eleven entries. **An earlier version of this section
+Measured on darwin against **Docker Compose v5.3.1**, 2026-08-09. Eleven entries. All but two
+are `docker compose config` or CLI-surface behaviour, which is resolved client-side and is
+therefore the compose CLI's rather than the host's; the exceptions are the `${files}` entry,
+which is a shell's behaviour, and the service-labels entry, which is the daemon's, and each
+says so where it appears. **An earlier version of this section
 was headed v2.24.3-desktop.1, which is not what is installed** — so every entry below was
 re-run against v5.3.1 before being trusted. Four reproduced unchanged; one is version-dependent
 and is marked.
@@ -575,6 +579,14 @@ warning about it (`PLAN.md` §4.1).
 
 Also non-malicious and silent: a filename containing a space is word-split into two arguments.
 
+**Not compose, and not platform-neutral.** This entry is `sh -c` word-splitting and command
+substitution with no compose involved, measured on darwin. `/bin/sh` is `bash` on darwin and
+`dash` on Debian and Ubuntu, and `crates/core`'s `shell_argv` wraps every `shell: true` command
+as `["/bin/sh", "-c", …]` on both — so the shell char actually invokes differs by platform.
+**The dash side is unverified.** Nothing here rests on it, because the schema makes
+`shell: true` beside `${files}` unrepresentable on every platform; what has not been measured
+is whether any *other* `shell: true` command char runs behaves differently under dash.
+
 ### `docker compose up` has no `--label` flag
 
 ```sh
@@ -586,6 +598,9 @@ Labels reach containers only through the compose document — `labels:` on a ser
 command line.
 
 ### Service labels do **not** reach the network or the volumes
+
+**Daemon-side, not client-side:** this is what the daemon creates from the document, not what
+`config` renders, so the section's client-side note does not cover it. Measured on darwin.
 
 ```sh
 # a document with labels: {char.workspace: deadbeef} on the service only
