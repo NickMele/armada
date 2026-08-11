@@ -675,12 +675,32 @@ link here rather than restating it, because a fact stated in four places drifts,
 already drifted into a form that cannot match anything (see below).
 
 ```sh
-grep -riE "chariot|tilt|NEXT_PUBLIC|\.claude|backend/|web/" \
+grep -riE "tilt|NEXT_PUBLIC|\.claude|backend/|web/" \
      crates/ tests/ --exclude-dir=fixtures --exclude-dir=target
 ```
 
 It must return nothing. **There is no allowlist.** If it fires, the code changes, not the
 pattern.
+
+> **The source repo's own name is deliberately not in that pattern, and is configured
+> instead.** It is the single most valuable alternative — a leftover import or path is exactly
+> what phase 3 leaks — and it is also the one string this repository must not publish, for the
+> same reason §2.7 keeps the clean-room hook's guarded path out of the hook. Naming it here
+> would hand every clone an alternative belonging to nobody but this project's author.
+>
+> So it is appended to the pattern above from one of two places, on the same precedence the
+> hook uses:
+>
+> | | |
+> |---|---|
+> | `CHARKIT_CONTAMINATION_EXTRA` | `\|`-separated alternatives, winning whenever it is exported — exported-empty included, which is the off switch |
+> | `.claude/contamination.local` | the same alternatives one per line, `#` comments and blanks skipped. Untracked. Unlike the variable it survives a `cargo xtask` run from a shell that exported nothing, which is most of them |
+>
+> Values are matched **literally** — they are escaped before being appended, because a
+> configured value is the name of a repo and not a pattern its author debugged. Neither set
+> means no source repo has been named, so the pattern above runs on its own rather than the
+> gate failing: a repo with nothing private to keep out still gets the five alternatives it
+> can state in public.
 
 > **A copy of this pattern in a markdown table cell is unrunnable.** Table cells require `|`
 > to be escaped as `\|`, which renders as a pipe to a human but is a *literal* pipe in an
@@ -696,10 +716,15 @@ pattern.
 >
 > **The test builds the string at runtime and writes it to a temporary directory** — never as a
 > source literal, and never inside the repository. Written the obvious way
-> (`let known_bad = "chariot";` in `tests/`) the self-test trips the very gate it is testing,
-> the repo goes red while clean, and the documented response — *"the code changes, not the
-> pattern"* — means deleting the test. Use `format!("{}{}", "cha", "riot")` into a
-> `tempfile::TempDir`, and run the pattern against that directory.
+> (`let known_bad = "NEXT_PUBLIC";` in `tests/`) the self-test trips the very gate it is
+> testing, the repo goes red while clean, and the documented response — *"the code changes, not
+> the pattern"* — means deleting the test. Split the literal (`concat!("NEXT_", "PUBLIC")`) and
+> write it into a temporary directory, then run the pattern against that directory.
+>
+> **Assert the configured alternatives too, and never with a real one.** The extension above is
+> the half most likely to be silently broken, because a machine that has not configured it
+> cannot tell a working append from a no-op. Feed the check a synthetic alternative it makes up
+> itself and assert that the string it made up gets caught.
 
 > **Paths, not just the pattern.** Sources live at `crates/*/src/`; there is no top-level
 > `src/`. Pointing the grep at `src/` makes it warn, scan nothing, and exit 2 — which most
@@ -715,16 +740,16 @@ covered.
 valuable asset and its *cases* are ported in phase 3, which makes them the second
 transcription vector. An earlier draft greped `src/` only and missed them entirely.
 
-*What it catches:* phase 3 is the only phase permitted to read the Chariot repo, and this is
-its acceptance test made permanent. `chariot` is a leftover import or path; `tilt` means a
-vendor assumption got into code rather than staying in config; `NEXT_PUBLIC` means Next.js
-knowledge was baked in; `.claude` means char assumed where worktrees live instead of asking
-git; `backend/` and `web/` are the source repo's package directories, so a hardcoded one
-means the `components:` abstraction did not take.
+*What it catches:* phase 3 is the only phase permitted to read the source repo, and this is
+its acceptance test made permanent. The configured alternative — the repo's own name — is a
+leftover import or path; `tilt` means a vendor assumption got into code rather than staying in
+config; `NEXT_PUBLIC` means Next.js knowledge was baked in; `.claude` means char assumed where
+worktrees live instead of asking git; `backend/` and `web/` are the source repo's package
+directories, so a hardcoded one means the `components:` abstraction did not take.
 
-*Why permanent:* from phase 3 onward the plan runs charkit **against** the Chariot checkout
-in read-only parallel to compare verdicts, and phase 6 is a Chariot PR. Pasting a real
-Chariot path into `src/` to reproduce a mismatch is an entirely ordinary thing to do, and
+*Why permanent:* from phase 3 onward the plan runs charkit **against** the source checkout
+in read-only parallel to compare verdicts, and phase 6 is a PR against that repo. Pasting one
+of its real paths into `src/` to reproduce a mismatch is an entirely ordinary thing to do, and
 this is what catches it.
 
 *The known cost, chosen deliberately:* `tilt`, `backend/` and `web/` are ordinary words the

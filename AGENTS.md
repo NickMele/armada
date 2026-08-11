@@ -37,8 +37,13 @@ measured   decided           specified  sequenced   derived
 ### 1. Never write these strings under `src/` or `tests/`
 
 ```
-chariot   tilt   NEXT_PUBLIC   .claude   backend/   web/
+tilt   NEXT_PUBLIC   .claude   backend/   web/
 ```
+
+...plus **the source repo's own name**, which is not written here because this repo is public.
+It is appended to the pattern from `CHARKIT_CONTAMINATION_EXTRA` or an untracked
+`.claude/contamination.local` — `ARCHITECTURE.md` §2.4. Treat it as on the list whether or not
+your checkout has it configured.
 
 A grep runs in the merge gate over both directories and **has no allowlist**. If it fires, the
 code changes — not the pattern. **The pattern itself lives in `ARCHITECTURE.md` §2.4 and is

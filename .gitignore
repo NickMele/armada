@@ -16,10 +16,11 @@
 # clean-room hook in .claude/settings.json (docs/ARCHITECTURE.md §2.7) and it
 # only enforces anything if it is committed.
 #
-# Its one input is, though: clean-room.local names the private repo this one
-# was built away from, which is a path belonging to whoever set it and not to
-# this repo. The hook is committed, the target it points at is not.
+# Its inputs are, though. Both name the private repo this one was built away
+# from — a path and a name belonging to whoever set them, not to this repo. The
+# hook and the grep are committed; what they point at is not.
 .claude/clean-room.local
+.claude/contamination.local
 
 # macOS
 .DS_Store

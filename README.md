@@ -129,7 +129,7 @@ A change must clear all six:
 **1. Certain strings may never appear under `src/` or `tests/`.**
 
 ```
-chariot   tilt   NEXT_PUBLIC   .claude   backend/   web/
+tilt   NEXT_PUBLIC   .claude   backend/   web/
 ```
 
 The check engine was ported out of a Django+Next monorepo, and this grep is what stops that
@@ -137,6 +137,12 @@ repo's specifics coming along for the ride — a hardcoded package directory, a 
 assumption that belongs in config rather than code. It runs in the gate and **there is no
 allowlist**: if it fires, the code changes, not the pattern. The exact pattern lives in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 and is deliberately stated only there.
+
+That repo's *name* is not on the list, because this one is public and would be publishing it.
+It is appended from `CHARKIT_CONTAMINATION_EXTRA` or an untracked `.claude/contamination.local`
+instead — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4. Nothing configured means
+the five above run on their own, which is the
+right answer for a clone with no private repo to keep out.
 
 That includes docstrings and ported test cases — `tests/` is in scope for exactly that reason.
 `tests/fixtures/` is exempt, because a fixture config describes a hypothetical repo and naming
