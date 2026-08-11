@@ -175,6 +175,13 @@ exclusion, with a reason comment, for genuinely untestable lines.
 
 ## Workflow
 
+**Two rules phase 2 learned the hard way**, with the reasoning in
+`ARCHITECTURE.md` §2.1.1 and §2.1.2: **invert every new assertion once and watch
+it fail** — a vacuous assertion is worse than none, because it gets cited as
+evidence — and **shipped behaviour that disagrees with the spec is a divergence
+even if you edited no document**, so conform and record the argument where the
+licensed phase will find it.
+
 **Run `cargo xtask doclint` after editing any document.** It is a gate check. It resolves
 every `§` cross-reference, parses every fenced block with a real parser, and runs `ARCHITECTURE.md` §2.4's
 contamination grep from its single source. If a block is deliberately unparseable, mark it

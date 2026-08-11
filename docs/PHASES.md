@@ -418,6 +418,44 @@ replays through `step()` and is therefore the strongest single assertion availab
 a recorded run and the resulting `State` must equal the one that was persisted. Written when the check runs — it cannot be recovered later,
 and `char explain` in phase 5 is a reader with nothing to read without it.
 
+#### What phase 2 learned that this phase should start with
+
+Four hand-offs, each of them something phase 2 paid for once.
+
+**Give the two agents separate git worktrees.** This phase is *defined* as two
+agents working at the same time, and phase 2 ran with two sessions sharing one
+checkout: a `git add -A` in one swept another's in-flight files into a commit
+whose message described neither, and a branch switch moved the tree under the
+agent that was not looking. Nothing was lost, but the recovery cost more than
+the setup would have. §8.1 argues that structural guarantees beat policed ones;
+`git worktree add` is that argument applied to this phase's own shape. It also
+avoids a smaller trap phase 2 hit: `no-mistakes axi respond` resolves its run by
+**current branch**, so a stray `git switch` reports "no active run to respond
+to" rather than saying you are in the wrong place.
+
+**The ported cases encode the source repo's behaviour, bugs included.** That is
+the point of porting them — the value in those lines is the bug fixes discovered
+by running against a real repo — but it cuts the other way too, and a ported
+assertion that *cannot fail* is invisible while looking like coverage.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) §2.1.1 has the general rule; here it is
+load-bearing, because the harvest is the only place a quirk can be told from a
+fix and the implementer never sees the original.
+
+**Land it as several review-sized PRs, and phase 2 is the evidence.** Phase 2
+went in as one, and its review step ran for two hours across three fix rounds
+before the first test ever executed. §9's re-measurement already doubled this
+phase's harvest; review does not compress with it.
+
+**Two things phase 2 built and deliberately left unwired, for this phase to
+connect rather than reinvent.** `waiting_on` and the claim reducer's `Report`
+action exist with no consumer, because phase 2 has no run with a `results[]` to
+put a `WAITING` row in. `lease::acquisition_order` exists and nothing calls it,
+because nothing schedules yet. And the scheduler's own `Event`/`Action` enums
+are still unwritten: [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.2 gives their
+membership as a **contract floor**, and `crates/core/src/lease.rs` is the worked
+precedent for what a reducer looks like in this codebase — including the rule
+that there is never a catch-all arm.
+
 **Done when:** the ported suite is green against the phase-1 fixtures, **and** the
 contamination grep (§11) returns nothing.
 
