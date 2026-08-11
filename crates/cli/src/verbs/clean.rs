@@ -661,6 +661,7 @@ pub fn rebuild<R: Run, C: Clock>(
             run,
             &cwd,
             timeout,
+            &db_path,
             &sidecars,
             recovered.as_deref(),
         ))));
@@ -753,7 +754,8 @@ pub fn rebuild<R: Run, C: Clock>(
                 message: refused.join("; "),
                 next_action: Some(
                     "remove what is named above by hand, then re-run `char clean --all \
-                     --orphaned --force-rebuild`"
+                     --orphaned` — the store is readable again, so the ordinary reap is \
+                     enough and re-running the rebuild would only set another database aside"
                         .to_string(),
                 ),
             });
@@ -776,18 +778,44 @@ pub fn rebuild<R: Run, C: Clock>(
 }
 
 /// What `--force-rebuild` would do, with nothing done.
+///
+/// **The replacement database is stated as plainly as the move-aside**, because
+/// it is the more consequential half and the one a caller can misread: "moved
+/// aside" on its own reads as *the file is set safe and the store is otherwise
+/// preserved*, when in fact every workspace row, port block and lease record on
+/// the machine goes with it. Whether the old namespace comes across decides
+/// whether resources already stamped stay reapable, so the preview says which
+/// of the two cases this run would be.
 fn rebuild_preview<R: Run>(
     run: &R,
     cwd: &Path,
     timeout: Duration,
+    db_path: &Path,
     sidecars: &[PathBuf],
     recovered: Option<&str>,
 ) -> Envelope<CleanDryRun> {
+    let mut would_release: Vec<String> = sidecars
+        .iter()
+        .map(|path| format!("move aside {}", path.display()))
+        .collect();
+    would_release.push(match recovered {
+        Some(namespace) => format!(
+            "create a fresh {} in its place, carrying the recovered namespace {namespace} so \
+             resources already stamped with it stay reapable — every workspace row, port \
+             block and lease record on this machine goes with the old file",
+            db_path.display()
+        ),
+        None => format!(
+            "create a fresh {} in its place with a new namespace, since the old one could not \
+             be read — every workspace row, port block and lease record on this machine goes \
+             with the old file, and resources stamped with the old namespace are no longer \
+             matchable by it",
+            db_path.display()
+        ),
+    });
+
     let mut preview = CleanDryRun {
-        would_release: sidecars
-            .iter()
-            .map(|path| format!("move aside {}", path.display()))
-            .collect(),
+        would_release,
         ..Default::default()
     };
 

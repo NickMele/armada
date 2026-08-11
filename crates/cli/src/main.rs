@@ -44,6 +44,7 @@ char — one consistent vocabulary for managing a repo's tech stack
   char clean     [--json] [--dry-run] [--project|--all]
                  [--orphaned] [--artifacts] [--force]
                                                  release what this workspace owns
+  char clean --all --orphaned --force-rebuild    rebuild an unreadable ~/.char/char.db
   char status    [--json] [--project|--all]      what is running, mine, and stale
   char <name> …                                  a commands: entry from this repo's char.yml
 

@@ -724,11 +724,19 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
     );
     let payload: Value = serde_json::from_slice(&previewed.stdout).unwrap();
     assert_eq!(payload["status"], "CLEAN");
+    let would_release = payload["data"]["would_release"].to_string();
     assert!(
-        payload["data"]["would_release"]
-            .to_string()
-            .contains("char.db"),
+        would_release.contains("move aside") && would_release.contains("char.db"),
         "the preview must name the file it would move aside: {payload}"
+    );
+    // The half a caller can misread: "moved aside" alone reads as "the store is
+    // otherwise preserved", and the opposite is true.
+    assert!(
+        would_release.contains("create a fresh")
+            && would_release.contains("port block")
+            && would_release.contains("new namespace"),
+        "the preview must state that a fresh database replaces it, and what that costs: \
+         {payload}"
     );
     assert!(
         payload["data"]["results"].is_null(),

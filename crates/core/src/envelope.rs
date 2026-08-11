@@ -394,7 +394,9 @@ pub struct DispatchData {
 /// `results[]`, and nothing changed.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct CleanDryRun {
-    /// Port blocks that would go back.
+    /// What the run would hand back: the port blocks on the ordinary path, and
+    /// on `--force-rebuild` the `char.db` and its `-wal`/`-shm` sidecars that
+    /// would be moved aside, plus the fresh database that would replace them.
     pub would_release: Vec<String>,
     /// Resources that would be removed.
     pub would_remove: Vec<String>,
@@ -403,6 +405,12 @@ pub struct CleanDryRun {
     /// What would be reported rather than reclaimed: the external resources of
     /// §6.1, and on the `--force-rebuild` path the labelled resources the run
     /// would deliberately leave alone.
+    ///
+    /// It also carries that path's diagnostics — the namespace note, and any
+    /// enumeration that could not run. A preview has no `skipped` channel, and
+    /// the alternative is a fifth field on the envelope's frozen contract for
+    /// something one path emits, so they are reported here and named as such
+    /// rather than dropped.
     pub would_report: Vec<String>,
 }
 
