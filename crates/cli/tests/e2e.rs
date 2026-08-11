@@ -692,6 +692,115 @@ fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
     );
 }
 
+/// **A preview flag may not delete data**, and this is the operation it would
+/// matter most for: `--force-rebuild` removes labelled resources across
+/// namespaces and replaces the machine-global store, so `--dry-run` has to
+/// leave both exactly as it found them.
+#[test]
+fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    machine.run(&repo, &["init"]);
+
+    let db = machine.home.path().join(".char/char.db");
+    let junk = b"this is not a database";
+    std::fs::write(&db, junk).unwrap();
+
+    let previewed = machine.run(
+        &repo,
+        &[
+            "clean",
+            "--dry-run",
+            "--all",
+            "--orphaned",
+            "--force-rebuild",
+            "--json",
+        ],
+    );
+    assert!(
+        previewed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&previewed.stderr)
+    );
+    let payload: Value = serde_json::from_slice(&previewed.stdout).unwrap();
+    assert_eq!(payload["status"], "CLEAN");
+    assert!(
+        payload["data"]["would_release"]
+            .to_string()
+            .contains("char.db"),
+        "the preview must name the file it would move aside: {payload}"
+    );
+    assert!(
+        payload["data"]["results"].is_null(),
+        "a dry run answers with would_*, not results[]: {payload}"
+    );
+
+    // The unreadable file is still the unreadable file: not moved aside, and
+    // not replaced by a fresh database.
+    assert_eq!(
+        std::fs::read(&db).unwrap(),
+        junk,
+        "the database was touched by a preview"
+    );
+    let aside: Vec<_> = std::fs::read_dir(machine.home.path().join(".char"))
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains("unreadable"))
+        .collect();
+    assert!(
+        aside.is_empty(),
+        "a preview moved the database aside: {aside:?}"
+    );
+
+    // And the recovery is still needed, which is the same statement from the
+    // other side: nothing was repaired.
+    let after: Value =
+        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(after["error"]["class"], "environment");
+}
+
+/// `--force-rebuild` reaps the whole machine across namespaces, so the
+/// invocation has to say so. `--artifacts` and `--force` mean nothing on a path
+/// that reads no `char.yml` and takes no lease, and are refused rather than
+/// quietly dropped.
+#[test]
+fn force_rebuild_refuses_every_invocation_that_understates_it() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    machine.run(&repo, &["init"]);
+
+    for args in [
+        &["clean", "--orphaned", "--force-rebuild", "--json"][..],
+        &[
+            "clean",
+            "--all",
+            "--orphaned",
+            "--force-rebuild",
+            "--artifacts",
+            "--json",
+        ][..],
+        &[
+            "clean",
+            "--all",
+            "--orphaned",
+            "--force-rebuild",
+            "--force",
+            "--json",
+        ][..],
+    ] {
+        let refused = machine.run(&repo, args);
+        let payload: Value = serde_json::from_slice(&refused.stdout).unwrap();
+        assert_eq!(
+            payload["error"]["class"],
+            "bad_invocation",
+            "`char {}` was accepted: {payload}",
+            args.join(" ")
+        );
+        assert_eq!(refused.status.code(), Some(2));
+    }
+}
+
 fn namespace_of(db: &std::path::Path) -> String {
     rusqlite::Connection::open(db)
         .ok()

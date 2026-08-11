@@ -204,31 +204,21 @@ impl ResultRow {
 /// because the id grammar differs per verb and the message should read in the
 /// caller's vocabulary.
 pub fn aggregate(results: &[ResultRow], subject: &str) -> Option<CharError> {
-    let failures: Vec<&ResultRow> = results
+    // A row that failed without attaching an error of its own still counts: a
+    // verb reporting success over a `FAILED` row is the shape a consumer least
+    // expects.
+    let failures: Vec<(&ResultRow, ErrClass)> = results
         .iter()
-        .filter(|row| {
-            // A row that failed without attaching an error of its own still
-            // counts: a verb reporting success over a `FAILED` row is the shape
-            // a consumer least expects.
-            row.error.is_some()
-                || matches!(
-                    row.status,
-                    Status::Failed | Status::Timeout | Status::Aborted | Status::Dead
-                )
+        .filter_map(|row| {
+            let class = match &row.error {
+                Some(error) => Some(error.class),
+                None => implied_class(row.status),
+            };
+            class.map(|class| (row, class))
         })
         .collect();
 
-    let worst = failures.iter().max_by_key(|row| {
-        row.error
-            .as_ref()
-            .map_or(ErrClass::ToolFailed, |error| error.class)
-            .severity()
-    })?;
-
-    let class = worst
-        .error
-        .as_ref()
-        .map_or(ErrClass::ToolFailed, |error| error.class);
+    let (worst, class) = *failures.iter().max_by_key(|(_, class)| class.severity())?;
 
     Some(CharError {
         class,
@@ -250,6 +240,40 @@ pub fn aggregate(results: &[ResultRow], subject: &str) -> Option<CharError> {
             .as_ref()
             .and_then(|error| error.next_action.clone()),
     })
+}
+
+/// The class a terminal state implies for a row that attached no error of its
+/// own, and `None` for a state that is not a failure at all.
+///
+/// **The match is exhaustive rather than a catch-all, so a new terminal state
+/// is a compile error here.** Defaulting every failure state to `tool_failed`
+/// is not a neutral choice: a run of nothing but `TIMEOUT` rows would aggregate
+/// to exit 1, which is the exact "a gate reading 1 goes looking for a broken
+/// test" failure the precedence rule exists to prevent. PLAN.md §3.1's own
+/// example payload carries `{"id": "api:test", "status": "ABORTED"}` with no
+/// `error` object, so a row in this shape is specified rather than malformed.
+///
+/// `DEAD` maps to `aborted` with `ABORTED`: the run's holder dying and a
+/// cancellation are the same answer to the caller — nothing about the work was
+/// established, and the response is to retry rather than to read output.
+const fn implied_class(status: Status) -> Option<ErrClass> {
+    match status {
+        Status::Failed => Some(ErrClass::ToolFailed),
+        Status::Timeout => Some(ErrClass::Timeout),
+        Status::Aborted | Status::Dead => Some(ErrClass::Aborted),
+        // `PARTIAL` is an envelope-level state describing a mixed set; a row
+        // carrying it has not said that it failed.
+        Status::Ready
+        | Status::Up
+        | Status::Down
+        | Status::Clean
+        | Status::Pass
+        | Status::Ok
+        | Status::Skipped
+        | Status::Partial
+        | Status::Running
+        | Status::Waiting => None,
+    }
 }
 
 /// A port and what a probe found at it.
@@ -376,7 +400,9 @@ pub struct CleanDryRun {
     pub would_remove: Vec<String>,
     /// Declared `owns.files` that would be deleted — `--artifacts` only.
     pub would_delete: Vec<String>,
-    /// External resources that would be reported rather than reclaimed.
+    /// What would be reported rather than reclaimed: the external resources of
+    /// §6.1, and on the `--force-rebuild` path the labelled resources the run
+    /// would deliberately leave alone.
     pub would_report: Vec<String>,
 }
 
@@ -485,6 +511,61 @@ mod tests {
         let rows = [ResultRow::new("a", Status::Failed)];
         let error = aggregate(&rows, "workspaces").expect("a FAILED row is a failure");
         assert_eq!(error.class, ErrClass::ToolFailed);
+    }
+
+    /// The state carries the class when the row did not attach one. A run of
+    /// nothing but timed-out rows exits 4, so a gate raises a deadline rather
+    /// than hunting a broken test — and `check`, the verb that produces these
+    /// rows, is coded against this.
+    #[test]
+    fn a_terminal_state_with_no_error_of_its_own_scores_its_own_class() {
+        for (status, class) in [
+            (Status::Failed, ErrClass::ToolFailed),
+            (Status::Timeout, ErrClass::Timeout),
+            (Status::Aborted, ErrClass::Aborted),
+            (Status::Dead, ErrClass::Aborted),
+        ] {
+            let rows = [ResultRow::new("api:test", status)];
+            let error = aggregate(&rows, "checks").expect("a terminal failure is a failure");
+            assert_eq!(error.class, class, "{status:?} scored the wrong class");
+        }
+    }
+
+    /// PLAN.md §3.1's own example payload contains a row that is nothing but an
+    /// id and `ABORTED`, so the shape is specified — and mixed with an ordinary
+    /// failure the stricter one still wins.
+    #[test]
+    fn an_aborted_row_with_no_error_beats_a_tool_failure() {
+        let rows = [
+            failed("api:lint", ErrClass::ToolFailed),
+            ResultRow::new("api:test", Status::Aborted),
+        ];
+        let error = aggregate(&rows, "checks").unwrap();
+        assert_eq!(error.class, ErrClass::Aborted);
+        assert_eq!(error.class.exit_code(), 5, "not 1");
+        assert_eq!(error.r#where, "api:test");
+    }
+
+    #[test]
+    fn a_progress_or_success_state_never_becomes_a_failure() {
+        for status in [
+            Status::Ready,
+            Status::Up,
+            Status::Down,
+            Status::Clean,
+            Status::Pass,
+            Status::Ok,
+            Status::Skipped,
+            Status::Partial,
+            Status::Running,
+            Status::Waiting,
+        ] {
+            let rows = [ResultRow::new("a", status)];
+            assert!(
+                aggregate(&rows, "checks").is_none(),
+                "{status:?} was admitted as a failure"
+            );
+        }
     }
 
     #[test]

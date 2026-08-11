@@ -122,24 +122,16 @@ fn dispatch(
     // no workspace: it is most useful from a shell that happens to be anywhere.
     if let Invocation::Clean {
         common,
+        artifacts,
         orphaned,
+        force,
         force_rebuild: true,
-        ..
     } = &invocation
     {
-        if !orphaned {
-            return Err(CharError {
-                class: ErrClass::BadInvocation,
-                r#where: "--force-rebuild".to_string(),
-                message: concat!(
-                    "--force-rebuild rebuilds char.db from labels alone, and only ",
-                    "--orphaned bounds that to workspaces whose directory is gone",
-                )
-                .to_string(),
-                next_action: Some("`char clean --all --orphaned --force-rebuild`".to_string()),
-            });
+        if let Some(refusal) = rebuild_refusal(common, *artifacts, *orphaned, *force) {
+            return Err(refusal);
         }
-        return verbs::clean::rebuild(&run, &SystemClock, home, common.json);
+        return verbs::clean::rebuild(&run, &SystemClock, home, common.dry_run);
     }
 
     // Two invocations legitimately run outside any workspace: asking about
@@ -197,6 +189,68 @@ fn dispatch(
         }
         Invocation::Version | Invocation::Help => unreachable!("handled before dispatch"),
     }
+}
+
+/// The invocation `--force-rebuild` insists on, or `None` if this is it.
+///
+/// **The flags have to say what the operation does.** This path enumerates
+/// every labelled resource on the daemon and removes on `ENOENT` across
+/// namespaces, which is machine-scoped work — accepting a narrower-looking
+/// `char clean --orphaned --force-rebuild` from inside a workspace and silently
+/// doing the machine-wide thing is worse than requiring the flag that says so,
+/// and `--all` is already what the refusal below recommends.
+///
+/// `--artifacts` and `--force` are refused rather than ignored: neither has a
+/// meaning here. The rebuild reads no `char.yml`, so there are no declared
+/// `owns.files` to delete, and it takes no lease, so there is no liveness guard
+/// to override.
+fn rebuild_refusal(
+    common: &args::Common,
+    artifacts: bool,
+    orphaned: bool,
+    force: bool,
+) -> Option<CharError> {
+    let refusal = |r#where: &str, message: String| {
+        Some(CharError {
+            class: ErrClass::BadInvocation,
+            r#where: r#where.to_string(),
+            message,
+            next_action: Some("`char clean --all --orphaned --force-rebuild`".to_string()),
+        })
+    };
+
+    if !orphaned {
+        return refusal(
+            "--force-rebuild",
+            concat!(
+                "--force-rebuild rebuilds char.db from labels alone, and only ",
+                "--orphaned bounds that to workspaces whose directory is gone",
+            )
+            .to_string(),
+        );
+    }
+    if common.lens != charkit_core::scope::Lens::All {
+        return refusal(
+            "--force-rebuild",
+            concat!(
+                "--force-rebuild reaps every labelled resource on this daemon, which is ",
+                "machine-scoped work, so it has to be asked for with --all",
+            )
+            .to_string(),
+        );
+    }
+    for (flag, given) in [("--artifacts", artifacts), ("--force", force)] {
+        if given {
+            return refusal(
+                flag,
+                format!(
+                    "{flag} has no meaning alongside --force-rebuild: that path reads no \
+                     char.yml and takes no lease"
+                ),
+            );
+        }
+    }
+    None
 }
 
 fn emit(output: Output, json: bool) -> ExitCode {

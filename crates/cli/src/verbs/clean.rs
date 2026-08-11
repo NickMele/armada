@@ -35,12 +35,13 @@ use charkit_core::envelope::{
 use charkit_core::error::{CharError, ConfigWhere, ErrClass, Status};
 use charkit_core::id::WorkspaceId;
 use charkit_core::lease::{is_cold, LeaseId, LeaseKind, Policy};
-use charkit_core::reap::PathStat;
+use charkit_core::reap::{LabelledResource, LeftAlone, PathStat, ReapPlan, ReapTarget, Reported};
 use charkit_core::registry::{OwnedKind, WorkspaceRow};
 use charkit_core::scope::{self, Lens};
 use charkit_core::template::{self, Site, Vars};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::app::{self, App, RELEASED_EARLY};
 use crate::args::Common;
@@ -603,23 +604,32 @@ fn would_delete<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>, row: &WorkspaceR
 /// Two deliberate departures from the ordinary reap, both stated because they
 /// are the cost of the recovery:
 ///
-/// - **The namespace filter cannot apply**, because the namespace is one of the
-///   things that was lost. So this removes a labelled resource whose path is
-///   `ENOENT` even if another installation stamped it. That is exactly the
-///   cross-namespace removal PLAN.md §2.3.1 forbids for the automatic passes —
-///   permitted here only because the caller asked for it by name, with two
-///   flags, after their database stopped working.
+/// - **The namespace filter does not apply**, because the namespace is one of
+///   the things that was lost — and it stays inapplicable on the run where
+///   `meta` was still legible, so the recovery behaves the same way whether or
+///   not the peek happened to succeed. So this removes a labelled resource
+///   whose path is `ENOENT` even if another installation stamped it. That is
+///   exactly the cross-namespace removal PLAN.md §2.3.1 forbids for the
+///   automatic passes — permitted here only because the caller asked for it by
+///   name, with two flags, after their database stopped working. Which of the
+///   two cases the run was in is stated in `reaped.skipped`, because that is
+///   the half the caller reads.
 /// - **The unreadable file is moved aside, not deleted.** A recovery that
 ///   destroys the evidence of what it recovered from cannot be diagnosed
 ///   afterwards, and the file is the only artifact that could say what went
 ///   wrong.
+///
+/// `--dry-run` previews it and changes nothing — no file is moved, no
+/// replacement is created and no removal is run. This is the most destructive
+/// operation in the tool, so it is the one a preview matters most for;
+/// enumerating is still permitted, because listing and `stat`-ing change
+/// nothing.
 pub fn rebuild<R: Run, C: Clock>(
     run: &R,
     now: &C,
     home: &Path,
-    json: bool,
+    dry_run: bool,
 ) -> Result<Output, CharError> {
-    let _ = json;
     let char_home = charkit_adapters::machine::char_home(home);
     let db_path = char_home.join("char.db");
 
@@ -628,17 +638,43 @@ pub fn rebuild<R: Run, C: Clock>(
     // namespace across keeps every resource already stamped with it reapable.
     let recovered = charkit_adapters::db::Db::peek_namespace(&db_path);
 
+    // Read before anything is opened, and it opens nothing itself: the deadline
+    // has to be available on a path whose whole premise is that the database is
+    // not.
+    let machine = charkit_adapters::machine::MachineConfig::read(&char_home)?;
+    let timeout = machine.docker_deadline();
+    let cwd = home.to_path_buf();
+
+    // **Every sidecar is moved with the file, and the presence of `char.db` is
+    // not what decides it.** An interrupted write can leave `char.db-wal` and
+    // `char.db-shm` behind with no `char.db` at all (PLAN.md §4.3), and a fresh
+    // database opened alongside a foreign WAL is a worse state than the one
+    // being recovered from.
+    let sidecars: Vec<PathBuf> = ["", "-wal", "-shm"]
+        .iter()
+        .map(|suffix| char_home.join(format!("char.db{suffix}")))
+        .filter(|path| path.exists())
+        .collect();
+
+    if dry_run {
+        return Ok(Output::CleanDryRun(Box::new(rebuild_preview(
+            run,
+            &cwd,
+            timeout,
+            &sidecars,
+            recovered.as_deref(),
+        ))));
+    }
+
+    let stamp = now.wall_rfc3339().replace(':', "-");
     let mut moved_aside = Vec::new();
-    if db_path.exists() {
-        let stamp = now.wall_rfc3339().replace(':', "-");
-        for suffix in ["", "-wal", "-shm"] {
-            let from = char_home.join(format!("char.db{suffix}"));
-            if from.exists() {
-                let to = char_home.join(format!("char.db{suffix}.unreadable-{stamp}"));
-                if std::fs::rename(&from, &to).is_ok() {
-                    moved_aside.push(to.display().to_string());
-                }
-            }
+    for from in &sidecars {
+        let Some(name) = from.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let to = char_home.join(format!("{name}.unreadable-{stamp}"));
+        if std::fs::rename(from, &to).is_ok() {
+            moved_aside.push(to.display().to_string());
         }
     }
 
@@ -647,85 +683,185 @@ pub fn rebuild<R: Run, C: Clock>(
         db.adopt_namespace(namespace)?;
     }
 
-    let machine = charkit_adapters::machine::MachineConfig::read(&char_home)?;
-    let timeout = machine.docker_deadline();
-    let cwd = home.to_path_buf();
-    let mut reaped = charkit_core::reap::ReapPlan::default();
-
+    let mut reaped = ReapPlan::default();
     for note in moved_aside {
         reaped.skipped.push(format!("moved aside: {note}"));
     }
-    if recovered.is_none() {
-        reaped.skipped.push(
-            concat!(
-                "the previous namespace could not be read, so resources stamped with it ",
-                "are foreign to this database and will be reported rather than reclaimed",
-            )
-            .to_string(),
-        );
-    }
+    reaped.skipped.push(namespace_note(recovered.as_deref()));
 
-    // No lease to renew: the rebuild path holds none, because the store the
-    // leases live in is the thing that is broken.
-    let tick = &mut || {};
-    match docker::daemon_ready(run, &cwd, timeout, tick) {
-        Ok(()) => {
-            for kind in docker::Kind::ALL {
-                let found = docker::list_labelled(run, &cwd, timeout, kind, tick);
-                let found = match found {
-                    Ok(found) => found,
-                    Err(error) => {
-                        reaped
-                            .skipped
-                            .push(format!("enumeration: {}", error.message));
-                        continue;
-                    }
-                };
-                for resource in found {
-                    // By label alone, and only on `ENOENT`. Every other errno
-                    // still means "adopt or report, never remove" — that rule
-                    // is not what broke.
-                    if fs::stat(&resource.workspace_path) == PathStat::Missing {
-                        let removed = docker::remove(
-                            run,
-                            &cwd,
-                            timeout,
-                            kind,
-                            std::slice::from_ref(&resource.reference),
-                            &mut || {},
-                        );
-                        if removed.iter().all(|(_, error)| error.is_none()) {
-                            reaped.resources.push(charkit_core::reap::ReapTarget {
-                                kind: resource.kind,
-                                reference: resource.reference,
-                                workspace: resource.workspace,
-                            });
-                            continue;
-                        }
-                    }
-                    reaped.reported.push(charkit_core::reap::Reported {
+    // Two channels, exactly as `clean_one` keeps them: an enumeration char
+    // could not perform is `skipped` and proves nothing, while a removal char
+    // attempted and could not complete is a leak on a workspace that is
+    // provably gone — so it fails a row rather than being reported as a
+    // resource that was deliberately left alone.
+    let found = survey(run, &cwd, timeout, &mut reaped.skipped);
+    let mut refused: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    for (kind, resource, stat) in found {
+        // By label alone, and only on `ENOENT`. Every other errno still means
+        // "adopt or report, never remove" — that rule is not what broke.
+        let reason = match stat {
+            PathStat::Present => LeftAlone::WorkspaceLive,
+            PathStat::Unreadable(_) => LeftAlone::PathUnreadable,
+            PathStat::Missing => {
+                let removed = docker::remove(
+                    run,
+                    &cwd,
+                    timeout,
+                    kind,
+                    std::slice::from_ref(&resource.reference),
+                    &mut || {},
+                );
+                let failures: Vec<String> = removed
+                    .iter()
+                    .filter_map(|(reference, error)| {
+                        error
+                            .as_ref()
+                            .map(|e| format!("{reference}: {}", e.message))
+                    })
+                    .collect();
+                if failures.is_empty() {
+                    reaped.resources.push(ReapTarget {
                         kind: resource.kind,
                         reference: resource.reference,
                         workspace: resource.workspace,
-                        reason: charkit_core::reap::LeftAlone::WorkspaceLive,
                     });
+                } else {
+                    refused
+                        .entry(resource.workspace.to_string())
+                        .or_default()
+                        .extend(failures);
+                }
+                continue;
+            }
+        };
+        reaped.reported.push(Reported {
+            kind: resource.kind,
+            reference: resource.reference,
+            workspace: resource.workspace,
+            reason,
+        });
+    }
+
+    let results: Vec<ResultRow> = refused
+        .into_iter()
+        .map(|(workspace, refused)| {
+            let mut row = ResultRow::new(workspace.clone(), Status::Failed);
+            row.error = Some(CharError {
+                class: ErrClass::ToolFailed,
+                r#where: workspace,
+                message: refused.join("; "),
+                next_action: Some(
+                    "remove what is named above by hand, then re-run `char clean --all \
+                     --orphaned --force-rebuild`"
+                        .to_string(),
+                ),
+            });
+            row
+        })
+        .collect();
+
+    let error = aggregate(&results, "workspaces");
+    let data = CleanData {
+        reaped,
+        results,
+        unreclaimed: Vec::new(),
+        skipped: Vec::new(),
+    };
+
+    Ok(Output::Clean(Box::new(match error {
+        None => Envelope::ok("clean", None, Status::Clean, data),
+        Some(error) => Envelope::failed("clean", None, error, data),
+    })))
+}
+
+/// What `--force-rebuild` would do, with nothing done.
+fn rebuild_preview<R: Run>(
+    run: &R,
+    cwd: &Path,
+    timeout: Duration,
+    sidecars: &[PathBuf],
+    recovered: Option<&str>,
+) -> Envelope<CleanDryRun> {
+    let mut preview = CleanDryRun {
+        would_release: sidecars
+            .iter()
+            .map(|path| format!("move aside {}", path.display()))
+            .collect(),
+        ..Default::default()
+    };
+
+    let mut notes = vec![namespace_note(recovered)];
+    for (_, resource, stat) in survey(run, cwd, timeout, &mut notes) {
+        let named = format!("{} {}", resource.kind, resource.reference);
+        match stat {
+            PathStat::Missing => preview.would_remove.push(named),
+            PathStat::Present => preview
+                .would_report
+                .push(format!("{named}: its workspace is alive")),
+            PathStat::Unreadable(why) => preview.would_report.push(format!(
+                "{named}: its path could not be read ({why}), which is not the same as gone"
+            )),
+        }
+    }
+    preview.would_report.extend(notes);
+
+    Envelope::ok("clean", None, Status::Clean, preview)
+}
+
+/// Every labelled resource on this daemon, with the `stat` of the path it
+/// carries.
+///
+/// Listing and `stat`-ing change nothing, which is what lets the preview share
+/// this with the pass that removes — a preview built from a different
+/// enumeration than the real pass acts on reads as a complete answer and is not
+/// one.
+fn survey<R: Run>(
+    run: &R,
+    cwd: &Path,
+    timeout: Duration,
+    skipped: &mut Vec<String>,
+) -> Vec<(docker::Kind, LabelledResource, PathStat)> {
+    // No lease to renew: the rebuild path holds none, because the store the
+    // leases live in is the thing that is broken.
+    let tick = &mut || {};
+    let mut found = Vec::new();
+
+    match docker::daemon_ready(run, cwd, timeout, tick) {
+        Ok(()) => {
+            for kind in docker::Kind::ALL {
+                match docker::list_labelled(run, cwd, timeout, kind, tick) {
+                    Ok(listed) => found.extend(listed.into_iter().map(|resource| {
+                        let stat = fs::stat(&resource.workspace_path);
+                        (kind, resource, stat)
+                    })),
+                    Err(error) => skipped.push(format!("enumeration: {}", error.message)),
                 }
             }
         }
-        Err(error) => reaped
-            .skipped
-            .push(format!("labelled resources: {}", error.message)),
+        Err(error) => skipped.push(format!("labelled resources: {}", error.message)),
     }
+    found
+}
 
-    Ok(Output::Clean(Box::new(Envelope::ok(
-        "clean",
-        None,
-        Status::Clean,
-        CleanData {
-            reaped,
-            results: Vec::new(),
-            unreclaimed: Vec::new(),
-            skipped: Vec::new(),
-        },
-    ))))
+/// What the caller has to know about the namespace on this path, stated as it
+/// actually behaves.
+///
+/// **The removal is by label alone in both cases**, so a note promising that
+/// another installation's resources are preserved would be false — and the note
+/// is the half the caller actually reads.
+fn namespace_note(recovered: Option<&str>) -> String {
+    match recovered {
+        Some(_) => concat!(
+            "the previous namespace was recovered and carried across, but this path still ",
+            "enumerates by label alone and removes on ENOENT whichever installation ",
+            "stamped a resource — which is why it takes two explicit flags",
+        ),
+        None => concat!(
+            "the previous namespace could not be read, so char cannot tell its own dead ",
+            "resources from another installation's; this path removes on ENOENT regardless ",
+            "— which is why it takes two explicit flags",
+        ),
+    }
+    .to_string()
 }
