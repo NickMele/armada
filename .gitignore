@@ -22,6 +22,12 @@
 .claude/clean-room.local
 .claude/contamination.local
 
+# Agent run logs. They record the raw prompt that started a run and every
+# iteration's transcript, so they hold whatever was typed — including the
+# source repo's name, which is the one string this repo exists to not carry.
+# Ignored here rather than in .git/info/exclude so the rule survives a clone.
+.gnhf/
+
 # macOS
 .DS_Store
 
