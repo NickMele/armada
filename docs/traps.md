@@ -581,8 +581,11 @@ Also non-malicious and silent: a filename containing a space is word-split into 
 
 **Not compose, and not platform-neutral.** This entry is `sh -c` word-splitting and command
 substitution with no compose involved, measured on darwin. `/bin/sh` is `bash` on darwin and
-`dash` on Debian and Ubuntu, and `crates/core`'s `shell_argv` wraps every `shell: true` command
-as `["/bin/sh", "-c", …]` on both — so the shell char actually invokes differs by platform.
+`dash` on Debian and Ubuntu, and char hardcodes it in **two** places: `template::shell_argv`
+for a `setup:` step, and `verbs::dispatch` inline for a `commands:` entry, which builds the
+same `["/bin/sh", "-c", …]` itself because it has to append shell-quoted passthrough after
+substitution. Grepping for the helper finds one of them. Both inherit whatever `/bin/sh` is on
+the machine, so the shell char actually invokes differs by platform.
 **The dash side is unverified.** Nothing here rests on it, because the schema makes
 `shell: true` beside `${files}` unrepresentable on every platform; what has not been measured
 is whether any *other* `shell: true` command char runs behaves differently under dash.
