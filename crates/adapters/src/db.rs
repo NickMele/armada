@@ -213,6 +213,40 @@ impl Db {
         tx.commit().map_err(|e| map_sqlite(&self.path, e))
     }
 
+    /// Read the namespace out of a database file, best-effort, swallowing
+    /// every failure.
+    ///
+    /// For the rebuild path only. `char clean --orphaned --force-rebuild`
+    /// exists because `char.db` cannot be read, so it must not *need* this to
+    /// work — but a database can be unreadable in ways that still leave `meta`
+    /// legible, and carrying the old namespace across keeps every resource
+    /// already stamped with it reapable. Failing to read it costs a namespace,
+    /// not the recovery.
+    pub fn peek_namespace(path: &Path) -> Option<String> {
+        let conn =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+        conn.query_row(
+            "SELECT value FROM meta WHERE key = ?1",
+            [NAMESPACE_KEY],
+            |row| row.get(0),
+        )
+        .ok()
+    }
+
+    /// Carry a namespace recovered from a replaced database into this one.
+    pub fn adopt_namespace(&mut self, namespace: &str) -> Result<(), CharError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
+            (NAMESPACE_KEY, namespace),
+        )
+        .map_err(|e| map_sqlite(&self.path, e))?;
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))
+    }
+
     /// This installation's namespace.
     pub fn namespace(&self) -> Result<String, CharError> {
         self.conn
@@ -854,6 +888,34 @@ mod tests {
         let namespace = db.namespace().unwrap();
         assert_eq!(namespace.len(), 36, "{namespace}");
         assert_eq!(&namespace[14..15], "4", "version 4 nibble");
+    }
+
+    #[test]
+    fn a_namespace_can_be_peeked_and_carried_into_a_replacement() {
+        let home = tempfile::tempdir().unwrap();
+        let original = Db::open(home.path()).unwrap().namespace().unwrap();
+        let peeked = Db::peek_namespace(&home.path().join("char.db"));
+        assert_eq!(peeked.as_deref(), Some(original.as_str()));
+
+        // The replacement adopts it, so every resource already stamped with it
+        // stays reapable across the rebuild.
+        let fresh = tempfile::tempdir().unwrap();
+        let mut replacement = Db::open(fresh.path()).unwrap();
+        assert_ne!(replacement.namespace().unwrap(), original);
+        replacement.adopt_namespace(&original).unwrap();
+        assert_eq!(replacement.namespace().unwrap(), original);
+    }
+
+    /// The recovery must not *need* it: a database that cannot be read at all
+    /// answers `None` rather than failing the rebuild.
+    #[test]
+    fn peeking_an_unreadable_database_answers_none_rather_than_failing() {
+        let home = tempfile::tempdir().unwrap();
+        assert_eq!(Db::peek_namespace(&home.path().join("absent.db")), None);
+
+        let junk = home.path().join("junk.db");
+        std::fs::write(&junk, b"this is not a database").unwrap();
+        assert_eq!(Db::peek_namespace(&junk), None);
     }
 
     #[test]

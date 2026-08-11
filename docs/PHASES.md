@@ -223,7 +223,7 @@ incompatible ones.
 
 ### Phase 2 — Ownership core: `init`, `clean`, `status`, `commands:`
 
-> **✓ Complete.** What it settled, and the two defects it found in `PLAN.md`, are recorded at
+> **✓ Complete.** What it settled, and what it sends back to `PLAN.md`, are recorded at
 > the end of this section. The five things it had to decide — the shape of `Ctx` and the three
 > seam traits, the claim loop's own `step()`, where `~/.char/config.toml` is read, the envelope
 > renderer and its snapshots, and `char.db`'s DDL — are settled from here, because every later
@@ -309,7 +309,18 @@ Plus one number `PLAN.md` never states: **the port base is 5460**, taken from `P
 rather than invented, with the ceiling at 32767 so a block never lands inside Linux's ephemeral
 range.
 
-#### Two defects phase 2 found in `PLAN.md`, for phase 2.5 to fix
+#### Three gaps closed after the phase merged
+
+A conformance pass before phase 3 opened found three things the done-whens did
+not reach, and closing them cost less than phase 3 inheriting them:
+
+| Gap | Why it was worth closing before phase 3 |
+|---|---|
+| **`PLAN.md` §3.1's aggregation precedence had no implementation.** `ErrClass::severity()` existed and was unit-tested, while `init` and `clean` each counted rows for themselves. `init`'s version was a live bug: it took the *first* failed row and hardcoded `tool_failed`, so a `setup:` command missing from `PATH` reported exit 1 — whose documented response is "that is a real result, report it" — instead of the `bad_config` exit 3 the caller had to act on. | The rule's stated purpose is that *two implementations cannot disagree*, and there were already two. `check` is where it becomes load-bearing, so phase 3 would have written a third. `envelope::aggregate` is now the only one. |
+| **`clean --orphaned --force-rebuild` was a stub** returning `bad_invocation`. | `PLAN.md` §4.3 specifies it as the way out of a `char.db` char cannot read, and *the recovery path must not need the thing that is broken* — so it runs at the entrypoint, before `App` opens anything. It moves the unreadable file aside rather than deleting it, and carries the old namespace across when that is still legible, so resources already stamped stay reapable. The shipped invocation is the one `PLAN.md` spells, `--all` optional: the pass is machine-scoped either way — it enumerates every labelled resource on the daemon and removes across namespaces — so it says that in its own output rather than demanding a flag the corpus does not. `--artifacts` and `--force` *are* refused, having no meaning on a path that reads no `char.yml` and takes no lease. `--dry-run` previews it, replacement database included. |
+| **The reap test covered networks and volumes, not containers.** | The code path is parameterised by kind, so a container adds little *on that argument* — which is the point: this corpus is explicit that arguments lose to measurements, and the phase's own wording is `docker run --label`. Gated on obtaining an image, skipped loudly otherwise. |
+
+#### Two defects and one open question phase 2 sends to phase 2.5
 
 Recorded rather than fixed, because phase 2.5 is the only phase licensed to send changes back.
 
@@ -317,6 +328,7 @@ Recorded rather than fixed, because phase 2.5 is the only phase licensed to send
 |---|---|---|
 | **`owned.kind` has no `release` member**, though `PLAN.md` §6.1 requires the resolved `owns.release:` command to be recorded at `char init` into the machine-global store — a workspace-local record would be gone in the orphan case, which is the one that matters. | `PLAN.md` §4.3's `kind` list vs §6.1 | Added `release` as a `kind`. A new kind value is additive, which the 0.x rule already permits; a new table would not have been. |
 | **No port base is stated anywhere.** `PLAN.md` §3.1's payload shows `5460-5469`, `PLAN.md` §4.3.1 has `port_block_size` but nothing to add it to. | `PLAN.md` §3.1 vs §4.3.1 | Took 5460 from the payload, as a constant rather than a seventh `config.toml` key — adding a key would have been a contract change. |
+| **Should `--force-rebuild` require `--all`?** The recovery is machine-scoped and cross-namespace by nature: it enumerates every labelled resource on the daemon and removes on `ENOENT` whichever installation stamped it, which is the one path `PLAN.md` §2.3.1's namespace filter cannot bound. `PLAN.md` §4.3 spells the invocation without `--all`, so that is what ships and the run states its own scope in `reaped.skipped` and in the `--dry-run` preview. Whether saying so is enough, or the scope should have to be typed, is the open question. **The consequence that sharpens it:** the rebuild writes a *fresh* database, as `PLAN.md` §4.3 specifies, which discards every workspace row and port block on the machine — so live workspaces re-claim on their next `init` and may be handed different ports while their services are still bound to the old ones. | `PLAN.md` §4.3 vs §2.3.1 | Nothing — this is a proposal, and phase 2.5 is the phase with a real repo behind it to answer from. |
 
 ### Phase 2.5 — A real repo adopts the ownership layer *(first contact)*
 

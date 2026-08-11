@@ -423,16 +423,28 @@ fn a_setup_step_that_cannot_start_is_bad_config_and_prints_to_stderr() {
     );
     assert!(error["next_action"].is_string());
 
+    // **The aggregate carries the row's class up rather than flattening it.**
+    // An earlier version of this assertion read `tool_failed` "whatever the row
+    // said", which pinned a bug: `init` picked the first failed row and
+    // hardcoded the class, so a config the caller must edit reported exit 1 —
+    // whose documented response is "that is a real result, report it" — instead
+    // of exit 3. The precedence rule exists so two implementations cannot
+    // disagree, and `init` was the second implementation.
+    assert_eq!(payload["error"]["class"], "bad_config");
+    assert_eq!(output.status.code(), Some(3), "bad_config is 3, not 1");
+    assert!(
+        payload["error"]["next_action"].is_string(),
+        "next_action is required for bad_config: {payload}"
+    );
+
     // Human: a failed verb's report belongs on stderr, so a pipeline reading
-    // stdout is never handed an error report as if it were an answer. The row's
-    // message is printed under the row; the envelope's class is the aggregate
-    // one, which for a failed setup step is `tool_failed` whatever the row said.
+    // stdout is never handed an error report as if it were an answer.
     let human = machine.run(&repo, &["init"]);
     assert!(!human.status.success());
     assert!(human.stdout.is_empty(), "nothing goes to stdout on failure");
     let text = String::from_utf8_lossy(&human.stderr);
     assert!(text.contains("could not be started"), "stderr: {text:?}");
-    assert!(text.contains("class: tool_failed"), "stderr: {text:?}");
+    assert!(text.contains("class: bad_config"), "stderr: {text:?}");
 }
 
 /// `clean --dry-run --artifacts` previews **exactly** what the real pass then
@@ -499,24 +511,6 @@ fn clean_artifacts_deletes_the_declared_files_and_reports_the_external_command()
     let status: Value =
         serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
     assert_eq!(status["data"]["results"].as_array().unwrap().len(), 0);
-}
-
-/// A stated limit rather than a silent one: `--force-rebuild` refuses, and the
-/// refusal carries the manual remedy.
-#[test]
-fn force_rebuild_refuses_and_says_what_to_do_instead() {
-    let machine = Machine::new();
-    let repo = machine.repo("main", OWNS_CONFIG);
-
-    let output = machine.run(&repo, &["clean", "--force-rebuild", "--json"]);
-    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(payload["error"]["class"], "bad_invocation");
-    assert_eq!(payload["error"]["where"], "--force-rebuild");
-    assert!(payload["error"]["next_action"]
-        .as_str()
-        .unwrap()
-        .contains("char.db"));
-    assert_eq!(output.status.code(), Some(2));
 }
 
 /// The human renderer on the ordinary success path: `status` prints its scope,
@@ -630,4 +624,210 @@ commands:
 #[test]
 fn the_binary_under_test_is_the_one_this_workspace_built() {
     assert!(char_binary().exists());
+}
+
+/// **`char clean --orphaned --force-rebuild` is the way out of a `char.db` char
+/// cannot read**, and the property under test is that *the recovery path does
+/// not need the thing that is broken*: every other verb fails against this
+/// database, and this one does not.
+#[test]
+fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    machine.run(&repo, &["init"]);
+
+    let db = machine.home.path().join(".char/char.db");
+    let namespace_before = namespace_of(&db);
+    std::fs::write(&db, b"this is not a database").unwrap();
+
+    // The premise: an ordinary verb cannot get past opening it, and says so as
+    // `environment` — the machine is broken, the repo is fine.
+    let broken = machine.run(&repo, &["status", "--json"]);
+    let payload: Value = serde_json::from_slice(&broken.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "environment");
+    assert_eq!(broken.status.code(), Some(6));
+
+    // `--orphaned` is required, because it is what bounds the removal to
+    // workspaces whose directory is gone.
+    let unbounded = machine.run(&repo, &["clean", "--all", "--force-rebuild", "--json"]);
+    let payload: Value = serde_json::from_slice(&unbounded.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "bad_invocation");
+
+    // The invocation `PLAN.md` §4.3 spells, run from inside a workspace and
+    // without `--all`: the corpus documents this exact form, so this exact form
+    // is what has to work.
+    let rebuilt = machine.run(&repo, &["clean", "--orphaned", "--force-rebuild", "--json"]);
+    assert!(
+        rebuilt.status.success(),
+        "{}",
+        String::from_utf8_lossy(&rebuilt.stderr)
+    );
+    let payload: Value = serde_json::from_slice(&rebuilt.stdout).unwrap();
+    assert_eq!(payload["status"], "CLEAN");
+
+    // **Moved aside, not deleted.** A recovery that destroys the evidence of
+    // what it recovered from cannot be diagnosed afterwards.
+    let reported = payload["data"]["reaped"]["skipped"].to_string();
+    assert!(reported.contains("moved aside"), "{payload}");
+
+    // Accepting the workspace-scoped-looking form means the report, not the
+    // command line, is what tells the caller how far the pass reached.
+    assert!(
+        reported.contains("machine-scoped") && reported.contains("across namespaces"),
+        "the run must state its own scope: {payload}"
+    );
+    let kept: Vec<_> = std::fs::read_dir(machine.home.path().join(".char"))
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains("unreadable"))
+        .collect();
+    assert_eq!(
+        kept.len(),
+        1,
+        "the unreadable file should be kept: {kept:?}"
+    );
+
+    // And the store works again.
+    assert!(machine.run(&repo, &["status", "--all"]).status.success());
+    let namespace_after = namespace_of(&db);
+    assert_ne!(namespace_after, "", "a fresh database has a namespace");
+    assert_ne!(
+        namespace_after, namespace_before,
+        "a database overwritten with junk cannot yield its old namespace, so the \
+         replacement takes a new one and says so"
+    );
+}
+
+/// **A preview flag may not delete data**, and this is the operation it would
+/// matter most for: `--force-rebuild` removes labelled resources across
+/// namespaces and replaces the machine-global store, so `--dry-run` has to
+/// leave both exactly as it found them.
+#[test]
+fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    machine.run(&repo, &["init"]);
+
+    let db = machine.home.path().join(".char/char.db");
+    let junk = b"this is not a database";
+    std::fs::write(&db, junk).unwrap();
+
+    let previewed = machine.run(
+        &repo,
+        &[
+            "clean",
+            "--dry-run",
+            "--all",
+            "--orphaned",
+            "--force-rebuild",
+            "--json",
+        ],
+    );
+    assert!(
+        previewed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&previewed.stderr)
+    );
+    let payload: Value = serde_json::from_slice(&previewed.stdout).unwrap();
+    assert_eq!(payload["status"], "CLEAN");
+    let would_release = payload["data"]["would_release"].to_string();
+    assert!(
+        would_release.contains("move aside") && would_release.contains("char.db"),
+        "the preview must name the file it would move aside: {payload}"
+    );
+    // The half a caller can misread: "moved aside" alone reads as "the store is
+    // otherwise preserved", and the opposite is true.
+    assert!(
+        would_release.contains("create a fresh")
+            && would_release.contains("port block")
+            && would_release.contains("new namespace"),
+        "the preview must state that a fresh database replaces it, and what that costs: \
+         {payload}"
+    );
+    assert!(
+        payload["data"]["results"].is_null(),
+        "a dry run answers with would_*, not results[]: {payload}"
+    );
+
+    // The unreadable file is still the unreadable file: not moved aside, and
+    // not replaced by a fresh database.
+    assert_eq!(
+        std::fs::read(&db).unwrap(),
+        junk,
+        "the database was touched by a preview"
+    );
+    let aside: Vec<_> = std::fs::read_dir(machine.home.path().join(".char"))
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains("unreadable"))
+        .collect();
+    assert!(
+        aside.is_empty(),
+        "a preview moved the database aside: {aside:?}"
+    );
+
+    // And the recovery is still needed, which is the same statement from the
+    // other side: nothing was repaired.
+    let after: Value =
+        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+    assert_eq!(after["error"]["class"], "environment");
+}
+
+/// `--artifacts` and `--force` mean nothing on a path that reads no `char.yml`
+/// and takes no lease, so they are refused rather than quietly dropped —
+/// a flag that is silently ignored is indistinguishable from one that worked.
+///
+/// `--all` is *not* among them: `PLAN.md` §4.3 spells the recovery without it,
+/// so it is accepted with or without, and the run states its own machine scope
+/// in its output instead.
+#[test]
+fn force_rebuild_refuses_every_flag_that_has_no_meaning_on_it() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    machine.run(&repo, &["init"]);
+
+    for args in [
+        &[
+            "clean",
+            "--all",
+            "--orphaned",
+            "--force-rebuild",
+            "--artifacts",
+            "--json",
+        ][..],
+        &[
+            "clean",
+            "--all",
+            "--orphaned",
+            "--force-rebuild",
+            "--force",
+            "--json",
+        ][..],
+    ] {
+        let refused = machine.run(&repo, args);
+        let payload: Value = serde_json::from_slice(&refused.stdout).unwrap();
+        assert_eq!(
+            payload["error"]["class"],
+            "bad_invocation",
+            "`char {}` was accepted: {payload}",
+            args.join(" ")
+        );
+        assert_eq!(refused.status.code(), Some(2));
+    }
+}
+
+fn namespace_of(db: &std::path::Path) -> String {
+    rusqlite::Connection::open(db)
+        .ok()
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT value FROM meta WHERE key = 'namespace'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+        })
+        .unwrap_or_default()
 }
