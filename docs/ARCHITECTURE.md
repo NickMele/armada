@@ -795,12 +795,20 @@ runs over **every tracked file**, on two rules:
 
 | Rule | What it matches |
 |---|---|
-| the configured private names | the same values the pattern above is extended from, read through the same two sources, so a name configured once arms both checks |
+| the configured private names | the same values the pattern above is extended from, read through the same two sources, so a name configured once arms both checks — in a file's **contents and in its own path** |
 | this machine's home directory | `$HOME`, read at run time; its literal value may not appear in any tracked file |
 
 It runs inside `cargo xtask doclint`, alongside the grep. `docs/harvest.md` is exempt from the
 first rule and not from the second, for the reason given below: describing the source repo is
 its job, and carrying the path of the machine that wrote it is not.
+
+**Why the first rule reads the path and not only the contents.** A document called
+`docs/<name>-port.md` publishes the name in the file listing, in the GitHub tree and in every
+`git log --stat`, with nothing inside it that a content grep could find. It is also the copy
+nobody thinks to check, because the habit the rest of this section builds is *grep the text*.
+The path costs one extra match per file to cover. Findings against a path are reported at line
+0 — there is no line, and naming line 1 would send a reader looking for a word that is not on
+it.
 
 **Why the running machine's home, rather than the shape of a home path.** `/Users/<name>/` and
 `/home/<name>/` are ordinary things for a test to construct — `crates/adapters` builds
@@ -816,6 +824,35 @@ states them locally.
 the very strings this check hunts for, and `target/` is full of them after any build. A walk
 would have to reimplement `.gitignore` to avoid reporting both. What is not tracked is not
 published, so it is not a leak — asking git is the definition the check actually wants.
+
+**How the name rule is armed on CI.** Both name-based rules — this one and the grep's appended
+alternative — are configured locally by a file that is deliberately untracked, and a runner
+checks out only what is tracked. Left there, the merge gate would run the one check that cannot
+say what it is looking for and pass every time, which is worse than not having it: a green gate
+that structurally cannot fail is the failure mode this section already records twice. So the
+name is a **repository secret**, `CHARKIT_CONTAMINATION_EXTRA`, exported to the `doclint` step
+in `gate.yml` — the CI counterpart of `.claude/contamination.local`, holding the same
+`|`-separated value and read by the same precedence.
+
+| | Where the name comes from |
+|---|---|
+| a developer's machine | `.claude/contamination.local`, untracked, or the exported variable |
+| CI | the repository secret of the same name, exported to the `doclint` step |
+| a fresh clone that has configured neither | nowhere — the rule finds nothing and the five public alternatives run on their own |
+
+Two consequences, both accepted. An **unset secret renders as the empty string**, which is the
+documented off switch, so a fork or a clone without it gets today's no-op rather than a red
+gate for a condition it cannot fix. And **a pull request from a fork gets no secrets at all**,
+so the name rule is disarmed on exactly those PRs; the push to `main` re-runs the gate with the
+secret, which is where the branch is caught. GitHub masks the secret in logs, so a finding
+gives the file and line and prints the match as `***` — enough to fix, and the whole reason the
+name is not in the repository.
+
+Because a disarmed rule is invisible in a passing run, **the summary line says which one it
+was**: a run with no name configured reports `privacy (name rule unconfigured)` rather than
+`privacy`. Both rules still execute; the label is the difference between *nothing was found*
+and *nothing was looked for*, which is the distinction this section has already been caught by
+twice.
 
 ---
 

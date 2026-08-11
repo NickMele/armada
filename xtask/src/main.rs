@@ -94,7 +94,7 @@ fn main() -> ExitCode {
         Some("privacy") => match privacy::check(&root) {
             Ok(f) => {
                 findings.extend(f);
-                ran.push("privacy");
+                ran.push(privacy_label(&root));
             }
             Err(e) => {
                 eprintln!("xtask: privacy: {e}");
@@ -119,7 +119,7 @@ fn main() -> ExitCode {
             match privacy::check(&root) {
                 Ok(f) => {
                     findings.extend(f);
-                    ran.push("privacy");
+                    ran.push(privacy_label(&root));
                 }
                 Err(e) => {
                     eprintln!("xtask: privacy: {e}");
@@ -147,6 +147,21 @@ fn main() -> ExitCode {
     }
     println!("\n{} finding(s) — {}", findings.len(), ran.join(", "));
     ExitCode::from(1)
+}
+
+/// How the privacy check is named in the summary line.
+///
+/// Both of its rules run either way, but rule 1 has nothing to match until a
+/// private name is configured — locally in `.claude/contamination.local`, on CI
+/// in the repository secret (`ARCHITECTURE.md` §2.4). Reporting that run as a
+/// plain `privacy` claims a pass the check never made, which is the same
+/// silently-green failure §2.4 has already been bitten by twice.
+fn privacy_label(root: &Path) -> &'static str {
+    if privacy::name_rule_armed(root) {
+        "privacy"
+    } else {
+        "privacy (name rule unconfigured)"
+    }
 }
 
 /// The repo root, from `CARGO_MANIFEST_DIR` rather than the cwd.

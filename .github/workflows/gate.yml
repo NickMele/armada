@@ -64,7 +64,23 @@ jobs:
       #    ARCHITECTURE.md §2.4 rather than from a copy, plus the privacy gate
       #    from the same section over every tracked file. `doclint` also
       #    resolves every § cross-reference and parses every fenced block.
+      #
+      #    Both of those checks ban the source repo's name, and neither can be
+      #    told what it is by a file in a public repository — locally that is
+      #    the untracked `.claude/contamination.local`, and a runner has no
+      #    such file. The repository secret is the CI equivalent: set
+      #    `CHARKIT_CONTAMINATION_EXTRA` in Settings → Secrets → Actions to the
+      #    `|`-separated names, and the merge gate enforces the scrub instead of
+      #    quietly passing. Unset renders as the empty string, which §2.4's
+      #    precedence reads as the off switch — the same no-op as today, not a
+      #    failure. Secrets are masked in logs, so a finding names the file and
+      #    line and prints the match as `***`; that is enough to fix it and is
+      #    the point of not putting the name in the repo. Known gap, and the
+      #    same one GitHub gives every secret: a pull request from a fork gets
+      #    no secrets, so the name rule is disarmed there.
       - name: doclint
+        env:
+          CHARKIT_CONTAMINATION_EXTRA: ${{ secrets.CHARKIT_CONTAMINATION_EXTRA }}
         run: cargo xtask doclint
 
       # 5. crate boundaries — the layers contract from ARCHITECTURE.md §1.5.

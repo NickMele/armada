@@ -156,10 +156,12 @@ implementation — no verbatim code.
 **That repo's name is banned everywhere, not just under `src/`, and so is your home
 directory.** `cargo xtask privacy` runs over every tracked file — prose included, because this
 repo is public and its documentation is the larger surface. It matches the names you
-configured above, plus the literal value of `$HOME` on the machine running it: write paths
-relative to the repo or as `~/`, never as `/Users/someone/...`. `docs/harvest.md` is exempt
-from the name rule and not from the home-directory one. Both rules are stated in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 with the grep.
+configured above, in each file's contents *and in its path*, plus the literal value of `$HOME`
+on the machine running it: write paths relative to the repo or as `~/`, never as
+`/Users/someone/...`. `docs/harvest.md` is exempt from the name rule and not from the
+home-directory one. Both rules are stated in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 with the grep, which also covers how to
+give CI the name — a repository secret, since the untracked local file never reaches a runner.
 
 A green grep only means no *crude* contamination. The subtler failure — an abstraction shaped
 around one repo because that is the only repo anyone saw — is invisible to it, and is what the

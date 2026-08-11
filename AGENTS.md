@@ -56,11 +56,12 @@ different rule instead — see rule 2.
 
 **The source repo's name is banned in every tracked file, not only those two directories — and
 so is your home directory.** `cargo xtask privacy`, inside `doclint`, matches the configured
-names anywhere in the repo plus the literal `$HOME` of the machine running it. This repo is
+names anywhere in the repo — in a file's contents *and in its own path*, so do not name a file
+after that repo either — plus the literal `$HOME` of the machine running it. This repo is
 public and its prose is the larger surface, which is where every reference that has had to be
 removed so far actually lived. Write paths relative to the repo or as `~/`. `docs/harvest.md`
 is exempt from the name rule and not from the home-directory one; both are stated in
-`ARCHITECTURE.md` §2.4.
+`ARCHITECTURE.md` §2.4, along with how CI is told the name it cannot read from the checkout.
 
 This includes docstrings, comments and test fixture strings. When you need to illustrate the
 `command` driver or a component root, use neutral examples:

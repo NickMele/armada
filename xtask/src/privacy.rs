@@ -11,10 +11,11 @@
 //!
 //! **Two rules, both mechanical, neither with an allowlist.**
 //!
-//! 1. *The configured private names.* Read from the same two sources §2.4's
-//!    pattern extends from — one name configured once arms both checks. Nothing
-//!    configured means this rule finds nothing, exactly as the grep runs its
-//!    five public alternatives on their own.
+//! 1. *The configured private names*, in a file's contents **and in its path**.
+//!    Read from the same two sources §2.4's pattern extends from — one name
+//!    configured once arms both checks. Nothing configured means this rule
+//!    finds nothing, exactly as the grep runs its five public alternatives on
+//!    their own.
 //! 2. *This machine's home directory.* `$HOME` is read at run time and its
 //!    literal value may not appear in any tracked file. It needs no
 //!    configuration, it is different on every machine and on CI, and it is
@@ -50,6 +51,18 @@ const EXEMPT: &[&str] = &["docs/harvest.md"];
 /// A home directory this short is a container's or a misconfiguration's, not a
 /// person's, and greping every tracked file for `/` would report the repository.
 const MIN_HOME: usize = 2;
+
+/// Whether rule 1 has anything at all to look for.
+///
+/// §2.4's discipline — *a check that cannot match is indistinguishable from a
+/// clean repository* — applies to what the gate **says** as much as to what it
+/// does. On a checkout that has configured no name, half of this gate is a
+/// no-op, and a bare `clean — …, privacy` reads as though both rules passed.
+/// The caller labels the run instead, so the disarmed state is visible in the
+/// one line anybody actually looks at.
+pub fn name_rule_armed(root: &Path) -> bool {
+    !extra_alternatives(root, std::env::var(EXTRA_ENV).ok()).is_empty()
+}
 
 pub fn check(root: &Path) -> Result<Vec<Finding>, String> {
     let names = extra_alternatives(root, std::env::var(EXTRA_ENV).ok());
@@ -99,6 +112,27 @@ fn scan(
 
     let mut findings = Vec::new();
     for rel in files {
+        // The path before the contents. A document named after the source repo
+        // leaks it in the file listing, in every `git log --stat` and in the
+        // GitHub tree, whether or not a single line inside it says the word —
+        // and a file whose *name* is the leak is one nobody thinks to grep.
+        // Line 0 because there is no line: the finding is the path itself.
+        if !EXEMPT.contains(&rel.as_str()) {
+            if let Some(re) = &named {
+                if let Some(m) = re.find(rel) {
+                    findings.push(Finding {
+                        file: rel.clone(),
+                        line: 0,
+                        message: format!(
+                            "the file's own path names a configured private repo: `{}` — \
+                             rename the file (ARCHITECTURE.md §2.4)",
+                            m.as_str()
+                        ),
+                    });
+                }
+            }
+        }
+
         let Ok(text) = std::fs::read_to_string(root.join(rel)) else {
             continue;
         };
@@ -240,6 +274,23 @@ mod tests {
             "not caught unconfigured"
         );
         assert_eq!(findings(&root, &files, &[INVENTED], None).len(), 1);
+    }
+
+    #[test]
+    fn a_file_named_after_the_source_repo_is_caught_even_when_its_contents_are_clean() {
+        let rel = format!("docs/{INVENTED}-port.md");
+        let (root, files) = scratch("filename", &[(&rel, "Nothing in here says it.\n")]);
+        assert!(
+            findings(&root, &files, &[], None).is_empty(),
+            "not caught unconfigured"
+        );
+
+        let found = findings(&root, &files, &[INVENTED], None);
+        assert_eq!(found.len(), 1);
+        assert!(found[0].message.contains("the file's own path"));
+        // No line to point at, and claiming line 1 would send a reader looking
+        // for a word that is not on it.
+        assert_eq!(found[0].line, 0);
     }
 
     #[test]
