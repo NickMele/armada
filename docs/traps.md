@@ -21,9 +21,10 @@ between phases.
   put a darwin-only result in this file as though it were general — it was wrong on Linux,
   and CI found it. An unqualified entry here reads as "true everywhere", so an entry measured
   in one place says where.
-- **Invert the assertion that establishes an entry, once, and watch it fail.** The same entry
-  cited an assertion that could not fail, so its evidence was decoration. This file's whole
-  claim is that it was measured rather than read; an assertion nobody falsified is neither.
+- **An entry's evidence must have been falsified once before it is cited here.** The same entry
+  rested on an assertion that could not fail, so its evidence was decoration. This file's whole
+  claim is that an entry was measured rather than read, and an assertion nobody inverted is
+  neither — the general rule, and the incident, are owned by `ARCHITECTURE.md` §2.1.1.
 
 Record for each: what was measured, the version it was measured against, the command that
 shows it, and what breaks if you assume otherwise.
@@ -32,8 +33,10 @@ shows it, and what breaks if you assume otherwise.
 
 ## SQLite — the lease mechanism depends on these
 
-Measured 2026-08-09. **Language-neutral: every one of these applies whatever charkit is
-written in.** This is the machinery `PLAN.md` §4.3 rests on.
+Run on darwin 2026-08-09. **Language-neutral, and deliberately not platform-qualified beyond
+that:** every one of these applies whatever charkit is written in, and locking, `BEGIN
+IMMEDIATE` and `busy_timeout` are properties of SQLite rather than of an operating system.
+This is the machinery `PLAN.md` §4.3 rests on.
 
 ### `BEGIN IMMEDIATE` is mandatory. `busy_timeout` cannot substitute for it
 
@@ -79,7 +82,8 @@ lost; anything that failed in microseconds is a design error in the transaction.
 
 ## MCP
 
-Verified against the live specification and SDK, phase 0.
+Verified against the live specification and SDK, phase 0, on darwin — the specification's own
+wording and the SDK's module layout are the same wherever it is installed.
 
 ### The base protocol is stateless as of spec revision `2026-07-28`
 
@@ -113,6 +117,12 @@ durable handles."* This is the standard shape for exposing something like a ten-
 
 ## Ports — what a bind probe can and cannot see
 
+**Measured on darwin, and not re-run on Linux.** What a `bind()` refuses is decided by the
+kernel, and the `IPV6_V6ONLY` and `SO_REUSEPORT` rows below are the two that could plausibly
+answer differently there — treat them as unverified on Linux until someone measures them, and
+do not assume this section transfers because the last kernel-level section in this file did
+not.
+
 ### An IPv6-only listener is invisible to an IPv4 bind probe
 
 | Holder | IPv4 `bind()` probe |
@@ -129,7 +139,7 @@ rather than an exotic case.
 
 ### A bind probe is itself a bind, so two concurrent probes collide
 
-Measured 2026-08-10, while writing phase 2's golden suite. Two processes (or two
+Measured 2026-08-10 on darwin, while writing phase 2's golden suite. Two processes (or two
 threads) probing the *same* port at the same instant make one of them see the
 other's momentary listener and report the port taken:
 
@@ -154,7 +164,10 @@ than a bug to fix.
 ## Rust — the POSIX primitives, and the rules each one forces
 
 Both sit in machinery `PLAN.md` §7 calls load-bearing, and both are one line you must not
-forget. Measured 2026-08-09 against Rust 1.97.1.
+forget. Measured 2026-08-09 on darwin, against Rust 1.97.1. **Every entry below is darwin-only
+and unverified on Linux unless it names a platform.** This is the section where the one entry
+that *was* re-run on Linux — the zombie-only group, at the end — came back different, so the
+absence of a Linux column here is a gap rather than a claim of agreement.
 
 ### `SIGPIPE` is set to `SIG_IGN` at startup — `char status | head` panics until you fix it
 
@@ -303,8 +316,9 @@ version of this note said two and omitted the one the whole cleanup model depend
 
 ## Serialization and parsing — what the golden snapshots depend on
 
-Measured 2026-08-09 against `serde_json` 1.0.151 and `serde_yaml_ng` 0.10.0, on the crates the
-binary actually uses.
+Measured 2026-08-09 on darwin, against `serde_json` 1.0.151 and `serde_yaml_ng` 0.10.0 — the
+crates the binary actually uses. Key ordering and scalar coercion are decided by those crates
+rather than by the host, so no platform qualifier belongs on the entries themselves.
 
 ### `serde_json::Value` sorts object keys. Structs and `BTreeMap`s do not
 
@@ -354,7 +368,9 @@ errors, which is what makes PLAN.md §4.1.1's decision 4 free.
 
 ## Typer / Click exit codes *(historical — charkit is Rust)*
 
-Measured against **Typer 0.27.1**, phase 0. **Kept because the source repo being harvested in
+Measured on darwin against **Typer 0.27.1**, phase 0, and not re-run on Linux — the exit codes
+are Click's own, but the broken-pipe entry below turns on a signal disposition and is a
+kernel-adjacent claim this file has been burned by before. **Kept because the source repo being harvested in
 phase 3 is Python**, so these remain true of the behaviour being harvested — and because the
 exit-code conclusions they produced (130 and 2 are conventional; broken pipe needs an explicit
 decision) carried over to the Rust design intact.
@@ -403,9 +419,11 @@ signal-derived codes, covering `130` and `141` together.
 
 ## Docker CLI — reading labels back off a resource
 
-Measured against **Docker 29.6.2**, 2026-08-10. char stamps three labels on
-everything it creates and reaps by them, so reading them back is the other half
-of the mechanism.
+Measured on darwin against **Docker 29.6.2**, 2026-08-10. char stamps three
+labels on everything it creates and reaps by them, so reading them back is the
+other half of the mechanism. `ls --format` and `inspect --format` are rendered
+client-side by the CLI's own templater, so these are properties of the docker
+client rather than of the host.
 
 ### `docker image ls --format` cannot print labels at all, unlike every other `ls`
 
@@ -445,7 +463,9 @@ failure the label exists to prevent.
 
 ## Docker Compose
 
-Measured against **Docker Compose v5.3.1**, 2026-08-09. Eleven entries. **An earlier version of this section
+Measured on darwin against **Docker Compose v5.3.1**, 2026-08-09; `config` resolves, merges and
+interpolates client-side, so these are the compose CLI's behaviour rather than the host's.
+Eleven entries. **An earlier version of this section
 was headed v2.24.3-desktop.1, which is not what is installed** — so every entry below was
 re-run against v5.3.1 before being trusted. Four reproduced unchanged; one is version-dependent
 and is marked.

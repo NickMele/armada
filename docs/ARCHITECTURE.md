@@ -19,7 +19,7 @@
 | § | | |
 |---|---|---|
 | **1** | Architecture principles | 1.1 seams · 1.2 pure core & the reducer · 1.3 no logic in commands · 1.4 no ambient state · 1.5 dependencies inward · 1.6 machine-readable output & exit codes · 1.7 typed failures · 1.8 secrets |
-| **2** | SDLC principles | 2.1 TDD scope · 2.2 branching · 2.3 commits · 2.4 the merge gate & contamination grep · 2.5 versioning · 2.6 dogfooding · 2.7 phase 3 clean-room · **2.8 document ownership & precedence** |
+| **2** | SDLC principles | 2.1 TDD scope · 2.1.1 what a green test does not prove · 2.1.2 spec divergence · 2.2 branching · 2.3 commits · 2.4 the merge gate & contamination grep · 2.5 versioning · 2.6 dogfooding · 2.7 phase 3 clean-room · **2.8 document ownership & precedence** |
 | **3** | Decisions recorded, and the test tiers | |
 | **4** | What was deliberately not decided | |
 
@@ -915,6 +915,8 @@ which one was wrong.
 | The merge gate's checks | `ARCHITECTURE.md` §2.4 |
 | Test tiers | `ARCHITECTURE.md` §3 |
 | Harvester / implementer split | `ARCHITECTURE.md` §2.7 |
+| Inverting a new assertion, and what a green test does not prove | `ARCHITECTURE.md` §2.1.1 |
+| Shipped behaviour disagreeing with the spec is a divergence | `ARCHITECTURE.md` §2.1.2 |
 | `--json` envelope and `data.results[]` | `PLAN.md` §3.1 |
 | Terminal-state enum | `PLAN.md` §3 |
 | The `char.yml` contract, key by key | `crates/core/schema/char.schema.json` |
