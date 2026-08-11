@@ -218,21 +218,59 @@ whose handle is dropped without `wait()` leaves a `<defunct>` entry until char i
 **Rule: every spawned `Child` is waited on, or explicitly reaped.** A long-lived
 `char check --detach` accumulating zombies across a fifteen-minute run is the case that bites.
 
-### A zombie answers `ESRCH` to `kill(pid, 0)` — so "is it alive?" and `ps` disagree
+### A group holding only a zombie: `killpg` fails on darwin and **succeeds** on Linux
 
-Measured 2026-08-10 on darwin, while writing phase 2's process-group suite.
+Measured 2026-08-10 on darwin and, through CI, on `ubuntu-latest`. A child in
+its own session — so its pid genuinely is a process-group id — exits and is not
+waited on:
 
 ```
-child exits, not yet waited on
-  kill(pid, 0)              -> -1, ESRCH      "gone"
-  ps -o stat= -p <pid>      -> Z              still listed
+ps -o stat= -p <pid>     ->  Z
+killpg(pgid, 0)          -> -1  EPERM      (darwin)
+killpg(pgid, 0)          ->  0  succeeds   (Linux)
+kill(pid, 0)             ->  0  succeeds   (darwin — the *process* still exists)
+after waitpid:
+killpg(pgid, 0)          -> -1  ESRCH      (both)
 ```
 
-**If you assume otherwise:** a test that kills a process group and then counts
-`ps` output finds one process left and concludes `killpg` did not reach the
-tree — when what it actually found is char's own un-reaped direct child. The
-liveness probe is right and the count is right; they are answering different
-questions. **Confirm a kill with the signal-0 probe, and reap before counting.**
+Three things there are each easy to get backwards. A zombie is still a member of
+its group, so a signal-0 probe is answering "does this group still have
+members", not "is anything running". The two platforms then disagree about that
+question while the corpse is unreaped. And the errno on darwin is **`EPERM`, not
+`ESRCH`** — code that branches on `ESRCH` specifically sees neither the darwin
+answer nor the Linux one.
+
+**If you assume otherwise:** char confirms a kill with the signal-0 probe, and
+for a caller that *parented* the group and has not reaped it the two platforms
+then fail in opposite directions. On darwin the zombie-only group answers
+`EPERM`, so `group_alive` is false and `stop_group` takes its first grace poll
+as proof the group is empty: it returns `gone`, never waits out the grace and
+never sends its SIGKILL — the right answer for the wrong reason. On Linux the
+same probe succeeds, so `stop_group` waits out the whole grace period,
+escalates to SIGKILL, and *still* reads the group as alive, returning
+`gone: false`. A group that died on the first SIGTERM therefore reports `CLEAN`
+on darwin and `FAILED` on Linux, and only one of those is even accidentally
+right. This is a test-shaped hazard rather than a production one, because the
+case char actually reclaims is an **orphan**: its parent is gone, so init reaps
+it the moment it dies and both platforms answer `ESRCH`. **Reap before reading
+the probe as "empty", and reap before counting `ps` output.**
+
+> **This entry was wrong in its first form, and how it was wrong is the
+> instructive part.** It read *"a zombie answers `ESRCH` to `kill(pid, 0)`"*,
+> measured on darwin only, and cited an assertion that appeared to prove it. The
+> assertion was **vacuous**: it passed the pid of a child spawned *without*
+> `setsid` to a `killpg` probe, so it interrogated a process-group id that had
+> never existed, and any answer would have looked like confirmation. Two rules
+> this file already states were both broken at once — measure rather than infer,
+> and measure on the platforms the project supports. It survived local review
+> and was caught by CI running the same suite on Linux.
+>
+> The correction then made the same mistake once more, and review caught that:
+> the **If you assume otherwise** paragraph above attributed the Linux sequence
+> — whole grace, SIGKILL, group still alive — to both platforms, a sentence
+> carried over from an earlier summary rather than read off the table a dozen
+> lines above it in this very entry. Reasoning from the narrative instead of
+> from the numbers is the failure this entry exists to document.
 
 ### `std::process::exit` skips a `BufWriter` flush — and it is size-dependent
 
