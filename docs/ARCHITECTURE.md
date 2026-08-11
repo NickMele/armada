@@ -853,6 +853,15 @@ mechanisms, in descending order of how much weight they carry:
    hook denies a call by returning `permissionDecision: "deny"`. Default-deny the source-repo
    path for **every** agent, and allow it for the harvester alone — an allowlist, so a new
    agent added later is denied by default rather than silently permitted.
+
+   **The path it guards is configuration, not a constant.** charkit is public and the repo it
+   is built away from is not, so a committed path would publish the thing the guard exists to
+   keep out, and would be nobody else's path in every clone. The hook takes a path fragment
+   from `CHARKIT_CLEAN_ROOM_PATH`, or from an untracked `.claude/clean-room.local` when no
+   variable is exported — the file being what survives a hook run that inherits no shell.
+   Neither set means no source repo has been named and the hook permits: unconfigured is not
+   a clean room to be outside of, and the fail-closed reading is not even available, because
+   the empty fragment is a substring of every payload and would deny all work.
 2. **A narrow `tools:` list** on the implementer. Real but coarse: `tools:` is an allowlist
    and cannot express paths, so it reduces surface without addressing the actual boundary.
 3. **Prompt instructions.** Documentation of intent. They are why the agent *wants* to

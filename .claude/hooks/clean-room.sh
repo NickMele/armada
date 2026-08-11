@@ -31,19 +31,56 @@
 #
 # THE ONE NARROWING, AND ITS REASON. For tools that write, only the target path
 # is matched — not the content. The corpus legitimately discusses the source
-# repo by name (PLAN.md §1 cites it as the project's one piece of evidence), so
-# matching content would deny an agent editing this project's own documents,
-# which is ordinary work and not a clean-room breach. Reading is the vector;
-# writing a document that mentions a path is not. Every other tool name — one
-# renamed between versions, an MCP tool nobody listed — takes the reading path,
-# so the tool dimension is an allowlist too.
+# repo (PLAN.md §1 cites it as the project's one piece of evidence), so matching
+# content would deny an agent editing this project's own documents, which is
+# ordinary work and not a clean-room breach. Reading is the vector; writing a
+# document that mentions a path is not. Every other tool name — one renamed
+# between versions, an MCP tool nobody listed — takes the reading path, so the
+# tool dimension is an allowlist too.
+#
+# WHERE THE GUARDED PATH COMES FROM, AND WHY NOT FROM HERE. charkit is public.
+# A guard that names the repo it is guarding publishes the one thing it exists
+# to keep out, and every clone inherits a path that is nobody else's. So the
+# path is configuration, in one of two places:
+#
+#   CHARKIT_CLEAN_ROOM_PATH   a path fragment — `Development/acme-app` — which
+#                             wins whenever it is exported, empty included.
+#   .claude/clean-room.local  the same fragment on a line of its own, `#`
+#                             comments and blanks skipped, first line used.
+#                             Untracked (see .gitignore), and unlike the
+#                             variable it survives a hook run that inherits no
+#                             shell — an editor launched from the desktop.
+#
+# Neither set is not a failure to fail closed: it means no source repo has been
+# named, so there is nothing to be outside of and the hook permits. Treating it
+# as a failure is not even available — the empty fragment matched with
+# `grep -F` is in every payload, so "deny when unconfigured" denies all work.
 
 set -u
 
-GUARDED='Development/chariot'
+# Exported wins over the file, and exported-empty is a deliberate off switch —
+# hence `+set` rather than `:-`, which cannot tell the two apart.
+if [ -n "${CHARKIT_CLEAN_ROOM_PATH+set}" ]; then
+	GUARDED=$CHARKIT_CLEAN_ROOM_PATH
+else
+	CONFIG="$(dirname "$0")/../clean-room.local"
+	GUARDED=$(
+		[ -r "$CONFIG" ] && grep -v '^[[:space:]]*#' "$CONFIG" |
+			sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' |
+			grep -v '^$' | head -n 1
+	)
+fi
+
 HARVESTER='harvester'
 
+# Read first, exit second: closing stdin on a writer that is still sending gets
+# reported as a broken hook, which is the shape this file spends its length
+# avoiding.
 input=$(cat)
+
+# Nothing named, nothing to guard — and no payload scanned, on every tool call
+# in every clone that never configures this.
+[ -n "$GUARDED" ] || exit 0
 
 # `field <container> <key>`: the value of a string field, at one exact place in
 # the payload. `field "" tool_name` reads a top-level key; `field tool_input
@@ -115,13 +152,17 @@ field() {
 #
 # The text handed here is raw JSON bytes — `field` returns what is between the
 # quotes and the reading path matches the payload itself — so JSON's own escapes
-# are still in it, and `Development\/chariot` is the guarded path written a
-# second way. `find -regex`, `sed s///` and `grep -E` all put a backslash there
+# are still in it, and a backslash before the separator is the guarded fragment
+# written a second way. `find -regex`, `sed s///` and `grep -E` all put one there
 # in ordinary use. Dropping every backslash before matching can only make a path
 # easier to see, never harder, so the normalisation errs towards denying. `tr`
 # and `grep` are each one pass, which is what keeps this linear on a payload
 # carrying a whole file.
+#
+# The empty-fragment check is redundant with the exit above and stays anyway: it
+# is the difference between reordering this file and disabling it.
 reaches_the_source_repo() {
+	[ -n "$GUARDED" ] || return 1
 	printf '%s' "$1" | tr -d '\\' | grep -q -F "$GUARDED"
 }
 

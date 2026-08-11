@@ -8,15 +8,23 @@
 //! permitting.
 //!
 //! It lives in `xtask/` because that is dev tooling and outside the
-//! contamination grep's scope (`crates/` and `tests/`). The guarded path is
-//! still assembled at runtime rather than written as one literal — the same
-//! discipline §2.4 requires of the grep's own self-test, and cheap insurance
-//! against the greped set ever widening.
+//! contamination grep's scope (`crates/` and `tests/`).
+//!
+//! Every path here is invented. The hook takes the repo it guards from
+//! configuration rather than carrying one (`ARCHITECTURE.md` §2.7), so these
+//! tests supply their own — which is also what lets them assert on the two
+//! states a committed path could never have: configured, and not.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+
+/// The variable the hook reads its guarded fragment from.
+const GUARD_ENV: &str = "CHARKIT_CLEAN_ROOM_PATH";
+
+/// A stand-in for whatever private repo an operator points the hook at.
+const GUARDED_FRAGMENT: &str = "Development/source-under-glass";
 
 fn hook() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -24,22 +32,27 @@ fn hook() -> PathBuf {
         .join(".claude/hooks/clean-room.sh")
 }
 
-/// `~/Development/chariot`, built rather than written.
+/// A path inside the guarded repo.
 fn guarded_path() -> String {
-    format!(
-        "/Users/someone/Development/{}{}/scripts/char",
-        "cha", "riot"
-    )
+    format!("/Users/someone/{GUARDED_FRAGMENT}/scripts/char")
 }
 
 fn run(payload: &str) -> String {
-    let mut child = Command::new("sh")
-        .arg(hook())
+    run_hook(&hook(), payload, Some(GUARDED_FRAGMENT))
+}
+
+/// `guarded: None` exports the variable empty, which is the hook's off switch
+/// and — unlike leaving it unset — cannot be quietly re-armed by a
+/// `clean-room.local` that happens to exist on the machine running the tests.
+fn run_hook(hook: &Path, payload: &str, guarded: Option<&str>) -> String {
+    let mut command = Command::new("sh");
+    command
+        .arg(hook)
+        .env(GUARD_ENV, guarded.unwrap_or(""))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("the hook runs under /bin/sh");
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().expect("the hook runs under /bin/sh");
     child
         .stdin
         .as_mut()
@@ -58,6 +71,13 @@ fn run(payload: &str) -> String {
 
 fn denied(payload: &str) -> bool {
     run(payload).contains("\"permissionDecision\":\"deny\"")
+}
+
+fn read_of_the_source_repo() -> String {
+    format!(
+        r#"{{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{{"file_path":"{}/check.py"}}}}"#,
+        guarded_path()
+    )
 }
 
 /// Slow enough is the same as absent.
@@ -90,11 +110,111 @@ fn a_large_payload_does_not_slow_the_guard_into_permitting() {
 
 #[test]
 fn a_read_of_the_source_repo_is_denied() {
-    let payload = format!(
-        r#"{{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{{"file_path":"{}/check.py"}}}}"#,
-        guarded_path()
+    assert!(denied(&read_of_the_source_repo()));
+}
+
+/// A clone that has named no source repo is not in a clean room, and the guard
+/// has nothing to be outside of.
+///
+/// The alternative reading — unconfigured means fail closed — is not available
+/// even in principle: the empty fragment is a substring of every payload, so a
+/// guard that denied on it would deny all work in every fresh clone, and the
+/// first thing anyone did about that would be to delete the hook.
+#[test]
+fn an_unconfigured_guard_permits_rather_than_denying_everything() {
+    let out = run_hook(&hook(), &read_of_the_source_repo(), None);
+    assert!(
+        !out.contains("\"permissionDecision\":\"deny\""),
+        "an unconfigured hook denied a read: {out}"
     );
-    assert!(denied(&payload));
+    assert!(
+        out.trim().is_empty(),
+        "an unconfigured hook must say nothing at all, not deny quietly: {out}"
+    );
+}
+
+/// The variable is the override; the file is what an operator actually sets.
+///
+/// A hook launched by an editor started from the desktop inherits no shell, so
+/// a guard reachable only through the environment is a guard that is off on the
+/// machines least likely to notice. The layout is the repo's: the hook sits in
+/// `hooks/` and reads `clean-room.local` from its parent.
+#[test]
+fn the_guarded_path_can_come_from_the_local_config_file() {
+    let dir = scratch_dir("config-file");
+    let hooks = dir.join("hooks");
+    std::fs::create_dir_all(&hooks).expect("scratch hooks dir");
+    let copy = hooks.join("clean-room.sh");
+    std::fs::copy(hook(), &copy).expect("copy the hook");
+    std::fs::write(
+        dir.join("clean-room.local"),
+        format!("# the source repo\n\n   {GUARDED_FRAGMENT}   \n"),
+    )
+    .expect("write the config");
+
+    // No variable at all: the file is the only source left.
+    let mut child = Command::new("sh")
+        .arg(&copy)
+        .env_remove(GUARD_ENV)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("the hook runs under /bin/sh");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(read_of_the_source_repo().as_bytes())
+        .expect("write");
+    let out = child.wait_with_output().expect("hook exits");
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(out.status.success(), "the hook must exit 0");
+    assert!(
+        stdout.contains("\"permissionDecision\":\"deny\""),
+        "a comment, a blank line and surrounding spaces must not defeat the \
+         config file: {stdout}"
+    );
+}
+
+/// An exported fragment beats the file, so a run can override what a machine is
+/// configured for — which is the only reason the rest of this suite can assert
+/// on a guarded path that exists nowhere.
+#[test]
+fn the_environment_overrides_the_local_config_file() {
+    let dir = scratch_dir("env-wins");
+    let hooks = dir.join("hooks");
+    std::fs::create_dir_all(&hooks).expect("scratch hooks dir");
+    let copy = hooks.join("clean-room.sh");
+    std::fs::copy(hook(), &copy).expect("copy the hook");
+    std::fs::write(dir.join("clean-room.local"), "Development/somewhere-else\n")
+        .expect("write the config");
+
+    let denied_by_env = run_hook(&copy, &read_of_the_source_repo(), Some(GUARDED_FRAGMENT))
+        .contains("\"permissionDecision\":\"deny\"");
+    let off_by_env = run_hook(&copy, &read_of_the_source_repo(), None);
+
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert!(
+        denied_by_env,
+        "the exported fragment must be the one matched"
+    );
+    assert!(
+        !off_by_env.contains("\"permissionDecision\":\"deny\""),
+        "exported empty is an off switch, and a config file must not re-arm it"
+    );
+}
+
+/// Unique per test and per run, because `cargo test` runs these threaded and a
+/// leftover directory from a panicked run must not be adopted by the next one.
+fn scratch_dir(label: &str) -> PathBuf {
+    let dir =
+        std::env::temp_dir().join(format!("charkit-clean-room-{label}-{}", std::process::id()));
+    std::fs::remove_dir_all(&dir).ok();
+    dir
 }
 
 #[test]
