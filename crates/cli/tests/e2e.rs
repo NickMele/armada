@@ -653,10 +653,10 @@ fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
     let payload: Value = serde_json::from_slice(&unbounded.stdout).unwrap();
     assert_eq!(payload["error"]["class"], "bad_invocation");
 
-    let rebuilt = machine.run(
-        &repo,
-        &["clean", "--all", "--orphaned", "--force-rebuild", "--json"],
-    );
+    // The invocation `PLAN.md` §4.3 spells, run from inside a workspace and
+    // without `--all`: the corpus documents this exact form, so this exact form
+    // is what has to work.
+    let rebuilt = machine.run(&repo, &["clean", "--orphaned", "--force-rebuild", "--json"]);
     assert!(
         rebuilt.status.success(),
         "{}",
@@ -669,6 +669,13 @@ fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
     // what it recovered from cannot be diagnosed afterwards.
     let reported = payload["data"]["reaped"]["skipped"].to_string();
     assert!(reported.contains("moved aside"), "{payload}");
+
+    // Accepting the workspace-scoped-looking form means the report, not the
+    // command line, is what tells the caller how far the pass reached.
+    assert!(
+        reported.contains("machine-scoped") && reported.contains("across namespaces"),
+        "the run must state its own scope: {payload}"
+    );
     let kept: Vec<_> = std::fs::read_dir(machine.home.path().join(".char"))
         .unwrap()
         .filter_map(|entry| entry.ok())
@@ -768,18 +775,20 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
     assert_eq!(after["error"]["class"], "environment");
 }
 
-/// `--force-rebuild` reaps the whole machine across namespaces, so the
-/// invocation has to say so. `--artifacts` and `--force` mean nothing on a path
-/// that reads no `char.yml` and takes no lease, and are refused rather than
-/// quietly dropped.
+/// `--artifacts` and `--force` mean nothing on a path that reads no `char.yml`
+/// and takes no lease, so they are refused rather than quietly dropped —
+/// a flag that is silently ignored is indistinguishable from one that worked.
+///
+/// `--all` is *not* among them: `PLAN.md` §4.3 spells the recovery without it,
+/// so it is accepted with or without, and the run states its own machine scope
+/// in its output instead.
 #[test]
-fn force_rebuild_refuses_every_invocation_that_understates_it() {
+fn force_rebuild_refuses_every_flag_that_has_no_meaning_on_it() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
     machine.run(&repo, &["init"]);
 
     for args in [
-        &["clean", "--orphaned", "--force-rebuild", "--json"][..],
         &[
             "clean",
             "--all",

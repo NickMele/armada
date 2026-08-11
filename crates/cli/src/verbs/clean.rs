@@ -872,24 +872,35 @@ fn survey<R: Run>(
     found
 }
 
-/// What the caller has to know about the namespace on this path, stated as it
-/// actually behaves.
+/// What the caller has to know about the scope and the namespace on this path,
+/// stated as it actually behaves.
 ///
-/// **The removal is by label alone in both cases**, so a note promising that
-/// another installation's resources are preserved would be false — and the note
-/// is the half the caller actually reads.
+/// **The scope is stated first, and unconditionally.** `PLAN.md` §4.3 spells
+/// the recovery as `char clean --orphaned --force-rebuild`, so that invocation
+/// is accepted as written — which means a caller can reach this pass from a
+/// command line that reads workspace-scoped and get machine-scoped,
+/// cross-namespace work. Telling them what it did is the honest half of
+/// accepting the documented form; refusing it was not.
+///
+/// **The removal is by label alone in both namespace cases**, so a note
+/// promising that another installation's resources are preserved would be false
+/// — and the note is the half the caller actually reads.
 fn namespace_note(recovered: Option<&str>) -> String {
-    match recovered {
+    let scope = concat!(
+        "this pass is machine-scoped whichever flags reached it: it enumerates every ",
+        "labelled resource on this daemon and removes on ENOENT across namespaces, so it ",
+        "may remove a resource another char installation stamped",
+    );
+    let namespace = match recovered {
         Some(_) => concat!(
-            "the previous namespace was recovered and carried across, but this path still ",
-            "enumerates by label alone and removes on ENOENT whichever installation ",
-            "stamped a resource — which is why it takes two explicit flags",
+            "the previous namespace was recovered and carried across, so resources already ",
+            "stamped with it stay reapable — but the enumeration above is still by label ",
+            "alone and the namespace filter does not bound it",
         ),
         None => concat!(
             "the previous namespace could not be read, so char cannot tell its own dead ",
-            "resources from another installation's; this path removes on ENOENT regardless ",
-            "— which is why it takes two explicit flags",
+            "resources from another installation's; this path removes on ENOENT regardless",
         ),
-    }
-    .to_string()
+    };
+    format!("{scope}; {namespace}")
 }

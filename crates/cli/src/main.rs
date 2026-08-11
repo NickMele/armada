@@ -44,7 +44,7 @@ char — one consistent vocabulary for managing a repo's tech stack
   char clean     [--json] [--dry-run] [--project|--all]
                  [--orphaned] [--artifacts] [--force]
                                                  release what this workspace owns
-  char clean --all --orphaned --force-rebuild    rebuild an unreadable ~/.char/char.db
+  char clean --orphaned --force-rebuild          rebuild an unreadable ~/.char/char.db
   char status    [--json] [--project|--all]      what is running, mine, and stale
   char <name> …                                  a commands: entry from this repo's char.yml
 
@@ -129,7 +129,7 @@ fn dispatch(
         force_rebuild: true,
     } = &invocation
     {
-        if let Some(refusal) = rebuild_refusal(common, *artifacts, *orphaned, *force) {
+        if let Some(refusal) = rebuild_refusal(*artifacts, *orphaned, *force) {
             return Err(refusal);
         }
         return verbs::clean::rebuild(&run, &SystemClock, home, common.dry_run);
@@ -194,29 +194,28 @@ fn dispatch(
 
 /// The invocation `--force-rebuild` insists on, or `None` if this is it.
 ///
-/// **The flags have to say what the operation does.** This path enumerates
-/// every labelled resource on the daemon and removes on `ENOENT` across
-/// namespaces, which is machine-scoped work — accepting a narrower-looking
-/// `char clean --orphaned --force-rebuild` from inside a workspace and silently
-/// doing the machine-wide thing is worse than requiring the flag that says so,
-/// and `--all` is already what the refusal below recommends.
+/// **`char clean --orphaned --force-rebuild` is the invocation `PLAN.md` §4.3
+/// spells, so it is the one that has to work.** `--all` is accepted too and
+/// changes nothing: the pass is machine-scoped either way, because it
+/// enumerates every labelled resource on the daemon and removes on `ENOENT`
+/// across namespaces. That is worth telling a caller who typed the
+/// narrower-looking form — but it is told in the *output*, in
+/// [`crate::verbs::clean::rebuild`]'s namespace note and in its `--dry-run`
+/// preview, rather than by refusing what the corpus documents. Whether the flag
+/// should be required is a question for phase 2.5, and is recorded there
+/// (`docs/PHASES.md`).
 ///
 /// `--artifacts` and `--force` are refused rather than ignored: neither has a
 /// meaning here. The rebuild reads no `char.yml`, so there are no declared
 /// `owns.files` to delete, and it takes no lease, so there is no liveness guard
 /// to override.
-fn rebuild_refusal(
-    common: &args::Common,
-    artifacts: bool,
-    orphaned: bool,
-    force: bool,
-) -> Option<CharError> {
+fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<CharError> {
     let refusal = |r#where: &str, message: String| {
         Some(CharError {
             class: ErrClass::BadInvocation,
             r#where: r#where.to_string(),
             message,
-            next_action: Some("`char clean --all --orphaned --force-rebuild`".to_string()),
+            next_action: Some("`char clean --orphaned --force-rebuild`".to_string()),
         })
     };
 
@@ -226,16 +225,6 @@ fn rebuild_refusal(
             concat!(
                 "--force-rebuild rebuilds char.db from labels alone, and only ",
                 "--orphaned bounds that to workspaces whose directory is gone",
-            )
-            .to_string(),
-        );
-    }
-    if common.lens != charkit_core::scope::Lens::All {
-        return refusal(
-            "--force-rebuild",
-            concat!(
-                "--force-rebuild reaps every labelled resource on this daemon, which is ",
-                "machine-scoped work, so it has to be asked for with --all",
             )
             .to_string(),
         );
