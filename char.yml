@@ -1,0 +1,63 @@
+# charkit's own config — the dogfood target (ARCHITECTURE.md §2.6).
+#
+# **This is a test subject, not the merge gate.** Through phase 6 the gate runs
+# the raw tools and one integration test asserts `char check --json` agrees with
+# them, so a bug in a half-built tool cannot lock its own repository. Phase 6 is
+# where `char check` becomes the gate; the raw commands below are the ones the
+# README keeps as the fallback afterwards.
+#
+# **A caveat that belongs next to the file rather than only in the document.**
+# This config is one component, pure Rust, no services, no ports and no
+# secrets — structurally the *simplest* shape the schema can express, so
+# dogfooding pulls the design toward it. "It works on charkit" is not evidence
+# the abstraction generalises; the six fixtures under `tests/fixtures/` and
+# phase 8 are.
+#
+# Every check is `scope: component`, and that is a property of cargo rather
+# than a default being dodged: `cargo clippy`, `cargo fmt --check` and
+# `cargo test` take a workspace, not a file list, so a file-scoped spelling
+# would declare a `${files}` none of them could receive. `${files}` is
+# exercised by the fixtures, which model repos whose tools do take one.
+
+version: 1
+
+components:
+
+  charkit:
+    # No `root:` and no `match:`: the component *is* the repo, so the default
+    # (`**`, PLAN.md §4.1.1) is the correct glob rather than an omission.
+    setup: cargo fetch
+
+    owns:
+      # Removed only by `clean --artifacts` (PLAN.md §3.3.1). It costs disk and
+      # leaks nothing machine-global, and deleting it makes the next `init` pay
+      # a full rebuild.
+      files: [target]
+
+    checks:
+      fmt:
+        cmd: cargo fmt --all --check
+        fix: cargo fmt --all
+        scope: component
+
+      lint:
+        cmd: cargo clippy --all-targets -- -D warnings
+        scope: component
+        cost: 2
+
+      test:
+        cmd: cargo test --workspace
+        scope: component
+        cost: 2
+
+      # `cargo xtask doclint` is item 6 of the gate's six: the ARCHITECTURE.md
+      # §2.4 contamination grep and the privacy gate, plus the § cross-reference
+      # and fenced-block checks over the corpus.
+      docs:
+        cmd: cargo xtask doclint
+        scope: component
+
+      # The ARCHITECTURE.md §1.5 layers contract, read off the crate graph.
+      boundaries:
+        cmd: cargo xtask boundaries
+        scope: component
