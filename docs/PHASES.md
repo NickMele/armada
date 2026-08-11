@@ -213,6 +213,8 @@ lands here, so a key missing now is a contract change later.
 against the heading index, parses every fenced YAML/JSON/shell block, diffs config keys in
 examples against keys in prose, and runs `ARCHITECTURE.md` §2.4's contamination grep — reading the pattern out
 of `ARCHITECTURE.md` rather than carrying a copy, so there is still exactly one place it lives.
+It also runs `ARCHITECTURE.md` §2.4's privacy gate over every tracked file, which is what keeps
+the source repo's name and anyone's home directory out of the prose the grep does not cover.
 A block that is deliberately unparseable carries `<!-- doclint: skip — reason -->`.
 
 **Done when:** all six are expressible with no escape hatches and no fields invented on the

@@ -26,7 +26,7 @@ use std::path::Path;
 /// Extra alternatives, `|`-separated. Exported wins over the file, and
 /// exported-empty is a deliberate off switch — the same precedence the
 /// clean-room hook uses, so one habit covers both.
-const EXTRA_ENV: &str = "CHARKIT_CONTAMINATION_EXTRA";
+pub const EXTRA_ENV: &str = "CHARKIT_CONTAMINATION_EXTRA";
 
 /// The same alternatives, one per line, `#` comments and blanks skipped.
 /// Untracked (see `.gitignore`). Unlike the variable it survives a `cargo
@@ -85,7 +85,12 @@ fn pattern(root: &Path, corpus: &[Doc], from_env: Option<String>) -> Result<Stri
 
 /// The configured alternatives, from the variable if it is exported at all and
 /// from the file otherwise.
-fn extra_alternatives(root: &Path, from_env: Option<String>) -> Vec<String> {
+///
+/// `privacy` reads the same two sources through this function rather than
+/// growing a second pair: one private name configured once should arm every
+/// check that needs it, and two config surfaces would mean a repo that is armed
+/// against a leak into `crates/` and unarmed against the same leak into `docs/`.
+pub fn extra_alternatives(root: &Path, from_env: Option<String>) -> Vec<String> {
     let raw = match from_env {
         // Exported-empty yields no alternatives, which is the off switch.
         Some(v) => v.split('|').map(str::to_string).collect(),

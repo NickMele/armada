@@ -11,6 +11,7 @@ mod boundaries;
 mod contamination;
 mod docs;
 mod keys;
+mod privacy;
 mod xref;
 
 use std::path::{Path, PathBuf};
@@ -24,6 +25,7 @@ cargo xtask <command>
   blocks          parse every fenced yaml / json / sh block
   keys            config keys in examples vs prose (-v lists one-sided keys)
   contamination   the ARCHITECTURE.md §2.4 grep, over crates/ and tests/
+  privacy         the ARCHITECTURE.md §2.4 leak rules, over every tracked file
   boundaries      the ARCHITECTURE.md §1.5 layers contract, over the crate graph
 
 Exit: 0 clean, 1 findings, 2 could not run.
@@ -89,6 +91,16 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             }
         },
+        Some("privacy") => match privacy::check(&root) {
+            Ok(f) => {
+                findings.extend(f);
+                ran.push("privacy");
+            }
+            Err(e) => {
+                eprintln!("xtask: privacy: {e}");
+                return ExitCode::from(2);
+            }
+        },
         Some("doclint") | None => {
             findings.extend(xref::check(&corpus));
             findings.extend(blocks::check(&corpus));
@@ -101,6 +113,16 @@ fn main() -> ExitCode {
                 }
                 Err(e) => {
                     eprintln!("xtask: contamination: {e}");
+                    return ExitCode::from(2);
+                }
+            }
+            match privacy::check(&root) {
+                Ok(f) => {
+                    findings.extend(f);
+                    ran.push("privacy");
+                }
+                Err(e) => {
+                    eprintln!("xtask: privacy: {e}");
                     return ExitCode::from(2);
                 }
             }

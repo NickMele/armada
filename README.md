@@ -122,7 +122,7 @@ A change must clear all six:
 | **coverage** | ratchet — it may never drop |
 | **crate boundaries** | `core` depends on nothing concrete, `adapters` depend on core traits only, `cli` is the only crate depending on both |
 | **contamination** | a grep, described below — run by `cargo xtask doclint` |
-| **docs** | `cargo xtask doclint` — cross-references resolve, code blocks parse, config keys appear in both an example and prose |
+| **docs** | `cargo xtask doclint` — cross-references resolve, code blocks parse, config keys appear in both an example and prose, and no tracked file names the source repo or your home directory |
 
 ## Two rules that trip people up
 
@@ -152,6 +152,14 @@ that repo's directories is the fixture working. Use neutral examples — `forema
 `docs/harvest.md` is the one exception: it exists to describe the source repo, so a ban would
 forbid recording the assumptions you are meant to strip. It carries behaviour, not
 implementation — no verbatim code.
+
+**That repo's name is banned everywhere, not just under `src/`, and so is your home
+directory.** `cargo xtask privacy` runs over every tracked file — prose included, because this
+repo is public and its documentation is the larger surface. It matches the names you
+configured above, plus the literal value of `$HOME` on the machine running it: write paths
+relative to the repo or as `~/`, never as `/Users/someone/...`. `docs/harvest.md` is exempt
+from the name rule and not from the home-directory one. Both rules are stated in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 with the grep.
 
 A green grep only means no *crude* contamination. The subtler failure — an abstraction shaped
 around one repo because that is the only repo anyone saw — is invisible to it, and is what the

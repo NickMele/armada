@@ -61,8 +61,9 @@ jobs:
         run: cargo test --workspace
 
       # 6. the contamination grep, run from its single source of truth in
-      #    ARCHITECTURE.md §2.4 rather than from a copy. `doclint` also resolves
-      #    every § cross-reference and parses every fenced block.
+      #    ARCHITECTURE.md §2.4 rather than from a copy, plus the privacy gate
+      #    from the same section over every tracked file. `doclint` also
+      #    resolves every § cross-reference and parses every fenced block.
       - name: doclint
         run: cargo xtask doclint
 

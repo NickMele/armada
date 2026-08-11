@@ -657,7 +657,7 @@ The gate is `.github/workflows/gate.yml`, and it is:
 | 3 | **tests** — unit, integration and e2e tiers | both platforms |
 | 4 | **coverage ratchet** — may never drop | `cargo llvm-cov` against `.coverage-floor` |
 | 5 | **crate boundaries** — the layers contract from §1.5 | `cargo xtask boundaries` |
-| 6 | **the contamination grep** | inside `cargo xtask doclint` |
+| 6 | **the contamination grep**, plus the privacy gate that covers what it does not reach | inside `cargo xtask doclint` |
 
 Plus one the list did not have, because it is a claim two documents make rather than a rule:
 **the MSRV builds.** `rust-version` is read out of `Cargo.toml` and the workspace is built with
@@ -785,6 +785,37 @@ confidence.
 nothing more. The higher-severity risk — an abstraction shaped around Django+Next because
 that is the only repo anyone saw — is invisible to it. That is what the six fixture configs
 are for.
+
+**The privacy gate, over everything the grep does not reach.** The pattern above covers
+`crates/` and `tests/`, because the leak it was designed for is transcription *into code*
+during phase 3. But this repository is public and its prose is most of it, and every reference
+to the source repo that has ever had to be removed from this project lived in a document
+rather than in a crate — not one of them was inside the grep's roots. So `cargo xtask privacy`
+runs over **every tracked file**, on two rules:
+
+| Rule | What it matches |
+|---|---|
+| the configured private names | the same values the pattern above is extended from, read through the same two sources, so a name configured once arms both checks |
+| this machine's home directory | `$HOME`, read at run time; its literal value may not appear in any tracked file |
+
+It runs inside `cargo xtask doclint`, alongside the grep. `docs/harvest.md` is exempt from the
+first rule and not from the second, for the reason given below: describing the source repo is
+its job, and carrying the path of the machine that wrote it is not.
+
+**Why the running machine's home, rather than the shape of a home path.** `/Users/<name>/` and
+`/home/<name>/` are ordinary things for a test to construct — `crates/adapters` builds
+`/home/agent/.char` to assert a path join, and that is the test doing its job. Banning the
+shape needs an allowlist of blessed pretend usernames, which grows every time someone writes a
+test and is exactly the weakening mechanism this section rejects for the grep. Matching only
+`$HOME` has nothing to allowlist, because a path that is not yours cannot identify you. It
+costs the check a *collaborator's* home path, which is the same accepted trade as the name: a
+public repo cannot state the strings it exists to keep out, so the operator who has them
+states them locally.
+
+**Why git's file list rather than a walk.** The untracked `.claude/*.local` files exist to hold
+the very strings this check hunts for, and `target/` is full of them after any build. A walk
+would have to reimplement `.gitignore` to avoid reporting both. What is not tracked is not
+published, so it is not a leak — asking git is the definition the check actually wants.
 
 ---
 
@@ -943,6 +974,7 @@ which one was wrong.
 | Fact | Owner |
 |---|---|
 | Contamination grep pattern and its scope | `ARCHITECTURE.md` §2.4 |
+| The privacy gate's two rules and its scope | `ARCHITECTURE.md` §2.4 |
 | Exit-code map and the signal carve-out | `ARCHITECTURE.md` §1.6 |
 | Error classes | `ARCHITECTURE.md` §1.7 |
 | `schema_version` and its bump rule | `ARCHITECTURE.md` §1.6 |
