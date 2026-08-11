@@ -19,7 +19,7 @@
 //! obvious fix (reorder the snapshot) hides that the renderer stopped emitting
 //! the documented order. See `docs/traps.md`.
 
-use crate::error::{CharError, Status};
+use crate::error::{CharError, ErrClass, Status};
 use crate::id::{ProjectId, WorkspaceId};
 use crate::lease::WaitingOn;
 use crate::ports::{PortBlock, PortState};
@@ -178,6 +178,80 @@ impl ResultRow {
     }
 }
 
+/// The one error a set of `results[]` aggregates to.
+///
+/// **The top-level `error` is the strict maximum over `results[]` by a fixed
+/// precedence, so two implementations cannot disagree** (PLAN.md §3.1):
+///
+/// ```text
+/// char_bug > environment > bad_config > bad_invocation > timeout > aborted > tool_failed
+/// ```
+///
+/// The strictly-worse signal wins because acting on the milder one wastes the
+/// time the stricter one was reporting: a gate reading exit 1 goes looking for
+/// a broken test, while reading 4 it raises a deadline or asks why the suite
+/// got slow. `environment` sits near the top for the same reason inverted —
+/// when Docker is down or the disk is full, the failures underneath it are
+/// consequences, and reporting one of them sends the caller to fix a repo that
+/// is fine.
+///
+/// **This function is the single implementation of that rule**, and it exists
+/// as one function precisely because the rule's stated purpose is that two
+/// implementations cannot disagree. Every verb with a `results[]` aggregates
+/// through it rather than counting rows for itself.
+///
+/// `subject` names what the rows are — `checks`, `workspaces`, `services` —
+/// because the id grammar differs per verb and the message should read in the
+/// caller's vocabulary.
+pub fn aggregate(results: &[ResultRow], subject: &str) -> Option<CharError> {
+    let failures: Vec<&ResultRow> = results
+        .iter()
+        .filter(|row| {
+            // A row that failed without attaching an error of its own still
+            // counts: a verb reporting success over a `FAILED` row is the shape
+            // a consumer least expects.
+            row.error.is_some()
+                || matches!(
+                    row.status,
+                    Status::Failed | Status::Timeout | Status::Aborted | Status::Dead
+                )
+        })
+        .collect();
+
+    let worst = failures.iter().max_by_key(|row| {
+        row.error
+            .as_ref()
+            .map_or(ErrClass::ToolFailed, |error| error.class)
+            .severity()
+    })?;
+
+    let class = worst
+        .error
+        .as_ref()
+        .map_or(ErrClass::ToolFailed, |error| error.class);
+
+    Some(CharError {
+        class,
+        // The id from `results[]`, which is the actionable thing for every
+        // class but `bad_config` — and for that one the row's own `where` is
+        // already a config path, so it is carried rather than replaced.
+        r#where: match (class, worst.error.as_ref()) {
+            (ErrClass::BadConfig, Some(error)) => error.r#where.clone(),
+            _ => worst.id.clone(),
+        },
+        message: format!(
+            "{} of {} {subject} did not succeed",
+            failures.len(),
+            results.len()
+        ),
+        // Required for `bad_config`, so it may not be dropped on the way up.
+        next_action: worst
+            .error
+            .as_ref()
+            .and_then(|error| error.next_action.clone()),
+    })
+}
+
 /// A port and what a probe found at it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct PortReport {
@@ -326,6 +400,123 @@ pub struct NoData {}
 mod tests {
     use super::*;
     use crate::error::ErrClass;
+
+    fn failed(id: &str, class: ErrClass) -> ResultRow {
+        let mut row = ResultRow::new(id, Status::Failed);
+        row.error = Some(CharError {
+            class,
+            r#where: id.to_string(),
+            message: format!("{id} did not"),
+            next_action: None,
+        });
+        row
+    }
+
+    /// **The strictly-worse signal wins**, because acting on the milder one
+    /// wastes the time the stricter one was reporting: a gate reading 1 goes
+    /// looking for a broken test, while reading 4 it raises a deadline or asks
+    /// why the suite got slow.
+    #[test]
+    fn the_aggregate_is_the_strict_maximum_over_the_rows() {
+        let rows = [
+            failed("api:lint", ErrClass::ToolFailed),
+            failed("web:e2e", ErrClass::Timeout),
+            failed("api:test", ErrClass::Aborted),
+        ];
+        let error = aggregate(&rows, "checks").expect("three failures aggregate to one");
+        assert_eq!(error.class, ErrClass::Timeout);
+        assert_eq!(error.class.exit_code(), 4, "not 1");
+        assert_eq!(error.r#where, "web:e2e", "the worst row names itself");
+    }
+
+    /// PLAN.md §3.1's own example payload is internally inconsistent — it prints
+    /// `tool_failed` for a set containing a `TIMEOUT`, and the prose beneath it
+    /// corrects itself. The rule wins over the illustration, and this pins it.
+    #[test]
+    fn a_run_containing_a_timeout_exits_four_and_not_one() {
+        let rows = [
+            ResultRow::new("web:lint", Status::Pass),
+            failed("api:lint", ErrClass::ToolFailed),
+            failed("web:e2e", ErrClass::Timeout),
+        ];
+        assert_eq!(aggregate(&rows, "checks").unwrap().class.exit_code(), 4);
+    }
+
+    #[test]
+    fn the_whole_precedence_order_holds_pairwise() {
+        // char_bug > environment > bad_config > bad_invocation > timeout >
+        // aborted > tool_failed
+        let order = [
+            ErrClass::ToolFailed,
+            ErrClass::Aborted,
+            ErrClass::Timeout,
+            ErrClass::BadInvocation,
+            ErrClass::BadConfig,
+            ErrClass::Environment,
+            ErrClass::CharBug,
+        ];
+        for (i, milder) in order.iter().enumerate() {
+            for worse in order.iter().skip(i + 1) {
+                let rows = [failed("a", *milder), failed("b", *worse)];
+                assert_eq!(
+                    aggregate(&rows, "checks").unwrap().class,
+                    *worse,
+                    "{worse:?} should beat {milder:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rows_that_all_succeeded_aggregate_to_no_error() {
+        let rows = [
+            ResultRow::new("a", Status::Clean),
+            ResultRow::new("b", Status::Clean),
+        ];
+        assert!(aggregate(&rows, "workspaces").is_none());
+        assert!(aggregate(&[], "workspaces").is_none());
+    }
+
+    /// A row that failed without attaching an error still has to reach the
+    /// aggregate — otherwise a verb reports success while `results[]` shows a
+    /// `FAILED` row, which is the shape a consumer least expects.
+    #[test]
+    fn a_failed_row_with_no_error_of_its_own_still_fails_the_run() {
+        let rows = [ResultRow::new("a", Status::Failed)];
+        let error = aggregate(&rows, "workspaces").expect("a FAILED row is a failure");
+        assert_eq!(error.class, ErrClass::ToolFailed);
+    }
+
+    #[test]
+    fn the_message_counts_the_failures_and_names_the_subject() {
+        let rows = [
+            ResultRow::new("a", Status::Clean),
+            failed("b", ErrClass::ToolFailed),
+            failed("c", ErrClass::ToolFailed),
+        ];
+        assert_eq!(
+            aggregate(&rows, "workspaces").unwrap().message,
+            "2 of 3 workspaces did not succeed"
+        );
+    }
+
+    /// `next_action` is required for `bad_config`, so the aggregate may not drop
+    /// the one the row carried.
+    #[test]
+    fn a_bad_config_aggregate_keeps_its_next_action() {
+        let mut row = ResultRow::new("api", Status::Failed);
+        row.error = Some(CharError::bad_config(
+            crate::error::ConfigWhere::Path {
+                file: "char.yml".into(),
+                path: "components.api.setup".into(),
+            },
+            "no such step",
+            "correct the setup step",
+        ));
+        let error = aggregate(&[row], "components").unwrap();
+        assert_eq!(error.class, ErrClass::BadConfig);
+        assert_eq!(error.next_action.as_deref(), Some("correct the setup step"));
+    }
 
     #[test]
     fn the_envelope_emits_its_fields_in_reading_order() {

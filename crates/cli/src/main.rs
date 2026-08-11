@@ -115,6 +115,33 @@ fn dispatch(
 
     let run = RealRun;
 
+    // **The recovery path runs before anything is opened.** `char clean
+    // --orphaned --force-rebuild` exists for a `char.db` char cannot read, and
+    // `app::build` opens that database — so routing it through the ordinary
+    // path would fail on exactly the thing it exists to repair. It also needs
+    // no workspace: it is most useful from a shell that happens to be anywhere.
+    if let Invocation::Clean {
+        common,
+        orphaned,
+        force_rebuild: true,
+        ..
+    } = &invocation
+    {
+        if !orphaned {
+            return Err(CharError {
+                class: ErrClass::BadInvocation,
+                r#where: "--force-rebuild".to_string(),
+                message: concat!(
+                    "--force-rebuild rebuilds char.db from labels alone, and only ",
+                    "--orphaned bounds that to workspaces whose directory is gone",
+                )
+                .to_string(),
+                next_action: Some("`char clean --all --orphaned --force-rebuild`".to_string()),
+            });
+        }
+        return verbs::clean::rebuild(&run, &SystemClock, home, common.json);
+    }
+
     // Two invocations legitimately run outside any workspace: asking about
     // *this workspace* requires a `char.yml`, asking about *the machine* does
     // not. `clean --orphaned` is most needed from a shell that happens to be

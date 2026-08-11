@@ -29,7 +29,9 @@
 use charkit_adapters::{docker, fs};
 use charkit_core::config::ResolvedConfig;
 use charkit_core::ctx::{Clock, Fetch, Run};
-use charkit_core::envelope::{CleanData, CleanDryRun, Envelope, Released, ResultRow, Unreclaimed};
+use charkit_core::envelope::{
+    aggregate, CleanData, CleanDryRun, Envelope, Released, ResultRow, Unreclaimed,
+};
 use charkit_core::error::{CharError, ConfigWhere, ErrClass, Status};
 use charkit_core::id::WorkspaceId;
 use charkit_core::lease::{is_cold, LeaseId, LeaseKind, Policy};
@@ -38,6 +40,7 @@ use charkit_core::registry::{OwnedKind, WorkspaceRow};
 use charkit_core::scope::{self, Lens};
 use charkit_core::template::{self, Site, Vars};
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use crate::app::{self, App, RELEASED_EARLY};
 use crate::args::Common;
@@ -62,18 +65,6 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     common: Common,
     filters: Filters,
 ) -> Result<Output, CharError> {
-    if filters.force_rebuild {
-        return Err(CharError {
-            class: ErrClass::BadInvocation,
-            r#where: "--force-rebuild".to_string(),
-            message: "rebuilding char.db from labels alone is not built yet".to_string(),
-            next_action: Some(
-                "remove ~/.char/char.db by hand; `char init` recreates it and reaps by label"
-                    .to_string(),
-            ),
-        });
-    }
-
     let me = app.ctx.workspace.as_ref().map(|w| w.id.clone());
     let project = app.ctx.workspace.as_ref().and_then(|w| w.project.clone());
 
@@ -160,9 +151,20 @@ fn clean_all<R: Run, C: Clock, F: Fetch>(
         results.push(clean_one(app, row, filters, &mut reaped.skipped)?);
     }
 
+    // **The one implementation of the precedence rule.** Counting rows here
+    // would be a second one, and PLAN.md §3.1's stated reason for fixing the
+    // order is that two implementations cannot disagree — so the class, the
+    // `where` and the message all come from `envelope::aggregate`, and this
+    // verb decides only the terminal *state*, which is a different axis.
+    let error = aggregate(&results, "workspaces");
+
+    // `PARTIAL` earns its place here: "three of five worked" and "nothing
+    // worked" demand different actions and would otherwise both read `FAILED`.
+    // Terminal state describes *what happened*; the error class states *why*,
+    // and the exit code follows the class and never the state.
     let failed = results
         .iter()
-        .filter(|r| r.status == Status::Failed)
+        .filter(|row| row.status != Status::Clean)
         .count();
     let status = match (failed, results.len()) {
         (0, _) => Status::Clean,
@@ -177,27 +179,11 @@ fn clean_all<R: Run, C: Clock, F: Fetch>(
         skipped,
     };
 
-    Ok(match status {
-        Status::Clean => Envelope::ok("clean", me.cloned(), Status::Clean, data),
-        other => {
-            let mut envelope = Envelope::failed(
-                "clean",
-                me.cloned(),
-                CharError {
-                    class: ErrClass::ToolFailed,
-                    r#where: "clean".to_string(),
-                    message: format!(
-                        "{failed} of {} workspaces did not release",
-                        data.results.len()
-                    ),
-                    next_action: None,
-                },
-                data,
-            );
-            // `PARTIAL` earns its place here: "three of five worked" and
-            // "nothing worked" demand different actions and would otherwise
-            // both read `FAILED`.
-            envelope.status = other;
+    Ok(match error {
+        None => Envelope::ok("clean", me.cloned(), Status::Clean, data),
+        Some(error) => {
+            let mut envelope = Envelope::failed("clean", me.cloned(), error, data);
+            envelope.status = status;
             envelope
         }
     })
@@ -597,4 +583,149 @@ fn would_delete<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>, row: &WorkspaceR
         .into_iter()
         .filter_map(|path| template::substitute(path, &vars, Site::Argv, &at).ok())
         .collect()
+}
+
+/// `char clean --orphaned --force-rebuild` — the way out of a `char.db` char
+/// cannot read (PLAN.md §4.3).
+///
+/// **The recovery path must not need the thing that is broken**, which is why
+/// this does not go through [`crate::app::App`] at all: building one opens the
+/// database, so a verb that reached this function through the ordinary path
+/// would already have failed. It runs from the entrypoint, before anything has
+/// been opened.
+///
+/// It ignores the existing database, enumerates by **label alone** —
+/// `char.workspace_path` is a real path and `stat` still works — reaps what is
+/// unambiguously dead, and writes a fresh database. **It is the one operation
+/// that trusts labels over rows, which is why it is explicit rather than
+/// automatic.**
+///
+/// Two deliberate departures from the ordinary reap, both stated because they
+/// are the cost of the recovery:
+///
+/// - **The namespace filter cannot apply**, because the namespace is one of the
+///   things that was lost. So this removes a labelled resource whose path is
+///   `ENOENT` even if another installation stamped it. That is exactly the
+///   cross-namespace removal PLAN.md §2.3.1 forbids for the automatic passes —
+///   permitted here only because the caller asked for it by name, with two
+///   flags, after their database stopped working.
+/// - **The unreadable file is moved aside, not deleted.** A recovery that
+///   destroys the evidence of what it recovered from cannot be diagnosed
+///   afterwards, and the file is the only artifact that could say what went
+///   wrong.
+pub fn rebuild<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    home: &Path,
+    json: bool,
+) -> Result<Output, CharError> {
+    let _ = json;
+    let char_home = charkit_adapters::machine::char_home(home);
+    let db_path = char_home.join("char.db");
+
+    // Best-effort, and the recovery does not depend on it: a database can be
+    // unreadable in ways that still leave `meta` legible, and carrying the old
+    // namespace across keeps every resource already stamped with it reapable.
+    let recovered = charkit_adapters::db::Db::peek_namespace(&db_path);
+
+    let mut moved_aside = Vec::new();
+    if db_path.exists() {
+        let stamp = now.wall_rfc3339().replace(':', "-");
+        for suffix in ["", "-wal", "-shm"] {
+            let from = char_home.join(format!("char.db{suffix}"));
+            if from.exists() {
+                let to = char_home.join(format!("char.db{suffix}.unreadable-{stamp}"));
+                if std::fs::rename(&from, &to).is_ok() {
+                    moved_aside.push(to.display().to_string());
+                }
+            }
+        }
+    }
+
+    let mut db = charkit_adapters::db::Db::open(&char_home)?;
+    if let Some(namespace) = &recovered {
+        db.adopt_namespace(namespace)?;
+    }
+
+    let machine = charkit_adapters::machine::MachineConfig::read(&char_home)?;
+    let timeout = machine.docker_deadline();
+    let cwd = home.to_path_buf();
+    let mut reaped = charkit_core::reap::ReapPlan::default();
+
+    for note in moved_aside {
+        reaped.skipped.push(format!("moved aside: {note}"));
+    }
+    if recovered.is_none() {
+        reaped.skipped.push(
+            concat!(
+                "the previous namespace could not be read, so resources stamped with it ",
+                "are foreign to this database and will be reported rather than reclaimed",
+            )
+            .to_string(),
+        );
+    }
+
+    // No lease to renew: the rebuild path holds none, because the store the
+    // leases live in is the thing that is broken.
+    let tick = &mut || {};
+    match docker::daemon_ready(run, &cwd, timeout, tick) {
+        Ok(()) => {
+            for kind in docker::Kind::ALL {
+                let found = docker::list_labelled(run, &cwd, timeout, kind, tick);
+                let found = match found {
+                    Ok(found) => found,
+                    Err(error) => {
+                        reaped
+                            .skipped
+                            .push(format!("enumeration: {}", error.message));
+                        continue;
+                    }
+                };
+                for resource in found {
+                    // By label alone, and only on `ENOENT`. Every other errno
+                    // still means "adopt or report, never remove" — that rule
+                    // is not what broke.
+                    if fs::stat(&resource.workspace_path) == PathStat::Missing {
+                        let removed = docker::remove(
+                            run,
+                            &cwd,
+                            timeout,
+                            kind,
+                            std::slice::from_ref(&resource.reference),
+                            &mut || {},
+                        );
+                        if removed.iter().all(|(_, error)| error.is_none()) {
+                            reaped.resources.push(charkit_core::reap::ReapTarget {
+                                kind: resource.kind,
+                                reference: resource.reference,
+                                workspace: resource.workspace,
+                            });
+                            continue;
+                        }
+                    }
+                    reaped.reported.push(charkit_core::reap::Reported {
+                        kind: resource.kind,
+                        reference: resource.reference,
+                        workspace: resource.workspace,
+                        reason: charkit_core::reap::LeftAlone::WorkspaceLive,
+                    });
+                }
+            }
+        }
+        Err(error) => reaped
+            .skipped
+            .push(format!("labelled resources: {}", error.message)),
+    }
+
+    Ok(Output::Clean(Box::new(Envelope::ok(
+        "clean",
+        None,
+        Status::Clean,
+        CleanData {
+            reaped,
+            results: Vec::new(),
+            unreclaimed: Vec::new(),
+            skipped: Vec::new(),
+        },
+    ))))
 }

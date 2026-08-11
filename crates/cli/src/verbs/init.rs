@@ -16,7 +16,7 @@ use charkit_adapters::db::ClaimOutcome;
 use charkit_adapters::{fs, net};
 use charkit_core::config::ResolvedConfig;
 use charkit_core::ctx::{Clock, Fetch, Run, RunRequest, StdioMode};
-use charkit_core::envelope::{Envelope, InitData, InitDryRun, PortReport, ResultRow};
+use charkit_core::envelope::{aggregate, Envelope, InitData, InitDryRun, PortReport, ResultRow};
 use charkit_core::error::{CharError, ConfigWhere, ErrClass, Status};
 use charkit_core::lease::{LeaseId, Policy};
 use charkit_core::ports::{self, PortBlock, PortState};
@@ -70,7 +70,14 @@ fn claim_and_prepare<R: Run, C: Clock, F: Fetch>(
     record_release_commands(app, workspace, config, &ports)?;
 
     let results = run_setup(app, workspace, config, &ports, lease)?;
-    let failed = results.iter().any(|row| row.status == Status::Failed);
+
+    // Through `aggregate`, not by finding the first failed row: a `setup:`
+    // command that is not on `PATH` fails `bad_config`, and picking the first
+    // failure while hardcoding `tool_failed` reported exit 1 — "that is a real
+    // result, report it" — for a config the caller has to edit before anything
+    // else means anything. The precedence rule exists so that two
+    // implementations cannot disagree, which is only true when there is one.
+    let error = aggregate(&results, "components");
 
     let data = InitData {
         port_block: block,
@@ -80,25 +87,9 @@ fn claim_and_prepare<R: Run, C: Clock, F: Fetch>(
         results,
     };
 
-    Ok(if failed {
-        Envelope::failed(
-            "init",
-            Some(workspace.id.clone()),
-            CharError {
-                class: ErrClass::ToolFailed,
-                r#where: data
-                    .results
-                    .iter()
-                    .find(|row| row.status == Status::Failed)
-                    .map(|row| row.id.clone())
-                    .unwrap_or_default(),
-                message: "a setup step did not succeed".to_string(),
-                next_action: None,
-            },
-            data,
-        )
-    } else {
-        Envelope::ok("init", Some(workspace.id.clone()), Status::Ready, data)
+    Ok(match error {
+        Some(error) => Envelope::failed("init", Some(workspace.id.clone()), error, data),
+        None => Envelope::ok("init", Some(workspace.id.clone()), Status::Ready, data),
     })
 }
 

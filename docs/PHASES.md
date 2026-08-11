@@ -309,6 +309,17 @@ Plus one number `PLAN.md` never states: **the port base is 5460**, taken from `P
 rather than invented, with the ceiling at 32767 so a block never lands inside Linux's ephemeral
 range.
 
+#### Three gaps closed after the phase merged
+
+A conformance pass before phase 3 opened found three things the done-whens did
+not reach, and closing them cost less than phase 3 inheriting them:
+
+| Gap | Why it was worth closing before phase 3 |
+|---|---|
+| **`PLAN.md` §3.1's aggregation precedence had no implementation.** `ErrClass::severity()` existed and was unit-tested, while `init` and `clean` each counted rows for themselves. `init`'s version was a live bug: it took the *first* failed row and hardcoded `tool_failed`, so a `setup:` command missing from `PATH` reported exit 1 — whose documented response is "that is a real result, report it" — instead of the `bad_config` exit 3 the caller had to act on. | The rule's stated purpose is that *two implementations cannot disagree*, and there were already two. `check` is where it becomes load-bearing, so phase 3 would have written a third. `envelope::aggregate` is now the only one. |
+| **`clean --orphaned --force-rebuild` was a stub** returning `bad_invocation`. | `PLAN.md` §4.3 specifies it as the way out of a `char.db` char cannot read, and *the recovery path must not need the thing that is broken* — so it runs at the entrypoint, before `App` opens anything. It moves the unreadable file aside rather than deleting it, and carries the old namespace across when that is still legible, so resources already stamped stay reapable. |
+| **The reap test covered networks and volumes, not containers.** | The code path is parameterised by kind, so a container adds little *on that argument* — which is the point: this corpus is explicit that arguments lose to measurements, and the phase's own wording is `docker run --label`. Gated on obtaining an image, skipped loudly otherwise. |
+
 #### Two defects phase 2 found in `PLAN.md`, for phase 2.5 to fix
 
 Recorded rather than fixed, because phase 2.5 is the only phase licensed to send changes back.

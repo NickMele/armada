@@ -5,14 +5,19 @@
 //! startup for every subsequently allocated worktree, *"accumulated exactly
 //! because nothing ever called this."*
 //!
-//! The resources here are networks and volumes rather than containers, and the
-//! deviation from the phase's wording (`docker run --label`) is deliberate:
-//! `docker network create` and `docker volume create` need **no image**, so the
-//! test depends on a daemon and not on a registry. They are also the harder
-//! case — measured, compose does not propagate a service's labels to either, so
-//! a `clean` that finds resources by label finds the containers and leaves the
-//! network and the volumes behind, with no verb that can ever locate them
-//! again.
+//! Networks and volumes are covered unconditionally, because
+//! `docker network create` and `docker volume create` need **no image** — so
+//! that half depends on a daemon and not on a registry. They are also the
+//! harder case: measured, compose does not propagate a service's labels to
+//! either, so a `clean` that finds resources by label finds the containers and
+//! leaves the network and the volumes behind, with no verb that can ever locate
+//! them again.
+//!
+//! A **container** created with `docker run --label` — the phase's own wording —
+//! is covered too, gated on being able to obtain an image. The code path is
+//! shared and parameterised by kind, so the container adds little on that
+//! argument alone; it is here because "the code path is shared" *is* an
+//! argument, and this corpus is explicit that arguments lose to measurements.
 //!
 //! Skipped, loudly, when no daemon is reachable. A test that silently passes
 //! without a daemon is worse than one that is absent.
@@ -47,6 +52,35 @@ fn docker(args: &[&str]) -> String {
 fn exists(kind: &str, name: &str) -> bool {
     let listed = docker(&[kind, "ls", "-q", "--filter", &format!("name=^{name}$")]);
     !listed.is_empty()
+}
+
+/// `docker ps -a`, because a stopped container still holds its name and its
+/// volumes and a `clean` that leaves it behind leaves the leak.
+fn container_exists(name: &str) -> bool {
+    let listed = docker(&["ps", "-a", "-q", "--filter", &format!("name=^{name}$")]);
+    !listed.is_empty()
+}
+
+/// An image to run a throwaway container from: one already on this machine, or
+/// a small one pulled if the network allows. `None` means the container half of
+/// the test cannot run here, and it is skipped loudly rather than silently.
+fn image_for_testing() -> Option<String> {
+    let pulled = Command::new("docker")
+        .args(["pull", "-q", "busybox:latest"])
+        .output()
+        .ok()?;
+    if pulled.status.success() {
+        return Some("busybox:latest".to_string());
+    }
+    let local = Command::new("docker")
+        .args(["image", "ls", "-q", "--format", "{{.Repository}}:{{.Tag}}"])
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&local.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.contains("<none>"))
+        .map(str::to_string)
 }
 
 fn namespace_of(machine: &Machine) -> String {
@@ -144,6 +178,32 @@ fn init_reaps_an_orphans_labelled_resources_and_leaves_everyone_elses_alone() {
         &foreign_net,
     ]);
 
+    // A container, created the way the phase words it. Skipped rather than
+    // failed when no image can be obtained, so the suite depends on a daemon
+    // and not on a registry.
+    let orphan_container = image_for_testing().map(|image| {
+        let name = format!("char-test-orphan-c-{suffix}");
+        docker(&[
+            "run",
+            "-d",
+            "--name",
+            &name,
+            "--label",
+            &format!("char.workspace={doomed_id}"),
+            "--label",
+            &format!("char.workspace_path={}", doomed.display()),
+            "--label",
+            &format!("char.namespace={namespace}"),
+            &image,
+            "sleep",
+            "300",
+        ]);
+        name
+    });
+    if orphan_container.is_none() {
+        eprintln!("note: no image available, so the container case was skipped");
+    }
+
     std::fs::remove_dir_all(&doomed).unwrap();
 
     let third = machine.worktree(&main, "third");
@@ -170,6 +230,14 @@ fn init_reaps_an_orphans_labelled_resources_and_leaves_everyone_elses_alone() {
         "the orphan network survived"
     );
     assert!(!exists("volume", &orphan_vol), "the orphan volume survived");
+    if let Some(container) = &orphan_container {
+        assert!(
+            !container_exists(container),
+            "the orphan container survived — this is the case the phase words as \
+             `docker run --label`, and it is here because \"the code path is shared\" \
+             is an argument, and arguments lose to measurements"
+        );
+    }
     assert!(
         exists("network", &live_net),
         "a live workspace's network was destroyed"
