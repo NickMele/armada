@@ -35,10 +35,15 @@
 //! source repo's name in a checkout that has configured none. Both are the same
 //! accepted trade as §2.4's — a public repo cannot state the strings it exists
 //! to keep out, so the operator who has them states them locally.
+//!
+//! [`history`] applies the same two rules to what git **publishes** rather than
+//! to what is checked out. See its own documentation for why that is a separate
+//! command and not part of the gate.
 
 use crate::contamination::{extra_alternatives, EXTRA_ENV};
 use crate::docs::Finding;
 use regex::{Regex, RegexBuilder};
+use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
@@ -68,6 +73,13 @@ pub fn check(root: &Path) -> Result<Vec<Finding>, String> {
     let names = extra_alternatives(root, std::env::var(EXTRA_ENV).ok());
     let home = std::env::var("HOME").ok();
     scan(root, &tracked(root)?, &names, home.as_deref())
+}
+
+/// This machine's home, normalised, or nothing if it is too short to identify
+/// anybody — see [`MIN_HOME`].
+fn local_home(home: Option<&str>) -> Option<&str> {
+    home.map(|h| h.trim_end_matches('/'))
+        .filter(|h| h.len() >= MIN_HOME)
 }
 
 /// Every file git would publish, which is the definition this check wants.
@@ -106,9 +118,7 @@ fn scan(
     home: Option<&str>,
 ) -> Result<Vec<Finding>, String> {
     let named = build_names(names)?;
-    let local = home
-        .map(|h| h.trim_end_matches('/'))
-        .filter(|h| h.len() >= MIN_HOME);
+    let local = local_home(home);
 
     let mut findings = Vec::new();
     for rel in files {
@@ -184,6 +194,268 @@ fn build_names(names: &[String]) -> Result<Option<Regex>, String> {
         .build()
         .map(Some)
         .map_err(|e| format!("the configured private names do not compile: {e}"))
+}
+
+/// How a set of banned strings is named in a report that must not print them.
+const HISTORY: &str = "(reachable commits)";
+
+/// The same two rules, over what git **publishes** rather than what is checked
+/// out: every ref, and every commit reachable from one.
+///
+/// Scrubbing the working tree changes nothing anybody can see. `origin/main`,
+/// every other pushed branch and every tag still serve the old files, and every
+/// commit that ever carried the string is still reachable from them and still
+/// rendered by GitHub. This turns that remaining exposure into a count and a
+/// list of refs, so the decision to rewrite is made against a measurement.
+///
+/// **Why this is not in `doclint`.** The only fixes are a history rewrite and a
+/// force-push: they are the operator's call, they are destructive, and they
+/// cannot be performed by a merge gate. A gate that fails for a condition the
+/// contributor cannot act on is a gate that gets switched off — and every
+/// commit already merged would fail it forever, including the ones that did the
+/// scrubbing. So it reports, on request, and the gate keeps guarding the only
+/// thing a PR can still change: the tree.
+pub fn history(root: &Path) -> Result<Vec<Finding>, String> {
+    scan_history(root, &needles(root))
+}
+
+/// Every banned literal as one list. The two rules differ in the working tree —
+/// `docs/harvest.md` is exempt from one of them — but a ref that publishes
+/// either is equally published, so history draws no distinction.
+fn needles(root: &Path) -> Vec<String> {
+    let mut needles = extra_alternatives(root, std::env::var(EXTRA_ENV).ok());
+    let home = std::env::var("HOME").ok();
+    if let Some(home) = local_home(home.as_deref()) {
+        needles.push(home.to_string());
+    }
+    needles
+}
+
+/// Split from [`history`] so the tests can supply their own banned strings and
+/// their own throwaway repository, for the same reason [`scan`] is split.
+fn scan_history(root: &Path, needles: &[String]) -> Result<Vec<Finding>, String> {
+    let refs = refs(root)?;
+    if needles.is_empty() || refs.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut findings = Vec::new();
+    for name in &refs {
+        let files = tip_hits(root, name, needles)?;
+        if !files.is_empty() {
+            findings.push(Finding {
+                file: name.clone(),
+                line: 0,
+                message: format!(
+                    "this ref publishes a banned string in {} tracked file(s) ({}) — a clean \
+                     working tree does not clean a ref (ARCHITECTURE.md §2.4)",
+                    files.len(),
+                    sample(&files)
+                ),
+            });
+        }
+    }
+
+    let touching = commits_touching(root, needles)?;
+    if !touching.is_empty() {
+        findings.push(Finding {
+            file: HISTORY.to_string(),
+            line: 0,
+            message: format!(
+                "{} commit(s) add or remove a banned string in their diff ({}) — every one is \
+                 still served by GitHub, and only a rewrite removes them (ARCHITECTURE.md §2.4)",
+                touching.len(),
+                sample(&shorten(&touching))
+            ),
+        });
+    }
+
+    let naming = commits_naming(root, needles)?;
+    if !naming.is_empty() {
+        findings.push(Finding {
+            file: HISTORY.to_string(),
+            line: 0,
+            message: format!(
+                "{} commit message(s) name a banned string ({}) — messages survive a rewrite \
+                 that only rewrites trees (ARCHITECTURE.md §2.4)",
+                naming.len(),
+                sample(&shorten(&naming))
+            ),
+        });
+    }
+
+    Ok(findings)
+}
+
+/// Every ref a clone would receive, which is the definition of published here —
+/// branches, remote-tracking branches and tags alike. A branch nobody pushed is
+/// still listed, because the leak it carries is one `git push` away and the
+/// operator is the one who decides whether it matters.
+fn refs(root: &Path) -> Result<Vec<String>, String> {
+    Ok(git(
+        root,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads",
+            "refs/remotes",
+            "refs/tags",
+        ],
+    )?
+    .lines()
+    // `refs/remotes/<remote>/HEAD` is a symbolic ref to a branch already in
+    // this list, so counting it doubles one ref and informs nobody.
+    .filter(|r| !r.ends_with("/HEAD"))
+    .map(str::to_string)
+    .collect())
+}
+
+/// The files at a ref's tip that carry a banned string, by contents or by path
+/// — the same pair of surfaces [`scan`] covers in the working tree.
+fn tip_hits(root: &Path, name: &str, needles: &[String]) -> Result<Vec<String>, String> {
+    let mut args = vec!["grep", "--no-color", "-I", "-l", "-i", "-F"];
+    for needle in needles {
+        args.push("-e");
+        args.push(needle);
+    }
+    args.push(name);
+
+    let prefix = format!("{name}:");
+    let mut hits: Vec<String> = git(root, &args)?
+        .lines()
+        .filter_map(|l| l.strip_prefix(&prefix))
+        .map(str::to_string)
+        .collect();
+
+    let lowered: Vec<String> = needles.iter().map(|n| n.to_lowercase()).collect();
+    for path in git(root, &["ls-tree", "-r", "--name-only", name])?.lines() {
+        let lower = path.to_lowercase();
+        if lowered.iter().any(|n| lower.contains(n.as_str())) {
+            hits.push(path.to_string());
+        }
+    }
+
+    hits.sort();
+    hits.dedup();
+    Ok(hits)
+}
+
+/// Commits whose diff adds or removes a banned string anywhere in the reachable
+/// graph — the ones a tip-only scan cannot see, because the string was removed
+/// by a later commit that left the leak fully intact one click away.
+fn commits_touching(root: &Path, needles: &[String]) -> Result<Vec<String>, String> {
+    let mut shas = Vec::new();
+    for needle in needles {
+        let pickaxe = format!("-S{}", ere_literal(needle));
+        shas.extend(
+            git(
+                root,
+                &[
+                    "log",
+                    "--all",
+                    "--format=%H",
+                    "-i",
+                    "--pickaxe-regex",
+                    &pickaxe,
+                ],
+            )?
+            .lines()
+            .map(str::to_string),
+        );
+    }
+    Ok(unique(shas))
+}
+
+/// Commits whose *message* names one. Worth its own rule because the obvious
+/// rewrite — replay the trees with the string substituted — does not touch a
+/// message, so this is the half that survives a fix that looked complete.
+fn commits_naming(root: &Path, needles: &[String]) -> Result<Vec<String>, String> {
+    let mut shas = Vec::new();
+    for needle in needles {
+        let grep = format!("--grep={needle}");
+        shas.extend(
+            git(root, &["log", "--all", "--format=%H", "-i", "-F", &grep])?
+                .lines()
+                .map(str::to_string),
+        );
+    }
+    Ok(unique(shas))
+}
+
+/// `git`, with "found nothing" treated as an answer rather than a failure.
+///
+/// `git grep` and `git log --grep` exit 1 when they match nothing, which is the
+/// result this wants most of the time; anything above that is a real error and
+/// is reported as one rather than read as a clean repository.
+fn git(root: &Path, args: &[&str]) -> Result<String, String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .map_err(|e| format!("could not run `git {}`: {e}", args.join(" ")))?;
+    match out.status.code() {
+        Some(0 | 1) => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+        _ => Err(format!(
+            "`git {}` failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        )),
+    }
+}
+
+/// A literal, spelled so that POSIX ERE can read none of it as syntax.
+///
+/// `--pickaxe-regex` is what makes `-S` case-insensitive, and case matters: a
+/// name written three ways across a history is three leaks. But a configured
+/// value is the *name of a repo*, not a pattern its author debugged, so a `.`
+/// in it has to match a dot and nothing else. A bracket expression is the one
+/// ERE construct in which an otherwise-special character stands for itself; the
+/// three that cannot go inside one take a backslash instead.
+fn ere_literal(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            c if c.is_ascii_alphanumeric() || c == '_' => c.to_string(),
+            ']' | '^' | '\\' => format!("\\{c}"),
+            c => format!("[{c}]"),
+        })
+        .collect()
+}
+
+/// Deduplicated, in the order git reported them — which is newest first, so the
+/// sample in a finding is the most recent commits rather than an arbitrary set.
+fn unique(shas: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for sha in shas {
+        if seen.insert(sha.clone()) {
+            out.push(sha);
+        }
+    }
+    out
+}
+
+fn shorten(shas: &[String]) -> Vec<String> {
+    shas.iter()
+        .map(|s| s[..s.len().min(8)].to_string())
+        .collect()
+}
+
+/// Enough of a list to recognise it, and never the whole thing: these reports
+/// run in terminals and, once the name is a CI secret, in logs.
+fn sample(items: &[String]) -> String {
+    const SHOWN: usize = 3;
+    let head = items
+        .iter()
+        .take(SHOWN)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(", ");
+    if items.len() > SHOWN {
+        format!("{head}, … and {} more", items.len() - SHOWN)
+    } else {
+        head
+    }
 }
 
 /// §2.4's self-test discipline applies here too, and for the same reason: a
@@ -349,5 +621,155 @@ mod tests {
         files.push("logo.png".into());
         files.push("gone.md".into());
         assert!(findings(&root, &files, &[INVENTED], None).is_empty());
+    }
+
+    /// A throwaway repository, built commit by commit, because the whole point
+    /// of these rules is what git kept rather than what is on disk — a file
+    /// list cannot stand in for a ref graph.
+    ///
+    /// Committing a real string into a real repository is safe here for the
+    /// same reason the scans above are: it is invented at run time and lives in
+    /// a temporary directory that is not this one.
+    fn repo(label: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("charkit-history-{label}-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).expect("scratch repo");
+        git_ok(&dir, &["init", "-q", "-b", "main"]);
+        git_ok(&dir, &["config", "user.email", "gate@example.invalid"]);
+        git_ok(&dir, &["config", "user.name", "gate"]);
+        // Whoever runs the suite may sign their commits; this repository is
+        // deleted in a moment and has no key.
+        git_ok(&dir, &["config", "commit.gpgsign", "false"]);
+        dir
+    }
+
+    fn git_ok(dir: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .expect("git runs");
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn commit(dir: &Path, rel: &str, body: &str, message: &str) {
+        let path = dir.join(rel);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("scratch dir");
+        std::fs::write(&path, body).expect("scratch file");
+        git_ok(dir, &["add", "-A"]);
+        git_ok(dir, &["commit", "-q", "-m", message]);
+    }
+
+    fn published(root: &Path, names: &[&str]) -> Vec<Finding> {
+        let names: Vec<String> = names.iter().map(|n| n.to_string()).collect();
+        scan_history(root, &names).expect("the history scan runs")
+    }
+
+    fn refs_reported(found: &[Finding]) -> Vec<&str> {
+        found
+            .iter()
+            .filter(|f| f.file.starts_with("refs/"))
+            .map(|f| f.file.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn a_ref_whose_tip_publishes_the_name_is_reported() {
+        let root = repo("tip");
+        commit(
+            &root,
+            "README.md",
+            &format!("ported out of {INVENTED}\n"),
+            "docs",
+        );
+
+        let found = published(&root, &[INVENTED]);
+        assert_eq!(refs_reported(&found), ["refs/heads/main"]);
+        assert!(published(&root, &[]).is_empty(), "not caught unconfigured");
+    }
+
+    #[test]
+    fn a_name_scrubbed_from_the_tip_is_still_reported_in_the_commit_that_added_it() {
+        // Exactly this repository's own situation: the tree is clean and every
+        // commit that made it clean is still reachable from the branch.
+        let root = repo("scrubbed");
+        commit(&root, "README.md", &format!("out of {INVENTED}\n"), "one");
+        commit(&root, "README.md", "out of the source repo\n", "two");
+
+        let found = published(&root, &[INVENTED]);
+        assert!(refs_reported(&found).is_empty(), "the tip is clean");
+        let history: Vec<&Finding> = found.iter().filter(|f| f.file == HISTORY).collect();
+        assert_eq!(history.len(), 1);
+        assert!(history[0].message.contains("2 commit(s)"));
+    }
+
+    #[test]
+    fn a_tag_left_pointing_at_the_old_commit_is_reported_when_the_branch_is_clean() {
+        let root = repo("tag");
+        commit(&root, "README.md", &format!("out of {INVENTED}\n"), "one");
+        git_ok(&root, &["tag", "phase-0"]);
+        commit(&root, "README.md", "out of the source repo\n", "two");
+
+        assert_eq!(
+            refs_reported(&published(&root, &[INVENTED])),
+            ["refs/tags/phase-0"]
+        );
+    }
+
+    #[test]
+    fn a_file_named_after_the_repo_is_reported_even_when_every_line_of_it_is_clean() {
+        let root = repo("path");
+        commit(
+            &root,
+            &format!("docs/{INVENTED}-port.md"),
+            "Nothing in here says it.\n",
+            "notes",
+        );
+
+        let found = published(&root, &[INVENTED]);
+        assert_eq!(refs_reported(&found), ["refs/heads/main"]);
+        assert!(found[0].message.contains("1 tracked file(s)"));
+    }
+
+    #[test]
+    fn a_commit_message_that_names_it_is_reported_when_no_file_ever_did() {
+        let root = repo("message");
+        commit(
+            &root,
+            "README.md",
+            "clean\n",
+            &format!("port the {INVENTED} check"),
+        );
+
+        let found = published(&root, &[INVENTED]);
+        assert!(refs_reported(&found).is_empty(), "no file ever carried it");
+        assert_eq!(found.len(), 1);
+        assert!(found[0].message.contains("commit message(s)"));
+    }
+
+    #[test]
+    fn a_configured_name_is_matched_literally_by_the_commit_scan_too() {
+        // `a.c` as a pattern matches `abc`, and a name is not a pattern — the
+        // pickaxe is the one scan that has to be told so, because making it
+        // case-insensitive means handing git a regex.
+        let root = repo("literal");
+        commit(&root, "README.md", "use abc::x\n", "code");
+        assert!(published(&root, &["a.c"]).is_empty());
+        assert!(!published(&root, &["a.c", "abc"]).is_empty());
+    }
+
+    #[test]
+    fn a_repository_with_no_refs_at_all_reports_nothing_rather_than_failing() {
+        // `git log --all` is fatal in a repository with no commits, and a fresh
+        // `git init` is the state every clean-room instruction starts from.
+        let root = repo("empty");
+        assert!(published(&root, &[INVENTED]).is_empty());
     }
 }

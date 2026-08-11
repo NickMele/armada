@@ -163,6 +163,12 @@ home-directory one. Both rules are stated in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 with the grep, which also covers how to
 give CI the name — a repository secret, since the untracked local file never reaches a runner.
 
+A clean checkout is not a clean repository: pushed branches, tags and old commits publish their
+own copies, and no gate can rewrite them. `cargo xtask history` reports that surface — which
+refs and how many commits still carry a configured name — so the decision to rewrite is made
+against a number. It is a report, not a gate check, for the reasons in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4.
+
 A green grep only means no *crude* contamination. The subtler failure — an abstraction shaped
 around one repo because that is the only repo anyone saw — is invisible to it, and is what the
 six fixture configs exist to catch.

@@ -26,6 +26,7 @@ cargo xtask <command>
   keys            config keys in examples vs prose (-v lists one-sided keys)
   contamination   the ARCHITECTURE.md §2.4 grep, over crates/ and tests/
   privacy         the ARCHITECTURE.md §2.4 leak rules, over every tracked file
+  history         the same rules over every ref and commit — a report, not a gate
   boundaries      the ARCHITECTURE.md §1.5 layers contract, over the crate graph
 
 Exit: 0 clean, 1 findings, 2 could not run.
@@ -101,6 +102,16 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             }
         },
+        Some("history") => match privacy::history(&root) {
+            Ok(f) => {
+                findings.extend(f);
+                ran.push(history_label(&root));
+            }
+            Err(e) => {
+                eprintln!("xtask: history: {e}");
+                return ExitCode::from(2);
+            }
+        },
         Some("doclint") | None => {
             findings.extend(xref::check(&corpus));
             findings.extend(blocks::check(&corpus));
@@ -161,6 +172,18 @@ fn privacy_label(root: &Path) -> &'static str {
         "privacy"
     } else {
         "privacy (name rule unconfigured)"
+    }
+}
+
+/// The same distinction for `history`, which needs it more: its `$HOME` rule
+/// finds nothing in a repository whose commits were all written elsewhere, so
+/// an unconfigured run is *expected* to be silent and reads as an all-clear on
+/// exactly the surface the operator asked about.
+fn history_label(root: &Path) -> &'static str {
+    if privacy::name_rule_armed(root) {
+        "history"
+    } else {
+        "history (name rule unconfigured)"
     }
 }
 

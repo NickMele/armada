@@ -854,6 +854,34 @@ was**: a run with no name configured reports `privacy (name rule unconfigured)` 
 and *nothing was looked for*, which is the distinction this section has already been caught by
 twice.
 
+**The tree is not the repository.** Everything above runs against the checkout, and a public
+repository publishes far more than that: `origin/main`, every branch anyone pushed, every tag,
+and every commit reachable from one — all of them rendered by GitHub. A scrub can leave the
+working tree spotless and change nothing a visitor sees. `cargo xtask history` applies the same
+two rules to that surface instead:
+
+| What it reports | Why the file scan cannot |
+|---|---|
+| every ref whose tip carries a banned string, and how many files | a branch nobody has touched in a month still serves its own tree |
+| commits whose **diff** adds or removes one | a string a later commit removed is still one click away in the history |
+| commits whose **message** names one | the obvious rewrite replays trees and leaves every message untouched |
+
+It prints refs, counts and short hashes and never the matched string — the name is a
+repository secret, and these reports end up in terminals and logs.
+
+**It is deliberately not a gate check.** The only fixes are a history rewrite and a
+force-push: destructive, coordinated with everyone holding a clone, and the operator's call
+rather than CI's. Every commit already merged would fail such a gate forever — including the
+commits that did the scrubbing — and a gate that fails for a condition the contributor cannot
+act on is a gate that gets switched off. So `doclint` keeps guarding the only thing a pull
+request can still change, which is the tree, and this reports on request.
+
+| Owner | What is left once the tree is clean |
+|---|---|
+| the operator | rewrite the published history and force-push, then have every clone re-clone. The only fix that takes the string off `main`, off the tags and out of the commit views |
+| the operator | or delete the stale refs that carry it and accept the history, if the branches are the exposure that matters. Re-running the command says how much that removed |
+| nobody | a repository whose refs and commits are clean, where the rules above are the whole gate again |
+
 ---
 
 ### 2.5 Versioning: 0.x indefinitely
