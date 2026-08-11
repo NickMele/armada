@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "verb": "commands",
+  "workspace": "<workspace>",
+  "status": "OK",
+  "error": null,
+  "data": {
+    "command": "echoer",
+    "dispatched": true,
+    "child_exit": 0,
+    "argv": [
+      "echo",
+      "prune",
+      "--dry-run"
+    ]
+  }
+}

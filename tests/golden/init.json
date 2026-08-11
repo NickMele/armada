@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "verb": "init",
+  "workspace": "<workspace>",
+  "status": "READY",
+  "error": null,
+  "data": {
+    "port_block": {
+      "from": 5460,
+      "to": 5469
+    },
+    "claimed_at": "2026-08-09T14:02:11Z",
+    "ports": {
+      "api": 5460
+    },
+    "reaped": {},
+    "results": [
+      {
+        "id": "api",
+        "status": "READY",
+        "ports": {
+          "api": {
+            "port": 5460,
+            "state": "RESERVED"
+          }
+        },
+        "duration_ms": 0
+      }
+    ]
+  }
+}

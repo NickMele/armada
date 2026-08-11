@@ -80,6 +80,26 @@ impl ErrClass {
     }
 }
 
+impl fmt::Display for ErrClass {
+    /// The documented spelling, which is the one the `--json` payload uses.
+    ///
+    /// Derived `Debug` would print `BadConfig`, so a human reading the terminal
+    /// and an agent reading the envelope would see two different vocabularies
+    /// for one enum — and the project's whole thesis is that this is learned
+    /// once.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            ErrClass::BadInvocation => "bad_invocation",
+            ErrClass::BadConfig => "bad_config",
+            ErrClass::ToolFailed => "tool_failed",
+            ErrClass::Timeout => "timeout",
+            ErrClass::Aborted => "aborted",
+            ErrClass::Environment => "environment",
+            ErrClass::CharBug => "char_bug",
+        })
+    }
+}
+
 /// Where a `bad_config` failure is, in the one grammar `where` uses for that
 /// class: `char.yml:` and then a locator (PLAN.md §3.1, §4.1.1 decision 4).
 ///
@@ -209,9 +229,55 @@ impl Status {
     }
 }
 
+impl fmt::Display for Status {
+    /// One spelling everywhere: `FAILED`, never `FAIL`, and never `Failed`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Status::Ready => "READY",
+            Status::Up => "UP",
+            Status::Down => "DOWN",
+            Status::Clean => "CLEAN",
+            Status::Pass => "PASS",
+            Status::Ok => "OK",
+            Status::Skipped => "SKIPPED",
+            Status::Partial => "PARTIAL",
+            Status::Failed => "FAILED",
+            Status::Aborted => "ABORTED",
+            Status::Dead => "DEAD",
+            Status::Timeout => "TIMEOUT",
+            Status::Running => "RUNNING",
+            Status::Waiting => "WAITING",
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The terminal-state enum and the error-class enum each have exactly one
+    /// spelling, and it is the one the envelope uses. Two vocabularies for one
+    /// value is how `FAIL` and `FAILED` coexisted in an earlier draft.
+    #[test]
+    fn the_human_spelling_is_the_json_spelling() {
+        for status in [Status::Failed, Status::Skipped, Status::Ready, Status::Ok] {
+            assert_eq!(
+                format!("\"{status}\""),
+                serde_json::to_string(&status).unwrap()
+            );
+        }
+        for class in [
+            ErrClass::BadConfig,
+            ErrClass::CharBug,
+            ErrClass::ToolFailed,
+            ErrClass::Environment,
+        ] {
+            assert_eq!(
+                format!("\"{class}\""),
+                serde_json::to_string(&class).unwrap()
+            );
+        }
+    }
 
     /// The exit map, asserted whole. Nothing else in the suite catches a
     /// silent renumbering: golden snapshots capture stdout, not exit status

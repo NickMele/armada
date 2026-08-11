@@ -1,8 +1,10 @@
 # charkit — architecture
 
-> **Status:** agreed in Phase 0 (see [`PHASES.md`](PHASES.md)). Phase 1 has landed: the
-> `char.yml` contract exists as a schema, the structs that mirror it and six fixtures. There
-> is still no runtime — `char` has no verbs.
+> **Status:** agreed in Phase 0 (see [`PHASES.md`](PHASES.md)). Phases 1 and 2 have landed:
+> the `char.yml` contract exists as a schema, the structs that mirror it and six fixtures, and
+> the ownership layer exists behind `init`, `clean`, `status` and the `commands:` dispatcher.
+> The three seams, the reducer's shape for the claim loop and the `--json` envelope are now
+> code rather than sketches. `up`, `down` and `check` are not built.
 >
 > This document records **principles and the reasoning behind them**. The reasoning is the
 > load-bearing part: a rule without its reason gets discarded the first time it is
@@ -899,11 +901,16 @@ when the copy and the owner disagree, the owner wins and the copy is the bug.
 
 ### Test tiers
 
-| Tier | Contents | Speed |
-|---|---|---|
-| `tests/unit/` | Pure core. Scheduler reducer, scope resolution, verdict aggregation, config resolution, port selection. No I/O of any kind. | fast |
-| `tests/integration/` | Real subprocesses and real files. Process-group spawn and kill with no orphans surviving; two directories claiming ports concurrently; compose up/down with labels verified gone. | slow |
-| `tests/e2e/` | The real CLI against scratch repos, end to end. | slowest |
+| Tier | Where it lives | Contents | Speed |
+|---|---|---|---|
+| unit | `#[cfg(test)]` modules beside the code they test, in `crates/*/src/` | Pure core. Scheduler reducer, scope resolution, verdict aggregation, config resolution, port selection. No I/O of any kind. | fast |
+| integration | `crates/*/tests/`, everything but the e2e file | Real subprocesses and real files. Process-group spawn and kill with no orphans surviving; two directories claiming ports concurrently; compose up/down with labels verified gone. | slow |
+| e2e | `crates/cli/tests/e2e.rs` | The real CLI against scratch repos, end to end. | slowest |
+
+The tiers are a rule about what a test may touch, not three directories: Rust puts unit tests
+in-module, so a `tests/unit/` would mean the pure core testing itself from outside its own
+crate. The golden snapshots the CLI tier asserts against are data rather than a tier, and live
+at `tests/golden/` (§1.6).
 
 Integration and e2e run on both `ubuntu-latest` and `macos-latest` in the Actions matrix.
 

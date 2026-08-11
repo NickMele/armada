@@ -120,6 +120,25 @@ and cited this file for a measurement that was never here. What defeats it is an
 listener, and modern Node resolving `localhost` to `::1` makes that the ordinary dev server
 rather than an exotic case.
 
+### A bind probe is itself a bind, so two concurrent probes collide
+
+Measured 2026-08-10, while writing phase 2's golden suite. Two processes (or two
+threads) probing the *same* port at the same instant make one of them see the
+other's momentary listener and report the port taken:
+
+```
+thread A: bind 127.0.0.1:5460 -> ok        (held for microseconds, then dropped)
+thread B: bind 127.0.0.1:5460 -> EADDRINUSE
+```
+
+**If you assume otherwise:** a golden snapshot that records a port's state
+becomes flaky in exactly the way that looks like a real conflict, and
+`char status --all` run twice at once can report a `CONFLICT` that does not
+exist. It is inherent to bind-probing rather than a bug to fix — `connect()`
+answers a different question — so the rule is that a probe's answer is a
+point-in-time reading and nothing may be serialised against it. char's own
+suite serialises the runs that snapshot a port state, for this reason.
+
 So a probe must bind **both** `127.0.0.1` and `[::1]` and treat either `EADDRINUSE` as taken,
 and `char status` must connect on both families before reporting `RESERVED`. `SO_REUSEPORT` on
 both sides remains undetectable; nothing char does prevents that, so it is a known limit rather
@@ -198,6 +217,22 @@ whose handle is dropped without `wait()` leaves a `<defunct>` entry until char i
 
 **Rule: every spawned `Child` is waited on, or explicitly reaped.** A long-lived
 `char check --detach` accumulating zombies across a fifteen-minute run is the case that bites.
+
+### A zombie answers `ESRCH` to `kill(pid, 0)` — so "is it alive?" and `ps` disagree
+
+Measured 2026-08-10 on darwin, while writing phase 2's process-group suite.
+
+```
+child exits, not yet waited on
+  kill(pid, 0)              -> -1, ESRCH      "gone"
+  ps -o stat= -p <pid>      -> Z              still listed
+```
+
+**If you assume otherwise:** a test that kills a process group and then counts
+`ps` output finds one process left and concludes `killpg` did not reach the
+tree — when what it actually found is char's own un-reaped direct child. The
+liveness probe is right and the count is right; they are answering different
+questions. **Confirm a kill with the signal-0 probe, and reap before counting.**
 
 ### `std::process::exit` skips a `BufWriter` flush — and it is size-dependent
 
@@ -320,6 +355,48 @@ Two things to note, and neither is what was predicted:
 
 Whichever is chosen, the "exit code = `f(error.class)`" rule needs an explicit carve-out for
 signal-derived codes, covering `130` and `141` together.
+
+## Docker CLI — reading labels back off a resource
+
+Measured against **Docker 29.6.2**, 2026-08-10. char stamps three labels on
+everything it creates and reaps by them, so reading them back is the other half
+of the mechanism.
+
+### `docker image ls --format` cannot print labels at all, unlike every other `ls`
+
+```sh
+docker ps           --format '{{.ID}}|{{.Labels}}'    # works
+docker network ls   --format '{{.ID}}|{{.Labels}}'    # works
+docker volume  ls   --format '{{.Name}}|{{.Labels}}'  # works
+docker image   ls   --format '{{.ID}}|{{.Labels}}'
+# template parsing error: can't evaluate field Labels in type *formatter.imageContext
+docker image   ls   --format '{{.ID}}|{{.Label "x"}}'
+# template parsing error: can't evaluate field Label  in type *formatter.imageContext
+```
+
+**If you assume otherwise:** the obvious uniform implementation — one `ls
+--format` per kind — works for three of the four kinds and *errors* on images,
+which is the kind holding roughly 2.1 GB per stale workspace. So labels are read
+through `inspect`, which works for every type.
+
+### …and `inspect` keeps labels in two different places
+
+```sh
+docker inspect --type=container --format '{{index .Config.Labels "k"}}'   # containers
+docker inspect --type=image     --format '{{index .Config.Labels "k"}}'   # images
+docker inspect --type=network   --format '{{index .Labels "k"}}'          # networks
+docker inspect --type=volume    --format '{{index .Labels "k"}}'          # volumes
+```
+
+A label that is not set renders as the literal `<no value>` for containers,
+images and networks, and as an empty string for volumes — so an absent label and
+an empty one are indistinguishable in the text.
+
+**Consequence char acts on:** labels are read as `{{json …}}` and parsed, not as
+a delimited line. A workspace path may legally contain a tab or a newline, and
+`char.workspace_path` is a real path — a delimiter a value can contain is one
+that eventually attributes a resource to the wrong workspace, which is the
+failure the label exists to prevent.
 
 ## Docker Compose
 
