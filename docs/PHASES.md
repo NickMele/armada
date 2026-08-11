@@ -28,16 +28,21 @@ third renumbering.*
 
 ## 8. Phases
 
-Built **greenfield in its own repo**, not extracted incrementally through Chariot.
+Built **greenfield in its own repo**, not extracted incrementally through the source repo.
 
 ### 8.1 Why greenfield, and the anti-contamination strategy
 
-The goal is that charkit carries no Chariot assumptions. Two distinct risks, and they need
+**"The source repo" is the private Django+Next monorepo char is being ported out of**, and
+whose `scripts/char/` §9 describes. This repo never names it or its path — both are supplied
+locally, from an untracked file or an environment variable
+([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7). Every reference below uses that term.
+
+The goal is that charkit carries no source-repo assumptions. Two distinct risks, and they need
 different defenses:
 
 | Contamination | Looks like | Defense |
 |---|---|---|
-| **Crude** | A hardcoded `backend/` path, a `tilt` import, a `.claude/worktrees` assumption | Greenfield makes it *structurally impossible* — the agent cannot see Chariot except in phase 3's harvest. Backed by a grep gate. |
+| **Crude** | A hardcoded `backend/` path, a `tilt` import, a `.claude/worktrees` assumption | Greenfield makes it *structurally impossible* — the agent cannot see the source repo except in phase 3's harvest. Backed by a grep gate. |
 | **Subtle** | An abstraction shaped around Django+Next because that is the only repo the agent ever saw | **Six fixture configs in phase 1.** Isolation does nothing here — an agent given one example generalizes from n=1 regardless of repo topology. |
 
 **The fixture set is the more important of the two and is non-optional.** Write all six
@@ -90,23 +95,24 @@ its mitigation. That mitigation now rests on one real data point. Two consequenc
 Phase 8's target repository is also unnamed. If it ever turns out to be the same repo a
 fixture was drawn from, the final validation is circular and does not count.
 
-Greenfield was chosen over extract-through-Chariot for two reasons beyond contamination:
+Greenfield was chosen over extracting in place for two reasons beyond contamination:
 
-1. **Structural guarantees beat policed ones.** "The agent cannot see Chariot" is stronger
-   than "the agent is told not to look."
+1. **Structural guarantees beat policed ones.** "The agent cannot see the source repo" is
+   stronger than "the agent is told not to look."
 2. **Extract-later has a specific, historically common failure mode.** Once phases 2–4 land
-   inside Chariot the daily pain is gone, nothing forces the split, and it quietly never
-   happens. Greenfield forces the code to be extractable because it has nowhere else to live.
+   inside the source repo the daily pain is gone, nothing forces the split, and it quietly
+   never happens. Greenfield forces the code to be extractable because it has nowhere else to
+   live.
 
 **What greenfield gives up, and how to buy it back:** continuous validation against a real
 repo. Fixtures catch config-model failures but not runtime ones — you would not discover
 "the scheduler deadlocks when two exclusive resources overlap under load" until phase 6.
 
-> **Read-only parallel run, from phase 3 onward.** Point charkit at the Chariot checkout,
-> run `char check`, and diff the verdicts against `scripts/char`'s output. This is *not* a
-> Chariot dependency and *not* a Chariot PR — zero risk to Chariot's merge gate — but it
-> restores most of the continuous validation and turns phase 6 from a cliff into a
-> formality. Do this at the end of every phase from 3 on.
+> **Read-only parallel run, from phase 3 onward.** Point charkit at the source repo's
+> checkout, run `char check`, and diff the verdicts against `scripts/char`'s output. This
+> creates *no* dependency there and opens *no* PR against it — zero risk to that repo's merge
+> gate — but it restores most of the continuous validation and turns phase 6 from a cliff into
+> a formality. Do this at the end of every phase from 3 on.
 
 ### Phase 0 — Foundations *(human + agent, working session, no code)*
 
@@ -114,11 +120,11 @@ repo. Fixtures catch config-model failures but not runtime ones — you would no
 Nothing else. This is a conversation that produces documents, not a build step.
 
 **Why this is first, and not skipped:** it is the third anti-contamination defense, and it
-catches what the other two miss. Chariot's `check.py` has a *structure* — 3,383 lines of it.
-Without stated architecture principles, phase 3's port inherits that structure by default,
-because "make it work like it did" is the path of least resistance. Deciding the target shape
-first turns the port from a copy into **a rewrite into a known architecture**, and gives the
-reviewer an objective standard to reject against.
+catches what the other two miss. The source repo's `check.py` has a *structure* — 3,383 lines
+of it. Without stated architecture principles, phase 3's port inherits that structure by
+default, because "make it work like it did" is the path of least resistance. Deciding the
+target shape first turns the port from a copy into **a rewrite into a known architecture**,
+and gives the reviewer an objective standard to reject against.
 
 #### 0.1 Architecture principles — recommended; confirm or override
 
@@ -131,10 +137,10 @@ reviewer an objective standard to reject against.
 
 | # | Principle | Why it earns its place |
 |---|---|---|
-| 1 | **Every outside-world interaction sits behind an injected seam** — subprocess, filesystem, docker, git, clock, network | This is why Chariot's 2,694 test lines run hermetically with no mocking framework: `run_fn` is *passed in*, not imported. It is the load-bearing pattern in the existing code, the one thing worth copying wholesale, and the same instinct as Chariot's own adapter-first rule. |
+| 1 | **Every outside-world interaction sits behind an injected seam** — subprocess, filesystem, docker, git, clock, network | This is why the source repo's 2,694 test lines run hermetically with no mocking framework: `run_fn` is *passed in*, not imported. It is the load-bearing pattern in the existing code, the one thing worth copying wholesale, and the same instinct as that repo's own adapter-first rule. |
 | 2 | **Pure core, imperative shell** | Config resolution, scope computation, scheduling, verdict aggregation = pure functions over data. Spawning, writing, labeling live at the edge. Most tests then need no fixture at all. |
 | 3 | **The CLI is a thin wrapper over an importable library** | Already forced by the MCP server sharing the logic layer — but state it, because the failure mode is logic quietly accumulating in command functions. Every command: parse args → call library → render. |
-| 4 | **No ambient state** | Workspace is resolved once and passed explicitly, never read from a global or inferred mid-call. Chariot's `--target` threading is the precedent, and it is what makes `--project` / `--all` scoping tractable. |
+| 4 | **No ambient state** | Workspace is resolved once and passed explicitly, never read from a global or inferred mid-call. The source repo's `--target` threading is the precedent, and it is what makes `--project` / `--all` scoping tractable. |
 | 5 | **Dependencies point one way: core → adapters** | An adapter may never import the core's decision logic. Enforceable with a lint rule; worth doing. |
 | 6 | **Every verb answers in a machine-readable shape** | `--json` is not an afterthought on some subset. The renderer is the only thing differing between human and agent output. |
 
@@ -144,13 +150,13 @@ reviewer an objective standard to reject against.
 > **scoped** (mandatory in the core, test-alongside at adapters) rather than absolute; PRs
 > are sized for review with no phase branches; the merge gate runs `no-mistakes` plus a
 > GitHub Actions matrix; versioning stays `0.x` with no `1.0` commitment; and dogfooding is a
-> **test** until phase 6, only becoming the gate once Chariot depends on it.
+> **test** until phase 6, only becoming the gate once the source repo depends on it.
 
 | # | Principle | Note |
 |---|---|---|
 | 1 | **TDD throughout** — failing test → minimal implementation → passing test | Non-negotiable given this tool becomes a merge gate |
-| 2 | **Branch + PR per phase, never commit to main** | Chariot enforces this with a `PreToolUse` hook — port the hook on day one rather than relying on discipline |
-| 3 | **Conventional commits** | Matches Chariot's existing history (`build(family):`, `char check:`) |
+| 2 | **Branch + PR per phase, never commit to main** | The source repo enforces this with a `PreToolUse` hook — port the hook on day one rather than relying on discipline |
+| 3 | **Conventional commits** | Matches the source repo's existing history (`build(family):`, `char check:`) |
 | 4 | **Merge gate = lint + typecheck + tests + the contamination grep** | The grep is the phase-3 acceptance test made permanent |
 | 5 | **Semver from the first publish, with a changelog** | Cheap now, painful to retrofit once anything depends on it |
 | 6 | **Dogfood from phase 3 onward** | charkit gets its own `char.yml` and gates itself with itself the moment `char check` runs. Strongest available forcing function, and it makes the README example real rather than illustrative. |
@@ -161,11 +167,11 @@ reviewer an objective standard to reject against.
 |---|---|---|
 | **Public or private repo?** | public / private-for-now | Changes whether CI is free, whether the license matters, how much README polish is warranted. Private → public later is easy; the reverse is not. |
 | **License, if public** | Apache-2.0 / MIT / none | Apache-2.0 adds a patent grant and clears corporate legal at no adoption cost. Only matters if public. |
-| **CI** | GitHub Actions / local gate only / both | Actions is free for public repos, and unlike Chariot there is no billing constraint. Real CI matters more for a package other repos depend on. |
+| **CI** | GitHub Actions / local gate only / both | Actions is free for public repos, and unlike the source repo there is no billing constraint. Real CI matters more for a package other repos depend on. |
 | **Typing strictness** | mypy strict / basic / none | Strict from commit one is cheap; retrofitting onto 3,000 lines is not. |
 | **Rust edition / MSRV** | 2021 edition | Pin an MSRV in `Cargo.toml` and raise it deliberately. Users are unaffected either way — they receive a static binary, so no toolchain is required to run `char`. |
 | **Test layers** | unit only / unit + a real-subprocess integration tier | Principle 1 makes unit tests hermetic — which means **nothing exercises real process-group kill** unless you deliberately add a small integration tier. Recommend adding one: it covers the exact failure char exists to prevent. |
-| **Coverage** | gated / report-only | Chariot runs report-only; same is probably right here. |
+| **Coverage** | gated / report-only | The source repo runs report-only; same is probably right here. |
 
 #### 0.4 Done when — ✓ satisfied
 
@@ -277,8 +283,9 @@ is in this phase: the spawn wrapper, port claiming, `clean`, and the run lease `
 entries now take (`PLAN.md` §4.3). Grants arrive in phase 4 and change nothing already shipped.
 
 Moving it here is what makes phase 2.5 possible, and `PLAN.md` §4.5 calls it critical path: it
-is the entire mechanism by which Chariot keeps `worktrees` / `tickets` / `design` / `baselines`
-while giving up `check` and `servers`. The surface is small but touches several subsystems:
+is the entire mechanism by which the source repo keeps `worktrees` / `tickets` / `design` /
+`baselines` while giving up `check` and `servers`. The surface is small but touches several
+subsystems:
 
 - transparent argv passthrough and the child's exit code
 - `env:` layering over the inherited environment, including `${port.NAME}` substitution
@@ -332,8 +339,8 @@ Recorded rather than fixed, because phase 2.5 is the only phase licensed to send
 
 ### Phase 2.5 — A real repo adopts the ownership layer *(first contact)*
 
-**Chariot takes the dependency for `init` / `clean` / `status` / `commands:` only, and keeps
-its own `check.py` and `servers.py` untouched.**
+**The source repo takes the dependency for `init` / `clean` / `status` / `commands:` only, and
+keeps its own `check.py` and `servers.py` untouched.**
 
 Everything else in this plan is validated against fixtures written by the same people who wrote
 the plan. This is the first phase where a repo that was not designed around charkit has to
@@ -343,11 +350,11 @@ vocabulary all reached a real repo only after `check` and `up`/`down` were built
 
 **It is affordable precisely here and nowhere earlier.** The subsystem with the strongest
 evidence behind it is this one: the 29-leftover-networks outage (§1 of `PLAN.md`) is an
-ownership failure, not a check failure. It is also the subsystem with no incumbent inside
-Chariot to fight — `worktrees.py` does part of it badly and knows it. `check.py` and
+ownership failure, not a check failure. It is also the subsystem with no incumbent inside the
+source repo to fight — `worktrees.py` does part of it badly and knows it. `check.py` and
 `servers.py` stay, so nothing the repo depends on daily is at risk.
 
-**Done when:** a Chariot worktree is created and destroyed entirely through `char init` and
+**Done when:** a source-repo worktree is created and destroyed entirely through `char init` and
 `char clean`, five worktrees coexist with non-overlapping port blocks, `char status --project`
 reports all five, and **deleting a worktree with `rm -rf` leaves nothing behind that the next
 `char init` does not reclaim** — verified with `docker network ls` and `docker volume ls`
@@ -362,8 +369,8 @@ evidence the ownership model has ever received, and the fixture set rests on one
 change discovered in phase 6 is not. Record what changed and why, in the same shape §8.1 asks
 of the fixtures.
 
-> **This phase does not read the Chariot repo under the clean-room rule** (§11) — it *modifies*
-> it, as an ordinary consumer, from the outside. The rule forbids porting Chariot's
+> **This phase does not read the source repo under the clean-room rule** (§11) — it *modifies*
+> it, as an ordinary consumer, from the outside. The rule forbids porting that repo's
 > implementation into charkit; it does not forbid charkit having a user. Phase 3's harvester is
 > still the only agent that may read `scripts/char/` for its contents.
 
@@ -386,8 +393,8 @@ test functions.
 
 | Agent | Reads | Produces |
 |---|---|---|
-| **Harvester** | `~/Development/chariot/scripts/char/` | `docs/harvest.md` — a behaviour spec plus **a written list of every trap and bug-shaped branch found**. Plus the ported test *cases*. |
-| **Implementer** | this plan, `ARCHITECTURE.md`, the fixtures, the harvest doc, the tests. **Never opens the Chariot repo.** | `crates/` |
+| **Harvester** | The source repo's `scripts/char/`, at the locally configured path (§8.1) | `docs/harvest.md` — a behaviour spec plus **a written list of every trap and bug-shaped branch found**. Plus the ported test *cases*. |
+| **Implementer** | this plan, `ARCHITECTURE.md`, the fixtures, the harvest doc, the tests. **Never opens the source repo.** | `crates/` |
 
 The harvest step is mandatory and is the whole reason a rewrite is safe here. The value in
 those 3,383 lines is not the code — it is the bug fixes discovered by running against a real
@@ -396,7 +403,7 @@ danger, and charkit has no continuous real-repo validation until phase 6, so any
 would not resurface until then.
 
 Substantively: replace `CHECK_CATALOG` with the config loader, `domain` with `component`, and
-strip every Chariot-specific path, turbo filter and interpreter-directory assumption.
+strip every source-repo-specific path, turbo filter and interpreter-directory assumption.
 
 **`needs:` on a check gates in this phase and starts in phase 4.** The end state is that a
 check needing `postgres` brings it up — one command instead of three, which matters when the
@@ -484,12 +491,12 @@ services.
 > review-sized PRs; `ARCHITECTURE.md` §2.2 already makes review the binding constraint rather than phase
 > boundaries.
 
-> **Considered and rejected: moving phase 5 after Chariot adoption.** Adoption needs `check`,
-> `up`/`down`/`clean`, `init` and `commands:` — not the evidence scanner, `agents-md` or the
-> MCP server, whose real consumer is phase 8. Reordering would buy real-repo validation a
-> phase sooner. It loses on one point, and it is decisive: Chariot would then adopt charkit
-> without `config verify`, which `PLAN.md` §5 calls load-bearing. One hand-written config could survive
-> that; everything after it would not.
+> **Considered and rejected: moving phase 5 after the source repo's adoption.** Adoption needs
+> `check`, `up`/`down`/`clean`, `init` and `commands:` — not the evidence scanner, `agents-md`
+> or the MCP server, whose real consumer is phase 8. Reordering would buy real-repo validation
+> a phase sooner. It loses on one point, and it is decisive: the source repo would then adopt
+> charkit without `config verify`, which `PLAN.md` §5 calls load-bearing. One hand-written
+> config could survive that; everything after it would not.
 
 **Done when:** a scratch repo with a bare `docker-compose.yml` plus a long-running command
 comes up, gets ready-checked, and tears down completely — `docker ps` and `lsof` clean
@@ -558,10 +565,10 @@ nothing else in the corpus tests, and it is the one an agent's behaviour changes
 a repo it has never seen — `char config scan` → the agent authors → `char config verify`
 passes, with no human in the loop.
 
-### Phase 6 — Chariot adopts it
+### Phase 6 — The source repo adopts it
 
-A Chariot PR: delete `scripts/char/check.py` and `servers.py`, and move everything char does not
-replace into a `commands:` block (`PLAN.md` §4.5).
+A PR against the source repo: delete `scripts/char/check.py` and `servers.py`, and move
+everything char does not replace into a `commands:` block (`PLAN.md` §4.5).
 
 **The dependency, `bin/char`, the `commands:` block and the whole ownership half are already
 there** — phase 2.5 did that, and has been in daily use since. So this phase is narrower than
@@ -570,7 +577,7 @@ with its worktrees. The table below is the full remaining surface.
 
 **The full dispatch surface, confirmed by inspection rather than assumed:**
 
-| Chariot command | Subcommands | Disposition |
+| Source-repo command | Subcommands | Disposition |
 |---|---|---|
 | `check` | passthrough | charkit `check` |
 | `stack` | start, stop, restart, open, clean | charkit `up` / `down` / `clean` — **except `open` and `restart`**, which have no charkit verb |
@@ -605,8 +612,8 @@ So the repo-local command shrinks to "create the worktree, then shell out to `ch
 Ownership inference from compose's `working_dir` label goes away entirely, because charkit
 stamps `char.workspace=<id>` itself.
 
-**Done when:** `char check --all-files` is green in Chariot and the worktree flow still works end
-to end.
+**Done when:** `char check --all-files` is green in the source repo and the worktree flow still
+works end to end.
 
 **Expect the most rework here** — six phases of drift surface in this one PR.
 
@@ -626,7 +633,7 @@ that as a floor and re-measure at this phase. The install is a single download a
 is a second channel for people who would rather `cargo install`; a Homebrew tap is a third,
 later.
 
-Chariot's git dependency is repointed at a released binary as part of this phase.
+The source repo's git dependency is repointed at a released binary as part of this phase.
 
 **Done when:** a clean machine with no toolchain of any kind runs the one-liner and gets a
 working `char`. Verify on a container with neither Rust nor Python installed — the whole point
@@ -643,9 +650,10 @@ Adopt char in a repo that is *not* Django + Next (a multi-language repo), using 
 
 ## 9. Source material
 
-The reference implementation lives at `~/Development/chariot/scripts/`. **It is Python;
-charkit is Rust** (`PLAN.md` §10.1), so every row below is a source of *behaviour*, never of code. The
-line counts indicate how much behaviour there is to harvest, not how much work the rewrite is.
+The reference implementation is the source repo's `scripts/` directory, at the locally
+configured path (§8.1). **It is Python; charkit is Rust** (`PLAN.md` §10.1), so every row below
+is a source of *behaviour*, never of code. The line counts indicate how much behaviour there is
+to harvest, not how much work the rewrite is.
 
 | Path | Lines | Role in this plan |
 |------|------:|-------------------|
@@ -687,9 +695,9 @@ line counts indicate how much behaviour there is to harvest, not how much work t
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| **Overfitting to Chariot** — the abstraction gets shaped around Django+Next because it is the only repo the agent has seen. Isolation does *not* prevent this. | **High** | **Six fixture configs in phase 1** (§8.1). This is the single most important guard in the plan. |
-| **Six phases of drift surface in phase 6.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against Chariot from phase 3 onward (§8.1). Expect substantial rework in phase 6 regardless. |
-| **Crude contamination** — a Chariot path or import follows the code in during phase 3. | Med | Phase-3 acceptance test runs the contamination grep — **defined only in `ARCHITECTURE.md` §2.4**, because a copy inside a markdown table is both unrunnable and a second thing to keep in sync — and it must return nothing. Plus a PreToolUse hook that denies the source-repo path to every agent but the harvester. **Only phase 3's harvester has Chariot access.** |
+| **Overfitting to the source repo** — the abstraction gets shaped around Django+Next because it is the only repo the agent has seen. Isolation does *not* prevent this. | **High** | **Six fixture configs in phase 1** (§8.1). This is the single most important guard in the plan. |
+| **Six phases of drift surface in phase 6.** Isolation removes continuous real-repo validation. | High | Read-only parallel run against the source repo from phase 3 onward (§8.1). Expect substantial rework in phase 6 regardless. |
+| **Crude contamination** — a source-repo path or import follows the code in during phase 3. | Med | Phase-3 acceptance test runs the contamination grep — **defined only in `ARCHITECTURE.md` §2.4**, because a copy inside a markdown table is both unrunnable and a second thing to keep in sync — and it must return nothing. Plus a PreToolUse hook that denies the source-repo path to every agent but the harvester. **Only phase 3's harvester has source-repo access.** |
 | **Config expressiveness pressure** once a second repo lands. | Med | Four substitutions plus two scoped placeholders, hard cap (`PLAN.md` §4.4). Escape hatch is a generator script. |
 | **Machine-global state corruption** with several agents claiming or renewing leases simultaneously. | Low | SQLite transactions (`PLAN.md` §4.3). Was Med when this was a JSON file rewritten under an `O_EXCL` lockfile; ten-minute runs renewing heartbeats made that write pattern the contended path, which is why the store changed. |
 | **`curl \| sh` is a trust ask** and some environments block it. | Low | `uvx` and `pipx` cover anyone who will not run it. Publish the script's source in-repo. |
@@ -700,8 +708,8 @@ line counts indicate how much behaviour there is to harvest, not how much work t
 
 - **Phase 0 produces documents only.** Phase 1 lands alone and ships all **six** fixtures.
   Do not fan out until the config contract is committed.
-- **Only phase 3's harvester has access to the Chariot repo.** Every other phase works from
-  this document and the fixtures. If a later phase feels like it needs to look at Chariot,
+- **Only phase 3's harvester has access to the source repo.** Every other phase works from
+  this document and the fixtures. If a later phase feels like it needs to look at that repo,
   that is a signal the plan is underspecified — fix the plan, don't peek.
 - Phases 2 and 4 parallelize moderately; **phase 5's evidence scanner is the widest fan-out**
   (one agent per parser).
