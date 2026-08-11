@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "components": {
+    "control": {
+      "root": "apps/control",
+      "match": [
+        "apps/control/**"
+      ],
+      "setup": [
+        {
+          "cmd": "mix deps.get",
+          "shell": false
+        }
+      ],
+      "run": {
+        "driver": "command",
+        "cmd": "mix phx.server",
+        "shell": false,
+        "ports": {
+          "http": 4000
+        },
+        "ready": {
+          "kind": {
+            "log": "Running ControlWeb.Endpoint"
+          },
+          "timeout": 120
+        },
+        "needs": [
+          {
+            "component": "postgres"
+          }
+        ],
+        "env": {
+          "MIX_ENV": "dev",
+          "PORT": "${port.http}"
+        }
+      },
+      "checks": {
+        "lint": {
+          "id": "control:lint",
+          "cmd": "mix format --check-formatted ${files}",
+          "shell": false,
+          "timeout": 900,
+          "cost": 1,
+          "scope": "file"
+        },
+        "test": {
+          "id": "control:test",
+          "cmd": "mix test ${files}",
+          "shell": false,
+          "timeout": 900,
+          "cost": 2,
+          "scope": "file",
+          "needs": [
+            {
+              "component": "postgres"
+            }
+          ],
+          "env": {
+            "MIX_ENV": "test"
+          }
+        },
+        "types": {
+          "id": "control:types",
+          "cmd": "mix dialyzer",
+          "shell": false,
+          "timeout": 1200,
+          "cost": 2,
+          "scope": "component"
+        }
+      }
+    },
+    "postgres": {
+      "run": {
+        "driver": "compose",
+        "file": [
+          "docker-compose.yml"
+        ],
+        "ports": {
+          "pg": 5432
+        },
+        "ready": {
+          "kind": {
+            "exec": "pg_isready -q -h 127.0.0.1 -p ${port.pg}"
+          },
+          "timeout": 90
+        }
+      }
+    },
+    "worker": {
+      "root": "services/worker",
+      "match": [
+        "services/worker/**"
+      ],
+      "setup": [
+        {
+          "cmd": "cargo fetch --manifest-path services/worker/Cargo.toml",
+          "shell": false
+        }
+      ],
+      "owns_files": [
+        ".cache/worker-target"
+      ],
+      "run": {
+        "driver": "command",
+        "cmd": "cargo run --manifest-path services/worker/Cargo.toml",
+        "shell": false,
+        "ports": {
+          "worker": 7000
+        },
+        "ready": {
+          "kind": {
+            "tcp": "worker"
+          },
+          "timeout": 60
+        },
+        "needs": [
+          {
+            "component": "control"
+          }
+        ],
+        "env": {
+          "CARGO_TARGET_DIR": ".cache/worker-target",
+          "CONTROL_URL": "http://127.0.0.1:${port.http}"
+        },
+        "owns_containers": "label=char.workspace=${workspace.id}",
+        "owns_images": "label=char.workspace=${workspace.id}",
+        "owns_ports": [
+          "worker"
+        ]
+      },
+      "checks": {
+        "lint": {
+          "id": "worker:lint",
+          "cmd": "cargo clippy --manifest-path services/worker/Cargo.toml -- -D warnings",
+          "shell": false,
+          "timeout": 900,
+          "cost": 2,
+          "scope": "component"
+        },
+        "test": {
+          "id": "worker:test",
+          "cmd": "cargo test --manifest-path services/worker/Cargo.toml",
+          "shell": false,
+          "timeout": 600,
+          "cost": 2,
+          "scope": "component"
+        }
+      }
+    }
+  }
+}

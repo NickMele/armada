@@ -1,0 +1,33 @@
+[package]
+name = "charkit"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "char — one consistent vocabulary for managing a repo's tech stack."
+
+# The only crate that depends on both, and the only one that wires them
+# together (ARCHITECTURE.md §1.5).
+# A library target as well as the binary, so the integration and golden suites
+# can drive the verbs with fake seams instead of only through a subprocess.
+# `ARCHITECTURE.md` §1.3 keeps the *public* contract to the CLI surface and the
+# `--json` payloads — this crate is `publish = false`, so nothing here is a
+# promise to anyone; it is how the tests reach `Ctx<FakeRun, FixedClock, …>`.
+[lib]
+name = "charkit"
+path = "src/lib.rs"
+
+[[bin]]
+name = "char"
+path = "src/main.rs"
+
+[dependencies]
+charkit-adapters = { path = "../adapters" }
+charkit-core = { path = "../core" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+tempfile = "3"

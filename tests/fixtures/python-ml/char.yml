@@ -1,0 +1,64 @@
+# python-ml — no services, no ports at all.
+#
+# Axis it owns (PHASES.md §8.1): a repo with nothing to run, no `ports:`
+# anywhere, a thirty-minute check, and a GPU as an exclusive resource that is
+# not a port.
+#
+# The failures it catches: port machinery that does not gracefully no-op, and
+# an `exclusive:` implementation that assumes "an exclusive" means "a port".
+# Three components, none with a `run:` — which is also why `env:` had to be
+# available on `checks:`: there is no `run.env:` here to put `CUDA_VISIBLE_
+# DEVICES` in, and no service to put it on.
+
+version: 1
+
+components:
+
+  data:
+    root: pipelines/data
+    match: ["pipelines/data/**"]
+    setup: uv sync --frozen
+    owns:
+      files: [.venv]
+    checks:
+      lint:
+        cmd: uv run ruff check ${files}
+        fix: uv run ruff check --fix ${files}
+        timeout: 120
+      types:
+        cmd: uv run mypy pipelines/data
+        scope: component
+        timeout: 600
+      test:
+        cmd: uv run pytest ${files}
+        cost: 2
+        timeout: 600
+
+  train:
+    root: pipelines/train
+    match: ["pipelines/train/**"]
+    checks:
+      lint:
+        cmd: uv run ruff check ${files}
+        fix: uv run ruff check --fix ${files}
+        timeout: 120
+      # Thirty minutes, six CPU slots, and the machine's one GPU held for the
+      # whole of it. This is the longest legitimate exclusive hold in the
+      # fixture set, and `acquire_timeout` (PLAN.md §4.3) is sized against it:
+      # a ceiling below this figure fires on a healthy run.
+      test:
+        cmd: uv run pytest pipelines/train
+        scope: component
+        timeout: 1800
+        cost: 6
+        exclusive: [gpu]
+        env:
+          CUDA_VISIBLE_DEVICES: "0"
+
+  notebooks:
+    root: notebooks
+    match: ["notebooks/**"]
+    checks:
+      lint:
+        cmd: uv run nbqa ruff ${files}
+        timeout: 300
