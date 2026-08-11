@@ -17,6 +17,13 @@ between phases.
 - An entry earns its place if believing the opposite would produce a plausible design that
   silently does not work. Entries that merely record how something works belong in the
   design documents instead.
+- **Name the platform, or measure on both.** charkit supports darwin and Linux, and phase 2
+  put a darwin-only result in this file as though it were general — it was wrong on Linux,
+  and CI found it. An unqualified entry here reads as "true everywhere", so an entry measured
+  in one place says where.
+- **Invert the assertion that establishes an entry, once, and watch it fail.** The same entry
+  cited an assertion that could not fail, so its evidence was decoration. This file's whole
+  claim is that it was measured rather than read; an assertion nobody falsified is neither.
 
 Record for each: what was measured, the version it was measured against, the command that
 shows it, and what breaks if you assume otherwise.

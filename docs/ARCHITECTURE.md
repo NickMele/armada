@@ -544,6 +544,59 @@ for.
 
 ---
 
+### 2.1.1 Two things a green test does not prove
+
+Both were learned from phase 2, both survived a self-review, and both were
+caught by something else — which is the argument for writing them down rather
+than trusting the next reader to be more careful than the last one.
+
+**Invert every new assertion once and watch it fail.** A vacuous assertion is
+indistinguishable from a passing one, and it is *more* dangerous than no
+assertion, because it is cited afterwards as evidence. Phase 2 shipped an entry
+in [`traps.md`](traps.md) — the document that outranks every other — resting on
+an assertion that probed the pid of a child spawned *without* `setsid`, so it
+interrogated a process-group id that had never existed and any answer would have
+looked like confirmation. The measurement was wrong, the platform was
+unrepresentative, and the test was green throughout. Inverting an assertion
+costs one edit and one run.
+
+**A test written to raise coverage encodes current behaviour, not intended
+behaviour.** Phase 2 had a coverage pass add an e2e assertion that the envelope
+reports `tool_failed` *"whatever the row said"* — a faithful description of a
+bug, pinned by a test that then defended it. This bears on
+[`PHASES.md`](PHASES.md) phase 3 specifically, where 2,694 lines of test cases
+are ported: those encode the *source repo's* behaviour, bugs included, and the
+harvest's job is to tell a bug fix worth keeping from a quirk worth dropping.
+Read what an assertion claims, not merely whether it passes.
+
+---
+
+### 2.1.2 A change the spec did not ask for is a change, even with a good reason
+
+The corpus is frozen and one phase at a time is licensed to send changes back
+(§2.7, [`PHASES.md`](PHASES.md)). The rule is easy to keep while editing
+documents and easy to break while writing code, because **the code can diverge
+from the spec without any document being touched.**
+
+Measured against phase 2, twice. A recovery invocation `PLAN.md` §4.3 spells out
+was made to fail, because requiring one more flag was safer — so the shipped
+binary refused the exact command the specification documents, while every
+document still said it worked. And a preview flag was left to fall through to
+the destructive path it was previewing, in the same pass that was supposed to be
+closing conformance gaps.
+
+Both happened at the *end* of a long session, in tidying-up work that felt too
+small to review. So the rule is stated in the form that would have caught them:
+
+> **If the shipped behaviour and the specification disagree, that is a
+> divergence — whether or not you edited a document.** Conform, and record the
+> argument for changing the spec where the licensed phase will find it.
+
+The corollary is about sequencing rather than judgment: a fix-up pass earns the
+same review as the work it fixes, and is the most likely place to skip it.
+
+---
+
 ### 2.2 Feature branch → PR → main. Tag each phase.
 
 No phase branches. `main` is the only base. Each completed phase gets a git tag (`phase-1`,
