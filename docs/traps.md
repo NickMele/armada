@@ -168,7 +168,7 @@ than a bug to fix.
 Both sit in machinery `PLAN.md` §7 calls load-bearing, and both are one line you must not
 forget. Measured 2026-08-09 on darwin, against Rust 1.97.1. **Every entry below is darwin-only
 and unverified on Linux unless it names a platform.** This is the section where the one entry
-that *was* re-run on Linux — the zombie-only group, at the end — came back different, so the
+that *was* re-run on Linux — the zombie-only group, below — came back different, so the
 absence of a Linux column here is a gap rather than a claim of agreement.
 
 ### `SIGPIPE` is set to `SIG_IGN` at startup — `char status | head` panics until you fix it
