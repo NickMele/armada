@@ -91,8 +91,11 @@ fn clean_stops_a_recorded_group_confirms_it_is_gone_and_counts_it() {
     // Linux `killpg(pgid, 0)` succeeds against exactly that group and only
     // reports `ESRCH` after the `waitpid` (measured; `posix::group_alive`), so
     // reaping after `clean` returns means char watches the whole grace, sends
-    // its SIGKILL and still sees the group alive: `CLEAN` on darwin and
-    // `FAILED` on Linux for a group that in fact died on the first SIGTERM.
+    // its SIGKILL and still sees the group alive: `FAILED` for a group that in
+    // fact died on the first SIGTERM. darwin answers `EPERM` to that same
+    // probe, so char reads the group as gone on its first grace poll and
+    // reports `CLEAN` without ever escalating — the right answer for the wrong
+    // reason, and why reaping late would pass here and fail in CI.
     // Waiting concurrently is what a real orphaned service gets for free — its
     // parent is gone, so init reaps it the moment it dies.
     let reaper = std::thread::spawn(move || {
