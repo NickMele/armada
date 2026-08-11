@@ -332,9 +332,9 @@ fn ordinary_work_in_this_repo_is_untouched() {
 
 #[test]
 fn editing_a_document_that_merely_mentions_the_path_is_allowed() {
-    // PLAN.md §1 cites the source repo as this project's one piece of
-    // evidence, so a content match would deny ordinary documentation work.
-    // Writing is not the vector; reading is.
+    // The guarded fragment is arbitrary configured text, so a content match
+    // would deny writing it into `.claude/clean-room.local` itself, or into
+    // any note about the boundary. Writing is not the vector; reading is.
     let payload = format!(
         r#"{{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{{"file_path":"docs/PLAN.md","content":"evidence from {}"}}}}"#,
         guarded_path()

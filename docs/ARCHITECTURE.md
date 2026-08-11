@@ -55,9 +55,8 @@ and the production path pays nothing for. A test constructs `Ctx<FakeRun, FixedC
 FakeFetch>`; nothing is patched and nothing is dynamic.
 
 **Why injection at all.** This is the one pattern worth copying wholesale from the source
-repo. Chariot's 2,694 test lines run hermetically with no mocking framework, because
-`run_fn` is a *parameter*. Nothing patches `subprocess.run`; the test simply passes a
-different function.
+repo. Its 2,694 test lines run hermetically with no mocking framework, because `run_fn` is a
+*parameter*. Nothing patches `subprocess.run`; the test simply passes a different function.
 
 **Why three and not six.** The plan originally proposed six (adding filesystem, docker and
 git). Three, because:
@@ -772,7 +771,7 @@ So the harvest doc gets a positive rule rather than a prohibition:
 > are fine. The test: could this be pasted into `src/` and compile?
 
 The reasoning is that the two contamination types have different vectors. **Transcription** —
-a Chariot path ending up in the code — is already caught downstream by the grep over `src/`
+a source-repo path ending up in the code — is already caught downstream by the grep over `src/`
 and `tests/`. **Structure** — the shape of `check.py` reproducing itself in a rewrite — is
 carried by pasted code, and is exactly what [`PHASES.md`](PHASES.md) §8.1 says no grep can catch.
 
@@ -810,16 +809,16 @@ runs the **raw tools** — `cargo clippy`, `cargo fmt --check`, `cargo test`. A 
 runs `char check --json` and asserts it reaches the same verdict and that every check id
 resolves.
 
-**Phase 2.5 is the first real repo, and it is not this one.** Chariot adopts
+**Phase 2.5 is the first real repo, and it is not this one.** The source repo adopts
 `init`/`clean`/`status`/`commands:` there while keeping its own `check.py`, which is why the
 dogfooding arrangement below concerns `check` specifically: the ownership half has had a real
 consumer since well before phase 6.
 
-**Once phase 6 lands — `char check` becomes the gate.** Phase 6 is Chariot adopting charkit:
-`scripts/char/check.py` deleted, the dependency taken, `char check --all-files` green. That is the
-point at which a real repository is already trusting `char check` as its own merge gate — so
-it is trustworthy enough for this one. The dogfood test is then replaced by the real thing,
-and the raw commands stay documented in the README as the fallback.
+**Once phase 6 lands — `char check` becomes the gate.** Phase 6 is the source repo adopting
+charkit: `scripts/char/check.py` deleted, the dependency taken, `char check --all-files`
+green. That is the point at which a real repository is already trusting `char check` as its
+own merge gate — so it is trustworthy enough for this one. The dogfood test is then replaced
+by the real thing, and the raw commands stay documented in the README as the fallback.
 
 **Why not gate on `char check` from phase 3.** If `char check` is the gate and `char check`
 breaks, every PR fails — including the PR that fixes it. The alternative is a written
@@ -845,8 +844,8 @@ The plan called phase 3 a copy. It is a **clean-room rewrite**, split across two
 
 | | Reads | Produces |
 |---|---|---|
-| **Harvester** | `~/Development/chariot` | `docs/harvest.md` — a behaviour spec plus a written list of every trap and bug-shaped branch found. Plus the ported test **cases**. |
-| **Implementer** | `PLAN.md`, this document, the fixtures, the harvest doc, the tests. **Never opens the Chariot repo.** | `crates/` |
+| **Harvester** | The source repo, at the locally configured path (below) | `docs/harvest.md` — a behaviour spec plus a written list of every trap and bug-shaped branch found. Plus the ported test **cases**. |
+| **Implementer** | `PLAN.md`, this document, the fixtures, the harvest doc, the tests. **Never opens the source repo.** | `crates/` |
 
 **Why rewrite rather than copy.** Two reasons already force it. The scheduler is a reducer
 (§1.2) and the original's almost certainly is not, so the hardest part was being rewritten
@@ -869,7 +868,7 @@ when the agent typing the code has never seen the structure.
 
 #### Making it structural rather than aspirational
 
-"The implementer never opens the Chariot repo" is a sentence in a prompt, and a sentence in a
+"The implementer never opens the source repo" is a sentence in a prompt, and a sentence in a
 prompt is policed, not structural — the weaker thing this section exists to reject. Three
 mechanisms, in descending order of how much weight they carry:
 
@@ -903,9 +902,10 @@ needed has already been unenforced for every commit before that, and a guard not
 exercises fails in the one direction nobody notices: silently permitting.
 
 One narrowing the tests pin, because it is not obvious from the rule above: for a *writing*
-tool the guard matches the target path only, not the whole payload. This corpus cites the
-source repo by name, so a content match would deny an agent editing `PLAN.md` — ordinary
-work, and not the vector. Reading is.
+tool the guard matches the target path only, not the whole payload. The guarded fragment is
+arbitrary configured text, so a content match would deny writing that fragment into
+`.claude/clean-room.local` itself, or into any note about the boundary — ordinary work, and
+not the vector. Reading is.
 
 **The test cases are ported, not rewritten.** The source suite is 2,694 lines asserting on
 behaviour rather than implementation, and the plan calls it the single most valuable asset.

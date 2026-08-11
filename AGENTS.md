@@ -78,15 +78,20 @@ covered.
 The reasoning is in `ARCHITECTURE.md` §2.4. Short version: the tool was ported out of a
 Django+Next monorepo, and this catches the port dragging that repo's specifics along with it.
 
-### 2. Only phase 3's *harvester* may read `~/Development/chariot`
+### 2. Only phase 3's *harvester* may read the source repo
 
-Every other phase, and phase 3's implementer, works from `docs/PLAN.md`, `ARCHITECTURE.md`,
-the fixtures, and `docs/harvest.md`.
+The source repo is the private Django+Next monorepo the tool is being ported out of. This
+repo never names it: its path is configured locally, in `.claude/clean-room.local` or
+`CHARKIT_CLEAN_ROOM_PATH` (`ARCHITECTURE.md` §2.7). Every other phase, and phase 3's
+implementer, works from `docs/PLAN.md`, `ARCHITECTURE.md`, the fixtures, and
+`docs/harvest.md`.
 
 **This is enforced, not requested.** A `PreToolUse` hook default-denies that path for every
 agent and allows it only for the harvester, inspecting the whole `tool_input` — so `Read`,
 `Glob`, `Grep`, and a `Bash` line containing `rg`, `find`, `cat` or `python -c` are all
-covered. If you are not the harvester, you will be denied rather than trusted.
+covered. If you are not the harvester, you will be denied rather than trusted. If nothing is
+configured the hook permits everything — see `ARCHITECTURE.md` §2.7 for why it cannot fail
+closed.
 
 If a phase feels like it needs to look at that repo, **the plan is underspecified — fix the
 plan, do not peek.**
@@ -113,9 +118,9 @@ contamination nothing else can catch.
   loop's reducer, where `~/.char/config.toml` is read, the golden-snapshot layout, and
   `char.db`'s DDL — is recorded in [`docs/PHASES.md`](docs/PHASES.md), phase 2**, along with two
   defects it found in `PLAN.md`. `up`, `down` and `check` are not built.
-- **Phase 2.5 is first contact with a real repo** — Chariot adopts `init`/`clean`/`status`/
-  `commands:` and keeps its own `check.py`. It is allowed to send changes back to `PLAN.md`;
-  every later phase is not.
+- **Phase 2.5 is first contact with a real repo** — the source repo adopts
+  `init`/`clean`/`status`/`commands:` and keeps its own `check.py`. It is allowed to send
+  changes back to `PLAN.md`; every later phase is not.
 
 ---
 
@@ -225,7 +230,7 @@ into the gate itself yet.
 
 **Once phase 6 lands, `char check` becomes the gate.** That is the end state — the interim
 arrangement exists only because a bug in a half-built tool should not be able to lock its own
-repo. Phase 6 is Chariot adopting charkit, so at that point a real repo is already trusting
+repo. Phase 6 is the source repo adopting charkit, so a real repo is by then already trusting
 `char check` as its merge gate. See `ARCHITECTURE.md` §2.6.
 
 ---

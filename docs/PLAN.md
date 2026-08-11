@@ -71,7 +71,7 @@ Four rules that hold for the whole project:
 - **Phase 1 must land alone.** Every later phase codes against the config contract it
   establishes. Parallel agents cannot share a decision that has not been made yet — they will
   each invent an answer and you will get three incompatible ones.
-- **Only phase 3's *harvester* may read the Chariot repo** ([`PHASES.md`](PHASES.md) §9). If any other phase
+- **Only phase 3's *harvester* may read the source repo** ([`PHASES.md`](PHASES.md) §9). If any other phase
   feels like it needs to look, the plan is underspecified — fix the plan, don't peek.
 - **Do not relitigate §10.** Those decisions were made deliberately, with rationale recorded.
 
@@ -113,10 +113,10 @@ and tells you about the rest.
 
 ### Evidence this is a real problem
 
-From the source repo (`~/Development/chariot`), `scripts/char/worktrees.py:110` exists
-because 29 leftover per-worktree Docker networks exhausted Docker's default bridge address
-pool and broke Postgres startup for every subsequently allocated worktree — *"accumulated
-exactly because nothing ever called this."* That is failure mode #4, already paid for once.
+From the source repo, `scripts/char/worktrees.py:110` exists because 29 leftover per-worktree
+Docker networks exhausted Docker's default bridge address pool and broke Postgres startup for
+every subsequently allocated worktree — *"accumulated exactly because nothing ever called
+this."* That is failure mode #4, already paid for once.
 
 ---
 
@@ -2002,8 +2002,8 @@ oversight rather than a decision.
 
 **Why this is in the config rather than a plugin mechanism.** It is the same argument as
 §6.1: the thing a repo actually needs is a name and a command, not a lifecycle contract. This
-is also what lets Chariot keep `worktrees` / `tickets` / `design` while giving up `check` and
-`servers` (phase 6), so it is on the critical path rather than a nicety.
+is also what lets the source repo keep `worktrees` / `tickets` / `design` while giving up
+`check` and `servers` (phase 6), so it is on the critical path rather than a nicety.
 
 ### 4.6 `workspaces:` — nested workspaces in one repo
 
@@ -2700,7 +2700,7 @@ of the six verbs.
 | Config format | **YAML, statically verifiable** | Generator script is the escape hatch. Starlark would force `config verify` to execute untrusted code. |
 | Driver extensibility | **`owns:`, not a plugin API** | Gets the one real benefit of a custom driver at ~60 lines. |
 | Concept naming | **Keep "workspace"** | Already means this in VS Code / Terraform / cargo / pnpm. Do not invent vocabulary for concepts that already have names. |
-| Build order | **Greenfield repo, Chariot last** | Isolation requested; keeps Chariot's merge gate out of the blast radius. |
+| Build order | **Greenfield repo, source repo last** | Isolation requested; keeps the source repo's merge gate out of the blast radius. |
 
 ### 10.1 Why the language was reopened, and what decided it
 
