@@ -916,6 +916,35 @@ Phase 2.5 was the last phase licensed to send changes back to `PLAN.md`
 | No stated rule that an empty-string `env:` value is preserved rather than pruned | §6.2. The schema already permits it; nothing states that resolution must not drop it |
 | **No worker figure the engine computes can reach the tool — and it is the whole point of the budget.** The engine can derive a worker count exactly: `max(1, min(declared cost, granted))`. It has no way to deliver it. The worker flag is a **literal the config author writes into `cmd:`**, and `PLAN.md` §4.4 caps substitutions at `${port.NAME}`, `${files}`, `${component.root}`, `${workspace.id}` plus scoped `${env.NAME}` / `${ref}` — an unrecognised `${…}` is `bad_config`. There is no `${jobs}`-shaped variable, so a config can only hard-code the *declared* cost, and only that. Two kept traps fall out of it: **SCH-7's clamp is decorative** (an over-budget check is admitted against fewer slots and still launches its full declared parallelism — the exact oversubscription SCH-6's clamp exists to prevent), and **SCH-11 is unexpressible** (an explicit flag overriding a tool's auto-sizing is entirely the author's discipline; nothing in the engine can require or correct it). **SCH-7 and SCH-11 are the only kept traps in this harvest with no ported case behind them, and this row is why.** SCH-1/SCH-2's two numbers survive, but not as two declared keys with a default between them: `cost:` is the reservation and the worker count is the author's literal, so *nothing enforces that raising one does not raise the other* | **Why it matters, plainly: a scheduler that budgets the machine while every tool sizes itself to the whole machine is budgeting nothing.** SCH-1 and SCH-3 are the incidents that already cost this, and they present as ordinary test failures. The cap is deliberate and phase 3 is **not licensed to change `PLAN.md`** (phase 2.5 was the last), so **the implementer raises this against `PLAN.md` rather than inventing a key**. The engine-side half is cased — `sched.reserve.clamped-grant-is-the-clamped-figure` and `exec.grant.declared-cost-is-reserved-and-granted` assert the grant, and no case anywhere expects the engine to produce a worker count. The nearest thing is `exec.workers.bounded-browser-run-does-not-manufacture-failures`, which asserts the *fixture config declares* one — a config lint, and the only lever that exists today. Options: a granted-slots substitution admitted inside the cap; or accept that `cost:` must equal the tool's worker count, making clamping a scheduling-only concept and the author's literal the sole guarantee |
 
+### 10.1 One gap that is not in `PLAN.md` — nothing machine-checks this document or `tests/cases/`
+
+`cargo xtask doclint` works from a fixed corpus of six files (`xtask/src/docs.rs`), and neither
+`docs/harvest.md` nor `tests/cases/README.md` is in it. So the ~95 `§` cross-references in this
+file, the ~35 more the case files carry, the fenced YAML blocks in `tests/cases/README.md`, and
+**every trap id that a `trap:` key under `tests/cases/` cites by name** are checked by nobody. All
+of it was verified by hand while this document was written, and **hand-verification does not repeat
+itself.**
+
+**Why it matters, concretely.** The case files' `trap:` keys are a hard dependency on the ids in
+§5: renumber a trap or delete a row and the link breaks silently, with no gate firing. That already
+happened inside this change — three cases cited trap ids that resolved to unrelated defects, and
+the check that was supposed to catch it confirmed only that the ids **existed**, never that they
+were the right ones. That is the same shape as §9's vacuous assertions, and the same shape
+[`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4 warns about twice: a green check that structurally cannot
+fail.
+
+**Closing it is not a one-line change.** This document cites its own sections, and it is not in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) §2.8's precedence list — so adding it to the corpus means
+first deciding what an *unattributed* `§` means inside a document that does not rank. A cheaper
+partial measure stands on its own and needs no such decision: **check that every `trap:` value
+under `tests/cases/` resolves to a row in §5**, or — for the `"§6.1"` form the schema also permits
+— to a section this document actually has.
+
+| | |
+|---|---|
+| Owner | the implementer, or whoever next touches `xtask` |
+| Status | **out of scope for phase 3** — recorded here deliberately, not closed |
+
 ---
 
 ## 11. The ported cases
