@@ -143,7 +143,7 @@ impl fmt::Display for ConfigWhere {
 }
 
 /// A typed failure: which class, where, and what to do next.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CharError {
     /// The class. The exit code follows from it and from nothing else.
     pub class: ErrClass,
@@ -154,7 +154,7 @@ pub struct CharError {
     /// Required for `bad_config`, optional elsewhere — that is the one class
     /// where char genuinely knows the fix, because it has just validated the
     /// file and knows what it expected (`ARCHITECTURE.md` §1.7).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub next_action: Option<String>,
 }
 

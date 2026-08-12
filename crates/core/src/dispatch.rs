@@ -30,7 +30,7 @@ use crate::error::CharError;
 use crate::id::WorkspaceId;
 use crate::lease::LeaseKind;
 use crate::schedule::{CheckId, Event, Plan};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -43,7 +43,7 @@ use std::path::{Path, PathBuf};
 pub const SIGNATURE_TAIL_BYTES: usize = 4 * 1024;
 
 /// What char knew when it ran one check.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Dispatch {
     /// Which check.
     pub check: CheckId,
@@ -59,16 +59,16 @@ pub struct Dispatch {
     /// **Names only.** See the module note.
     pub env: Vec<String>,
     /// The `${files}` set, exactly as it was expanded into argv.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub files: Vec<String>,
     /// The leases held at the moment of the spawn.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub leases: Vec<String>,
     /// **What this check waited on, and who held it.** Point-in-time state that
     /// no longer exists: this is the row PLAN.md §3.4 marks "No" in the
     /// recoverable column, and the only useful answer to "why has this taken
     /// fifteen minutes".
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub waited_on: Vec<Waited>,
     /// The monotonic reading at dispatch.
     pub dispatched_at_mono: u64,
@@ -77,7 +77,7 @@ pub struct Dispatch {
     /// before the child starts, for the same reason `up` records before it
     /// spawns: the failure mode must be a stale row, never an untracked
     /// resource.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub signature: Option<Signature>,
 }
 
@@ -117,7 +117,7 @@ impl Dispatch {
 }
 
 /// One thing a check queued behind.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Waited {
     /// The lease class, spelled as `char.db` spells it.
     pub kind: String,
@@ -125,7 +125,7 @@ pub struct Waited {
     pub key: String,
     /// **The workspace that had it.** `None` for a claim char never saw a holder
     /// for, which is honest: the record says what was observed and never guesses.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub held_by: Option<WorkspaceId>,
     /// How long the wait lasted.
     pub waited_ms: u64,
@@ -140,7 +140,7 @@ pub struct Waited {
 /// none of which touched its files" and "this check passed twenty minutes ago
 /// and the only change since is one file" are opposite problems, and a stack
 /// trace is identical in both.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Signature {
     /// The check that failed.
     pub check: CheckId,
@@ -297,13 +297,13 @@ fn patterns() -> &'static [(regex::Regex, &'static str)] {
 /// spawn, every deadline, every exit — and persisting it gives `explain`
 /// something `docker inspect` has no equivalent of: a trace that **replays
 /// through `step()`**. It costs one append per event.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Journal {
     /// One per check char actually dispatched, in id order.
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub dispatches: BTreeMap<CheckId, Dispatch>,
     /// Every event the shell fed the reducer, in order.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub events: Vec<Event>,
 }
 

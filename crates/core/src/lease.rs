@@ -25,7 +25,7 @@
 
 use crate::error::{CharError, ErrClass};
 use crate::id::WorkspaceId;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Milliseconds of silence after which a lease is dead and may be taken.
@@ -45,7 +45,7 @@ pub const RENEW_INTERVAL_MS: u64 = 5_000;
 pub const POLL_INTERVAL_MS: u64 = 500;
 
 /// What a lease is over.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum LeaseKind {
     /// One per workspace, held by everything that mutates: `init`, `up`,
@@ -138,7 +138,7 @@ pub struct Holder {
 
 /// What a waiting result reports, and it carries the distinction that matters:
 /// whether the cause is inside this workspace or outside it (PLAN.md §3.1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum WaitingOn {
     /// This run's own budget. It will clear on its own.

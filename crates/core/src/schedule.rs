@@ -44,7 +44,7 @@
 use crate::error::{CharError, ErrClass, Status};
 use crate::id::WorkspaceId;
 use crate::lease::{LeaseKind, WaitingOn, RENEW_INTERVAL_MS};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -58,7 +58,7 @@ use std::path::PathBuf;
 /// one, which is what makes the derivation unambiguous and is load-bearing a
 /// second time in `needs:`, where the colon alone tells a component from a
 /// check id.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct CheckId(String);
 
@@ -88,7 +88,7 @@ impl fmt::Display for CheckId {
 /// everything sharing its foreground group. The ownership layer already drops
 /// such a row rather than acting on it; making it unrepresentable here means the
 /// scheduler cannot propose the action in the first place.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Pgid(i32);
 
@@ -117,7 +117,7 @@ impl fmt::Display for Pgid {
 /// resolution happens in the shell, at spawn, and a pure function that has never
 /// seen a value cannot leak one. The core deals in secret *names* and
 /// references; `set` never holds one.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnvDelta {
     /// Literal values, already substituted. Layered over the inherited
     /// environment, never replacing it.
@@ -148,7 +148,7 @@ impl EnvDelta {
 /// The argv is already split and substituted, because that is a pure decision
 /// (PLAN.md §4.1.1) and the seam must never re-parse anything — which is also
 /// what lets a test assert the exact vector that would have been executed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plan {
     /// The derived id.
     pub id: CheckId,
@@ -185,7 +185,7 @@ pub struct Plan {
 /// exactly the case this project is built around — and it is enforced by
 /// leases in `char.db`. This is the run's own view of it, and it exists so the
 /// scheduler does not put every check into a lease queue at once.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Budget {
     /// `cpu_slots` from `~/.char/config.toml`, or `--jobs`.
     pub slots: u32,
@@ -218,7 +218,7 @@ impl Budget {
 }
 
 /// Where one check has got to. The five phases `ARCHITECTURE.md` §1.2 names.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
     /// Selected, not yet started.
@@ -234,7 +234,7 @@ pub enum Phase {
 }
 
 /// A check that is queueing for a machine-wide claim.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Waiting {
     /// Which class it is acquiring. Exclusives come first and slots second, and
     /// a check waiting on an exclusive holds no slot.
@@ -246,7 +246,7 @@ pub struct Waiting {
 }
 
 /// A check with a child.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Running {
     /// The tracked process group. `None` between the spawn being proposed and
     /// the shell reporting that it happened.
@@ -264,7 +264,7 @@ pub struct Running {
 }
 
 /// Why char is killing a child.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Stopping {
     /// The check outlived its own `timeout:`.
@@ -274,7 +274,7 @@ pub enum Stopping {
 }
 
 /// What a finished check came to.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Outcome {
     /// This check's terminal state.
     pub status: Status,
@@ -286,6 +286,15 @@ pub struct Outcome {
     pub reason: Option<String>,
     /// Wall time from the spawn being proposed to the child being reaped.
     pub duration_ms: u64,
+    /// How much output the check produced.
+    ///
+    /// **Kept past the check's end, and the replay property is what forced
+    /// that.** While a check ran the count lived in [`Running::bytes`] and was
+    /// dropped when it finished, which meant `ChildOutput` was an event char
+    /// recorded and no persisted state ever reflected — so a record could
+    /// disagree with the run in the one dimension nothing would check. It is
+    /// also the number that says whether a log hit the 10 MB cap.
+    pub bytes: usize,
     /// **Whether the check ever ran**, which is what decides if it may set the
     /// run's `error.class`.
     ///
@@ -298,7 +307,7 @@ pub struct Outcome {
 }
 
 /// One check, and where it has got to.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheckState {
     /// The immutable half.
     pub plan: Plan,
@@ -321,7 +330,7 @@ impl CheckState {
 }
 
 /// Why a run is stopping before it finished its work.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Ending {
     /// SIGINT.
@@ -337,7 +346,7 @@ pub enum Ending {
 /// id and the config are all the shell's; what is here is the graph, the leases
 /// held, the deadlines outstanding and the budget — the things that only exist
 /// because this run is in flight.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct State {
     /// The workspace root. **Every check runs from here** (PLAN.md §4.1) — one
     /// base for cwd, `${files}` and `match:` alike, which §3.4 leans on when it
@@ -373,6 +382,30 @@ impl State {
         }
     }
 
+    /// The state this run began in: the same root, the same budget and the
+    /// same plans, with every check back at `Pending`.
+    ///
+    /// **Derived from the persisted state rather than stored beside it**, which
+    /// is what makes the replay property checkable against a record written by
+    /// an older binary: the plans are immutable for the length of a run, so the
+    /// starting state is a projection of the ending one and cannot drift from
+    /// it. Storing it twice would let the copies disagree, and the disagreement
+    /// would look exactly like a scheduler bug.
+    pub fn restart(&self) -> State {
+        State {
+            root: self.root.clone(),
+            now_mono: 0,
+            checks: self
+                .checks
+                .values()
+                .map(|entry| (entry.plan.id.clone(), CheckState::new(entry.plan.clone())))
+                .collect(),
+            budget: Budget::new(self.budget.slots),
+            ending: None,
+            finished: false,
+        }
+    }
+
     /// The run's verdict rows, in id order — every check that reached a
     /// terminal phase.
     pub fn results(&self) -> Vec<CheckResult> {
@@ -381,7 +414,7 @@ impl State {
 }
 
 /// What the shell observed. **The floor, plus [`Event::Tick`].**
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Event {
     /// The run begins.
     Started,
@@ -552,7 +585,7 @@ pub enum Action {
 /// rather than being that type: a check has no port block, no project and
 /// nothing released, and a row carrying six fields that are always `None` reads
 /// as though they might not be.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheckResult {
     /// The check id.
     pub id: CheckId,
@@ -583,6 +616,33 @@ impl From<&CheckResult> for crate::envelope::ResultRow {
         row.reason = result.reason.clone();
         row
     }
+}
+
+/// Replay a recorded event sequence, producing the state it must arrive at.
+///
+/// **The strongest single assertion available in this phase.** The reducer was
+/// chosen for compile-time exhaustiveness; this is the second dividend from the
+/// same decision (PLAN.md §3.4). A run persists its `Event` sequence beside its
+/// `State`, and the two have to agree — replay the one and you must get the
+/// other. Nothing else in the engine checks the scheduler end to end: the unit
+/// tests each drive one transition, and a production deadlock or a lost verdict
+/// lives in the *composition* of hundreds of them.
+///
+/// It also means a production failure replays verbatim as a regression test.
+/// The events are on disk in `.char/run/<id>/state.json`; a run that went wrong
+/// on someone's machine becomes a fixture by being copied.
+///
+/// **Deterministic by construction, and that is the property being relied on.**
+/// `step` reads no clock, no filesystem and no environment — every input it has
+/// is in the state it was handed and the event it was given, which is why the
+/// same sequence cannot produce two answers.
+pub fn replay(initial: State, events: &[Event]) -> State {
+    let mut state = initial;
+    for event in events {
+        let (next, _) = step(state, event.clone());
+        state = next;
+    }
+    state
 }
 
 /// The scheduler, as a reducer.
@@ -644,7 +704,14 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                     since_mono: since,
                     holder: Some(holder.clone()),
                 });
-                let waiting_on = waiting_on(kind, &entry.plan, &holder, now - since, budget);
+                // `saturating_sub`, and it is not defensive habit. The reducer
+                // must be total over every sequence that can reach it,
+                // including one a later binary replays out of `state.json`
+                // after a clock the shell believed was monotonic was not — and
+                // a panic in the pure core is a `char_bug` for a run that
+                // already happened. Found by perturbing a recorded sequence.
+                let waited = now.saturating_sub(since);
+                let waiting_on = waiting_on(kind, &entry.plan, &holder, waited, budget);
                 actions.push(Action::Emit {
                     result: CheckResult {
                         id: check.clone(),
@@ -693,6 +760,7 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 }),
                 reason: None,
                 duration_ms: elapsed(&state, &check),
+                bytes: bytes_so_far(&state, &check),
                 // It was attempted: char tried to run it and the machine or the
                 // config refused, which is a verdict about this check.
                 attempted: true,
@@ -749,6 +817,7 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 }),
                 reason: None,
                 duration_ms: 0,
+                bytes: bytes_so_far(&state, &check),
                 attempted: true,
             };
             conclude(&mut state, &check, outcome, &mut actions);
@@ -819,6 +888,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             }),
             reason: None,
             duration_ms,
+            bytes: running.bytes,
             attempted: true,
         },
         Some(Stopping::Ending) => Outcome {
@@ -826,6 +896,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             error: None,
             reason: Some("the run was stopped".to_string()),
             duration_ms,
+            bytes: running.bytes,
             attempted: true,
         },
         None if code == 0 => Outcome {
@@ -833,6 +904,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             error: None,
             reason: None,
             duration_ms,
+            bytes: running.bytes,
             attempted: true,
         },
         None => Outcome {
@@ -845,9 +917,22 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             }),
             reason: None,
             duration_ms,
+            bytes: running.bytes,
             attempted: true,
         },
     })
+}
+
+/// How much output a check has produced so far, or zero if it never ran.
+fn bytes_so_far(state: &State, check: &CheckId) -> usize {
+    match state.checks.get(check).map(|entry| &entry.phase) {
+        Some(Phase::Running(running)) => running.bytes,
+        Some(Phase::Pending)
+        | Some(Phase::Waiting(_))
+        | Some(Phase::Done(_))
+        | Some(Phase::Skipped)
+        | None => 0,
+    }
 }
 
 /// How long a check has been running, or zero if it is not.
@@ -958,6 +1043,7 @@ fn resolve_pending(state: &mut State, actions: &mut Vec<Action>) {
                         error: None,
                         reason: Some(format!("{failed} did not pass")),
                         duration_ms: 0,
+                        bytes: 0,
                         attempted: false,
                     },
                     actions,
@@ -1141,6 +1227,7 @@ fn end_run(state: &mut State, actions: &mut Vec<Action>) {
                         error: None,
                         reason: Some("the run was stopped".to_string()),
                         duration_ms: 0,
+                        bytes: 0,
                         attempted: false,
                     },
                     actions,
@@ -1542,6 +1629,42 @@ mod tests {
                 // 1 000 and the clock now reads 45 000.
                 since_ms: 44_000,
             })
+        );
+    }
+
+    /// **A clock that goes backwards must not panic the pure core.** A
+    /// suspend-excluding monotonic reading should never move backwards, and a
+    /// reducer that assumes it does is a `char_bug` on a run that already
+    /// happened — including one a later binary replays out of `state.json`.
+    /// Found by perturbing a recorded event sequence, not by reasoning.
+    #[test]
+    fn a_clock_that_moves_backwards_is_survived_rather_than_trusted() {
+        let mut e2e = plan("web:e2e");
+        e2e.exclusives = vec!["browser".to_string()];
+        let (state, _) = step(run(vec![e2e]), Event::Tick { now_mono: 90_000 });
+        let (state, _) = step(state, Event::Started);
+        let (state, _) = step(state, Event::Tick { now_mono: 1_000 });
+
+        let (_, actions) = step(
+            state,
+            Event::LeaseDenied {
+                check: id("web:e2e"),
+                kind: LeaseKind::Exclusive,
+                holder: WorkspaceId::from_stored("7c21ab90"),
+            },
+        );
+        let waiting = actions.iter().find_map(|action| match action {
+            Action::Emit { result } => result.waiting_on.clone(),
+            _ => None,
+        });
+        assert_eq!(
+            waiting,
+            Some(WaitingOn::Exclusive {
+                exclusive: "browser".to_string(),
+                held_by: WorkspaceId::from_stored("7c21ab90"),
+                since_ms: 0,
+            }),
+            "a wait cannot be negative, so it is reported as none"
         );
     }
 

@@ -25,7 +25,7 @@ use crate::dispatch::Journal;
 use crate::error::{CharError, ErrClass};
 use crate::id::WorkspaceId;
 use crate::schedule::{CheckId, State};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Crockford's base32 alphabet.
@@ -61,7 +61,7 @@ pub const RUN_ID_LEN: usize = TIME_LEN + ENTROPY_LEN;
 /// format here is the illustration made real rather than a departure from it.
 /// The remaining characters are what stop two runs a millisecond apart from
 /// being one directory.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct RunId(String);
 
@@ -181,7 +181,7 @@ pub fn runs_to_reap(present: &[RunId], retention: u32, live: &[RunId]) -> Vec<Ru
 /// nothing to read without it: query `char.db` an hour later and it truthfully
 /// reports who holds the browser *now*, which is a different and useless answer
 /// to "what was `web:e2e` waiting on when it timed out".
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunRecord {
     /// The same global version the `--json` envelope carries, so one number
     /// covers the whole CLI contract.
@@ -198,6 +198,7 @@ pub struct RunRecord {
     pub state: State,
     /// What char knew at each dispatch, and the reducer's event sequence
     /// (PLAN.md §3.4).
+    #[serde(default)]
     pub journal: Journal,
 }
 
