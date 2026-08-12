@@ -143,6 +143,18 @@ pub struct ResultRow {
     /// Why this row is not executing.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub waiting_on: Option<WaitingOn>,
+    /// Prose for the states where the status alone does not say enough.
+    ///
+    /// PLAN.md §4.1 requires it on a skipped check —
+    /// `{"status": "SKIPPED", "reason": "no matching files"}` — so an agent that
+    /// expected a check to run can tell *no files matched* from *never
+    /// selected*. `check` also uses it for the check a cascaded `ABORTED` names,
+    /// which cannot go in `error` because a cascade may not set `error.class`.
+    ///
+    /// Additive, so `schema_version` does not bump, and omitted when absent, so
+    /// no existing golden snapshot changes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
     /// Where this row's output went.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log: Option<String>,
@@ -171,6 +183,7 @@ impl ResultRow {
             leases: Vec::new(),
             released: None,
             waiting_on: None,
+            reason: None,
             log: None,
             duration_ms: None,
             error: None,
