@@ -225,6 +225,20 @@ pub trait Clock {
     /// live holder look stale (PLAN.md §4.3).
     fn wall_rfc3339(&self) -> String;
 
+    /// Wall clock, milliseconds since the epoch.
+    ///
+    /// The one thing char needs the wall clock as a *number* for: a run id is
+    /// time-ordered so that lexicographic order is chronological order, which is
+    /// what makes run retention a sort of directory names rather than a stat of
+    /// every one of them (PLAN.md §4.2). Monotonic will not do — those readings
+    /// are meaningless across a reboot, and a run id has to sort against the ones
+    /// already on disk from last week.
+    ///
+    /// Like [`Clock::wall_rfc3339`] it is never *compared* to decide whether
+    /// something is stale; a backwards NTP step can reorder two run ids, which
+    /// costs a retention decision and nothing else.
+    fn wall_ms(&self) -> u64;
+
     /// Milliseconds on a **suspend-excluding** monotonic clock: `Instant`
     /// semantics, which pick `CLOCK_UPTIME_RAW` on darwin and
     /// `CLOCK_MONOTONIC` on Linux.

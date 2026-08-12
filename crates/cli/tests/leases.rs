@@ -36,6 +36,9 @@ impl Clock for AdvancedClock {
     fn wall_rfc3339(&self) -> String {
         SystemClock.wall_rfc3339()
     }
+    fn wall_ms(&self) -> u64 {
+        SystemClock.wall_ms()
+    }
     fn mono(&self) -> u64 {
         SystemClock.mono() + self.by_ms
     }

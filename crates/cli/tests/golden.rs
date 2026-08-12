@@ -38,6 +38,11 @@ impl Clock for FrozenClock {
     fn wall_rfc3339(&self) -> String {
         "2026-08-09T14:02:11Z".to_string()
     }
+    /// The same instant as the string above, so a run id minted here is a
+    /// constant too — a snapshot containing one must not need redacting.
+    fn wall_ms(&self) -> u64 {
+        1_786_284_131_000
+    }
     fn mono(&self) -> u64 {
         1_000
     }

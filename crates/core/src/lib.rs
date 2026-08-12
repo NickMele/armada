@@ -24,6 +24,7 @@ pub mod lease;
 pub mod ports;
 pub mod reap;
 pub mod registry;
+pub mod run;
 pub mod schedule;
 pub mod scope;
 pub mod template;

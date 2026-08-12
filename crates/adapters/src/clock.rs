@@ -26,6 +26,13 @@ impl Clock for SystemClock {
         rfc3339_utc(secs)
     }
 
+    fn wall_ms(&self) -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+
     fn mono(&self) -> u64 {
         posix::mono_ms()
     }
@@ -106,6 +113,16 @@ mod tests {
         assert_eq!(now.len(), 20, "{now}");
         assert!(now.ends_with('Z'));
         assert!(now.starts_with("20"));
+    }
+
+    /// The two wall readings answer about the same instant, because a run id
+    /// minted from one and a `claimed_at` rendered from the other end up in the
+    /// same payload.
+    #[test]
+    fn the_two_wall_readings_agree_to_the_second() {
+        let ms = SystemClock.wall_ms();
+        assert!(ms > 1_700_000_000_000, "{ms} is not a plausible instant");
+        assert_eq!(rfc3339_utc((ms / 1000) as i64), SystemClock.wall_rfc3339());
     }
 
     #[test]
