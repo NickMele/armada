@@ -9,7 +9,7 @@
 //! race between two concurrent runs, which is the exact scenario charkit exists
 //! to make safe.
 
-use charkit_adapters::db::{AcquireOutcome, Db};
+use charkit_adapters::db::{AcquireOutcome, Db, SlotOutcome as AcquireSlots};
 use charkit_adapters::machine::MachineConfig;
 use charkit_adapters::{docker, fs, machine};
 use charkit_core::ctx::{Clock, Ctx, Fetch, Run};
@@ -197,6 +197,113 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                         class: ErrClass::CharBug,
                         r#where: "lease".to_string(),
                         message: format!("the claim loop stalled in {:?}", state.phase),
+                        next_action: None,
+                    })
+                }
+            }
+        }
+    }
+
+    /// Take `count` CPU slots, driving the same claim reducer an exclusive
+    /// uses.
+    ///
+    /// **Through `lease::step`, not around it** — the ceiling, the visible
+    /// wait and the meaning of `Attempt` are all stated there, and a second
+    /// loop would be a second set of answers. `Attempt` means *re-decide and
+    /// try*, which is exactly what a counted budget needs: losing means the
+    /// answer changed, so the next attempt asks the store again rather than
+    /// waiting for a slot it already picked.
+    ///
+    /// The slots' *identity* is the store's, chosen all-or-nothing inside one
+    /// transaction — see
+    /// [`Db::try_acquire_slots`](charkit_adapters::db::Db::try_acquire_slots)
+    /// for why a partial claim deadlocks and why numbering a check's own slots
+    /// `0..cost` hangs the second check that starts.
+    pub fn acquire_slots(
+        &mut self,
+        workspace: &WorkspaceId,
+        count: u32,
+        total: u32,
+        ceiling_ms: Option<u64>,
+        on_wait: &mut dyn FnMut(charkit_core::lease::WaitingOn),
+    ) -> Result<Vec<LeaseId>, CharError> {
+        let pid = charkit_adapters::posix::pid();
+        let started = machine::process_start_at(&self.ctx.run, &self.cwd(), pid);
+        let claim = LeaseId {
+            workspace: Some(workspace.clone()),
+            kind: LeaseKind::CpuSlot,
+            // A budget has no one key. This names the *claim* so the reducer
+            // and the payload have something to say; the rows the store writes
+            // carry the real slot numbers.
+            key: format!("{count} of {total}"),
+        };
+
+        let mut state = ClaimState::new(claim, Policy::Block, ceiling_ms);
+        let mut event = ClaimEvent::Start;
+        let mut granted: Vec<LeaseId> = Vec::new();
+
+        loop {
+            let (next, actions) = charkit_core::lease::step(state, event);
+            state = next;
+            let mut pending: Option<ClaimEvent> = None;
+
+            for action in actions {
+                match action {
+                    ClaimAction::Attempt => {
+                        let now = self.ctx.now.mono();
+                        let outcome = self.db.try_acquire_slots(
+                            workspace,
+                            count,
+                            total,
+                            now,
+                            &self.boot_id,
+                            pid,
+                            started.as_deref(),
+                        )?;
+                        pending = Some(match outcome {
+                            AcquireSlots::Granted(leases) => {
+                                granted = leases;
+                                ClaimEvent::Granted
+                            }
+                            AcquireSlots::Short { held, free } => {
+                                on_wait(charkit_core::lease::WaitingOn::CpuSlot {
+                                    cpu_slot: count,
+                                    available: free,
+                                });
+                                ClaimEvent::Held(match held {
+                                    Some(row) => charkit_adapters::db::holder_of(&row, now),
+                                    None => charkit_core::lease::Holder {
+                                        workspace: Some(workspace.clone()),
+                                        pid,
+                                        held_ms: 0,
+                                    },
+                                })
+                            }
+                        });
+                    }
+                    // A cold slot is reclaimed inside the same transaction that
+                    // counts them, because a slot has no fixed key for the
+                    // claim loop to name.
+                    ClaimAction::Reclaim(_) => {}
+                    ClaimAction::Sleep { ms } => {
+                        let until = self.ctx.now.mono().saturating_add(ms);
+                        self.ctx.now.sleep_until(until);
+                        self.renew_held();
+                        pending = Some(ClaimEvent::Slept { ms });
+                    }
+                    ClaimAction::Report(waiting_on) => on_wait(waiting_on),
+                    ClaimAction::Granted => return Ok(granted),
+                    ClaimAction::Failed(error) => return Err(error),
+                }
+            }
+
+            match pending {
+                Some(next) => event = next,
+                None => {
+                    return Err(CharError {
+                        class: ErrClass::CharBug,
+                        r#where: "cpu-slot".to_string(),
+                        message: format!("the slot claim stalled in {:?}", state.phase),
                         next_action: None,
                     })
                 }

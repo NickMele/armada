@@ -56,6 +56,7 @@ fn plan(name: &str, cost: u32, exclusives: &[&str], needs: &[&str]) -> Plan {
         id: CheckId::new(name),
         argv: vec!["true".to_string(), name.to_string()],
         env: EnvDelta::default(),
+        files: Vec::new(),
         timeout_ms: 900_000,
         cost,
         exclusives: exclusives.iter().map(|e| (*e).to_string()).collect(),

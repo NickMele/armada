@@ -9,7 +9,8 @@
 //! this file is reading a field.
 
 use charkit_core::envelope::{
-    CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun, StatusData,
+    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
+    StatusData,
 };
 use charkit_core::error::CharError;
 use charkit_core::reap::ReapPlan;
@@ -24,6 +25,8 @@ pub fn human(output: &Output) -> String {
         Output::Clean(envelope) => clean(envelope),
         Output::CleanDryRun(envelope) => clean_dry(envelope),
         Output::Status(envelope) => status(envelope),
+        Output::Check(envelope) => check(envelope),
+        Output::CheckDryRun(envelope) => check_dry(envelope),
         Output::Dispatch(envelope) => dispatch(envelope),
     }
 }
@@ -53,6 +56,61 @@ fn init(envelope: &Envelope<InitData>) -> String {
     out.push_str(&reaped(&data.reaped));
     if let Some(error) = &envelope.error {
         out.push_str(&error_lines(error));
+    }
+    out
+}
+
+/// `char check`.
+///
+/// One line per check, because that is the shape an agent scans and a human
+/// reads: the id, the verdict, how long, and where the output went. The
+/// **`waiting_on`** line is the one worth having — it names the workspace that
+/// is in the way, which is the thing the caller cannot work out for itself.
+fn check(envelope: &Envelope<CheckData>) -> String {
+    let data = &envelope.data;
+    let mut out = format!("run {}\n", data.run_id);
+    for row in &data.results {
+        out.push_str(&format!("  {:<24} {}", row.id, row.status));
+        if let Some(ms) = row.duration_ms {
+            out.push_str(&format!("  {ms}ms"));
+        }
+        out.push('\n');
+        if let Some(reason) = &row.reason {
+            out.push_str(&format!("    {reason}\n"));
+        }
+        if let Some(waiting) = &row.waiting_on {
+            out.push_str(&format!(
+                "    waiting on {}\n",
+                serde_json::to_string(waiting).unwrap_or_default()
+            ));
+        }
+        if let Some(error) = &row.error {
+            out.push_str(&format!("    {}\n", error.message));
+        }
+        if let Some(log) = &row.log {
+            out.push_str(&format!("    {log}\n"));
+        }
+    }
+    for reaped in &data.reaped_runs {
+        out.push_str(&format!("  reaped run {reaped}\n"));
+    }
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error));
+    }
+    out
+}
+
+fn check_dry(envelope: &Envelope<CheckDryRun>) -> String {
+    let data = &envelope.data;
+    let mut out = String::new();
+    for line in &data.would_run {
+        out.push_str(&format!("  would_run       {line}\n"));
+    }
+    for line in &data.would_skip {
+        out.push_str(&format!("  would_skip      {line}\n"));
+    }
+    for line in &data.would_reap {
+        out.push_str(&format!("  would_reap      run {line}\n"));
     }
     out
 }

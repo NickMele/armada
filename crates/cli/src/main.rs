@@ -46,6 +46,9 @@ char — one consistent vocabulary for managing a repo's tech stack
                                                  release what this workspace owns
   char clean --orphaned --force-rebuild          rebuild an unreadable ~/.char/char.db
   char status    [--json] [--project|--all]      what is running, mine, and stale
+  char check     [--json] [--dry-run] [--all-files] [--fix] [--wait]
+                 [--files <path>…] [--component <name>] [--jobs <n>] [<selector>]
+                                                 lint / format / test
   char <name> …                                  a commands: entry from this repo's char.yml
 
   char --version
@@ -54,7 +57,7 @@ char — one consistent vocabulary for managing a repo's tech stack
 Global flags come before the verb. Everything after a commands: name is the
 child's, including flags char itself defines.
 
-Not built yet: up, down, check, config, agents-md, explain.
+Not built yet: up, down, config, agents-md, explain, and check's --detach/--status.
 ";
 
 fn main() -> ExitCode {
@@ -96,6 +99,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
     match invocation {
         Invocation::Init(common) | Invocation::Status(common) => common.json,
         Invocation::Clean { common, .. } => common.json,
+        Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
         Invocation::Version | Invocation::Help => false,
     }
@@ -185,6 +189,7 @@ fn dispatch(
                 force_rebuild,
             },
         ),
+        Invocation::Check(check) => verbs::check::run(&mut app, &check),
         Invocation::Dispatch { name, argv, json } => {
             verbs::dispatch::run(&mut app, &name, &argv, json)
         }

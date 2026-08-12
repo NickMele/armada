@@ -157,6 +157,15 @@ pub struct Plan {
     pub argv: Vec<String>,
     /// Layered over the inherited environment.
     pub env: EnvDelta,
+    /// The `${files}` this check was scoped to, as they were expanded into
+    /// `argv`.
+    ///
+    /// **Carried rather than re-derived at the dispatch record.** PLAN.md §3.4
+    /// wants the set written down, and computing it a second time from the
+    /// changed files and the component's globs would be a second implementation
+    /// of the scoping — which is the shape §3.4 is written against: a
+    /// reconstruction that disagrees is worse than none.
+    pub files: Vec<String>,
     /// char's own deadline, in milliseconds.
     pub timeout_ms: u64,
     /// CPU slots this check occupies while it runs.
@@ -1015,7 +1024,9 @@ fn resolve_pending(state: &mut State, actions: &mut Vec<Action>) {
                     id: id.clone(),
                     status: Status::Skipped,
                     duration_ms: None,
-                    log: entry.plan.log.clone(),
+                    // Nothing was written to a log, so none is reported — see
+                    // `result_of`.
+                    log: None,
                     waiting_on: None,
                     error: None,
                     reason: Some(reason),
@@ -1339,7 +1350,11 @@ fn result_of(entry: &CheckState) -> Option<CheckResult> {
             id: entry.plan.id.clone(),
             status: Status::Skipped,
             duration_ms: None,
-            log: entry.plan.log.clone(),
+            // **No log, because nothing was written to one.** PLAN.md §4.1's
+            // own example row for a skipped check carries a status and a
+            // reason and nothing else; pointing at a file that does not exist
+            // sends an agent to read output that was never produced.
+            log: None,
             waiting_on: None,
             error: None,
             reason: entry.plan.skip.clone(),
@@ -1396,6 +1411,7 @@ mod tests {
             id: id(name),
             argv: vec!["true".to_string()],
             env: EnvDelta::default(),
+            files: Vec::new(),
             timeout_ms: 900_000,
             cost: 1,
             exclusives: Vec::new(),

@@ -365,6 +365,7 @@ mod tests {
                 "sub/semi;echo INJECTED.py".to_string(),
             ],
             env,
+            files: vec!["sub/semi;echo INJECTED.py".to_string()],
             timeout_ms: 600_000,
             cost: 4,
             exclusives: vec!["browser".to_string()],

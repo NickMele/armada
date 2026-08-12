@@ -333,6 +333,37 @@ pub struct InitData {
     pub results: Vec<ResultRow>,
 }
 
+/// `char check` (PLAN.md §3.1).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CheckData {
+    /// The run these results belong to, and the directory its logs are in.
+    pub run_id: String,
+    /// One row per selected check, in id order.
+    pub results: Vec<ResultRow>,
+    /// Run directories reaped at the start of this run. **Reported, never
+    /// silent** — a tool that removes things without saying so is worse than
+    /// one that does not remove them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub reaped_runs: Vec<String>,
+}
+
+/// `--dry-run` on `char check`: what would run, and nothing changed.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct CheckDryRun {
+    /// The exact argv each selected check would be given, post-substitution.
+    /// Not a re-derivation: it is the same value the dispatch record would have
+    /// carried, produced by the same code path.
+    pub would_run: Vec<String>,
+    /// Checks that would be skipped, and why — "no matching files" being the
+    /// one that matters, since a preview that hid it would report work that is
+    /// not going to happen.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub would_skip: Vec<String>,
+    /// Run directories that would be reaped.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub would_reap: Vec<String>,
+}
+
 /// `char clean`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CleanData {

@@ -85,6 +85,23 @@ pub enum AcquireOutcome {
     Held(LeaseRow),
 }
 
+/// What an all-or-nothing slot claim came to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlotOutcome {
+    /// Every slot asked for, with the keys the store chose.
+    Granted(Vec<LeaseId>),
+    /// Not enough were free. `held` is one of the holders, for the `WAITING`
+    /// row; `None` when every slot is free and the machine is simply smaller
+    /// than the request, which the caller has already clamped for.
+    Short {
+        /// One holder, so the payload can name a workspace.
+        held: Option<LeaseRow>,
+        /// How many were free at that instant — this run's own view, which is
+        /// the number PLAN.md §3.1's `waiting_on.available` reports.
+        free: u32,
+    },
+}
+
 impl Db {
     /// Open, creating the database and its schema if this is a first run.
     pub fn open(char_home: &Path) -> Result<Self, CharError> {
@@ -641,6 +658,135 @@ impl Db {
         .map_err(|e| map_sqlite(&self.path, e))?;
         tx.commit().map_err(|e| map_sqlite(&self.path, e))?;
         Ok(AcquireOutcome::Granted)
+    }
+
+    /// Take `count` CPU slots, **all of them or none**, in one transaction.
+    ///
+    /// **The identity of a slot is the store's to choose, and that is the whole
+    /// point of this method.** `lease::acquisition_order` numbers a check's
+    /// slots `0..cost`, which is the right answer for *ordering* and the wrong
+    /// one for *naming*: two checks each asking for slot `0` deadlock the
+    /// moment the second one blocks on the first — measured, and it hung
+    /// `char check` on its first real run. Slots are a counted budget, so what
+    /// a check needs is `cost` free ones and never a particular one.
+    ///
+    /// **All or nothing, because a partial claim deadlocks under contention.**
+    /// Taking three of four and waiting for the fourth means two runs can hold
+    /// half the machine each and neither can proceed — the classic counted-
+    /// semaphore failure, and one no acquisition *order* can fix, because the
+    /// resources within the class are interchangeable. One `BEGIN IMMEDIATE`
+    /// makes the count and the insert a single decision, which is exactly the
+    /// shape PLAN.md §4.3 requires of anything that reads and then writes.
+    ///
+    /// **A check costing more than the machine takes the whole machine.** The
+    /// reducer already admits it alone (`Budget::admits`); refusing it here
+    /// would leave it waiting forever for slots that do not exist, which is the
+    /// hang that rule exists to prevent.
+    ///
+    /// A slot whose holder has gone cold is reclaimed inside the same
+    /// transaction rather than reported: the claim loop reclaims by
+    /// `(kind, key)` and a slot has no fixed key to name, so the only place the
+    /// two can be made atomic is here.
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_acquire_slots(
+        &mut self,
+        workspace: &WorkspaceId,
+        count: u32,
+        total: u32,
+        heartbeat_mono: u64,
+        boot_id: &str,
+        pid: i32,
+        pid_started_at: Option<&str>,
+    ) -> Result<SlotOutcome, CharError> {
+        let want = count.min(total).max(1);
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| map_sqlite(&self.path, e))?;
+
+        let held: Vec<LeaseRow> = {
+            let mut statement = tx
+                .prepare(
+                    "SELECT workspace, kind, key, heartbeat_mono, boot_id, pid, pid_started_at
+                     FROM leases WHERE kind = ?1",
+                )
+                .map_err(|e| map_sqlite(&self.path, e))?;
+            let rows = statement
+                .query_map((LeaseKind::CpuSlot.to_string(),), |row| {
+                    Ok(LeaseRow {
+                        workspace: row
+                            .get::<_, Option<String>>(0)?
+                            .map(WorkspaceId::from_stored),
+                        kind: parse_kind(&row.get::<_, String>(1)?),
+                        key: row.get(2)?,
+                        heartbeat_mono: row.get::<_, i64>(3)? as u64,
+                        boot_id: row.get(4)?,
+                        pid: row.get::<_, i64>(5)? as i32,
+                        pid_started_at: row.get(6)?,
+                    })
+                })
+                .map_err(|e| map_sqlite(&self.path, e))?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| map_sqlite(&self.path, e))?
+        };
+
+        let mut live: Vec<&LeaseRow> = Vec::new();
+        for row in &held {
+            if charkit_core::lease::is_cold(
+                row.heartbeat_mono,
+                heartbeat_mono,
+                row.boot_id == boot_id,
+            ) {
+                tx.execute(
+                    "DELETE FROM leases WHERE kind = ?1 AND key = ?2",
+                    (LeaseKind::CpuSlot.to_string(), &row.key),
+                )
+                .map_err(|e| map_sqlite(&self.path, e))?;
+            } else {
+                live.push(row);
+            }
+        }
+
+        let taken: std::collections::BTreeSet<&str> =
+            live.iter().map(|row| row.key.as_str()).collect();
+        let free: Vec<String> = (0..total)
+            .map(|slot| slot.to_string())
+            .filter(|slot| !taken.contains(slot.as_str()))
+            .collect();
+
+        if (free.len() as u32) < want {
+            tx.rollback().map_err(|e| map_sqlite(&self.path, e))?;
+            return Ok(SlotOutcome::Short {
+                held: live.first().map(|row| (*row).clone()),
+                free: free.len() as u32,
+            });
+        }
+
+        let mut granted = Vec::new();
+        for slot in free.into_iter().take(want as usize) {
+            tx.execute(
+                "INSERT INTO leases
+                 (workspace, kind, key, heartbeat_mono, boot_id, pid, pid_started_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (
+                    workspace.as_str(),
+                    LeaseKind::CpuSlot.to_string(),
+                    &slot,
+                    heartbeat_mono as i64,
+                    boot_id,
+                    pid as i64,
+                    pid_started_at,
+                ),
+            )
+            .map_err(|e| map_sqlite(&self.path, e))?;
+            granted.push(LeaseId {
+                workspace: Some(workspace.clone()),
+                kind: LeaseKind::CpuSlot,
+                key: slot,
+            });
+        }
+        tx.commit().map_err(|e| map_sqlite(&self.path, e))?;
+        Ok(SlotOutcome::Granted(granted))
     }
 
     /// Renew a held lease's heartbeat.
