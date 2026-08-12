@@ -121,15 +121,18 @@ cases:
     given: { budget: 2, request: { cost: 99 } }
     expect: { granted: 2, workers: 2, ran: true }
 
-  - id: sched.reserve.clamped-grant-sizes-the-tool
+  - id: sched.reserve.clamped-grant-is-the-clamped-figure
     trap: SCH-7
     note: >-
-      Not covered by the original, which only tested the static default. Without this the
-      clamp is decorative — the check is admitted against 2 slots and launches 4 workers.
+      Not covered by the original, which only tested the static default. The grant a clamped
+      reservation returns must be the clamped figure, never the request — a scheduler that
+      returns the request has admitted the check against 2 slots while telling it it has 4.
+      Whether that figure can reach the tool is a separate, open question: the worker flag is
+      written by the config author and PLAN.md §4.4 admits no substitution for the grant, so
+      as specified the clamp is decorative. Recorded in docs/harvest.md §10 for the
+      implementer to raise; this case asserts only the half the engine owns.
     given: { budget: 2, check: { cost: 4, footprint: 4 } }
-    expect:
-      granted: 2
-      invocations: { contains: ["--workers=2"], absent: ["--workers=4"] }
+    expect: { granted: 2 }
 
   - id: sched.reserve.release-happens-on-failure
     trap: SCH-8
@@ -138,18 +141,6 @@ cases:
       release its exclusive names, or the run deadlocks behind a leak.
     given: { budget: 4, sequence: [{ cost: 4, panics: true }, { cost: 4 }] }
     expect: { second_admitted: true }
-
-  - id: sched.reserve.slots-and-names-are-taken-together
-    trap: SCH-8
-    note: >-
-      Not covered by the original. A check must never hold an exclusive name while still
-      waiting for slots — two checks sharing a name deadlock if it does.
-    given:
-      budget: 2
-      concurrent:
-        - { cost: 2, exclusive: ["db"], holds_ms: 40 }
-        - { cost: 2, exclusive: ["db"] }
-    expect: { deadlocked: false }
 
   # --- mode filtering -----------------------------------------------------
 
@@ -235,6 +226,19 @@ cases:
     expect: { every_host_check_that_was_containerised_declares_exclusive: true }
 
 excluded:
+
+  - id: sched.reserve.slots-and-names-are-taken-together
+    reason: >-
+      The invariant is real — no part of a reservation may be held while the rest is still
+      pending — but this case asserted it through an acquisition order the source does not
+      have. The source takes slots and exclusive names in one atomic step under a single
+      guard, so it states no order and this case had no source behaviour to port. charkit
+      reaches the same invariant by a different route: PLAN.md §4.3 requires exclusives
+      first, in sorted name order, then slots, because charkit's leases are machine-wide and
+      a cycle can span processes. That is a cross-process property, which PLAN.md §4.3
+      already specifies an integration test for; a single-process case here would pass under
+      either scheme and prove nothing. See docs/harvest.md §5.3.
+    replaced_by: null
 
   - id: sched.order.assert-catalog-footprints
     reason: >-

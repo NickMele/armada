@@ -93,20 +93,13 @@ cases:
   - id: exec.runner.container-wrapper-preserves-the-command
     note: >-
       Asserted as a property: everything after the service name equals the original command,
-      in order. The wrapper's own tokens are that repo's container tool and are config here.
+      in order. The wrapper's own leading tokens are the container tool's and are config here;
+      the case pins only that the declared command survives the wrapping byte-identical.
     given: { check: { runner: container, service: "checks", cmd: ["test", "-x"] } }
     expect:
       invocations: { contains: ["checks", "test", "-x"] }
       command_suffix_equals_original: true
       cwd: workspace_root
-
-  - id: exec.runner.container-run-forces-a-build
-    trap: CMD-2
-    note: >-
-      A stale image silently tests the wrong code the moment a build input moves. Green on
-      stale code is indistinguishable from real green.
-    given: { check: { runner: container, service: "checks" } }
-    expect: { invocations: { contains: ["--build"] } }
 
   - id: exec.runner.container-run-allocates-no-terminal
     note: >-
@@ -197,10 +190,12 @@ cases:
     trap: SCH-11
     note: >-
       Every parallel tool defaults to sizing itself to the whole machine. The budget means
-      nothing if the tools ignore it. In charkit the flag is written by the config author,
-      so what this pins is that the substituted value is the granted figure.
-    given: { check: { cost: 4, cmd: ["test", "--workers=${jobs}"] }, budget: 16 }
-    expect: { invocations: { contains: ["--workers=4"] } }
+      nothing if the tools ignore it. In charkit the worker flag is written by the config
+      author and there is no substitution for the grant, so what the engine owes is that the
+      declared cost is what it reserves and grants — the config author matches the flag to
+      it. Recorded as a candidate gap in docs/harvest.md §10.
+    given: { check: { cost: 4 }, budget: 16 }
+    expect: { reserved: 4, granted: 4 }
 
   - id: exec.workers.bounded-browser-run-does-not-manufacture-failures
     trap: "§6.1"
@@ -310,6 +305,17 @@ excluded:
       Both executions pass the same test double, so the verbose path is never exercised —
       only the flag parsing is. The streaming behaviour is cased in process.yml against a
       real subprocess.
+    replaced_by: null
+
+  - id: exec.runner.container-run-forces-a-build
+    reason: >-
+      The trap is real — a stale image silently tests the wrong code the moment a build input
+      moves, and green on stale code is indistinguishable from real green — but it cannot be
+      a check-invocation assertion here. The source runs an ephemeral container per check, so
+      its build flag rides on that invocation; charkit execs into an already-running service
+      (PLAN.md §4.1's `in:`, a compose exec with no terminal), brought up by `needs:` and
+      `char up`. An exec has no build flag. The rule is kept and reclassified as phase-4
+      material on whatever brings the service up — docs/harvest.md §3 and trap CMD-2.
     replaced_by: null
 
   - id: exec.structural.no-dev-stack-symbols

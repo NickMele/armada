@@ -49,9 +49,11 @@ named, because naming the assumption is how the implementer knows to strip it.
 ## 1. What was measured
 
 [`PHASES.md`](PHASES.md) §9 warns that its table went stale once already, by 1.4–2.4×, and instructs
-re-measurement before scoping. Re-measured; **it is stale again, in the same direction.**
+re-measurement before scoping. Re-measured; **it was stale again, in the same direction.**
+**§9 has been updated in place with these figures** — the "§9 says" column below is what it carried
+before, kept so the drift is legible rather than erased.
 
-| Path, relative to `scripts/` | §9 says | Measured | Delta |
+| Path, relative to `scripts/` | §9 said | Measured | Delta |
 |---|---:|---:|---|
 | `char/check.py` | 3,383 | **3,556** | +173 |
 | `char/_shared.py` | 337 | 337 | — |
@@ -66,7 +68,8 @@ re-measurement before scoping. Re-measured; **it is stale again, in the same dir
 | `scripts/uv.lock` | *unlisted* | 788 | — |
 | **Harvestable total** | ~6,169 | **12,632** | ~2.0× |
 
-`bin/char` is 21 lines and lives at the **repo root**, not under `scripts/` as §9's path implies.
+`bin/char` is 21 lines and lives at the **repo root**, not under `scripts/` as §9's path implied;
+§9's row now says so.
 
 `char_test/` is the correction that matters, and §9 predicted it: that row was explicitly never
 re-measured and flagged as "assume stale by a similar factor". It is 2.2× larger, and one file —
@@ -113,7 +116,7 @@ put a compose-shaped adapter inside the check engine, which is the contamination
 | Command construction, the runner decision (§4.4) | Renamed-container husk sweeping | Per-tool parsers as core logic |
 | The process seam — deadlines, groups, abort (§4.5) | Anonymous-volume sweeping | The pixel-diff visual aid (§6.2) |
 | Result parsing as a *contract* (§4.6) | Service teardown and the ownership rule | Behaviour keyed on check id |
-| Two-phase execution (§4.7) | Dependency-image freshening | |
+| Two-phase execution (§4.7) | Image freshening, of the service *and* its dependencies (§5.4, CMD-2 and CMD-3) | |
 | Live output (§4.8) | Package-manager install preflight | |
 | Run state, status, leases, `--again`, detach (§4.9, §4.10) | | |
 
@@ -247,11 +250,20 @@ host workspace root to the fixed container mount point, preserving the sub-path.
 translated the other way, and the translation is conditioned on *whether the check actually runs in
 a container*, not on what it declares (§5.4, CMD-5).
 
-**The container wrapper adds**, in order: an ephemeral-run verb, remove-on-exit, a **forced build**
-so a stale image cannot silently pass, an environment signal marking "inside a check container", a
-domain-scoped environment signal selecting a shared database, and the service name — after which the
-original command is passed through byte-identical. Working directory is always the workspace root,
-because that is where the compose document lives and because the project name is derived from it.
+**The container wrapper, as the *source* builds it**, adds in order: an ephemeral-run verb,
+remove-on-exit, a **forced build** so a stale image cannot silently pass, an environment signal
+marking "inside a check container", a domain-scoped environment signal selecting a shared database,
+and the service name — after which the original command is passed through byte-identical. Working
+directory is always the workspace root, because that is where the compose document lives and because
+the project name is derived from it.
+
+**charkit's shape is different, and only the last three of those transfer.** `PLAN.md` §4.1's `in:`
+execs into a service that is *already running*, brought up by `needs:` / `char up`, so the
+invocation charkit builds is an `exec -T` — no ephemeral-run verb, no remove-on-exit, no build flag.
+What survives verbatim is: the environment signals are passed, the service is named, the original
+command is passed through byte-identical after it, and `-T` is mandatory (`PLAN.md` §4.1 —
+omitting it allocates a TTY and hangs). Image freshness does not disappear; it moves to whatever
+brings the service up (§3, and §5.4 CMD-2).
 
 **One logical check becoming several tool invocations** is a source-repo workaround that charkit
 should not reproduce. That repo needed one check id to cover N workspace packages whose task runner
@@ -492,7 +504,7 @@ nothing to notice their absence by.
 | SCH-5 | Deterministic tie-break on id | C | Two runs of one set schedule differently and a flaky run cannot be reproduced |
 | SCH-6 | Over-budget requests are **clamped**, not queued | C | A check declaring more than the machine has waits forever for capacity that cannot exist. Deadlock, not a slow run |
 | SCH-7 | The clamped grant is returned and sizes the tool | C | Without it a check admitted against a clamped budget still launches its full declared parallelism, oversubscribing the machine the clamp protects |
-| SCH-8 | Slots and exclusive names are acquired **atomically**, released in a finally, waking all | partial | Acquiring names first deadlocks two checks sharing a name. Releasing outside a finally leaks slots and locks on a panic. Waking one leaves a waiter blocked on a *name* never re-evaluated after a *slot* release |
+| SCH-8 | Slots and exclusive names are taken in **one atomic step under a single guard**, released in a finally, waking all | partial | The source states no acquisition order because it has none to state — the whole reservation is one step, and its comment argues for *eliminating* the ordering question rather than answering it. The transferable rule is that **no part of a reservation is ever held while waiting for the rest**. Releasing outside a finally leaks slots and locks on a panic. Waking one leaves a waiter blocked on a *name* never re-evaluated after a *slot* release |
 | SCH-9 | The wait predicate is re-checked in a loop after every wake | **S** | A single conditional admits two checks past the budget on a spurious or multi-waiter wake |
 | SCH-10 | Cores are reserved rather than fully budgeted | D | The machine sits at 100 %+ while its owner is trying to work. Reported twice |
 | SCH-11 | Explicit worker flags override each tool's own auto-sizing | C | Every parallel tool defaults to one worker per core; the budget means nothing if the tools ignore it |
@@ -501,12 +513,35 @@ nothing to notice their absence by.
 | SCH-14 | Moving a check back to the host must **re-declare** its exclusive resource | C | The locks were safe to remove *only because* those checks run in containers. Flipping one back without restoring its lock silently reinstates the original corruption, and the symptom is unrelated tests failing in the gate while passing in isolation |
 | SCH-15 | A container-declared check must name a service | C | A malformed invocation at run time instead of a config error at load time |
 
+**On SCH-8 and `PLAN.md` §4.3's acquisition order — they are not in conflict, and `PLAN.md` wins
+anyway** ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.8; this document is not in that precedence list).
+Four things the implementer should have:
+
+- **`PLAN.md` §4.3's sorted-exclusives-then-slots ordering solves a problem the source never had.**
+  The source's mechanism is entirely in-process and in-memory, and no named resource crosses a
+  process boundary, so there is no cycle for an order to break. SCH-8 is evidence about atomicity
+  and release, not about ordering.
+- **The source's only cross-process exclusion is its per-checkout whole-run lock** (ST-14 to ST-20),
+  and that lock is precisely why an in-memory scheduler was ever sufficient there. Remove it and the
+  scheduler's guarantees stop at the process edge.
+- **The source's own dated TODO — the one recorded as X-1 — is that in-memory mechanism failing to
+  cover a resource with real extent beyond the process.** It notes the container tool holds no
+  cross-process lock of its own. That is independent empirical support for `PLAN.md` §4.3's premise,
+  from the very system SCH-8 is harvested from.
+- **Multi-name acquisition is unexercised in the source.** No test passes more than one exclusive
+  name and no catalogue entry declares more than one, so the source's clean record on ordering is
+  not evidence of safety for charkit, where `exclusive:` is a machine-wide list.
+
+**Build `PLAN.md` §4.3's order.** SCH-8's contribution is the invariant it shares with it — nothing
+is held while the rest of the reservation is pending — reached there by atomicity and here by a
+total order across both lease classes.
+
 ### 5.4 Command construction and the runner seam
 
 | # | Branch | Marked | What breaks if absent |
 |---|---|---|---|
 | CMD-1 | The git-aware package filter is **dropped inside a container** and kept on the host | D | A worktree's git directory is a *file* pointing outside the bind mount, so the container has no usable git and the check fails with *not part of a git repository*. The asymmetry is what makes the fix safe: dropping it is merely less selective, keeping it is always fatal |
-| CMD-2 | Every container run **forces a build** | C | A stale image silently tests the wrong code the moment a build input moves. Green on stale code is indistinguishable from real green |
+| CMD-2 | Every container run **forces a build** | C | A stale image silently tests the wrong code the moment a build input moves. Green on stale code is indistinguishable from real green. **Phase 4, not phase 3.** The source *runs* an ephemeral container per check, so the build flag rides on the check's own invocation; charkit **execs into an already-running service** (`PLAN.md` §4.1's `in:`, a `docker compose … exec -T`), and an exec has no build flag and no image of its own to freshen. The rule survives unchanged — a stale image must never silently pass — but it lands on whatever brings the service up (`needs:` / `char up`) beside CMD-3, not on the check engine. Nothing in a check invocation asserts it |
 | CMD-3 | A **dependency** image whose code is baked in is force-built **separately** | D | A rebuild flag on the run covers the run target only; compose's default for a dependency is build-only-if-missing. An image built before a fix commit was reused for the rest of the day, so the browser check kept failing the exact assertion the fix targeted while the server suite passed against the same commit. 77 minutes lost across two review rounds |
 | CMD-4 | The no-host-topology case both **refuses** and **skips** | C in test | With only the refusal, the error escapes the executor and **discards every other check's results for the run**. With only the skip, a direct caller gets a silent nonsense command. Both are needed |
 | CMD-5 | Path translation keys on whether the check *runs* in a container, not on what it *declares* | **S** | A forced-host run writes reports into a host directory named after the container mount point — a stray absolute top-level directory — and reads nothing back |
@@ -657,8 +692,9 @@ and **M** where it is an artefact of the old mechanism that the store makes unne
 
 ## 6. The Playwright traps — §9 corrected
 
-[`PHASES.md`](PHASES.md) §9 records two, one in each file, and attributes the snapshot trap to
-`baselines.py`. The count is right and the description needs two corrections.
+[`PHASES.md`](PHASES.md) §9 recorded two, one in each file, and attributed the snapshot trap to
+`baselines.py`. The attribution was right and the count and the description were not.
+**§9 now carries both corrections**; this section is the evidence behind them.
 
 ### 6.1 There are three distinct traps, and the shared one is the live one
 
@@ -773,12 +809,14 @@ defect.
 | X-13 | Skip-decision and skip-*reason* orderings differ | A check skipped for two reasons is reported under the one that did not decide it. Unify, and derive the message from the predicate |
 | X-14 | The changed-file count in the pre-run summary omits one domain's list | A run scoped entirely to that domain announces "0 changed files" while running its checks |
 
-### 7.1 Two measured defects in the kill path
+### 7.1 Three measured defects in the kill path
 
-Measured directly against the source module during this harvest, on darwin. Both are dangerous and
-both are invisible to that suite.
+Measured directly against the source module during this harvest, on darwin. All three are dangerous
+and all three are invisible to that suite. They carry ids — X-15, X-16, X-17 — because the ported
+cases cite them and an unnumbered defect gets cited by section, which collides with the numbered
+rows above.
 
-**The process-group id is looked up at kill time, not recorded at spawn.** For a child that has
+**X-15 — the process-group id is looked up at kill time, not recorded at spawn.** For a child that has
 exited but not been reaped — exactly the state after a deadline expires, since the wait that would
 reap it is the one that just timed out — the lookup fails and **the entire kill is skipped**.
 Measured: a grandchild survived the timeout, the drain burned its full ceiling so the deadline
@@ -786,14 +824,14 @@ overran by 15×, and all partial output was destroyed. Three published guarantee
 **Fix: record the group id at spawn. With `setsid` the group id *is* the child's pid, so it is known
 the instant the child exists and can never become unavailable.**
 
-**Escalation to a hard kill is conditioned on the leader's exit, not the group's emptiness.** If the
+**X-16 — escalation to a hard kill is conditioned on the leader's exit, not the group's emptiness.** If the
 leader dies on the soft signal while a group member ignores it, the hard signal is **never sent**.
 Measured: the survivor was still alive after the call returned. This directly contradicts
 [`traps.md`](traps.md)'s measured rule that escalation must be **unconditional, not a retry**,
 because children inherit an ignored disposition and one uncooperative leader immunises its group.
 **`traps.md` wins.**
 
-A third, smaller one: only one error condition is treated as "already gone", where
+**X-17 — only one error condition is treated as "already gone"**, where
 [`traps.md`](traps.md) measured a *different* one on darwin for a zombie-only group and warns in
 terms that branching on one specifically sees neither platform's answer. On the abort path that
 escapes a signal handler, where nothing catches it.
@@ -809,10 +847,13 @@ escapes a signal handler, where nothing catches it.
 
 **Keep — every one earned by an incident.** SC-1 to SC-8, SC-10, SC-12 to SC-20 (scope
 conservatism and every fallback); CAT-2, CAT-3 (positive time budgets, engine suite on the host);
-SCH-1 to SCH-11, SCH-14 (footprint separate from workers, clamp-don't-wait, atomic acquisition,
+SCH-1 to SCH-11, SCH-14 (footprint separate from workers, clamp-don't-wait, **no part of a
+reservation held while waiting for the rest** — SCH-8's transferable invariant, which charkit
+reaches by `PLAN.md` §4.3's order rather than by the source's single atomic step, see §5.3 —
 reserved cores, re-declare the lock on moving back to the host); CMD-1 to CMD-4, CMD-7, CMD-9,
-CMD-10, CMD-12, CMD-14 (drop the git filter in a container, force builds, refuse *and* skip, create
-the artefact directory first, never synthesise a faster command); PAR-1 to PAR-15 as *contract*
+CMD-10, CMD-12, CMD-14 (drop the git filter in a container, refuse *and* skip, create
+the artefact directory first, never synthesise a faster command — **CMD-2's forced build is kept but
+lands on phase 4's `up`**, §5.4); PAR-1 to PAR-15 as *contract*
 (the benign-summary guard above all); EXE-1 to EXE-6; VIS-1 to VIS-11; ST-1, ST-4 to ST-16, ST-19 to
 ST-38 (as requirements, per §5.8's R/M column); PRO-1 to PRO-13; BAS-1 to BAS-15 as fixture config.
 
@@ -871,6 +912,7 @@ Phase 2.5 was the last phase licensed to send changes back to `PLAN.md`
 | A check whose tool legitimately exits non-zero on success has no way to say so | `PLAN.md` §4.1.1 lists keys deliberately not added, and an expected-exit-code key is not among them either way. **Recommendation: leave the engine strict.** The one harvested case (BAS-5) is a repo-local aid that becomes a `commands:` entry in phase 6, where the exit code passes through verbatim anyway |
 | Per-check output tail length and a noise-prefix list | BAS-8, BAS-9 and PAR-3 all want them. `PLAN.md` §3.1 caps captured output at 10 MB but says nothing about which lines reach a summary |
 | No stated rule that an empty-string `env:` value is preserved rather than pruned | §6.2. The schema already permits it; nothing states that resolution must not drop it |
+| **A clamped worker grant has no way to reach the tool.** SCH-6 clamps an over-budget request; SCH-7 requires the *clamped* figure to size the tool. But the worker flag is written by the config author in `cmd:`, and `PLAN.md` §4.4 caps substitutions at `${port.NAME}`, `${files}`, `${component.root}`, `${workspace.id}` plus scoped `${env.NAME}` / `${ref}` — an unrecognised `${…}` is `bad_config`. There is no `${jobs}`-shaped variable, so a config can only hard-code the *declared* cost. **As specified, SCH-7's clamp is decorative**: an over-budget check is admitted against fewer slots and still launches its full declared parallelism, which is exactly the oversubscription SCH-6's clamp exists to prevent | The cap is deliberate, and phase 3 is **not licensed to change `PLAN.md`** (phase 2.5 was the last), so this is recorded rather than fixed. The engine-side half is cased — `sched.reserve.clamped-grant-is-the-clamped-figure` and `exec.workers.pinned-to-the-declared-cost` assert the grant, not a substitution. **Raise it before building admission**; the options are a granted-slots substitution inside the cap, or accepting that `cost:` must equal the tool's worker count and clamping is a scheduling-only concept |
 
 ---
 

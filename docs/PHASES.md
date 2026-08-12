@@ -659,37 +659,56 @@ to harvest, not how much work the rewrite is.
 
 | Path | Lines | Role in this plan |
 |------|------:|-------------------|
-| `char/check.py` | 3,383 | Harvest in phase 3. Scope → schedule → run → parse → report, run lock, live table, `--again`. Contains `CHECK_CATALOG` (replace) and load-bearing comments about Playwright traps (translate into the fixture config, not the code). **Only one of the two traps is here — the other is in `baselines.py`, so harvest both.** |
+| `char/check.py` | 3,556 | Harvest in phase 3. Scope → schedule → run → parse → report, run lock, live table, `--again`. Contains `CHECK_CATALOG` (replace) and load-bearing comments about Playwright traps (translate into the fixture config, not the code). **Two of the three Playwright traps touch this file** — the live one, unbounded browser workers manufacturing failures that pass in isolation, and a historical flag-forwarding one kept as a regression assertion. Detail in `docs/harvest.md`. |
 | `char/_shared.py` | 337 | Harvest in phase 3. `run_fn` injection, target resolution, git worktree list. |
-| `char/worktrees.py` | 679 | Reference for phase 2. Orphan container/network sweep — note it infers ownership from compose's `working_dir` label; charkit stamps its own instead. |
+| `char/worktrees.py` | 705 | Reference for phase 2. Orphan container/network sweep — note it infers ownership from compose's `working_dir` label; charkit stamps its own instead. |
 | `char/servers.py` | 436 | Reference for phase 4. Tilt-shaped; becomes config, not code. |
 | `char/__main__.py` | 521 | Reference. Typer dispatch pattern. |
-| `char_mcp/server.py` | ~95 | **Do not use as a template.** Written against a pre-2.0 MCP SDK; `FastMCP` no longer exists (`docs/traps.md`). Read it for *what* to expose, never for *how*. |
-| `char_test/` | 2,694 | **Harvest in phase 3 — port the cases, rebuild the harness.** `run_fn`-injected, asserts on behavior not implementation — this is the single most valuable asset. Only check-id fixtures should need editing. |
-| `char/baselines.py` | 762 | **Not previously listed. Harvest for traps in phase 3 even though the code does not move.** A Playwright snapshot review aid — pixel-diffs darwin/linux snapshot pairs and renders an HTML page for a human. Holds at least one of the two Playwright traps this table attributes to `check.py`: with the default `updateSnapshots: "missing"`, an absent snapshot is *written* and the test *passes*, so a first containerised run reported 29/29 having compared 17 brand-new images against themselves. Couples only to `_shared` (`CheckError`, `RunFn`, `default_run_fn`), so phase 6 inlines three symbols and registers it as a `commands:` entry. |
+| `char_mcp/server.py` | 316 | **Do not use as a template.** Written against a pre-2.0 MCP SDK; `FastMCP` no longer exists (`docs/traps.md`). Read it for *what* to expose, never for *how*. |
+| `char_test/` | 5,948 | **Harvest in phase 3 — port the cases, rebuild the harness.** `run_fn`-injected, asserts on behavior not implementation — this is the single most valuable asset. Only check-id fixtures should need editing. |
+| `char/baselines.py` | 762 | **Not previously listed. Harvest for traps in phase 3 even though the code does not move.** A Playwright snapshot review aid — pixel-diffs darwin/linux snapshot pairs and renders an HTML page for a human. Carries two of the three Playwright traps: the same unbounded-workers root cause as `check.py`, found and fixed there independently, and the snapshot-write trap. **The snapshot trap runs the other way round from the description this table used to carry.** The tool's default does write an absent snapshot and pass — but the source repo's own config already sets `updateSnapshots` to none under CI and its check image sets `CI`, so *the check side is defended*. It is the **generation** side that must deliberately clear `CI` to be allowed to write at all; without that it exits cleanly having produced zero baselines. Both failures are silent and they are different failures. Detail in `docs/harvest.md`. Couples only to `_shared` (`CheckError`, `RunFn`, `default_run_fn`), so phase 6 inlines three symbols and registers it as a `commands:` entry. |
 | `char/tickets.py` | 51 | Small. Becomes a `commands:` entry in phase 6. |
-| `bin/char` | ~25 | Copy the pattern. A bash dispatcher that resolves the git root from the *caller's* cwd at every invocation and execs `$root/scripts/char/__main__.py "$@"` — which is why one symlink works from inside any worktree. |
+| `scripts/pyproject.toml` | 47 | **Trap material, not packaging.** Its header comments narrate two dated production incidents. Read it in phase 3 alongside the code. |
+| `scripts/uv.lock` | 788 | Reference only. Pins the source toolchain; nothing here transfers. |
+| `bin/char` | 21 | Copy the pattern. A bash dispatcher that lives at the **repo root**, not under `scripts/`. It resolves the git root from the *caller's* cwd at every invocation and execs the package entrypoint under `scripts/` — which is why one symlink works from inside any worktree. |
 
-> **Counts re-measured. An earlier draft of this table was uniformly stale — everything had
-> grown 1.4–2.4× since it was written.**
+> **Counts re-measured twice. The table above is the second measurement.**
 >
-> | File | Earlier draft | Measured | |
+> **First pass.** An earlier draft was uniformly stale — everything had grown 1.4–2.4×.
+>
+> | File | Earlier draft | First measurement | |
 > |---|---:|---:|---|
-> | `check.py` | 1,632 | **3,383** | 2.07× |
-> | `_shared.py` | 140 | **337** | 2.4× |
-> | `worktrees.py` | 397 | **679** | 1.71× |
-> | `__main__.py` | 345 | **521** | 1.51× |
-> | `servers.py` | 321 | **436** | 1.36× |
+> | `check.py` | 1,632 | 3,383 | 2.07× |
+> | `_shared.py` | 140 | 337 | 2.4× |
+> | `worktrees.py` | 397 | 679 | 1.71× |
+> | `__main__.py` | 345 | 521 | 1.51× |
+> | `servers.py` | 321 | 436 | 1.36× |
 >
-> `scripts/char` totals **6,169** lines. `char_mcp/` and `char_test/` were not re-measured
-> and should be assumed stale by a similar factor.
+> That pass covered `scripts/char` only — **6,169** lines — and left `char_mcp/` and
+> `char_test/` unmeasured, flagging them as "assume stale by a similar factor".
+>
+> **Second pass, during phase 3's harvest. Stale again, in the same direction.**
+>
+> | File | First measurement | Now | Delta |
+> |---|---:|---:|---|
+> | `char/check.py` | 3,383 | **3,556** | +173 |
+> | `char/worktrees.py` | 679 | **705** | +26 |
+> | `char_mcp/server.py` | *~95, never measured* | **316** | 3.3× |
+> | `char_test/` | *2,694, never measured* | **5,948** | **2.2×** |
+>
+> `_shared.py`, `servers.py`, `__main__.py`, `baselines.py` and `tickets.py` are unchanged.
+> Harvestable total **12,632** lines, ~2.0× the 6,169 the first pass reported.
+>
+> **The row this note flagged as never re-measured was indeed the worst.** `char_test/` is
+> 2.2× larger than assumed, and one file inside it — 3,354 lines and 250 tests — is on its own
+> larger than the figure this table carried for the entire suite.
 >
 > **Consequence for phase 3:** the harvest is roughly double what the plan assumed. That
 > makes the harvest step *more* valuable rather than less — twice the lines means twice the
 > uncommented bug fixes to lose in a rewrite — but it is a scope change, and phase 3 should
 > land as several review-sized PRs rather than one.
 >
-> **Re-measure before scoping any phase against this table.** It went stale once already.
+> **Re-measure before scoping any phase against this table.** It has now gone stale twice.
 
 ---
 

@@ -70,7 +70,7 @@ cases:
     expect: { exit: 124, grandchild_alive_after: false }
 
   - id: process.group.leader-exits-while-a-member-survives
-    trap: X-1
+    trap: X-15
     note: >-
       Rewritten from an assertion that could not fail. Measured defect in the original: the
       group id is looked up at kill time, and for a child that exited but was not reaped the
@@ -84,7 +84,7 @@ cases:
       returns_within_s: 20
 
   - id: process.group.escalation-is-unconditional
-    trap: X-2
+    trap: X-16
     note: >-
       Measured defect in the original: escalation is conditioned on the leader's exit rather
       than the group's emptiness, so a leader that dies on the soft signal while a member
@@ -95,7 +95,7 @@ cases:
     expect: { exit: 124, member_alive_after: false }
 
   - id: process.group.already-dead-group-does-not-raise
-    trap: X-3
+    trap: X-17
     note: >-
       docs/traps.md measured a different error condition on darwin than on Linux for a
       zombie-only group, and warns that branching on one specifically sees neither answer.
