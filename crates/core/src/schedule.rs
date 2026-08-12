@@ -311,6 +311,16 @@ pub struct Outcome {
     pub reason: Option<String>,
     /// Wall time from the spawn being proposed to the child being reaped.
     pub duration_ms: u64,
+    /// **Whether a child ever ran**, which is what decides if this row may
+    /// point at a log.
+    ///
+    /// A cascaded `ABORTED`, a check blocked on a service, and a claim that hit
+    /// the ceiling all reach a verdict without spawning anything — so no log
+    /// was written, and reporting the path one *would* have had sends an agent
+    /// to open a file that does not exist. The same defect was fixed for
+    /// `SKIPPED` and missed here; found by running the cascade and listing the
+    /// directory.
+    pub ran: bool,
     /// How much output the check produced.
     ///
     /// **Kept past the check's end, and the replay property is what forced
@@ -789,6 +799,8 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 reason: None,
                 duration_ms: elapsed(&state, &check),
                 bytes: bytes_so_far(&state, &check),
+                // A spawn that failed produced no output to write.
+                ran: false,
                 // It was attempted: char tried to run it and the machine or the
                 // config refused, which is a verdict about this check.
                 classifies: true,
@@ -846,6 +858,7 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 reason: None,
                 duration_ms: 0,
                 bytes: bytes_so_far(&state, &check),
+                ran: false,
                 classifies: true,
             };
             conclude(&mut state, &check, outcome, &mut actions);
@@ -917,6 +930,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             reason: None,
             duration_ms,
             bytes: running.bytes,
+            ran: true,
             classifies: true,
         },
         Some(Stopping::Ending) => Outcome {
@@ -925,6 +939,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             reason: Some("the run was stopped".to_string()),
             duration_ms,
             bytes: running.bytes,
+            ran: true,
             classifies: true,
         },
         None if code == 0 => Outcome {
@@ -933,6 +948,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             reason: None,
             duration_ms,
             bytes: running.bytes,
+            ran: true,
             classifies: true,
         },
         None => Outcome {
@@ -946,6 +962,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             reason: None,
             duration_ms,
             bytes: running.bytes,
+            ran: true,
             classifies: true,
         },
     })
@@ -1071,6 +1088,7 @@ fn resolve_pending(state: &mut State, actions: &mut Vec<Action>) {
                         reason: None,
                         duration_ms: 0,
                         bytes: 0,
+                        ran: false,
                         // It classifies: `bad_invocation` outranks a test
                         // failure precisely because the caller has to fix the
                         // invocation before any other result means anything
@@ -1099,6 +1117,7 @@ fn resolve_pending(state: &mut State, actions: &mut Vec<Action>) {
                         reason: Some(format!("{failed} did not pass")),
                         duration_ms: 0,
                         bytes: 0,
+                        ran: false,
                         classifies: false,
                     },
                     actions,
@@ -1283,6 +1302,7 @@ fn end_run(state: &mut State, actions: &mut Vec<Action>) {
                         reason: Some("the run was stopped".to_string()),
                         duration_ms: 0,
                         bytes: 0,
+                        ran: false,
                         classifies: false,
                     },
                     actions,
@@ -1374,7 +1394,24 @@ impl State {
             })
             .filter_map(|entry| result_of(entry).as_ref().map(Into::into))
             .collect();
-        crate::envelope::aggregate(&rows, "checks")
+        let error = crate::envelope::aggregate(&rows, "checks")?;
+
+        // **The class is the aggregate's; the sentence is the run's.** Because
+        // the rows above are filtered, `aggregate`'s own count would read
+        // "1 of 1 checks did not succeed" beside a `results[]` holding two —
+        // truthful about what it was asked and confusing about the run.
+        // Restating the count is not a second precedence rule: the class, the
+        // `where` and the `next_action` are all still `aggregate`'s and are
+        // carried through untouched.
+        let all = self.results();
+        let failed = all
+            .iter()
+            .filter(|row| !matches!(row.status, Status::Pass | Status::Skipped))
+            .count();
+        Some(CharError {
+            message: format!("{failed} of {} checks did not succeed", all.len()),
+            ..error
+        })
     }
 }
 
@@ -1385,7 +1422,8 @@ fn result_of(entry: &CheckState) -> Option<CheckResult> {
             id: entry.plan.id.clone(),
             status: outcome.status,
             duration_ms: Some(outcome.duration_ms),
-            log: entry.plan.log.clone(),
+            // Only where there is one to read. See `Outcome::ran`.
+            log: outcome.ran.then(|| entry.plan.log.clone()).flatten(),
             waiting_on: None,
             error: outcome.error.clone(),
             reason: outcome.reason.clone(),
@@ -2137,6 +2175,69 @@ mod tests {
         let (state, actions) = step(run(vec![test]), Event::Started);
         assert_eq!(state.results()[0].status, Status::Skipped);
         assert_eq!(finish_of(&actions), Some((Status::Skipped, None)));
+    }
+
+    /// **A row may only point at a log that exists.** A cascaded `ABORTED`
+    /// spawned nothing, so nothing was written — and an agent sent to open a
+    /// file that is not there has been told something false about the run.
+    /// Found by running the cascade and listing the directory.
+    #[test]
+    fn a_row_whose_check_never_ran_points_at_no_log() {
+        let mut types = plan("ui:types");
+        types.needs = vec![id("core:build")];
+        let (state, _) = step(run(vec![plan("core:build"), types]), Event::Started);
+        let (state, _) = step(
+            state,
+            Event::LeaseGranted {
+                check: id("core:build"),
+                kind: LeaseKind::CpuSlot,
+            },
+        );
+        let (state, _) = step(
+            state,
+            Event::ChildExited {
+                check: id("core:build"),
+                code: 1,
+            },
+        );
+
+        let rows = state.results();
+        let cascaded = rows.iter().find(|row| row.id == id("ui:types")).unwrap();
+        let ran = rows.iter().find(|row| row.id == id("core:build")).unwrap();
+        assert_eq!(cascaded.log, None, "an aborted check pointed at a log");
+        assert!(ran.log.is_some(), "a check that ran lost its log");
+    }
+
+    /// **The message describes the run, not the slice the aggregate was
+    /// handed.** Filtering the classifying rows made the count read
+    /// "1 of 1 checks did not succeed" beside a `results[]` holding two.
+    #[test]
+    fn the_runs_message_counts_every_row_and_not_only_the_ones_that_classify() {
+        let mut types = plan("ui:types");
+        types.needs = vec![id("core:build")];
+        let (state, _) = step(run(vec![plan("core:build"), types]), Event::Started);
+        let (state, _) = step(
+            state,
+            Event::LeaseGranted {
+                check: id("core:build"),
+                kind: LeaseKind::CpuSlot,
+            },
+        );
+        let (state, actions) = step(
+            state,
+            Event::ChildExited {
+                check: id("core:build"),
+                code: 1,
+            },
+        );
+
+        let (_, error) = finish_of(&actions).expect("the run ends");
+        let error = error.expect("it failed");
+        assert_eq!(error.message, "2 of 2 checks did not succeed");
+        assert_eq!(state.results().len(), 2, "the count matches the payload");
+        // The class is still the aggregate's, and still the prerequisite's.
+        assert_eq!(error.class, ErrClass::ToolFailed);
+        assert_eq!(error.r#where, "core:build");
     }
 
     /// A `SKIPPED` prerequisite did not fail, so nothing cascades. Reading
