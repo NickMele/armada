@@ -287,6 +287,71 @@ fn prerequisites_of(config: &ResolvedConfig, id: &CheckId) -> Vec<CheckId> {
         .unwrap_or_default()
 }
 
+/// The `${files}` a component's checks receive, out of a candidate file set.
+///
+/// **One function for both sources, and that is what makes `--all-files`
+/// honest.** PLAN.md §4.1 says `--all-files` "sets `${files}` from each
+/// component's `match:` globs instead of from the diff" — so the globs are the
+/// filter in both cases and only the candidate list changes: the changed set
+/// from git on the ordinary path, every tracked file under `--all-files`. Two
+/// functions would be two chances for the two paths to scope differently.
+///
+/// Sorted, so a check's argv is the same for the same input and a golden
+/// snapshot or a failure signature does not move because git listed a directory
+/// in a different order.
+pub fn files_for(globs: &[String], candidates: &[String]) -> Vec<String> {
+    let mut files: Vec<String> = candidates
+        .iter()
+        .filter(|path| glob::matches_any(globs, path))
+        .cloned()
+        .collect();
+    files.sort();
+    files.dedup();
+    files
+}
+
+/// Why a check will not run, decided before the run starts, or `None` if it
+/// will.
+///
+/// **A file-scoped check whose set is empty is skipped, never invoked with no
+/// arguments** (PLAN.md §4.1). This is not a nicety: `ruff check` with no paths
+/// checks the entire tree, so a file-scoped check that silently degraded into a
+/// full-tree run would turn a three-second lint into a several-minute one, and
+/// would do it precisely when nothing needed checking.
+///
+/// The reason travels with the decision so `results[]` can carry it, which is
+/// what lets an agent that expected a check to run tell **"no files matched"**
+/// from **"never selected"**.
+pub fn skip_reason(scope: crate::config::Scope, files: &[String]) -> Option<String> {
+    match scope {
+        // A component-scoped check always runs: it has no `${files}` to be
+        // empty, which is exactly what `web:e2e` needs — an end-to-end suite
+        // scoped to two changed files tests nothing.
+        crate::config::Scope::Component => None,
+        crate::config::Scope::File if files.is_empty() => Some("no matching files".to_string()),
+        crate::config::Scope::File => None,
+    }
+}
+
+/// The error for a run that cannot compute a base to diff against.
+///
+/// **char does not silently fall back to the whole tree**, which would be the
+/// same hole `--all-files` exists to close with an extra step. It bites on a
+/// fresh clone, on a detached HEAD, and under a CI shallow clone where the
+/// merge-base is genuinely not present — all cases where the honest answer is
+/// that the caller has to say what they meant.
+pub fn no_merge_base(tried: &[&str]) -> CharError {
+    CharError {
+        class: ErrClass::BadInvocation,
+        r#where: "merge-base".to_string(),
+        message: format!(
+            "no merge-base against {} — this may be a fresh clone, a detached HEAD, or a shallow CI checkout",
+            tried.join(", ")
+        ),
+        next_action: Some("`char check --all-files` to check the whole tree".to_string()),
+    }
+}
+
 /// The error for a name that matched nothing, listing what would have worked.
 ///
 /// **The error teaches the vocabulary rather than merely rejecting**, which is
@@ -524,6 +589,76 @@ components:
     fn a_component_that_does_not_exist_is_bad_invocation() {
         let error = resolve(&config(), &Selector::Component("nope".into())).unwrap_err();
         assert_eq!(error.class, ErrClass::BadInvocation);
+    }
+
+    // --------------------------------------------------------- file sets
+
+    /// The globs are the filter on both paths; only the candidate list changes.
+    #[test]
+    fn a_components_globs_filter_whichever_candidate_list_they_are_given() {
+        let config = config();
+        let core = &config.components["core"];
+
+        let changed = vec![
+            "packages/core/src/index.ts".to_string(),
+            "packages/ui/src/button.tsx".to_string(),
+            "README.md".to_string(),
+        ];
+        assert_eq!(
+            files_for(&core.match_globs, &changed),
+            vec!["packages/core/src/index.ts"]
+        );
+
+        // `--all-files` is the same filter over every tracked file.
+        let tracked = vec![
+            "packages/core/src/a.ts".to_string(),
+            "packages/core/src/b.ts".to_string(),
+            "packages/ui/src/c.ts".to_string(),
+        ];
+        assert_eq!(
+            files_for(&core.match_globs, &tracked),
+            vec!["packages/core/src/a.ts", "packages/core/src/b.ts"]
+        );
+    }
+
+    #[test]
+    fn a_file_set_is_sorted_and_deduplicated_so_an_argv_does_not_move() {
+        let globs = vec!["**".to_string()];
+        let candidates = vec!["b.py".to_string(), "a.py".to_string(), "b.py".to_string()];
+        assert_eq!(files_for(&globs, &candidates), vec!["a.py", "b.py"]);
+    }
+
+    /// **`ruff check` with no paths checks the entire tree**, so a file-scoped
+    /// check that degraded into a full-tree run would turn a three-second lint
+    /// into a several-minute one — precisely when nothing needed checking.
+    #[test]
+    fn a_file_scoped_check_with_no_matching_files_is_skipped_and_says_why() {
+        use crate::config::Scope;
+        assert_eq!(
+            skip_reason(Scope::File, &[]),
+            Some("no matching files".to_string())
+        );
+        assert_eq!(skip_reason(Scope::File, &["a.py".to_string()]), None);
+    }
+
+    /// A component-scoped check has no `${files}` to be empty — which is what
+    /// an end-to-end suite needs, since one scoped to two changed files tests
+    /// nothing.
+    #[test]
+    fn a_component_scoped_check_runs_whether_or_not_anything_changed() {
+        use crate::config::Scope;
+        assert_eq!(skip_reason(Scope::Component, &[]), None);
+    }
+
+    /// The one thing char must not do is decide for the caller: a fallback to
+    /// the whole tree here is the same hole `--all-files` exists to close.
+    #[test]
+    fn a_missing_merge_base_is_bad_invocation_that_names_the_way_out() {
+        let error = no_merge_base(&["origin/HEAD", "main", "master"]);
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert_eq!(error.class.exit_code(), 2);
+        assert!(error.message.contains("origin/HEAD"));
+        assert!(error.next_action.unwrap().contains("--all-files"));
     }
 
     // ------------------------------------------------------- prerequisites
