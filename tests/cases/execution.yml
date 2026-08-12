@@ -186,14 +186,14 @@ cases:
 
   # --- worker counts ------------------------------------------------------
 
-  - id: exec.workers.pinned-to-the-declared-cost
-    trap: SCH-11
+  - id: exec.grant.declared-cost-is-reserved-and-granted
+    trap: SCH-7
     note: >-
-      Every parallel tool defaults to sizing itself to the whole machine. The budget means
-      nothing if the tools ignore it. In charkit the worker flag is written by the config
-      author and there is no substitution for the grant, so what the engine owes is that the
-      declared cost is what it reserves and grants — the config author matches the flag to
-      it. Recorded as a candidate gap in docs/harvest.md §10.
+      The unclamped half of SCH-7, the sibling of scheduling.yml's clamped case: a request
+      that fits is granted whole. It does not pin SCH-11 — every parallel tool sizing itself
+      to the machine unless an explicit flag says otherwise — because charkit has no way to
+      assert that. The flag is a literal the config author writes into `cmd:` and the engine
+      never touches it, so SCH-11 has no ported case. See docs/harvest.md §10.
     given: { check: { cost: 4 }, budget: 16 }
     expect: { reserved: 4, granted: 4 }
 

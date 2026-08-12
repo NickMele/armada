@@ -4,6 +4,10 @@ note: >-
   Admission control, costs, exclusive resources and wall-clock ceilings. "footprint" is what
   the scheduler reserves; "workers" is what reaches the tool's own parallelism flag. They are
   two numbers and merging them is a documented outage — see docs/harvest.md SCH-1.
+  No case here expects a worker count. The engine can compute one and has no way to deliver
+  it: the worker flag is a literal the config author writes into `cmd:`, and PLAN.md §4.4's
+  substitution cap admits nothing that carries a grant into a command. Cases assert what the
+  engine decides — the reservation and the grant. The gap is docs/harvest.md §10.
 
 cases:
 
@@ -42,15 +46,18 @@ cases:
       co-scheduled another check beside it and two synchronous tests failed, in a container
       where they pass 820/820 alone. Starvation presents as an ordinary test failure.
     given: { check: { cost: 4, footprint: 8 } }
-    expect: { footprint: 8, workers: 4 }
+    expect: { footprint: 8 }
 
   - id: sched.footprint.raising-it-does-not-raise-workers
     trap: SCH-2
     note: >-
       The obvious fix for SCH-1 is to raise the cost, which is handed straight to the tool's
       parallelism flag and makes the check spawn more work. This is why they cannot be merged.
+      Only the reservation half is assertable here: the engine reserves the footprint and
+      leaves the declared cost alone. The worker half is the config author's literal, and the
+      contract gives the engine no way to touch it — docs/harvest.md §10.
     given: { check: { cost: 4, footprint: 8 }, budget: 16 }
-    expect: { granted: 8, workers: 4 }
+    expect: { granted: 8, declared_cost: 4 }
 
   # --- admission order ----------------------------------------------------
 
@@ -119,7 +126,7 @@ cases:
       Strengthened. The original asserted only that the body ran; it did not assert the
       granted value, so a scheduler that granted the full request would have passed.
     given: { budget: 2, request: { cost: 99 } }
-    expect: { granted: 2, workers: 2, ran: true }
+    expect: { granted: 2, ran: true }
 
   - id: sched.reserve.clamped-grant-is-the-clamped-figure
     trap: SCH-7
