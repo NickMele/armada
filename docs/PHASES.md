@@ -120,9 +120,10 @@ repo. Fixtures catch config-model failures but not runtime ones — you would no
 Nothing else. This is a conversation that produces documents, not a build step.
 
 **Why this is first, and not skipped:** it is the third anti-contamination defense, and it
-catches what the other two miss. The source repo's `check.py` has a *structure* — 3,383 lines
-of it. Without stated architecture principles, phase 3's port inherits that structure by
-default, because "make it work like it did" is the path of least resistance. Deciding the
+catches what the other two miss. The source repo's `check.py` has a *structure* — thousands of
+lines of it (§9 measures them). Without stated architecture principles, phase 3's port
+inherits that structure by default, because "make it work like it did" is the path of least
+resistance. Deciding the
 target shape first turns the port from a copy into **a rewrite into a known architecture**,
 and gives the reviewer an objective standard to reject against.
 
@@ -137,7 +138,7 @@ and gives the reviewer an objective standard to reject against.
 
 | # | Principle | Why it earns its place |
 |---|---|---|
-| 1 | **Every outside-world interaction sits behind an injected seam** — subprocess, filesystem, docker, git, clock, network | This is why the source repo's 2,694 test lines run hermetically with no mocking framework: `run_fn` is *passed in*, not imported. It is the load-bearing pattern in the existing code, the one thing worth copying wholesale, and the same instinct as that repo's own adapter-first rule. |
+| 1 | **Every outside-world interaction sits behind an injected seam** — subprocess, filesystem, docker, git, clock, network | This is why the source repo's test suite runs hermetically with no mocking framework: `run_fn` is *passed in*, not imported. It is the load-bearing pattern in the existing code, the one thing worth copying wholesale, and the same instinct as that repo's own adapter-first rule. |
 | 2 | **Pure core, imperative shell** | Config resolution, scope computation, scheduling, verdict aggregation = pure functions over data. Spawning, writing, labeling live at the edge. Most tests then need no fixture at all. |
 | 3 | **The CLI is a thin wrapper over an importable library** | Already forced by the MCP server sharing the logic layer — but state it, because the failure mode is logic quietly accumulating in command functions. Every command: parse args → call library → render. |
 | 4 | **No ambient state** | Workspace is resolved once and passed explicitly, never read from a global or inferred mid-call. The source repo's `--target` threading is the precedent, and it is what makes `--project` / `--all` scoping tractable. |
@@ -395,14 +396,20 @@ test functions.
 
 | Agent | Reads | Produces |
 |---|---|---|
-| **Harvester** | The source repo's `scripts/char/`, at the locally configured path (§8.1) | `docs/harvest.md` — a behaviour spec plus **a written list of every trap and bug-shaped branch found**. Plus the ported test *cases*. |
+| **Harvester** | The source repo's `scripts/char/`, at the locally configured path (§8.1) | `docs/harvest.md` — a behaviour spec plus **a written list of every trap and bug-shaped branch found**. Plus the ported test *cases*, as data under `tests/cases/`. |
 | **Implementer** | this plan, `ARCHITECTURE.md`, the fixtures, the harvest doc, the tests. **Never opens the source repo.** | `crates/` |
 
+> **The harvest step has landed** — [`docs/harvest.md`](harvest.md) and `tests/cases/`, whose
+> schema is `tests/cases/README.md`. §2.7 of `ARCHITECTURE.md` licenses one read of the source
+> repo and there is no second one, so the harvest doc also records phase-4 material in full and
+> is the only place a quirk can be told from a fix. The rest of this phase is the implementer's.
+
 The harvest step is mandatory and is the whole reason a rewrite is safe here. The value in
-those 3,383 lines is not the code — it is the bug fixes discovered by running against a real
-repo, two of which the source flags as "Playwright traps." The uncommented ones are the
-danger, and charkit has no continuous real-repo validation until phase 6, so anything lost
-would not resurface until then.
+those lines is not the code — it is the bug fixes discovered by running against a real repo,
+two of which the source flags as "Playwright traps" — there are three, and
+[`docs/harvest.md`](harvest.md) has them. The uncommented ones are the danger, and charkit has
+no continuous real-repo validation until phase 6, so anything lost would not resurface until
+then.
 
 Substantively: replace `CHECK_CATALOG` with the config loader, `domain` with `component`, and
 strip every source-repo-specific path, turbo filter and interpreter-directory assumption.

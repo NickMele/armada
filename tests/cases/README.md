@@ -42,7 +42,7 @@ excluded: []
 | Key | Meaning |
 |---|---|
 | `id` | Stable, dotted, unique across the directory. Cite it in a Rust test name. |
-| `trap` | Optional. The `docs/harvest.md` §5 trap this case pins. Absent means it pins ordinary behaviour. |
+| `trap` | Optional. The `docs/harvest.md` trap this case pins — a §5 trap id (`SC-5`, `ST-20`), or a section reference such as `"§6.1"` for the Playwright traps, which are described rather than numbered. Absent means it pins ordinary behaviour. |
 | `note` | Optional. One line, only where the case's point is not obvious from its id. |
 | `given` | Inputs. Pure-core cases give plain values; cases needing a seam give `run` (below). |
 | `expect` | Expected outputs. A case asserts on values, never on argv text — see below. |
