@@ -25,6 +25,15 @@ serde_yaml_ng = { workspace = true }
 # no dependencies of its own: hashing bytes is a pure function, and the core
 # may not grow a transitive I/O crate by accident.
 sha1_smol = "1"
+# `char explain`'s failure signature, named by PLAN.md §3.4. Pure: it hashes
+# bytes and opens nothing. It does use `unsafe` internally for SIMD, and
+# `#![deny(unsafe_code)]` is per-crate and does not reach a dependency — the
+# same trust decision `docs/traps.md` already records for the YAML parser.
+blake3 = { workspace = true }
+# Normalising a failure's output — stripping the paths, ids, timings and pids
+# that differ between two runs of the same bug. ARCHITECTURE.md §1.5 names it as
+# a pure data crate the core may take.
+regex = { workspace = true }
 
 [dev-dependencies]
 # The JSON Schema validator the tests use to hold the schema and the structs to

@@ -17,6 +17,7 @@
 
 pub mod config;
 pub mod ctx;
+pub mod dispatch;
 pub mod envelope;
 pub mod error;
 pub mod id;

@@ -21,6 +21,7 @@
 //! directories are reaped at the *start* of each run, keeping the most recent N
 //! and never touching one whose run lease is live.
 
+use crate::dispatch::Journal;
 use crate::error::{CharError, ErrClass};
 use crate::id::WorkspaceId;
 use crate::schedule::{CheckId, State};
@@ -195,6 +196,9 @@ pub struct RunRecord {
     pub started_at: String,
     /// The scheduler's state, which is the run.
     pub state: State,
+    /// What char knew at each dispatch, and the reducer's event sequence
+    /// (PLAN.md §3.4).
+    pub journal: Journal,
 }
 
 impl RunRecord {
@@ -206,6 +210,7 @@ impl RunRecord {
             workspace,
             started_at,
             state,
+            journal: Journal::default(),
         }
     }
 }

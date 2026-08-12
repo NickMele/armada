@@ -26,3 +26,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml_ng = "0.10"
 regex = "1"
+# The failure signature is `blake3(normalised tail of output)` (PLAN.md §3.4).
+# Named by the specification rather than chosen here, and pinned at workspace
+# level for the same reason the YAML parser is: one hash, or two runs of one bug
+# stop matching across a version boundary.
+blake3 = "1"
