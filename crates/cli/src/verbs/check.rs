@@ -267,6 +267,7 @@ fn plan_for(
     let skip = skipped_by_fix.or_else(|| select::skip_reason(check.scope, &files));
 
     Ok(Plan {
+        blocked: blocked_on_a_service(check),
         id: id.clone(),
         argv,
         env,
@@ -284,6 +285,54 @@ fn plan_for(
             .collect(),
         log: None,
         skip,
+    })
+}
+
+/// **`needs:` gates in this phase and starts in phase 4** (`PHASES.md` phase 3).
+///
+/// The end state is that a check needing `postgres` brings it up — one command
+/// instead of three, which matters when the caller is an agent. `char up` does
+/// not exist yet, so the honest answer is a `bad_invocation` naming the service
+/// and saying how to start it. Phase 4 replaces the error with the start; this
+/// is **one behaviour built in two steps, not two behaviours**.
+///
+/// **Nothing char started is running, and that is a fact rather than an
+/// assumption.** `up` is the only verb that records a service as `owned`, and
+/// it is not built — so there is no state in which this answer is wrong today.
+/// Phase 4 is where liveness becomes a question worth asking, because that is
+/// the phase where something can answer it.
+///
+/// `in:` implies `needs:` on the enclosing component (PLAN.md §4.1): the
+/// container has to be running before char can exec into it, so a check that
+/// declares one is gated exactly like a check that names the component.
+fn blocked_on_a_service(check: &ResolvedCheck) -> Option<CharError> {
+    let mut services: Vec<String> = check
+        .needs
+        .iter()
+        .filter_map(|need| match need {
+            charkit_core::config::Need::Component(name) => Some(name.clone()),
+            charkit_core::config::Need::Check(_) => None,
+        })
+        .collect();
+    if let Some(service) = &check.in_service {
+        // Named separately so the message says the service the caller wrote
+        // rather than the component char inferred it from.
+        services.push(service.clone());
+    }
+    services.sort();
+    services.dedup();
+    if services.is_empty() {
+        return None;
+    }
+
+    let named = services.join(", ");
+    Some(CharError {
+        class: ErrClass::BadInvocation,
+        r#where: check.id.clone(),
+        message: format!("`{}` needs {named}, which is not running", check.id),
+        next_action: Some(format!(
+            "`char up {named}` starts it — not built until phase 4, so start it by hand for now"
+        )),
     })
 }
 

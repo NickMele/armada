@@ -214,6 +214,94 @@ fn two_runs_of_one_failure_produce_the_same_signature() {
     assert_eq!(digests[0], digests[1], "one failure signed two ways");
 }
 
+// ------------------------------------------------------------------- needs:
+
+/// **`needs:` gates here and starts in phase 4** (`PHASES.md` phase 3). The end
+/// state is that a check needing `postgres` brings it up; `char up` does not
+/// exist yet, so the honest answer names the service and says how to start it.
+/// One behaviour built in two steps, not two behaviours.
+#[test]
+fn a_check_needing_a_service_that_is_not_running_is_refused_by_name() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", NEEDS_A_SERVICE);
+    machine.run(&repo, &["init"]);
+
+    let output = machine.run(&repo, &["check", "app:test", "--json"]);
+    let payload = envelope(&output);
+
+    assert_eq!(payload["error"]["class"], "bad_invocation");
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "not 1 — nothing was examined"
+    );
+
+    let test = row(&payload, "app:test");
+    assert_eq!(test["status"], "FAILED");
+    assert!(
+        test["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("postgres"),
+        "the service was not named: {payload}"
+    );
+    assert!(
+        test["error"]["next_action"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("char up"),
+        "the way out was not named: {payload}"
+    );
+}
+
+/// **`bad_invocation` outranks a test failure.** A run mixing the two reports
+/// the invocation, because the caller has to fix that before any other result
+/// means anything — the mixture PLAN.md §3.1 records as having had no defined
+/// maximum until `bad_invocation` joined the precedence list.
+#[test]
+fn a_blocked_check_beside_a_failing_one_reports_the_invocation() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", NEEDS_A_SERVICE);
+    machine.run(&repo, &["init"]);
+
+    let output = machine.run(&repo, &["check", "--json"]);
+    let payload = envelope(&output);
+
+    assert_eq!(row(&payload, "app:fail")["status"], "FAILED");
+    assert_eq!(row(&payload, "app:fail")["error"]["class"], "tool_failed");
+    assert_eq!(payload["error"]["class"], "bad_invocation");
+    assert_eq!(output.status.code(), Some(2), "not 1");
+}
+
+/// A check that needs no service is unaffected — the gate is per check, not per
+/// run, so one component's dependency does not stop the rest of the suite.
+#[test]
+fn a_check_that_needs_nothing_still_runs_beside_a_blocked_one() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", NEEDS_A_SERVICE);
+    machine.run(&repo, &["init"]);
+
+    let payload = envelope(&machine.run(&repo, &["check", "--json"]));
+    assert_eq!(row(&payload, "app:free")["status"], "PASS");
+}
+
+const NEEDS_A_SERVICE: &str = "\
+version: 1
+components:
+  postgres:
+    run:
+      driver: compose
+      file: [docker-compose.yml]
+  app:
+    checks:
+      test:
+        cmd: \"./exiter.sh 0\"
+        scope: component
+        needs: [postgres]
+      fail: { cmd: \"./exiter.sh 3\", scope: component }
+      free: { cmd: \"./exiter.sh 0\", scope: component }
+";
+
 // -------------------------------------------------------------- the run lease
 
 /// **A second run in the same workspace fails fast rather than blocking**

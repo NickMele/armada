@@ -62,6 +62,7 @@ fn plan(name: &str, cost: u32, exclusives: &[&str], needs: &[&str]) -> Plan {
         exclusives: exclusives.iter().map(|e| (*e).to_string()).collect(),
         needs: needs.iter().map(|n| CheckId::new(*n)).collect(),
         log: Some(format!("logs/{}.log", name.replace(':', "."))),
+        blocked: None,
         skip: None,
     }
 }

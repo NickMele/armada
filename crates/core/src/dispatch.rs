@@ -371,6 +371,7 @@ mod tests {
             exclusives: vec!["browser".to_string()],
             needs: Vec::new(),
             log: Some(".char/run/01J8X2/logs/api.test.log".to_string()),
+            blocked: None,
             skip: None,
         }
     }

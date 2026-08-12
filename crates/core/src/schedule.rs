@@ -179,6 +179,22 @@ pub struct Plan {
     pub needs: Vec<CheckId>,
     /// Where this check's output goes, workspace-relative.
     pub log: Option<String>,
+    /// Why this check **cannot** run: a `needs:` naming a service that is not
+    /// running (PLAN.md §4.1, `PHASES.md` phase 3).
+    ///
+    /// **`needs:` gates in this phase and starts in phase 4.** The end state is
+    /// that a check needing `postgres` brings it up — one command instead of
+    /// three, which matters when the caller is an agent. `up` does not exist
+    /// yet, so the honest answer is a `bad_invocation` naming the service and
+    /// telling the caller to run `char up`; phase 4 replaces the error with the
+    /// start. **One behaviour built in two steps, not two behaviours.**
+    ///
+    /// Distinct from [`Plan::skip`] because the states differ and so do the exit
+    /// codes: a skipped check is `SKIPPED` and exit 0 — there was nothing to
+    /// do — while this is `FAILED` and exit 2, and the caller has to change
+    /// what they asked for before any other result means anything.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub blocked: Option<CharError>,
     /// Why this check will not run at all, decided before the run started —
     /// an empty `${files}` set being the case that matters. A file-scoped check
     /// is **never invoked with no arguments**: `ruff check` with no paths checks
@@ -304,15 +320,18 @@ pub struct Outcome {
     /// disagree with the run in the one dimension nothing would check. It is
     /// also the number that says whether a log hit the 10 MB cap.
     pub bytes: usize,
-    /// **Whether the check ever ran**, which is what decides if it may set the
-    /// run's `error.class`.
+    /// **Whether this row may set the run's `error.class`.**
     ///
-    /// A cascaded `ABORTED` did not run, and PLAN.md §4.1 is explicit that it
-    /// may not classify the run: letting it would exit 5 — the *retryable*
-    /// class — for a deterministic test failure, telling a merge gate to try
-    /// again on a bug that will fail identically forever. See
+    /// Named for what it decides rather than for what happened, because the two
+    /// are not the same question. A cascaded `ABORTED` never ran *and* must not
+    /// classify: PLAN.md §4.1 is explicit that letting it would exit 5 — the
+    /// *retryable* class — for a deterministic test failure, telling a merge
+    /// gate to try again on a bug that will fail identically forever. A check
+    /// blocked by a service that is not running also never ran, and *must*
+    /// classify: it is a `bad_invocation`, and the caller has to change what
+    /// they asked for before any other result means anything. See
     /// [`State::run_error`].
-    pub attempted: bool,
+    pub classifies: bool,
 }
 
 /// One check, and where it has got to.
@@ -772,7 +791,7 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 bytes: bytes_so_far(&state, &check),
                 // It was attempted: char tried to run it and the machine or the
                 // config refused, which is a verdict about this check.
-                attempted: true,
+                classifies: true,
             };
             conclude(&mut state, &check, outcome, &mut actions);
         }
@@ -827,7 +846,7 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 reason: None,
                 duration_ms: 0,
                 bytes: bytes_so_far(&state, &check),
-                attempted: true,
+                classifies: true,
             };
             conclude(&mut state, &check, outcome, &mut actions);
         }
@@ -898,7 +917,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             reason: None,
             duration_ms,
             bytes: running.bytes,
-            attempted: true,
+            classifies: true,
         },
         Some(Stopping::Ending) => Outcome {
             status: Status::Aborted,
@@ -906,7 +925,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             reason: Some("the run was stopped".to_string()),
             duration_ms,
             bytes: running.bytes,
-            attempted: true,
+            classifies: true,
         },
         None if code == 0 => Outcome {
             status: Status::Pass,
@@ -914,7 +933,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             reason: None,
             duration_ms,
             bytes: running.bytes,
-            attempted: true,
+            classifies: true,
         },
         None => Outcome {
             status: Status::Failed,
@@ -927,7 +946,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             reason: None,
             duration_ms,
             bytes: running.bytes,
-            attempted: true,
+            classifies: true,
         },
     })
 }
@@ -1039,6 +1058,31 @@ fn resolve_pending(state: &mut State, actions: &mut Vec<Action>) {
                 continue;
             }
 
+            // **After the skip, deliberately.** A check with no matching files
+            // was not going to run anyway, and demanding that the caller start
+            // a service for work that has none is an error about nothing.
+            if let Some(error) = entry.plan.blocked.clone() {
+                conclude(
+                    state,
+                    &id,
+                    Outcome {
+                        status: Status::Failed,
+                        error: Some(error),
+                        reason: None,
+                        duration_ms: 0,
+                        bytes: 0,
+                        // It classifies: `bad_invocation` outranks a test
+                        // failure precisely because the caller has to fix the
+                        // invocation before any other result means anything
+                        // (PLAN.md §3.1).
+                        classifies: true,
+                    },
+                    actions,
+                );
+                changed = true;
+                continue;
+            }
+
             if let Some(failed) = failed_prerequisite(state, &id) {
                 // **Not `FAILED` — they were never attempted**, and an agent
                 // must not go looking for output that does not exist. The row
@@ -1055,7 +1099,7 @@ fn resolve_pending(state: &mut State, actions: &mut Vec<Action>) {
                         reason: Some(format!("{failed} did not pass")),
                         duration_ms: 0,
                         bytes: 0,
-                        attempted: false,
+                        classifies: false,
                     },
                     actions,
                 );
@@ -1239,7 +1283,7 @@ fn end_run(state: &mut State, actions: &mut Vec<Action>) {
                         reason: Some("the run was stopped".to_string()),
                         duration_ms: 0,
                         bytes: 0,
-                        attempted: false,
+                        classifies: false,
                     },
                     actions,
                 );
@@ -1325,7 +1369,7 @@ impl State {
             .checks
             .values()
             .filter(|entry| match &entry.phase {
-                Phase::Done(outcome) => outcome.attempted,
+                Phase::Done(outcome) => outcome.classifies,
                 Phase::Pending | Phase::Waiting(_) | Phase::Running(_) | Phase::Skipped => true,
             })
             .filter_map(|entry| result_of(entry).as_ref().map(Into::into))
@@ -1420,6 +1464,7 @@ mod tests {
                 ".char/run/01J8X2/logs/{}.log",
                 name.replace(':', ".")
             )),
+            blocked: None,
             skip: None,
         }
     }
@@ -2004,6 +2049,94 @@ mod tests {
         let error = error.expect("the run failed");
         assert_eq!(error.class, ErrClass::ToolFailed);
         assert_eq!(error.class.exit_code(), 1, "not 5 — this is deterministic");
+    }
+
+    /// **`needs:` gates in this phase and starts in phase 4.** A check whose
+    /// service is not running is `FAILED` with `bad_invocation` — exit 2, and
+    /// the caller has to change what they asked for. Not `SKIPPED`, which would
+    /// exit 0 and report approval for a check that never examined anything.
+    #[test]
+    fn a_check_blocked_on_a_service_fails_bad_invocation_and_names_it() {
+        let mut test = plan("api:test");
+        test.blocked = Some(CharError {
+            class: ErrClass::BadInvocation,
+            r#where: "api:test".to_string(),
+            message: "`api:test` needs postgres, which is not running".to_string(),
+            next_action: Some("`char up postgres` starts it".to_string()),
+        });
+
+        let (state, actions) = step(run(vec![test]), Event::Started);
+        assert!(
+            !actions
+                .iter()
+                .any(|action| matches!(action, Action::Spawn { .. })),
+            "a blocked check was spawned"
+        );
+
+        let row = &state.results()[0];
+        assert_eq!(row.status, Status::Failed);
+        let error = row.error.as_ref().expect("it says why");
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert!(error.message.contains("postgres"));
+        assert!(error.next_action.as_deref().unwrap().contains("char up"));
+
+        let (status, error) = finish_of(&actions).expect("the run ends");
+        assert_eq!(status, Status::Failed);
+        assert_eq!(error.unwrap().class.exit_code(), 2);
+    }
+
+    /// **`bad_invocation` outranks a test failure**, because the caller has to
+    /// fix the invocation before any other result means anything (PLAN.md
+    /// §3.1). This is the mixture that had no defined maximum until
+    /// `bad_invocation` joined the precedence list.
+    #[test]
+    fn a_blocked_check_beside_a_failing_one_reports_the_invocation() {
+        let mut blocked = plan("api:test");
+        blocked.blocked = Some(CharError {
+            class: ErrClass::BadInvocation,
+            r#where: "api:test".to_string(),
+            message: "needs postgres".to_string(),
+            next_action: None,
+        });
+
+        let (state, _) = step(run(vec![blocked, plan("web:lint")]), Event::Started);
+        let (state, _) = step(
+            state,
+            Event::LeaseGranted {
+                check: id("web:lint"),
+                kind: LeaseKind::CpuSlot,
+            },
+        );
+        let (_, actions) = step(
+            state,
+            Event::ChildExited {
+                check: id("web:lint"),
+                code: 1,
+            },
+        );
+        let (_, error) = finish_of(&actions).expect("the run ends");
+        let error = error.unwrap();
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert_eq!(error.class.exit_code(), 2, "not 1");
+    }
+
+    /// **A check with nothing to do is skipped rather than blocked.** Demanding
+    /// that the caller start a service for work that has no files is an error
+    /// about nothing.
+    #[test]
+    fn a_blocked_check_with_no_matching_files_is_skipped_rather_than_refused() {
+        let mut test = plan("api:test");
+        test.skip = Some("no matching files".to_string());
+        test.blocked = Some(CharError {
+            class: ErrClass::BadInvocation,
+            r#where: "api:test".to_string(),
+            message: "needs postgres".to_string(),
+            next_action: None,
+        });
+
+        let (state, actions) = step(run(vec![test]), Event::Started);
+        assert_eq!(state.results()[0].status, Status::Skipped);
+        assert_eq!(finish_of(&actions), Some((Status::Skipped, None)));
     }
 
     /// A `SKIPPED` prerequisite did not fail, so nothing cascades. Reading
