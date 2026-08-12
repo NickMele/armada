@@ -472,6 +472,38 @@ contamination grep (§11) returns nothing.
 `scripts/char`, so it cannot begin before this phase — and repeat it at the end of every
 subsequent phase.
 
+> **Who runs it, because the implementer cannot.** The parallel run points char
+> at the source repo's checkout, and reading that path is exactly what the
+> clean-room hook denies to every agent but the harvester
+> ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7). The implementer being unable to
+> start it is the guard working rather than a gap in it. It is the operator's to
+> run, or the harvester's; what the implementer owes is a `char check` that can
+> be pointed somewhere, which is what "cannot begin before this phase" means.
+
+#### What phase 3 settled
+
+Six things the corpus specified without deciding, and the answers every later
+phase now codes against. Same shape as phase 2's table, and for the same reason:
+two implementers deciding these separately produce two incompatible engines.
+
+| # | Decision | Why it landed there |
+|---|---|---|
+| 1 | **A run id is 16 Crockford base32 characters: 10 of wall-clock milliseconds, then 6 of per-process entropy.** | `PLAN.md` writes `01J8X2` in `data.run_id`, in `.char/run/01J8X2/logs/` and in `char explain --run 01J8X2` — and those six characters are exactly the leading edge of a time-ordered base32 id, so this is the illustration made real. Time-ordered is load-bearing: retention keeps "the most recent N", and an id that did not sort would need every run's mtime read off a filesystem that may have been restored from a backup. |
+| 2 | **A CPU slot's identity is the store's, chosen all-or-nothing inside one transaction.** | `lease::acquisition_order` numbers a check's slots `0..cost`, which is right for *ordering* and wrong for *naming*: two checks each asking for slot `0` deadlock the moment the second blocks on the first — measured, and it hung `char check` on its first real run. All-or-nothing matters as much: taking three of four and waiting for the fourth lets two runs hold half the machine each, and no acquisition order fixes that, because resources within the class are interchangeable. `acquisition_order` keeps its job — how many, and exclusives before slots. |
+| 3 | **`Event::Tick` is the one variant added to [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.2's floor, and the shell ticks before it starts.** | `ARCHITECTURE.md` §1.2 records the cost of a pure reducer as "`now` is carried on every event"; spelling that as a variant is the escape hatch the floor names, and it changes none of the ten variants it writes out. The ordering is not cosmetic: a `Started` that arrives first computes every deadline from a `now_mono` of zero, and the first real tick then jumps past it. Measured — every check timed out immediately and reported a duration of eleven days. |
+| 4 | **A check's verdict row carries `classifies`, not `attempted`.** | The two turned out not to be the same question. A cascaded `ABORTED` never ran *and* must not set the run's class; a check blocked on a service that is not running also never ran and *must*, because `bad_invocation` outranks a test failure precisely so the caller fixes the invocation first. Naming the field for what happened would have marked a blocked check `attempted: true` while it was never attempted. |
+| 5 | **A `SKIPPED` prerequisite satisfies `needs:`.** | `PLAN.md` §4.1 says a check id in `needs:` "must have **passed** in this run". Read literally that cascades an `ABORTED` through every dependent of a check that had no matching files — turning a clean tree into a failing run, which is the mirror image of the hole `--all-files` exists to close. Nothing failed, so nothing is aborted. Recorded because it is an ambiguity in the spec rather than a free choice. |
+| 6 | **`--detach` and `--status` are refused by name, as not built.** | `PLAN.md` §3 gives both to `check` and neither ships in this phase. Refused by name rather than as an unknown flag, because the flag *is* known and the honest answer is that char cannot do it yet — "unknown flag" sends an agent looking for a typo. The gap is stated here rather than left to be discovered. |
+
+#### One defect phase 3 sends to phase 2.5
+
+Recorded rather than fixed, because phase 2.5 is the only phase licensed to send
+changes back.
+
+| Defect | Where | What phase 3 did |
+|---|---|---|
+| **`PLAN.md` §3.1 and §4.1 disagree about whether a cascaded `ABORTED` may classify a run.** `PLAN.md` §3.1 says the top-level `error` is "the strict maximum over `results[]`", and `PLAN.md` §4.1 says "a cascaded `ABORTED` never sets `error.class`" — with the reason spelled out, that letting it would exit 5, the *retryable* class, for a deterministic test failure. Phase 2's `envelope::aggregate` implements `PLAN.md` §3.1 and maps a bare `ABORTED` row to `aborted`, which is the behaviour §4.1 forbids. | `PLAN.md` §3.1 vs §4.1 | Conformed to `PLAN.md` §4.1 by choosing which rows the aggregate is asked about, rather than by adding a second precedence rule. `aggregate` stays the only implementation of the ordering; what the engine decides is only its input set. Whether `PLAN.md` §3.1 should state the exception in its own text is phase 2.5's to answer. |
+
 ### Phase 4 — Services: `up` / `down`
 
 Both drivers, five ready-check kinds, `needs:` ordering, `owns:`, everything started
