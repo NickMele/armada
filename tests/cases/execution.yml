@@ -1,0 +1,329 @@
+subsystem: execution
+source: check.py
+note: >-
+  Two-phase execution, command construction, the runner decision, and live output. Service
+  lifecycle (daemon start, provisioning, sweeps, teardown) is phase-4 material and is
+  specified in docs/harvest.md §5.7 rather than cased here — phase 3 owes phase 4 only a
+  preflight hook and a cleanup hook.
+
+cases:
+
+  # --- two-phase execution ------------------------------------------------
+
+  - id: exec.phases.fixers-complete-before-verifiers-start
+    trap: EXE-1
+    note: >-
+      Otherwise a verifier reads a tree a fixer is mid-write on and verdicts become
+      timing-dependent. Assert on observed ordering, not on wall-clock arithmetic.
+    given: { fix: true, checks: [{ id: "ui:lint", fixable: true }] }
+    expect: { order: ["fix:ui:lint", "verify:ui:lint"], overlap: false }
+
+  - id: exec.phases.no-fixers-without-the-fix-flag
+    given: { fix: false, checks: [{ id: "ui:lint", fixable: true }] }
+    expect: { invocations: { count: 1 }, no_fix_mode_invocation: true }
+
+  - id: exec.phases.fixer-verdicts-are-discarded
+    trap: EXE-2
+    note: >-
+      A fixer's exit code must never appear as a check result; the verifier re-discovers the
+      failure. And fixer output must go to a distinct log, or it clobbers the log its
+      verifier is about to write.
+    given:
+      fix: true
+      checks: [{ id: "ui:lint", fixable: true }]
+      run: [{ match: ["--fix"], exit: 1 }, { match: [], exit: 0 }]
+    expect: { status: PASS, logs_distinct: true }
+
+  - id: exec.phases.fixers-honour-the-same-skip-predicate
+    trap: EXE-3
+    note: >-
+      Silent in the original. A check skipped for scope must not be auto-fixed — that mutates
+      files nothing in this run was asked to touch.
+    given: { fix: true, checks: [{ id: "ui:lint", fixable: true, skipped: true }] }
+    expect: { invocations: { count: 0 } }
+
+  - id: exec.phases.fixers-go-through-admission
+    trap: X-2
+    note: >-
+      Corrects a defect. The original's fix phase has no reservation, no exclusive-name
+      enforcement and no budget — a fixable check with a real footprint bypasses the
+      scheduler entirely. Route both phases through one admission path.
+    given: { fix: true, budget: 2, checks: [{ id: "a:fmt", fixable: true, cost: 4 }] }
+    expect: { granted: 2 }
+
+  - id: exec.skip.never-reserves
+    trap: EXE-4
+    note: >-
+      A skip costs nothing and must never queue behind a heavyweight check. Its absence looks
+      like a stall.
+    given: { budget: 1, checks: [{ id: "a:test", cost: 1, holds_ms: 50 }, { id: "b:lint", skipped: true }] }
+    expect: { skip_completed_before_heavy_check: true, invocations: { count: 1 } }
+
+  - id: exec.skip.produces-no-command-and-no-log
+    given: { checks: [{ id: "a:lint", skipped: true }] }
+    expect: { status: SKIPPED, invocations: { count: 0 }, log: null }
+
+  - id: exec.pool.does-not-impose-a-second-limit
+    trap: EXE-5
+    note: >-
+      A fixed pool silently re-imposes a concurrency limit that ignores declared costs and
+      exclusive names, and the two limits disagree. Admission is solely the scheduler's job.
+    given: { budget: 8, checks: 8, each_cost: 1 }
+    expect: { peak_concurrent: 8 }
+
+  - id: exec.cleanup.runs-on-the-abort-path
+    trap: EXE-6
+    given: { abort_mid_run: true }
+    expect: { cleanup_ran: true }
+
+  - id: exec.cleanup.never-changes-the-verdict
+    trap: EXE-6
+    note: >-
+      A cleanup hiccup must not turn a passing run into a failure with a cause unrelated to
+      anything under test.
+    given: { checks: [{ id: "a:lint", exit: 0 }], cleanup_fails: true }
+    expect: { overall: PASS }
+
+  # --- the runner decision ------------------------------------------------
+
+  - id: exec.runner.host-check-passes-through-unchanged
+    given: { check: { runner: host, cmd: ["lint", "."] } }
+    expect: { invocations: { contains: ["lint", "."] }, cwd: component_root }
+
+  - id: exec.runner.container-wrapper-preserves-the-command
+    note: >-
+      Asserted as a property: everything after the service name equals the original command,
+      in order. The wrapper's own tokens are that repo's container tool and are config here.
+    given: { check: { runner: container, service: "checks", cmd: ["test", "-x"] } }
+    expect:
+      invocations: { contains: ["checks", "test", "-x"] }
+      command_suffix_equals_original: true
+      cwd: workspace_root
+
+  - id: exec.runner.container-run-forces-a-build
+    trap: CMD-2
+    note: >-
+      A stale image silently tests the wrong code the moment a build input moves. Green on
+      stale code is indistinguishable from real green.
+    given: { check: { runner: container, service: "checks" } }
+    expect: { invocations: { contains: ["--build"] } }
+
+  - id: exec.runner.container-run-allocates-no-terminal
+    note: >-
+      Not asserted anywhere in the original — a gap rather than a fix. The engine never wants
+      an interactive terminal, and omitting the flag leaves the tool's default unpinned.
+    given: { check: { runner: container, service: "checks" } }
+    expect: { invocations: { contains: ["-T"] } }
+
+  - id: exec.runner.forced-host-leaves-every-other-check-real
+    given: { force_host: true, checks: [{ runner: container, host_capable: true }] }
+    expect: { wrapped: false }
+
+  - id: exec.runner.no-host-topology-under-forced-host-is-skipped
+    trap: CMD-4
+    note: >-
+      With only the refusal, the error escapes the executor and discards every other check's
+      results for the run. Both the skip and the refusal must exist; the skip is what the run
+      actually takes.
+    given: { force_host: true, checks: [{ id: "ui:e2e", runner: container, host_capable: false }] }
+    expect: { status: SKIPPED, reason_names_the_check: true, invocations: { count: 0 } }
+
+  - id: exec.runner.no-host-topology-refuses-a-direct-caller
+    trap: CMD-4
+    given: { force_host: true, check: { id: "ui:e2e", host_capable: false }, call: direct }
+    expect: { error: { class: bad_config }, message_contains: ["ui:e2e"] }
+
+  - id: exec.runner.a-whole-run-survives-an-unrunnable-check
+    trap: CMD-4
+    note: the regression case for the error escaping the pool
+    given:
+      force_host: true
+      checks: [{ id: "ui:e2e", host_capable: false }, { id: "ui:lint", exit: 0 }]
+    expect: { completed: true, statuses: { "ui:e2e": SKIPPED, "ui:lint": PASS } }
+
+  # --- path translation ---------------------------------------------------
+
+  - id: exec.paths.artefact-directory-translated-for-a-container
+    trap: CMD-7
+    given: { check: { runner: container }, run_dir: "<workspace>/.char/run/01J8X2" }
+    expect: { translated: "<mount>/.char/run/01J8X2", host_root_absent: true }
+
+  - id: exec.paths.untouched-for-a-host-check
+    given: { check: { runner: host }, run_dir: "<workspace>/.char/run/01J8X2" }
+    expect: { translated: "<workspace>/.char/run/01J8X2" }
+
+  - id: exec.paths.untouched-when-host-is-forced
+    trap: CMD-5
+    note: >-
+      Silent in the original, and a three-token difference. Keying on what the check declares
+      rather than on where it actually runs makes a forced-host run write its reports into a
+      host directory named after the container mount point, and read nothing back.
+    given: { check: { runner: container }, force_host: true, run_dir: "<workspace>/.char/run/01J8X2" }
+    expect: { translated: "<workspace>/.char/run/01J8X2" }
+
+  - id: exec.paths.artefact-directory-exists-before-the-command-is-built
+    trap: CMD-7
+    note: >-
+      A containerised check writes its report through the bind mount into a directory that
+      must already exist on the host, or the report lands nowhere and the check fails with
+      nothing parseable at all.
+    given: { check: { runner: container } }
+    expect: { host_run_dir_created_before_first_invocation: true }
+
+  # --- environment --------------------------------------------------------
+
+  - id: exec.env.empty-string-value-is-set-not-dropped
+    trap: "§6.2"
+    note: >-
+      The one baselines finding with a real engine consequence. A tool whose write mode is
+      gated on an environment variable being set must be able to have it overridden to empty.
+      A config layer that prunes empty values turns the command into a silent no-op.
+      The schema already permits it; this pins resolution and the spawn adapter.
+    given: { check: { env: { CI: "" } } }
+    expect: { child_env: { CI: { present: true, value: "" } } }
+
+  - id: exec.env.declared-values-reach-the-child
+    given: { check: { env: { MODE: "test" } } }
+    expect: { child_env: { MODE: "test" } }
+
+  - id: exec.env.parent-environment-is-inherited-underneath
+    note: PLAN.md §4.5 — a child needing HOME already has it; env is additive
+    given: { parent_env: { HOME: "~" }, check: { env: { MODE: "test" } } }
+    expect: { child_env: { HOME: "~", MODE: "test" } }
+
+  # --- worker counts ------------------------------------------------------
+
+  - id: exec.workers.pinned-to-the-declared-cost
+    trap: SCH-11
+    note: >-
+      Every parallel tool defaults to sizing itself to the whole machine. The budget means
+      nothing if the tools ignore it. In charkit the flag is written by the config author,
+      so what this pins is that the substituted value is the granted figure.
+    given: { check: { cost: 4, cmd: ["test", "--workers=${jobs}"] }, budget: 16 }
+    expect: { invocations: { contains: ["--workers=4"] } }
+
+  - id: exec.workers.bounded-browser-run-does-not-manufacture-failures
+    trap: "§6.1"
+    note: >-
+      The live Playwright trap, discovered independently in two files. Unbounded, a screenshot
+      suite reported 17 of 29 specs failing; the same specs passed in isolation. Bounded to
+      the declared cost it went to 28/29 and from 1.9 minutes to 24 seconds. The failures it
+      manufactures are indistinguishable from real visual regressions.
+    given: { fixture: visual-suite }
+    expect: { config_declares_explicit_worker_count: true }
+
+  # --- live output --------------------------------------------------------
+
+  - id: exec.live.enabled-only-with-a-terminal
+    trap: VIS-9
+    note: >-
+      The primary consumer is an agent reading captured output, which must get zero extra
+      bytes. A stray flag in a captured run must cost nothing.
+    given: { live_flag: true, stdout_is_terminal: false }
+    expect: { table_constructed: false, bytes_written: 0 }
+
+  - id: exec.live.colour-is-gated-on-the-terminal-alone
+    trap: VIS-9
+    given: { stdout_is_terminal: false, status: PASS }
+    expect: { rendered: "PASS" }
+
+  - id: exec.live.unknown-status-renders-plain-even-on-a-terminal
+    given: { stdout_is_terminal: true, status: WEIRD }
+    expect: { rendered: "WEIRD" }
+
+  - id: exec.live.skipped-checks-start-as-skipped
+    trap: VIS-1
+    note: otherwise checks that will never run sit at queued and the table never settles
+    given: { checks: [{ id: "a:lint", skipped: true }] }
+    expect: { initial: { "a:lint": SKIPPED } }
+
+  - id: exec.live.marking-running-never-overwrites-a-skip
+    trap: VIS-2
+    given: { checks: [{ id: "a:lint", skipped: true }], then: [{ mark_running: "a:lint" }] }
+    expect: { state: { "a:lint": SKIPPED }, redraws: 0 }
+
+  - id: exec.live.rows-render-in-list-order
+    given: { checks: ["b:test", "a:lint"], then: [{ done: { id: "b:test", status: FAILED } }] }
+    expect: { row_order: ["b:test", "a:lint"] }
+
+  - id: exec.live.no-separator-between-cursor-move-and-content
+    trap: VIS-3
+    note: >-
+      Reproduced against a real terminal emulator. A newline there moves the cursor down a
+      row before a single character is written; the table drifts one row per redraw and the
+      drift compounds into dozens of stale header lines instead of one table updating in
+      place. Assert on the byte immediately following the control sequence.
+    given: { redraws: 2 }
+    expect: { second_write: { starts_with_cursor_move: true, next_byte_is_not_newline: true } }
+
+  - id: exec.live.every-line-erases-to-end
+    trap: VIS-5
+    note: a shorter line leaves the tail of the previous longer one visible and looking current
+    given: { redraws: 2, second_row_shorter: true }
+    expect: { every_line_prefixed_with_erase: true }
+
+  - id: exec.live.first-redraw-emits-no-cursor-move
+    trap: VIS-6
+    given: { redraws: 1 }
+    expect: { first_write: { contains_cursor_move: false } }
+
+  - id: exec.live.redraw-is-serialised-across-threads
+    trap: VIS-4
+    note: >-
+      Three independent sources call redraw — the submission loop, the completion loop and a
+      ticker. Two writers computing the cursor move from a stale line count desync the
+      terminal from reality.
+    given: { checks: 20, threads: 20, flips_each: 20, widen_window: true }
+    expect: { reentrant_writes: 0 }
+
+  - id: exec.live.status-cell-padded-before-colouring
+    trap: VIS-10
+    note: escape bytes must not count toward column width
+    given: { stdout_is_terminal: true, statuses: [PASS, FAILED] }
+    expect: { columns_aligned: true }
+
+  - id: exec.live.final-report-omits-its-own-table
+    trap: VIS-11
+    given: { live_ran: true }
+    expect: { report_contains_table: false, report_contains_failure_blocks: true }
+
+  - id: exec.live.the-engine-drives-the-table
+    note: proves the run is actually wired to it rather than the table being updated by tests
+    given: { checks: [{ id: "a:lint", exit: 0 }], live: true }
+    expect: { table_state: { "a:lint": PASS } }
+
+excluded:
+
+  - id: exec.summary.recomputes-its-own-expectation
+    reason: >-
+      The pre-run summary case recomputes the run and skip counts using the same predicate it
+      is testing, so it verifies formatting and wiring but not the skip decision. Worth
+      porting only as a rendering case with literal expected counts.
+
+  - id: exec.summary.no-skips-on-a-whole-repo-run
+    reason: >-
+      Depends on the source catalogue having exactly one all-only check and on context
+      defaults putting every other check in scope. It breaks the moment a check is added.
+
+  - id: exec.verbose.selects-the-verbose-runner
+    reason: >-
+      Both executions pass the same test double, so the verbose path is never exercised —
+      only the flag parsing is. The streaming behaviour is cased in process.yml against a
+      real subprocess.
+    replaced_by: null
+
+  - id: exec.structural.no-dev-stack-symbols
+    reason: >-
+      Asserts that the check module exposes no service-lifecycle symbol, by inspecting the
+      module's namespace. The equivalent in charkit is that the check crate does not depend
+      on the service-lifecycle crate, which is a dependency lint (cargo xtask boundaries),
+      not a test. The rule it protects is real and is recorded as trap CAT-2.
+
+  - id: exec.service.lifecycle
+    reason: >-
+      Roughly twenty original cases cover daemon availability and auto-start, compose
+      environment provisioning, port export, husk sweeping, anonymous-volume sweeping,
+      teardown ownership and dependency-image freshening. All are phase-4 service-driver
+      material; building them in phase 3 would put a compose-shaped adapter inside the check
+      engine. Their behaviour and every trap is specified in docs/harvest.md §5.7 so phase 4
+      inherits them without a second harvest.
