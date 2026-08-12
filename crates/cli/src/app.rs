@@ -101,6 +101,24 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         policy: Policy,
         ceiling_ms: Option<u64>,
     ) -> Result<LeaseId, CharError> {
+        self.acquire_reporting(lease, policy, ceiling_ms, &mut |_| {})
+    }
+
+    /// Take a lease, and say out loud what is in the way while waiting.
+    ///
+    /// **This is the consumer `ClaimAction::Report` was built without.** Phase 2
+    /// had no run with a `results[]` to put a `WAITING` row in, so the action
+    /// existed and nothing performed it; a run has one, and the row is the whole
+    /// difference between a wait that is visible and a wait that is silent. An
+    /// earlier design's defect was never the blocking — it was blocking
+    /// invisibly and without a ceiling (PLAN.md §4.3).
+    pub fn acquire_reporting(
+        &mut self,
+        lease: LeaseId,
+        policy: Policy,
+        ceiling_ms: Option<u64>,
+        on_wait: &mut dyn FnMut(charkit_core::lease::WaitingOn),
+    ) -> Result<LeaseId, CharError> {
         let pid = charkit_adapters::posix::pid();
         let started = machine::process_start_at(&self.ctx.run, &self.cwd(), pid);
 
@@ -154,14 +172,18 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                     ClaimAction::Sleep { ms } => {
                         let until = self.ctx.now.mono().saturating_add(ms);
                         self.ctx.now.sleep_until(until);
+                        // **Renewed from the loop that waits, not a background
+                        // timer.** Without this a check queueing fifteen minutes
+                        // behind another workspace's `exclusive:` would stop
+                        // renewing the leases this invocation *already holds* —
+                        // including its own run lease — and a lease goes cold
+                        // after sixty seconds of silence. A third process would
+                        // then reclaim the run lease out from under a run that
+                        // is behaving exactly as specified.
+                        self.renew_held();
                         pending = Some(ClaimEvent::Slept { ms });
                     }
-                    // Phase 2's verbs are not runs, so there is no `results[]`
-                    // to put a `WAITING` row in yet. Phase 3's scheduler emits
-                    // it; the action exists here because the reducer is the
-                    // contract and inventing it twice is the failure this
-                    // whole module exists to prevent.
-                    ClaimAction::Report(_) => {}
+                    ClaimAction::Report(waiting_on) => on_wait(waiting_on),
                     ClaimAction::Granted => return Ok(lease),
                     ClaimAction::Failed(error) => return Err(error),
                 }
