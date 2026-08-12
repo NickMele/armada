@@ -37,6 +37,13 @@ pub struct App<R: Run, C: Clock, F: Fetch> {
     pub boot_id: String,
     /// The environment char was started with, captured once.
     pub inherited: BTreeMap<String, String>,
+    /// The run this invocation belongs to, when it is inside one.
+    ///
+    /// Set for `check` and cleared everywhere else, which is what makes
+    /// [`App::child_env`] able to answer PLAN.md §2.4 without asking anything:
+    /// `char up` is not a run and has no run id, so a service's environment
+    /// carries `CHAR_WORKSPACE` alone.
+    pub run: Option<charkit_core::run::RunId>,
     /// The leases this invocation is holding right now, innermost last.
     ///
     /// Two things need it and neither can re-derive it: a heartbeat has to be
@@ -59,9 +66,15 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
 
     /// The two variables **every** child inherits (PLAN.md §2.4).
     ///
-    /// Neither is declared anywhere and both are always present, so a script
-    /// char has never been told anything about still knows which workspace it
-    /// is in. `CHAR_RUN_ID` arrives with runs, in phase 3.
+    /// Neither is declared anywhere, so a script char has never been told
+    /// anything about still knows which workspace it is in.
+    ///
+    /// **`CHAR_RUN_ID` is present only inside a run**, and the two travel
+    /// together on purpose: a child reading them decides whether to *join* this
+    /// run or start its own, and that decision is `CHAR_WORKSPACE` matching the
+    /// workspace it resolved for itself (PLAN.md §3.2.1). One without the other
+    /// is not an inheritance — which is why `char up`, which is not a run,
+    /// sets the workspace alone.
     pub fn child_env(&self) -> BTreeMap<String, String> {
         let mut env = BTreeMap::new();
         if let Some(workspace) = &self.ctx.workspace {
@@ -69,6 +82,9 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                 "CHAR_WORKSPACE".to_string(),
                 workspace.id.as_str().to_string(),
             );
+        }
+        if let Some(run) = &self.run {
+            env.insert("CHAR_RUN_ID".to_string(), run.to_string());
         }
         env
     }
@@ -523,6 +539,7 @@ pub fn build<R: Run, C: Clock, F: Fetch>(
         namespace,
         boot_id,
         inherited,
+        run: None,
         held: Vec::new(),
     })
 }

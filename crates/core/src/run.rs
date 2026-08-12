@@ -174,6 +174,56 @@ pub fn runs_to_reap(present: &[RunId], retention: u32, live: &[RunId]) -> Vec<Ru
         .collect()
 }
 
+/// Whether an invocation joins the run it was started inside, or starts its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Nesting {
+    /// `CHAR_RUN_ID` names a run in **this** workspace: join it and inherit its
+    /// lease rather than contending for one.
+    Join(RunId),
+    /// Start a run of this invocation's own, and clear both variables for its
+    /// children so they do not inherit a claim that is not theirs.
+    Independent,
+}
+
+/// Decide whether to join the run named in the environment (PLAN.md §3.2.1).
+///
+/// > A child that finds `CHAR_RUN_ID` set joins the outer run and inherits its
+/// > lease **if and only if `CHAR_WORKSPACE` equals the workspace it just
+/// > resolved.**
+///
+/// **That condition is load-bearing, and the failure without it is the kind
+/// that only shows up under nesting.** PLAN.md §4.5 has a `commands:` entry
+/// inherit the parent environment *wholesale*, so both variables reach every
+/// child — including a `char check` invoked in a **different** workspace: a
+/// nested workspace (§4.6), a `commands:` script that changes directory, a
+/// monorepo sub-invocation. Without the check such a child skips its own lease
+/// and reports the parent's run id, which allows two concurrent runs in one
+/// workspace — the exact thing the run lease exists to prevent, failing only
+/// rarely and nondeterministically.
+///
+/// **A malformed `CHAR_RUN_ID` starts a fresh run rather than failing.** The
+/// variable is set by char and read back by char, so a value that is not a run
+/// id means something in between rewrote it — a wrapper script, a CI runner
+/// sanitising the environment. Refusing to run would make char fail in an
+/// environment that is merely untidy, and the id becomes a *path*, so accepting
+/// it unvalidated is the one thing that must not happen.
+pub fn nesting(
+    run_id: Option<&str>,
+    workspace_env: Option<&str>,
+    resolved: &WorkspaceId,
+) -> Nesting {
+    let (Some(run_id), Some(workspace_env)) = (run_id, workspace_env) else {
+        return Nesting::Independent;
+    };
+    if workspace_env != resolved.as_str() {
+        return Nesting::Independent;
+    }
+    match RunId::parse(run_id) {
+        Ok(run) => Nesting::Join(run),
+        Err(_) => Nesting::Independent,
+    }
+}
+
 /// What `.char/run/<run-id>/state.json` holds.
 ///
 /// **Written when the check runs, because most of it cannot be recovered
@@ -369,6 +419,66 @@ mod tests {
             2,
             "keeping the live run in addition to ten would keep eleven"
         );
+    }
+
+    // ------------------------------------------------------------ nesting
+
+    fn mine() -> WorkspaceId {
+        WorkspaceId::from_stored("a3f91c02")
+    }
+
+    #[test]
+    fn a_child_in_the_same_workspace_joins_the_run_it_was_started_inside() {
+        let outer = id(0, 3);
+        assert_eq!(
+            nesting(Some(outer.as_str()), Some("a3f91c02"), &mine()),
+            Nesting::Join(outer)
+        );
+    }
+
+    /// **The condition that is load-bearing.** `commands:` inherits the parent
+    /// environment wholesale, so both variables reach a `char check` invoked in
+    /// a *different* workspace — a nested workspace, a script that changed
+    /// directory, a monorepo sub-invocation. Without this check that child skips
+    /// its own lease and reports the parent's run id, which allows two
+    /// concurrent runs in one workspace.
+    #[test]
+    fn a_child_in_a_different_workspace_starts_its_own_run() {
+        let outer = id(0, 3);
+        assert_eq!(
+            nesting(Some(outer.as_str()), Some("7c21ab90"), &mine()),
+            Nesting::Independent
+        );
+    }
+
+    /// Half an inheritance is not an inheritance. Either variable alone says
+    /// nothing about whether this workspace already has a run.
+    #[test]
+    fn one_variable_without_the_other_starts_an_independent_run() {
+        let outer = id(0, 3);
+        assert_eq!(
+            nesting(Some(outer.as_str()), None, &mine()),
+            Nesting::Independent
+        );
+        assert_eq!(
+            nesting(None, Some("a3f91c02"), &mine()),
+            Nesting::Independent
+        );
+        assert_eq!(nesting(None, None, &mine()), Nesting::Independent);
+    }
+
+    /// The id becomes a path, so accepting it unvalidated is the one thing that
+    /// must not happen — and refusing to run would make char fail in an
+    /// environment that is merely untidy.
+    #[test]
+    fn a_malformed_run_id_starts_a_fresh_run_rather_than_becoming_a_path() {
+        for hostile in ["../../etc", "", "01J8X2", "not a run id!!"] {
+            assert_eq!(
+                nesting(Some(hostile), Some("a3f91c02"), &mine()),
+                Nesting::Independent,
+                "`{hostile}` was joined"
+            );
+        }
     }
 
     #[test]
