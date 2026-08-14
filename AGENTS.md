@@ -69,6 +69,14 @@ as in force:
 Their reasoning is kept in `ARCHITECTURE.md` §2.4 and `ARCHITECTURE.md` §2.7 rather than erased,
 because a rule that vanishes without a reason gets reinvented.
 
+**The harvest has landed, and there is no second one.** The behaviour spec of the source check
+engine and every trap found in it are in [`docs/harvest.md`](docs/harvest.md); the ported cases
+are data under `tests/cases/`, one file per subsystem, with the schema and the recorded
+exclusions in `tests/cases/README.md`. Build from those two and **never open the source
+repo** — anything they lack is a question for the harvest doc, not the original. The harvester
+that produced them is `.claude/agents/harvester.md`, and its `name:` is the `agent_type` the
+hook allows, so renaming one without the other closes the clean room entirely.
+
 **What did not go away is the risk the grep was a poor proxy for.** A green grep only proved the
 absence of *crude* contamination. The failure that matters is invisible to it: an abstraction
 shaped around one repository because that is the only repository anyone looked at.

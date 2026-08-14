@@ -1,0 +1,286 @@
+subsystem: parsing
+source: check.py
+note: >-
+  Result parsing and failure reporting. The per-tool field paths are trivia and are dropped —
+  charkit names arbitrary commands, so parser selection is declared in config and defaults to
+  a generic fallback. What survives is the contract: the benign-summary guard, the message
+  budget, the multi-document scanner, and identifier/message as separate fields (PLAN.md §3.1).
+
+cases:
+
+  # --- the guard ----------------------------------------------------------
+
+  - id: parse.guard.non-zero-exit-may-not-report-a-benign-summary
+    trap: PAR-1
+    note: >-
+      The load-bearing rule in this area, and tool-agnostic. A bad flag, missing module or
+      crashed worker aborts the tool before it runs anything; the parser sees no failures and
+      says "no failing tests"; the report shows FAILED beside it. Confirmed live — one
+      invalid flag aborted all nine packages and the report said exactly that.
+    given:
+      exit: 1
+      stdout: ""
+      stderr: "CACError: Unknown option `--minWorkers`\n    at Command.checkUnknownOptions\n"
+    expect:
+      summary_absent: ["no failing tests"]
+      summary_contains: ["minWorkers"]
+
+  - id: parse.guard.takes-the-first-error-line-not-the-last
+    trap: PAR-2
+    note: for a crash the opening line is the error and the tail is stack frames
+    given:
+      exit: 1
+      stdout: ""
+      stderr: "Error: browserType.launch: Executable doesn't exist\n    at frame-one\n    at frame-two\n"
+    expect: { summary_contains: ["Executable doesn't exist"], summary_absent: ["frame-two"] }
+
+  - id: parse.crash.noise-ahead-of-error
+    trap: PAR-3
+    note: >-
+      Rewritten. The original fixture had no structured-failure line at all, so the parser
+      degraded to a fallback whose last-line rule already returned the right answer, the
+      guard never fired and the noise filter was never called — deleting the filter left it
+      green. This fixture routes through the guard and puts the real error where a last-line
+      rule cannot find it.
+    given:
+      exit: 1
+      parser: structured
+      stdout: "{\"results\":[]}\n"
+      stderr: "#0 building\n#12 CACHED\n  x Unable to query SCM: not part of a git repository\n#26 DONE 4.8s\n"
+      noise_prefixes: ["#", "=> ", "DONE ", "CACHED"]
+    expect:
+      summary_contains: ["Unable to query SCM"]
+      summary_absent: ["DONE", "CACHED"]
+
+  - id: parse.guard.does-not-fire-on-a-genuine-zero-exit
+    given: { exit: 0, stdout: "{\"results\":[]}\n" }
+    expect: { summary: "no failing tests", failures: [] }
+
+  - id: parse.guard.empty-output-is-not-a-parse-failure
+    trap: PAR-11
+    note: >-
+      Reporting a parse error for an empty stream masks the guard, which only rewrites benign
+      summaries — a crash with no stdout would report a parse error rather than its stderr.
+    given: { exit: 1, stdout: "", stderr: "boom\n" }
+    expect: { summary_contains: ["boom"], summary_absent: ["could not parse"] }
+
+  - id: parse.fallback.last-line-for-an-ordinary-summary
+    given: { exit: 1, stdout: "some output\nlast line\n", stderr: "" }
+    expect: { summary: "last line" }
+
+  - id: parse.fallback.no-output-captured
+    given: { exit: 1, stdout: "", stderr: "" }
+    expect: { summary_contains: ["no output"] }
+
+  # --- the multi-document scanner ----------------------------------------
+
+  - id: parse.scan.two-documents-newline-separated
+    given:
+      exit: 1
+      stdout: "{\"failures\":[\"a\"]}\n{\"failures\":[\"b\"]}\n"
+    expect: { failure_count: 2 }
+
+  - id: parse.scan.two-documents-with-no-separator
+    given: { exit: 1, stdout: "{\"failures\":[\"a\"]}{\"failures\":[\"b\"]}" }
+    expect: { failure_count: 2 }
+
+  - id: parse.scan.noisy-preamble-before-a-document
+    trap: PAR-6
+    note: >-
+      One package printing a telemetry banner before its output makes a strict parse fail,
+      and every other package's real failures become invisible.
+    given:
+      exit: 1
+      stdout: "Storybook collects anonymous usage telemetry.\n{\"failures\":[\"a\"]}\n"
+    expect: { failure_count: 1 }
+
+  - id: parse.scan.bare-scalar-in-the-preamble-is-skipped
+    trap: PAR-5
+    note: >-
+      Not covered by the original at all. A standalone digit in a version string decodes as a
+      complete, valid document; yielding it desyncs the scan and feeds a non-object to a
+      parser that assumes one, losing every subsequent report.
+    given:
+      exit: 1
+      stdout: "runner v4 1.10 starting\n{\"failures\":[\"a\"]}\n"
+    expect: { failure_count: 1 }
+
+  - id: parse.scan.nothing-recoverable
+    given: { exit: 1, stdout: "not structured at all, no braces here\n" }
+    expect: { summary_contains: ["could not parse"], failures: [] }
+
+  # --- message budget -----------------------------------------------------
+
+  - id: parse.budget.keeps-leading-lines-and-states-the-drop
+    trap: PAR-8
+    note: >-
+      Three lines of a twelve-line trace read like the whole error; the reader concludes they
+      have seen everything and never opens the log.
+    given: { message_lines: 10, max_lines: 3 }
+    expect:
+      kept: ["line0", "line1", "line2"]
+      trailer_contains: ["7 more lines"]
+
+  - id: parse.budget.strips-escape-sequences-before-trimming
+    trap: PAR-9
+    note: >-
+      Escapes consume the character budget, and a line truncated mid-sequence leaves a
+      dangling escape colouring the rest of the terminal.
+    given: { message: "\e[31mAssertionError: nope\e[0m" }
+    expect: { kept: ["AssertionError: nope"] }
+
+  - id: parse.budget.drops-blank-lines-before-counting
+    trap: PAR-9
+    note: >-
+      Silent in the original. Counted blank lines spend the budget on nothing, so the actual
+      assertion never appears in the report.
+    given: { message_lines: ["err", "", "   ", "detail", "more"], max_lines: 3 }
+    expect: { kept: ["err", "detail", "more"] }
+
+  - id: parse.budget.truncates-by-character-not-byte
+    note: >-
+      Real fixtures contain multi-byte text. A byte slice panics or produces mojibake.
+    given: { message: { repeat: "£", times: 5000 }, max_chars: 240 }
+    expect: { kept_length_max: 241, ends_with: "…" }
+
+  - id: parse.budget.past-the-cap-says-omitted
+    trap: PAR-7
+    note: >-
+      Without the distinct marker a capped failure is byte-identical to one that never had a
+      message, and the reader cannot tell truncation from absence.
+    given: { failures_with_messages: 15, max_with_messages: 10 }
+    expect:
+      first_carries_message: true
+      last_carries_message: false
+      last_message_contains: ["omitted"]
+
+  - id: parse.budget.cap-spans-concatenated-documents
+    trap: PAR-10
+    note: per-document capping multiplies the budget by the number of documents
+    given: { documents: 3, failures_each: 8, max_with_messages: 10 }
+    expect: { messages_emitted: 10 }
+
+  - id: parse.budget.absent-message-yields-a-bare-identifier
+    given: { failure: { id: "a.test :: x", message: null } }
+    expect: { entry: { id: "a.test :: x", message: null } }
+
+  # --- structured failure shape ------------------------------------------
+
+  - id: parse.shape.identifier-and-message-are-separate-fields
+    trap: PAR-14
+    note: >-
+      PLAN.md §3.1 already fixes results[] entries as carrying a structured error, so the
+      original's single string with an embedded newline and a six-space indent does not
+      survive. This makes the recover-the-identifier-from-the-first-line trap
+      unrepresentable rather than defended against.
+    given: { failure: { id: "tests/a.py::test_x", message: "AssertionError: 1 != 2" } }
+    expect:
+      entry: { id: "tests/a.py::test_x", message: "AssertionError: 1 != 2" }
+      rendered_hint_contains: ["tests/a.py::test_x"]
+      rendered_hint_absent: ["AssertionError"]
+
+  - id: parse.shape.rerun-hint-passes-identifiers-positionally
+    trap: PAR-14
+    note: >-
+      The earlier form used a name-matching selector, so a path-qualified identifier never
+      matched anything and the suggested rerun silently ran zero tests and looked like a pass.
+    given: { failures: ["tests/a.py::test_x", "tests/b.py::test_y"] }
+    expect: { hint_style: positional, hint_absent: ["-k"] }
+
+  - id: parse.shape.message-may-live-in-a-different-section
+    trap: PAR-15
+    note: >-
+      The instance is one runner's text format and is dropped. The pattern is general and is
+      kept: the identifier is in one place, the diagnosis in another, and the join key is not
+      equal to the identifier. Keying by the raw identifier makes some failures silently lose
+      their message while others keep theirs.
+    given:
+      identifier: "tests/a.py::Case::test_x"
+      section_key: "Case.test_x"
+      section_message: "AssertionError: leaked"
+    expect: { entry_message_contains: ["leaked"] }
+
+  # --- report-level errors ------------------------------------------------
+
+  - id: parse.toplevel.error-surfaced-when-no-suite-ran
+    trap: PAR-4
+    note: >-
+      A pre-run failure — a configured server failing to boot — produces zero suites and a
+      non-empty report-level error array. Without this branch the parser reports "no failing
+      tests" for a run that never started.
+    given:
+      exit: 1
+      report: { errors: ["Process from config was not able to start. Exit code: 3"], suites: [] }
+    expect:
+      summary_contains: ["was not able to start"]
+      failure_count: 1
+
+  - id: parse.toplevel.error-ignored-when-suites-have-specs
+    trap: PAR-4
+    note: >-
+      Omit the condition and a benign report-level warning overrides genuine per-test
+      results, so every real green run is reported as a failure whose summary is a warning.
+    given:
+      exit: 0
+      report: { errors: ["some warning"], suites: [{ specs: [{ ok: true }] }] }
+    expect: { summary: "no failing tests", failures: [] }
+
+  - id: parse.spec.absent-pass-marker-means-passed
+    trap: PAR-12
+    note: >-
+      Silent in the original. Treating absent as failed reports every spec in that report
+      shape as a failure and the whole suite reads red.
+    given: { report: { suites: [{ specs: [{ title: "x" }] }] } }
+    expect: { failures: [] }
+
+  - id: parse.spec.message-read-from-either-field
+    trap: PAR-13
+    note: >-
+      Version-dependent: some versions populate one field, some the other. Reading only one
+      makes half the installed versions produce failures with titles and no messages.
+    given:
+      report_variants:
+        - { spec: { ok: false, error: { message: "Timeout 30000ms exceeded" } } }
+        - { spec: { ok: false, errors: [{ message: "Timeout 30000ms exceeded" }] } }
+    expect: { both_variants_yield_message: "Timeout 30000ms exceeded" }
+
+  # --- remediation hints --------------------------------------------------
+
+  - id: parse.hint.matches-on-failure-text-not-on-failure
+    trap: PAR-17
+    note: >-
+      Advising regeneration on an ordinary visual regression is actively harmful —
+      regenerating erases the regression you were meant to look at. In charkit the trigger
+      pattern and the hint are per-check config; no behaviour keys on a check id.
+    given:
+      failures: ["home.spec.ts :: renders — snapshot doesn't exist, writing actual"]
+      hint: { when_matches: "snapshot does(n't| not) exist", text: "regenerate baselines" }
+    expect: { hint_emitted: true }
+
+  - id: parse.hint.not-emitted-for-an-ordinary-regression
+    trap: PAR-17
+    given:
+      failures: ["home.spec.ts :: renders — 1043 pixels differ"]
+      hint: { when_matches: "snapshot does(n't| not) exist", text: "regenerate baselines" }
+    expect: { hint_emitted: false }
+
+excluded:
+
+  - id: parse.per-tool.field-paths
+    reason: >-
+      Roughly twenty original cases assert on one specific tool's JSON field paths, label
+      join strings and placeholder characters at one pinned version. They are schema trivia
+      for five tools. Parser selection is config in charkit; the format adapters get their
+      own cases when someone writes one.
+
+  - id: parse.guard.called-through-the-parser-directly
+    reason: >-
+      The original's "a clean parse is not rewritten" case calls the parser directly rather
+      than the entry point, so it cannot detect a guard that over-fires — the guard is only
+      reachable through the top level.
+    replaced_by: parse.guard.does-not-fire-on-a-genuine-zero-exit
+
+  - id: parse.substring-assertions
+    reason: >-
+      Many original assertions are of the form "the summary contains '1 violation'", which
+      also passes for "11 violations". Ported as exact equality wherever the format is fixed.
