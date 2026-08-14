@@ -2,7 +2,7 @@
 #
 # Axis it owns (PHASES.md §8.1): component-per-package, no `run:` anywhere,
 # turbo already present, and a declared nested workspace — so this fixture is a
-# root manifest *and* a second `char.yml` at apps/site/char.yml.
+# root manifest *and* a second `armada.yml` at apps/site/armada.yml.
 #
 # It also asks the honest question: is char redundant where turbo already
 # exists? The answer this config gives is that char schedules and turbo builds
@@ -12,7 +12,7 @@
 version: 1
 
 # apps/site is a separate product that happens to share this repo. It has its
-# own char.yml, its own id, its own port block and its own lifecycle, and it
+# own armada.yml, its own id, its own port block and its own lifecycle, and it
 # inherits nothing from here (PLAN.md §4.6). Declaring it is also what makes
 # the overlap illegal: no component `root:` and no `match:` glob below may
 # reach into it.

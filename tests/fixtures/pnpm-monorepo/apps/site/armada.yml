@@ -1,4 +1,4 @@
-# The nested workspace declared by ../../char.yml.
+# The nested workspace declared by ../../armada.yml.
 #
 # "An ordinary workspace" is meant literally: its own id, its own port block,
 # its own `.char/`, and it inherits nothing from the root — not
@@ -7,7 +7,7 @@
 #
 # It exists in this fixture set to prove one thing no other fixture can:
 # workspace resolution returns the same answer from any depth. Walking up from
-# here finds two `char.yml` files, and the innermost wins *because* the outer
+# here finds two `armada.yml` files, and the innermost wins *because* the outer
 # one declares it — an undeclared one is bad_config (PLAN.md §2.1).
 
 version: 1

@@ -1,11 +1,11 @@
-//! Reading `char.yml` off disk.
+//! Reading `armada.yml` off disk.
 //!
 //! The read lives here because the core does no I/O — it takes the text and
 //! gives back a typed value. That split is what lets every config test run
 //! against a string with no tmpdir, and it is why `armada-core` has no file
 //! API to accidentally reach for.
 //!
-//! Finding *which* `char.yml` — the walk up to the git root, the two-or-more
+//! Finding *which* `armada.yml` — the walk up to the git root, the two-or-more
 //! rule, nested workspaces (PLAN.md §2.1) — is workspace resolution, and
 //! arrives with the rest of the ownership layer in phase 2. This module reads a
 //! path it is given.
@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Read a config file, mapping an I/O failure into char's own vocabulary.
 ///
-/// A missing `char.yml` is `bad_config` — the workspace is not set up — while
+/// A missing `armada.yml` is `bad_config` — the workspace is not set up — while
 /// anything else about the filesystem is `environment`: the repo is fine and
 /// the machine is not, which is the distinction that decides whether an agent
 /// edits a file or a human fixes a disk (`ARCHITECTURE.md` §1.7).
@@ -25,13 +25,13 @@ pub fn read(path: &Path) -> Result<String, CharError> {
         match e.kind() {
             std::io::ErrorKind::NotFound => CharError::bad_config(
                 ConfigWhere::File { file: display },
-                "no char.yml here",
-                "run `char config scan` to gather evidence, then author a char.yml",
+                "no armada.yml here",
+                "run `char config scan` to gather evidence, then author a armada.yml",
             ),
             _ => CharError {
                 class: ErrClass::Environment,
                 r#where: display,
-                message: format!("could not read char.yml: {e}"),
+                message: format!("could not read armada.yml: {e}"),
                 next_action: None,
             },
         }
@@ -44,7 +44,7 @@ mod tests {
 
     #[test]
     fn a_missing_config_is_bad_config_and_says_what_to_do() {
-        let err = read(Path::new("/nonexistent/char.yml")).unwrap_err();
+        let err = read(Path::new("/nonexistent/armada.yml")).unwrap_err();
         assert_eq!(err.class, ErrClass::BadConfig);
         assert!(err.next_action.is_some());
     }

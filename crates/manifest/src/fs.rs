@@ -97,7 +97,7 @@ pub fn remove_owned_file(root: &Path, declared: &str) -> Result<bool, CharError>
     if escapes || Path::new(declared).is_absolute() {
         return Err(CharError::bad_config(
             armada_core::error::ConfigWhere::Path {
-                file: "char.yml".to_string(),
+                file: "armada.yml".to_string(),
                 path: "owns.files".to_string(),
             },
             format!("`{declared}` reaches outside the workspace"),

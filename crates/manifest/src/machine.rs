@@ -2,8 +2,8 @@
 //! — plus the two machine facts that are not configuration: the boot id and a
 //! random namespace.
 //!
-//! **`char.yml` declares how expensive a check is; this file declares how much
-//! the machine has.** They cannot be the same file: `char.yml` is committed,
+//! **`armada.yml` declares how expensive a check is; this file declares how much
+//! the machine has.** They cannot be the same file: `armada.yml` is committed,
 //! and a repo cannot know your core count.
 //!
 //! **Who reads it, and where — one of the five things phase 2 had to settle.**

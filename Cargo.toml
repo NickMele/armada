@@ -18,7 +18,7 @@ license = "Apache-2.0"
 repository = "https://github.com/nickmele/charkit"
 
 # One version of the YAML parser for the whole repo, and it is deliberately the
-# same crate the binary reads `char.yml` with (PLAN.md §4.1.1, decision 5).
+# same crate the binary reads `armada.yml` with (PLAN.md §4.1.1, decision 5).
 # `xtask doclint` parses the corpus's examples with it, so a doc example that
 # char would reject is a finding rather than a discovery in phase 3. Stating it
 # once here is what keeps that true — a comment asking two manifests to agree

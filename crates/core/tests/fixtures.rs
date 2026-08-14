@@ -49,9 +49,9 @@ fn all_configs() -> Vec<(String, PathBuf)> {
     let dir = fixtures_dir();
     let mut out: Vec<(String, PathBuf)> = FIXTURES
         .iter()
-        .map(|name| ((*name).to_string(), dir.join(name).join("char.yml")))
+        .map(|name| ((*name).to_string(), dir.join(name).join("armada.yml")))
         .collect();
-    out.push((NESTED.to_string(), dir.join(NESTED).join("char.yml")));
+    out.push((NESTED.to_string(), dir.join(NESTED).join("armada.yml")));
     out
 }
 
@@ -62,7 +62,11 @@ fn read(path: &Path) -> String {
 #[test]
 fn every_fixture_is_present() {
     for (name, path) in all_configs() {
-        assert!(path.is_file(), "{name}: no char.yml at {}", path.display());
+        assert!(
+            path.is_file(),
+            "{name}: no armada.yml at {}",
+            path.display()
+        );
     }
 }
 
@@ -70,8 +74,8 @@ fn every_fixture_is_present() {
 fn every_fixture_parses_and_resolves() {
     for (name, path) in all_configs() {
         let text = read(&path);
-        let config = parse(&text, "char.yml").unwrap_or_else(|e| panic!("{name}: {e}"));
-        resolve(config, &Defaults::built_in(), "char.yml")
+        let config = parse(&text, "armada.yml").unwrap_or_else(|e| panic!("{name}: {e}"));
+        resolve(config, &Defaults::built_in(), "armada.yml")
             .unwrap_or_else(|e| panic!("{name}: {e}"));
     }
 }
@@ -94,8 +98,8 @@ fn every_fixture_matches_its_golden_resolved_config() {
     let mut stale = Vec::new();
     for (name, path) in all_configs() {
         let text = read(&path);
-        let config = parse(&text, "char.yml").unwrap_or_else(|e| panic!("{name}: {e}"));
-        let resolved = resolve(config, &Defaults::built_in(), "char.yml")
+        let config = parse(&text, "armada.yml").unwrap_or_else(|e| panic!("{name}: {e}"));
+        let resolved = resolve(config, &Defaults::built_in(), "armada.yml")
             .unwrap_or_else(|e| panic!("{name}: {e}"));
 
         let actual =
@@ -156,7 +160,7 @@ fn every_schema_property_is_used_by_at_least_one_fixture() {
 fn the_schema_and_the_structs_agree_about_an_unknown_key() {
     let doc = "version: 1\ncomponents:\n  api:\n    rooot: services/api\n";
 
-    let parsed = parse(doc, "char.yml");
+    let parsed = parse(doc, "armada.yml");
     assert!(parsed.is_err(), "the structs accepted an unknown key");
 
     let (schemas, index) = compile_schema();

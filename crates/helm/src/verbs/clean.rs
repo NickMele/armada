@@ -361,7 +361,8 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
     refused: &mut Vec<String>,
     skipped: &mut Vec<String>,
 ) -> Result<(), CharError> {
-    let ports = armada_core::ports::assign_ports(config, row.ports, "char.yml").unwrap_or_default();
+    let ports =
+        armada_core::ports::assign_ports(config, row.ports, "armada.yml").unwrap_or_default();
 
     // Resolved up front, so the docker calls below can take the whole `App`:
     // they renew the heartbeat, and a template borrowing the inherited
@@ -369,7 +370,7 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
     let resolved: Vec<(docker::Kind, String)> = {
         let vars = Vars::new(row.id.as_str(), &ports, &app.inherited);
         let at = ConfigWhere::Path {
-            file: "char.yml".to_string(),
+            file: "armada.yml".to_string(),
             path: "owns".to_string(),
         };
 
@@ -444,10 +445,10 @@ fn remove_artifacts<R: Run, C: Clock, F: Fetch>(
         return Ok(0);
     };
     let ports =
-        armada_core::ports::assign_ports(&config, row.ports, "char.yml").unwrap_or_default();
+        armada_core::ports::assign_ports(&config, row.ports, "armada.yml").unwrap_or_default();
     let vars = Vars::new(row.id.as_str(), &ports, &app.inherited);
     let at = ConfigWhere::Path {
-        file: "char.yml".to_string(),
+        file: "armada.yml".to_string(),
         path: "owns.files".to_string(),
     };
 
@@ -573,10 +574,10 @@ fn would_delete<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>, row: &WorkspaceR
         return Vec::new();
     };
     let ports: BTreeMap<String, u16> =
-        armada_core::ports::assign_ports(&config, row.ports, "char.yml").unwrap_or_default();
+        armada_core::ports::assign_ports(&config, row.ports, "armada.yml").unwrap_or_default();
     let vars = Vars::new(row.id.as_str(), &ports, &app.inherited);
     let at = ConfigWhere::Path {
-        file: "char.yml".to_string(),
+        file: "armada.yml".to_string(),
         path: "owns.files".to_string(),
     };
     declared_files(&config)

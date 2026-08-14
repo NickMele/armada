@@ -1,13 +1,13 @@
 //! Workspace resolution (PLAN.md §2.1) — the pure half.
 //!
-//! **A workspace is one directory tree containing a `char.yml`, which gets its
+//! **A workspace is one directory tree containing a `armada.yml`, which gets its
 //! own runtime state.** In practice: a checkout. The walk itself is I/O and
 //! lives in `adapters`; what it *means* — one, none, or several — is a decision
 //! and lives here.
 //!
 //! The answer must be identical from anywhere inside the tree, because
 //! `workspace_id` is a hash of it. That is why the walk collects **every**
-//! `char.yml` up to the git root rather than stopping at the nearest one: an
+//! `armada.yml` up to the git root rather than stopping at the nearest one: an
 //! accidental nested config then fails loudly instead of silently creating a
 //! second owner for the same source.
 
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 /// cite in errors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Workspace {
-    /// The realpath of the directory holding this workspace's `char.yml`.
+    /// The realpath of the directory holding this workspace's `armada.yml`.
     pub root: PathBuf,
     /// `sha1(realpath(root))[..8]`. Owns everything char creates here.
     pub id: WorkspaceId,
@@ -30,8 +30,8 @@ pub struct Workspace {
     /// `project_id` owns nothing: `--project` scoping stops working for that
     /// worktree while `--all`, the workspace id, and every reclaim keep working.
     pub project: Option<ProjectId>,
-    /// The path to cite in a `bad_config` — `char.yml`, or
-    /// `<declared path>/char.yml` for a nested workspace, so the message names
+    /// The path to cite in a `bad_config` — `armada.yml`, or
+    /// `<declared path>/armada.yml` for a nested workspace, so the message names
     /// a file the caller can find from the repo root.
     pub config_label: String,
 }
@@ -47,9 +47,9 @@ impl Workspace {
         }
     }
 
-    /// This workspace's `char.yml`.
+    /// This workspace's `armada.yml`.
     pub fn config_path(&self) -> PathBuf {
-        self.root.join("char.yml")
+        self.root.join("armada.yml")
     }
 
     /// This workspace's `.char/` (PLAN.md §4.2).
@@ -58,19 +58,19 @@ impl Workspace {
     }
 }
 
-/// One directory holding a `char.yml`, with the nested workspaces it declares.
+/// One directory holding a `armada.yml`, with the nested workspaces it declares.
 ///
 /// The declarations travel with the candidate because the two-or-more rule
 /// needs them, and reading them is the shell's job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate {
-    /// The directory holding the `char.yml`.
+    /// The directory holding the `armada.yml`.
     pub dir: PathBuf,
     /// This config's `workspaces:` list, verbatim (PLAN.md §4.6).
     pub declares: Vec<String>,
 }
 
-/// Which of the collected `char.yml` files is this workspace's, if any.
+/// Which of the collected `armada.yml` files is this workspace's, if any.
 ///
 /// `candidates` is ordered **innermost first** — the order the walk from the
 /// caller's cwd up to the git root produces. `searched` is every directory the
@@ -116,10 +116,10 @@ fn no_config(searched: &[PathBuf]) -> CharError {
         .join(", ");
     CharError {
         class: ErrClass::BadConfig,
-        r#where: "char.yml".to_string(),
-        message: format!("no char.yml in any directory up to the git root: {list}"),
+        r#where: "armada.yml".to_string(),
+        message: format!("no armada.yml in any directory up to the git root: {list}"),
         next_action: Some(
-            "run `char config scan` to gather evidence, then author a char.yml at the repo root"
+            "run `char config scan` to gather evidence, then author a armada.yml at the repo root"
                 .to_string(),
         ),
     }
@@ -128,16 +128,16 @@ fn no_config(searched: &[PathBuf]) -> CharError {
 fn undeclared_nesting(inner: &Path, outer: &Path) -> CharError {
     CharError::bad_config(
         ConfigWhere::Path {
-            file: format!("{}/char.yml", outer.display()),
+            file: format!("{}/armada.yml", outer.display()),
             path: "workspaces".to_string(),
         },
         format!(
-            "two char.yml files own this tree: {} and {}",
+            "two armada.yml files own this tree: {} and {}",
             inner.display(),
             outer.display()
         ),
         format!(
-            "declare it — `workspaces: [{}]` in the outer char.yml — or delete the inner one",
+            "declare it — `workspaces: [{}]` in the outer armada.yml — or delete the inner one",
             inner.strip_prefix(outer).unwrap_or(inner).display()
         ),
     )
@@ -184,7 +184,7 @@ mod tests {
         ];
         let err = choose_root(&found, &[]).unwrap_err();
         assert_eq!(err.class, ErrClass::BadConfig);
-        assert!(err.message.contains("two char.yml files"));
+        assert!(err.message.contains("two armada.yml files"));
     }
 
     #[test]
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn a_workspace_derives_its_id_from_its_root() {
-        let ws = Workspace::new(PathBuf::from("/srv/repo"), None, "char.yml".into());
+        let ws = Workspace::new(PathBuf::from("/srv/repo"), None, "armada.yml".into());
         assert_eq!(ws.id, WorkspaceId::derive(Path::new("/srv/repo")));
         assert_eq!(ws.char_dir(), PathBuf::from("/srv/repo/.char"));
         assert_eq!(ws.project, None);

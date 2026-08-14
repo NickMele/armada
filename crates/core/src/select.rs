@@ -396,8 +396,8 @@ components:
 "#;
 
     fn config() -> ResolvedConfig {
-        let parsed = parse(CONFIG, "char.yml").expect("the fixture parses");
-        resolve_config(parsed, &Defaults::built_in(), "char.yml").expect("it resolves")
+        let parsed = parse(CONFIG, "armada.yml").expect("the fixture parses");
+        resolve_config(parsed, &Defaults::built_in(), "armada.yml").expect("it resolves")
     }
 
     fn ids(selection: &Selection) -> Vec<&str> {
@@ -524,8 +524,8 @@ components:
     checks:
       lint: { cmd: "ruff check ${files}" }
 "#;
-        let parsed = parse(doc, "char.yml").unwrap();
-        let config = resolve_config(parsed, &Defaults::built_in(), "char.yml").unwrap();
+        let parsed = parse(doc, "armada.yml").unwrap();
+        let config = resolve_config(parsed, &Defaults::built_in(), "armada.yml").unwrap();
 
         let error = resolve(&config, &Selector::Word("lint".into())).unwrap_err();
         assert_eq!(error.class, ErrClass::BadInvocation);
@@ -541,8 +541,8 @@ components:
     #[test]
     fn a_conventional_name_matching_nothing_is_an_empty_selection_and_not_an_error() {
         let doc = "version: 1\ncomponents:\n  api:\n    checks:\n      audit: { cmd: \"true\" }\n";
-        let parsed = parse(doc, "char.yml").unwrap();
-        let config = resolve_config(parsed, &Defaults::built_in(), "char.yml").unwrap();
+        let parsed = parse(doc, "armada.yml").unwrap();
+        let config = resolve_config(parsed, &Defaults::built_in(), "armada.yml").unwrap();
 
         // Written out rather than iterated over `CONVENTIONAL`. The set is a
         // *decision* — drawn from PLAN.md §4.1's example config, minus `build`,
@@ -676,8 +676,8 @@ components:
       one: { cmd: "true", needs: [a:two] }
       two: { cmd: "true", needs: [a:one] }
 "#;
-        let parsed = parse(doc, "char.yml").unwrap();
-        let config = resolve_config(parsed, &Defaults::built_in(), "char.yml").unwrap();
+        let parsed = parse(doc, "armada.yml").unwrap();
+        let config = resolve_config(parsed, &Defaults::built_in(), "armada.yml").unwrap();
         let selection = resolve(&config, &Selector::Id("a:one".into())).unwrap();
         assert_eq!(ids(&selection), vec!["a:one", "a:two"]);
     }
@@ -696,8 +696,8 @@ components:
     checks:
       test: { cmd: "pytest", needs: [postgres] }
 "#;
-        let parsed = parse(doc, "char.yml").unwrap();
-        let config = resolve_config(parsed, &Defaults::built_in(), "char.yml").unwrap();
+        let parsed = parse(doc, "armada.yml").unwrap();
+        let config = resolve_config(parsed, &Defaults::built_in(), "armada.yml").unwrap();
         let selection = resolve(&config, &Selector::Id("api:test".into())).unwrap();
         assert_eq!(ids(&selection), vec!["api:test"]);
     }

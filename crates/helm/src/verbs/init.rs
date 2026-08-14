@@ -1,7 +1,7 @@
 //! `char init` — make this workspace ready.
 //!
 //! **Exactly one thing.** An earlier draft also gave it §5's layer-1 evidence
-//! scan, which by definition runs where no `char.yml` exists — so the verb had
+//! scan, which by definition runs where no `armada.yml` exists — so the verb had
 //! two unrelated behaviours, two output shapes, and could only fail in the state
 //! half of it existed to serve. That scan is `char config scan`.
 //!
@@ -150,7 +150,7 @@ fn record_release_commands<R: Run, C: Clock, F: Fetch>(
     config: &ResolvedConfig,
     ports: &BTreeMap<String, u16>,
 ) -> Result<(), CharError> {
-    // Cleared first so a declaration removed from `char.yml` stops being
+    // Cleared first so a declaration removed from `armada.yml` stops being
     // reported, rather than accumulating every version the repo ever had.
     app.db.clear_kind(&workspace.id, OwnedKind::Release)?;
 

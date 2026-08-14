@@ -259,8 +259,8 @@ mod tests {
     }
 
     fn config_with_ports(yaml: &str) -> ResolvedConfig {
-        let parsed = crate::config::parse(yaml, "char.yml").expect("fixture parses");
-        crate::config::resolve(parsed, &crate::config::Defaults::built_in(), "char.yml")
+        let parsed = crate::config::parse(yaml, "armada.yml").expect("fixture parses");
+        crate::config::resolve(parsed, &crate::config::Defaults::built_in(), "armada.yml")
             .expect("fixture resolves")
     }
 
@@ -282,7 +282,7 @@ components:
                 from: 5460,
                 to: 5469,
             },
-            "char.yml",
+            "armada.yml",
         )
         .unwrap();
         assert_eq!(assigned["api"], 5460);
@@ -307,7 +307,7 @@ components:
                 from: 5460,
                 to: 5469,
             },
-            "char.yml",
+            "armada.yml",
         )
         .unwrap();
         assert_eq!(assigned.len(), 1);
@@ -332,7 +332,7 @@ components:
                 from: 5460,
                 to: 5461,
             },
-            "char.yml",
+            "armada.yml",
         )
         .unwrap_err();
         assert_eq!(err.class, ErrClass::BadConfig);

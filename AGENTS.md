@@ -14,7 +14,7 @@ module rule is not yet, because three of the four modules have no crates.
 **The vocabulary is fixed in `docs/glossary.md`** — Job, Drone, Helm, Bridge, Board, and the
 three status enums. Use those words and no synonyms.
 
-**⚠️ The code still spells the tool `char`.** The binary is `char`, the config is `char.yml`, the
+**⚠️ The code still spells the tool `char`.** The binary is `char`, the config is `armada.yml`, the
 state dir is `~/.char/`, and the crates are `charkit-*`. The rename to `armada` is M1 and has not
 happened. Docs written after the rename decision (this file's header, `docs/reference.md`,
 `docs/glossary.md`, `PLAN.md` §13–§15, everything under `docs/manifest|guild|fleet|helm/`) say
@@ -219,7 +219,7 @@ no-mistakes axi run --intent "<what the user set out to accomplish>"
 
 ### Dogfooding — staged
 
-This repository has its own `char.yml`.
+This repository has its own `armada.yml`.
 
 **Until `check` ships, the gate runs the raw tools** — `cargo clippy`, `cargo fmt --check`,
 `cargo test`. A dogfood integration test runs `char check --json` and asserts it agrees, so a

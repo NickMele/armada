@@ -352,7 +352,7 @@ mod tests {
 
     fn at() -> ConfigWhere {
         ConfigWhere::Path {
-            file: "char.yml".into(),
+            file: "armada.yml".into(),
             path: "components.api.checks.lint.cmd".into(),
         }
     }

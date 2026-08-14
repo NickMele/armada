@@ -91,7 +91,7 @@ impl Output {
     }
 }
 
-/// Read, parse and resolve this workspace's `char.yml`.
+/// Read, parse and resolve this workspace's `armada.yml`.
 ///
 /// **Loading is not verifying.** No schema runs here: the structs reject
 /// anything they cannot turn into a typed value, and everything needing a
@@ -122,7 +122,7 @@ pub fn load_foreign_config(
     root: &std::path::Path,
     machine: &MachineConfig,
 ) -> Option<ResolvedConfig> {
-    let text = std::fs::read_to_string(root.join("char.yml")).ok()?;
-    let parsed = config::parse(&text, "char.yml").ok()?;
-    config::resolve(parsed, &machine.config_defaults(), "char.yml").ok()
+    let text = std::fs::read_to_string(root.join("armada.yml")).ok()?;
+    let parsed = config::parse(&text, "armada.yml").ok()?;
+    config::resolve(parsed, &machine.config_defaults(), "armada.yml").ok()
 }

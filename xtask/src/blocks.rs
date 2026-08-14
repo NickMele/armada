@@ -8,7 +8,7 @@
 //! Phase 1 chose that parser (`PLAN.md` §4.1.1, decision 5) and it is the one
 //! this check already used. The version is pinned once, in the workspace's
 //! `[workspace.dependencies]`, and `crates/core` takes it from there — which is
-//! what keeps "the lint parses examples with the parser that reads `char.yml`"
+//! what keeps "the lint parses examples with the parser that reads `armada.yml`"
 //! true, rather than a comment asking two manifests to agree.
 //!
 //! Known limitation, stated rather than hidden: this checks YAML 1.2 only. The

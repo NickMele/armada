@@ -1,4 +1,4 @@
-//! The `char.yml` contract: the schema, the structs that mirror it, and
+//! The `armada.yml` contract: the schema, the structs that mirror it, and
 //! resolution.
 //!
 //! **The JSON Schema is authoritative** (PLAN.md §4.1.1, decision 2). The

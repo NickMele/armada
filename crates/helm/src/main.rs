@@ -51,7 +51,7 @@ armada — one consistent vocabulary for managing a repo's tech stack
   armada manifest check   [--json] [--dry-run] [--all-files] [--fix] [--wait]
                           [--files <path>…] [--component <name>] [--jobs <n>] [<selector>]
                                                  lint / format / test
-  armada manifest <name> …                       a commands: entry from this repo's char.yml
+  armada manifest <name> …                       a commands: entry from this repo's armada.yml
 
   armada --version
   armada --help
@@ -145,7 +145,7 @@ fn dispatch(
     }
 
     // Two invocations legitimately run outside any workspace: asking about
-    // *this workspace* requires a `char.yml`, asking about *the machine* does
+    // *this workspace* requires a `armada.yml`, asking about *the machine* does
     // not. `clean --orphaned` is most needed from a shell that happens to be
     // anywhere, and nothing else on the machine reaps orphaned ports and
     // containers — a rule that made it resolve a local workspace first would
@@ -216,7 +216,7 @@ fn dispatch(
 /// (`docs/PHASES.md`).
 ///
 /// `--artifacts` and `--force` are refused rather than ignored: neither has a
-/// meaning here. The rebuild reads no `char.yml`, so there are no declared
+/// meaning here. The rebuild reads no `armada.yml`, so there are no declared
 /// `owns.files` to delete, and it takes no lease, so there is no liveness guard
 /// to override.
 fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<CharError> {
@@ -245,7 +245,7 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<CharE
                 flag,
                 format!(
                     "{flag} has no meaning alongside --force-rebuild: that path reads no \
-                     char.yml and takes no lease"
+                     armada.yml and takes no lease"
                 ),
             );
         }

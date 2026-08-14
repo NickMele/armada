@@ -693,7 +693,7 @@ mod tests {
         let mut row = ResultRow::new("api", Status::Failed);
         row.error = Some(CharError::bad_config(
             crate::error::ConfigWhere::Path {
-                file: "char.yml".into(),
+                file: "armada.yml".into(),
                 path: "components.api.setup".into(),
             },
             "no such step",

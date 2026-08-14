@@ -35,7 +35,7 @@ impl Machine {
         }
     }
 
-    /// A git repository with a committed `char.yml` and the helper scripts the
+    /// A git repository with a committed `armada.yml` and the helper scripts the
     /// dispatch tests need.
     ///
     /// Committed rather than merely written, because `git worktree add` gives a
@@ -45,7 +45,7 @@ impl Machine {
         let path = self.root.path().join(name);
         std::fs::create_dir_all(&path).unwrap();
         git(&path, &["init", "-q", "-b", "main"]);
-        std::fs::write(path.join("char.yml"), config).unwrap();
+        std::fs::write(path.join("armada.yml"), config).unwrap();
         write_script(&path, "exiter.sh", "#!/bin/sh\nexit \"$1\"\n");
         write_script(
             &path,

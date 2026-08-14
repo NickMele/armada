@@ -19,7 +19,7 @@
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-/// A fully resolved `char.yml`.
+/// A fully resolved `armada.yml`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedConfig {
     /// Always 1 in this version of the contract.

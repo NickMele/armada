@@ -16,7 +16,7 @@ use std::fmt;
 pub enum ErrClass {
     /// The command itself was wrong — unknown verb or flag. Fix the command.
     BadInvocation,
-    /// `char.yml` is wrong. Fix the config. `next_action` is required here.
+    /// `armada.yml` is wrong. Fix the config. `next_action` is required here.
     BadConfig,
     /// The underlying tool failed on its own terms. That is a real result.
     ToolFailed,
@@ -101,14 +101,14 @@ impl fmt::Display for ErrClass {
 }
 
 /// Where a `bad_config` failure is, in the one grammar `where` uses for that
-/// class: `char.yml:` and then a locator (PLAN.md §3.1, §4.1.1 decision 4).
+/// class: `armada.yml:` and then a locator (PLAN.md §3.1, §4.1.1 decision 4).
 ///
 /// Two locators, because a config error arrives in two shapes and a parser
 /// cannot give the first one. Both answer the same question — what do I edit —
 /// which is why they share a grammar rather than being a third one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigWhere {
-    /// A key path char resolved for itself: `char.yml:components.api.checks.lint.cmd`.
+    /// A key path char resolved for itself: `armada.yml:components.api.checks.lint.cmd`.
     Path {
         /// Workspace-relative path of the config file.
         file: String,
@@ -116,7 +116,7 @@ pub enum ConfigWhere {
         path: String,
     },
     /// A 1-indexed source position, for a document that did not parse far
-    /// enough to have a key path: `char.yml:12:7`.
+    /// enough to have a key path: `armada.yml:12:7`.
     Location {
         /// Workspace-relative path of the config file.
         file: String,
@@ -354,20 +354,23 @@ mod tests {
     #[test]
     fn config_where_has_one_grammar_and_two_locators() {
         let path = ConfigWhere::Path {
-            file: "char.yml".into(),
+            file: "armada.yml".into(),
             path: "components.api.checks.lint.cmd".into(),
         };
-        assert_eq!(path.to_string(), "char.yml:components.api.checks.lint.cmd");
+        assert_eq!(
+            path.to_string(),
+            "armada.yml:components.api.checks.lint.cmd"
+        );
 
         let loc = ConfigWhere::Location {
-            file: "char.yml".into(),
+            file: "armada.yml".into(),
             line: 12,
             column: 7,
         };
-        assert_eq!(loc.to_string(), "char.yml:12:7");
+        assert_eq!(loc.to_string(), "armada.yml:12:7");
 
-        // Both carry the `char.yml:` prefix an agent disambiguates on.
-        assert!(path.to_string().starts_with("char.yml:"));
-        assert!(loc.to_string().starts_with("char.yml:"));
+        // Both carry the `armada.yml:` prefix an agent disambiguates on.
+        assert!(path.to_string().starts_with("armada.yml:"));
+        assert!(loc.to_string().starts_with("armada.yml:"));
     }
 }

@@ -33,7 +33,7 @@ use serde_json::Value;
 use support::{char_binary, Machine};
 
 /// The five-worktrees case §2.1 calls "the case that matters": same committed
-/// `char.yml`, several ids, non-overlapping blocks, independent lifecycles.
+/// `armada.yml`, several ids, non-overlapping blocks, independent lifecycles.
 #[test]
 fn two_worktrees_claim_non_overlapping_blocks_concurrently() {
     let machine = Machine::new();
@@ -818,7 +818,7 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
     assert_eq!(after["error"]["class"], "environment");
 }
 
-/// `--artifacts` and `--force` mean nothing on a path that reads no `char.yml`
+/// `--artifacts` and `--force` mean nothing on a path that reads no `armada.yml`
 /// and takes no lease, so they are refused rather than quietly dropped —
 /// a flag that is silently ignored is indistinguishable from one that worked.
 ///

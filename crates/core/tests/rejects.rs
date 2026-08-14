@@ -17,8 +17,10 @@ fn rejected_by_schema(doc: &str) -> bool {
     let mut schemas = boon::Schemas::new();
     let mut compiler = boon::Compiler::new();
     let value: serde_json::Value = serde_json::from_str(SCHEMA).expect("schema is JSON");
-    compiler.add_resource("char.schema.json", value).unwrap();
-    let index = compiler.compile("char.schema.json", &mut schemas).unwrap();
+    compiler.add_resource("armada.schema.json", value).unwrap();
+    let index = compiler
+        .compile("armada.schema.json", &mut schemas)
+        .unwrap();
 
     let Ok(instance) = serde_yaml_ng::from_str::<serde_json::Value>(doc) else {
         // Not even YAML-into-JSON: rejected earlier than the schema, which is
@@ -29,9 +31,9 @@ fn rejected_by_schema(doc: &str) -> bool {
 }
 
 fn rejected_by_the_core(doc: &str) -> bool {
-    match parse(doc, "char.yml") {
+    match parse(doc, "armada.yml") {
         Err(_) => true,
-        Ok(config) => resolve(config, &Defaults::built_in(), "char.yml").is_err(),
+        Ok(config) => resolve(config, &Defaults::built_in(), "armada.yml").is_err(),
     }
 }
 
@@ -295,15 +297,14 @@ fn every_config_error_carries_a_where_and_a_next_action() {
         "version: 1\ncomponents: {\n",
     ];
     for doc in docs {
-        let err = match parse(doc, "char.yml") {
+        let err = match parse(doc, "armada.yml") {
             Err(e) => e,
-            Ok(config) => {
-                resolve(config, &Defaults::built_in(), "char.yml").expect_err("should not resolve")
-            }
+            Ok(config) => resolve(config, &Defaults::built_in(), "armada.yml")
+                .expect_err("should not resolve"),
         };
         assert_eq!(err.class, armada_core::error::ErrClass::BadConfig);
         assert!(
-            err.r#where.starts_with("char.yml"),
+            err.r#where.starts_with("armada.yml"),
             "where was {}",
             err.r#where
         );

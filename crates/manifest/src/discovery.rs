@@ -5,12 +5,12 @@
 //! not: it reads directories, and it asks git where the repository stops.
 //!
 //! > Walk up from the caller's cwd to the git root, collecting **every**
-//! > `char.yml` found.
+//! > `armada.yml` found.
 //!
 //! **Collecting all of them rather than taking the nearest** is what makes an
-//! accidental nested `char.yml` fail loudly instead of silently creating a
+//! accidental nested `armada.yml` fail loudly instead of silently creating a
 //! second owner for the same source. **Stopping at the git root** keeps a stray
-//! `char.yml` in a parent directory from capturing an unrelated repo — and
+//! `armada.yml` in a parent directory from capturing an unrelated repo — and
 //! means a git submodule, which has its own git root, is correctly its own
 //! workspace for free.
 
@@ -48,18 +48,18 @@ pub fn resolve(run: &impl Run, cwd: &Path) -> Result<Workspace, CharError> {
         .and_then(|git_root| root.strip_prefix(git_root).ok())
         .map(|relative| {
             if relative.as_os_str().is_empty() {
-                "char.yml".to_string()
+                "armada.yml".to_string()
             } else {
-                format!("{}/char.yml", relative.display())
+                format!("{}/armada.yml", relative.display())
             }
         })
-        .unwrap_or_else(|| "char.yml".to_string());
+        .unwrap_or_else(|| "armada.yml".to_string());
 
     Ok(Workspace::new(root, project, label))
 }
 
 /// Every directory from `from` up to and including `stop_at`, and the ones
-/// among them that hold a `char.yml`.
+/// among them that hold a `armada.yml`.
 ///
 /// With no git root the walk stops at the filesystem root — which is the
 /// correct behaviour outside a repository, where `char config scan` is the only
@@ -71,7 +71,7 @@ fn walk(from: &Path, stop_at: Option<&Path>) -> (Vec<Candidate>, Vec<PathBuf>) {
     let mut current = Some(from);
     while let Some(dir) = current {
         searched.push(dir.to_path_buf());
-        let config = dir.join("char.yml");
+        let config = dir.join("armada.yml");
         if config.is_file() {
             let declares = std::fs::read_to_string(&config)
                 .map(|text| declared_workspaces(&text))
@@ -135,7 +135,7 @@ mod tests {
     fn the_answer_is_identical_from_any_depth() {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&root.join("char.yml"), "version: 1\n");
+        write(&root.join("armada.yml"), "version: 1\n");
         std::fs::create_dir_all(root.join("a/b/c")).unwrap();
 
         let git = FakeGit {
@@ -155,10 +155,10 @@ mod tests {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
         write(
-            &root.join("char.yml"),
+            &root.join("armada.yml"),
             "version: 1\nworkspaces: [apps/site]\n",
         );
-        write(&root.join("apps/site/char.yml"), "version: 1\n");
+        write(&root.join("apps/site/armada.yml"), "version: 1\n");
 
         let git = FakeGit {
             toplevel: root.clone(),
@@ -166,15 +166,15 @@ mod tests {
         };
         let workspace = resolve(&git, &root.join("apps/site")).unwrap();
         assert_eq!(workspace.root, root.join("apps/site"));
-        assert_eq!(workspace.config_label, "apps/site/char.yml");
+        assert_eq!(workspace.config_label, "apps/site/armada.yml");
     }
 
     #[test]
     fn an_undeclared_nested_config_is_bad_config() {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&root.join("char.yml"), "version: 1\n");
-        write(&root.join("apps/site/char.yml"), "version: 1\n");
+        write(&root.join("armada.yml"), "version: 1\n");
+        write(&root.join("apps/site/armada.yml"), "version: 1\n");
 
         let git = FakeGit {
             toplevel: root.clone(),
@@ -197,13 +197,13 @@ mod tests {
         assert!(err.message.contains(&root.display().to_string()));
     }
 
-    /// The walk stops at the git root, so a stray `char.yml` in a parent
+    /// The walk stops at the git root, so a stray `armada.yml` in a parent
     /// directory cannot capture an unrelated repository.
     #[test]
     fn a_config_above_the_git_root_is_never_collected() {
         let scratch = scratch();
         let outer = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&outer.join("char.yml"), "version: 1\n");
+        write(&outer.join("armada.yml"), "version: 1\n");
         let repo = outer.join("repo");
         std::fs::create_dir_all(&repo).unwrap();
 
@@ -225,7 +225,7 @@ mod tests {
     fn an_underivable_project_is_null_and_not_an_error() {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&root.join("char.yml"), "version: 1\n");
+        write(&root.join("armada.yml"), "version: 1\n");
 
         let git = FakeGit {
             toplevel: root.clone(),
@@ -243,14 +243,14 @@ mod tests {
     fn an_unparseable_outer_config_does_not_mask_the_nesting_error() {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&root.join("char.yml"), "this: [is: not: yaml\n");
-        write(&root.join("apps/site/char.yml"), "version: 1\n");
+        write(&root.join("armada.yml"), "this: [is: not: yaml\n");
+        write(&root.join("apps/site/armada.yml"), "version: 1\n");
 
         let git = FakeGit {
             toplevel: root.clone(),
             common_dir: Some(root.join(".git")),
         };
         let err = resolve(&git, &root.join("apps/site")).unwrap_err();
-        assert!(err.message.contains("two char.yml files"), "{err:?}");
+        assert!(err.message.contains("two armada.yml files"), "{err:?}");
     }
 }

@@ -1,4 +1,4 @@
-//! charkit's own `char.yml`, held to the same contract every other repo's is —
+//! charkit's own `armada.yml`, held to the same contract every other repo's is —
 //! and held to the merge gate it is eventually going to replace.
 //!
 //! **Dogfooding is staged** (`ARCHITECTURE.md` §2.6). Through phase 6 the gate
@@ -37,15 +37,15 @@ fn read(path: &Path) -> String {
 }
 
 fn own_config_text() -> String {
-    read(&repo_root().join("char.yml"))
+    read(&repo_root().join("armada.yml"))
 }
 
 /// charkit's own checks, resolved, keyed by their derived id.
 fn own_checks() -> BTreeMap<String, ResolvedCheck> {
     let text = own_config_text();
-    let config = parse(&text, "char.yml").unwrap_or_else(|e| panic!("charkit's char.yml: {e}"));
-    let resolved = resolve(config, &Defaults::built_in(), "char.yml")
-        .unwrap_or_else(|e| panic!("charkit's char.yml: {e}"));
+    let config = parse(&text, "armada.yml").unwrap_or_else(|e| panic!("charkit's armada.yml: {e}"));
+    let resolved = resolve(config, &Defaults::built_in(), "armada.yml")
+        .unwrap_or_else(|e| panic!("charkit's armada.yml: {e}"));
     resolved
         .components
         .values()
@@ -59,9 +59,9 @@ fn charkits_own_config_parses_resolves_and_validates_against_the_schema() {
     let text = own_config_text();
 
     // Parse and resolve: the path phase 2 already takes for any repo's config.
-    let config = parse(&text, "char.yml").unwrap_or_else(|e| panic!("charkit's char.yml: {e}"));
-    resolve(config, &Defaults::built_in(), "char.yml")
-        .unwrap_or_else(|e| panic!("charkit's char.yml: {e}"));
+    let config = parse(&text, "armada.yml").unwrap_or_else(|e| panic!("charkit's armada.yml: {e}"));
+    resolve(config, &Defaults::built_in(), "armada.yml")
+        .unwrap_or_else(|e| panic!("charkit's armada.yml: {e}"));
 
     // And the authoritative artifact, which is the schema rather than the
     // structs (PLAN.md §4.1.1 decision 2). Both, because either one alone
@@ -69,9 +69,9 @@ fn charkits_own_config_parses_resolves_and_validates_against_the_schema() {
     // fixture suite runs them together.
     let (schemas, index) = compile_schema();
     let instance: serde_json::Value =
-        serde_yaml_ng::from_str(&text).expect("charkit's char.yml reads as a JSON value");
+        serde_yaml_ng::from_str(&text).expect("charkit's armada.yml reads as a JSON value");
     if let Err(e) = schemas.validate(&instance, index) {
-        panic!("charkit's char.yml does not validate:\n{e:#}");
+        panic!("charkit's armada.yml does not validate:\n{e:#}");
     }
 }
 

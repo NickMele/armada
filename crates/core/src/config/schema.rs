@@ -1,4 +1,4 @@
-//! The JSON Schema for `char.yml`, embedded.
+//! The JSON Schema for `armada.yml`, embedded.
 //!
 //! It is embedded rather than read from disk for two reasons: the core does no
 //! I/O, and phase 5's `char config scan` hands this text to the agent that
@@ -13,8 +13,8 @@
 //! is used by at least one fixture — so a key that exists in only one of the
 //! two, or in neither, fails the build.
 
-/// The `char.yml` JSON Schema, draft 2020-12.
-pub const SCHEMA: &str = include_str!("../../schema/char.schema.json");
+/// The `armada.yml` JSON Schema, draft 2020-12.
+pub const SCHEMA: &str = include_str!("../../schema/armada.schema.json");
 
 #[cfg(test)]
 mod tests {

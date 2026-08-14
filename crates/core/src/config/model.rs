@@ -1,6 +1,6 @@
-//! The structs `char.yml` deserializes into.
+//! The structs `armada.yml` deserializes into.
 //!
-//! These mirror `crates/core/schema/char.schema.json`, which is the
+//! These mirror `crates/core/schema/armada.schema.json`, which is the
 //! authoritative statement of the contract. Everything here is
 //! `deny_unknown_fields`, so a key the schema does not know is a parse error
 //! rather than a silently ignored line — the schema's `additionalProperties:
@@ -57,7 +57,7 @@ fn yaml_kind(value: &serde_yaml_ng::Value) -> &'static str {
     }
 }
 
-/// A parsed `char.yml`, before defaults and derivation.
+/// A parsed `armada.yml`, before defaults and derivation.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {

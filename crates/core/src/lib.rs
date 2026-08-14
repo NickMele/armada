@@ -5,7 +5,7 @@
 //! injected seams reach them. Parsing a string is a pure function; reading the
 //! file it came from is not, and is somebody else's job.
 //!
-//! Phase 1 populated two things: the `char.yml` contract ([`config`]) and the
+//! Phase 1 populated two things: the `armada.yml` contract ([`config`]) and the
 //! failure vocabulary every verb answers in ([`error`]). Phase 2 adds the
 //! ownership core — the two identities, workspace resolution, port blocks, the
 //! claim/lease reducer, the reaping decisions, the scope lens and the `--json`

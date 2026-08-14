@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/nickmele/charkit/main/crates/core/schema/char.schema.json",
-  "title": "char.yml",
+  "$id": "https://raw.githubusercontent.com/nickmele/charkit/main/crates/core/schema/armada.schema.json",
+  "title": "armada.yml",
   "description": "The committed configuration for one charkit workspace. Specified in docs/PLAN.md §4. This schema is authoritative: the serde structs in crates/core mirror it, and the fixtures under tests/fixtures are what keep the two honest. Rules that can be decided from the value in front of you live here; rules needing a second part of the document, or the filesystem, live in `char config verify` (PLAN.md §5). Every pattern below is lookaround-free, because char validates with a Rust regex engine that has no lookahead.",
   "type": "object",
   "additionalProperties": false,
@@ -44,7 +44,7 @@
       "additionalProperties": { "$ref": "#/$defs/commandEntry" }
     },
     "workspaces": {
-      "description": "Paths that are separate workspaces, each with its own complete char.yml, excluded from this one (PLAN.md §4.6). A nested workspace inherits nothing. A root that is nothing but this key is legal.",
+      "description": "Paths that are separate workspaces, each with its own complete armada.yml, excluded from this one (PLAN.md §4.6). A nested workspace inherits nothing. A root that is nothing but this key is legal.",
       "type": "array",
       "items": { "$ref": "#/$defs/relPath" },
       "uniqueItems": true

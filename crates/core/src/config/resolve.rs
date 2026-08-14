@@ -60,16 +60,16 @@ impl Default for Defaults {
 
 /// The schema's advice, attached to every parse failure. Pointing at the one
 /// authoritative statement of the contract beats restating a fragment of it.
-const SEE_SCHEMA: &str = "every key char accepts is in the char.yml JSON Schema";
+const SEE_SCHEMA: &str = "every key char accepts is in the armada.yml JSON Schema";
 
-/// Parse `char.yml`.
+/// Parse `armada.yml`.
 ///
 /// `file` is the workspace-relative path the error should cite, which is
-/// `char.yml` for an ordinary workspace and `<path>/char.yml` for a nested one.
+/// `armada.yml` for an ordinary workspace and `<path>/armada.yml` for a nested one.
 pub fn parse(text: &str, file: &str) -> Result<Config, CharError> {
     let config: Config = serde_yaml_ng::from_str(text).map_err(|e| {
         // Decision 4 (PLAN.md §4.1.1): `where` keeps the `bad_config` grammar —
-        // `char.yml:` and then a locator. A parser cannot give a key path, so
+        // `armada.yml:` and then a locator. A parser cannot give a key path, so
         // the locator is `line:column`; serde's own message still carries the
         // path when it has one, so nothing is lost.
         let location = match e.location() {
@@ -104,7 +104,7 @@ pub fn parse(text: &str, file: &str) -> Result<Config, CharError> {
 
 /// Read only the `workspaces:` list, tolerating everything else.
 ///
-/// Workspace resolution has to ask each `char.yml` on the way up whether it
+/// Workspace resolution has to ask each `armada.yml` on the way up whether it
 /// declares the one below it (PLAN.md §2.1), and it has to ask **before** it
 /// knows which config is this workspace's. A full parse there would make an
 /// unrelated error in an outer config — a key phase 5 adds, a typo in a
@@ -513,8 +513,8 @@ mod tests {
     use super::*;
 
     fn resolved(yaml: &str) -> ResolvedConfig {
-        let config = parse(yaml, "char.yml").expect("parses");
-        resolve(config, &Defaults::built_in(), "char.yml").expect("resolves")
+        let config = parse(yaml, "armada.yml").expect("parses");
+        resolve(config, &Defaults::built_in(), "armada.yml").expect("resolves")
     }
 
     #[test]
@@ -537,14 +537,14 @@ mod tests {
     fn a_machine_with_a_different_check_timeout_resolves_differently() {
         let config = parse(
             "version: 1\ncomponents:\n  api:\n    checks:\n      lint:\n        cmd: ruff check ${files}\n",
-            "char.yml",
+            "armada.yml",
         )
         .unwrap();
         let defaults = Defaults {
             check_timeout: 60,
             ready_timeout: 5,
         };
-        let cfg = resolve(config, &defaults, "char.yml").unwrap();
+        let cfg = resolve(config, &defaults, "armada.yml").unwrap();
         assert_eq!(cfg.components["api"].checks["lint"].timeout, 60);
     }
 
@@ -640,21 +640,21 @@ mod tests {
 
     #[test]
     fn a_version_other_than_one_is_bad_config_at_the_version_key() {
-        let err = parse("version: 2\n", "char.yml").unwrap_err();
-        assert_eq!(err.r#where, "char.yml:version");
+        let err = parse("version: 2\n", "armada.yml").unwrap_err();
+        assert_eq!(err.r#where, "armada.yml:version");
         assert!(err.next_action.is_some());
     }
 
     #[test]
     fn a_syntax_error_reports_line_and_column_in_the_same_grammar() {
-        let err = parse("version: 1\ncomponents: {\n", "char.yml").unwrap_err();
+        let err = parse("version: 1\ncomponents: {\n", "armada.yml").unwrap_err();
         assert!(
-            err.r#where.starts_with("char.yml:"),
+            err.r#where.starts_with("armada.yml:"),
             "where was {}",
             err.r#where
         );
-        // `char.yml:<line>:<column>` — two trailing numeric segments.
-        let locator = err.r#where.strip_prefix("char.yml:").unwrap();
+        // `armada.yml:<line>:<column>` — two trailing numeric segments.
+        let locator = err.r#where.strip_prefix("armada.yml:").unwrap();
         let parts: Vec<&str> = locator.split(':').collect();
         assert_eq!(parts.len(), 2, "locator was {locator}");
         assert!(parts.iter().all(|p| p.parse::<usize>().is_ok()));
@@ -664,27 +664,27 @@ mod tests {
     fn a_driver_with_the_wrong_keys_beside_it_names_the_key() {
         let err = parse(
             "version: 1\ncomponents:\n  api:\n    run:\n      driver: compose\n      file: [docker-compose.yml]\n      cmd: serve\n",
-            "char.yml",
+            "armada.yml",
         )
-        .and_then(|c| resolve(c, &Defaults::built_in(), "char.yml"))
+        .and_then(|c| resolve(c, &Defaults::built_in(), "armada.yml"))
         .unwrap_err();
-        assert_eq!(err.r#where, "char.yml:components.api.run.cmd");
+        assert_eq!(err.r#where, "armada.yml:components.api.run.cmd");
     }
 
     #[test]
     fn two_ready_kinds_is_bad_config_rather_than_a_precedence_rule() {
         let err = parse(
             "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n      ready: { http: \"http://127.0.0.1/health\", none: true }\n",
-            "char.yml",
+            "armada.yml",
         )
-        .and_then(|c| resolve(c, &Defaults::built_in(), "char.yml"))
+        .and_then(|c| resolve(c, &Defaults::built_in(), "armada.yml"))
         .unwrap_err();
-        assert_eq!(err.r#where, "char.yml:components.api.run.ready");
+        assert_eq!(err.r#where, "armada.yml:components.api.run.ready");
     }
 
     #[test]
     fn an_unknown_key_is_a_parse_error_not_a_silently_ignored_line() {
-        let err = parse("version: 1\ncomponentz: {}\n", "char.yml").unwrap_err();
+        let err = parse("version: 1\ncomponentz: {}\n", "armada.yml").unwrap_err();
         assert!(err.message.contains("unknown field"), "{}", err.message);
     }
 }

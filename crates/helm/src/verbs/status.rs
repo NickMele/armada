@@ -36,7 +36,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     let rows = app.db.workspaces()?;
     let selected: Vec<WorkspaceRow> = match (&me, common.lens) {
         // `char status --all` is one of the two invocations that run without a
-        // `char.yml` at all: asking about *this workspace* requires one, asking
+        // `armada.yml` at all: asking about *this workspace* requires one, asking
         // about *the machine* does not.
         (None, Lens::All) => rows.clone(),
         (None, _) => return Err(app.ctx.workspace().unwrap_err()),
@@ -86,7 +86,8 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
 
         if exists {
             if let Some(config) = load_foreign_config(&row.path, &app.machine) {
-                if let Ok(ports) = armada_core::ports::assign_ports(&config, row.ports, "char.yml")
+                if let Ok(ports) =
+                    armada_core::ports::assign_ports(&config, row.ports, "armada.yml")
                 {
                     result.ports = ports
                         .into_iter()
