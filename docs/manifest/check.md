@@ -5,7 +5,7 @@ Lint, format, test. Scoped, scheduled and locked.
 > **Status: not built.** Answers `bad_invocation` today. **This is the blocker for M4** —
 > the workflow loop cannot close without it ([`PHASES.md`](../PHASES.md) §8.6).
 
-This is the objective gate the whole system leans on. A Fleet verdict is only `pass` if it
+This is the objective gate the whole system leans on. A Fleet verdict is only `PASS` if it
 carries evidence an external command produced, and this is that command
 ([`PLAN.md`](../PLAN.md) §14.3).
 
@@ -42,9 +42,9 @@ armada manifest check [<selector>] [--scope <lens>] [-C <path>] [--dry-run] [--j
 ## Output
 
 ```
-lint     pass   2.1s
-format   pass   0.4s
-test     fail   18.7s   3 failed, 214 passed
+lint     PASS     2.1s
+format   PASS     0.4s
+test     FAILED  18.7s   3 failed, 214 passed
 ```
 
 `--json` returns one result per check with verdict, argv, duration, and the failure signature.

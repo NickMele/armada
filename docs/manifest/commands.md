@@ -3,7 +3,8 @@
 Run a command the repository declared. The escape hatch that stops Armada needing to know
 everything.
 
-> **Status: shipped** — the `commands:` dispatcher works today ([`PLAN.md`](../PLAN.md) §4.5).
+> **Status: shipped** — as `char <name>` today; renames in M1 ([`PHASES.md`](../PHASES.md) §8.3).
+> The dispatcher itself works ([`PLAN.md`](../PLAN.md) §4.5).
 
 Every repo has scripts Armada has no opinion about: seeding a database, generating types,
 deploying to staging. Declaring them in `armada.yml` means **an agent working in an unfamiliar

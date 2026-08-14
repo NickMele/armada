@@ -13,7 +13,7 @@
 | § | | |
 |---|---|---|
 | **0.1** | Architecture principles — carried forward | |
-| **0.2** | SDLC principles — two retired, the rest carried forward | |
+| **0.2** | SDLC principles — two retire in M1, the rest carried forward | |
 | **8** | The milestones — M0 through M4 | 8.1 why this order · 8.2 M0 · 8.3 M1 · 8.4 M2 · 8.5 M3 · 8.6 M4 |
 | **9** | Source material | 9.1 **M0 spike findings** · 9.2 prior art |
 | **11** | Risks | |
@@ -28,22 +28,23 @@ charkit and **all eight apply unchanged to all four modules**. They were written
 subprocesses, clocks and networks, not about repositories, so nothing in the widening of scope
 touches them. [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9 adds one rule the four-module shape needs and changes none of the others.
 
-#### 0.2 SDLC principles — two retired, the rest carried forward
+#### 0.2 SDLC principles — two retire in M1, the rest carry forward
 
-Two SDLC principles changed, because they existed only to protect a public repository:
+Two SDLC principles exist only to protect a **public** repository, so they end when it goes
+private. **That has not happened yet — both are live and must be satisfied today** (§8.3).
 
-| Was | Now |
+| Principle | Status |
 |---|---|
-| Contamination grep over `src/` and `tests/` | **Retired.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4 |
-| Clean-room rule for the harvester phase | **Retired.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7 |
+| Contamination grep over `src/` and `tests/` | **Live. Retires in M1.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4 |
+| Clean-room rule for the harvester phase | **Live. Retires in M1.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7 |
 
 Both retirements are recorded rather than deleted, because a rule that vanishes without a
-reason gets reinvented. What replaces them is the fixture set: six config fixtures are now the
-*only* thing standing between this design and being shaped around one repository, and that
-makes them more load-bearing than they were, not less.
+reason gets reinvented. What replaces them **once they go** is the fixture set: six config
+fixtures become the *only* thing standing between this design and being shaped around one
+repository, which makes them more load-bearing after M1 than before it.
 
 Everything else in [`ARCHITECTURE.md`](ARCHITECTURE.md) §2 stands: TDD scope, feature branches,
-conventional commits, the merge gate minus its two retired checks, `0.x` versioning, dogfooding,
+conventional commits, the merge gate including its two soon-to-retire checks, `0.x` versioning, dogfooding,
 and document ownership.
 
 ---
@@ -78,7 +79,7 @@ working setup on a new machine — and its content already exists in `~/.claude/
 adopted.
 
 **M1 is subtraction and it gets more expensive every week.** Renaming crates, moving the state
-directory and deleting the retired privacy machinery touches every file and every golden
+directory and deleting the privacy machinery touches every file and every golden
 snapshot. Doing it before Guild and Fleet add surface area is the cheapest this will ever be.
 
 **M4 is genuinely blocked** on Manifest's `check` verb, which is not built. Nothing else is.
@@ -110,14 +111,27 @@ renames everything *and* adds a feature has an unreviewable diff.
 | **Repo** | Goes private. `charkit` → `armada`. |
 | **Crates** | `core`, `manifest`, `guild`, `fleet`, `helm` — mirroring [`PLAN.md`](PLAN.md)'s module structure. Today's `charkit-core` + `charkit-adapters` become `manifest`; today's `charkit-cli` becomes `helm`. |
 | **Binary** | One: `armada`. No `char` shim — it was never published, so a clean break costs nothing. |
-| **Config** | `char.yml` → `armada.yml`, with the existing keys under a `manifest:` section. |
-| **State** | `~/.char/char.db` → `~/.armada/manifest.db`. |
-| **Deletes** | `xtask/src/privacy.rs`, `xtask/src/contamination.rs`, the clean-room hook and its test, and the doc sections that explain them. |
-| **Boundary check** | `xtask/src/boundaries.rs` generalises from "core depends on nothing concrete" to the module dependency rule in [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9. |
+| **Config** | `char.yml` → `armada.yml`, with the existing keys under a `manifest:` section. Also `crates/core/schema/char.schema.json`, and all six `tests/fixtures/*/char.yml`. |
+| **State** | `~/.char/char.db` → `~/.armada/manifest.db`; `~/.char/config.toml` → `~/.armada/machine.yml`; the workspace-local `.char/` → `.armada/`. |
+| **Identifiers** | Error class `char_bug` → `armada_bug`. Docker label namespace `char.workspace` → `armada.workspace`, compose project prefix `char-<id>` → `armada-<id>`. **Both are stamped on live resources**, so M1 must reap the old namespace before it stops recognising it — see the warning below. |
+| **Managed blocks** | The `<!-- char:begin -->` / `<!-- char:end -->` markers and the `char agents-md` verb ([`PLAN.md`](PLAN.md) §5.1). Existing markers in the wild must still be recognised for one release, or a re-run appends a second block instead of replacing the first. |
+| **Docs** | Convert [`PLAN.md`](PLAN.md) §1–§12, [`ARCHITECTURE.md`](ARCHITECTURE.md), [`AGENTS.md`](../AGENTS.md) and [`traps.md`](traps.md) from `char` spelling to `armada`. Part II of `PLAN.md` and everything under `docs/manifest/`, `docs/guild/`, `docs/fleet/`, `docs/helm/` is already converted. Delete the transition notes on each shipped reference page once they are true. |
+| **Deletes** | `xtask/src/privacy.rs`, `xtask/src/contamination.rs`, the clean-room hook and its test, and the doc sections that explain them — **only after the repo is actually private**, not before ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4, §2.7). |
+| **Boundary check** | `xtask/src/boundaries.rs` generalises from "core depends on nothing concrete" to the module dependency rule in [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9. Today it enforces only the crate layering of [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5, because three of the four modules have no crates. |
+
+> **The rename touches live resources, which is the one part that is not a search-and-replace.**
+> Docker labels and the compose project prefix identify containers, networks and volumes that
+> exist on the machine right now. A build that renames the namespace without reaping the old one
+> leaves every pre-M1 resource unowned and unreclaimable — the exact failure the ownership layer
+> was built to prevent ([`PLAN.md`](PLAN.md) §2.3). **`armada manifest clean` must recognise both namespaces for one
+> release.** This is the only behaviour M1 is allowed to add, and it is a migration rather than
+> a feature.
 
 **Done when:** `cargo test` and `cargo xtask doclint` pass, the six golden snapshots are
-regenerated by hand, and `armada manifest init` / `clean` / `status` behave exactly as
-`char init` / `clean` / `status` did. **A behaviour change in M1 is a defect**, not a bonus.
+regenerated by hand, `rg -i 'char(kit)?' --glob '!target'` returns only deliberate historical
+references, and `armada manifest init` / `clean` / `status` behave exactly as `char init` /
+`clean` / `status` did. **A behaviour change in M1 is a defect**, not a bonus — with the single
+documented exception of dual-namespace reaping above.
 
 ### 8.4 M2 — Guild
 

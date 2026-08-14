@@ -43,7 +43,7 @@ nightly-flake  9m ago  needs_human
   Reproduced 3/5 runs. Wants to raise the CI timeout 30s → 90s.
 ```
 
-`--json` returns one result per entry with `Job`, `uuid`, `kind`, `raised_at`, `body` and
+`--json` returns one result per entry with `job`, `uuid`, `kind`, `raised_at`, `body` and
 `answered`.
 
 ## Dependencies

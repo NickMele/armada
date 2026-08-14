@@ -40,7 +40,7 @@ Two mechanisms, both configuration rather than code, and deliberately overlappin
 
 ### Live push — a plugin monitor
 
-A monitor's every stdout line is delivered to Claude as a notification **during** the Job,
+A monitor's every stdout line is delivered to Claude as a notification **during** the session,
 so events arrive mid-turn.
 
 ```json

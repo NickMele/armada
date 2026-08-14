@@ -710,13 +710,21 @@ The gate is `.github/workflows/gate.yml`, and it is:
 | 5 | **module boundaries** — the layers contract from §1.5 and the module rule from §1.9 | `cargo xtask boundaries` |
 | 6 | ~~the contamination grep and the privacy gate~~ — **retired, see below** | — |
 
-#### Check 6 is retired, and what replaced it
+#### Check 6 is scheduled for retirement, and what will replace it
 
-The contamination grep banned a set of strings under `src/` and `tests/`, and the privacy gate
-banned a configured repository name and the literal `$HOME` across every tracked file. **Both
-existed for exactly one reason: this repository was public.** It is now private, so both were
-deleted in M1 ([`PHASES.md`](PHASES.md) §8.3) along with `xtask/src/contamination.rs`,
-`xtask/src/privacy.rs` and the clean-room hook.
+> **⚠️ Not yet retired. This repository is still public and both checks are live.**
+> `xtask/src/contamination.rs`, `xtask/src/privacy.rs` and the clean-room hook all exist and
+> still run — `cargo xtask doclint` names `contamination, privacy` in its own output. **Keep
+> satisfying them.** The retirement below happens in M1 ([`PHASES.md`](PHASES.md) §8.3), at the
+> same moment the repository goes private, and not before. Until `git remote -v` points at a
+> private repository and `xtask/src/privacy.rs` is gone, treat every rule in this section as in
+> force.
+
+The contamination grep bans a set of strings under `src/` and `tests/`, and the privacy gate
+bans a configured repository name and the literal `$HOME` across every tracked file. **Both
+exist for exactly one reason: this repository is public.** When it goes private in M1 both are
+deleted, along with `xtask/src/contamination.rs`, `xtask/src/privacy.rs` and the clean-room
+hook.
 
 This is recorded rather than simply removed because **a rule that vanishes without a reason
 gets reinvented** — six months from now, someone finds the empty hole where a gate check was
@@ -1021,13 +1029,17 @@ fixtures and phase 8 are.
 
 ---
 
-### 2.7 The clean-room rule — retired
+### 2.7 The clean-room rule — scheduled for retirement, still in force
 
-> **Retired in M1** ([`PHASES.md`](PHASES.md) §8.3), together with the contamination grep in
-> §2.4. The rule below split the check-engine work across two agents so that the one writing
-> code had never seen the source repository. It existed to protect a **public** repository from
-> importing a private one's specifics; with this repository private, the threat it was built
-> against no longer exists.
+> **⚠️ Not yet retired. The hook exists at `.claude/hooks/clean-room.sh` and still fires.**
+> Retirement happens **in M1** ([`PHASES.md`](PHASES.md) §8.3), together with the contamination
+> grep in §2.4, at the moment the repository goes private. The rule below splits the
+> check-engine work across two agents so that the one writing code has never seen the source
+> repository. It protects a **public** repository from importing a private one's specifics —
+> and this repository is public today, so the threat it was built against is live.
+>
+> **Never disable it by setting `CHARKIT_CLEAN_ROOM_PATH=""`.** That silences the guard rather
+> than satisfying it.
 >
 > **One part of its reasoning survives and is worth carrying forward:** the value in ported code
 > is not the code, it is the **empirically discovered bug fixes** — branches that exist because

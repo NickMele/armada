@@ -46,7 +46,7 @@ Drones is a fork bomb with a budget.
 ## How it works
 
 Stateless: each request is self-contained, with per-request capability negotiation and no
-Job to hold. That happens to match how the CLI is already built — a command is parse → call
+session to hold. That happens to match how the CLI is already built — a command is parse → call
 core → render, and a stateless server is the same shape with a different renderer
 ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §1.3).
 
@@ -62,7 +62,7 @@ a shell caller parse identically.
 ## Dependencies
 
 Fleet and Manifest. No network, no daemon — the server is started by whatever registers it and
-lives as long as that Job.
+lives as long as that session.
 
 ## Exit codes
 

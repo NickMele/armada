@@ -87,7 +87,7 @@ when the config was wrong and exit `1` when the tests were.
 | `4` | `timeout` | |
 | `5` | `aborted` | |
 | `6` | `environment` | Fix the machine and retry unchanged. |
-| `70` | `armada_bug` | |
+| `70` | `armada_bug` | Emitted as `char_bug` today; renames in M1 ([`PHASES.md`](PHASES.md) §8.3). |
 | `130` / `141` | — | SIGINT / SIGPIPE. |
 
 A `commands:` child's exit code passes through **verbatim** and is not remapped

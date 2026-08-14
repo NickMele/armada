@@ -14,6 +14,12 @@ module rule is not yet, because three of the four modules have no crates.
 **The vocabulary is fixed in `docs/glossary.md`** — Job, Drone, Helm, Bridge, Board, and the
 three status enums. Use those words and no synonyms.
 
+**⚠️ The code still spells the tool `char`.** The binary is `char`, the config is `char.yml`, the
+state dir is `~/.char/`, and the crates are `charkit-*`. The rename to `armada` is M1 and has not
+happened. Docs written after the rename decision (this file's header, `docs/reference.md`,
+`docs/glossary.md`, `PLAN.md` §13–§15, everything under `docs/manifest|guild|fleet|helm/`) say
+`armada`; the rest say `char`. **Match the code, not the docs, when writing code.**
+
 ## Read these first, in order
 
 1. **`docs/PHASES.md`** — `PHASES.md` §8.1, then **your phase only**. It tells you what you
@@ -43,12 +49,25 @@ measured   decided           specified  sequenced   derived
 
 ## Rules that are easy to break by accident
 
-### 1. Two rules were retired — do not reinstate them by accident
+### 1. Two rules retire in M1 — but they are LIVE today, so satisfy them
 
-The contamination grep and the clean-room rule existed for one reason: this repository was
-public. It is private now, and both were deleted in M1 along with `xtask/src/contamination.rs`,
-`xtask/src/privacy.rs` and the clean-room hook. Their reasoning is kept in `ARCHITECTURE.md`
-§2.4 and `ARCHITECTURE.md` §2.7 rather than erased, because a rule that vanishes without a reason gets reinvented.
+**This repository is public right now.** The contamination grep and the clean-room rule both
+exist and both still run: `xtask/src/contamination.rs`, `xtask/src/privacy.rs` and
+`.claude/hooks/clean-room.sh` are all present, and `cargo xtask doclint` names `contamination,
+privacy` in its own output.
+
+They are deleted **in M1**, at the moment the repository goes private — not before. Until
+`git remote -v` points at a private repository and `xtask/src/privacy.rs` is gone, treat them
+as in force:
+
+- Never write the private source repository's name or the literal `$HOME` into a tracked file.
+- Never disable the hook with `CHARKIT_CLEAN_ROOM_PATH=""` — that silences the guard rather
+  than satisfying it.
+- If `cargo xtask privacy` or `cargo xtask history` reports `(name rule unconfigured)`, it is
+  **checking nothing**. That is the guard being off, not passing.
+
+Their reasoning is kept in `ARCHITECTURE.md` §2.4 and `ARCHITECTURE.md` §2.7 rather than erased,
+because a rule that vanishes without a reason gets reinvented.
 
 **What did not go away is the risk the grep was a poor proxy for.** A green grep only proved the
 absence of *crude* contamination. The failure that matters is invisible to it: an abstraction
@@ -67,9 +86,10 @@ real project's layout is the first step toward code that assumes it.
 
 ### 2. Write paths relative to the repo, or as `~/`
 
-The `$HOME` ban was part of the retired privacy gate, but the habit is worth keeping on its own
-merits: an absolute path in a document is wrong on every machine except the one it was written
-on, and this project's whole premise is working across several.
+**The `$HOME` ban is part of the privacy gate above and is live** — `cargo xtask privacy` fails
+on a literal home path in a tracked file. The habit outlives the gate on its own merits: an
+absolute path in a document is wrong on every machine except the one it was written on, and this
+project's whole premise is working across several.
 
 ### 3. Check which milestone you are in before writing code
 
@@ -88,7 +108,7 @@ Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
   usage is [`docs/reference.md`](docs/reference.md).
 
 **`manifest check` blocks M4.** The workflow loop cannot close without it, because a verdict is
-only `pass` if it carries evidence an external command produced. Manifest's remaining verbs are
+only `PASS` if it carries evidence an external command produced. Manifest's remaining verbs are
 first-class work, not background work.
 
 ## Architecture rules, in short
@@ -152,7 +172,7 @@ exclusion, with a reason comment, for genuinely untestable lines.
 
 ## Workflow
 
-**Two rules phase 2 learned the hard way**, with the reasoning in
+**Two rules the ownership layer learned the hard way**, with the reasoning in
 `ARCHITECTURE.md` §2.1.1 and §2.1.2: **invert every new assertion once and watch
 it fail** — a vacuous assertion is worse than none, because it gets cited as
 evidence — and **shipped behaviour that disagrees with the spec is a divergence
@@ -173,38 +193,36 @@ git switch -c <scope>/<short-description>
 no-mistakes axi run --intent "<what the user set out to accomplish>"
 ```
 
-- **Commits are conventional**, scoped by module: `core`, `adapters`, `cli`, `schema`,
-  `fixtures`, `docs`. Not phase numbers — they expire.
+- **Commits are conventional**, scoped by module: `manifest`, `guild`, `fleet`, `helm`,
+  `core`, `schema`, `fixtures`, `docs`. Not milestone numbers — they expire.
 - **The GitHub Actions matrix is the authoritative gate** — nothing merges without it.
   **`no-mistakes` is the pre-flight you should use**: it runs an agent code review plus test
   and lint locally, then pushes and opens the PR. Drive its gates; do not edit files to fix
   findings while a run is active. Escalate any `ask-user` finding rather than deciding it.
-- **PRs are sized for review, not per phase.** Review is the binding constraint on this
-  project. `main` sitting part-way through a phase is expected and fine.
-- **Tag each completed phase**: `git tag phase-3`.
+- **PRs are sized for review, not per milestone.** Review is the binding constraint on this
+  project. `main` sitting part-way through a milestone is expected and fine.
+- **Tag each completed milestone**: `git tag m1`.
 - A GitHub Actions matrix (`ubuntu-latest`, `macos-latest`) runs lint, typecheck and tests
   alongside `no-mistakes`. It exists to cover the platform you are not developing on.
 
 ### Dogfooding — staged
 
-From phase 3, charkit has its own `char.yml`.
+This repository has its own `char.yml`.
 
-**Through phase 6: the gate runs the raw tools** — `cargo clippy`, `cargo fmt --check`,
-`cargo test`.
-A dogfood integration test runs `char check --json` and asserts it agrees. So a broken
-`char check` is one failing test, not an unmergeable repository. Do not wire `char check`
-into the gate itself yet.
+**Until `check` ships, the gate runs the raw tools** — `cargo clippy`, `cargo fmt --check`,
+`cargo test`. A dogfood integration test runs `char check --json` and asserts it agrees, so a
+broken `check` is one failing test rather than an unmergeable repository. **Do not wire
+`char check` into the gate itself yet.**
 
-**Once phase 6 lands, `char check` becomes the gate.** That is the end state — the interim
-arrangement exists only because a bug in a half-built tool should not be able to lock its own
-repo. Phase 6 is the source repo adopting charkit, so a real repo is by then already trusting
-`char check` as its merge gate. See `ARCHITECTURE.md` §2.6.
+**When `check` lands, it becomes the gate.** That is the end state; the interim arrangement
+exists only because a bug in a half-built tool must not be able to lock its own repository.
+`check` is the M4 blocker ([`docs/PHASES.md`](docs/PHASES.md) §8.6). See `ARCHITECTURE.md` §2.6.
 
 ---
 
 ## Versioning
 
-charkit stays at `0.x` and does not promise stability. Because the package version therefore
+Armada stays at `0.x` and does not promise stability. Because the package version therefore
 carries no compatibility signal, **`schema_version` in the `--json` payloads is the only
 one** — treat it accordingly.
 
@@ -214,5 +232,5 @@ Bump rule: adding a field does not bump. Removing a field or changing its type d
 
 <!-- char:begin -->
 <!-- This block is generated by `char agents-md --write` from the resolved config.
-     It will be populated in phase 5. Anything outside these markers is never touched. -->
+     It is populated when `agents-md` ships. Anything outside these markers is never touched. -->
 <!-- char:end -->

@@ -67,7 +67,7 @@ A conversation.
 
 > how's it going?
 
-  rate-limit    — 14m, check green, writing tests. On track.
+  rate-limit    — 14m, RUNNING. Checks green, writing tests. On track.
   nightly-flake —  9m, reproduced it, 3 of 5 runs. Needs you:
                    it wants to bump the CI timeout, which felt like your call.
 ```
@@ -88,7 +88,7 @@ and debugging, not for use.
 
 The process is replaced by `claude`, so the exit code is whatever it exits with.
 
-`3` `bad_config` — no guild, or no orchestrator persona; run [`../init.md`](../init.md).
+`3` `bad_config` — no guild, or no Helm persona; run [`../init.md`](../init.md).
 
 Full table and the one rule behind it: [`reference.md`](../reference.md).
 

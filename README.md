@@ -118,10 +118,12 @@ exactly the things that differ.
 | **module boundaries** | the dependency rule of [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.9 |
 | **docs** | `cargo xtask doclint` — cross-references resolve, code blocks parse, config keys appear in both an example and prose |
 
-Two checks were **retired** when the repository went private: the contamination grep and the
-clean-room rule. Both retirements and their reasoning are recorded in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 and §2.7 rather than deleted, because a rule
-that vanishes without a reason gets reinvented.
+Two further checks run today and **retire in M1**, when the repository goes private: the
+contamination grep (`cargo xtask contamination`) and the privacy gate (`cargo xtask privacy`),
+alongside a clean-room hook. They exist because this repository is public, and they stay in
+force until it is not. Their reasoning is recorded in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 and §2.7 so that the retirement does not
+read as an unexplained hole, because a rule that vanishes without a reason gets reinvented.
 
 **What replaced them is the fixture set.** Six config fixtures are now the only thing standing
 between this design and being shaped around a single repository. A green grep never caught the

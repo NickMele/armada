@@ -24,8 +24,16 @@
 > how. A conflict between them is a defect in one of them — fix it rather than picking a side
 > silently, and say which document was wrong.
 >
-> **Binary name:** `char` · **Crate name:** `charkit` (crates.io verified free; `char` is taken)
+> **Binary name today:** `char` · **Crate names today:** `charkit-core`, `charkit-adapters`,
+> `charkit-cli`. **Both become `armada` in M1** ([`PHASES.md`](PHASES.md) §8.3).
 > **Language:** Rust (2021 edition) · **Platform:** POSIX only (macOS/Linux). Not Windows.
+>
+> **⚠️ The two halves of this document use different spellings, and that is deliberate.**
+> §1–§12 were written before the rename and say `char`, `char.yml`, `~/.char/`, `char_bug`.
+> §13–§15 were written after and say `armada`, `armada.yml`, `~/.armada/`. **The concepts are
+> unchanged; only the spelling differs.** M1 converts Part I to match Part II — until then,
+> read `char` as `armada` throughout Part I, and use the spelling the code actually uses when
+> writing code. [`glossary.md`](glossary.md) is the authority on every other term.
 
 ## Contents
 
@@ -56,7 +64,8 @@ this file (specified) › [`PHASES.md`](PHASES.md) (sequenced) › [`AGENTS.md`]
 > `ARCHITECTURE.md`, `AGENTS.md`, `traps.md` and the README's contributing section; the
 > numbered steps below are kept as the record of what it did. Phase 1 turned §4 into a schema,
 > six fixtures and a golden snapshot each — see §4.1.1. Phase 2 built the ownership layer on
-> top of it. **Start at [`PHASES.md`](PHASES.md), Phase 3.**
+> top of it. **Start at [`PHASES.md`](PHASES.md) §8.3 — M1.** (This document predates the M0–M4 milestones
+> and its "Phase 3" no longer exists as a heading; the phase numbering was replaced.)
 
 Read §2 (concepts), §4 (config) and [`PHASES.md`](PHASES.md) first — you need the shape of the thing to
 have a useful conversation about how to build it. Then work through **Phase 0 — Foundations**
@@ -2902,7 +2911,7 @@ a stray delete in the parent cannot take out live work.
 **A Job with no live Drone is the ordinary resting state, not an error.** It is what you have
 after a Drone finishes a turn, after a crash, and after a reboot; `armada fleet board` is how
 you enter it and Claude Code's `--resume` is what actually reattaches the conversation. An
-earlier draft of the vocabulary reached for an idle *pool* of pre-warmed workers to explain
+earlier draft of the vocabulary reached for an idle *pool* of pre-warmed Drones to explain
 this state and was dropped: a pool means processes alive with nothing to do, which is a daemon
 under another name (§4.3), and it is unnecessary once the Job is the thing that persists.
 
