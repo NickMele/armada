@@ -38,12 +38,10 @@ const MUST_BE_BOTH: &[&str] = &[
 pub fn check(docs: &[Doc], verbose: bool) -> Vec<Finding> {
     // `key:` at the head of a line or inside a flow mapping.
     let in_example = Regex::new(r"([A-Za-z_][A-Za-z0-9_.\-]*)\s*:").unwrap();
-    // `key = value` for the TOML blocks (~/.armada/machine.yml).
-    let toml_key = Regex::new(r"^\s*([a-z_]+)\s*=").unwrap();
     // Prose names a key three ways: `key:` alone, `key: value` — much the most
     // common form, and missing it reported `driver:` and `version:` as
     // undescribed when both are described at length — or a bare snake_case
-    // identifier in backticks, which is how the config.toml keys are written.
+    // identifier in backticks, which is how `machine.yml`'s keys are written.
     let in_prose =
         Regex::new(r"`([A-Za-z_][A-Za-z0-9_.\[\]\-]*):(?:\s[^`]*)?`|`([a-z]+_[a-z_]+)`").unwrap();
 
@@ -52,7 +50,10 @@ pub fn check(docs: &[Doc], verbose: bool) -> Vec<Finding> {
 
     for doc in docs {
         for b in blocks(&doc.text) {
-            if !matches!(b.lang.as_str(), "yaml" | "yml" | "toml") {
+            // YAML only. `machine.yml` was `config.toml` until M1, and the
+            // `key = value` branch that read it went with the format — there is
+            // no TOML left in the corpus for it to match (PHASES.md §8.3).
+            if !matches!(b.lang.as_str(), "yaml" | "yml") {
                 continue;
             }
             for (off, line) in b.body.lines().enumerate() {
@@ -62,12 +63,6 @@ pub fn check(docs: &[Doc], verbose: bool) -> Vec<Finding> {
                 let code = line.split('#').next().unwrap_or("");
                 let cite = format!("{}:{}", doc.rel, b.start + off);
                 for m in in_example.captures_iter(code) {
-                    example
-                        .entry(m[1].to_string())
-                        .or_default()
-                        .push(cite.clone());
-                }
-                if let Some(m) = toml_key.captures(code) {
                     example
                         .entry(m[1].to_string())
                         .or_default()
