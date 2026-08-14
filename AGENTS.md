@@ -228,7 +228,8 @@ broken `check` is one failing test rather than an unmergeable repository. **Do n
 
 **When `check` lands, it becomes the gate.** That is the end state; the interim arrangement
 exists only because a bug in a half-built tool must not be able to lock its own repository.
-`check` is the M4 blocker ([`docs/PHASES.md`](docs/PHASES.md) §8.6). See `ARCHITECTURE.md` §2.6.
+`check --detach` / `--status` are the M4 blocker ([`docs/PHASES.md`](docs/PHASES.md) §8.6) —
+the engine itself has landed. See `ARCHITECTURE.md` §2.6.
 
 ---
 

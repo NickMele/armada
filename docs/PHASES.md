@@ -60,7 +60,7 @@ that matters when the whole thing is built in evenings.
 | **M1** | all | One tree: rename, four crates, one binary, private repo, subtraction | next |
 | **M2** | Guild | `armada init`, the interview, import from `~/.claude/`, sync | |
 | **M3** | Fleet + Helm | Jobs and Drones, budgets, inbox — **and Helm and the Bridge on top** | the product |
-| **M4** | Fleet | Workflow loops with real verification | check engine landed — §9.3 |
+| **M4** | Fleet | Workflow loops with real verification | blocked on `check --detach` / `--status` |
 
 ### 8.1 Why this order, and the one thing that reordered it
 
@@ -82,8 +82,13 @@ adopted.
 directory and deleting the privacy machinery touches every file and every golden
 snapshot. Doing it before Guild and Fleet add surface area is the cheapest this will ever be.
 
-**M4 is genuinely blocked** on Manifest's `check` verb, which is not built. Nothing else is.
-That is stated here rather than discovered at integration time.
+**M4 is still blocked, but on something narrower than before.** The `check` engine has landed
+and dogfoods (§9.3), so a verdict can now carry evidence an external command produced — the
+thing M4 was originally waiting for. What it cannot do is `--detach` and `--status`, both still
+refused by name. That matters because a loop runs inside a Drone's turn: the `python-ml`
+fixture's checks take thirty minutes, and a Drone that blocks its whole turn on one is not
+viable. **A loop can run a check to completion; it cannot yet start one and poll it.** Stated
+here rather than discovered at integration time.
 
 ### 8.2 M0 — the research spike ✓ done
 
