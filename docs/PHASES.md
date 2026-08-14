@@ -433,29 +433,33 @@ documents is worth checking for a third possibility — that one of them never m
 
 #### One gap the check engine leaves open
 
-**`Event::Interrupted` has no producer.** Both reducers handle it and both are unit-tested on
-it, but nothing in the shell delivers it: there is no SIGINT handler anywhere in `crates/`, only
-the SIGPIPE restore at the entrypoint. So a `armada manifest check` that is interrupted dies on the default
-disposition instead of ending its run.
+**`Event::Interrupted` had no producer. Fixed.** Both reducers handled it and both were
+unit-tested on it, but nothing in the shell delivered it: there was no SIGINT handler anywhere
+in `crates/`, only the SIGPIPE restore at the entrypoint. A `armada manifest check` that was
+interrupted died on the default disposition instead of ending its run.
 
-Measured, by sending SIGINT to a real run:
+Measured before the fix, by sending SIGINT to a real run:
 
-| | What happens today |
-|---|---|
-| exit code | **130**, which is correct — [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.6 makes signals the one carve-out from `exit = f(error.class)` |
-| run lease | left in `~/.armada/manifest.db` until the heartbeat goes cold, so a retry inside the minute fails fast with "a run is already in flight" |
-| **children** | **keep running.** They are `setsid`'d into their own sessions, so the signal never reaches them |
+| | Before | After |
+|---|---|---|
+| exit code | **130**, correct — [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.6 makes signals the one carve-out from `exit = f(error.class)` | **130**, and still by *dying from the signal* rather than calling `exit(130)`, so job control is not fooled |
+| run lease | left in `~/.armada/manifest.db` until the heartbeat went cold, so a retry inside the minute failed fast | released with the run |
+| **children** | **kept running.** `setsid`'d into their own sessions, so the signal never reached them | **killed**, by the group-kill path the reducer already had |
 
-The third row is the one that matters: [`PLAN.md`](PLAN.md) §2.3's premise is that no process
-outlives its workspace, and an interrupted run currently leaves its test suites running. It is
-the check engine's gap rather than the ownership layer's — the check engine is what spawns them,
-and `armada manifest clean` reclaims them only when somebody runs it.
+`manifest::posix::catch_interrupts` traps SIGINT and SIGTERM and does one thing: sets an
+atomic. The run loop polls it before any other observation and delivers `Event::Interrupted`
+once, and the path that already existed takes over — kill each running group, mark the rest
+`ABORTED`, end the run `aborted`.
 
-The shape of the fix, so it is not rediscovered: a handler sets a flag, the scheduler loop feeds
-`Event::Interrupted` on the next turn, and the path that already exists takes over — it kills
-each running group, marks the rest `ABORTED`, and ends the run `aborted`. The loop must not
-block, so the handler sets an atomic and the loop polls it rather than doing any work in the
-handler itself.
+**Two details that are not incidental.** A second signal restores the default disposition and
+re-raises, so a second Ctrl-C always kills: a tool that traps SIGINT and then wedges is worse
+than one that never trapped it. And the exit is a real re-raise rather than `exit(130)`, because
+[`ARCHITECTURE.md`](ARCHITECTURE.md) §1.6 says a signal *"has no error class at all"* — mapping it to `aborted`'s exit `5` is the
+mistake that section names in advance, and it is exactly the mistake catching the signal tempts
+you into.
+
+Covered by `crates/helm/tests/interrupt.rs`, which signals a real run and then looks for the
+grandchild — the only way to see this, since the orphan is invisible from inside the process.
 
 ---
 

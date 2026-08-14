@@ -415,6 +415,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
         children: BTreeMap::new(),
         rows: BTreeMap::new(),
         finish: None,
+        interrupted: false,
         scrub: Scrub::new(&workspace.root, &workspace.id),
         run_id: run_id.clone(),
         ceiling_ms: app.machine.acquire_ceiling_ms(),
@@ -471,6 +472,10 @@ struct Loop<'a> {
     /// the one worth reporting.
     rows: BTreeMap<CheckId, CheckResult>,
     finish: Option<(Status, Option<ArmadaError>)>,
+    /// Whether `Event::Interrupted` has already been delivered. The handler's
+    /// flag stays set once tripped, so without this the loop would re-deliver
+    /// on every turn.
+    interrupted: bool,
     scrub: Scrub,
     run_id: RunId,
     ceiling_ms: u64,
@@ -516,6 +521,17 @@ fn drive<R: Run, C: Clock, F: Fetch>(
         }
         if it.finish.is_some() {
             break;
+        }
+
+        // **The interrupt is observed before anything else**, because every
+        // other observation costs time the operator has just asked to stop
+        // spending. `Event::Interrupted` is delivered once — the reducer moves
+        // the run to `Ending::Interrupted`, and delivering it again would step
+        // a state that has already ended.
+        if !it.interrupted && armada_manifest::posix::interrupted() {
+            it.interrupted = true;
+            queue.push(Event::Interrupted);
+            continue;
         }
 
         // Observe: children first, then deadlines, then the clock. A child that

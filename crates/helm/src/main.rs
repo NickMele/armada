@@ -40,6 +40,12 @@ use verbs::Output;
 
 fn main() -> ExitCode {
     posix::restore_sigpipe();
+    // **Without this, Ctrl-C leaves the children running.** They are `setsid`'d
+    // into their own sessions, so a signal delivered to Armada never reaches
+    // them (`PHASES.md` §9.3). Trapping it lets the run loop end the run
+    // properly — kill each group, mark the rest ABORTED — instead of the
+    // process dying and orphaning a `cargo test`.
+    posix::catch_interrupts();
 
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -284,6 +290,13 @@ fn emit(output: Output, json: bool, style: Style, terminal: render::term::Termin
         } else {
             write_err(&text);
         }
+    }
+    // **A signal has no error class, so it does not get the class's code**
+    // (`ARCHITECTURE.md` §1.6). The envelope above still says `aborted`,
+    // because that describes the run; the exit code describes the signal, and
+    // every shell reads 130 for Ctrl-C. Written first, then exited.
+    if posix::interrupted() {
+        posix::die_by_signal();
     }
     ExitCode::from(output.exit_code())
 }
