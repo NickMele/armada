@@ -658,3 +658,31 @@ workspace on the machine, including the verb whose job is recovery.
 ### Override merging does work for `labels:` and `build.labels:`
 
 Both merge as expected. Labels were never the hard part; ports were.
+
+### `docker compose` is a CLI plugin, so it disappears under a scratch `$HOME`
+
+Measured on darwin 2026-08-14, against Docker **29.6.2** and Compose **v5.3.1**, while
+writing the compose driver's integration test. The daemon is reachable and the subcommand is
+not:
+
+```sh
+env -i PATH="$PATH" HOME=/tmp/scratch docker version   # rc 0 — the daemon answers
+env -i PATH="$PATH" HOME=/tmp/scratch docker compose version
+# docker: unknown command: docker compose
+
+env -i PATH="$PATH" HOME=/tmp/scratch DOCKER_CONFIG="$REAL_HOME/.docker" docker compose version
+# Docker Compose version v5.3.1
+```
+
+The CLI looks for plugins under `$DOCKER_CONFIG`, which defaults to `$HOME/.docker`. So a
+`$HOME` that is not the user's has a working `docker` and no `docker compose`.
+
+**If you assume otherwise:** char's own end-to-end harness gives every test a scratch `$HOME`
+— that is what makes `~/.armada/manifest.db` a fresh machine-global store rather than the
+developer's — and the compose driver then fails there with `tool_failed` and docker's generic
+*"Run 'docker --help' for more information"*, on a machine where the driver works perfectly by
+hand. It reads exactly like a bug in the argv, which is where an hour goes.
+
+**This is a property of the harness, not of char.** A real invocation runs under the user's own
+`$HOME` and finds the plugin. The integration suite passes `DOCKER_CONFIG` through explicitly;
+nothing in `crates/` compensates for it, and nothing should.

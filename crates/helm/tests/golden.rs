@@ -267,6 +267,7 @@ fn status_matches_its_snapshot() {
                 reference,
                 boot_id: None,
                 pid_started_at: None,
+                component: None,
             })?;
         }
         verbs::status::run(

@@ -55,6 +55,7 @@ fn ours(workspace: &WorkspaceId, pgid: i32, cwd: &Path) -> OwnedRow {
         reference: pgid.to_string(),
         boot_id: machine::boot_id(&RealRun, cwd),
         pid_started_at: machine::process_start_at(&RealRun, cwd, pgid),
+        component: Some("api".to_string()),
     }
 }
 
@@ -169,6 +170,7 @@ fn a_zero_or_unparseable_pgid_is_dropped_rather_than_signalled() {
                 reference: reference.to_string(),
                 boot_id: machine::boot_id(&RealRun, &repo),
                 pid_started_at: Some("whenever".to_string()),
+                component: Some("api".to_string()),
             },
         );
     }

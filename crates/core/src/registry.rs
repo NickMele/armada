@@ -121,6 +121,19 @@ pub struct OwnedRow {
     /// not safe. One-second resolution on darwin, so it is a strong filter
     /// rather than a proof.
     pub pid_started_at: Option<String>,
+    /// Which component started this, when Armada knows.
+    ///
+    /// **The column `armada manifest down <component>` needs, and nothing
+    /// else.** Without it a selector cannot be honoured: the rows are
+    /// workspace-scoped, so `down api` would find every group the workspace
+    /// owns and stop the `postgres` something else is still using — the exact
+    /// over-reach `down`'s "pause, not release" contract forbids.
+    ///
+    /// **`None` is a real answer rather than a gap.** A row written before this
+    /// column existed, or by a driver whose handles belong to a whole stack
+    /// rather than one component, genuinely is unattributed — so a selector may
+    /// not claim it, while `clean`, which takes everything, is unaffected.
+    pub component: Option<String>,
 }
 
 /// One held lease.

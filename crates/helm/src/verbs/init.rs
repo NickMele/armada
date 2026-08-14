@@ -188,6 +188,9 @@ fn record_release_commands<R: Run, C: Clock, F: Fetch>(
             reference: command,
             boot_id: None,
             pid_started_at: None,
+            // A `release:` command is reported and never executed, so nothing
+            // ever selects one by component.
+            component: None,
         })?;
     }
     Ok(())

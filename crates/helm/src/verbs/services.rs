@@ -243,6 +243,7 @@ fn record<R: Run, C: Clock, F: Fetch>(
             reference: format!("{PENDING}{service}"),
             boot_id: Some(app.boot_id.clone()),
             pid_started_at: None,
+            component: Some(service.to_string()),
         }),
         // Nothing to write: the stamp is in the document, and the document is
         // handed to compose before compose creates anything.
@@ -270,6 +271,7 @@ fn settle_pgid<R: Run, C: Clock, F: Fetch>(
         workspace: workspace.id.clone(),
         kind: OwnedKind::Pgid,
         reference: pgid.to_string(),
+        component: Some(service.to_string()),
         boot_id: Some(app.boot_id.clone()),
         // **Both halves, or the row is a permanent phantom.** Without a start
         // time a recycled pid is indistinguishable from an orphaned service, so
@@ -440,6 +442,12 @@ fn adopt_compose<R: Run, C: Clock, F: Fetch>(
                 reference: reference.clone(),
                 boot_id: None,
                 pid_started_at: None,
+                // **Unattributed on purpose.** One `docker compose up` brings
+                // the whole project up, so a container belongs to the stack
+                // rather than to the component that happened to trigger it —
+                // and claiming otherwise would have `down api` remove the
+                // postgres container `db` is the component for.
+                component: None,
             });
             owns.push(format!("{owned}:{reference}"));
         }
@@ -649,7 +657,7 @@ fn command_down<R: Run, C: Clock, F: Fetch>(
     shell: bool,
     assigned: &BTreeMap<String, u16>,
 ) -> Result<Attempt, ArmadaError> {
-    let groups = owned_pgids(app, workspace)?;
+    let groups = owned_pgids(app, workspace, service)?;
 
     // A repo's own `stop:` gets to go first — `pumactl stop` knows how to end a
     // Puma cleanly and Armada does not. It is not trusted to have worked:
@@ -721,20 +729,31 @@ fn command_down<R: Run, C: Clock, F: Fetch>(
     })
 }
 
-/// Every process group this workspace still owns, as numbers Armada may signal.
+/// The process groups **this component** owns, as numbers Armada may signal.
+///
+/// **Scoped to the component, and that is not a refinement.** The rows are
+/// workspace-scoped, so an unscoped read would have `armada manifest down api`
+/// stop the `postgres` group that `db` owns — over-reach the "pause, not
+/// release" contract forbids, and the reason `owned.component` exists at all.
 ///
 /// **A pgid of zero is not a pgid**: `killpg(0, …)` signals the caller's own
 /// group, so a `0` reaching here would have `down` SIGTERM and then SIGKILL
 /// Armada itself and everything sharing its foreground group.
+///
+/// A row with no component was written before that was recorded. It is left
+/// alone here and reclaimed by `clean`, which takes everything: acting on it
+/// would be guessing, and guessing wrong stops a live service.
 fn owned_pgids<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
+    service: &str,
 ) -> Result<Vec<i32>, ArmadaError> {
     Ok(app
         .db
         .owned(Some(&workspace.id))?
         .into_iter()
         .filter(|row| row.kind == OwnedKind::Pgid)
+        .filter(|row| row.component.as_deref() == Some(service))
         .filter_map(|row| row.reference.parse::<i32>().ok())
         .filter(|pgid| *pgid > 0)
         .collect())

@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// The schema version this binary writes and understands.
-pub const USER_VERSION: i64 = 1;
+pub const USER_VERSION: i64 = 2;
 
 /// How long any one statement waits for a database another Armada is writing.
 const BUSY_TIMEOUT_MS: u64 = 5_000;
@@ -199,6 +199,7 @@ impl Db {
                  \"ref\"          TEXT NOT NULL,
                  boot_id        TEXT,
                  pid_started_at TEXT,
+                 component      TEXT,
                  PRIMARY KEY (workspace, kind, \"ref\")
              );
              CREATE TABLE IF NOT EXISTS leases (
@@ -213,6 +214,20 @@ impl Db {
              );",
         )
         .map_err(|e| map_sqlite(&self.path, e))?;
+
+        // **Schema 2, added the additive way the rule above states.** A store
+        // created fresh gets the column from the `CREATE` above; one already at
+        // schema 1 gets it here, and the duplicate-column error the fresh path
+        // raises is the "already correct" answer rather than a failure. The
+        // column is nullable, so every row written before it existed reads back
+        // as `None` — which is exactly what it means: Armada did not record
+        // which component this handle belongs to, so no selector can claim it.
+        if let Err(e) = tx.execute_batch("ALTER TABLE owned ADD COLUMN component TEXT") {
+            let already = e.to_string().contains("duplicate column");
+            if !already {
+                return Err(map_sqlite(&self.path, e));
+            }
+        }
 
         // The namespace is written once, at creation, and never again. It
         // scopes the whole reaping mechanism to one filesystem view: without
@@ -463,7 +478,7 @@ impl Db {
 
     /// Everything one workspace owns, or everything on the machine.
     pub fn owned(&self, workspace: Option<&WorkspaceId>) -> Result<Vec<OwnedRow>, ArmadaError> {
-        let sql = "SELECT workspace, kind, \"ref\", boot_id, pid_started_at FROM owned";
+        let sql = "SELECT workspace, kind, \"ref\", boot_id, pid_started_at, component FROM owned";
         let mut statement = self
             .conn
             .prepare(&match workspace {
@@ -482,6 +497,7 @@ impl Db {
                     reference: row.get(2)?,
                     boot_id: row.get(3)?,
                     pid_started_at: row.get(4)?,
+                    component: row.get(5)?,
                 },
             ))
         };
@@ -522,14 +538,16 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|e| map_sqlite(&self.path, e))?;
         tx.execute(
-            "INSERT OR REPLACE INTO owned (workspace, kind, \"ref\", boot_id, pid_started_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT OR REPLACE INTO owned
+                 (workspace, kind, \"ref\", boot_id, pid_started_at, component)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             (
                 row.workspace.as_str(),
                 row.kind.to_string(),
                 &row.reference,
                 &row.boot_id,
                 &row.pid_started_at,
+                &row.component,
             ),
         )
         .map_err(|e| map_sqlite(&self.path, e))?;
@@ -1157,6 +1175,7 @@ mod tests {
             reference: "4212".to_string(),
             boot_id: Some("boot-1".to_string()),
             pid_started_at: Some("whenever".to_string()),
+            component: Some("api".to_string()),
         })
         .unwrap();
         // As a newer Armada would have written it.
@@ -1187,6 +1206,7 @@ mod tests {
             reference: "psql -c 'DROP DATABASE app_aaaaaaaa'".to_string(),
             boot_id: None,
             pid_started_at: None,
+            component: None,
         })
         .unwrap();
         let rows = db.owned(Some(&ws("aaaaaaaa"))).unwrap();
