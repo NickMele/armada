@@ -26,6 +26,7 @@ use crate::ports::{PortBlock, PortState};
 use crate::reap::ReapPlan;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// One global version for the whole CLI contract.
 ///
@@ -521,6 +522,290 @@ pub struct InitDryRun {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct NoData {}
 
+// ------------------------------------------------------------------- M2:
+// the machine, the guild, and the one word that is not a `Status`
+
+/// **The one uppercase word in Armada's output that is not a [`Status`].**
+///
+/// `armada doctor` and `armada guild pull` end on `NEEDS ATTENTION`
+/// (`tests/golden/render/doctor.plain`, `guild-pull.plain`), and no terminal
+/// state spells that. The two verbs are reporting the condition of a *machine*
+/// rather than the outcome of a *run*, and the distinction is real: `FAILED`
+/// would say `doctor` failed, which it did not — it succeeded, at telling you
+/// something is wrong.
+///
+/// `render.rs`'s rule is that an uppercase word is the envelope's own spelling
+/// and a lowercase one is render-only. **This keeps that rule rather than
+/// breaking it**: the word is in the payload, under `data.headline`, spelled
+/// exactly as it is printed. A reader can still grep for anything they saw.
+///
+/// **One variant, deliberately.** The healthy case leads with an ordinary
+/// [`Status`], so exactly one word in the whole CLI needed inventing and it is
+/// declared here where it can be counted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum Headline {
+    /// Something on this machine needs a person. Not a failure of the verb.
+    #[serde(rename = "NEEDS ATTENTION")]
+    NeedsAttention,
+}
+
+impl fmt::Display for Headline {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Headline::NeedsAttention => "NEEDS ATTENTION",
+        })
+    }
+}
+
+/// `armada init` — set up **this machine**.
+///
+/// Not to be confused with [`InitData`], which claims a *workspace*.
+///
+/// **The body is a transcript, because the verb is a conversation.** Every
+/// other envelope in this file describes work that happened; this one also
+/// carries what was *asked* and what was answered, because `armada init` is the
+/// one verb that interviews you and the agreed layout
+/// (`tests/golden/render/init-machine.plain`) prints the questions. A reader of
+/// `--json` gets the same account the terminal did.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MachineInitData {
+    /// One row per preflight check, plus one for the directories created.
+    pub results: Vec<ResultRow>,
+    /// The one question that matters, and which of the three was chosen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guild: Option<GuildChoice>,
+    /// What the import adopted, as the facts of one line.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub imported: Vec<String>,
+    /// The interview prompts that were put to the person.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub asked: Vec<Asked>,
+    /// How many questions the interview has.
+    pub questions: usize,
+    /// How many were left at their default. **`--defaults` is all of them**,
+    /// and it leaves a working guild that `armada doctor` reports as incomplete.
+    pub skipped: usize,
+    /// Where the guild is, as a person writes it.
+    pub guild_path: String,
+}
+
+/// *Do you already have a guild?* — the one question `armada init` asks before
+/// anything else (`PLAN.md` §13.4).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildChoice {
+    /// The question, in words.
+    pub question: String,
+    /// The three answers, in the order they are offered.
+    pub options: Vec<String>,
+    /// Which was taken, **one-based**, to match what was typed.
+    pub chosen: usize,
+}
+
+/// One interview prompt, as it was put.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Asked {
+    /// Its position, one-based.
+    pub number: usize,
+    /// Out of how many.
+    pub of: usize,
+    /// The question.
+    pub prompt: String,
+    /// What pressing enter would have done.
+    pub hint: String,
+}
+
+/// `armada doctor` — what this machine is missing.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DoctorData {
+    /// One row per check, in the order they are run.
+    pub results: Vec<Finding>,
+    /// `NEEDS ATTENTION`, or absent when everything is `ok`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headline: Option<Headline>,
+    /// The tally the summary line carries — `4 ok`, `1 missing`, `2 warnings`.
+    pub tally: Vec<String>,
+}
+
+/// One `doctor` check.
+///
+/// **`remedy` is the point of the command.** `docs/commands/doctor.md`: a check
+/// that reports a problem without the command that fixes it sends the reader to
+/// the documentation, which is most of what `doctor` exists to save. It is
+/// `Option` because a check that passed has nothing to fix, and for no other
+/// reason — a failing check without one is a defect.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Finding {
+    /// What was checked: `git`, `docker`, `guild`, `manifest.db`.
+    pub check: String,
+    /// How it stands.
+    pub status: Health,
+    /// The specific delta rather than a verdict — `3 commits behind origin`,
+    /// not `out of date`.
+    pub detail: String,
+    /// The exact command that would fix it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remedy: Option<String>,
+}
+
+/// How one `doctor` check stands.
+///
+/// **Lowercase in the payload and lowercase on the screen**, which is the same
+/// rule [`Status`] follows in the other direction: one spelling, and it is the
+/// JSON spelling. These are not terminal states of a run — nothing here ends
+/// anything — so they are their own small enum rather than five more members of
+/// an enum whose exit-code mapping they would have no meaning in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Health {
+    /// Present and current.
+    Ok,
+    /// Not there at all.
+    Missing,
+    /// There, and behind what it should be.
+    Stale,
+    /// There, and only half set up — a fragment still as imported.
+    Partial,
+    /// Could not be checked, because the network was not reachable. **Not a
+    /// failure**: `doctor` degrades to this rather than failing, so it stays
+    /// safe to run in a shell prompt.
+    Offline,
+}
+
+impl Health {
+    /// The word, in both audiences.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Health::Ok => "ok",
+            Health::Missing => "missing",
+            Health::Stale => "stale",
+            Health::Partial => "partial",
+            Health::Offline => "offline",
+        }
+    }
+
+    /// Whether this state fails the command. **`ok` and `offline` do not, and
+    /// nor does a warning** — `doctor` is safe to run in a shell prompt, which
+    /// it would not be if every drifted guild exited non-zero.
+    pub const fn is_failure(self) -> bool {
+        matches!(self, Health::Missing)
+    }
+
+    /// Whether this state is a warning: real, and not a failure.
+    pub const fn is_warning(self) -> bool {
+        matches!(self, Health::Stale | Health::Partial | Health::Offline)
+    }
+}
+
+/// `armada guild pull` and `armada guild push`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildSyncData {
+    /// The remote, or absent when sync is off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote: Option<String>,
+    /// Commits this machine has that the remote does not.
+    pub ahead: usize,
+    /// Commits the remote has that this machine does not.
+    pub behind: usize,
+    /// One row per area of the guild the change set touches.
+    pub results: Vec<SyncItem>,
+    /// **Whether anything was written.** `false` on a divergence, which is the
+    /// whole of `guild/pull.md`'s exit-code contract: *diverged, and nothing
+    /// changed*. A reader must be able to tell "here is what is waiting" from
+    /// "here is what landed", and the rows alone cannot say it.
+    pub applied: bool,
+    /// `NEEDS ATTENTION`, when a conflict or a divergence needs a person.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headline: Option<Headline>,
+}
+
+/// One area of the guild, and what the change set does to it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SyncItem {
+    /// What happened to it.
+    pub status: Sync,
+    /// The area — `skills`, `hooks`, `workflows` — or a single file's name.
+    pub item: String,
+    /// Which ones, or how many.
+    pub detail: String,
+}
+
+/// What a sync does to one area.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Sync {
+    /// The remote has it and this machine does not.
+    Added,
+    /// Both have it, and they differ.
+    Changed,
+    /// This machine has it and the remote does not.
+    Removed,
+    /// **Edited here and on origin.** Reported, never resolved automatically —
+    /// two machines' guilds merged without asking is how you end up with a hook
+    /// you did not write (`guild/push.md`).
+    Conflict,
+    /// Identical on both sides.
+    Unchanged,
+}
+
+impl Sync {
+    /// The word, in both audiences.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Sync::Added => "added",
+            Sync::Changed => "changed",
+            Sync::Removed => "removed",
+            Sync::Conflict => "conflict",
+            Sync::Unchanged => "unchanged",
+        }
+    }
+}
+
+/// `armada guild init`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildInitData {
+    /// Where the guild is.
+    pub guild_path: String,
+    /// What import adopted.
+    pub imported: Vec<String>,
+    /// **Every credential-shaped value the importer refused, by key.** Never a
+    /// value: see `armada-guild`'s `secrets` module for why the type carrying
+    /// these has nowhere to put one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub withheld: Vec<String>,
+    /// The files written — the three fragments and the starters.
+    pub wrote: Vec<String>,
+    /// The sync remote, if one was named.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote: Option<String>,
+    /// How many questions the interview has.
+    pub questions: usize,
+    /// How many were left at their default.
+    pub skipped: usize,
+}
+
+/// `armada guild export` and `armada guild import`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildBundleData {
+    /// The bundle's path.
+    pub path: String,
+    /// Its size, when it was just written. Absent on import, where the reader
+    /// is being told what came out rather than what went in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
+    /// What is in it.
+    pub contents: Vec<String>,
+    /// Whether `machine.yml` travelled. **Reported either way**, because "the
+    /// file that never syncs did not sync" is the fact the flag exists to make
+    /// checkable.
+    pub secrets: bool,
+    /// What was deliberately not taken from the bundle.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<String>,
+    /// Files `--merge` left alone because this machine's copy differs.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -805,5 +1090,169 @@ mod tests {
         let json = Envelope::ok("status", None, Status::Ok, NoData {}).to_json();
         assert!(json.ends_with("}\n"));
         assert!(!json.ends_with("\n\n"));
+    }
+
+    // --------------------------------------------------------------- M2
+
+    /// **The human spelling is the JSON spelling**, which is the rule that lets
+    /// `NEEDS ATTENTION` be an uppercase word without breaking `render.rs`'s
+    /// "uppercase means the envelope's own". A reader can grep for anything
+    /// they saw on the screen.
+    #[test]
+    fn the_headline_is_spelled_in_the_payload_exactly_as_it_is_printed() {
+        assert_eq!(
+            serde_json::to_string(&Headline::NeedsAttention).unwrap(),
+            "\"NEEDS ATTENTION\""
+        );
+        assert_eq!(Headline::NeedsAttention.to_string(), "NEEDS ATTENTION");
+    }
+
+    /// The same rule, on `doctor`'s own words: lowercase on the screen and
+    /// lowercase in the payload.
+    #[test]
+    fn a_doctor_finding_is_spelled_the_same_in_both_audiences() {
+        for (health, word) in [
+            (Health::Ok, "ok"),
+            (Health::Missing, "missing"),
+            (Health::Stale, "stale"),
+            (Health::Partial, "partial"),
+            (Health::Offline, "offline"),
+        ] {
+            assert_eq!(health.word(), word);
+            assert_eq!(
+                serde_json::to_string(&health).unwrap(),
+                format!("\"{word}\"")
+            );
+        }
+    }
+
+    /// **`warn` alone does not fail**, so `doctor` is safe to run in a shell
+    /// prompt (`docs/commands/doctor.md`). A drifted guild that exited non-zero
+    /// would make the command unusable exactly where it is most useful.
+    #[test]
+    fn a_warning_does_not_fail_doctor_and_a_missing_thing_does() {
+        assert!(Health::Missing.is_failure());
+        for health in [Health::Stale, Health::Partial, Health::Offline] {
+            assert!(!health.is_failure(), "{health:?} failed the command");
+            assert!(health.is_warning());
+        }
+        assert!(!Health::Ok.is_failure());
+        assert!(!Health::Ok.is_warning());
+    }
+
+    /// The `remedy` is what earns `doctor` its existence, so a `Finding` that
+    /// has one carries it in the payload under that name.
+    #[test]
+    fn a_finding_carries_the_command_that_fixes_it() {
+        let finding = Finding {
+            check: "guild".to_string(),
+            status: Health::Stale,
+            detail: "3 commits behind origin".to_string(),
+            remedy: Some("armada guild pull".to_string()),
+        };
+        let json = serde_json::to_string(&finding).unwrap();
+        assert_eq!(
+            json,
+            r#"{"check":"guild","status":"stale","detail":"3 commits behind origin","remedy":"armada guild pull"}"#
+        );
+
+        // A passing check has nothing to fix, and the key is absent rather
+        // than null — a field that is usually empty teaches agents to ignore it.
+        let ok = Finding {
+            check: "git".to_string(),
+            status: Health::Ok,
+            detail: "2.51.0".to_string(),
+            remedy: None,
+        };
+        assert!(!serde_json::to_string(&ok).unwrap().contains("remedy"));
+    }
+
+    /// **A reader must be able to tell "here is what is waiting" from "here is
+    /// what landed"**, and the rows alone cannot say it. `applied` is the whole
+    /// of `guild/pull.md`'s *diverged, and nothing changed*.
+    #[test]
+    fn a_diverged_pull_says_in_the_payload_that_nothing_was_applied() {
+        let data = GuildSyncData {
+            remote: Some("git@example.com:me/guild.git".to_string()),
+            ahead: 2,
+            behind: 3,
+            results: vec![SyncItem {
+                status: Sync::Conflict,
+                item: "voice.md".to_string(),
+                detail: "edited here and on origin".to_string(),
+            }],
+            applied: false,
+            headline: Some(Headline::NeedsAttention),
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains(r#""applied":false"#), "{json}");
+        assert!(json.contains(r#""status":"conflict""#), "{json}");
+        assert!(json.contains(r#""headline":"NEEDS ATTENTION""#), "{json}");
+    }
+
+    #[test]
+    fn every_sync_word_is_the_word_the_layout_prints() {
+        for (sync, word) in [
+            (Sync::Added, "added"),
+            (Sync::Changed, "changed"),
+            (Sync::Removed, "removed"),
+            (Sync::Conflict, "conflict"),
+            (Sync::Unchanged, "unchanged"),
+        ] {
+            assert_eq!(sync.word(), word);
+            assert_eq!(serde_json::to_string(&sync).unwrap(), format!("\"{word}\""));
+        }
+    }
+
+    /// **`armada init`'s payload is the transcript the terminal got.** The one
+    /// verb that interviews you is the one whose `--json` has to carry what was
+    /// asked, or the two audiences are looking at different runs.
+    #[test]
+    fn machine_init_carries_the_questions_it_asked() {
+        let data = MachineInitData {
+            results: vec![ResultRow::new("git", Status::Ready)],
+            guild: Some(GuildChoice {
+                question: "Do you already have a guild?".to_string(),
+                options: vec![
+                    "pull from a remote".to_string(),
+                    "import a bundle".to_string(),
+                    "build one now".to_string(),
+                ],
+                chosen: 3,
+            }),
+            imported: vec!["imported from ~/.claude/".to_string()],
+            asked: vec![Asked {
+                number: 1,
+                of: 5,
+                prompt: "How should agents write to you?".to_string(),
+                hint: "(enter to keep what import found)".to_string(),
+            }],
+            questions: 5,
+            skipped: 0,
+            guild_path: "~/.armada/guild".to_string(),
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains(r#""chosen":3"#), "{json}");
+        assert!(json.contains("How should agents write to you?"), "{json}");
+        assert!(json.contains(r#""skipped":0"#), "{json}");
+    }
+
+    /// The withheld list is keys, and the type it is built from has nowhere to
+    /// put a value — asserted here too, because this is the payload that leaves
+    /// the process.
+    #[test]
+    fn guild_init_reports_withheld_keys_and_not_values() {
+        let data = GuildInitData {
+            guild_path: "~/.armada/guild".to_string(),
+            imported: vec!["19 skills".to_string()],
+            withheld: vec!["settings.json:env.GITHUB_TOKEN".to_string()],
+            wrote: vec!["voice.md".to_string()],
+            remote: None,
+            questions: 5,
+            skipped: 5,
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains("env.GITHUB_TOKEN"), "{json}");
+        assert!(!json.contains("remote"), "sync off is absent, not null");
     }
 }
