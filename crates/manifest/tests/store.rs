@@ -1,4 +1,4 @@
-//! `char.db` under real contention.
+//! `manifest.db` under real contention.
 //!
 //! The filesystem and SQLite are deliberately **not** faked
 //! (`ARCHITECTURE.md` §1.1): char depends on real transaction semantics for
@@ -94,7 +94,7 @@ fn a_deferred_read_then_write_fails_where_an_immediate_one_succeeds() {
 
 /// **Creating the database is itself contended**, and the test above says so by
 /// omission: it primes the schema first, so nothing covered the state every
-/// machine passes through exactly once — no `char.db` at all, and two `char
+/// machine passes through exactly once — no `manifest.db` at all, and two `char
 /// init`s arriving together.
 ///
 /// Both failures it guards are real and were reproducible about one run in ten

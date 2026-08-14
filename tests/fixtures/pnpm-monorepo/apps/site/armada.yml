@@ -1,7 +1,7 @@
 # The nested workspace declared by ../../armada.yml.
 #
 # "An ordinary workspace" is meant literally: its own id, its own port block,
-# its own `.char/`, and it inherits nothing from the root — not
+# its own `.armada/`, and it inherits nothing from the root — not
 # `secret_providers:`, not `commands:`, not `components:`. The only thing the
 # root contributes is permission for this to exist (PLAN.md §4.6).
 #

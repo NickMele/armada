@@ -1,4 +1,4 @@
-//! The shape of `~/.char/char.db` (PLAN.md §4.3), as data.
+//! The shape of `~/.armada/manifest.db` (PLAN.md §4.3), as data.
 //!
 //! The rows live here, in the core, because every decision about them —
 //! which to reap, which the scope lens selects, whether a lease is cold — is a
@@ -13,7 +13,7 @@
 //!
 //! This is **the only cross-workspace state, and the only thing that survives a
 //! workspace directory being deleted** — which is the whole reason a pgid is
-//! recorded here rather than in `.char/`. A pgid recorded inside a directory
+//! recorded here rather than in `.armada/`. A pgid recorded inside a directory
 //! that gets deleted is a leaked process.
 
 use crate::id::{ProjectId, WorkspaceId};
@@ -87,7 +87,7 @@ impl OwnedKind {
     /// Parse a `kind` column back.
     ///
     /// An unrecognised value is `None` rather than an error: a newer char may
-    /// have written a kind this binary does not know, and `char.db` is
+    /// have written a kind this binary does not know, and `manifest.db` is
     /// deliberately forward-compatible within 0.x.
     pub fn parse(text: &str) -> Option<Self> {
         match text {

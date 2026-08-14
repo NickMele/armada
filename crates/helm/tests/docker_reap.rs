@@ -139,7 +139,7 @@ fn labelled_container(name: &str, labels: &[String]) -> Option<String> {
 }
 
 fn namespace_of(machine: &Machine) -> String {
-    let db = machine.home.path().join(".char/char.db");
+    let db = machine.home.path().join(".armada/manifest.db");
     let conn = rusqlite::Connection::open(db).unwrap();
     conn.query_row(
         "SELECT value FROM meta WHERE key = 'namespace'",
@@ -334,7 +334,7 @@ fn a_commands_owns_selector_is_reclaimed_after_the_command_has_exited() {
     std::fs::write(
         repo.join("make-net.sh"),
         format!(
-            "#!/bin/sh\ndocker network create --label com.example.wt=$CHAR_WORKSPACE {network} >/dev/null\n"
+            "#!/bin/sh\ndocker network create --label com.example.wt=$ARMADA_WORKSPACE {network} >/dev/null\n"
         ),
     )
     .unwrap();
@@ -415,7 +415,7 @@ fn a_force_rebuild_dry_run_names_the_orphan_and_removes_nothing() {
         &format!("name=^{orphan_net}$"),
     ]);
 
-    let db = machine.home.path().join(".char/char.db");
+    let db = machine.home.path().join(".armada/manifest.db");
     std::fs::write(&db, b"this is not a database").unwrap();
 
     let previewed = machine.run(

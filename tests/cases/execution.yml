@@ -138,12 +138,12 @@ cases:
 
   - id: exec.paths.artefact-directory-translated-for-a-container
     trap: CMD-7
-    given: { check: { runner: container }, run_dir: "<workspace>/.char/run/01J8X2" }
-    expect: { translated: "<mount>/.char/run/01J8X2", host_root_absent: true }
+    given: { check: { runner: container }, run_dir: "<workspace>/.armada/run/01J8X2" }
+    expect: { translated: "<mount>/.armada/run/01J8X2", host_root_absent: true }
 
   - id: exec.paths.untouched-for-a-host-check
-    given: { check: { runner: host }, run_dir: "<workspace>/.char/run/01J8X2" }
-    expect: { translated: "<workspace>/.char/run/01J8X2" }
+    given: { check: { runner: host }, run_dir: "<workspace>/.armada/run/01J8X2" }
+    expect: { translated: "<workspace>/.armada/run/01J8X2" }
 
   - id: exec.paths.untouched-when-host-is-forced
     trap: CMD-5
@@ -151,8 +151,8 @@ cases:
       Silent in the original, and a three-token difference. Keying on what the check declares
       rather than on where it actually runs makes a forced-host run write its reports into a
       host directory named after the container mount point, and read nothing back.
-    given: { check: { runner: container }, force_host: true, run_dir: "<workspace>/.char/run/01J8X2" }
-    expect: { translated: "<workspace>/.char/run/01J8X2" }
+    given: { check: { runner: container }, force_host: true, run_dir: "<workspace>/.armada/run/01J8X2" }
+    expect: { translated: "<workspace>/.armada/run/01J8X2" }
 
   - id: exec.paths.artefact-directory-exists-before-the-command-is-built
     trap: CMD-7

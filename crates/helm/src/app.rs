@@ -29,9 +29,9 @@ pub struct App<R: Run, C: Clock, F: Fetch> {
     pub ctx: Ctx<R, C, F>,
     /// The machine-global store.
     pub db: Db,
-    /// `~/.char/config.toml`, or its defaults.
+    /// `~/.armada/machine.yml`, or its defaults.
     pub machine: MachineConfig,
-    /// This installation's namespace, from `char.db`.
+    /// This installation's namespace, from `manifest.db`.
     pub namespace: String,
     /// This boot, so a row from a previous one is stale by definition.
     pub boot_id: String,
@@ -42,7 +42,7 @@ pub struct App<R: Run, C: Clock, F: Fetch> {
     /// Set for `check` and cleared everywhere else, which is what makes
     /// [`App::child_env`] able to answer PLAN.md §2.4 without asking anything:
     /// `char up` is not a run and has no run id, so a service's environment
-    /// carries `CHAR_WORKSPACE` alone.
+    /// carries `ARMADA_WORKSPACE` alone.
     pub run: Option<armada_core::run::RunId>,
     /// The leases this invocation is holding right now, innermost last.
     ///
@@ -69,9 +69,9 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// Neither is declared anywhere, so a script char has never been told
     /// anything about still knows which workspace it is in.
     ///
-    /// **`CHAR_RUN_ID` is present only inside a run**, and the two travel
+    /// **`ARMADA_RUN_ID` is present only inside a run**, and the two travel
     /// together on purpose: a child reading them decides whether to *join* this
-    /// run or start its own, and that decision is `CHAR_WORKSPACE` matching the
+    /// run or start its own, and that decision is `ARMADA_WORKSPACE` matching the
     /// workspace it resolved for itself (PLAN.md §3.2.1). One without the other
     /// is not an inheritance — which is why `char up`, which is not a run,
     /// sets the workspace alone.
@@ -79,12 +79,12 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         let mut env = BTreeMap::new();
         if let Some(workspace) = &self.ctx.workspace {
             env.insert(
-                "CHAR_WORKSPACE".to_string(),
+                "ARMADA_WORKSPACE".to_string(),
                 workspace.id.as_str().to_string(),
             );
         }
         if let Some(run) = &self.run {
-            env.insert("CHAR_RUN_ID".to_string(), run.to_string());
+            env.insert("ARMADA_RUN_ID".to_string(), run.to_string());
         }
         env
     }
@@ -636,9 +636,9 @@ pub fn build<R: Run, C: Clock, F: Fetch>(
     home: &Path,
     inherited: BTreeMap<String, String>,
 ) -> Result<App<R, C, F>, CharError> {
-    let db = Db::open(&machine::char_home(home))?;
+    let db = Db::open(&machine::armada_home(home))?;
     let namespace = db.namespace()?;
-    let machine_config = MachineConfig::read(&machine::char_home(home))?;
+    let machine_config = MachineConfig::read(&machine::armada_home(home))?;
 
     let cwd = ctx
         .workspace

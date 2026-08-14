@@ -1,4 +1,4 @@
-//! `~/.char/char.db` — machine-global, SQLite (PLAN.md §4.3).
+//! `~/.armada/manifest.db` — machine-global, SQLite (PLAN.md §4.3).
 //!
 //! The only cross-workspace state, and the only thing that survives a workspace
 //! directory being deleted. **SQLite rather than a JSON file because of
@@ -49,7 +49,7 @@ pub struct Db {
     /// A handle on the same inode, opened with the connection.
     ///
     /// It exists for one measurement: **`fstat` on a process's own open handle
-    /// returns `st_nlink == 0` once the file is unlinked.** Deleting `char.db`
+    /// returns `st_nlink == 0` once the file is unlinked.** Deleting `manifest.db`
     /// while a process holds it open under WAL lets that process keep reading
     /// and writing a consistent world through the unlinked inode, while the
     /// next process creates a fresh file at the same path and hands out a port
@@ -104,14 +104,14 @@ pub enum SlotOutcome {
 
 impl Db {
     /// Open, creating the database and its schema if this is a first run.
-    pub fn open(char_home: &Path) -> Result<Self, CharError> {
-        std::fs::create_dir_all(char_home).map_err(|e| {
+    pub fn open(armada_home: &Path) -> Result<Self, CharError> {
+        std::fs::create_dir_all(armada_home).map_err(|e| {
             environment(
-                char_home.display().to_string(),
-                format!("cannot create {}: {e}", char_home.display()),
+                armada_home.display().to_string(),
+                format!("cannot create {}: {e}", armada_home.display()),
             )
         })?;
-        let path = char_home.join("char.db");
+        let path = armada_home.join("manifest.db");
         let conn = Connection::open(&path).map_err(|e| map_sqlite(&path, e))?;
 
         // `busy_timeout` goes first, because a timeout set second does nothing
@@ -125,7 +125,7 @@ impl Db {
         let handle = std::fs::File::open(&path).map_err(|e| {
             environment(
                 path.display().to_string(),
-                format!("cannot open char.db: {e}"),
+                format!("cannot open manifest.db: {e}"),
             )
         })?;
 
@@ -137,7 +137,7 @@ impl Db {
     /// Create or upgrade the schema.
     ///
     /// **The compatibility rule is deliberately one-directional.**
-    /// `~/.char/char.db` is machine-global and long-lived, so a machine running
+    /// `~/.armada/manifest.db` is machine-global and long-lived, so a machine running
     /// two charkit versions — one repo pinned, one fresh — is normal rather
     /// than exotic. An older binary meeting a higher `user_version` fails
     /// `environment` and says which version wrote it; a newer binary meeting a
@@ -150,7 +150,7 @@ impl Db {
     /// written by a second statement after the transaction, and a sibling `char
     /// init` starting in the same millisecond then read `user_version = 1`,
     /// returned here early, and asked for a namespace that was not there yet —
-    /// `char.db: Query returned no rows`, from a database that was merely
+    /// `manifest.db: Query returned no rows`, from a database that was merely
     /// half a heartbeat young.
     fn migrate(&mut self) -> Result<(), CharError> {
         let version: i64 = self
@@ -234,7 +234,7 @@ impl Db {
     /// every failure.
     ///
     /// For the rebuild path only. `char clean --orphaned --force-rebuild`
-    /// exists because `char.db` cannot be read, so it must not *need* this to
+    /// exists because `manifest.db` cannot be read, so it must not *need* this to
     /// work — but a database can be unreadable in ways that still leave `meta`
     /// legible, and carrying the old namespace across keeps every resource
     /// already stamped with it reapable. Failing to read it costs a namespace,
@@ -869,10 +869,10 @@ impl Db {
 /// measured rather than assumed.** Switching a database's journal mode takes a
 /// brief exclusive lock, and SQLite acquires that one *without* consulting the
 /// busy handler — so a `busy_timeout` of five seconds still loses instantly.
-/// Two `char init`s started together on a machine with no `char.db` yet both
+/// Two `char init`s started together on a machine with no `manifest.db` yet both
 /// create the file in rollback mode and both try to convert it, and roughly one
 /// run in ten the loser reported `aborted` — "another char is writing to
-/// char.db; retry" — for a database nobody was writing to. That is the
+/// manifest.db; retry" — for a database nobody was writing to. That is the
 /// concurrent-claim guarantee failing before a claim is even attempted.
 ///
 /// The wait is char's own, bounded by the same budget as every other statement,
@@ -945,7 +945,7 @@ fn map_sqlite(path: &Path, error: rusqlite::Error) -> CharError {
         // SQLITE_BUSY: a genuine queue char lost. Retryable, unchanged.
         5 => (
             ErrClass::Aborted,
-            Some("another char is writing to char.db; retry".to_string()),
+            Some("another char is writing to manifest.db; retry".to_string()),
         ),
         // SQLITE_BUSY_SNAPSHOT: never retryable, and always char's bug — it
         // means a transaction read and then wrote without BEGIN IMMEDIATE.
@@ -963,7 +963,7 @@ fn map_sqlite(path: &Path, error: rusqlite::Error) -> CharError {
     CharError {
         class,
         r#where: path.display().to_string(),
-        message: format!("char.db: {error}"),
+        message: format!("manifest.db: {error}"),
         next_action,
     }
 }
@@ -1040,7 +1040,7 @@ mod tests {
     fn a_namespace_can_be_peeked_and_carried_into_a_replacement() {
         let home = tempfile::tempdir().unwrap();
         let original = Db::open(home.path()).unwrap().namespace().unwrap();
-        let peeked = Db::peek_namespace(&home.path().join("char.db"));
+        let peeked = Db::peek_namespace(&home.path().join("manifest.db"));
         assert_eq!(peeked.as_deref(), Some(original.as_str()));
 
         // The replacement adopts it, so every resource already stamped with it
@@ -1283,7 +1283,7 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let db = Db::open(home.path()).unwrap();
         assert!(db.still_linked());
-        std::fs::remove_file(home.path().join("char.db")).unwrap();
+        std::fs::remove_file(home.path().join("manifest.db")).unwrap();
         assert!(!db.still_linked());
     }
 
@@ -1294,7 +1294,7 @@ mod tests {
     /// transaction that can never succeed.
     #[test]
     fn a_sqlite_failure_is_classified_by_its_extended_code() {
-        let path = Path::new("/scratch/char.db");
+        let path = Path::new("/scratch/manifest.db");
         let mapped = |code| {
             map_sqlite(
                 path,
@@ -1318,7 +1318,7 @@ mod tests {
             let broken = mapped(code);
             assert_eq!(broken.class, ErrClass::Environment, "code {code}");
             assert!(
-                broken.next_action.unwrap().contains("/scratch/char.db"),
+                broken.next_action.unwrap().contains("/scratch/manifest.db"),
                 "code {code}"
             );
         }
@@ -1342,7 +1342,7 @@ mod tests {
     fn a_newcomer_cannot_tell_an_unlinked_database_from_a_fresh_one() {
         let home = tempfile::tempdir().unwrap();
         let holder = Db::open(home.path()).unwrap();
-        std::fs::remove_file(home.path().join("char.db")).unwrap();
+        std::fs::remove_file(home.path().join("manifest.db")).unwrap();
 
         let newcomer = Db::open(home.path()).unwrap();
         assert!(newcomer.still_linked());

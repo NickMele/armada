@@ -52,9 +52,9 @@ impl Workspace {
         self.root.join("armada.yml")
     }
 
-    /// This workspace's `.char/` (PLAN.md §4.2).
-    pub fn char_dir(&self) -> PathBuf {
-        self.root.join(".char")
+    /// This workspace's `.armada/` (PLAN.md §4.2).
+    pub fn armada_dir(&self) -> PathBuf {
+        self.root.join(".armada")
     }
 }
 
@@ -226,7 +226,7 @@ mod tests {
     fn a_workspace_derives_its_id_from_its_root() {
         let ws = Workspace::new(PathBuf::from("/srv/repo"), None, "armada.yml".into());
         assert_eq!(ws.id, WorkspaceId::derive(Path::new("/srv/repo")));
-        assert_eq!(ws.char_dir(), PathBuf::from("/srv/repo/.char"));
+        assert_eq!(ws.armada_dir(), PathBuf::from("/srv/repo/.armada"));
         assert_eq!(ws.project, None);
     }
 }

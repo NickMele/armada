@@ -45,7 +45,7 @@ fn row<'a>(payload: &'a serde_json::Value, id: &str) -> &'a serde_json::Value {
 
 /// The record a run left behind, read the way `char explain` will.
 fn record(repo: &Path, run_id: &str) -> RunRecord {
-    let path = repo.join(".char/run").join(run_id).join("state.json");
+    let path = repo.join(".armada/run").join(run_id).join("state.json");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     serde_json::from_str(&text).expect("the record reads back")
 }
@@ -317,7 +317,7 @@ fn a_second_run_in_one_workspace_fails_fast_and_names_the_way_to_queue() {
 
     let mut first = machine.spawn(&repo, &["manifest", "check"]);
     // Wait for the run lease to appear rather than sleeping a guess.
-    let db = machine.home.path().join(".char/char.db");
+    let db = machine.home.path().join(".armada/manifest.db");
     let start = std::time::Instant::now();
     while !lease_held(&db, "run") && start.elapsed() < std::time::Duration::from_secs(20) {
         std::thread::sleep(std::time::Duration::from_millis(20));
@@ -440,7 +440,7 @@ fn a_dry_run_shows_the_argv_and_writes_no_run() {
         "{would:?}"
     );
 
-    let runs = repo.join(".char/run");
+    let runs = repo.join(".armada/run");
     let count = std::fs::read_dir(&runs).map(|d| d.count()).unwrap_or(0);
     assert_eq!(count, 0, "a dry run wrote a run directory");
 }

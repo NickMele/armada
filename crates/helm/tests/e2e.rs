@@ -221,7 +221,7 @@ fn a_dispatched_command_receives_its_argv_untouched_and_returns_its_own_code() {
 
 /// `env:` is **additive** — the parent environment is inherited wholesale and
 /// these are layered on top, so a command needing `$HOME` already has it. And
-/// `CHAR_WORKSPACE` is present without being declared anywhere.
+/// `ARMADA_WORKSPACE` is present without being declared anywhere.
 #[test]
 fn a_dispatched_command_gets_a_layered_environment_and_the_workspace_id() {
     let machine = Machine::new();
@@ -268,7 +268,7 @@ fn a_second_mutating_verb_in_one_workspace_fails_fast_naming_the_holder() {
 
     let mut holder = machine.spawn(&repo, &["manifest", "sleeper"]);
     // Wait until the lease row actually exists rather than guessing.
-    let db = machine.home.path().join(".char/char.db");
+    let db = machine.home.path().join(".armada/manifest.db");
     for _ in 0..200 {
         if lease_count(&db) > 0 {
             break;
@@ -354,7 +354,7 @@ fn version_and_help_answer_from_outside_a_workspace() {
 }
 
 /// `init --dry-run` decides everything and changes nothing: no block is
-/// claimed, no `.char/` appears, and the workspace is still unknown to the
+/// claimed, no `.armada/` appears, and the workspace is still unknown to the
 /// store afterwards.
 #[test]
 fn init_dry_run_previews_the_claim_and_claims_nothing() {
@@ -372,7 +372,10 @@ fn init_dry_run_previews_the_claim_and_claims_nothing() {
         "the setup steps are previewed in order"
     );
 
-    assert!(!repo.join(".char").exists(), ".char/ must not be created");
+    assert!(
+        !repo.join(".armada").exists(),
+        ".armada/ must not be created"
+    );
     let all: Value = serde_json::from_slice(
         &machine
             .run(
@@ -495,9 +498,9 @@ fn clean_previews_what_it_would_release_and_releases_none_of_it() {
         "the recorded release command is reported, never run: {payload}"
     );
 
-    // Nothing moved: the artifact, the row and `.char/` are all still there.
+    // Nothing moved: the artifact, the row and `.armada/` are all still there.
     assert!(repo.join("node_modules").exists());
-    assert!(repo.join(".char").exists());
+    assert!(repo.join(".armada").exists());
     let status: Value =
         serde_json::from_slice(&machine.run(&repo, &["manifest", "status", "--json"]).stdout)
             .unwrap();
@@ -532,7 +535,7 @@ fn clean_artifacts_deletes_the_declared_files_and_reports_the_external_command()
     );
 
     assert!(!repo.join("node_modules").exists(), "the artifact went");
-    assert!(!repo.join(".char").exists(), ".char/ went with it");
+    assert!(!repo.join(".armada").exists(), ".armada/ went with it");
     let status: Value =
         serde_json::from_slice(&machine.run(&repo, &["manifest", "status", "--json"]).stdout)
             .unwrap();
@@ -658,7 +661,7 @@ fn the_binary_under_test_is_the_one_this_workspace_built() {
     assert!(char_binary().exists());
 }
 
-/// **`char clean --orphaned --force-rebuild` is the way out of a `char.db` char
+/// **`char clean --orphaned --force-rebuild` is the way out of a `manifest.db` char
 /// cannot read**, and the property under test is that *the recovery path does
 /// not need the thing that is broken*: every other verb fails against this
 /// database, and this one does not.
@@ -668,7 +671,7 @@ fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
     let repo = machine.repo("main", CONFIG);
     machine.run(&repo, &["manifest", "init"]);
 
-    let db = machine.home.path().join(".char/char.db");
+    let db = machine.home.path().join(".armada/manifest.db");
     let namespace_before = namespace_of(&db);
     std::fs::write(&db, b"this is not a database").unwrap();
 
@@ -720,7 +723,7 @@ fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
         reported.contains("machine-scoped") && reported.contains("across namespaces"),
         "the run must state its own scope: {payload}"
     );
-    let kept: Vec<_> = std::fs::read_dir(machine.home.path().join(".char"))
+    let kept: Vec<_> = std::fs::read_dir(machine.home.path().join(".armada"))
         .unwrap()
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
@@ -756,7 +759,7 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
     let repo = machine.repo("main", CONFIG);
     machine.run(&repo, &["manifest", "init"]);
 
-    let db = machine.home.path().join(".char/char.db");
+    let db = machine.home.path().join(".armada/manifest.db");
     let junk = b"this is not a database";
     std::fs::write(&db, junk).unwrap();
 
@@ -781,7 +784,7 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
     assert_eq!(payload["status"], "CLEAN");
     let would_release = payload["data"]["would_release"].to_string();
     assert!(
-        would_release.contains("move aside") && would_release.contains("char.db"),
+        would_release.contains("move aside") && would_release.contains("manifest.db"),
         "the preview must name the file it would move aside: {payload}"
     );
     // The half a caller can misread: "moved aside" alone reads as "the store is
@@ -805,7 +808,7 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
         junk,
         "the database was touched by a preview"
     );
-    let aside: Vec<_> = std::fs::read_dir(machine.home.path().join(".char"))
+    let aside: Vec<_> = std::fs::read_dir(machine.home.path().join(".armada"))
         .unwrap()
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.file_name().to_string_lossy().into_owned())

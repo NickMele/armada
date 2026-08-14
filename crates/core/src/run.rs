@@ -1,7 +1,7 @@
 //! The run: its id, where it writes, and which old ones get reaped.
 //!
 //! ```text
-//! .char/
+//! .armada/
 //!   run/<run-id>/
 //!     state.json                    per-check status, verdict, and the
 //!                                   dispatch record §3.4 reads
@@ -13,7 +13,7 @@
 //! so anything recorded only here is gone precisely when it is most needed. Run
 //! artifacts are safe because a run without its workspace is meaningless anyway
 //! — which is exactly why the port block, the owned rows and the leases are in
-//! `~/.char/char.db` instead.
+//! `~/.armada/manifest.db` instead.
 //!
 //! **Log growth is a separate problem with a separate answer.** Coupling
 //! retention to `char clean` would mean either logs live forever or you lose the
@@ -56,7 +56,7 @@ pub const RUN_ID_LEN: usize = TIME_LEN + ENTROPY_LEN;
 ///
 /// **What phase 3 decided, because the corpus specifies the shape and not the
 /// format.** PLAN.md writes `01J8X2` throughout — in `data.run_id`, in
-/// `.char/run/01J8X2/logs/`, in `char explain --run 01J8X2` — and those six
+/// `.armada/run/01J8X2/logs/`, in `char explain --run 01J8X2` — and those six
 /// characters are exactly the leading edge of a time-ordered base32 id, so the
 /// format here is the illustration made real rather than a departure from it.
 /// The remaining characters are what stop two runs a millisecond apart from
@@ -92,12 +92,12 @@ impl RunId {
         RunId(out)
     }
 
-    /// Adopt an id read back off disk or out of `CHAR_RUN_ID`.
+    /// Adopt an id read back off disk or out of `ARMADA_RUN_ID`.
     ///
     /// **Validated rather than trusted, because the id becomes a path.**
-    /// `CHAR_RUN_ID` arrives from the environment (PLAN.md §2.4) and a child
+    /// `ARMADA_RUN_ID` arrives from the environment (PLAN.md §2.4) and a child
     /// may set it to anything at all; a value of `../../etc` reaching
-    /// `.char/run/<id>/` is a directory traversal in the one variable char
+    /// `.armada/run/<id>/` is a directory traversal in the one variable char
     /// promises to set for every process it spawns.
     pub fn parse(text: &str) -> Result<Self, CharError> {
         let bad = |message: &str| CharError {
@@ -177,7 +177,7 @@ pub fn runs_to_reap(present: &[RunId], retention: u32, live: &[RunId]) -> Vec<Ru
 /// Whether an invocation joins the run it was started inside, or starts its own.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Nesting {
-    /// `CHAR_RUN_ID` names a run in **this** workspace: join it and inherit its
+    /// `ARMADA_RUN_ID` names a run in **this** workspace: join it and inherit its
     /// lease rather than contending for one.
     Join(RunId),
     /// Start a run of this invocation's own, and clear both variables for its
@@ -187,8 +187,8 @@ pub enum Nesting {
 
 /// Decide whether to join the run named in the environment (PLAN.md §3.2.1).
 ///
-/// > A child that finds `CHAR_RUN_ID` set joins the outer run and inherits its
-/// > lease **if and only if `CHAR_WORKSPACE` equals the workspace it just
+/// > A child that finds `ARMADA_RUN_ID` set joins the outer run and inherits its
+/// > lease **if and only if `ARMADA_WORKSPACE` equals the workspace it just
 /// > resolved.**
 ///
 /// **That condition is load-bearing, and the failure without it is the kind
@@ -201,7 +201,7 @@ pub enum Nesting {
 /// workspace — the exact thing the run lease exists to prevent, failing only
 /// rarely and nondeterministically.
 ///
-/// **A malformed `CHAR_RUN_ID` starts a fresh run rather than failing.** The
+/// **A malformed `ARMADA_RUN_ID` starts a fresh run rather than failing.** The
 /// variable is set by char and read back by char, so a value that is not a run
 /// id means something in between rewrote it — a wrapper script, a CI runner
 /// sanitising the environment. Refusing to run would make char fail in an
@@ -224,11 +224,11 @@ pub fn nesting(
     }
 }
 
-/// What `.char/run/<run-id>/state.json` holds.
+/// What `.armada/run/<run-id>/state.json` holds.
 ///
 /// **Written when the check runs, because most of it cannot be recovered
 /// afterwards** (PLAN.md §3.4). `char explain` in phase 5 is a reader with
-/// nothing to read without it: query `char.db` an hour later and it truthfully
+/// nothing to read without it: query `manifest.db` an hour later and it truthfully
 /// reports who holds the browser *now*, which is a different and useless answer
 /// to "what was `web:e2e` waiting on when it timed out".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -339,8 +339,8 @@ mod tests {
         assert_eq!(RunId::parse(run.as_str()).unwrap().wall_ms(), run.wall_ms());
     }
 
-    /// **`CHAR_RUN_ID` arrives from the environment and becomes a path.** A
-    /// child may set it to anything, and `../../etc` reaching `.char/run/<id>/`
+    /// **`ARMADA_RUN_ID` arrives from the environment and becomes a path.** A
+    /// child may set it to anything, and `../../etc` reaching `.armada/run/<id>/`
     /// is a traversal in the one variable char promises to set on every process
     /// it spawns.
     #[test]

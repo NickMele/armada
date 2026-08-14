@@ -5,7 +5,7 @@
 //! workspaces it reports are doing. A gate uses `char check --wait`; it never
 //! reads a query's exit code as a verdict.
 //!
-//! It also asks **no daemon**. Everything it reports comes from `char.db` and a
+//! It also asks **no daemon**. Everything it reports comes from `manifest.db` and a
 //! port probe, which is what makes it cheap enough to poll — and it is enough
 //! for §6.1's own `status --all` example, since a declared `release:` command is
 //! a recorded row rather than a labelled resource. Reaping is `init`'s and

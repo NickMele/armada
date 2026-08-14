@@ -412,7 +412,7 @@ pub struct StatusData {
     pub results: Vec<ResultRow>,
     /// External resources char will never reclaim, named so a human can.
     ///
-    /// **`status` asks no daemon.** It answers from `char.db` and a port probe,
+    /// **`status` asks no daemon.** It answers from `manifest.db` and a port probe,
     /// which is what makes it cheap enough to poll — and what §6.1's own
     /// `status --all` example needs, since a declared `release:` command is a
     /// recorded row rather than a labelled resource. Reaping is `init`'s and
@@ -458,7 +458,7 @@ pub struct DispatchData {
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct CleanDryRun {
     /// What the run would hand back: the port blocks on the ordinary path, and
-    /// on `--force-rebuild` the `char.db` and its `-wal`/`-shm` sidecars that
+    /// on `--force-rebuild` the `manifest.db` and its `-wal`/`-shm` sidecars that
     /// would be moved aside, plus the fresh database that would replace them.
     pub would_release: Vec<String>,
     /// Resources that would be removed.

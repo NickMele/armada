@@ -58,7 +58,7 @@ fn char_check_agrees_with_the_raw_tool_on_charkits_own_config() {
     };
 
     // A scratch `$HOME`, so the run's lease and port block land in a throwaway
-    // `char.db` rather than in the developer's — the same property that makes
+    // `manifest.db` rather than in the developer's — the same property that makes
     // every other suite here safe to run concurrently.
     let home = tempfile::tempdir().expect("a scratch home");
     let output = Command::new(support::char_binary())

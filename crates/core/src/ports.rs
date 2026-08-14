@@ -129,7 +129,7 @@ pub fn assign_ports(
                 block.size()
             ),
             next_action: Some(
-                "raise `port_block_size` in ~/.char/config.toml, then `char clean` and \
+                "raise `port_block_size` in ~/.armada/machine.yml, then `char clean` and \
                  `char init` to take a new block"
                     .to_string(),
             ),

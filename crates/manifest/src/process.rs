@@ -503,9 +503,9 @@ mod tests {
     #[test]
     fn the_environment_is_layered_over_the_inherited_one() {
         let mut env = BTreeMap::new();
-        env.insert("CHAR_TEST_VALUE".to_string(), "layered".to_string());
+        env.insert("ARMADA_TEST_VALUE".to_string(), "layered".to_string());
         let out = RealRun
-            .call(&request(&["/bin/sh", "-c", "echo $CHAR_TEST_VALUE:$PATH"]).env(env))
+            .call(&request(&["/bin/sh", "-c", "echo $ARMADA_TEST_VALUE:$PATH"]).env(env))
             .unwrap();
         assert!(out.stdout.starts_with("layered:"));
         // `$PATH` survived, so the layer was additive rather than a replacement.

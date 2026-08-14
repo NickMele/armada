@@ -54,7 +54,7 @@ fn a_lease_whose_holder_was_killed_is_reclaimed_once_it_goes_cold() {
     // A real holder: a dispatched `commands:` entry takes the run lease for as
     // long as its child runs.
     let mut holder = machine.spawn(&repo, &["manifest", "sleeper"]);
-    let db_path = machine.home.path().join(".char/char.db");
+    let db_path = machine.home.path().join(".armada/manifest.db");
     wait_for(|| lease_rows(&db_path) == 1);
 
     // SIGKILL: no unwinding, no `Drop`, nothing released. This is the crash

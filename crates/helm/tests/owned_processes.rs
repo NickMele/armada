@@ -42,7 +42,7 @@ fn detached_sleeper(cwd: &Path) -> ProcessGroup {
 }
 
 fn record(machine: &Machine, workspace: &WorkspaceId, row: OwnedRow) {
-    let mut db = Db::open(&machine::char_home(machine.home.path())).unwrap();
+    let mut db = Db::open(&machine::armada_home(machine.home.path())).unwrap();
     assert_eq!(&row.workspace, workspace);
     db.record_owned(&row).unwrap();
 }
@@ -185,7 +185,7 @@ fn a_zero_or_unparseable_pgid_is_dropped_rather_than_signalled() {
 }
 
 fn owned_rows(home: &Path) -> Vec<String> {
-    let path: PathBuf = machine::char_home(home).join("char.db");
+    let path: PathBuf = machine::armada_home(home).join("manifest.db");
     let conn = rusqlite::Connection::open(path).unwrap();
     let mut statement = conn.prepare("SELECT \"ref\" FROM owned").unwrap();
     let rows = statement

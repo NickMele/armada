@@ -7,7 +7,7 @@
 //! record, never a computation.
 //!
 //! **Written at dispatch, because most of it cannot be recovered afterwards.**
-//! Query `char.db` an hour later and it truthfully reports who holds the browser
+//! Query `manifest.db` an hour later and it truthfully reports who holds the browser
 //! *now*, which is a different and useless answer to "what was `web:e2e`
 //! waiting on when it timed out". Live state answers a different question than
 //! the one being asked, so the record has to be made at the time or not at all.
@@ -119,7 +119,7 @@ impl Dispatch {
 /// One thing a check queued behind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Waited {
-    /// The lease class, spelled as `char.db` spells it.
+    /// The lease class, spelled as `manifest.db` spells it.
     pub kind: String,
     /// Which lease within the class — the exclusive's name, or the slot.
     pub key: String,
@@ -370,7 +370,7 @@ mod tests {
             cost: 4,
             exclusives: vec!["browser".to_string()],
             needs: Vec::new(),
-            log: Some(".char/run/01J8X2/logs/api.test.log".to_string()),
+            log: Some(".armada/run/01J8X2/logs/api.test.log".to_string()),
             blocked: None,
             skip: None,
         }

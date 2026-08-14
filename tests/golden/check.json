@@ -19,7 +19,7 @@
       {
         "id": "api:test",
         "status": "FAILED",
-        "log": ".char/run/<run>/logs/api.test.log",
+        "log": ".armada/run/<run>/logs/api.test.log",
         "duration_ms": 0,
         "error": {
           "class": "tool_failed",
@@ -30,7 +30,7 @@
       {
         "id": "api:types",
         "status": "PASS",
-        "log": ".char/run/<run>/logs/api.types.log",
+        "log": ".armada/run/<run>/logs/api.types.log",
         "duration_ms": 0
       }
     ]

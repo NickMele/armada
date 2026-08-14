@@ -27,7 +27,7 @@ use super::resolved::{
 use crate::error::{CharError, ConfigWhere};
 use std::collections::BTreeMap;
 
-/// Machine-level defaults, from `~/.char/config.toml` (PLAN.md §4.3.1).
+/// Machine-level defaults, from `~/.armada/machine.yml` (PLAN.md §4.3.1).
 ///
 /// Passed in rather than read, because they are not the repo's to state and
 /// nothing below the entrypoint may reach for ambient state

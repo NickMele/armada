@@ -45,7 +45,7 @@ pub enum Invocation {
         orphaned: bool,
         /// Override the liveness guard.
         force: bool,
-        /// Rebuild an unreadable `char.db` from labels alone.
+        /// Rebuild an unreadable `manifest.db` from labels alone.
         force_rebuild: bool,
     },
     /// `armada manifest status`.

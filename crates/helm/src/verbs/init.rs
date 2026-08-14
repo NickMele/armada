@@ -66,7 +66,7 @@ fn claim_and_prepare<R: Run, C: Clock, F: Fetch>(
     let block = claim(app, workspace, &claimed_at)?;
     let ports = ports::assign_ports(config, block, &workspace.config_label)?;
 
-    fs::create_char_dir(&workspace.root)?;
+    fs::create_armada_dir(&workspace.root)?;
     record_release_commands(app, workspace, config, &ports)?;
 
     let results = run_setup(app, workspace, config, &ports, lease)?;
@@ -196,7 +196,7 @@ fn record_release_commands<R: Run, C: Clock, F: Fetch>(
 /// Run each component's `setup:`, in declaration order within a component.
 ///
 /// **Idempotent in char's own state, not in the repo's** — `char init` twice
-/// claims one block and creates one `.char/`, but it runs `setup:` again,
+/// claims one block and creates one `.armada/`, but it runs `setup:` again,
 /// because whether `bundle install` is cheap the second time is the repo's
 /// business and char has no way to know.
 fn run_setup<R: Run, C: Clock, F: Fetch>(

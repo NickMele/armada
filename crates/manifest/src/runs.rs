@@ -1,4 +1,4 @@
-//! `.char/run/<run-id>/` on disk: creating it, writing the record, and reaping
+//! `.armada/run/<run-id>/` on disk: creating it, writing the record, and reaping
 //! the ones that have aged out.
 //!
 //! The decisions are all in [`armada_core::run`] — the id format, which
@@ -14,12 +14,12 @@ use armada_core::schedule::CheckId;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// `.char/run/`, given a workspace root.
+/// `.armada/run/`, given a workspace root.
 pub fn runs_dir(root: &Path) -> PathBuf {
-    root.join(".char").join("run")
+    root.join(".armada").join("run")
 }
 
-/// `.char/run/<run-id>/`.
+/// `.armada/run/<run-id>/`.
 pub fn run_dir(root: &Path, run: &RunId) -> PathBuf {
     runs_dir(root).join(run.as_str())
 }
@@ -36,10 +36,10 @@ pub fn log_path(root: &Path, run: &RunId, check: &CheckId) -> PathBuf {
 /// home directory into `--json`, which the privacy rules exist to keep out of
 /// anything char writes down.
 pub fn log_reference(run: &RunId, check: &CheckId) -> String {
-    format!(".char/run/{}/logs/{}", run, log_name(check))
+    format!(".armada/run/{}/logs/{}", run, log_name(check))
 }
 
-/// Create `.char/run/<run-id>/logs/`.
+/// Create `.armada/run/<run-id>/logs/`.
 pub fn prepare(root: &Path, run: &RunId) -> Result<PathBuf, CharError> {
     let dir = run_dir(root, run);
     let logs = dir.join("logs");
@@ -49,7 +49,7 @@ pub fn prepare(root: &Path, run: &RunId) -> Result<PathBuf, CharError> {
 
 /// Every run directory this workspace has kept.
 ///
-/// **A name that is not a run id is ignored rather than reported.** `.char/` is
+/// **A name that is not a run id is ignored rather than reported.** `.armada/` is
 /// an ordinary directory on a developer's machine: an editor's swap file, a
 /// `.DS_Store`, a directory someone copied there to look at — none of them are
 /// char's, and none of them is a reason for `char check` to refuse to start.
@@ -155,7 +155,7 @@ mod tests {
 
     fn workspace() -> tempfile::TempDir {
         let dir = tempfile::tempdir().expect("a scratch workspace");
-        crate::fs::create_char_dir(dir.path()).expect("`.char/`");
+        crate::fs::create_armada_dir(dir.path()).expect("`.armada/`");
         dir
     }
 
@@ -174,13 +174,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert!(
             present(dir.path()).unwrap().is_empty(),
-            "no `.char/` at all"
+            "no `.armada/` at all"
         );
-        crate::fs::create_char_dir(dir.path()).unwrap();
-        assert!(present(dir.path()).unwrap().is_empty(), "an empty `.char/`");
+        crate::fs::create_armada_dir(dir.path()).unwrap();
+        assert!(
+            present(dir.path()).unwrap().is_empty(),
+            "an empty `.armada/`"
+        );
     }
 
-    /// `.char/` is an ordinary directory on a developer's machine. A stray file
+    /// `.armada/` is an ordinary directory on a developer's machine. A stray file
     /// is not char's and is not a reason for `char check` to refuse to start.
     #[test]
     fn a_directory_that_is_not_a_run_is_ignored_rather_than_reaped_or_reported() {
@@ -305,7 +308,7 @@ mod tests {
     fn the_reported_log_path_is_workspace_relative() {
         let run = id(0);
         let reference = log_reference(&run, &CheckId::new("api:lint"));
-        assert_eq!(reference, format!(".char/run/{run}/logs/api.lint.log"));
+        assert_eq!(reference, format!(".armada/run/{run}/logs/api.lint.log"));
         assert!(!reference.starts_with('/'));
         assert_eq!(
             log_path(Path::new("/srv/repo"), &run, &CheckId::new("api:lint")),

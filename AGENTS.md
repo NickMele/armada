@@ -15,7 +15,7 @@ module rule is not yet, because three of the four modules have no crates.
 three status enums. Use those words and no synonyms.
 
 **⚠️ The code still spells the tool `char`.** The binary is `char`, the config is `armada.yml`, the
-state dir is `~/.char/`, and the crates are `charkit-*`. The rename to `armada` is M1 and has not
+state dir is `~/.armada/`, and the crates are `charkit-*`. The rename to `armada` is M1 and has not
 happened. Docs written after the rename decision (this file's header, `docs/reference.md`,
 `docs/glossary.md`, `PLAN.md` §13–§15, everything under `docs/manifest|guild|fleet|helm/`) say
 `armada`; the rest say `char`. **Match the code, not the docs, when writing code.**
@@ -140,7 +140,7 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 | **Every verb takes `--json`** | Fixed envelope: `schema_version`, `verb`, `workspace`, `status`, `error`, `data`. Per-verb fields go **inside `data`**, never at the top level, and every plural verb uses `data.results[]` (PLAN.md §3.1). One golden snapshot per verb. |
 | **One spelling for failure** | `FAILED`, never `FAIL`. Terminal: `READY` `UP` `DOWN` `CLEAN` `PASS` `OK` `SKIPPED` / `PARTIAL` / `FAILED` / `ABORTED` `DEAD` `TIMEOUT`. Progress, never terminal and never mapped to an exit code: `RUNNING` `WAITING` (with `waiting_on`). |
 | **Errors are typed** | `class` ∈ {`bad_invocation`, `bad_config`, `tool_failed`, `timeout`, `aborted`, `environment`, `char_bug`}, plus `where`. `next_action` is required for `bad_config`. The enum covers **every** non-zero exit — a hole is where a second, competing mapping grows back. |
-| **Secrets never leave the shell** | Resolved values are injected into a child's env at spawn and never reach the core, argv, `--json`, logs or `.char/`. There is no verb that returns a secret. See `ARCHITECTURE.md` §1.8. |
+| **Secrets never leave the shell** | Resolved values are injected into a child's env at spawn and never reach the core, argv, `--json`, logs or `.armada/`. There is no verb that returns a secret. See `ARCHITECTURE.md` §1.8. |
 
 ### Exit codes
 

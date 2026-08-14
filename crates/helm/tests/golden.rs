@@ -168,8 +168,8 @@ fn redact_field(json: &str, prefix: &str, terminator: &str, with: &str) -> Strin
 fn redact_run_paths(json: &str) -> String {
     let mut out = String::with_capacity(json.len());
     let mut rest = json;
-    while let Some(at) = rest.find(".char/run/") {
-        let (before, after) = rest.split_at(at + ".char/run/".len());
+    while let Some(at) = rest.find(".armada/run/") {
+        let (before, after) = rest.split_at(at + ".armada/run/".len());
         out.push_str(before);
         match after.find('/') {
             Some(end) => {

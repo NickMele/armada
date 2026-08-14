@@ -152,7 +152,7 @@ pub fn registry_pass(rows: &[(WorkspaceRow, PathStat)]) -> Vec<WorkspaceId> {
 
 /// Pass 2: which labelled resources are orphans, and which are merely not ours.
 ///
-/// `namespace` is this installation's, read from `char.db` at creation. **A
+/// `namespace` is this installation's, read from `manifest.db` at creation. **A
 /// third label, `char.namespace`, scopes the whole mechanism to one filesystem
 /// view** — without it, path-based reaping is actively dangerous the moment two
 /// char installations share a Docker daemon, which is the ordinary

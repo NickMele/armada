@@ -38,7 +38,7 @@ const MUST_BE_BOTH: &[&str] = &[
 pub fn check(docs: &[Doc], verbose: bool) -> Vec<Finding> {
     // `key:` at the head of a line or inside a flow mapping.
     let in_example = Regex::new(r"([A-Za-z_][A-Za-z0-9_.\-]*)\s*:").unwrap();
-    // `key = value` for the TOML blocks (~/.char/config.toml).
+    // `key = value` for the TOML blocks (~/.armada/machine.yml).
     let toml_key = Regex::new(r"^\s*([a-z_]+)\s*=").unwrap();
     // Prose names a key three ways: `key:` alone, `key: value` — much the most
     // common form, and missing it reported `driver:` and `version:` as

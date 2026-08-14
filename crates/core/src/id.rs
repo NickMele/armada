@@ -1,7 +1,7 @@
 //! The two derived identities (PLAN.md §2.2).
 //!
 //! Both are 8 hex characters and both are **derived, never stored as truth** —
-//! so they survive a deleted `.char/` and anything can recompute them. They are
+//! so they survive a deleted `.armada/` and anything can recompute them. They are
 //! distinct newtypes rather than two `String` aliases because passing one where
 //! the other belongs must not compile: `workspace_id` owns ports, containers,
 //! networks and processes, while `project_id` owns nothing at all and is purely
@@ -46,7 +46,7 @@ impl WorkspaceId {
         WorkspaceId(short_sha1(realpath.as_os_str().as_encoded_bytes()))
     }
 
-    /// Adopt an id read back out of `char.db` or a resource label.
+    /// Adopt an id read back out of `manifest.db` or a resource label.
     ///
     /// The hash is one-way, so a stored id can only ever be compared, never
     /// re-derived into the path that produced it — which is the whole reason
@@ -90,7 +90,7 @@ impl ProjectId {
         ))
     }
 
-    /// Adopt an id read back out of `char.db`.
+    /// Adopt an id read back out of `manifest.db`.
     pub fn from_stored(id: impl Into<String>) -> Self {
         ProjectId(id.into())
     }

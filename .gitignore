@@ -2,14 +2,19 @@
 /target/
 **/*.rs.bk
 
-# Cargo.lock is deliberately NOT ignored. charkit ships a binary, and a
+# Cargo.lock is deliberately NOT ignored. Armada ships a binary, and a
 # committed lockfile is what makes `cargo install --locked` and the release
 # build reproducible.
 
-# charkit's own workspace state. Gitignored by design — docs/PLAN.md §4.2:
-# ".char/ holds nothing reclaimable", precisely because a workspace directory
-# gets deleted without char's involvement. Machine-global state lives in
-# ~/.char/char.db, outside any repo.
+# A workspace's own Manifest state. Gitignored by design — docs/PLAN.md §4.2:
+# ".armada/ holds nothing reclaimable", precisely because a workspace directory
+# gets deleted without Armada's involvement. Machine-global state lives in
+# ~/.armada/manifest.db, outside any repo.
+.armada/
+# The pre-M1 spelling, still on the disk of anyone who ran the tool before the
+# rename. Ignored for the same release the docker labels are read for
+# (docs/PHASES.md §8.3) — dropping the line early is how a working copy full of
+# somebody's local run logs gets committed.
 .char/
 
 # .claude/ is deliberately NOT ignored. Phase 1 ships the PreToolUse

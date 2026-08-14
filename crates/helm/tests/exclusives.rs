@@ -85,7 +85,7 @@ fn wait_bounded(
 }
 
 fn record(repo: &Path, run_id: &str) -> RunRecord {
-    let path = repo.join(".char/run").join(run_id).join("state.json");
+    let path = repo.join(".armada/run").join(run_id).join("state.json");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     serde_json::from_str(&text).expect("the record reads back")
 }
@@ -218,10 +218,10 @@ fn the_run_that_queued_recorded_what_it_waited_on_and_who_held_it() {
 #[test]
 fn two_runs_each_wanting_the_whole_budget_take_turns_rather_than_splitting_it() {
     let machine = Machine::new();
-    std::fs::create_dir_all(machine.home.path().join(".char")).unwrap();
+    std::fs::create_dir_all(machine.home.path().join(".armada")).unwrap();
     std::fs::write(
-        machine.home.path().join(".char/config.toml"),
-        "cpu_slots = 3\n",
+        machine.home.path().join(".armada/machine.yml"),
+        "cpu_slots: 3\n",
     )
     .unwrap();
 
@@ -261,10 +261,10 @@ fn the_cpu_budget_is_the_machines_and_not_each_runs() {
     let machine = Machine::new();
     // `cpu_slots` is the machine's, and `--jobs` bounds a run within it. One
     // slot on the machine makes the arithmetic unambiguous.
-    std::fs::create_dir_all(machine.home.path().join(".char")).unwrap();
+    std::fs::create_dir_all(machine.home.path().join(".armada")).unwrap();
     std::fs::write(
-        machine.home.path().join(".char/config.toml"),
-        "cpu_slots = 1\n",
+        machine.home.path().join(".armada/machine.yml"),
+        "cpu_slots: 1\n",
     )
     .unwrap();
 

@@ -90,7 +90,7 @@ pub struct LeaseId {
 impl LeaseId {
     /// The run lease for one workspace.
     ///
-    /// **The key is the workspace id, and that is load-bearing.** `char.db`
+    /// **The key is the workspace id, and that is load-bearing.** `manifest.db`
     /// keys leases by `(kind, key)` because a cpu-slot and an exclusive are
     /// machine-wide budgets — slot 3 is slot 3 for everyone, `browser` is one
     /// browser. The run lease is the opposite: it is *per workspace*, and five
@@ -161,7 +161,7 @@ pub enum WaitingOn {
     },
     /// A run in this workspace, or the machine lease.
     Run {
-        /// The lease kind, spelled as it is in `char.db`.
+        /// The lease kind, spelled as it is in `manifest.db`.
         run: String,
         /// The holding pid.
         pid: i32,

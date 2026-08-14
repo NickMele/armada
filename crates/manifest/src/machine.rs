@@ -1,6 +1,12 @@
-//! `~/.char/config.toml` — machine capacity, never committed (PLAN.md §4.3.1)
+//! `~/.armada/machine.yml` — machine capacity, never committed (PLAN.md §4.3.1)
 //! — plus the two machine facts that are not configuration: the boot id and a
 //! random namespace.
+//!
+//! **YAML, and the same parser `armada.yml` uses.** The file was TOML while it
+//! was called `config.toml`; carrying a second document language for six
+//! integers meant a second parser in the dependency graph and a second set of
+//! quoting rules for anyone editing either file. One language, one parser, one
+//! set of surprises (PLAN.md §4.1.1, decision 5).
 //!
 //! **`armada.yml` declares how expensive a check is; this file declares how much
 //! the machine has.** They cannot be the same file: `armada.yml` is committed,
@@ -15,7 +21,7 @@
 //! an argument — which is also what lets the whole test suite point char at a
 //! `TempDir` without an environment variable.
 //!
-//! **Absence is not an error.** A machine with no `~/.char/config.toml` is the
+//! **Absence is not an error.** A machine with no `~/.armada/machine.yml` is the
 //! ordinary case — char never writes one — so a missing file is the documented
 //! defaults and nothing else. A file that exists and cannot be understood *is*
 //! an error, and it is `environment`: the repo is fine and the machine's
@@ -42,7 +48,7 @@ pub struct MachineConfig {
     pub cpu_slots: u32,
     /// How many ports one workspace's block holds.
     pub port_block_size: u16,
-    /// How many run directories `.char/run/` keeps.
+    /// How many run directories `.armada/run/` keeps.
     pub run_retention: u32,
     /// Seconds a check gets when it declares no `timeout:`.
     pub check_timeout: u32,
@@ -52,8 +58,8 @@ pub struct MachineConfig {
     pub docker_timeout: u32,
 }
 
-/// The file, as written. Every key optional: a config.toml that sets one thing
-/// takes the documented default for the other five.
+/// The file, as written. Every key optional: a `machine.yml` that sets one
+/// thing takes the documented default for the other five.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct MachineConfigFile {
@@ -87,9 +93,9 @@ impl MachineConfig {
         }
     }
 
-    /// Read `<char_home>/config.toml`, or take the defaults if it is not there.
-    pub fn read(char_home: &Path) -> Result<Self, CharError> {
-        let path = char_home.join("config.toml");
+    /// Read `<armada_home>/machine.yml`, or take the defaults if it is not there.
+    pub fn read(armada_home: &Path) -> Result<Self, CharError> {
+        let path = armada_home.join("machine.yml");
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::defaults()),
@@ -103,13 +109,13 @@ impl MachineConfig {
             }
         };
 
-        // `deny_unknown_fields` is deliberate and it is a trade. char never
+        // `deny_unknown_fields` is deliberate and it is a trade. Armada never
         // writes this file, so an unrecognised key is a typo far more often
         // than it is version skew — and a typo'd `cpu_slot` accepted in
         // silence is a machine budget that does not apply, which is the
         // "unstated default is a per-implementer decision" failure with the
         // user in the implementer's seat.
-        let file: MachineConfigFile = toml::from_str(&text).map_err(|e| CharError {
+        let file: MachineConfigFile = serde_yaml_ng::from_str(&text).map_err(|e| CharError {
             class: ErrClass::Environment,
             r#where: path.display().to_string(),
             message: format!("cannot parse {}: {e}", path.display()),
@@ -168,9 +174,9 @@ fn default_cpu_slots() -> u32 {
     cores.saturating_sub(2).max(1)
 }
 
-/// `~/.char/`, given the `$HOME` the entrypoint captured.
-pub fn char_home(home: &Path) -> PathBuf {
-    home.join(".char")
+/// `~/.armada/`, given the `$HOME` the entrypoint captured.
+pub fn armada_home(home: &Path) -> PathBuf {
+    home.join(".armada")
 }
 
 /// This boot's identity, so a recorded pgid or heartbeat from a previous boot
@@ -290,7 +296,7 @@ mod tests {
     #[test]
     fn a_partial_file_takes_the_defaults_for_everything_it_does_not_set() {
         let home = tempfile::tempdir().unwrap();
-        std::fs::write(home.path().join("config.toml"), "cpu_slots = 3\n").unwrap();
+        std::fs::write(home.path().join("machine.yml"), "cpu_slots: 3\n").unwrap();
         let config = MachineConfig::read(home.path()).unwrap();
         assert_eq!(config.cpu_slots, 3);
         assert_eq!(config.port_block_size, 10);
@@ -300,9 +306,9 @@ mod tests {
     fn every_documented_key_is_readable() {
         let home = tempfile::tempdir().unwrap();
         std::fs::write(
-            home.path().join("config.toml"),
-            "cpu_slots = 6\nport_block_size = 20\nrun_retention = 4\n\
-             check_timeout = 60\nacquire_timeout = 3000\ndocker_timeout = 15\n",
+            home.path().join("machine.yml"),
+            "cpu_slots: 6\nport_block_size: 20\nrun_retention: 4\n\
+             check_timeout: 60\nacquire_timeout: 3000\ndocker_timeout: 15\n",
         )
         .unwrap();
         let config = MachineConfig::read(home.path()).unwrap();
@@ -323,7 +329,7 @@ mod tests {
     #[test]
     fn an_unreadable_file_is_an_environment_failure_naming_the_keys() {
         let home = tempfile::tempdir().unwrap();
-        std::fs::write(home.path().join("config.toml"), "cpu_slots = = 3\n").unwrap();
+        std::fs::write(home.path().join("machine.yml"), "cpu_slots: [3\n").unwrap();
         let err = MachineConfig::read(home.path()).unwrap_err();
         assert_eq!(err.class, ErrClass::Environment);
         assert!(err.next_action.unwrap().contains("cpu_slots"));
@@ -332,16 +338,16 @@ mod tests {
     #[test]
     fn a_mistyped_key_is_reported_rather_than_ignored() {
         let home = tempfile::tempdir().unwrap();
-        std::fs::write(home.path().join("config.toml"), "cpu_slot = 3\n").unwrap();
+        std::fs::write(home.path().join("machine.yml"), "cpu_slot: 3\n").unwrap();
         let err = MachineConfig::read(home.path()).unwrap_err();
         assert_eq!(err.class, ErrClass::Environment);
     }
 
     #[test]
-    fn char_home_hangs_off_the_home_the_entrypoint_captured() {
+    fn armada_home_hangs_off_the_home_the_entrypoint_captured() {
         assert_eq!(
-            char_home(Path::new("/home/agent")),
-            PathBuf::from("/home/agent/.char")
+            armada_home(Path::new("/home/agent")),
+            PathBuf::from("/home/agent/.armada")
         );
     }
 

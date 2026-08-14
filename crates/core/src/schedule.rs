@@ -208,11 +208,11 @@ pub struct Plan {
 /// The authoritative budget is machine-wide — five concurrent workspaces each
 /// granting themselves the full CPU count is sustained 5× oversubscription on
 /// exactly the case this project is built around — and it is enforced by
-/// leases in `char.db`. This is the run's own view of it, and it exists so the
+/// leases in `manifest.db`. This is the run's own view of it, and it exists so the
 /// scheduler does not put every check into a lease queue at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Budget {
-    /// `cpu_slots` from `~/.char/config.toml`, or `--jobs`.
+    /// `cpu_slots` from `~/.armada/machine.yml`, or `--jobs`.
     pub slots: u32,
     /// Slots this run has committed to checks that are acquiring or running.
     pub in_use: u32,
@@ -660,7 +660,7 @@ impl From<&CheckResult> for crate::envelope::ResultRow {
 /// lives in the *composition* of hundreds of them.
 ///
 /// It also means a production failure replays verbatim as a regression test.
-/// The events are on disk in `.char/run/<id>/state.json`; a run that went wrong
+/// The events are on disk in `.armada/run/<id>/state.json`; a run that went wrong
 /// on someone's machine becomes a fixture by being copied.
 ///
 /// **Deterministic by construction, and that is the property being relied on.**
@@ -1456,7 +1456,7 @@ mod tests {
             exclusives: Vec::new(),
             needs: Vec::new(),
             log: Some(format!(
-                ".char/run/01J8X2/logs/{}.log",
+                ".armada/run/01J8X2/logs/{}.log",
                 name.replace(':', ".")
             )),
             blocked: None,
@@ -2564,7 +2564,7 @@ mod tests {
             id: id("api:lint"),
             status: Status::Failed,
             duration_ms: Some(3_120),
-            log: Some(".char/run/01J8X2/logs/api.lint.log".to_string()),
+            log: Some(".armada/run/01J8X2/logs/api.lint.log".to_string()),
             waiting_on: None,
             error: None,
             reason: Some("because".to_string()),

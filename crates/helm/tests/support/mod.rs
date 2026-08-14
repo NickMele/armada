@@ -1,6 +1,6 @@
 //! Scratch machines for the end-to-end suite.
 //!
-//! Every test gets its own `$HOME`, so `~/.char/char.db` is a fresh
+//! Every test gets its own `$HOME`, so `~/.armada/manifest.db` is a fresh
 //! machine-global store rather than the developer's. That is possible only
 //! because the entrypoint reads `$HOME` once and passes it down — the same
 //! property that makes `--project` and `--all` expressible at all.
@@ -19,7 +19,7 @@ pub fn char_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_armada"))
 }
 
-/// A scratch machine: one `$HOME`, one `char.db`, and repos under it.
+/// A scratch machine: one `$HOME`, one `manifest.db`, and repos under it.
 pub struct Machine {
     /// The fake `$HOME`.
     pub home: tempfile::TempDir,
@@ -50,7 +50,7 @@ impl Machine {
         write_script(
             &path,
             "enver.sh",
-            "#!/bin/sh\necho \"declared=$DECLARED\"\necho \"workspace=$CHAR_WORKSPACE\"\necho \"home=$HOME\"\n",
+            "#!/bin/sh\necho \"declared=$DECLARED\"\necho \"workspace=$ARMADA_WORKSPACE\"\necho \"home=$HOME\"\n",
         );
         git(&path, &["add", "-A"]);
         git(

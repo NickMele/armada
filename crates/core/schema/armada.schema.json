@@ -359,7 +359,7 @@
         },
         "shell": { "$ref": "#/$defs/shell" },
         "timeout": {
-          "description": "Seconds. Defaults to `check_timeout` from ~/.char/config.toml, itself 900 — a check with no deadline is a hung merge gate (PLAN.md §4.1).",
+          "description": "Seconds. Defaults to `check_timeout` from ~/.armada/machine.yml, itself 900 — a check with no deadline is a hung merge gate (PLAN.md §4.1).",
           "$ref": "#/$defs/seconds"
         },
         "cost": {

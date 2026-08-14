@@ -8,7 +8,7 @@
 //! test can reach it.
 //!
 //! ```text
-//! Tick ──▶ step ──▶ Acquire ──▶ (char.db)   ──▶ LeaseGranted / LeaseDenied
+//! Tick ──▶ step ──▶ Acquire ──▶ (manifest.db)   ──▶ LeaseGranted / LeaseDenied
 //!                   Spawn    ──▶ (a child)  ──▶ ChildSpawned / SpawnFailed
 //!                   Kill     ──▶ (killpg)   ──▶ ChildExited
 //!                   Emit / Finish
@@ -382,7 +382,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     // Reap first, then create: the new directory must not count toward its own
     // retention budget, and reaping is reported rather than silent.
     let (reaped, skipped) = runs::reap(&workspace.root, app.machine.run_retention, &[])?;
-    fs::create_char_dir(&workspace.root)?;
+    fs::create_armada_dir(&workspace.root)?;
     runs::prepare(&workspace.root, &run_id)?;
 
     let slots = args.jobs.unwrap_or(app.machine.cpu_slots);
@@ -837,7 +837,7 @@ fn never_finished() -> CharError {
 /// Entropy for the run id, from this process rather than from a crate.
 ///
 /// Runs in one workspace are serialised by the run lease (PLAN.md §3.2.1), so
-/// two ids in one `.char/run/` cannot be minted in the same millisecond by
+/// two ids in one `.armada/run/` cannot be minted in the same millisecond by
 /// construction. This is belt to that braces, and mixing the pid with a
 /// monotonic reading is enough for it.
 fn entropy<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>) -> u64 {

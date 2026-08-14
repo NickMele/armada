@@ -40,12 +40,12 @@ use verbs::Output;
 const USAGE: &str = "\
 armada — one consistent vocabulary for managing a repo's tech stack
 
-  armada manifest init    [--json] [--dry-run]   claim this workspace: ports, .char/, setup
+  armada manifest init    [--json] [--dry-run]   claim this workspace: ports, .armada/, setup
   armada manifest clean   [--json] [--dry-run] [--project|--all]
                           [--orphaned] [--artifacts] [--force]
                                                  release what this workspace owns
   armada manifest clean --orphaned --force-rebuild
-                                                 rebuild an unreadable ~/.char/char.db
+                                                 rebuild an unreadable ~/.armada/manifest.db
   armada manifest status  [--json] [--project|--all]
                                                  what is running, mine, and stale
   armada manifest check   [--json] [--dry-run] [--all-files] [--fix] [--wait]
@@ -119,14 +119,14 @@ fn dispatch(
     let home = home.ok_or_else(|| CharError {
         class: ErrClass::Environment,
         r#where: "HOME".to_string(),
-        message: "$HOME is not set, so Armada cannot find ~/.char/".to_string(),
+        message: "$HOME is not set, so Armada cannot find ~/.armada/".to_string(),
         next_action: Some("set HOME, then retry unchanged".to_string()),
     })?;
 
     let run = RealRun;
 
     // **The recovery path runs before anything is opened.** `armada manifest clean
-    // --orphaned --force-rebuild` exists for a `char.db` Armada cannot read, and
+    // --orphaned --force-rebuild` exists for a `manifest.db` Armada cannot read, and
     // `app::build` opens that database — so routing it through the ordinary
     // path would fail on exactly the thing it exists to repair. It also needs
     // no workspace: it is most useful from a shell that happens to be anywhere.
@@ -233,7 +233,7 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<CharE
         return refusal(
             "--force-rebuild",
             concat!(
-                "--force-rebuild rebuilds char.db from labels alone, and only ",
+                "--force-rebuild rebuilds manifest.db from labels alone, and only ",
                 "--orphaned bounds that to workspaces whose directory is gone",
             )
             .to_string(),

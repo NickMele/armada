@@ -10,7 +10,7 @@
 //! 3. docker      containers, then networks and volumes, then built images
 //! 4. ports       release the block
 //! 5. rows        delete owned/workspaces rows
-//! 6. .char/      remove the directory
+//! 6. .armada/      remove the directory
 //! 7. run lease   release
 //! ```
 //!
@@ -56,7 +56,7 @@ pub struct Filters {
     pub orphaned: bool,
     /// Override the live-lease guard.
     pub force: bool,
-    /// Rebuild an unreadable `char.db` from labels alone.
+    /// Rebuild an unreadable `manifest.db` from labels alone.
     pub force_rebuild: bool,
 }
 
@@ -298,11 +298,11 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     app.forget_workspace(&row.id)?;
     released.port_block = true;
 
-    // 6. `.char/`. **`clean` releases resources; it does not undo
+    // 6. `.armada/`. **`clean` releases resources; it does not undo
     //    installation** — `node_modules` and a populated `.venv` survive by
     //    design unless `--artifacts` is passed.
     if fs::stat(&row.path) != PathStat::Missing {
-        let _ = fs::remove_char_dir(&row.path);
+        let _ = fs::remove_armada_dir(&row.path);
     }
 
     if filters.artifacts {
@@ -586,7 +586,7 @@ fn would_delete<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>, row: &WorkspaceR
         .collect()
 }
 
-/// `char clean --orphaned --force-rebuild` — the way out of a `char.db` char
+/// `char clean --orphaned --force-rebuild` — the way out of a `manifest.db` char
 /// cannot read (PLAN.md §4.3).
 ///
 /// **The recovery path must not need the thing that is broken**, which is why
@@ -630,8 +630,8 @@ pub fn rebuild<R: Run, C: Clock>(
     home: &Path,
     dry_run: bool,
 ) -> Result<Output, CharError> {
-    let char_home = armada_manifest::machine::char_home(home);
-    let db_path = char_home.join("char.db");
+    let armada_home = armada_manifest::machine::armada_home(home);
+    let db_path = armada_home.join("manifest.db");
 
     // Best-effort, and the recovery does not depend on it: a database can be
     // unreadable in ways that still leave `meta` legible, and carrying the old
@@ -641,18 +641,18 @@ pub fn rebuild<R: Run, C: Clock>(
     // Read before anything is opened, and it opens nothing itself: the deadline
     // has to be available on a path whose whole premise is that the database is
     // not.
-    let machine = armada_manifest::machine::MachineConfig::read(&char_home)?;
+    let machine = armada_manifest::machine::MachineConfig::read(&armada_home)?;
     let timeout = machine.docker_deadline();
     let cwd = home.to_path_buf();
 
-    // **Every sidecar is moved with the file, and the presence of `char.db` is
-    // not what decides it.** An interrupted write can leave `char.db-wal` and
-    // `char.db-shm` behind with no `char.db` at all (PLAN.md §4.3), and a fresh
+    // **Every sidecar is moved with the file, and the presence of `manifest.db` is
+    // not what decides it.** An interrupted write can leave `manifest.db-wal` and
+    // `manifest.db-shm` behind with no `manifest.db` at all (PLAN.md §4.3), and a fresh
     // database opened alongside a foreign WAL is a worse state than the one
     // being recovered from.
     let sidecars: Vec<PathBuf> = ["", "-wal", "-shm"]
         .iter()
-        .map(|suffix| char_home.join(format!("char.db{suffix}")))
+        .map(|suffix| armada_home.join(format!("manifest.db{suffix}")))
         .filter(|path| path.exists())
         .collect();
 
@@ -673,13 +673,13 @@ pub fn rebuild<R: Run, C: Clock>(
         let Some(name) = from.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        let to = char_home.join(format!("{name}.unreadable-{stamp}"));
+        let to = armada_home.join(format!("{name}.unreadable-{stamp}"));
         if std::fs::rename(from, &to).is_ok() {
             moved_aside.push(to.display().to_string());
         }
     }
 
-    let mut db = armada_manifest::db::Db::open(&char_home)?;
+    let mut db = armada_manifest::db::Db::open(&armada_home)?;
     if let Some(namespace) = &recovered {
         db.adopt_namespace(namespace)?;
     }

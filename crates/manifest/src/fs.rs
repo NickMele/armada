@@ -42,10 +42,10 @@ pub fn stat(path: &Path) -> PathStat {
     }
 }
 
-/// Create `.char/` and the two directories inside it (PLAN.md §4.2).
+/// Create `.armada/` and the two directories inside it (PLAN.md §4.2).
 ///
 /// ```text
-/// .char/
+/// .armada/
 ///   logs/<component>.log            services — `up` is not a run
 ///   run/<run-id>/…                  checks
 /// ```
@@ -54,9 +54,9 @@ pub fn stat(path: &Path) -> PathStat {
 /// it does not belong.** A workspace directory is deleted by `rm -rf` or
 /// `git worktree remove`, neither of which consults char — so anything recorded
 /// only here is gone precisely when it is most needed. Everything reclaimable
-/// lives in `~/.char/char.db` instead.
-pub fn create_char_dir(root: &Path) -> Result<PathBuf, CharError> {
-    let dir = root.join(".char");
+/// lives in `~/.armada/manifest.db` instead.
+pub fn create_armada_dir(root: &Path) -> Result<PathBuf, CharError> {
+    let dir = root.join(".armada");
     for path in [dir.clone(), dir.join("logs"), dir.join("run")] {
         std::fs::create_dir_all(&path).map_err(|e| CharError {
             class: ErrClass::Environment,
@@ -68,16 +68,16 @@ pub fn create_char_dir(root: &Path) -> Result<PathBuf, CharError> {
     Ok(dir)
 }
 
-/// Remove `.char/` entirely. Absent is success — `clean` is idempotent.
-pub fn remove_char_dir(root: &Path) -> Result<bool, CharError> {
-    let dir = root.join(".char");
+/// Remove `.armada/` entirely. Absent is success — `clean` is idempotent.
+pub fn remove_armada_dir(root: &Path) -> Result<bool, CharError> {
+    let dir = root.join(".armada");
     match std::fs::remove_dir_all(&dir) {
         Ok(()) => Ok(true),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(CharError {
             class: ErrClass::Environment,
             r#where: dir.display().to_string(),
-            message: format!("cannot remove .char/: {e}"),
+            message: format!("cannot remove .armada/: {e}"),
             next_action: None,
         }),
     }
@@ -172,21 +172,21 @@ mod tests {
     #[test]
     fn the_char_dir_is_created_with_its_two_subdirectories_and_removed_whole() {
         let dir = tempfile::tempdir().unwrap();
-        let char_dir = create_char_dir(dir.path()).unwrap();
-        assert!(char_dir.join("logs").is_dir());
-        assert!(char_dir.join("run").is_dir());
+        let armada_dir = create_armada_dir(dir.path()).unwrap();
+        assert!(armada_dir.join("logs").is_dir());
+        assert!(armada_dir.join("run").is_dir());
 
-        assert!(remove_char_dir(dir.path()).unwrap());
-        assert!(!char_dir.exists());
+        assert!(remove_armada_dir(dir.path()).unwrap());
+        assert!(!armada_dir.exists());
         // Idempotent: `clean` twice is not an error.
-        assert!(!remove_char_dir(dir.path()).unwrap());
+        assert!(!remove_armada_dir(dir.path()).unwrap());
     }
 
     #[test]
     fn creating_the_char_dir_twice_is_not_an_error() {
         let dir = tempfile::tempdir().unwrap();
-        create_char_dir(dir.path()).unwrap();
-        create_char_dir(dir.path()).unwrap();
+        create_armada_dir(dir.path()).unwrap();
+        create_armada_dir(dir.path()).unwrap();
     }
 
     #[test]
