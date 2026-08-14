@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 
 /// The binary this workspace just built.
-pub fn char_binary() -> PathBuf {
+pub fn armada_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_armada"))
 }
 
@@ -57,9 +57,9 @@ impl Machine {
             &path,
             &[
                 "-c",
-                "user.email=char@example.test",
+                "user.email=Armada@example.test",
                 "-c",
-                "user.name=char",
+                "user.name=Armada",
                 "commit",
                 "-q",
                 "-m",
@@ -89,7 +89,7 @@ impl Machine {
     }
 
     fn command(&self, cwd: &Path, args: &[&str]) -> Command {
-        let mut command = Command::new(char_binary());
+        let mut command = Command::new(armada_binary());
         command
             .args(args)
             .current_dir(cwd)
@@ -117,7 +117,7 @@ impl Machine {
 
     /// Run to completion.
     pub fn run(&self, cwd: &Path, args: &[&str]) -> Output {
-        self.command(cwd, args).output().expect("char runs")
+        self.command(cwd, args).output().expect("Armada runs")
     }
 
     /// Start and leave running.
@@ -126,7 +126,7 @@ impl Machine {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("char runs")
+            .expect("Armada runs")
     }
 }
 

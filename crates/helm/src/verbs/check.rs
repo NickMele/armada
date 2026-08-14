@@ -1,4 +1,4 @@
-//! `char check` — lint, format, test. Scoped, scheduled, leased, ceilinged.
+//! `armada manifest check` — lint, format, test. Scoped, scheduled, leased, ceilinged.
 //!
 //! **This file is the shell, and it decides nothing.** The scheduler is a
 //! reducer (`ARCHITECTURE.md` §1.2): the core proposes actions, this performs
@@ -70,7 +70,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     // Blocking by default would mean an agent expecting a quick lint silently
     // waiting out a fifteen-minute test suite with no output; `--wait` is there
     // when queueing is what you meant, and is exempt from the ceiling because
-    // it is the caller asking rather than a wait char imposed.
+    // it is the caller asking rather than a wait Armada imposed.
     let policy = if args.wait {
         Policy::Block
     } else {
@@ -99,7 +99,7 @@ fn select_checks(config: &ResolvedConfig, args: &Check) -> Result<Selection, Arm
 /// The file set the per-check `${files}` are filtered out of.
 ///
 /// Three sources, and which one applies is the caller's choice rather than a
-/// fallback chain — **char never silently falls back to the whole tree**
+/// fallback chain — **Armada never silently falls back to the whole tree**
 /// (PLAN.md §4.1), because that is the same hole `--all-files` exists to close
 /// with an extra step.
 fn candidate_files<R: Run, C: Clock, F: Fetch>(
@@ -155,7 +155,7 @@ fn assigned_ports<R: Run, C: Clock, F: Fetch>(
             r#where: "port_block".to_string(),
             message: "this workspace holds no port block, so `${port.…}` cannot resolve"
                 .to_string(),
-            next_action: Some("`char init` claims one".to_string()),
+            next_action: Some("`armada manifest init` claims one".to_string()),
         }),
     }
 }
@@ -217,8 +217,8 @@ fn plan_for(
 
     // **`--fix` runs `fix:` instead of `cmd:`, and skips those that do not
     // declare one** (PLAN.md §3.2). Skipping rather than falling back to `cmd:`
-    // is the point: `--fix` asks char to change files, and running the checking
-    // command instead would report a failure the caller asked char to repair.
+    // is the point: `--fix` asks Armada to change files, and running the checking
+    // command instead would report a failure the caller asked Armada to repair.
     let (command, skipped_by_fix) = match (args.fix, &check.fix) {
         (true, Some(fix)) => (fix.clone(), None),
         (true, None) => (
@@ -291,19 +291,19 @@ fn plan_for(
 /// **`needs:` gates in this phase and starts in phase 4** (`PHASES.md` phase 3).
 ///
 /// The end state is that a check needing `postgres` brings it up — one command
-/// instead of three, which matters when the caller is an agent. `char up` does
+/// instead of three, which matters when the caller is an agent. `armada manifest up` does
 /// not exist yet, so the honest answer is a `bad_invocation` naming the service
 /// and saying how to start it. Phase 4 replaces the error with the start; this
 /// is **one behaviour built in two steps, not two behaviours**.
 ///
-/// **Nothing char started is running, and that is a fact rather than an
+/// **Nothing Armada started is running, and that is a fact rather than an
 /// assumption.** `up` is the only verb that records a service as `owned`, and
 /// it is not built — so there is no state in which this answer is wrong today.
 /// Phase 4 is where liveness becomes a question worth asking, because that is
 /// the phase where something can answer it.
 ///
 /// `in:` implies `needs:` on the enclosing component (PLAN.md §4.1): the
-/// container has to be running before char can exec into it, so a check that
+/// container has to be running before Armada can exec into it, so a check that
 /// declares one is gated exactly like a check that names the component.
 fn blocked_on_a_service(check: &ResolvedCheck) -> Option<ArmadaError> {
     let mut services: Vec<String> = check
@@ -316,7 +316,7 @@ fn blocked_on_a_service(check: &ResolvedCheck) -> Option<ArmadaError> {
         .collect();
     if let Some(service) = &check.in_service {
         // Named separately so the message says the service the caller wrote
-        // rather than the component char inferred it from.
+        // rather than the component Armada inferred it from.
         services.push(service.clone());
     }
     services.sort();
@@ -331,7 +331,7 @@ fn blocked_on_a_service(check: &ResolvedCheck) -> Option<ArmadaError> {
         r#where: check.id.clone(),
         message: format!("`{}` needs {named}, which is not running", check.id),
         next_action: Some(format!(
-            "`char up {named}` starts it — not built until phase 4, so start it by hand for now"
+            "`armada manifest up {named}` starts it — not built until phase 4, so start it by hand for now"
         )),
     })
 }
@@ -448,7 +448,7 @@ struct Loop {
     journal: Journal,
     children: BTreeMap<CheckId, ProcessGroup>,
     /// Keyed by id so a `WAITING` row is replaced by the verdict that follows
-    /// it. `results[]` is one row per check, and the last thing char knew is
+    /// it. `results[]` is one row per check, and the last thing Armada knew is
     /// the one worth reporting.
     rows: BTreeMap<CheckId, CheckResult>,
     finish: Option<(Status, Option<ArmadaError>)>,
@@ -457,7 +457,7 @@ struct Loop {
     ceiling_ms: u64,
     /// What each check actually holds. **Tracked rather than re-derived**: the
     /// store chooses which CPU slots a claim gets, so `acquisition_order` can
-    /// say how many and in what order but not which — and releasing a slot char
+    /// say how many and in what order but not which — and releasing a slot Armada
     /// does not hold would hand another workspace's budget away.
     held: BTreeMap<CheckId, Vec<LeaseId>>,
     /// The machine's slot count, which bounds what the store can ever grant.
@@ -783,7 +783,7 @@ fn collect_children(workspace: &Workspace, it: &mut Loop, queue: &mut Vec<Event>
         });
         // A child killed by a signal has no code. The shell convention is
         // `128 + N`, and it is the same carve-out `ARCHITECTURE.md` §1.6 makes
-        // for char's own 130 and 141.
+        // for Armada's own 130 and 141.
         let code = output
             .code
             .unwrap_or_else(|| 128 + output.signal.unwrap_or(0));

@@ -239,9 +239,9 @@ excluded:
       The invariant is real — no part of a reservation may be held while the rest is still
       pending — but this case asserted it through an acquisition order the source does not
       have. The source takes slots and exclusive names in one atomic step under a single
-      guard, so it states no order and this case had no source behaviour to port. charkit
+      guard, so it states no order and this case had no source behaviour to port. Armada
       reaches the same invariant by a different route: PLAN.md §4.3 requires exclusives
-      first, in sorted name order, then slots, because charkit's leases are machine-wide and
+      first, in sorted name order, then slots, because Armada's leases are machine-wide and
       a cycle can span processes. That is a cross-process property, which PLAN.md §4.3
       already specifies an integration test for; a single-process case here would pass under
       either scheme and prove nothing. See docs/harvest.md §5.3.
@@ -263,7 +263,7 @@ excluded:
     reason: >-
       Hand-parses that repo's container topology to assert every service declares a CPU
       ceiling below machine width. Phase 4 material at most, and it asserts over a file
-      charkit does not own. Recorded as trap CAT-4.
+      Armada does not own. Recorded as trap CAT-4.
 
   - id: sched.abort.handler-ordering-by-source-text
     reason: >-

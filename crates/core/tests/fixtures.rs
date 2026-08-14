@@ -175,7 +175,7 @@ fn the_schema_and_the_structs_agree_about_an_unknown_key() {
 ///
 /// Plain recursion, because a `properties` map's *values* are themselves
 /// schemas and have to be walked too. The only way this over-collects is a
-/// config key literally named `properties`, which would be a key char accepts
+/// config key literally named `properties`, which would be a key Armada accepts
 /// and therefore ought to be exercised anyway.
 fn collect_properties(node: &serde_json::Value, out: &mut BTreeSet<String>) {
     match node {

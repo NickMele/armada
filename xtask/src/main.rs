@@ -1,4 +1,4 @@
-//! charkit's dev tooling. Run as `cargo xtask <command>`.
+//! Armada's dev tooling. Run as `cargo xtask <command>`.
 //!
 //! Rust rather than a script because this repo has no interpreter and should
 //! not acquire one: `README.md` claims "no interpreter, no toolchain, nothing

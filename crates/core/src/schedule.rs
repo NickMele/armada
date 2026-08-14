@@ -80,11 +80,11 @@ impl fmt::Display for CheckId {
     }
 }
 
-/// A process-group id char may signal.
+/// A process-group id Armada may signal.
 ///
 /// **The constructor refuses zero and negatives, and that is the whole point of
 /// the type.** `killpg(0, …)` signals the *caller's* own group, so a `0` that
-/// reaches a kill path has `char` SIGTERM and then SIGKILL itself and
+/// reaches a kill path has `Armada` SIGTERM and then SIGKILL itself and
 /// everything sharing its foreground group. The ownership layer already drops
 /// such a row rather than acting on it; making it unrepresentable here means the
 /// scheduler cannot propose the action in the first place.
@@ -93,7 +93,7 @@ impl fmt::Display for CheckId {
 pub struct Pgid(i32);
 
 impl Pgid {
-    /// A real process-group id, or `None` for one char must not signal.
+    /// A real process-group id, or `None` for one Armada must not signal.
     pub fn new(pgid: i32) -> Option<Self> {
         (pgid > 0).then_some(Pgid(pgid))
     }
@@ -110,9 +110,9 @@ impl fmt::Display for Pgid {
     }
 }
 
-/// What a child's environment gains over the one char inherited.
+/// What a child's environment gains over the one Armada inherited.
 ///
-/// **Values char knows are separate from secret names char does not**, and that
+/// **Values Armada knows are separate from secret names Armada does not**, and that
 /// separation is most of `ARCHITECTURE.md` §1.8's enforcement for free:
 /// resolution happens in the shell, at spawn, and a pure function that has never
 /// seen a value cannot leak one. The core deals in secret *names* and
@@ -166,7 +166,7 @@ pub struct Plan {
     /// of the scoping — which is the shape §3.4 is written against: a
     /// reconstruction that disagrees is worse than none.
     pub files: Vec<String>,
-    /// char's own deadline, in milliseconds.
+    /// Armada's own deadline, in milliseconds.
     pub timeout_ms: u64,
     /// CPU slots this check occupies while it runs.
     pub cost: u32,
@@ -186,7 +186,7 @@ pub struct Plan {
     /// that a check needing `postgres` brings it up — one command instead of
     /// three, which matters when the caller is an agent. `up` does not exist
     /// yet, so the honest answer is a `bad_invocation` naming the service and
-    /// telling the caller to run `char up`; phase 4 replaces the error with the
+    /// telling the caller to run `armada manifest up`; phase 4 replaces the error with the
     /// start. **One behaviour built in two steps, not two behaviours.**
     ///
     /// Distinct from [`Plan::skip`] because the states differ and so do the exit
@@ -284,11 +284,11 @@ pub struct Running {
     /// core never sees a byte of it, which is what keeps a resolved secret out
     /// of the pure core entirely.
     pub bytes: usize,
-    /// Whether char is stopping it, and why.
+    /// Whether Armada is stopping it, and why.
     pub stopping: Option<Stopping>,
 }
 
-/// Why char is killing a child.
+/// Why Armada is killing a child.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Stopping {
@@ -325,7 +325,7 @@ pub struct Outcome {
     ///
     /// **Kept past the check's end, and the replay property is what forced
     /// that.** While a check ran the count lived in [`Running::bytes`] and was
-    /// dropped when it finished, which meant `ChildOutput` was an event char
+    /// dropped when it finished, which meant `ChildOutput` was an event Armada
     /// recorded and no persisted state ever reflected — so a record could
     /// disagree with the run in the one dimension nothing would check. It is
     /// also the number that says whether a log hit the 10 MB cap.
@@ -362,7 +362,7 @@ pub enum Ending {
     /// SIGINT.
     ///
     /// **Nothing produces this yet**, and the gap is recorded in
-    /// `docs/PHASES.md` under phase 3: char installs no SIGINT handler, so an
+    /// `docs/PHASES.md` under phase 3: Armada installs no SIGINT handler, so an
     /// interrupted run dies on the default disposition and its `setsid`'d
     /// children keep running. The arm below is what the handler will feed.
     Interrupted,
@@ -516,7 +516,7 @@ pub enum Event {
     Interrupted,
     /// The workspace root stat returned `ENOENT`.
     ///
-    /// **Every symptom of this is misleading**, which is why char stats the root
+    /// **Every symptom of this is misleading**, which is why Armada stats the root
     /// before each dispatch rather than waiting to be told: writes to an already
     /// open log fd succeed silently into an unlinked inode, opening a new file
     /// gives `ENOENT`, and spawning a child gives an opaque git error — so the
@@ -603,7 +603,7 @@ pub enum Action {
     /// Reap any finished child, without blocking.
     ///
     /// Rust's `Child` does not reap on drop, so every handle dropped without a
-    /// wait leaves a `<defunct>` entry until char exits — and a fifteen-minute
+    /// wait leaves a `<defunct>` entry until Armada exits — and a fifteen-minute
     /// detached run accumulates them. It is a *non-blocking* reap because the
     /// shell's event loop may never block: a wedged loop must be a loop that
     /// stopped renewing, and every blocking call weakens that.
@@ -842,7 +842,8 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                         None => format!("waited {}m for a lease", waited / 60_000),
                     },
                     next_action: Some(
-                        "retry; `char status --all` names what is holding it".to_string(),
+                        "retry; `armada manifest status --all` names what is holding it"
+                            .to_string(),
                     ),
                 }),
                 reason: None,
@@ -895,7 +896,7 @@ fn next_wake(state: &State) -> u64 {
         .map_or(renew_at, |deadline| deadline.min(renew_at))
 }
 
-/// The verdict a child's exit code produces, given how char was treating it.
+/// The verdict a child's exit code produces, given how Armada was treating it.
 fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
     let entry = state.checks.get(check)?;
     let Phase::Running(running) = &entry.phase else {
@@ -906,7 +907,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
     Some(match running.stopping {
         // **The deadline is the verdict, not the code.** A killed child exits
         // non-zero, and reporting that as `tool_failed` sends a gate looking for
-        // a broken test when the actionable fact is that char's own deadline
+        // a broken test when the actionable fact is that Armada's own deadline
         // elapsed.
         Some(Stopping::Deadline) => Outcome {
             status: Status::Timeout,
@@ -1823,7 +1824,7 @@ mod tests {
     }
 
     /// A tool that fails on its own terms is `tool_failed`, exit 1 — a real
-    /// result, not char's fault.
+    /// result, not Armada's fault.
     #[test]
     fn a_child_that_exits_non_zero_fails_the_run_with_tool_failed() {
         let (state, _) = to_running(run(vec![plan("api:lint")]), "api:lint");
@@ -1898,7 +1899,7 @@ mod tests {
 
     /// **The deadline is the verdict, not the exit code.** A killed child exits
     /// non-zero, and reporting that as `tool_failed` sends a gate hunting a
-    /// broken test when the actionable fact is that char's deadline elapsed —
+    /// broken test when the actionable fact is that Armada's deadline elapsed —
     /// exit 4, so the caller raises the deadline or asks why it got slow.
     #[test]
     fn a_timed_out_child_reports_timeout_rather_than_the_code_it_died_with() {
@@ -2057,7 +2058,7 @@ mod tests {
             class: ErrClass::BadInvocation,
             r#where: "api:test".to_string(),
             message: "`api:test` needs postgres, which is not running".to_string(),
-            next_action: Some("`char up postgres` starts it".to_string()),
+            next_action: Some("`armada manifest up postgres` starts it".to_string()),
         });
 
         let (state, actions) = step(run(vec![test]), Event::Started);
@@ -2073,7 +2074,11 @@ mod tests {
         let error = row.error.as_ref().expect("it says why");
         assert_eq!(error.class, ErrClass::BadInvocation);
         assert!(error.message.contains("postgres"));
-        assert!(error.next_action.as_deref().unwrap().contains("char up"));
+        assert!(error
+            .next_action
+            .as_deref()
+            .unwrap()
+            .contains("armada manifest up"));
 
         let (status, error) = finish_of(&actions).expect("the run ends");
         assert_eq!(status, Status::Failed);
@@ -2438,7 +2443,7 @@ mod tests {
     // ----------------------------------------------------------- the types
 
     /// `killpg(0, …)` signals the caller's own group, so a zero that reaches a
-    /// kill path has char SIGTERM and then SIGKILL itself. The type makes the
+    /// kill path has Armada SIGTERM and then SIGKILL itself. The type makes the
     /// action unproposable.
     #[test]
     fn a_process_group_id_of_zero_or_less_is_unrepresentable() {

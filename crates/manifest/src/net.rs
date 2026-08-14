@@ -9,7 +9,7 @@
 //! **Measured, and it is the reason the probe binds twice:** an IPv6-only
 //! listener is invisible to an IPv4 bind probe, and modern Node resolving
 //! `localhost` to `::1` makes that the ordinary dev server rather than an
-//! exotic case. So char binds **both** `127.0.0.1` and `[::1]` and treats
+//! exotic case. So Armada binds **both** `127.0.0.1` and `[::1]` and treats
 //! either `EADDRINUSE` as taken. `SO_REUSEPORT` on both sides remains
 //! undetectable; that is a stated limit, not a bug (`docs/traps.md`).
 
@@ -47,7 +47,7 @@ impl Fetch for RealFetch {
             .map_err(|e| environment(format!("{url}: {e}")))?;
 
         // The status line is the first 16 bytes at most; reading further would
-        // pull a body char has no use for into memory.
+        // pull a body Armada has no use for into memory.
         let mut head = [0u8; 64];
         let read = stream
             .read(&mut head)
@@ -71,13 +71,13 @@ impl Fetch for RealFetch {
 
 /// Whether anything holds this port, on either family.
 ///
-/// Binding is the probe: char asks the kernel the same question the service
+/// Binding is the probe: Armada asks the kernel the same question the service
 /// will ask, and gets the same answer. It costs one `bind()` per family and
 /// releases both immediately.
 pub fn port_is_taken(port: u16) -> bool {
     let v4 = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let v6 = SocketAddr::from((Ipv6Addr::LOCALHOST, port));
-    // A bind that fails for any reason at all is "taken" as far as char is
+    // A bind that fails for any reason at all is "taken" as far as Armada is
     // concerned: it could not have the port either way, and reporting a port
     // it cannot use as free is the failure that matters.
     !bindable(v4) || !bindable(v6)

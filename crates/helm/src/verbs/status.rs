@@ -1,8 +1,8 @@
-//! `char status` — what's running, what's mine, what's stale.
+//! `armada manifest status` — what's running, what's mine, what's stale.
 //!
 //! **A read verb.** It takes no lease, it mutates nothing, and **its exit code
 //! describes the query, not the thing queried**: `0` for answered, whatever the
-//! workspaces it reports are doing. A gate uses `char check --wait`; it never
+//! workspaces it reports are doing. A gate uses `armada manifest check --wait`; it never
 //! reads a query's exit code as a verdict.
 //!
 //! It also asks **no daemon**. Everything it reports comes from `manifest.db` and a
@@ -35,7 +35,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
 
     let rows = app.db.workspaces()?;
     let selected: Vec<WorkspaceRow> = match (&me, common.lens) {
-        // `char status --all` is one of the two invocations that run without a
+        // `armada manifest status --all` is one of the two invocations that run without a
         // `armada.yml` at all: asking about *this workspace* requires one, asking
         // about *the machine* does not.
         (None, Lens::All) => rows.clone(),
@@ -76,11 +76,11 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
             .collect();
 
         let owned = app.db.owned(Some(&row.id))?;
-        // Whether char started anything here is what tells `LISTENING` from
+        // Whether Armada started anything here is what tells `LISTENING` from
         // `CONFLICT`. A bound port with nothing owned is bound by a process
-        // char did not start — which is the only way that reaches a caller
+        // Armada did not start — which is the only way that reaches a caller
         // instead of surfacing later as a mysterious bind failure.
-        let char_started_something = owned
+        let armada_started_something = owned
             .iter()
             .any(|o| matches!(o.kind, OwnedKind::Pgid | OwnedKind::Container));
 
@@ -99,8 +99,10 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
                                     // Probed at report time, never remembered:
                                     // a claim recorded at `init` says nothing
                                     // about what is bound days later.
-                                    state: match (net::port_is_taken(port), char_started_something)
-                                    {
+                                    state: match (
+                                        net::port_is_taken(port),
+                                        armada_started_something,
+                                    ) {
                                         (false, _) => PortState::Reserved,
                                         (true, true) => PortState::Listening,
                                         (true, false) => PortState::Conflict,

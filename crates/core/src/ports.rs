@@ -1,8 +1,8 @@
 //! Port blocks: choosing one, and assigning declared names inside it.
 //!
 //! `port_block` is the **workspace's**; assignments are the component's
-//! (PLAN.md §3.1). A block is claimed once at `char init` and kept until
-//! `char clean` — `char down` deliberately keeps it, because it is still your
+//! (PLAN.md §3.1). A block is claimed once at `armada manifest init` and kept until
+//! `armada manifest clean` — `armada manifest down` deliberately keeps it, because it is still your
 //! workspace.
 //!
 //! Choosing a block is pure, the claim can lose a race, and losing means
@@ -14,7 +14,7 @@ use crate::error::{ArmadaError, ConfigWhere, ErrClass};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-/// The first port char hands out.
+/// The first port Armada hands out.
 ///
 /// **PLAN.md does not state a base and this is therefore a phase-2 decision.**
 /// It is taken from §3.1's own payload, which shows `5460-5469` and
@@ -23,7 +23,7 @@ use std::collections::BTreeMap;
 /// services conventionally use and well below the ephemeral range.
 pub const PORT_BASE: u16 = 5460;
 
-/// The last port char will hand out.
+/// The last port Armada will hand out.
 ///
 /// Below Linux's default ephemeral range (`32768–60999`): a block issued
 /// inside it collides with whatever the kernel hands a client socket, which
@@ -129,8 +129,8 @@ pub fn assign_ports(
                 block.size()
             ),
             next_action: Some(
-                "raise `port_block_size` in ~/.armada/machine.yml, then `char clean` and \
-                 `char init` to take a new block"
+                "raise `port_block_size` in ~/.armada/machine.yml, then `armada manifest clean` and \
+                 `armada manifest init` to take a new block"
                     .to_string(),
             ),
         });
@@ -153,9 +153,9 @@ pub enum PortState {
     /// Assigned to a component, nothing bound — expected after `init` or
     /// `down`.
     Reserved,
-    /// Bound by the service char started.
+    /// Bound by the service Armada started.
     Listening,
-    /// Bound by something char did not start. This is the only way a port
+    /// Bound by something Armada did not start. This is the only way a port
     /// taken by a foreign process reaches a caller instead of surfacing later
     /// as a mysterious bind failure.
     Conflict,

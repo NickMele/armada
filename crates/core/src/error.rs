@@ -20,13 +20,13 @@ pub enum ErrClass {
     BadConfig,
     /// The underlying tool failed on its own terms. That is a real result.
     ToolFailed,
-    /// char's own deadline elapsed.
+    /// Armada's own deadline elapsed.
     Timeout,
     /// Cancelled, or the run's holder died. Retryable.
     Aborted,
-    /// The machine char runs on is broken. Fix the machine, retry unchanged.
+    /// The machine Armada runs on is broken. Fix the machine, retry unchanged.
     Environment,
-    /// charkit broke. Stop; retrying will not help.
+    /// Armada broke. Stop; retrying will not help.
     ArmadaBug,
 }
 
@@ -108,7 +108,7 @@ impl fmt::Display for ErrClass {
 /// which is why they share a grammar rather than being a third one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigWhere {
-    /// A key path char resolved for itself: `armada.yml:components.api.checks.lint.cmd`.
+    /// A key path Armada resolved for itself: `armada.yml:components.api.checks.lint.cmd`.
     Path {
         /// Workspace-relative path of the config file.
         file: String,
@@ -152,7 +152,7 @@ pub struct ArmadaError {
     /// What went wrong, in one line.
     pub message: String,
     /// Required for `bad_config`, optional elsewhere — that is the one class
-    /// where char genuinely knows the fix, because it has just validated the
+    /// where Armada genuinely knows the fix, because it has just validated the
     /// file and knows what it expected (`ARCHITECTURE.md` §1.7).
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub next_action: Option<String>,

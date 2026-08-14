@@ -34,7 +34,7 @@ pub fn log_path(root: &Path, run: &RunId, check: &CheckId) -> PathBuf {
 /// **Workspace-relative because the primary consumer is an agent reading output
 /// and editing files** (PLAN.md §4.1). An absolute path also puts the machine's
 /// home directory into `--json`, which the privacy rules exist to keep out of
-/// anything char writes down.
+/// anything Armada writes down.
 pub fn log_reference(run: &RunId, check: &CheckId) -> String {
     format!(".armada/run/{}/logs/{}", run, log_name(check))
 }
@@ -52,8 +52,8 @@ pub fn prepare(root: &Path, run: &RunId) -> Result<PathBuf, ArmadaError> {
 /// **A name that is not a run id is ignored rather than reported.** `.armada/` is
 /// an ordinary directory on a developer's machine: an editor's swap file, a
 /// `.DS_Store`, a directory someone copied there to look at — none of them are
-/// char's, and none of them is a reason for `char check` to refuse to start.
-/// What char reaps is what char can prove it wrote.
+/// Armada's, and none of them is a reason for `armada manifest check` to refuse to start.
+/// What Armada reaps is what Armada can prove it wrote.
 pub fn present(root: &Path) -> Result<Vec<RunId>, ArmadaError> {
     let dir = runs_dir(root);
     let entries = match std::fs::read_dir(&dir) {
@@ -81,7 +81,7 @@ pub fn present(root: &Path) -> Result<Vec<RunId>, ArmadaError> {
 /// touching a live one. Returns what was removed.
 ///
 /// **At the start of each run** (PLAN.md §4.2), because the alternative —
-/// coupling retention to `char clean` — means either logs live forever or you
+/// coupling retention to `armada manifest clean` — means either logs live forever or you
 /// lose the evidence from a failed run the moment you release a port.
 pub fn reap(
     root: &Path,
@@ -97,11 +97,11 @@ pub fn reap(
         match std::fs::remove_dir_all(&dir) {
             Ok(()) => removed.push(run),
             Err(e) if e.kind() == io::ErrorKind::NotFound => removed.push(run),
-            // **Reported, never silent, and never fatal.** A run directory char
-            // could not remove is disk that stays used; a `char check` that
+            // **Reported, never silent, and never fatal.** A run directory Armada
+            // could not remove is disk that stays used; a `armada manifest check` that
             // refuses to start because of it is a repo nobody can check. The
             // two categories are the ones the reap passes already keep apart:
-            // char could not *look*, which proves nothing, against char could
+            // Armada could not *look*, which proves nothing, against Armada could
             // not *reclaim*, which is a real leak and is said out loud.
             Err(e) => skipped.push(format!("{}: {e}", dir.display())),
         }
@@ -112,7 +112,7 @@ pub fn reap(
 /// Write `state.json`.
 ///
 /// **Written to a temporary file and renamed**, because the reader is
-/// `char explain` and the writer is a run that may be SIGKILLed. `rename(2)` is
+/// `armada manifest explain` and the writer is a run that may be SIGKILLed. `rename(2)` is
 /// atomic within a filesystem, so a reader sees either the previous record or
 /// this one and never half of one — and a run's record is rewritten on every
 /// state change, so the window is not a rare one.
@@ -184,7 +184,7 @@ mod tests {
     }
 
     /// `.armada/` is an ordinary directory on a developer's machine. A stray file
-    /// is not char's and is not a reason for `char check` to refuse to start.
+    /// is not Armada's and is not a reason for `armada manifest check` to refuse to start.
     #[test]
     fn a_directory_that_is_not_a_run_is_ignored_rather_than_reaped_or_reported() {
         let dir = workspace();
@@ -200,7 +200,7 @@ mod tests {
         assert!(skipped.is_empty());
         assert!(
             runs_dir(dir.path()).join("not-a-run-id").is_dir(),
-            "char removed a directory it did not write"
+            "Armada removed a directory it did not write"
         );
     }
 

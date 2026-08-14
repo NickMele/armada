@@ -1,7 +1,7 @@
-//! What `char clean` does with a recorded process group — against real
+//! What `armada manifest clean` does with a recorded process group — against real
 //! processes, real signals and the real store.
 //!
-//! **Nothing is killed that char cannot prove is its own.** That rule is a pure
+//! **Nothing is killed that Armada cannot prove is its own.** That rule is a pure
 //! function in the core and is unit-tested there; what is only testable here is
 //! that the verb actually consults it before sending a signal, and that the row
 //! goes either way. Three cases, and two of them are the dangerous ones:
@@ -10,7 +10,7 @@
 //! |---|---|
 //! | a live group this boot stamped | signalled, confirmed gone, counted |
 //! | a group stamped by another boot | **never signalled** — that pid is recycled |
-//! | `0`, or anything unparseable | **never signalled** — `killpg(0, …)` is char's own group |
+//! | `0`, or anything unparseable | **never signalled** — `killpg(0, …)` is Armada's own group |
 //!
 //! The second and third are why this suite starts a real detached group rather
 //! than asserting on a summary: a regression in either sends a real SIGKILL to
@@ -47,7 +47,7 @@ fn record(machine: &Machine, workspace: &WorkspaceId, row: OwnedRow) {
     db.record_owned(&row).unwrap();
 }
 
-/// The boot and start-time stamps char itself would write for a live group.
+/// The boot and start-time stamps Armada itself would write for a live group.
 fn ours(workspace: &WorkspaceId, pgid: i32, cwd: &Path) -> OwnedRow {
     OwnedRow {
         workspace: workspace.clone(),
@@ -85,15 +85,15 @@ fn clean_stops_a_recorded_group_confirms_it_is_gone_and_counts_it() {
     let pgid = group.pgid();
     record(&machine, &workspace, ours(&workspace, pgid, &repo));
 
-    // **The reap has to happen while `char clean` is running, not after it.**
-    // This test is the group's parent, char is not — and a signalled child that
+    // **The reap has to happen while `armada manifest clean` is running, not after it.**
+    // This test is the group's parent, Armada is not — and a signalled child that
     // nobody has waited on is a zombie that is still a member of its group. On
     // Linux `killpg(pgid, 0)` succeeds against exactly that group and only
     // reports `ESRCH` after the `waitpid` (measured; `posix::group_alive`), so
-    // reaping after `clean` returns means char watches the whole grace, sends
+    // reaping after `clean` returns means Armada watches the whole grace, sends
     // its SIGKILL and still sees the group alive: `FAILED` for a group that in
     // fact died on the first SIGTERM. darwin answers `EPERM` to that same
-    // probe, so char reads the group as gone on its first grace poll and
+    // probe, so Armada reads the group as gone on its first grace poll and
     // reports `CLEAN` without ever escalating — the right answer for the wrong
     // reason, and why reaping late would pass here and fail in CI.
     // Waiting concurrently is what a real orphaned service gets for free — its
@@ -111,7 +111,10 @@ fn clean_stops_a_recorded_group_confirms_it_is_gone_and_counts_it() {
         "{payload}"
     );
 
-    assert!(!posix::group_alive(pgid), "the group survived `char clean`");
+    assert!(
+        !posix::group_alive(pgid),
+        "the group survived `armada manifest clean`"
+    );
 }
 
 /// **A pid from a previous boot is a recycled pid, not an orphaned service.**
@@ -137,10 +140,10 @@ fn a_group_stamped_by_another_boot_is_dropped_without_a_signal() {
     );
     assert!(
         posix::group_alive(pgid),
-        "char signalled a group it could not prove was its own"
+        "Armada signalled a group it could not prove was its own"
     );
 
-    // The row still goes: char cannot act on it, so remembering it forever
+    // The row still goes: Armada cannot act on it, so remembering it forever
     // would leak a row per reboot.
     assert!(owned_rows(machine.home.path()).is_empty());
 
@@ -149,7 +152,7 @@ fn a_group_stamped_by_another_boot_is_dropped_without_a_signal() {
 }
 
 /// **A pgid of zero is not a pgid.** `killpg(0, …)` signals the caller's own
-/// group, so a `0` in the table would have `char clean` SIGKILL char itself.
+/// group, so a `0` in the table would have `armada manifest clean` SIGKILL Armada itself.
 #[test]
 fn a_zero_or_unparseable_pgid_is_dropped_rather_than_signalled() {
     let machine = Machine::new();

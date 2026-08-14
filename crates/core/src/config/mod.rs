@@ -13,7 +13,7 @@
 //! |---|---|---|
 //! | parse | YAML text → [`model::Config`] | here |
 //! | resolve | defaults applied, ids derived, shapes normalised | here |
-//! | verify | cross-references, the filesystem, argv[0] on PATH | `char config verify`, phase 5 |
+//! | verify | cross-references, the filesystem, argv[0] on PATH | `armada manifest config verify`, phase 5 |
 //!
 //! **Loading is not verifying.** Resolution answers questions it can settle
 //! from one value or one entry; anything needing a second part of the document

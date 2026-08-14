@@ -4,11 +4,11 @@
 //! reasoned about:
 //!
 //! - two directories claim non-overlapping blocks **concurrently**, and
-//!   `char status --project` from either reports both;
-//! - **deleting one directory outright**, then running `char init` in a third,
+//!   `armada manifest status --project` from either reports both;
+//! - **deleting one directory outright**, then running `armada manifest init` in a third,
 //!   reclaims the deleted one's block — **reported, not silently** — without
 //!   disturbing the live one;
-//! - `char clean --orphaned` does the same on demand;
+//! - `armada manifest clean --orphaned` does the same on demand;
 //! - a `commands:` entry's subcommands and flags reach the child untouched, its
 //!   exit code comes back verbatim, and `env:` layers over the inherited
 //!   environment.
@@ -25,12 +25,12 @@
 //!   against `bad_config`, the tool's failure against the repo's statement being
 //!   wrong — and nothing else asserts the distinction survives to the envelope.
 //! - **the human renderer's two exits.** An answer goes to stdout and a failure
-//!   to stderr, so `char status | grep` is never quietly fed an error report.
+//!   to stderr, so `armada manifest status | grep` is never quietly fed an error report.
 
 mod support;
 
 use serde_json::Value;
-use support::{char_binary, Machine};
+use support::{armada_binary, Machine};
 
 /// The five-worktrees case §2.1 calls "the case that matters": same committed
 /// `armada.yml`, several ids, non-overlapping blocks, independent lifecycles.
@@ -81,7 +81,7 @@ fn two_worktrees_claim_non_overlapping_blocks_concurrently() {
     }
 }
 
-/// **Deleting one directory outright, then running `char init` in a third,
+/// **Deleting one directory outright, then running `armada manifest init` in a third,
 /// automatically reclaims the deleted one's block — reported, not silently —
 /// without disturbing the live one.**
 #[test]
@@ -145,7 +145,7 @@ fn init_in_a_third_workspace_reclaims_a_deleted_ones_block_and_says_so() {
     assert!(!ids.contains(&doomed_id.as_str()), "{ids:?}");
 }
 
-/// `char clean --orphaned` does the same **on demand**, and from outside any
+/// `armada manifest clean --orphaned` does the same **on demand**, and from outside any
 /// workspace — which is the state it is most needed in.
 #[test]
 fn clean_orphaned_reclaims_a_deleted_workspace_from_anywhere() {
@@ -192,7 +192,7 @@ fn clean_orphaned_reclaims_a_deleted_workspace_from_anywhere() {
 /// **Subcommands and flags reach the child untouched, and the child's exit code
 /// comes back verbatim and unremapped.**
 ///
-/// Note `--dry-run` in this invocation: char defines a flag by that name, and
+/// Note `--dry-run` in this invocation: Armada defines a flag by that name, and
 /// here it is the child's.
 #[test]
 fn a_dispatched_command_receives_its_argv_untouched_and_returns_its_own_code() {
@@ -207,7 +207,7 @@ fn a_dispatched_command_receives_its_argv_untouched_and_returns_its_own_code() {
     let seen = String::from_utf8_lossy(&output.stdout);
     assert_eq!(seen.trim(), "prune --dry-run -- -x");
 
-    // Verbatim: 3 is char's own `bad_config`, and this is the child's 3.
+    // Verbatim: 3 is Armada's own `bad_config`, and this is the child's 3.
     let output = machine.run(&repo, &["manifest", "exiter", "3"]);
     assert_eq!(output.status.code(), Some(3));
 
@@ -216,7 +216,7 @@ fn a_dispatched_command_receives_its_argv_untouched_and_returns_its_own_code() {
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(payload["data"]["dispatched"], Value::Bool(true));
     assert_eq!(payload["data"]["child_exit"], Value::from(3));
-    assert_eq!(payload["error"], Value::Null, "char did not decide this");
+    assert_eq!(payload["error"], Value::Null, "Armada did not decide this");
 }
 
 /// `env:` is **additive** — the parent environment is inherited wholesale and
@@ -239,8 +239,8 @@ fn a_dispatched_command_gets_a_layered_environment_and_the_workspace_id() {
     );
 }
 
-/// A command char cannot start never ran, so this is char's failure to report
-/// and char's code to exit with — `bad_config`, because the repo's statement is
+/// A command Armada cannot start never ran, so this is Armada's failure to report
+/// and Armada's code to exit with — `bad_config`, because the repo's statement is
 /// what is wrong.
 #[test]
 fn a_command_that_cannot_start_is_chars_own_failure_and_says_so() {
@@ -396,7 +396,7 @@ fn init_dry_run_previews_the_claim_and_claims_nothing() {
     assert!(String::from_utf8_lossy(&human.stdout).starts_with("dry run"));
 }
 
-/// A `setup:` step that runs and fails is the **tool's** failure: char started
+/// A `setup:` step that runs and fails is the **tool's** failure: Armada started
 /// it, so the repo's statement was right and the command was not.
 #[test]
 fn a_setup_step_that_exits_non_zero_fails_the_row_and_the_verb() {
@@ -472,7 +472,7 @@ fn a_setup_step_that_cannot_start_is_bad_config_and_prints_to_stderr() {
 }
 
 /// `clean --dry-run --artifacts` previews **exactly** what the real pass then
-/// releases: the block, the declared artifact, and the external command char
+/// releases: the block, the declared artifact, and the external command Armada
 /// records and will never run.
 #[test]
 fn clean_previews_what_it_would_release_and_releases_none_of_it() {
@@ -658,10 +658,10 @@ manifest:
 
 #[test]
 fn the_binary_under_test_is_the_one_this_workspace_built() {
-    assert!(char_binary().exists());
+    assert!(armada_binary().exists());
 }
 
-/// **`char clean --orphaned --force-rebuild` is the way out of a `manifest.db` char
+/// **`armada manifest clean --orphaned --force-rebuild` is the way out of a `manifest.db` Armada
 /// cannot read**, and the property under test is that *the recovery path does
 /// not need the thing that is broken*: every other verb fails against this
 /// database, and this one does not.

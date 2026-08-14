@@ -1,7 +1,7 @@
 //! Shared setup for the integration suites in this crate.
 //!
 //! It holds one thing: compiling the embedded JSON Schema. Two suites validate
-//! documents against it — the fixture set, and charkit's own `armada.yml` — and a
+//! documents against it — the fixture set, and Armada's own `armada.yml` — and a
 //! second copy of the compile step is how one of them ends up validating
 //! against a schema the other does not.
 

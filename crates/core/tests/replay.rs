@@ -11,7 +11,7 @@
 //! that it did not derive from `(state, event)` — a field the shell filled in, a
 //! cached decision, a counter incremented in an action rather than in a
 //! transition. All of those pass the unit tests and all of them make the record
-//! `char explain` reads a fiction, because a record that does not replay is a
+//! `armada manifest explain` reads a fiction, because a record that does not replay is a
 //! record of something that did not happen.
 //!
 //! **The round trip is part of the property, deliberately.** The record is read
@@ -286,7 +286,7 @@ fn a_run_replays_after_the_round_trip_through_state_json() {
 ///   from a sequence that has any other event is genuinely inert.
 /// - `Event::ChildOutput` **used to be** inert, because the byte count lived on
 ///   `Running` and was discarded when the check finished. That was a real
-///   defect: char recorded an event no persisted state reflected, so a record
+///   defect: Armada recorded an event no persisted state reflected, so a record
 ///   could disagree with its run in the one dimension nothing checked. The count
 ///   now survives into `Outcome`, which is why the third case below can assert
 ///   what it does.

@@ -191,7 +191,7 @@ cases:
     note: >-
       The unclamped half of SCH-7, the sibling of scheduling.yml's clamped case: a request
       that fits is granted whole. It does not pin SCH-11 — every parallel tool sizing itself
-      to the machine unless an explicit flag says otherwise — because charkit has no way to
+      to the machine unless an explicit flag says otherwise — because Armada has no way to
       assert that. The flag is a literal the config author writes into `cmd:` and the engine
       never touches it, so SCH-11 has no ported case. See docs/harvest.md §10.
     given: { check: { cost: 4 }, budget: 16 }
@@ -312,16 +312,16 @@ excluded:
       The trap is real — a stale image silently tests the wrong code the moment a build input
       moves, and green on stale code is indistinguishable from real green — but it cannot be
       a check-invocation assertion here. The source runs an ephemeral container per check, so
-      its build flag rides on that invocation; charkit execs into an already-running service
+      its build flag rides on that invocation; Armada execs into an already-running service
       (PLAN.md §4.1's `in:`, a compose exec with no terminal), brought up by `needs:` and
-      `char up`. An exec has no build flag. The rule is kept and reclassified as phase-4
+      `armada manifest up`. An exec has no build flag. The rule is kept and reclassified as phase-4
       material on whatever brings the service up — docs/harvest.md §3 and trap CMD-2.
     replaced_by: null
 
   - id: exec.structural.no-dev-stack-symbols
     reason: >-
       Asserts that the check module exposes no service-lifecycle symbol, by inspecting the
-      module's namespace. The equivalent in charkit is that the check crate does not depend
+      module's namespace. The equivalent in Armada is that the check crate does not depend
       on the service-lifecycle crate, which is a dependency lint (cargo xtask boundaries),
       not a test. The rule it protects is real and is recorded as trap CAT-2.
 

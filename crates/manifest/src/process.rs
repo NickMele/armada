@@ -9,7 +9,7 @@
 //!    `trap '' TERM` leaves 3 of 3 alive after `killpg(SIGTERM)`, because
 //!    children inherit an ignored disposition across `fork` and `exec`.
 //! 3. **Every spawned `Child` is waited on.** Rust's `Child` does not reap on
-//!    drop, so a dropped handle leaves a `<defunct>` entry until char exits —
+//!    drop, so a dropped handle leaves a `<defunct>` entry until Armada exits —
 //!    and a fifteen-minute detached run accumulates them.
 //!
 //! Rule 3 is why this module owns the child rather than handing it out: a
@@ -25,14 +25,14 @@ use crate::posix;
 /// How long a group gets between SIGTERM and SIGKILL.
 ///
 /// Long enough for a compose stack or a dev server to flush and exit, short
-/// enough that `char clean` on a wedged tree is not something you wait out.
+/// enough that `armada manifest clean` on a wedged tree is not something you wait out.
 pub const GRACE: Duration = Duration::from_secs(5);
 
-/// The most output char keeps from one child.
+/// The most output Armada keeps from one child.
 ///
 /// `run_retention` is a count of runs, not a size, so nothing else bounds a
 /// single one: a `commands:` entry writing gigabytes to stdout under
-/// `stdio: pipe` fills the disk with char faithfully copying every byte, and
+/// `stdio: pipe` fills the disk with Armada faithfully copying every byte, and
 /// the disk-full failure then lands on the state store (PLAN.md §3.1). Head and
 /// tail are retained with the middle elided, so a truncated stream never reads
 /// as a complete one.
@@ -71,7 +71,7 @@ impl Run for RealRun {
     }
 }
 
-/// A child and everything char needs to reach its whole tree.
+/// A child and everything Armada needs to reach its whole tree.
 pub struct ProcessGroup {
     child: Child,
     pgid: i32,
@@ -132,8 +132,8 @@ impl ProcessGroup {
         })?;
 
         // With `setsid` the child *is* its own group leader, so its pid is the
-        // pgid. Without it the child joins char's group, and killing that would
-        // kill char — so an un-detached request records no group to kill.
+        // pgid. Without it the child joins Armada's group, and killing that would
+        // kill Armada — so an un-detached request records no group to kill.
         let pgid = if request.new_session {
             child.id() as i32
         } else {
@@ -152,7 +152,7 @@ impl ProcessGroup {
 
     /// Has this child finished? **Never blocks.**
     ///
-    /// This is what lets `char check` run several checks at once. The scheduler
+    /// This is what lets `armada manifest check` run several checks at once. The scheduler
     /// is a reducer over one run (`ARCHITECTURE.md` §1.2) and the shell executes
     /// what it proposes, so the shell holds N children and asks each of them
     /// this question on every turn of its loop.
@@ -168,7 +168,7 @@ impl ProcessGroup {
     /// **The one residual, stated rather than papered over.** Once the child has
     /// exited this joins the reader threads, and a reader reaches EOF when the
     /// last holder of the pipe closes it. A *grandchild* that outlived the group
-    /// still holds it — which for char's own children means one that called
+    /// still holds it — which for Armada's own children means one that called
     /// `setsid` for itself and left the tracked group, the case `docs/traps.md`
     /// records as detected rather than prevented. The kill path closes it for
     /// every other shape, because `killpg` reaches grandchildren.
@@ -177,7 +177,7 @@ impl ProcessGroup {
         let status = match self.child.try_wait() {
             Ok(Some(status)) => Some(status),
             Ok(None) => return None,
-            // The only way `try_wait` errors is a handle char no longer owns,
+            // The only way `try_wait` errors is a handle Armada no longer owns,
             // which it cannot recover from and must not spin on.
             Err(_) => None,
         };
@@ -245,11 +245,11 @@ impl ProcessGroup {
         self.child.id() as i32
     }
 
-    /// Wait for the whole tree, killing the group if char's own deadline
+    /// Wait for the whole tree, killing the group if Armada's own deadline
     /// elapses.
     ///
     /// The reader threads are what make a deadline meaningful: reading the
-    /// pipes inline would block char in `read` while the clock ran out, and
+    /// pipes inline would block Armada in `read` while the clock ran out, and
     /// draining them only after `wait` deadlocks the moment a child fills a
     /// pipe buffer.
     pub fn wait(&mut self, timeout: Option<Duration>, tick: &mut dyn FnMut()) -> RunOutput {
@@ -262,7 +262,7 @@ impl ProcessGroup {
             match self.child.try_wait() {
                 Ok(Some(status)) => break Some(status),
                 Ok(None) => {}
-                // The only way `try_wait` errors is a handle char no longer
+                // The only way `try_wait` errors is a handle Armada no longer
                 // owns, which it cannot recover from and must not spin on.
                 Err(_) => break None,
             }
@@ -356,7 +356,7 @@ fn spawn_reader<R: Read + Send + 'static>(mut source: R) -> std::thread::JoinHan
         let mut text = String::from_utf8_lossy(&head).into_owned();
         if elided > 0 {
             text.push_str(&format!(
-                "\n… {elided} bytes elided: output exceeded char's {CAPTURE_CAP}-byte cap …\n"
+                "\n… {elided} bytes elided: output exceeded Armada's {CAPTURE_CAP}-byte cap …\n"
             ));
         }
         text.push_str(&String::from_utf8_lossy(&tail));

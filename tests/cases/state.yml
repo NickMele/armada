@@ -1,7 +1,7 @@
 subsystem: state
 source: check.py
 note: >-
-  Run state, leases, status, --again and detach. charkit's store is machine-global SQLite
+  Run state, leases, status, --again and detach. Armada's store is machine-global SQLite
   with lease rows (PLAN.md §4.3), not a lock directory in a workspace, so most of these are
   requirements expressed in a different medium: the assertion ports, the setup does not.
   Writing an owner file becomes inserting a lease row.
@@ -51,7 +51,7 @@ cases:
     note: >-
       Corrects a defect rather than porting it. The original lets a caller supplying no run
       id through unconditionally, which disables the guard above for any call site that
-      forgets to thread the id. In charkit the holder is always known.
+      forgets to thread the id. In Armada the holder is always known.
     given: { begin: { run_id: "run-C" }, then: [{ transition: { run_id: null } }] }
     expect: { error: { class: armada_bug } }
 
@@ -419,7 +419,7 @@ excluded:
     reason: >-
       Seven original cases assert over a lock directory and an owner file in the workspace.
       The assertions port — blocked, reclaimed, released, identity recorded — and are present
-      above; the setup does not. charkit's lease rows are machine-global, which is also what
+      above; the setup does not. Armada's lease rows are machine-global, which is also what
       lets contention be expressed between two workspaces of one repo.
 
   - id: state.target.dot-resolution

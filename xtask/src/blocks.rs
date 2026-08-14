@@ -1,6 +1,6 @@
 //! Parse every fenced code block with a real parser.
 //!
-//! The point is not that the examples look right. It is that **char's own YAML
+//! The point is not that the examples look right. It is that **Armada's own YAML
 //! parser accepts them** — a doc example that `serde_yaml_ng` rejects is a
 //! defect no amount of reading catches, and one that a third-party opinion
 //! would answer differently is the wrong question.

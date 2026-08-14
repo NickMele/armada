@@ -4,11 +4,11 @@
 //! |---|---|---|
 //! | *(no flag)* | this checkout | "are my services up? what ports do I hold?" |
 //! | `--project` | every workspace sharing this `--git-common-dir` | the orchestrating agent's view |
-//! | `--all` | every workspace on the machine | "what is char holding anywhere?" |
+//! | `--all` | every workspace on the machine | "what is Armada holding anywhere?" |
 //!
 //! **Workspaces in a project are siblings, not parent and children.** The root
 //! checkout is just another workspace with no authority over the worktrees.
-//! That is load-bearing: model it as a hierarchy and `char clean` in the root
+//! That is load-bearing: model it as a hierarchy and `armada manifest clean` in the root
 //! implies cascading into the worktrees, killing services another agent is
 //! actively using. Flat siblings plus an explicit flag makes the destructive
 //! step something you have to ask for.

@@ -71,7 +71,7 @@ impl<D: Serialize> Envelope<D> {
 
     /// A failure. `status` is `FAILED` whenever `error` is non-null and no more
     /// specific terminal state applies (PLAN.md §3.2.2) — which includes
-    /// `char status`, whose only success state is `OK` and which otherwise had
+    /// `armada manifest status`, whose only success state is `OK` and which otherwise had
     /// no way to report that it failed.
     pub fn failed(verb: &str, workspace: Option<WorkspaceId>, error: ArmadaError, data: D) -> Self {
         Envelope {
@@ -170,7 +170,7 @@ impl ResultRow {
     /// A bare row: an id and a state, with every optional field empty.
     ///
     /// Written out rather than derived from `Default`, because `Status` has no
-    /// defensible default — every candidate is either a success char has not
+    /// defensible default — every candidate is either a success Armada has not
     /// earned or a failure it has not established.
     pub fn new(id: impl Into<String>, status: Status) -> Self {
         ResultRow {
@@ -264,10 +264,10 @@ pub fn aggregate(results: &[ResultRow], subject: &str) -> Option<ArmadaError> {
 /// to exit 1, which is the exact "a gate reading 1 goes looking for a broken
 /// test" failure the precedence rule exists to prevent.
 ///
-/// **This inference is char's, not the specification's, and it is narrower than
+/// **This inference is Armada's, not the specification's, and it is narrower than
 /// it first shipped.** PLAN.md §3.1's precedence chain runs over `error`
 /// *classes*, and a row with no `error` object has none — so §3.1 is silent
-/// about what such a row contributes, and everything below is char filling that
+/// about what such a row contributes, and everything below is Armada filling that
 /// silence. The first version filled it for every failure state alike. That is
 /// right for `FAILED`, where the alternative is a verb reporting success while
 /// `results[]` shows a failure, and wrong for the two states that mean *no
@@ -336,7 +336,7 @@ pub struct Released {
     pub files: usize,
 }
 
-/// `char init`.
+/// `armada manifest init`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct InitData {
     /// The span reserved for this workspace, and when.
@@ -352,7 +352,7 @@ pub struct InitData {
     pub results: Vec<ResultRow>,
 }
 
-/// `char check` (PLAN.md §3.1).
+/// `armada manifest check` (PLAN.md §3.1).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CheckData {
     /// The run these results belong to, and the directory its logs are in.
@@ -366,7 +366,7 @@ pub struct CheckData {
     pub reaped_runs: Vec<String>,
 }
 
-/// `--dry-run` on `char check`: what would run, and nothing changed.
+/// `--dry-run` on `armada manifest check`: what would run, and nothing changed.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct CheckDryRun {
     /// The exact argv each selected check would be given, post-substitution.
@@ -383,7 +383,7 @@ pub struct CheckDryRun {
     pub would_reap: Vec<String>,
 }
 
-/// `char clean`.
+/// `armada manifest clean`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CleanData {
     /// What the reap passes did.
@@ -391,7 +391,7 @@ pub struct CleanData {
     /// One row per workspace touched — `--all` and `--project` make this
     /// plural, which is why `clean` reports `PARTIAL`.
     pub results: Vec<ResultRow>,
-    /// External resources char **recorded and did not reclaim** (PLAN.md
+    /// External resources Armada **recorded and did not reclaim** (PLAN.md
     /// §6.1). A stale `DROP DATABASE` is strictly more dangerous than a stale
     /// `kill`, so the same answer applies with more force: report it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -403,14 +403,14 @@ pub struct CleanData {
     pub skipped: Vec<String>,
 }
 
-/// `char status`.
+/// `armada manifest status`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StatusData {
     /// Which lens produced this: `workspace`, `project` or `all`.
     pub scope: String,
     /// One row per workspace in scope.
     pub results: Vec<ResultRow>,
-    /// External resources char will never reclaim, named so a human can.
+    /// External resources Armada will never reclaim, named so a human can.
     ///
     /// **`status` asks no daemon.** It answers from `manifest.db` and a port probe,
     /// which is what makes it cheap enough to poll — and what §6.1's own
@@ -441,14 +441,14 @@ pub struct DispatchData {
     /// The entry's name.
     pub command: String,
     /// **True only if the child was executed.** This is what disambiguates a
-    /// child exiting 3 from char's own `bad_config`: char's error codes can
+    /// child exiting 3 from Armada's own `bad_config`: Armada's error codes can
     /// only occur when the child never ran.
     pub dispatched: bool,
-    /// The child's code, **verbatim and unremapped** — char did not decide the
+    /// The child's code, **verbatim and unremapped** — Armada did not decide the
     /// outcome, so it does not get to classify it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub child_exit: Option<i32>,
-    /// The argv char executed, post-substitution and post-passthrough. Cheap to
+    /// The argv Armada executed, post-substitution and post-passthrough. Cheap to
     /// record, impossible to reconstruct without reimplementing the split.
     pub argv: Vec<String>,
 }
@@ -620,7 +620,7 @@ mod tests {
     /// Phase 2 asserted the opposite here — exit 5, with `"not 1"` written into
     /// it — on the reasoning that §3.1's own example payload contains a bare
     /// `ABORTED` row, so the shape is specified. The shape is; the *inference*
-    /// was char's own, and §4.1 forbids its result: a run whose only real
+    /// was Armada's own, and §4.1 forbids its result: a run whose only real
     /// failure is a deterministic test failure must not hand a merge gate the
     /// retryable class.
     #[test]

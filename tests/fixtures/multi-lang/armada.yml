@@ -78,8 +78,8 @@ manifest:
           CONTROL_URL: http://127.0.0.1:${port.http}
           CARGO_TARGET_DIR: .cache/worker-target
         owns:
-          containers: "label=char.workspace=${workspace.id}"
-          images: "label=char.workspace=${workspace.id}"
+          containers: "label=armada.workspace=${workspace.id}"
+          images: "label=armada.workspace=${workspace.id}"
           ports: [worker]
       checks:
         lint:

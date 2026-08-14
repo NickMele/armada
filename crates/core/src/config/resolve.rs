@@ -246,7 +246,7 @@ fn resolve_component(
 /// (PLAN.md §4.6), so `**` means everything in *this* workspace and reaches
 /// into nothing. The overlap `config verify` rejects is a `root:` or a `match:`
 /// glob that *names* a path inside a declared workspace — which is the author's
-/// to write and never char's to infer.
+/// to write and never Armada's to infer.
 fn default_match_globs(root: Option<&str>, no_checks: bool) -> Vec<String> {
     if no_checks {
         return Vec::new();
@@ -407,7 +407,7 @@ fn resolve_ready(
     defaults: &Defaults,
     file: &str,
 ) -> Result<ResolvedReady, ArmadaError> {
-    // An omitted `ready:` is `{none: true}`, and `char up` then reports UP on
+    // An omitted `ready:` is `{none: true}`, and `armada manifest up` then reports UP on
     // spawn — which is why a service with a real health endpoint declares one.
     let Some(ready) = ready else {
         return Ok(ResolvedReady {
@@ -467,7 +467,7 @@ fn resolve_command(
     entry: CommandEntry,
     file: &str,
 ) -> Result<ResolvedCommand, ArmadaError> {
-    // The default is inferred — `pipe` when the entry grants secrets, so char
+    // The default is inferred — `pipe` when the entry grants secrets, so Armada
     // can scrub what it writes; `inherit` otherwise, so colours and prompts
     // work. Inference is wrong in both directions, which is why the key exists
     // and why an explicit value always wins (PLAN.md §4.5).

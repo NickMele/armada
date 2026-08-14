@@ -7,7 +7,7 @@
 //!
 //! Each case names the rule and where it comes from. The first is the one that
 //! matters most — `shell: true` beside `${files}` is arbitrary code execution
-//! on every machine that runs `char check` on a branch anyone can push
+//! on every machine that runs `armada manifest check` on a branch anyone can push
 //! (`docs/traps.md`), and PLAN.md §4.1 says it must be unrepresentable rather
 //! than warned about.
 
@@ -220,7 +220,7 @@ fn the_schema_rejects_what_the_contract_forbids() {
 
 /// The subset the **core** must also reject, because a phase-2 verb loads a
 /// config through `parse`/`resolve` and no schema runs at that point. Anything
-/// here that only the schema caught would be a document char happily acts on.
+/// here that only the schema caught would be a document Armada happily acts on.
 #[test]
 fn the_core_rejects_what_it_cannot_turn_into_a_typed_value() {
     let cases: &[(&str, &str)] = &[
@@ -294,7 +294,7 @@ fn the_core_rejects_what_it_cannot_turn_into_a_typed_value() {
 /// Every `bad_config` says where, and says what to do about it.
 ///
 /// `next_action` is required for this class and for no other, because it is the
-/// one class where char genuinely knows the fix (`ARCHITECTURE.md` §1.7). A
+/// one class where Armada genuinely knows the fix (`ARCHITECTURE.md` §1.7). A
 /// class whose remediation field is usually empty teaches agents to ignore it.
 #[test]
 fn every_config_error_carries_a_where_and_a_next_action() {

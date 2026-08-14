@@ -123,8 +123,8 @@
           "CARGO_TARGET_DIR": ".cache/worker-target",
           "CONTROL_URL": "http://127.0.0.1:${port.http}"
         },
-        "owns_containers": "label=char.workspace=${workspace.id}",
-        "owns_images": "label=char.workspace=${workspace.id}",
+        "owns_containers": "label=armada.workspace=${workspace.id}",
+        "owns_images": "label=armada.workspace=${workspace.id}",
         "owns_ports": [
           "worker"
         ]

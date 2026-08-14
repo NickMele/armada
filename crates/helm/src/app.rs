@@ -6,7 +6,7 @@
 //! `--all` operate on workspaces that are *not* the current directory, so a
 //! function that can re-derive "the workspace" from cwd makes scoping to a
 //! different one require lying about cwd — and you are one `chdir` away from a
-//! race between two concurrent runs, which is the exact scenario charkit exists
+//! race between two concurrent runs, which is the exact scenario Armada exists
 //! to make safe.
 
 use armada_core::ctx::{Clock, Ctx, Fetch, Run};
@@ -35,13 +35,13 @@ pub struct App<R: Run, C: Clock, F: Fetch> {
     pub namespace: String,
     /// This boot, so a row from a previous one is stale by definition.
     pub boot_id: String,
-    /// The environment char was started with, captured once.
+    /// The environment Armada was started with, captured once.
     pub inherited: BTreeMap<String, String>,
     /// The run this invocation belongs to, when it is inside one.
     ///
     /// Set for `check` and cleared everywhere else, which is what makes
     /// [`App::child_env`] able to answer PLAN.md §2.4 without asking anything:
-    /// `char up` is not a run and has no run id, so a service's environment
+    /// `armada manifest up` is not a run and has no run id, so a service's environment
     /// carries `ARMADA_WORKSPACE` alone.
     pub run: Option<armada_core::run::RunId>,
     /// The leases this invocation is holding right now, innermost last.
@@ -54,7 +54,7 @@ pub struct App<R: Run, C: Clock, F: Fetch> {
 
 impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// The directory subprocesses run in. Always the workspace root — PLAN.md
-    /// §3.4 calls it a constant rather than a discovery, and `char explain`
+    /// §3.4 calls it a constant rather than a discovery, and `armada manifest explain`
     /// leans on that.
     pub fn cwd(&self) -> PathBuf {
         self.ctx
@@ -66,14 +66,14 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
 
     /// The two variables **every** child inherits (PLAN.md §2.4).
     ///
-    /// Neither is declared anywhere, so a script char has never been told
+    /// Neither is declared anywhere, so a script Armada has never been told
     /// anything about still knows which workspace it is in.
     ///
     /// **`ARMADA_RUN_ID` is present only inside a run**, and the two travel
     /// together on purpose: a child reading them decides whether to *join* this
     /// run or start its own, and that decision is `ARMADA_WORKSPACE` matching the
     /// workspace it resolved for itself (PLAN.md §3.2.1). One without the other
-    /// is not an inheritance — which is why `char up`, which is not a run,
+    /// is not an inheritance — which is why `armada manifest up`, which is not a run,
     /// sets the workspace alone.
     pub fn child_env(&self) -> BTreeMap<String, String> {
         let mut env = BTreeMap::new();
@@ -319,7 +319,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// Renew every lease this invocation holds, from whatever loop is running.
     ///
     /// The same rule as the child-process heartbeat and for the same reason: a
-    /// lease goes cold after sixty seconds of silence, and char's own work can
+    /// lease goes cold after sixty seconds of silence, and Armada's own work can
     /// take longer than that — a hung Docker daemon answers each call at the
     /// deadline. A holder that stops renewing while it is still working gets
     /// its lease reclaimed underneath it. A failed renewal is not fatal; the
@@ -338,7 +338,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// Make one docker call with the held leases' heartbeat driven from inside
     /// it.
     ///
-    /// **Every docker call char makes on its own account goes through here**,
+    /// **Every docker call Armada makes on its own account goes through here**,
     /// and the renewal is handed *down* to the adapter rather than wrapped
     /// around it. Wrapping is not enough: `docker::remove` runs one `docker rm`
     /// per handle and `list_labelled` is an `ls` plus an `inspect`, each capped
@@ -371,7 +371,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         self.docker_call(|run, cwd, timeout, tick| docker::daemon_ready(run, cwd, timeout, tick))
     }
 
-    /// Every resource of one kind carrying char's labels.
+    /// Every resource of one kind carrying Armada's labels.
     pub fn docker_list_labelled(
         &mut self,
         kind: docker::Kind,
@@ -437,7 +437,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
 
         // Pass 2: labelled resources. Skipped rather than fatal when Docker is
         // not there: a repo with no services needs no daemon, and failing
-        // `char init` because Docker Desktop is closed would make the ownership
+        // `armada manifest init` because Docker Desktop is closed would make the ownership
         // layer unusable for the majority of repos that never start a
         // container.
         match self.docker_ready() {
@@ -449,7 +449,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                     // inspects them as a second call, and `docker inspect`
                     // exits non-zero if any of those objects has disappeared in
                     // between; the thing that vanished was somebody else's and
-                    // is already gone, so nothing char owns failed to be
+                    // is already gone, so nothing Armada owns failed to be
                     // reclaimed. A failed *removal* is the other category and
                     // is never routed here.
                     match self.docker_list_labelled(kind) {
@@ -500,7 +500,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
             // A group still alive after the SIGKILL escalation is the *refused*
             // category, and it is reported here for the same reason `clean`
             // puts it in `results[].error`: the reap plan has no per-row status
-            // to fail, but a reclaim char could not complete must never be
+            // to fail, but a reclaim Armada could not complete must never be
             // silent.
             survived.extend(
                 stopped
@@ -552,7 +552,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
 
     /// Stop every process group a workspace owns, and say what happened.
     ///
-    /// **Nothing is killed that char cannot prove is its own.** A row from a
+    /// **Nothing is killed that Armada cannot prove is its own.** A row from a
     /// previous boot, or one whose pid now has a different start time, is a
     /// recycled pid rather than an orphaned service — so the row is dropped and
     /// no signal is sent.
@@ -567,8 +567,8 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
             // **A pgid of zero is not a pgid.** `killpg(0, …)` signals the
             // *caller's* own group, so a `0` written by any future recorder —
             // `ProcessGroup::spawn` stores one for a child that got no new
-            // session — would have `char clean` SIGTERM and then SIGKILL char
-            // itself and everything sharing its foreground group. A row char
+            // session — would have `armada manifest clean` SIGTERM and then SIGKILL Armada
+            // itself and everything sharing its foreground group. A row Armada
             // cannot act on is dropped, exactly as an unparseable one is.
             let pgid = match row.reference.parse::<i32>() {
                 Ok(pgid) if pgid > 0 => pgid,
@@ -608,10 +608,10 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
 
 /// How a failed *enumeration* is worded, wherever it happens.
 ///
-/// **Two categories, and they must not merge.** char could not *look* — a list
+/// **Two categories, and they must not merge.** Armada could not *look* — a list
 /// or an inspect that lost a race with another workspace's teardown — which
-/// proves nothing about what char owns and is recorded without failing
-/// anything. char could not *reclaim* — a `docker rm` that returned non-zero
+/// proves nothing about what Armada owns and is recorded without failing
+/// anything. Armada could not *reclaim* — a `docker rm` that returned non-zero
 /// for a handle this workspace owns, or a process group still alive after
 /// SIGKILL — which is a real leak and fails the row that owns it. Merging them
 /// would make a benign race under five concurrent worktrees exit 1, and that is
@@ -647,7 +647,7 @@ pub fn build<R: Run, C: Clock, F: Fetch>(
         .unwrap_or_else(|| PathBuf::from("/"));
 
     // Required rather than optional. Without a boot id every lease looks stale
-    // across a reboot and every recorded pgid is unreclaimable — so char would
+    // across a reboot and every recorded pgid is unreclaimable — so Armada would
     // either steal live leases or leak processes forever, and both are worse
     // than refusing to run on a platform that cannot answer.
     let boot_id = machine::boot_id(&ctx.run, &cwd).ok_or_else(|| ArmadaError {
@@ -655,7 +655,7 @@ pub fn build<R: Run, C: Clock, F: Fetch>(
         r#where: "boot_id".to_string(),
         message: "this machine reports no boot id".to_string(),
         next_action: Some(
-            "char needs `sysctl kern.bootsessionuuid` on darwin or \
+            "Armada needs `sysctl kern.bootsessionuuid` on darwin or \
              /proc/sys/kernel/random/boot_id on Linux"
                 .to_string(),
         ),
@@ -703,6 +703,6 @@ pub fn with_lease<R: Run, C: Clock, F: Fetch, T>(
 /// while tearing down blocks other workspaces for no reason. The run lease is
 /// held throughout and released last — an earlier version of `clean`'s ordering
 /// released it first, annotated "so nothing new starts", which is precisely
-/// what lets something new start: a concurrent `char up` takes the freed lease
+/// what lets something new start: a concurrent `armada manifest up` takes the freed lease
 /// and starts services into a workspace being torn down.
 pub const RELEASED_EARLY: [LeaseKind; 2] = [LeaseKind::CpuSlot, LeaseKind::Exclusive];

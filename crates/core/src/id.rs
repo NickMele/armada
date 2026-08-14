@@ -50,7 +50,7 @@ impl WorkspaceId {
     ///
     /// The hash is one-way, so a stored id can only ever be compared, never
     /// re-derived into the path that produced it — which is the whole reason
-    /// PLAN.md §2.3.1 stamps `char.workspace_path` alongside it.
+    /// PLAN.md §2.3.1 stamps `armada.workspace_path` alongside it.
     pub fn from_stored(id: impl Into<String>) -> Self {
         WorkspaceId(id.into())
     }
@@ -78,9 +78,9 @@ impl ProjectId {
     ///
     /// **`--path-format=absolute` is load-bearing and `realpath` alone does not
     /// substitute for it.** The plain form returns a path *relative to cwd*, so
-    /// hashing it yields a different id depending on where char ran; resolving
+    /// hashing it yields a different id depending on where Armada ran; resolving
     /// that relative path looks like a fix and is not, because it resolves
-    /// against char's own cwd rather than the directory git ran in. The
+    /// against Armada's own cwd rather than the directory git ran in. The
     /// absolute form is identical from every directory, and `realpath` stays
     /// only to collapse symlinks. See PLAN.md §2.2 — this fails only in a
     /// subdirectory of the main checkout, which is why it is easy to ship.

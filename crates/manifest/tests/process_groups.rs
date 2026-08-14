@@ -11,9 +11,9 @@
 //! |---|---|
 //! | cooperative | `killpg` against a `setsid`'d group reaches **grandchildren** |
 //! | SIGTERM-ignoring | one uncooperative leader immunises its whole group, and only the SIGKILL escalation gets it |
-//! | self-`setsid` | a group char cannot reach at all, which must be **detected and reported** rather than silently missed |
+//! | self-`setsid` | a group Armada cannot reach at all, which must be **detected and reported** rather than silently missed |
 //!
-//! These are run directly against the wrapper rather than through `char down`,
+//! These are run directly against the wrapper rather than through `armada manifest down`,
 //! which is phase 4 — an earlier draft's criteria could not be run at the end
 //! of this phase at all.
 
@@ -25,7 +25,7 @@ use std::time::Duration;
 
 /// How many processes are in this group, counted from `ps` rather than
 /// inferred. `killpg` reaching grandchildren is the claim under test, so the
-/// count has to come from outside char.
+/// count has to come from outside Armada.
 fn processes_in_group(pgid: i32) -> usize {
     let output = std::process::Command::new("ps")
         .args(["-A", "-o", "pgid=,pid="])
@@ -67,7 +67,7 @@ fn killpg_against_a_setsid_group_reaches_grandchildren() {
     assert!(report.existed, "the group was live before the stop");
 
     // Reap before judging, and judge afterwards — `report.gone` cannot be the
-    // assertion here. A killed direct child is a zombie until char waits on it,
+    // assertion here. A killed direct child is a zombie until Armada waits on it,
     // that zombie is still a member of its process group, and the two platforms
     // disagree about whether it counts: measured, `killpg(pgid, 0)` against a
     // group whose only member is an unreaped zombie *succeeds* on Linux and
@@ -110,7 +110,7 @@ fn a_sigterm_ignoring_leader_immunises_its_whole_group() {
     // the second one too.
     let report = posix::stop_group(group.pgid(), Duration::from_millis(300));
     assert!(report.escalated, "the escalation should have been needed");
-    // Reap before judging, for the reason recorded above: until char waits on
+    // Reap before judging, for the reason recorded above: until Armada waits on
     // the leader SIGKILL left behind, the group still has a member on Linux.
     reap(group.pid());
     settle();
@@ -125,7 +125,7 @@ fn a_sigterm_ignoring_leader_immunises_its_whole_group() {
 /// tracked group entirely, so its pgid is not the one recorded and no `killpg`
 /// reaches it. **That case is detected by the port still being bound
 /// afterwards, not prevented**, and this test asserts exactly that: the group
-/// is gone, the escapee is not, and char can see the difference.
+/// is gone, the escapee is not, and Armada can see the difference.
 #[test]
 fn a_self_setsid_service_escapes_the_group_and_is_detected_by_its_port() {
     if !std::path::Path::new("/usr/bin/perl").exists() {
@@ -202,7 +202,7 @@ fn a_self_setsid_service_escapes_the_group_and_is_detected_by_its_port() {
 
 /// **Every spawned `Child` is waited on, or explicitly reaped.** Measured:
 /// Rust's `Child` does not reap on drop, so a dropped handle leaves a
-/// `<defunct>` entry until char itself exits — and a fifteen-minute detached
+/// `<defunct>` entry until Armada itself exits — and a fifteen-minute detached
 /// run accumulates them.
 #[test]
 fn a_child_dropped_without_wait_leaves_a_zombie_and_the_wrapper_never_does() {
@@ -228,13 +228,13 @@ fn a_child_dropped_without_wait_leaves_a_zombie_and_the_wrapper_never_does() {
 
     // The rule the three tests above depend on, and the half of it that is
     // portable is asserted right here: **a zombie stays a member of its process
-    // group until char reaps it**, and the reap is what clears it — on both
+    // group until Armada reaps it**, and the reap is what clears it — on both
     // platforms, which is why those tests reap before they judge.
     //
     // The half that is not portable, and so is recorded rather than asserted:
     // `killpg(pgid, 0)` against a group whose only remaining member is an
     // unreaped zombie *succeeds* on Linux and fails on darwin. So no test may
-    // ask `stop_group` whether it emptied a group char has not waited on yet —
+    // ask `stop_group` whether it emptied a group Armada has not waited on yet —
     // the answer is the platform, not the kill.
     reap(leaked_pid);
     assert!(
@@ -270,7 +270,7 @@ fn process_state(pid: i32) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-/// Reap one child char has already signalled, so its `<defunct>` entry stops
+/// Reap one child Armada has already signalled, so its `<defunct>` entry stops
 /// answering the liveness probes the assertions above read.
 ///
 /// **`waitpid` on that pid and never on `-1`.** These tests run as threads of

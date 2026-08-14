@@ -1,4 +1,4 @@
-//! `char clean` — release everything this workspace owns.
+//! `armada manifest clean` — release everything this workspace owns.
 //!
 //! **The order is fixed, because a SIGKILL part-way through must not make
 //! things worse:**
@@ -23,7 +23,7 @@
 //! **Step 0 is the whole point**, and an earlier version of this list got it
 //! backwards: it released the run lease *first*, annotated "so nothing new
 //! starts", which is precisely what lets something new start. A concurrent
-//! `char up` takes the freed lease and starts services into a workspace being
+//! `armada manifest up` takes the freed lease and starts services into a workspace being
 //! torn down.
 
 use armada_core::config::ResolvedConfig;
@@ -102,11 +102,11 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
         (_, None) => LeaseId::machine(),
     };
 
-    // **The self-exemption below is only sound when the lease char just took is
+    // **The self-exemption below is only sound when the lease Armada just took is
     // *this workspace's* run lease.** Under `--all` the lease is the machine
     // one, whose row carries a NULL workspace, so a live lease on `me` belongs
-    // to some other process — and exempting it would have `char clean --all`,
-    // run from inside a worktree, tear down the `char init` running in it.
+    // to some other process — and exempting it would have `armada manifest clean --all`,
+    // run from inside a worktree, tear down the `armada manifest init` running in it.
     let holds_my_run_lease = lease.kind == LeaseKind::Run && lease.workspace == me;
 
     let envelope = app::with_lease(app, lease, Policy::FailFast, None, |app| {
@@ -199,10 +199,10 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
 ) -> Result<ResultRow, ArmadaError> {
     let mut released = Released::default();
     // **Everything that would not go is named, in one of two channels that must
-    // not merge.** `refused` is a reclaim char attempted and could not
+    // not merge.** `refused` is a reclaim Armada attempted and could not
     // complete — a `docker rm` returning non-zero for a handle this workspace
     // owns, or a process group still alive after SIGKILL. That is a real leak,
-    // so it fails this row. `skipped` is an enumeration char could not perform,
+    // so it fails this row. `skipped` is an enumeration Armada could not perform,
     // which is the same event `plan_reap` records there and proves nothing
     // about what this workspace still holds; it must not fail anything.
     let mut refused: Vec<String> = Vec::new();
@@ -230,7 +230,7 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     // what keeps this honest: with Docker closed every count below stays zero
     // and nothing is refused, so a silent probe would let the row report
     // `CLEAN` while the workspace's labelled containers, networks and volumes
-    // survive — and their `char.workspace_path` outlives the row, so the next
+    // survive — and their `armada.workspace_path` outlives the row, so the next
     // reap classifies them as belonging to a live workspace and only ever
     // reports them. That is the founding bug of this project, reached through a
     // run that said it succeeded.
@@ -260,7 +260,7 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
             };
             // **Filters on both labels, not the id alone.** `workspace_id` is
             // 32 bits, and every `owns:` selector is id-only — so a collision
-            // would have `char clean` in one workspace destroy another's live
+            // would have `armada manifest clean` in one workspace destroy another's live
             // containers, the single thing the flat-siblings model exists to
             // prevent.
             let mine: Vec<String> = found
@@ -274,7 +274,7 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
                 .collect();
 
             // The other category: a handle this workspace owns that would not
-            // go is a leak char is about to stop tracking, so it fails the row.
+            // go is a leak Armada is about to stop tracking, so it fails the row.
             let removed = app.docker_remove(kind, &mine);
             count_removed(kind, &removed, &mut released, &mut refused);
         }
@@ -323,7 +323,8 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
             r#where: row.id.to_string(),
             message: refused.join("; "),
             next_action: Some(
-                "remove what is named above by hand, then re-run `char clean`".to_string(),
+                "remove what is named above by hand, then re-run `armada manifest clean`"
+                    .to_string(),
             ),
         });
     }
@@ -429,9 +430,9 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
 
 /// `--artifacts`: the declared `owns.files`, and only those.
 ///
-/// **char never guesses which files are artifacts.** Inferring `node_modules`,
+/// **Armada never guesses which files are artifacts.** Inferring `node_modules`,
 /// `.venv` or `.next` from a repo scan is a stack-detection engine, which the
-/// plan rules out. They are declared, or they are not char's.
+/// plan rules out. They are declared, or they are not Armada's.
 fn remove_artifacts<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     row: &WorkspaceRow,
@@ -482,10 +483,10 @@ fn declared_files(config: &ResolvedConfig) -> Vec<&String> {
     declared
 }
 
-/// The declared external resources char is about to stop knowing about.
+/// The declared external resources Armada is about to stop knowing about.
 ///
 /// Collected **before** the rows are deleted, because after that there is
-/// nothing left to report — and reporting is the entire mechanism: char records
+/// nothing left to report — and reporting is the entire mechanism: Armada records
 /// these and never runs them.
 fn collect_unreclaimed<R: Run, C: Clock, F: Fetch>(
     app: &App<R, C, F>,
@@ -516,7 +517,7 @@ fn holds_a_live_lease<R: Run, C: Clock, F: Fetch>(
     }))
 }
 
-/// `--dry-run`. **char computes this from its own state and needs no help from
+/// `--dry-run`. **Armada computes this from its own state and needs no help from
 /// the repo:** it knows what it claimed, what it labelled, and what the current
 /// scope selects.
 fn dry<R: Run, C: Clock, F: Fetch>(
@@ -586,7 +587,7 @@ fn would_delete<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>, row: &WorkspaceR
         .collect()
 }
 
-/// `char clean --orphaned --force-rebuild` — the way out of a `manifest.db` char
+/// `armada manifest clean --orphaned --force-rebuild` — the way out of a `manifest.db` Armada
 /// cannot read (PLAN.md §4.3).
 ///
 /// **The recovery path must not need the thing that is broken**, which is why
@@ -596,7 +597,7 @@ fn would_delete<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>, row: &WorkspaceR
 /// been opened.
 ///
 /// It ignores the existing database, enumerates by **label alone** —
-/// `char.workspace_path` is a real path and `stat` still works — reaps what is
+/// `armada.workspace_path` is a real path and `stat` still works — reaps what is
 /// unambiguously dead, and writes a fresh database. **It is the one operation
 /// that trusts labels over rows, which is why it is explicit rather than
 /// automatic.**
@@ -690,8 +691,8 @@ pub fn rebuild<R: Run, C: Clock>(
     }
     reaped.skipped.push(namespace_note(recovered.as_deref()));
 
-    // Two channels, exactly as `clean_one` keeps them: an enumeration char
-    // could not perform is `skipped` and proves nothing, while a removal char
+    // Two channels, exactly as `clean_one` keeps them: an enumeration Armada
+    // could not perform is `skipped` and proves nothing, while a removal Armada
     // attempted and could not complete is a leak on a workspace that is
     // provably gone — so it fails a row rather than being reported as a
     // resource that was deliberately left alone.
@@ -753,7 +754,7 @@ pub fn rebuild<R: Run, C: Clock>(
                 r#where: workspace,
                 message: refused.join("; "),
                 next_action: Some(
-                    "remove what is named above by hand, then re-run `char clean --all \
+                    "remove what is named above by hand, then re-run `armada manifest clean --all \
                      --orphaned` — the store is readable again, so the ordinary reap is \
                      enough and re-running the rebuild would only set another database aside"
                         .to_string(),
@@ -876,7 +877,7 @@ fn survey<R: Run>(
 /// stated as it actually behaves.
 ///
 /// **The scope is stated first, and unconditionally.** `PLAN.md` §4.3 spells
-/// the recovery as `char clean --orphaned --force-rebuild`, so that invocation
+/// the recovery as `armada manifest clean --orphaned --force-rebuild`, so that invocation
 /// is accepted as written — which means a caller can reach this pass from a
 /// command line that reads workspace-scoped and get machine-scoped,
 /// cross-namespace work. Telling them what it did is the honest half of
@@ -889,7 +890,7 @@ fn namespace_note(recovered: Option<&str>) -> String {
     let scope = concat!(
         "this pass is machine-scoped whichever flags reached it: it enumerates every ",
         "labelled resource on this daemon and removes on ENOENT across namespaces, so it ",
-        "may remove a resource another char installation stamped",
+        "may remove a resource another Armada installation stamped",
     );
     let namespace = match recovered {
         Some(_) => concat!(
@@ -898,7 +899,7 @@ fn namespace_note(recovered: Option<&str>) -> String {
             "alone and the namespace filter does not bound it",
         ),
         None => concat!(
-            "the previous namespace could not be read, so char cannot tell its own dead ",
+            "the previous namespace could not be read, so Armada cannot tell its own dead ",
             "resources from another installation's; this path removes on ENOENT regardless",
         ),
     };

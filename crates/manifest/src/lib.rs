@@ -10,7 +10,7 @@
 //! machine-global store ([`db`]), the process-group wrapper, and the docker,
 //! git and filesystem modules — which are **not** seams, because they are
 //! subprocesses and files respectively, and faking either would hide the bug
-//! class char exists to prevent.
+//! class Armada exists to prevent.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]

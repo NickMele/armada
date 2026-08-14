@@ -62,7 +62,7 @@ pub fn resolve(run: &impl Run, cwd: &Path) -> Result<Workspace, ArmadaError> {
 /// among them that hold a `armada.yml`.
 ///
 /// With no git root the walk stops at the filesystem root — which is the
-/// correct behaviour outside a repository, where `char config scan` is the only
+/// correct behaviour outside a repository, where `armada manifest config scan` is the only
 /// verb that runs anyway.
 fn walk(from: &Path, stop_at: Option<&Path>) -> (Vec<Candidate>, Vec<PathBuf>) {
     let mut candidates = Vec::new();
@@ -242,7 +242,7 @@ mod tests {
         assert!(!workspace.id.as_str().is_empty());
     }
 
-    /// A config char cannot parse still answers the nesting question — as
+    /// A config Armada cannot parse still answers the nesting question — as
     /// "declares nothing" — so the failure reported is the nesting rather than
     /// a parse the caller did not ask for.
     #[test]

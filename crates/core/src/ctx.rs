@@ -10,11 +10,11 @@
 //!   modules that build argv and call [`Run`]. Giving them their own ports
 //!   would mean three different ways to fake a shell command.
 //! - **Faking at the `run` level keeps argv assertable, and argv is where the
-//!   bugs are.** charkit's central claim is *"`clean` releases exactly what this
+//!   bugs are.** Armada's central claim is *"`clean` releases exactly what this
 //!   workspace owns"*, and when that breaks it looks like `--filter
-//!   label=char.workspace` written without its `=<id>`. A test that fakes `run`
+//!   label=armada.workspace` written without its `=<id>`. A test that fakes `run`
 //!   catches that; a test that fakes a `DockerPort` catches none of it.
-//! - **The filesystem and SQLite are not faked at all.** char depends on real
+//! - **The filesystem and SQLite are not faked at all.** Armada depends on real
 //!   transaction semantics for port claims and lease acquisition, so a fake
 //!   proves things about the fake. Two threads against a real database in a
 //!   `TempDir` is both more faithful and less code.
@@ -37,7 +37,7 @@ use std::time::Duration;
 /// arguments.
 pub struct Ctx<R: Run, C: Clock, F: Fetch> {
     /// `None` for the two machine-scoped invocations that run outside any
-    /// workspace: `char config scan`, and `char clean --all --orphaned`
+    /// workspace: `armada manifest config scan`, and `armada manifest clean --all --orphaned`
     /// (PLAN.md §2.1).
     pub workspace: Option<Workspace>,
     /// Every subprocess.
@@ -64,10 +64,10 @@ impl<R: Run, C: Clock, F: Fetch> Ctx<R, C, F> {
 /// Where a child's output goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StdioMode {
-    /// char reads the child's stdout and stderr, and can therefore scrub them.
+    /// Armada reads the child's stdout and stderr, and can therefore scrub them.
     Capture,
-    /// The child keeps char's own descriptors — colours, progress bars and
-    /// prompts work, and char sees nothing.
+    /// The child keeps Armada's own descriptors — colours, progress bars and
+    /// prompts work, and Armada sees nothing.
     Inherit,
 }
 
@@ -89,7 +89,7 @@ pub struct RunRequest {
     pub env: BTreeMap<String, String>,
     /// Where the child's output goes.
     pub stdio: StdioMode,
-    /// char's own deadline. `None` means char imposes none — which is correct
+    /// Armada's own deadline. `None` means Armada imposes none — which is correct
     /// for a dispatched `commands:` entry, whose runtime is the repo's business.
     pub timeout: Option<Duration>,
     /// Spawn the child in a new **session** via `setsid`, so its whole tree
@@ -142,11 +142,11 @@ pub struct RunOutput {
     pub code: Option<i32>,
     /// The signal that ended the child, when one did.
     pub signal: Option<i32>,
-    /// Empty under [`StdioMode::Inherit`], because char never saw it.
+    /// Empty under [`StdioMode::Inherit`], because Armada never saw it.
     pub stdout: String,
     /// Empty under [`StdioMode::Inherit`].
     pub stderr: String,
-    /// char's own deadline elapsed and char killed the group.
+    /// Armada's own deadline elapsed and Armada killed the group.
     pub timed_out: bool,
 }
 
@@ -204,7 +204,7 @@ pub trait Run {
     /// the work is wedged, so the lease looks healthy forever and you need a
     /// TTL to catch it. `bundle install` takes minutes and a lease goes cold in
     /// one, so without this a second agent could take the run lease out from
-    /// under a healthy `char init`.
+    /// under a healthy `armada manifest init`.
     ///
     /// The default ignores the tick, which is right for a fake: nothing in a
     /// unit test is waiting on anything.
@@ -218,7 +218,7 @@ pub trait Run {
     }
 }
 
-/// Time, in the three shapes char needs.
+/// Time, in the three shapes Armada needs.
 pub trait Clock {
     /// Wall clock, RFC 3339. Used for `claimed_at`, which is only ever
     /// displayed — never compared, because a backwards NTP step would make a
@@ -227,7 +227,7 @@ pub trait Clock {
 
     /// Wall clock, milliseconds since the epoch.
     ///
-    /// The one thing char needs the wall clock as a *number* for: a run id is
+    /// The one thing Armada needs the wall clock as a *number* for: a run id is
     /// time-ordered so that lexicographic order is chronological order, which is
     /// what makes run retention a sort of directory names rather than a stat of
     /// every one of them (PLAN.md §4.2). Monotonic will not do — those readings
@@ -245,7 +245,7 @@ pub trait Clock {
     ///
     /// The distinction is not academic. Measured, darwin's `CLOCK_MONOTONIC`
     /// counted 4.4 days of sleep on the machine this was written on — and the
-    /// clock char wants is the one that does *not* advance while the machine
+    /// clock Armada wants is the one that does *not* advance while the machine
     /// is suspended, because the lease holder was not running either and its
     /// heartbeat should not age. Getting it backwards makes a live holder look
     /// arbitrarily cold after a laptop resumes, which is the

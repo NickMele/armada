@@ -36,7 +36,7 @@ manifest:
       match: ["app/**", "lib/**", "config/**", "db/**"]
       setup:
         - bundle install
-        # Idempotence is the repo's to provide, not char's. `db:create` errors
+        # Idempotence is the repo's to provide, not Armada's. `db:create` errors
         # when the database already exists, and `|| true` needs a shell — which
         # is why `shell:` is per step and visible in the diff.
         - { cmd: "bin/rails db:create || true", shell: true }
@@ -44,8 +44,8 @@ manifest:
         - bundle exec rails db:seed
       owns:
         files: [vendor/bundle, tmp/cache]
-        # Postgres here is a shared server, not a char-managed container, so this
-        # database outlives the workspace directory. char records the resolved
+        # Postgres here is a shared server, not an Armada-managed container, so this
+        # database outlives the workspace directory. Armada records the resolved
         # command at `init` and reports it from `status --all` when the workspace
         # is gone. It never executes it.
         release: psql -h db.internal -c 'DROP DATABASE app_${workspace.id}'

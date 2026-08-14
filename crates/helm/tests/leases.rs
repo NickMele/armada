@@ -2,8 +2,8 @@
 //!
 //! Take a lease, `kill -9` the holder, and confirm the next claimant reclaims
 //! it once the heartbeat goes cold rather than blocking forever. This is the
-//! mechanism ten-minute `char check` runs depend on, so it needs a test that
-//! kills something — and it does: the holder here is a real `char` process,
+//! mechanism ten-minute `armada manifest check` runs depend on, so it needs a test that
+//! kills something — and it does: the holder here is a real `Armada` process,
 //! ended with SIGKILL, which has no chance to release anything.
 //!
 //! **The clock is the seam, and that is the whole reason this is testable.**
@@ -69,7 +69,7 @@ fn a_lease_whose_holder_was_killed_is_reclaimed_once_it_goes_cold() {
     );
 
     // Still warm: the next claimant fails fast rather than stealing it. Acting
-    // on state char cannot prove is stale is the mistake this whole design
+    // on state Armada cannot prove is stale is the mistake this whole design
     // avoids.
     let blocked = machine.run(&repo, &["manifest", "init", "--json"]);
     let payload: Value = serde_json::from_slice(&blocked.stdout).unwrap();
@@ -95,7 +95,7 @@ fn a_lease_whose_holder_was_killed_is_reclaimed_once_it_goes_cold() {
     );
 }
 
-/// Drive `char init` in-process against a clock that has moved on.
+/// Drive `armada manifest init` in-process against a clock that has moved on.
 fn init_with_clock(
     machine: &Machine,
     repo: &Path,

@@ -95,7 +95,7 @@ impl LeaseId {
     /// machine-wide budgets — slot 3 is slot 3 for everyone, `browser` is one
     /// browser. The run lease is the opposite: it is *per workspace*, and five
     /// agents in five worktrees must never contend on it. A constant key here
-    /// makes the second worktree's `char init` fail with "a run is already in
+    /// makes the second worktree's `armada manifest init` fail with "a run is already in
     /// flight" against a run in a different directory, which is the exact
     /// silent-serialisation failure the flat-siblings model exists to prevent.
     pub fn run(workspace: WorkspaceId) -> Self {
@@ -125,7 +125,7 @@ impl LeaseId {
     }
 }
 
-/// Who is holding a lease char wanted.
+/// Who is holding a lease Armada wanted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Holder {
     /// The workspace holding it, when it has one.
@@ -209,7 +209,7 @@ pub struct ClaimState {
     /// The acquisition ceiling in milliseconds, or `None` under `--wait`.
     ///
     /// **`--wait` is exempt from the ceiling.** `acquire_timeout` bounds waits
-    /// char imposes; `--wait` is the caller asking, and the fixtures contain a
+    /// Armada imposes; `--wait` is the caller asking, and the fixtures contain a
     /// 1800-second check, so a ceiling there turns "queue behind that run" into
     /// "fail after fifteen minutes" for a run behaving exactly as specified.
     pub ceiling_ms: Option<u64>,
@@ -468,7 +468,7 @@ fn already_held(lease: &LeaseId, holder: &Holder) -> ArmadaError {
             holder.held_ms / 1000
         ),
         next_action: Some(
-            "`char check --wait` to queue, or `char check --status` to watch it".to_string(),
+            "`armada manifest check --wait` to queue, or `armada manifest check --status` to watch it".to_string(),
         ),
     }
 }
@@ -488,7 +488,9 @@ fn ceiling_expired(phase: &Phase, waited_ms: u64) -> ArmadaError {
             "{held_by}for {}m — acquisition ceiling reached",
             waited_ms / 60_000
         ),
-        next_action: Some("retry; `char status --all` names what is holding it".to_string()),
+        next_action: Some(
+            "retry; `armada manifest status --all` names what is holding it".to_string(),
+        ),
     }
 }
 

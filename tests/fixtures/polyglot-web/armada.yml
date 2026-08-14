@@ -53,7 +53,7 @@ manifest:
           cmd: uv run --project backend mypy backend
           scope: component
           timeout: 300
-        # Runs inside the `api` compose service. char builds the `exec -T`
+        # Runs inside the `api` compose service. Armada builds the `exec -T`
         # invocation from the file list and project name it already owns, so the
         # config never hardcodes either.
         test:
@@ -124,7 +124,7 @@ manifest:
         files: [".worktrees/${workspace.id}"]
 
     # No grant, but it fetches its own token internally and is chatty about it,
-    # so the repo asks for `pipe` and char scrubs what it can see.
+    # so the repo asks for `pipe` and Armada scrubs what it can see.
     design:
       cmd: uv run scripts/design.py
       help: Sync design tokens

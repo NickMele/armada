@@ -60,7 +60,7 @@ fn init(envelope: &Envelope<InitData>) -> String {
     out
 }
 
-/// `char check`.
+/// `armada manifest check`.
 ///
 /// One line per check, because that is the shape an agent scans and a human
 /// reads: the id, the verdict, how long, and where the output went. The
@@ -155,7 +155,7 @@ fn clean(envelope: &Envelope<CleanData>) -> String {
         // Reported, never executed. A stale `DROP DATABASE` is strictly more
         // dangerous than a stale `kill`.
         out.push_str(&format!(
-            "  char did not reclaim, and will not: {}\n",
+            "  Armada did not reclaim, and will not: {}\n",
             external.command
         ));
     }
@@ -211,7 +211,7 @@ fn status(envelope: &Envelope<StatusData>) -> String {
     }
     for external in &data.unreclaimed {
         out.push_str(&format!(
-            "  workspace {}{} declared an external resource char did not reclaim:\n      {}\n",
+            "  workspace {}{} declared an external resource Armada did not reclaim:\n      {}\n",
             external.workspace,
             if external.workspace_exists {
                 ""
@@ -227,7 +227,7 @@ fn status(envelope: &Envelope<StatusData>) -> String {
 fn dispatch(envelope: &Envelope<DispatchData>) -> String {
     match &envelope.error {
         Some(error) => error_lines(error),
-        // The child wrote its own output; char adds nothing. Saying "exited 0"
+        // The child wrote its own output; Armada adds nothing. Saying "exited 0"
         // after a command that already printed its result is noise, and saying
         // it on stdout would corrupt a pipeline the repo owns.
         None => String::new(),
@@ -314,13 +314,13 @@ mod tests {
             workspaces: vec![WorkspaceId::from_stored("deadbeef")],
             resources: vec![ReapTarget {
                 kind: OwnedKind::Container,
-                reference: "char-api-1".to_string(),
+                reference: "Armada-api-1".to_string(),
                 workspace: WorkspaceId::from_stored("deadbeef"),
             }],
             leases: vec!["run:a3f91c02".to_string()],
             reported: vec![Reported {
                 kind: OwnedKind::Volume,
-                reference: "char-data".to_string(),
+                reference: "Armada-data".to_string(),
                 workspace: workspace(),
                 reason: LeftAlone::WorkspaceLive,
             }],
@@ -375,9 +375,9 @@ mod tests {
         let text = human(&Output::Init(Box::new(envelope)));
         assert!(text.contains("error: `npm ci` exited 1\n"));
         assert!(text.contains("  reaped     workspace deadbeef (directory gone)\n"));
-        assert!(text.contains("  reaped     container char-api-1 (deadbeef)\n"));
+        assert!(text.contains("  reaped     container Armada-api-1 (deadbeef)\n"));
         assert!(text.contains("  reaped     lease run:a3f91c02 (heartbeat cold)\n"));
-        assert!(text.contains("  left alone volume char-data (a3f91c02) — workspace_live\n"));
+        assert!(text.contains("  left alone volume Armada-data (a3f91c02) — workspace_live\n"));
         assert!(text.contains("  not swept  labelled resources: docker daemon unreachable\n"));
     }
 
@@ -434,11 +434,11 @@ mod tests {
         ));
         assert!(text.contains("  skipped    b7c20d11 — it holds a live lease\n"));
         assert!(text.contains(
-            "  char did not reclaim, and will not: psql -c 'DROP DATABASE app_a3f91c02'\n"
+            "  Armada did not reclaim, and will not: psql -c 'DROP DATABASE app_a3f91c02'\n"
         ));
     }
 
-    /// A row char never got as far as releasing anything for prints its state
+    /// A row Armada never got as far as releasing anything for prints its state
     /// and nothing else — no empty tally.
     #[test]
     fn a_clean_row_with_nothing_released_prints_no_counts() {
@@ -468,7 +468,7 @@ mod tests {
             Status::Clean,
             CleanDryRun {
                 would_release: vec!["ports 5460-5469 (a3f91c02)".to_string()],
-                would_remove: vec!["container char-api-1".to_string()],
+                would_remove: vec!["container Armada-api-1".to_string()],
                 would_delete: vec!["node_modules".to_string()],
                 would_report: vec!["psql -c 'DROP DATABASE app_a3f91c02'".to_string()],
             },
@@ -477,7 +477,7 @@ mod tests {
         let text = human(&Output::CleanDryRun(Box::new(envelope)));
         assert!(text.starts_with("dry run — nothing was changed\n"));
         assert!(text.contains("  would_release   ports 5460-5469 (a3f91c02)\n"));
-        assert!(text.contains("  would_remove    container char-api-1\n"));
+        assert!(text.contains("  would_remove    container Armada-api-1\n"));
         assert!(text.contains("  would_delete    node_modules\n"));
         assert!(text.contains("  would_report    psql -c 'DROP DATABASE app_a3f91c02'\n"));
     }
@@ -545,7 +545,7 @@ mod tests {
         );
         assert_eq!(human(&Output::Dispatch(Box::new(ran))), "");
 
-        // A command that never ran is char's failure, and char says so.
+        // A command that never ran is Armada's failure, and Armada says so.
         let refused = Envelope::failed(
             "commands",
             Some(workspace()),

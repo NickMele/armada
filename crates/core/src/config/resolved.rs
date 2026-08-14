@@ -282,8 +282,8 @@ pub enum Scope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Stdio {
-    /// The child keeps char's terminal. char sees nothing and scrubs nothing.
+    /// The child keeps Armada's terminal. Armada sees nothing and scrubs nothing.
     Inherit,
-    /// char sees the output, and can scrub it.
+    /// Armada sees the output, and can scrub it.
     Pipe,
 }

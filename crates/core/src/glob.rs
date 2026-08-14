@@ -1,7 +1,7 @@
 //! Path globs, for `match:` (PLAN.md §4.1).
 //!
 //! **Hand-rolled rather than a crate**, for the reason `adapters::clock`
-//! hand-rolls one timestamp format: char needs one operation — does this
+//! hand-rolls one timestamp format: Armada needs one operation — does this
 //! workspace-relative path match this pattern — and a dependency for it is
 //! something to review, audit and upgrade for the life of the project in
 //! exchange for sixty lines. It is also the operation `config verify` and the
@@ -9,7 +9,7 @@
 //! having it be general.
 //!
 //! **Deliberately not a filesystem walk.** Every path this matches is one git
-//! already told char about (PLAN.md §4.1's `${files}`) or one the caller typed.
+//! already told Armada about (PLAN.md §4.1's `${files}`) or one the caller typed.
 //! Nothing here opens a directory, which is what keeps it in the pure core.
 //!
 //! The grammar, and nothing else:
@@ -50,8 +50,8 @@ fn match_segments(pattern: &[&str], path: &[&str]) -> bool {
         Some((&"**", rest)) => {
             // Zero or more segments. Zero first, so `a/**` matches `a` as well
             // as `a/b/c` — a component rooted at `a` owns the directory itself,
-            // and a caller who types `char check a` is not asking a different
-            // question from one who types `char check a/b`.
+            // and a caller who types `armada manifest check a` is not asking a different
+            // question from one who types `armada manifest check a/b`.
             (0..=path.len()).any(|skip| match_segments(rest, &path[skip..]))
         }
         Some((first, rest)) => match path.split_first() {

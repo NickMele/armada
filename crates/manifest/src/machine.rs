@@ -18,11 +18,11 @@
 //! (`ARCHITECTURE.md` §1.4). That property is kept: this module is the only
 //! reader, the entrypoint is the only caller, and everything below receives
 //! values. `$HOME` is likewise captured once, at the top, and arrives here as
-//! an argument — which is also what lets the whole test suite point char at a
+//! an argument — which is also what lets the whole test suite point Armada at a
 //! `TempDir` without an environment variable.
 //!
 //! **Absence is not an error.** A machine with no `~/.armada/machine.yml` is the
-//! ordinary case — char never writes one — so a missing file is the documented
+//! ordinary case — Armada never writes one — so a missing file is the documented
 //! defaults and nothing else. A file that exists and cannot be understood *is*
 //! an error, and it is `environment`: the repo is fine and the machine's
 //! configuration is not.
@@ -54,7 +54,7 @@ pub struct MachineConfig {
     pub check_timeout: u32,
     /// Cumulative seconds a check may spend *waiting* for leases.
     pub acquire_timeout: u32,
-    /// char's own deadline on every docker call.
+    /// Armada's own deadline on every docker call.
     pub docker_timeout: u32,
 }
 
@@ -76,7 +76,7 @@ impl MachineConfig {
     ///
     /// `cpu_slots` is `num_cpus - 2`, **not** `num_cpus`: a budget that permits
     /// full saturation makes the machine feel dead even while the work is
-    /// correctly bounded, because the editor, the agent processes and char
+    /// correctly bounded, because the editor, the agent processes and Armada
     /// itself all need something.
     pub fn defaults() -> Self {
         MachineConfig {
@@ -149,7 +149,7 @@ impl MachineConfig {
         }
     }
 
-    /// char's deadline on a docker call, as a duration.
+    /// Armada's deadline on a docker call, as a duration.
     ///
     /// Measured: the docker CLI has **no client-side timeout** and no flag for
     /// one — `docker ps` against a socket that accepts and never replies was
@@ -188,7 +188,7 @@ pub fn armada_home(home: &Path) -> PathBuf {
 ///
 /// A machine that answers neither returns `None`, and every liveness check that
 /// depends on it then declines to act: [`armada_core::reap::pgid_is_ours`]
-/// returns false without a boot id, so char reports rather than kills.
+/// returns false without a boot id, so Armada reports rather than kills.
 pub fn boot_id(run: &impl Run, cwd: &Path) -> Option<String> {
     #[cfg(target_os = "linux")]
     {
@@ -225,7 +225,7 @@ pub fn boot_id(run: &impl Run, cwd: &Path) -> Option<String> {
 /// One-second resolution on darwin, so pid reuse inside the same second is
 /// undetectable and this is **a strong filter rather than a proof** — which is
 /// why it is one half of a pair with the boot id rather than a test on its own.
-/// `None` means the process is gone, or char could not sample it; both are
+/// `None` means the process is gone, or Armada could not sample it; both are
 /// answered by declining to kill.
 pub fn process_start_at(run: &impl Run, cwd: &Path, pid: i32) -> Option<String> {
     #[cfg(target_os = "linux")]

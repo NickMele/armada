@@ -1,10 +1,10 @@
 //! Selectors: turning what the caller typed into the set of checks to run
 //! (PLAN.md §3.2).
 //!
-//! **char always holds the complete set of valid selectors and never has to
+//! **Armada always holds the complete set of valid selectors and never has to
 //! discover anything**, because check ids are derived as `<component>:<check>`
-//! (PLAN.md §4.1). `char check web:e2e`, `char check --component web` and
-//! `char check lint` all fall out of that set rather than being three features.
+//! (PLAN.md §4.1). `armada manifest check web:e2e`, `armada manifest check --component web` and
+//! `armada manifest check lint` all fall out of that set rather than being three features.
 //!
 //! **A bare positional accepts four things, disambiguated by characters the
 //! name grammar forbids.** Component and check names match
@@ -12,11 +12,11 @@
 //! is what makes the disambiguation total rather than heuristic:
 //!
 //! ```text
-//! char check api                    a component, or a check name
-//! char check lint                   a check name across every component
-//! char check api:lint               a check id                    (has `:`)
-//! char check services/api/views.py  a path                        (has `/` or `.`)
-//! char check --files a.py b.py      an explicit list
+//! armada manifest check api                    a component, or a check name
+//! armada manifest check lint                   a check name across every component
+//! armada manifest check api:lint               a check id                    (has `:`)
+//! armada manifest check services/api/views.py  a path                        (has `/` or `.`)
+//! armada manifest check --files a.py b.py      an explicit list
 //! ```
 //!
 //! **The path selector is the case an agent actually has** — it changed one file
@@ -89,11 +89,11 @@ pub struct Selection {
 /// Resolve a selector against the config.
 ///
 /// **Zero matches depend on whether the name is conventional** (PLAN.md §3.2),
-/// and char holds that small piece of policy because without it "you typed it
+/// and Armada holds that small piece of policy because without it "you typed it
 /// wrong" and "this repo has none" are indistinguishable — and both available
 /// answers are bad. Exiting 0 on a typo means an agent reports a passing lint
 /// that never ran; erroring on both teaches agents to write
-/// `char check lint || true`, which suppresses *every* error the command can
+/// `armada manifest check lint || true`, which suppresses *every* error the command can
 /// raise and converts a local annoyance into a total loss of signal.
 pub fn resolve(config: &ResolvedConfig, selector: &Selector) -> Result<Selection, ArmadaError> {
     let requested = match selector {
@@ -151,7 +151,7 @@ fn resolve_word(config: &ResolvedConfig, word: &str) -> Result<Selection, Armada
                 "`{word}` is both a component and a check name in this workspace"
             ),
             next_action: Some(format!(
-                "`char check --component {word}` for the component, or `char check <component>:{word}` for the check"
+                "`armada manifest check --component {word}` for the component, or `armada manifest check <component>:{word}` for the check"
             )),
         });
     }
@@ -164,7 +164,7 @@ fn resolve_word(config: &ResolvedConfig, word: &str) -> Result<Selection, Armada
 
     // Nothing matched. **A conventional name matching nothing is a real and
     // unremarkable answer** — it is what lets an orchestrating agent run
-    // `char check lint` across five workspaces without special-casing the three
+    // `armada manifest check lint` across five workspaces without special-casing the three
     // that lack it. Anything else is almost always a typo, and the error
     // teaches the vocabulary rather than merely rejecting.
     if CONVENTIONAL.contains(&word) {
@@ -201,7 +201,7 @@ fn checks_of_component(config: &ResolvedConfig, name: &str) -> Vec<CheckId> {
         .unwrap_or_default()
 }
 
-/// **Partial matches are normal**: `char check test` where `api:test` exists and
+/// **Partial matches are normal**: `armada manifest check test` where `api:test` exists and
 /// `web:test` does not runs `api:test` and exits 0.
 fn by_check_name(config: &ResolvedConfig, name: &str) -> Vec<CheckId> {
     config
@@ -222,7 +222,7 @@ fn by_id(config: &ResolvedConfig, id: &str) -> Vec<CheckId> {
 /// **A path selector runs the checks whose `match:` covers those files.**
 ///
 /// A path matching no check is `SKIPPED` rather than an error, and that is a
-/// decision rather than an omission: `char check README.md` in a repo whose
+/// decision rather than an omission: `armada manifest check README.md` in a repo whose
 /// checks all scope to source is an agent asking a reasonable question about a
 /// file nothing checks, and exit 2 for it would teach the same
 /// `|| true` habit §3.2 rejects. The empty `results[]` and the `SKIPPED` state
@@ -243,7 +243,7 @@ fn by_paths(config: &ResolvedConfig, paths: &[String]) -> Vec<CheckId> {
 
 /// Pull in every `needs:` prerequisite, transitively.
 ///
-/// **Selecting a check selects its prerequisites** (PLAN.md §4.1). `char check
+/// **Selecting a check selects its prerequisites** (PLAN.md §4.1). `armada manifest check
 /// ui:types` runs `core:build` first even though the selector did not name it;
 /// anything else makes the selector silently produce a broken run.
 ///
@@ -335,7 +335,7 @@ pub fn skip_reason(scope: crate::config::Scope, files: &[String]) -> Option<Stri
 
 /// The error for a run that cannot compute a base to diff against.
 ///
-/// **char does not silently fall back to the whole tree**, which would be the
+/// **Armada does not silently fall back to the whole tree**, which would be the
 /// same hole `--all-files` exists to close with an extra step. It bites on a
 /// fresh clone, on a detached HEAD, and under a CI shallow clone where the
 /// merge-base is genuinely not present — all cases where the honest answer is
@@ -348,7 +348,7 @@ pub fn no_merge_base(tried: &[&str]) -> ArmadaError {
             "no merge-base against {} — this may be a fresh clone, a detached HEAD, or a shallow CI checkout",
             tried.join(", ")
         ),
-        next_action: Some("`char check --all-files` to check the whole tree".to_string()),
+        next_action: Some("`armada manifest check --all-files` to check the whole tree".to_string()),
     }
 }
 
@@ -498,7 +498,7 @@ manifest:
         assert!(selection.checks.is_empty());
     }
 
-    /// A path nothing checks is `SKIPPED`, not exit 2: `char check README.md`
+    /// A path nothing checks is `SKIPPED`, not exit 2: `armada manifest check README.md`
     /// is a reasonable question, and erroring teaches the `|| true` habit that
     /// loses every signal.
     #[test]
@@ -537,7 +537,7 @@ manifest:
     }
 
     /// **"This workspace has no lint checks" is a real and unremarkable
-    /// answer**, and it is what lets an orchestrating agent run `char check
+    /// answer**, and it is what lets an orchestrating agent run `armada manifest check
     /// lint` across five workspaces without special-casing the three that lack
     /// it.
     #[test]
@@ -652,7 +652,7 @@ manifest:
         assert_eq!(skip_reason(Scope::Component, &[]), None);
     }
 
-    /// The one thing char must not do is decide for the caller: a fallback to
+    /// The one thing Armada must not do is decide for the caller: a fallback to
     /// the whole tree here is the same hole `--all-files` exists to close.
     #[test]
     fn a_missing_merge_base_is_bad_invocation_that_names_the_way_out() {

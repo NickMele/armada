@@ -4,10 +4,10 @@
 # turbo already present, and a declared nested workspace — so this fixture is a
 # root manifest *and* a second `armada.yml` at apps/site/armada.yml.
 #
-# It also asks the honest question: is char redundant where turbo already
-# exists? The answer this config gives is that char schedules and turbo builds
-# — `needs: [core:build]` is ordering char owns, and `turbo run build` is a
-# graph char never learns anything about (PLAN.md §7).
+# It also asks the honest question: is Armada redundant where turbo already
+# exists? The answer this config gives is that Armada schedules and turbo builds
+# — `needs: [core:build]` is ordering Armada owns, and `turbo run build` is a
+# graph Armada never learns anything about (PLAN.md §7).
 
 manifest:
   version: 1

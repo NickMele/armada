@@ -12,7 +12,7 @@ use armada_core::error::{ArmadaError, ErrClass};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// char's deadline on a git call.
+/// Armada's deadline on a git call.
 ///
 /// git is local and fast — the measured floor is 12–19 ms per invocation — so
 /// anything approaching this is a wedged filesystem rather than a slow repo.
@@ -21,7 +21,7 @@ pub const GIT_TIMEOUT: Duration = Duration::from_secs(10);
 /// The git root of the tree containing `cwd`, or `None` when there is no
 /// repository.
 ///
-/// `None` is not an error: `char config scan` exists to run before a config
+/// `None` is not an error: `armada manifest config scan` exists to run before a config
 /// does, and a directory outside any repository is a legitimate place to be.
 /// The walk that uses this simply stops at the filesystem root instead.
 pub fn root(run: &impl Run, cwd: &Path) -> Option<PathBuf> {
@@ -51,7 +51,7 @@ pub fn root(run: &impl Run, cwd: &Path) -> Option<PathBuf> {
 /// function exists rather than a string literal at the call site.** The plain
 /// form returns a path *relative to cwd* — `.git` from the repo root, `../.git`
 /// from a subdirectory — so hashing it yields a different project id depending
-/// on where char ran. Applying `realpath` looks like a fix and is not: char
+/// on where Armada ran. Applying `realpath` looks like a fix and is not: Armada
 /// runs git with `current_dir(workspace_root)` and would then resolve `../.git`
 /// against **its own** cwd. Measured, git ≥ 2.31 answers identically from every
 /// directory with this flag.
@@ -59,7 +59,7 @@ pub fn root(run: &impl Run, cwd: &Path) -> Option<PathBuf> {
 /// **`None` is expected and survivable.** Measured: inside a worktree whose
 /// parent checkout was deleted, git answers `fatal: not a git repository:
 /// (null)` — there is no key to recompute, so the project is *underivable*
-/// rather than wrong. char treats that as `project: null`, because `project_id`
+/// rather than wrong. Armada treats that as `project: null`, because `project_id`
 /// owns nothing: making it fatal would take a worktree whose resources are
 /// perfectly reclaimable and refuse to reclaim them (PLAN.md §2.2).
 pub fn common_dir(run: &impl Run, workspace_root: &Path) -> Option<PathBuf> {
@@ -84,13 +84,13 @@ pub fn common_dir(run: &impl Run, workspace_root: &Path) -> Option<PathBuf> {
     (!line.is_empty()).then(|| PathBuf::from(line))
 }
 
-/// The refs char tries, in order, to find the branch to diff against.
+/// The refs Armada tries, in order, to find the branch to diff against.
 ///
 /// **`origin/HEAD` first, and it is one call rather than two.** The obvious
 /// implementation asks `git symbolic-ref --short refs/remotes/origin/HEAD` and
 /// then diffs against the answer; git resolves `origin/HEAD` directly, so the
 /// lookup is unnecessary. That matters because PLAN.md §3.2 records a measured
-/// ~65 ms floor for `char check` before any YAML is parsed, and says a phase
+/// ~65 ms floor for `armada manifest check` before any YAML is parsed, and says a phase
 /// that adds a sixth subprocess to the common path is spending from a budget and
 /// should say so. **Measured here on darwin, five runs each: every git
 /// invocation on this path costs 21–25 ms**, so the lookup would have been a
@@ -106,7 +106,7 @@ pub const BASE_REFS: [&str; 3] = ["origin/HEAD", "main", "master"];
 ///
 /// `None` when none of [`BASE_REFS`] resolves — a fresh clone with no history, a
 /// detached HEAD, or a CI shallow clone where the base is genuinely not
-/// present. **char does not silently fall back to the whole tree there**
+/// present. **Armada does not silently fall back to the whole tree there**
 /// (PLAN.md §4.1): that would be the same hole `--all-files` exists to close,
 /// with an extra step. The caller reports `bad_invocation` naming the missing
 /// base and telling the caller to pass `--all-files`.
@@ -138,7 +138,7 @@ pub fn merge_base(run: &impl Run, root: &Path) -> Option<(String, String)> {
 
 /// The files changed against `base`, plus uncommitted working-tree changes.
 ///
-/// **Read NUL-delimited and never split by char** (PLAN.md §4.1). Newline is a
+/// **Read NUL-delimited and never split by Armada** (PLAN.md §4.1). Newline is a
 /// legal character in a POSIX filename, so a line-oriented read of git's output
 /// turns one file into two nonexistent ones — and because argv carries the
 /// values with no re-parsing, a filename with a newline in it survives end to
@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(run.seen.borrow().len(), 3, "every ref was tried in order");
     }
 
-    /// **char does not silently fall back to the whole tree** — that is the
+    /// **Armada does not silently fall back to the whole tree** — that is the
     /// same hole `--all-files` exists to close, with an extra step.
     #[test]
     fn a_repository_with_no_base_at_all_answers_none_rather_than_everything() {

@@ -1,25 +1,25 @@
 //! **The dogfood test `ARCHITECTURE.md` §2.6 asks for, now that the verb
 //! exists.**
 //!
-//! Through phase 6 the gate runs the raw tools and this asserts `char check`
+//! Through phase 6 the gate runs the raw tools and this asserts `armada manifest check`
 //! agrees with them. That staging is deliberate and the reason is not caution:
-//! if `char check` is the gate and `char check` breaks, every PR fails —
+//! if `armada manifest check` is the gate and `armada manifest check` breaks, every PR fails —
 //! including the PR that fixes it. Deferring the flip is not giving up the
-//! forcing function, because breaking `char check` still fails *this*, so it
+//! forcing function, because breaking `armada manifest check` still fails *this*, so it
 //! still cannot be merged.
 //!
 //! **What is asserted is agreement, not success.** A test that only checked
-//! `char check` exits 0 would pass on a repository that is genuinely broken and
-//! would fail for a reason that has nothing to do with char. Running the raw
+//! `armada manifest check` exits 0 would pass on a repository that is genuinely broken and
+//! would fail for a reason that has nothing to do with Armada. Running the raw
 //! command and comparing the two verdicts is the assertion that has content:
-//! whatever the truth is, char has to reach it.
+//! whatever the truth is, Armada has to reach it.
 //!
-//! **One check, not the suite.** `charkit:test` runs `cargo test --workspace`,
+//! **One check, not the suite.** `armada:test` runs `cargo test --workspace`,
 //! and running that from inside `cargo test` is a recursion, not a dogfood.
-//! `charkit:fmt` is the check that is fast, deterministic, and has no
+//! `armada:fmt` is the check that is fast, deterministic, and has no
 //! dependency on the state of the tree beyond the tree itself. The caveat
 //! `ARCHITECTURE.md` §2.6 already records applies with more force here: this
-//! config is one component, pure Rust, no services — "it works on charkit" is
+//! config is one component, pure Rust, no services — "it works on Armada" is
 //! not evidence the abstraction generalises. The six fixtures and phase 8 are.
 
 mod support;
@@ -45,13 +45,13 @@ fn raw_fmt_passes(root: &Path) -> Option<bool> {
         .map(|output| output.status.success())
 }
 
-/// **`char check charkit:fmt` reaches the same verdict as
+/// **`armada manifest check armada:fmt` reaches the same verdict as
 /// `cargo fmt --all --check`.**
 #[test]
-fn char_check_agrees_with_the_raw_tool_on_charkits_own_config() {
+fn armada_check_agrees_with_the_raw_tool_on_armadas_own_config() {
     let root = repo_root();
     let Some(raw) = raw_fmt_passes(&root) else {
-        // No cargo on PATH is a machine char cannot say anything about. Loud
+        // No cargo on PATH is a machine Armada cannot say anything about. Loud
         // rather than silent: a skip nobody sees is a test nobody has.
         eprintln!("skipping the dogfood check: `cargo fmt` could not be run");
         return;
@@ -61,12 +61,12 @@ fn char_check_agrees_with_the_raw_tool_on_charkits_own_config() {
     // `manifest.db` rather than in the developer's — the same property that makes
     // every other suite here safe to run concurrently.
     let home = tempfile::tempdir().expect("a scratch home");
-    let output = Command::new(support::char_binary())
-        .args(["manifest", "check", "charkit:fmt", "--json"])
+    let output = Command::new(support::armada_binary())
+        .args(["manifest", "check", "armada:fmt", "--json"])
         .current_dir(&root)
         .env("HOME", home.path())
         .output()
-        .expect("char runs");
+        .expect("Armada runs");
 
     let payload: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|e| {
         panic!(
@@ -80,54 +80,54 @@ fn char_check_agrees_with_the_raw_tool_on_charkits_own_config() {
         .as_array()
         .expect("results[]")
         .iter()
-        .find(|row| row["id"] == "charkit:fmt")
-        .unwrap_or_else(|| panic!("charkit:fmt did not resolve: {payload}"));
+        .find(|row| row["id"] == "armada:fmt")
+        .unwrap_or_else(|| panic!("armada:fmt did not resolve: {payload}"));
 
     if raw {
         assert_eq!(
             row["status"], "PASS",
-            "the raw tool passed and char did not: {payload}"
+            "the raw tool passed and Armada did not: {payload}"
         );
         assert_eq!(output.status.code(), Some(0));
     } else {
         assert_eq!(
             row["status"], "FAILED",
-            "the raw tool failed and char did not: {payload}"
+            "the raw tool failed and Armada did not: {payload}"
         );
         assert_eq!(
             row["error"]["class"], "tool_failed",
-            "a formatting failure is the tool's own result, not char's fault"
+            "a formatting failure is the tool's own result, not Armada's fault"
         );
         assert_eq!(output.status.code(), Some(1));
     }
 }
 
-/// **Every check id charkit declares resolves to something char can run.**
+/// **Every check id Armada declares resolves to something Armada can run.**
 ///
 /// The half of §2.6's ask that does not need the tools: a selector that names
 /// nothing would report `SKIPPED` and exit 0, which is the failure mode the
 /// whole dogfood arrangement exists to catch before phase 6 makes this the
 /// gate.
 #[test]
-fn every_check_charkit_declares_is_reachable_by_its_id() {
+fn every_check_armada_declares_is_reachable_by_its_id() {
     let root = repo_root();
     let home = tempfile::tempdir().expect("a scratch home");
 
     for id in [
-        "charkit:boundaries",
-        "charkit:docs",
-        "charkit:fmt",
-        "charkit:lint",
-        "charkit:test",
+        "armada:boundaries",
+        "armada:docs",
+        "armada:fmt",
+        "armada:lint",
+        "armada:test",
     ] {
         // `--dry-run` reaches the plan without running anything, which is what
-        // makes it safe to ask this of `charkit:test`.
-        let output = Command::new(support::char_binary())
+        // makes it safe to ask this of `armada:test`.
+        let output = Command::new(support::armada_binary())
             .args(["manifest", "check", id, "--dry-run", "--json"])
             .current_dir(&root)
             .env("HOME", home.path())
             .output()
-            .expect("char runs");
+            .expect("Armada runs");
 
         let payload: serde_json::Value =
             serde_json::from_slice(&output.stdout).expect("an envelope");
@@ -143,7 +143,7 @@ fn every_check_charkit_declares_is_reachable_by_its_id() {
 
         assert!(
             would.iter().any(|line| line.starts_with(&format!("{id}:"))),
-            "{id} resolved to nothing char would run: {payload}"
+            "{id} resolved to nothing Armada would run: {payload}"
         );
         assert_eq!(output.status.code(), Some(0), "{id}");
     }

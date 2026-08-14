@@ -51,7 +51,7 @@ impl Clock for FrozenClock {
 
 /// Real, except that docker answers "nothing here".
 ///
-/// Not a shortcut: without it a snapshot would contain whatever char-labelled
+/// Not a shortcut: without it a snapshot would contain whatever Armada-labelled
 /// resources happen to exist on the machine running the suite, reported as
 /// belonging to a foreign namespace — so the file would differ between two
 /// correct machines. Everything else, including git and the setup steps, is the
@@ -292,7 +292,7 @@ fn a_dispatched_command_matches_its_snapshot() {
     assert_golden("commands", &json);
 }
 
-/// `char check`, which is the verb agents call most and therefore the snapshot
+/// `armada manifest check`, which is the verb agents call most and therefore the snapshot
 /// most worth having: a rename in this payload surfaces here rather than in
 /// somebody else's repository.
 #[test]

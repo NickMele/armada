@@ -1,4 +1,4 @@
-//! `char check`, end to end: the real binary, real children, real leases.
+//! `armada manifest check`, end to end: the real binary, real children, real leases.
 //!
 //! **The tier that catches what the unit tests structurally cannot.** The
 //! reducer's suite drives one transition at a time and the replay property
@@ -43,7 +43,7 @@ fn row<'a>(payload: &'a serde_json::Value, id: &str) -> &'a serde_json::Value {
         .unwrap_or_else(|| panic!("no row for {id} in {payload}"))
 }
 
-/// The record a run left behind, read the way `char explain` will.
+/// The record a run left behind, read the way `armada manifest explain` will.
 fn record(repo: &Path, run_id: &str) -> RunRecord {
     let path = repo.join(".armada/run").join(run_id).join("state.json");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
@@ -55,7 +55,7 @@ fn record(repo: &Path, run_id: &str) -> RunRecord {
 /// **One failing check fails the run**, which is what a merge gate needs — and
 /// the code follows the *class*, not the state: `FAILED` here is exit 1 because
 /// the tool failed on its own terms, which is a real result to report rather
-/// than char's fault.
+/// than Armada's fault.
 #[test]
 fn a_failing_check_fails_the_run_with_the_tools_own_class() {
     let machine = Machine::new();
@@ -127,8 +127,8 @@ fn a_changed_file_makes_its_file_scoped_check_run() {
 
 /// **The strongest assertion this phase can make, against a record a real run
 /// wrote.** The replay property's own suite drives a simulated shell; this one
-/// replays what `char check` actually persisted, which is the thing
-/// `char explain` will read.
+/// replays what `armada manifest check` actually persisted, which is the thing
+/// `armada manifest explain` will read.
 #[test]
 fn a_real_runs_record_replays_to_the_state_it_persisted() {
     let machine = Machine::new();
@@ -218,7 +218,7 @@ fn two_runs_of_one_failure_produce_the_same_signature() {
 // ------------------------------------------------------------------- needs:
 
 /// **`needs:` gates here and starts in phase 4** (`PHASES.md` phase 3). The end
-/// state is that a check needing `postgres` brings it up; `char up` does not
+/// state is that a check needing `postgres` brings it up; `armada manifest up` does not
 /// exist yet, so the honest answer names the service and says how to start it.
 /// One behaviour built in two steps, not two behaviours.
 #[test]
@@ -250,7 +250,7 @@ fn a_check_needing_a_service_that_is_not_running_is_refused_by_name() {
         test["error"]["next_action"]
             .as_str()
             .unwrap_or_default()
-            .contains("char up"),
+            .contains("armada manifest up"),
         "the way out was not named: {payload}"
     );
 }
@@ -403,7 +403,7 @@ fn a_typo_in_a_selector_is_refused_and_lists_what_would_have_worked() {
 }
 
 /// A **conventional** name matching nothing is `SKIPPED` and exit 0, which is
-/// what lets an orchestrating agent run `char check lint` across five
+/// what lets an orchestrating agent run `armada manifest check lint` across five
 /// workspaces without special-casing the three that lack it.
 #[test]
 fn a_conventional_selector_matching_nothing_exits_zero() {
@@ -446,7 +446,7 @@ fn a_dry_run_shows_the_argv_and_writes_no_run() {
 }
 
 /// `--detach` and `--status` are reserved by PLAN.md §3 and not built. Refused
-/// **by name**, because the flag is known and the honest answer is that char
+/// **by name**, because the flag is known and the honest answer is that Armada
 /// cannot do it yet — "unknown flag" would send an agent looking for a typo.
 #[test]
 fn the_two_reserved_flags_say_they_are_not_built_rather_than_unknown() {

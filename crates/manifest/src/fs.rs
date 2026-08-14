@@ -32,7 +32,7 @@ pub fn canonical(path: &Path) -> Result<PathBuf, ArmadaError> {
 /// mode-000 parent returns `EACCES`, which is byte-identical in failure to a
 /// missing path — and `$HOME` is 0700 on Linux, so that is the ordinary
 /// multi-user and devcontainer case rather than an exotic one. Collapsing the
-/// two is how `char clean` in one workspace destroys another's live containers
+/// two is how `armada manifest clean` in one workspace destroys another's live containers
 /// (PLAN.md §2.3.1).
 pub fn stat(path: &Path) -> PathStat {
     match std::fs::symlink_metadata(path) {
@@ -52,7 +52,7 @@ pub fn stat(path: &Path) -> PathStat {
 ///
 /// **One rule decides what may live here: if losing it would leak a resource,
 /// it does not belong.** A workspace directory is deleted by `rm -rf` or
-/// `git worktree remove`, neither of which consults char — so anything recorded
+/// `git worktree remove`, neither of which consults Armada — so anything recorded
 /// only here is gone precisely when it is most needed. Everything reclaimable
 /// lives in `~/.armada/manifest.db` instead.
 pub fn create_armada_dir(root: &Path) -> Result<PathBuf, ArmadaError> {
@@ -87,7 +87,7 @@ pub fn remove_armada_dir(root: &Path) -> Result<bool, ArmadaError> {
 ///
 /// Returns whether anything was there. Refuses to escape the workspace: a
 /// declared path is a claim about this workspace's own tree, and `..` in one
-/// would make `char clean --artifacts --all` a machine-wide `rm -rf` driven by
+/// would make `armada manifest clean --artifacts --all` a machine-wide `rm -rf` driven by
 /// a committed file.
 pub fn remove_owned_file(root: &Path, declared: &str) -> Result<bool, ArmadaError> {
     let target = root.join(declared);
@@ -137,7 +137,7 @@ mod tests {
     }
 
     /// The measured case: a live directory under a mode-000 parent answers
-    /// `EACCES`, and char must not read that as gone.
+    /// `EACCES`, and Armada must not read that as gone.
     #[cfg(unix)]
     #[test]
     fn an_unreadable_parent_yields_unreadable_and_never_missing() {

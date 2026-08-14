@@ -1,7 +1,7 @@
 //! The JSON Schema for `armada.yml`, embedded.
 //!
 //! It is embedded rather than read from disk for two reasons: the core does no
-//! I/O, and phase 5's `char config scan` hands this text to the agent that
+//! I/O, and phase 5's `armada manifest config scan` hands this text to the agent that
 //! authors the config — a schema the binary has to find on the filesystem is a
 //! schema that is missing in the one situation it exists for.
 //!

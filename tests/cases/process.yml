@@ -18,7 +18,7 @@ cases:
     trap: PRO-6
     note: >-
       The consumer is usually an agent seeing only a parsed summary, and "timed out" versus
-      "the tool failed" call for opposite next moves. In charkit the typed home is
+      "the tool failed" call for opposite next moves. In Armada the typed home is
       error.class = timeout, exit 4 (ARCHITECTURE.md §1.7), not in-band text.
     given: { command: sleeps-forever, deadline_s: 1.0 }
     expect: { error: { class: timeout }, message_names_the_budget: true }

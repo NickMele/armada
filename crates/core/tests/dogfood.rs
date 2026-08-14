@@ -1,24 +1,24 @@
-//! charkit's own `armada.yml`, held to the same contract every other repo's is —
+//! Armada's own `armada.yml`, held to the same contract every other repo's is —
 //! and held to the merge gate it is eventually going to replace.
 //!
 //! **Dogfooding is staged** (`ARCHITECTURE.md` §2.6). Through phase 6 the gate
-//! runs the raw tools and charkit's config is a *test subject*; once phase 6
-//! lands, `char check` becomes the gate. The reason for the interim is that a
+//! runs the raw tools and Armada's config is a *test subject*; once phase 6
+//! lands, `armada manifest check` becomes the gate. The reason for the interim is that a
 //! gate which is also the thing under construction fails every PR when it
 //! breaks, including the PR that fixes it.
 //!
 //! **What is deliberately not here yet, stated rather than stubbed.**
-//! `ARCHITECTURE.md` §2.6 asks for a test that runs `char check --json` and
+//! `ARCHITECTURE.md` §2.6 asks for a test that runs `armada manifest check --json` and
 //! asserts it reaches the same verdict as the raw tools. That test cannot be
 //! written honestly before the engine runs — an `#[ignore]`d body or one
 //! asserting on a `bad_invocation` would be a green test that structurally
 //! cannot fail, which is the failure mode this corpus records three times over.
-//! It lands with the verb, in the phase-3 PR that makes `char check` execute.
+//! It lands with the verb, in the phase-3 PR that makes `armada manifest check` execute.
 //!
 //! What *is* available now is the half that does not need the verb, and it is
 //! not filler: it is the drift the phase-6 flip actually depends on. If this
 //! config and `.github/workflows/gate.yml` disagree about what "lint" means,
-//! then the day `char check` becomes the gate the gate silently changes.
+//! then the day `armada manifest check` becomes the gate the gate silently changes.
 
 mod support;
 
@@ -40,12 +40,12 @@ fn own_config_text() -> String {
     read(&repo_root().join("armada.yml"))
 }
 
-/// charkit's own checks, resolved, keyed by their derived id.
+/// Armada's own checks, resolved, keyed by their derived id.
 fn own_checks() -> BTreeMap<String, ResolvedCheck> {
     let text = own_config_text();
-    let config = parse(&text, "armada.yml").unwrap_or_else(|e| panic!("charkit's armada.yml: {e}"));
+    let config = parse(&text, "armada.yml").unwrap_or_else(|e| panic!("Armada's armada.yml: {e}"));
     let resolved = resolve(config, &Defaults::built_in(), "armada.yml")
-        .unwrap_or_else(|e| panic!("charkit's armada.yml: {e}"));
+        .unwrap_or_else(|e| panic!("Armada's armada.yml: {e}"));
     resolved
         .components
         .values()
@@ -55,13 +55,13 @@ fn own_checks() -> BTreeMap<String, ResolvedCheck> {
 }
 
 #[test]
-fn charkits_own_config_parses_resolves_and_validates_against_the_schema() {
+fn armadas_own_config_parses_resolves_and_validates_against_the_schema() {
     let text = own_config_text();
 
     // Parse and resolve: the path phase 2 already takes for any repo's config.
-    let config = parse(&text, "armada.yml").unwrap_or_else(|e| panic!("charkit's armada.yml: {e}"));
+    let config = parse(&text, "armada.yml").unwrap_or_else(|e| panic!("Armada's armada.yml: {e}"));
     resolve(config, &Defaults::built_in(), "armada.yml")
-        .unwrap_or_else(|e| panic!("charkit's armada.yml: {e}"));
+        .unwrap_or_else(|e| panic!("Armada's armada.yml: {e}"));
 
     // And the authoritative artifact, which is the schema rather than the
     // structs (PLAN.md §4.1.1 decision 2). Both, because either one alone
@@ -69,15 +69,15 @@ fn charkits_own_config_parses_resolves_and_validates_against_the_schema() {
     // fixture suite runs them together.
     let (schemas, index) = compile_schema();
     let instance: serde_json::Value =
-        serde_yaml_ng::from_str(&text).expect("charkit's armada.yml reads as a JSON value");
+        serde_yaml_ng::from_str(&text).expect("Armada's armada.yml reads as a JSON value");
     if let Err(e) = schemas.validate(&instance, index) {
-        panic!("charkit's armada.yml does not validate:\n{e:#}");
+        panic!("Armada's armada.yml does not validate:\n{e:#}");
     }
 }
 
 /// Check ids are **derived** as `<component>:<check>` and never written by
 /// hand (PLAN.md §4.1). Asserting the exact set is what makes a rename of
-/// either half visible — and this is also the list `char check <selector>` has
+/// either half visible — and this is also the list `armada manifest check <selector>` has
 /// to be able to reach, so it is the closest thing to a selector contract that
 /// exists before the verb does.
 #[test]
@@ -86,20 +86,20 @@ fn every_check_id_resolves_and_the_set_is_the_one_the_gate_covers() {
     assert_eq!(
         ids,
         vec![
-            "charkit:boundaries",
-            "charkit:docs",
-            "charkit:fmt",
-            "charkit:lint",
-            "charkit:test",
+            "armada:boundaries",
+            "armada:docs",
+            "armada:fmt",
+            "armada:lint",
+            "armada:test",
         ],
-        "charkit's own check ids changed"
+        "Armada's own check ids changed"
     );
 }
 
 /// **The drift catcher, and the reason this file is worth having before the
 /// verb exists.**
 ///
-/// `ARCHITECTURE.md` §2.6 flips the gate to `char check` in phase 6. That flip
+/// `ARCHITECTURE.md` §2.6 flips the gate to `armada manifest check` in phase 6. That flip
 /// is only safe if the two agree *now*: a `lint` check spelled `cargo clippy`
 /// with the `-D warnings` dropped would pass here, pass in a dogfood run, and
 /// silently weaken the gate on the day it replaces it.
@@ -179,10 +179,10 @@ fn collect_run_steps(node: &serde_yaml_ng::Value, out: &mut BTreeSet<String>) {
 /// `SKIPPED` (PLAN.md §4.1), which on the default branch would report a green
 /// run that checked nothing.
 ///
-/// The consequence is stated so it is not mistaken for coverage: **charkit's
+/// The consequence is stated so it is not mistaken for coverage: **Armada's
 /// own config exercises no `${files}` path at all.** The fixtures do.
 #[test]
-fn charkits_checks_are_component_scoped_and_none_of_them_can_expand_files() {
+fn armadas_checks_are_component_scoped_and_none_of_them_can_expand_files() {
     for (id, check) in own_checks() {
         assert_eq!(check.scope, Scope::Component, "{id}");
         assert!(

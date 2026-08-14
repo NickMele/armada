@@ -50,15 +50,15 @@ pub const LEGACY_LABEL_WORKSPACE_PATH: &str = "char.workspace_path";
 /// The pre-M1 spelling of [`LABEL_NAMESPACE`].
 pub const LEGACY_LABEL_NAMESPACE: &str = "char.namespace";
 
-/// The four things char stamps and reaps.
+/// The four things Armada stamps and reaps.
 ///
 /// **Volumes were absent from this vocabulary entirely until a review found
 /// it**, and a named volume outlives `down`, outlives the container, and is
-/// invisible to every filter char would otherwise use to find it. Images are
+/// invisible to every filter Armada would otherwise use to find it. Images are
 /// here because the source repo records roughly 2.1 GB per production app
 /// build — the single biggest thing a stale workspace holds — but **only images
-/// char causes to be built**: a pulled `postgres:16` is shared with everything
-/// else on the machine and was never char's to remove.
+/// Armada causes to be built**: a pulled `postgres:16` is shared with everything
+/// else on the machine and was never Armada's to remove.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// `docker ps`.
@@ -113,7 +113,7 @@ impl Kind {
     /// `docker image ls --format` supports neither `{{.Labels}}` nor
     /// `{{.Label "k"}}` — it errors with *can't evaluate field Labels in type
     /// `*formatter.imageContext`* — while `ps`, `network ls` and `volume ls`
-    /// all support `.Labels`. So char reads labels through `inspect`, which
+    /// all support `.Labels`. So Armada reads labels through `inspect`, which
     /// works for every type, and the label path differs there too: containers
     /// and images keep them under `.Config.Labels`, networks and volumes under
     /// `.Labels`.
@@ -270,7 +270,7 @@ fn parse_inspect_line(line: &str, kind: Kind) -> Option<LabelledResource> {
 /// `clean` evaluates the declaration against docker at the time it runs. The
 /// selector is passed to `--filter` verbatim after substitution, because the
 /// repo is naming resources by *its own* labels — `label=com.example.worktree=…`
-/// — which char has no vocabulary for and no business rewriting.
+/// — which Armada has no vocabulary for and no business rewriting.
 pub fn list_by_selector(
     run: &impl Run,
     cwd: &Path,
@@ -310,7 +310,7 @@ pub fn remove(
         .collect()
 }
 
-/// The label arguments char stamps onto everything it creates.
+/// The label arguments Armada stamps onto everything it creates.
 ///
 /// Returned as pairs rather than as `--label k=v` strings because the compose
 /// driver (phase 4) has to write them into a generated document instead —
@@ -361,7 +361,7 @@ fn call(
         return Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: "docker".to_string(),
-            message: format!("`{}` exceeded char's docker timeout", argv.join(" ")),
+            message: format!("`{}` exceeded Armada's docker timeout", argv.join(" ")),
             next_action: Some("check that Docker is running and responsive".to_string()),
         });
     }
@@ -653,7 +653,7 @@ mod tests {
     }
 
     /// A declared selector reaches `--filter` verbatim: the repo is naming
-    /// resources by its own labels, which char has no vocabulary for and no
+    /// resources by its own labels, which Armada has no vocabulary for and no
     /// business rewriting.
     #[test]
     fn a_declared_selector_reaches_the_filter_untouched() {

@@ -13,7 +13,7 @@
 use armada_core::error::{ArmadaError, ConfigWhere, ErrClass};
 use std::path::Path;
 
-/// Read a config file, mapping an I/O failure into char's own vocabulary.
+/// Read a config file, mapping an I/O failure into Armada's own vocabulary.
 ///
 /// A missing `armada.yml` is `bad_config` — the workspace is not set up — while
 /// anything else about the filesystem is `environment`: the repo is fine and
@@ -26,7 +26,7 @@ pub fn read(path: &Path) -> Result<String, ArmadaError> {
             std::io::ErrorKind::NotFound => ArmadaError::bad_config(
                 ConfigWhere::File { file: display },
                 "no armada.yml here",
-                "run `char config scan` to gather evidence, then author a armada.yml",
+                "run `armada manifest config scan` to gather evidence, then author a armada.yml",
             ),
             _ => ArmadaError {
                 class: ErrClass::Environment,

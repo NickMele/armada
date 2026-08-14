@@ -1,9 +1,9 @@
-//! `char init` — make this workspace ready.
+//! `armada manifest init` — make this workspace ready.
 //!
 //! **Exactly one thing.** An earlier draft also gave it §5's layer-1 evidence
 //! scan, which by definition runs where no `armada.yml` exists — so the verb had
 //! two unrelated behaviours, two output shapes, and could only fail in the state
-//! half of it existed to serve. That scan is `char config scan`.
+//! half of it existed to serve. That scan is `armada manifest config scan`.
 //!
 //! The order is **reap, then claim**, and it is the whole answer to the plan's
 //! one piece of empirical evidence: a sweep function that existed and was never
@@ -28,9 +28,9 @@ use std::collections::BTreeMap;
 use crate::app::{self, App};
 use crate::verbs::{load_config, Output};
 
-/// How many times a lost port-block claim is re-decided before char gives up.
+/// How many times a lost port-block claim is re-decided before Armada gives up.
 ///
-/// Losing means another workspace took the block char chose between the read
+/// Losing means another workspace took the block Armada chose between the read
 /// and the write, so the answer has changed and re-deciding is correct. A bound
 /// exists because an unbounded retry against a pathological machine is a spin.
 const CLAIM_ATTEMPTS: usize = 16;
@@ -121,7 +121,7 @@ fn claim<R: Run, C: Clock, F: Fetch>(
                         ports::PORT_CEILING
                     ),
                     next_action: Some(
-                        "`char clean --all --orphaned` releases blocks whose workspaces are gone"
+                        "`armada manifest clean --all --orphaned` releases blocks whose workspaces are gone"
                             .to_string(),
                     ),
                 })
@@ -132,7 +132,7 @@ fn claim<R: Run, C: Clock, F: Fetch>(
         class: ErrClass::Aborted,
         r#where: "ports".to_string(),
         message: format!("lost the port-block race {CLAIM_ATTEMPTS} times"),
-        next_action: Some("retry; another char is claiming blocks right now".to_string()),
+        next_action: Some("retry; another Armada is claiming blocks right now".to_string()),
     })
 }
 
@@ -195,10 +195,10 @@ fn record_release_commands<R: Run, C: Clock, F: Fetch>(
 
 /// Run each component's `setup:`, in declaration order within a component.
 ///
-/// **Idempotent in char's own state, not in the repo's** — `char init` twice
+/// **Idempotent in Armada's own state, not in the repo's** — `armada manifest init` twice
 /// claims one block and creates one `.armada/`, but it runs `setup:` again,
 /// because whether `bundle install` is cheap the second time is the repo's
-/// business and char has no way to know.
+/// business and Armada has no way to know.
 fn run_setup<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,

@@ -26,7 +26,7 @@ use std::time::Duration;
 pub fn restore_sigpipe() {
     // SAFETY: `signal` with `SIG_DFL` on a real signal number is defined and
     // cannot fail in a way that matters here; the return value is the previous
-    // handler, which char has no use for. This runs before any thread is
+    // handler, which Armada has no use for. This runs before any thread is
     // spawned, so there is no concurrent handler to race with.
     #[allow(unsafe_code)]
     unsafe {
@@ -70,7 +70,7 @@ pub fn new_session(command: &mut Command) {
 pub fn killpg(pgid: i32, signal: i32) -> io::Result<()> {
     // SAFETY: `killpg` is an extern fn and therefore unsafe to call, but it
     // takes two integers, dereferences nothing, and reports failure through
-    // errno like any other syscall wrapper. A pgid char never recorded is
+    // errno like any other syscall wrapper. A pgid Armada never recorded is
     // guarded above this call by `boot_id` and `pid_started_at`, not here.
     #[allow(unsafe_code)]
     let rc = unsafe { libc::killpg(pgid, signal) };
@@ -85,9 +85,9 @@ pub fn killpg(pgid: i32, signal: i32) -> io::Result<()> {
 ///
 /// Signal 0 performs the permission and existence checks without delivering
 /// anything, so any failure reads as "not alive" — `ESRCH` when the group is
-/// empty, and that is how char *confirms* a kill rather than assuming one.
+/// empty, and that is how Armada *confirms* a kill rather than assuming one.
 ///
-/// **An unreaped child of char's own is still a member of its group, and the
+/// **An unreaped child of Armada's own is still a member of its group, and the
 /// two platforms disagree about it.** Measured: against a group whose only
 /// remaining member is a zombie, `killpg(pgid, 0)` *succeeds* on Linux and
 /// fails on darwin with **`EPERM`, not `ESRCH`** — `ESRCH` arrives on both only
@@ -96,10 +96,10 @@ pub fn killpg(pgid: i32, signal: i32) -> io::Result<()> {
 /// [`crate::process::ProcessGroup::stop`] does, and which is why its report
 /// describes the kill rather than the state after it.
 ///
-/// The case char actually reclaims is an **orphan**, whose parent is gone, so
+/// The case Armada actually reclaims is an **orphan**, whose parent is gone, so
 /// init reaps it the moment it dies and both platforms agree. Note the
-/// consequence of testing `rc == 0`: a genuine `EPERM` — a group char may not
-/// signal — also reads as "not alive". char started every group it probes, so
+/// consequence of testing `rc == 0`: a genuine `EPERM` — a group Armada may not
+/// signal — also reads as "not alive". Armada started every group it probes, so
 /// it has permission by construction; a future caller that probes a group it
 /// did not start does not, and would need to branch on the errno.
 pub fn group_alive(pgid: i32) -> bool {
@@ -112,9 +112,9 @@ pub fn group_alive(pgid: i32) -> bool {
 /// What stopping a group actually did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StopReport {
-    /// The group existed when char started.
+    /// The group existed when Armada started.
     pub existed: bool,
-    /// SIGTERM alone was not enough and char escalated.
+    /// SIGTERM alone was not enough and Armada escalated.
     pub escalated: bool,
     /// The group is empty now.
     pub gone: bool,
@@ -159,7 +159,7 @@ pub fn stop_group(pgid: i32, grace: Duration) -> StopReport {
 
     let _ = killpg(pgid, libc::SIGKILL);
     // SIGKILL cannot be caught, but the kernel still has to reap; give it a
-    // bounded moment rather than reporting a live group char has in fact
+    // bounded moment rather than reporting a live group Armada has in fact
     // killed.
     let deadline = std::time::Instant::now() + Duration::from_millis(500);
     while std::time::Instant::now() < deadline {
@@ -184,7 +184,7 @@ pub fn stop_group(pgid: i32, grace: Duration) -> StopReport {
 ///
 /// `CLOCK_MONOTONIC` means opposite things on the two platforms this project
 /// supports: measured on darwin it counted **4.4 days of sleep**, while Linux's
-/// excludes suspend. char wants the clock that does *not* advance while the
+/// excludes suspend. Armada wants the clock that does *not* advance while the
 /// machine is suspended, because the lease holder was not running either and
 /// its heartbeat should not age. Rust's `Instant` already picks correctly on
 /// both — `CLOCK_UPTIME_RAW` on darwin, `CLOCK_MONOTONIC` on Linux — so the
@@ -202,7 +202,7 @@ pub fn mono_ms() -> u64 {
     };
     // SAFETY: `clock_gettime` writes into the `timespec` we own and borrow
     // exclusively for the call. Both clock ids are compile-time constants that
-    // exist on their target, so the call cannot fail for a reason char could
+    // exist on their target, so the call cannot fail for a reason Armada could
     // act on.
     #[allow(unsafe_code)]
     unsafe {

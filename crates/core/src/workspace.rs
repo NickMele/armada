@@ -21,12 +21,12 @@ use std::path::{Path, PathBuf};
 pub struct Workspace {
     /// The realpath of the directory holding this workspace's `armada.yml`.
     pub root: PathBuf,
-    /// `sha1(realpath(root))[..8]`. Owns everything char creates here.
+    /// `sha1(realpath(root))[..8]`. Owns everything Armada creates here.
     pub id: WorkspaceId,
     /// `None` when the project is **underivable** — measured, an orphaned
     /// worktree whose parent checkout was deleted answers `fatal: not a git
     /// repository: (null)`, so there is no key to recompute (PLAN.md §2.2).
-    /// char treats that as `project: null` rather than as an error, because
+    /// Armada treats that as `project: null` rather than as an error, because
     /// `project_id` owns nothing: `--project` scoping stops working for that
     /// worktree while `--all`, the workspace id, and every reclaim keep working.
     pub project: Option<ProjectId>,
@@ -119,7 +119,7 @@ fn no_config(searched: &[PathBuf]) -> ArmadaError {
         r#where: "armada.yml".to_string(),
         message: format!("no armada.yml in any directory up to the git root: {list}"),
         next_action: Some(
-            "run `char config scan` to gather evidence, then author a armada.yml at the repo root"
+            "run `armada manifest config scan` to gather evidence, then author a armada.yml at the repo root"
                 .to_string(),
         ),
     }

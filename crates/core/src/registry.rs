@@ -29,7 +29,7 @@ pub struct WorkspaceRow {
     /// The workspace id.
     pub id: WorkspaceId,
     /// The realpath the id was derived from. Kept because the id is a one-way
-    /// hash: without this column char could never ask whether the workspace
+    /// hash: without this column Armada could never ask whether the workspace
     /// still exists.
     pub path: PathBuf,
     /// The grouping key, or `None` when it was underivable.
@@ -50,9 +50,9 @@ pub enum OwnedKind {
     Network,
     /// A named volume.
     Volume,
-    /// An image char caused to be **built**. A pulled image such as
+    /// An image Armada caused to be **built**. A pulled image such as
     /// `postgres:16` is shared with everything else on the machine and was
-    /// never char's to remove.
+    /// never Armada's to remove.
     Image,
     /// A process group, spawned in its own session.
     Pgid,
@@ -61,7 +61,7 @@ pub enum OwnedKind {
     ///
     /// **PLAN.md §4.3's `kind` list omits this and §6.1 requires it**, which is
     /// a hole in the contract rather than a choice: §6.1 says the resolved
-    /// command is recorded at `char init` into the machine-global store,
+    /// command is recorded at `armada manifest init` into the machine-global store,
     /// because a teardown script symmetric with `setup:` would live in the
     /// workspace and therefore be gone in the orphan case — the one that
     /// actually matters. Recorded as a `kind` rather than a new table, because
@@ -86,7 +86,7 @@ impl fmt::Display for OwnedKind {
 impl OwnedKind {
     /// Parse a `kind` column back.
     ///
-    /// An unrecognised value is `None` rather than an error: a newer char may
+    /// An unrecognised value is `None` rather than an error: a newer Armada may
     /// have written a kind this binary does not know, and `manifest.db` is
     /// deliberately forward-compatible within 0.x.
     pub fn parse(text: &str) -> Option<Self> {

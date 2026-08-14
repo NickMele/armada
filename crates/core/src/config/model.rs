@@ -109,7 +109,7 @@ pub struct Component {
     /// component.
     #[serde(default, rename = "match")]
     pub match_globs: Option<Vec<String>>,
-    /// What `char init` runs.
+    /// What `armada manifest init` runs.
     #[serde(default)]
     pub setup: Option<OneOrMany<SetupStep>>,
     /// What `setup:` created.
@@ -153,7 +153,7 @@ pub struct Check {
     /// Layered over the inherited environment.
     #[serde(default, deserialize_with = "env_block")]
     pub env: BTreeMap<String, String>,
-    /// Run inside this compose *service*, via an exec char builds itself.
+    /// Run inside this compose *service*, via an exec Armada builds itself.
     #[serde(default, rename = "in")]
     pub in_service: Option<String>,
     /// Secret names granted to this entry and nowhere else.
@@ -183,7 +183,7 @@ pub struct Run {
     /// Port name → the port the service itself listens on.
     #[serde(default)]
     pub ports: BTreeMap<String, u16>,
-    /// How char decides this service is ready.
+    /// How Armada decides this service is ready.
     #[serde(default)]
     pub ready: Option<Ready>,
     /// Components that must be running first.
@@ -224,7 +224,7 @@ pub struct Ready {
     pub timeout: Option<u32>,
 }
 
-/// A repo-local verb char dispatches and does not define.
+/// A repo-local verb Armada dispatches and does not define.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CommandEntry {
@@ -242,7 +242,7 @@ pub struct CommandEntry {
     /// `inherit` or `pipe`. Inferred when absent.
     #[serde(default)]
     pub stdio: Option<String>,
-    /// A selector char evaluates at `clean` time, not a record.
+    /// A selector Armada evaluates at `clean` time, not a record.
     #[serde(default)]
     pub owns: Option<OwnsCommand>,
     /// Secret names granted to this entry and nowhere else.
@@ -269,7 +269,7 @@ pub struct OwnsRun {
     /// A docker filter expression.
     #[serde(default)]
     pub networks: Option<String>,
-    /// A docker filter expression, for images char caused to be built.
+    /// A docker filter expression, for images Armada caused to be built.
     #[serde(default)]
     pub images: Option<String>,
     /// Declared port names this service holds.
@@ -296,7 +296,7 @@ pub struct OwnsComponent {
 }
 
 /// What a `commands:` entry creates. A selector, evaluated at `clean` time.
-/// No `ports:` — the block is already claimed by `char init`.
+/// No `ports:` — the block is already claimed by `armada manifest init`.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OwnsCommand {

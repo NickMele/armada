@@ -1,7 +1,7 @@
 //! `manifest.db` under real contention.
 //!
 //! The filesystem and SQLite are deliberately **not** faked
-//! (`ARCHITECTURE.md` §1.1): char depends on real transaction semantics for
+//! (`ARCHITECTURE.md` §1.1): Armada depends on real transaction semantics for
 //! port claims and lease acquisition, and a fake gives you a green test over
 //! your own fake's concurrency model — in the one area where corruption under
 //! concurrent claims is a named live risk. Two threads against a real database
@@ -94,7 +94,7 @@ fn a_deferred_read_then_write_fails_where_an_immediate_one_succeeds() {
 
 /// **Creating the database is itself contended**, and the test above says so by
 /// omission: it primes the schema first, so nothing covered the state every
-/// machine passes through exactly once — no `manifest.db` at all, and two `char
+/// machine passes through exactly once — no `manifest.db` at all, and two `Armada
 /// init`s arriving together.
 ///
 /// Both failures it guards are real and were reproducible about one run in ten
@@ -154,8 +154,8 @@ fn concurrent_claimants_never_receive_overlapping_blocks() {
             let mut db = Db::open(home.path()).unwrap();
             let id = WorkspaceId::from_stored(format!("{index:08x}"));
             barrier.wait();
-            // Re-decide on a lost race, exactly as `char init` does: losing
-            // means another workspace took the block char chose between the
+            // Re-decide on a lost race, exactly as `armada manifest init` does: losing
+            // means another workspace took the block Armada chose between the
             // read and the write, so the answer has changed.
             for _ in 0..64 {
                 match db

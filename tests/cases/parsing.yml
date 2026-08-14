@@ -2,7 +2,7 @@ subsystem: parsing
 source: check.py
 note: >-
   Result parsing and failure reporting. The per-tool field paths are trivia and are dropped —
-  charkit names arbitrary commands, so parser selection is declared in config and defaults to
+  Armada names arbitrary commands, so parser selection is declared in config and defaults to
   a generic fallback. What survives is the contract: the benign-summary guard, the message
   budget, the multi-document scanner, and identifier/message as separate fields (PLAN.md §3.1).
 
@@ -250,7 +250,7 @@ cases:
     trap: PAR-17
     note: >-
       Advising regeneration on an ordinary visual regression is actively harmful —
-      regenerating erases the regression you were meant to look at. In charkit the trigger
+      regenerating erases the regression you were meant to look at. In Armada the trigger
       pattern and the hint are per-check config; no behaviour keys on a check id.
     given:
       failures: ["home.spec.ts :: renders — snapshot doesn't exist, writing actual"]
@@ -270,7 +270,7 @@ excluded:
     reason: >-
       Roughly twenty original cases assert on one specific tool's JSON field paths, label
       join strings and placeholder characters at one pinned version. They are schema trivia
-      for five tools. Parser selection is config in charkit; the format adapters get their
+      for five tools. Parser selection is config in Armada; the format adapters get their
       own cases when someone writes one.
 
   - id: parse.guard.called-through-the-parser-directly

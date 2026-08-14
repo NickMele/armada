@@ -2,7 +2,7 @@
 //!
 //! The only cross-workspace state, and the only thing that survives a workspace
 //! directory being deleted. **SQLite rather than a JSON file because of
-//! leases**: a ten-minute `char check` renews a heartbeat every few seconds,
+//! leases**: a ten-minute `armada manifest check` renews a heartbeat every few seconds,
 //! and rewriting a whole document under an `O_EXCL` lockfile, five workspaces
 //! at a time, for the whole of that run, is the wrong shape for that write
 //! pattern — and it is exactly where the registry-corruption risk lives.
@@ -35,7 +35,7 @@ use std::time::Duration;
 /// The schema version this binary writes and understands.
 pub const USER_VERSION: i64 = 1;
 
-/// How long any one statement waits for a database another char is writing.
+/// How long any one statement waits for a database another Armada is writing.
 const BUSY_TIMEOUT_MS: u64 = 5_000;
 
 /// The key the namespace UUID is stored under.
@@ -65,9 +65,9 @@ pub enum ClaimOutcome {
     /// A new block was reserved.
     Claimed(PortBlock),
     /// This workspace already held one. **Claims are idempotent by workspace
-    /// id** — `char init` twice is one block, not two.
+    /// id** — `armada manifest init` twice is one block, not two.
     AlreadyHeld(PortBlock),
-    /// Another workspace took the block char chose between the read and the
+    /// Another workspace took the block Armada chose between the read and the
     /// write. The caller re-decides; that is what the claim loop's `Attempt`
     /// action means.
     Lost,
@@ -138,7 +138,7 @@ impl Db {
     ///
     /// **The compatibility rule is deliberately one-directional.**
     /// `~/.armada/manifest.db` is machine-global and long-lived, so a machine running
-    /// two charkit versions — one repo pinned, one fresh — is normal rather
+    /// two Armada versions — one repo pinned, one fresh — is normal rather
     /// than exotic. An older binary meeting a higher `user_version` fails
     /// `environment` and says which version wrote it; a newer binary meeting a
     /// lower one migrates it forward in a single `BEGIN IMMEDIATE`, additively.
@@ -147,7 +147,7 @@ impl Db {
     ///
     /// **`user_version` is the flag that says the whole of creation is done, so
     /// everything creation does commits with it.** The namespace used to be
-    /// written by a second statement after the transaction, and a sibling `char
+    /// written by a second statement after the transaction, and a sibling `Armada
     /// init` starting in the same millisecond then read `user_version = 1`,
     /// returned here early, and asked for a namespace that was not there yet —
     /// `manifest.db: Query returned no rows`, from a database that was merely
@@ -163,11 +163,13 @@ impl Db {
                 class: ErrClass::Environment,
                 r#where: self.path.display().to_string(),
                 message: format!(
-                    "{} was written by a newer char (schema {version}; this one understands \
+                    "{} was written by a newer Armada (schema {version}; this one understands \
                      {USER_VERSION})",
                     self.path.display()
                 ),
-                next_action: Some("upgrade char, or point $HOME at a different store".to_string()),
+                next_action: Some(
+                    "upgrade Armada, or point $HOME at a different store".to_string(),
+                ),
             });
         }
         if version == USER_VERSION {
@@ -214,7 +216,7 @@ impl Db {
 
         // The namespace is written once, at creation, and never again. It
         // scopes the whole reaping mechanism to one filesystem view: without
-        // it, path-based reaping is actively dangerous the moment two char
+        // it, path-based reaping is actively dangerous the moment two Armada
         // installations share a Docker daemon, which is the ordinary
         // devcontainer setup (PLAN.md §2.3.1).
         tx.execute(
@@ -233,7 +235,7 @@ impl Db {
     /// Read the namespace out of a database file, best-effort, swallowing
     /// every failure.
     ///
-    /// For the rebuild path only. `char clean --orphaned --force-rebuild`
+    /// For the rebuild path only. `armada manifest clean --orphaned --force-rebuild`
     /// exists because `manifest.db` cannot be read, so it must not *need* this to
     /// work — but a database can be unreadable in ways that still leave `meta`
     /// legible, and carrying the old namespace across keeps every resource
@@ -275,7 +277,7 @@ impl Db {
             .map_err(|e| map_sqlite(&self.path, e))
     }
 
-    /// Whether the file char is writing still has a name.
+    /// Whether the file Armada is writing still has a name.
     ///
     /// **A long-running verb re-checks this on each loop iteration and ends
     /// `environment` when it goes false**, which stops the divergence at the
@@ -411,7 +413,7 @@ impl Db {
     /// holding that workspace's own run lease, and the whole ordering rests on
     /// that lease being held throughout and released last: a blanket
     /// `DELETE FROM leases WHERE workspace = ?1` frees it half way through, and
-    /// a concurrent `char up` then starts services into a workspace being torn
+    /// a concurrent `armada manifest up` then starts services into a workspace being torn
     /// down — the exact failure `clean`'s step 0 is written against.
     pub fn release_workspace(
         &mut self,
@@ -498,7 +500,7 @@ impl Db {
         };
 
         // A row whose kind this binary does not recognise was written by a
-        // newer char. Skipping it is the forward-compatible answer: char never
+        // newer Armada. Skipping it is the forward-compatible answer: Armada never
         // acts on something it cannot name, and never deletes it either.
         Ok(rows
             .into_iter()
@@ -512,7 +514,7 @@ impl Db {
     /// order.** Both follow one rule — *the failure mode must be a stale row,
     /// never an untracked resource* — and it inverts because one direction is
     /// creating and the other destroying. Spawn-then-record leaks a pgid if
-    /// char dies in between; record-then-spawn leaves a row pointing at
+    /// Armada dies in between; record-then-spawn leaves a row pointing at
     /// nothing, which the next `init` reaps for free.
     pub fn record_owned(&mut self, row: &OwnedRow) -> Result<(), ArmadaError> {
         let tx = self
@@ -667,7 +669,7 @@ impl Db {
     /// slots `0..cost`, which is the right answer for *ordering* and the wrong
     /// one for *naming*: two checks each asking for slot `0` deadlock the
     /// moment the second one blocks on the first — measured, and it hung
-    /// `char check` on its first real run. Slots are a counted budget, so what
+    /// `armada manifest check` on its first real run. Slots are a counted budget, so what
     /// a check needs is `cost` free ones and never a particular one.
     ///
     /// **All or nothing, because a partial claim deadlocks under contention.**
@@ -863,19 +865,19 @@ impl Db {
     }
 }
 
-/// Put the file into WAL, waiting out a sibling char doing the same thing.
+/// Put the file into WAL, waiting out a sibling Armada doing the same thing.
 ///
 /// **This is the one statement `busy_timeout` does not cover, and it is
 /// measured rather than assumed.** Switching a database's journal mode takes a
 /// brief exclusive lock, and SQLite acquires that one *without* consulting the
 /// busy handler — so a `busy_timeout` of five seconds still loses instantly.
-/// Two `char init`s started together on a machine with no `manifest.db` yet both
+/// Two `armada manifest init`s started together on a machine with no `manifest.db` yet both
 /// create the file in rollback mode and both try to convert it, and roughly one
-/// run in ten the loser reported `aborted` — "another char is writing to
+/// run in ten the loser reported `aborted` — "another Armada is writing to
 /// manifest.db; retry" — for a database nobody was writing to. That is the
 /// concurrent-claim guarantee failing before a claim is even attempted.
 ///
-/// The wait is char's own, bounded by the same budget as every other statement,
+/// The wait is Armada's own, bounded by the same budget as every other statement,
 /// and `SQLITE_BUSY` is the only code it retries: a busy database becomes
 /// available, and a corrupt or unopenable one never does.
 fn set_wal(conn: &Connection, path: &Path) -> Result<(), ArmadaError> {
@@ -912,14 +914,14 @@ fn parse_kind(text: &str) -> LeaseKind {
         "machine" => LeaseKind::Machine,
         "cpu-slot" => LeaseKind::CpuSlot,
         "exclusive" => LeaseKind::Exclusive,
-        // `run` and anything a newer char wrote. A lease char cannot name is
+        // `run` and anything a newer Armada wrote. A lease Armada cannot name is
         // still a lease it must not steal, so an unknown kind is treated as the
         // most conservative one rather than dropped.
         _ => LeaseKind::Run,
     }
 }
 
-/// Map a SQLite failure into char's vocabulary, **branching on the extended
+/// Map a SQLite failure into Armada's vocabulary, **branching on the extended
 /// code and never on the message**.
 ///
 /// Two failures both print `database is locked` and mean opposite things:
@@ -942,18 +944,18 @@ fn map_sqlite(path: &Path, error: rusqlite::Error) -> ArmadaError {
     };
 
     let (class, next_action) = match extended {
-        // SQLITE_BUSY: a genuine queue char lost. Retryable, unchanged.
+        // SQLITE_BUSY: a genuine queue Armada lost. Retryable, unchanged.
         5 => (
             ErrClass::Aborted,
-            Some("another char is writing to manifest.db; retry".to_string()),
+            Some("another Armada is writing to manifest.db; retry".to_string()),
         ),
-        // SQLITE_BUSY_SNAPSHOT: never retryable, and always char's bug — it
+        // SQLITE_BUSY_SNAPSHOT: never retryable, and always Armada's bug — it
         // means a transaction read and then wrote without BEGIN IMMEDIATE.
         517 => (ErrClass::ArmadaBug, None),
         11 | 13 | 14 => (
             ErrClass::Environment,
             Some(format!(
-                "`char clean --orphaned --force-rebuild` rebuilds {} from labels alone",
+                "`armada manifest clean --orphaned --force-rebuild` rebuilds {} from labels alone",
                 path.display()
             )),
         ),
@@ -979,11 +981,11 @@ fn environment(location: String, message: String) -> ArmadaError {
 
 /// A version-4 UUID from the operating system's entropy.
 ///
-/// `/dev/urandom` rather than a crate: char needs sixteen random bytes exactly
+/// `/dev/urandom` rather than a crate: Armada needs sixteen random bytes exactly
 /// once in its life, at database creation.
 ///
 /// **A read that fails is `environment` and never a fallback value.** The
-/// namespace is what keeps two char installations sharing one Docker daemon
+/// namespace is what keeps two Armada installations sharing one Docker daemon
 /// from reaping each other's resources, and a fixed stand-in makes two
 /// installations that both hit the failure compare *equal* — which is the
 /// cross-reap the label exists to prevent, arriving silently.
@@ -1157,7 +1159,7 @@ mod tests {
             pid_started_at: Some("whenever".to_string()),
         })
         .unwrap();
-        // As a newer char would have written it.
+        // As a newer Armada would have written it.
         db.conn
             .execute(
                 "INSERT INTO owned (workspace, kind, \"ref\") VALUES ('aaaaaaaa', 'quantum', 'q1')",
@@ -1173,7 +1175,7 @@ mod tests {
             .conn
             .query_row("SELECT count(*) FROM owned", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(still_there, 2, "char never deletes what it cannot name");
+        assert_eq!(still_there, 2, "Armada never deletes what it cannot name");
     }
 
     #[test]
@@ -1289,7 +1291,7 @@ mod tests {
 
     /// **The class comes from the extended code and never from the message.**
     /// `SQLITE_BUSY` and `SQLITE_BUSY_SNAPSHOT` both print `database is
-    /// locked`, and one of them is retryable while the other is char's own bug
+    /// locked`, and one of them is retryable while the other is Armada's own bug
     /// — so a mapping that read the text would have the claim loop retry a
     /// transaction that can never succeed.
     #[test]
@@ -1302,12 +1304,12 @@ mod tests {
             )
         };
 
-        // 5, SQLITE_BUSY: a queue char lost, and the remedy is to retry.
+        // 5, SQLITE_BUSY: a queue Armada lost, and the remedy is to retry.
         let busy = mapped(5);
         assert_eq!(busy.class, ErrClass::Aborted);
         assert!(busy.next_action.unwrap().contains("retry"));
 
-        // 517, SQLITE_BUSY_SNAPSHOT: never retryable, and always char's bug.
+        // 517, SQLITE_BUSY_SNAPSHOT: never retryable, and always Armada's bug.
         let snapshot = mapped(517);
         assert_eq!(snapshot.class, ErrClass::ArmadaBug);
         assert_eq!(snapshot.next_action, None);
@@ -1324,7 +1326,7 @@ mod tests {
         }
 
         // Anything else, including an error that is not a SQLite failure at
-        // all: environment, with no remedy char can honestly suggest.
+        // all: environment, with no remedy Armada can honestly suggest.
         let other = mapped(1);
         assert_eq!(other.class, ErrClass::Environment);
         assert_eq!(other.next_action, None);

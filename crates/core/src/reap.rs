@@ -1,12 +1,12 @@
 //! Reaping (PLAN.md §2.3.1) — the decisions, not the removals.
 //!
 //! **The plan's one piece of empirical evidence is a sweep function that
-//! existed and was never called.** So reaping is automatic, at `char init`
-//! *and* `char clean`, in three passes:
+//! existed and was never called.** So reaping is automatic, at `armada manifest init`
+//! *and* `armada manifest clean`, in three passes:
 //!
 //! 1. **Registry** — drop `workspaces` rows whose path no longer exists.
-//! 2. **Resource** — find everything labelled `char.workspace=*`, read its
-//!    `char.workspace_path` label, and **`stat` that path. Remove only on
+//! 2. **Resource** — find everything labelled `armada.workspace=*`, read its
+//!    `armada.workspace_path` label, and **`stat` that path. Remove only on
 //!    `ENOENT`.**
 //! 3. **Lease** — delete leases whose heartbeat has gone cold.
 //!
@@ -40,7 +40,7 @@ pub enum PathStat {
     Unreadable(String),
 }
 
-/// A resource carrying char's labels, as `docker ps`/`network ls`/`volume ls`/
+/// A resource carrying Armada's labels, as `docker ps`/`network ls`/`volume ls`/
 /// `image ls` reported it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LabelledResource {
@@ -48,13 +48,13 @@ pub struct LabelledResource {
     pub kind: OwnedKind,
     /// The id or name docker knows it by.
     pub reference: String,
-    /// The `char.workspace` label.
+    /// The `armada.workspace` label.
     pub workspace: WorkspaceId,
-    /// The `char.workspace_path` label. Stamping the path is what makes this
+    /// The `armada.workspace_path` label. Stamping the path is what makes this
     /// pass **self-sufficient**: it stats a real directory and consults no
     /// database at all.
     pub workspace_path: PathBuf,
-    /// The `char.namespace` label, absent on a resource stamped by a char that
+    /// The `armada.namespace` label, absent on a resource stamped by an Armada that
     /// predates it.
     pub namespace: Option<String>,
 }
@@ -67,14 +67,14 @@ pub enum LeftAlone {
     WorkspaceLive,
     /// Its path could not be read, and that is not the same as gone.
     PathUnreadable,
-    /// It belongs to a different `char.namespace` — a different filesystem
+    /// It belongs to a different `armada.namespace` — a different filesystem
     /// view of this daemon, which is the ordinary devcontainer setup.
     ForeignNamespace,
-    /// It carries no namespace label at all, so char cannot tell whose it is.
+    /// It carries no namespace label at all, so Armada cannot tell whose it is.
     UnstampedNamespace,
 }
 
-/// One thing char decided not to remove, and why. **Reported, never silent.**
+/// One thing Armada decided not to remove, and why. **Reported, never silent.**
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Reported {
     /// What kind of thing.
@@ -153,11 +153,11 @@ pub fn registry_pass(rows: &[(WorkspaceRow, PathStat)]) -> Vec<WorkspaceId> {
 /// Pass 2: which labelled resources are orphans, and which are merely not ours.
 ///
 /// `namespace` is this installation's, read from `manifest.db` at creation. **A
-/// third label, `char.namespace`, scopes the whole mechanism to one filesystem
+/// third label, `armada.namespace`, scopes the whole mechanism to one filesystem
 /// view** — without it, path-based reaping is actively dangerous the moment two
-/// char installations share a Docker daemon, which is the ordinary
+/// Armada installations share a Docker daemon, which is the ordinary
 /// devcontainer setup: a workspace at `/workspaces/repo` inside the container
-/// is `ENOENT` when a host-side `char init` stats it, so the host reaps a live
+/// is `ENOENT` when a host-side `armada manifest init` stats it, so the host reaps a live
 /// workspace's containers.
 pub fn resource_pass(
     resources: &[(LabelledResource, PathStat)],
@@ -223,7 +223,7 @@ pub fn pgid_is_ours(
         // No observed start time means the process is gone; nothing to kill,
         // and the row is safe to drop either way.
         (Some(_), Some(_), None) => false,
-        // A row written before these columns existed, or a process char could
+        // A row written before these columns existed, or a process Armada could
         // not sample. Not provably ours, so never killed.
         (None, _, _) | (_, None, _) => false,
     }
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(reported[0].reason, LeftAlone::PathUnreadable);
     }
 
-    /// Two char installations sharing one Docker daemon is the ordinary
+    /// Two Armada installations sharing one Docker daemon is the ordinary
     /// devcontainer setup. `/workspaces/repo` is `ENOENT` from the host, so
     /// without the namespace label the host reaps a live workspace.
     #[test]

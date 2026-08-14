@@ -1,4 +1,4 @@
-//! The dispatch record: what char knew at the moment it ran a check
+//! The dispatch record: what Armada knew at the moment it ran a check
 //! (PLAN.md §3.4).
 //!
 //! **The model is `docker inspect`.** `inspect` can answer everything about a
@@ -11,7 +11,7 @@
 //! *now*, which is a different and useless answer to "what was `web:e2e`
 //! waiting on when it timed out". Live state answers a different question than
 //! the one being asked, so the record has to be made at the time or not at all.
-//! `char explain` in phase 5 is a reader with nothing to read without this.
+//! `armada manifest explain` in phase 5 is a reader with nothing to read without this.
 //!
 //! **A reconstruction that disagrees is worse than none.** An agent that
 //! reimplements the substitution and the argv split produces a command it
@@ -42,13 +42,13 @@ use std::path::{Path, PathBuf};
 /// and small enough that hashing it is free.
 pub const SIGNATURE_TAIL_BYTES: usize = 4 * 1024;
 
-/// What char knew when it ran one check.
+/// What Armada knew when it ran one check.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Dispatch {
     /// Which check.
     pub check: CheckId,
-    /// **The argv char executed, post-substitution.** Only recoverable by
-    /// reimplementing char: the substitution, the `${files}` set and the argv
+    /// **The argv Armada executed, post-substitution.** Only recoverable by
+    /// reimplementing Armada: the substitution, the `${files}` set and the argv
     /// split with quote handling.
     pub argv: Vec<String>,
     /// The working directory. Recoverable — PLAN.md §4.1 fixes it at the
@@ -123,7 +123,7 @@ pub struct Waited {
     pub kind: String,
     /// Which lease within the class — the exclusive's name, or the slot.
     pub key: String,
-    /// **The workspace that had it.** `None` for a claim char never saw a holder
+    /// **The workspace that had it.** `None` for a claim Armada never saw a holder
     /// for, which is honest: the record says what was observed and never guesses.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub held_by: Option<WorkspaceId>,
@@ -230,7 +230,7 @@ const ROOT: &str = "<root>";
 /// [`ROOT`] marker, which is this repo's own and is the actionable half.
 ///
 /// Written by hand rather than as a pattern because the rule is "not preceded
-/// by", and char validates with a Rust regex engine that has no lookbehind —
+/// by", and Armada validates with a Rust regex engine that has no lookbehind —
 /// the same constraint PLAN.md §4.1.1 records for the JSON Schema, arrived at
 /// from the other direction.
 fn elide_foreign_paths(text: &str) -> String {
@@ -292,14 +292,14 @@ fn patterns() -> &'static [(regex::Regex, &'static str)] {
 /// The dispatch records and the reducer's event sequence for one run.
 ///
 /// **The event sequence is the second dividend from choosing a reducer.** The
-/// first was compile-time exhaustiveness; this is that char already produces a
+/// first was compile-time exhaustiveness; this is that Armada already produces a
 /// complete ordered account of the run — every lease granted and denied, every
 /// spawn, every deadline, every exit — and persisting it gives `explain`
 /// something `docker inspect` has no equivalent of: a trace that **replays
 /// through `step()`**. It costs one append per event.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Journal {
-    /// One per check char actually dispatched, in id order.
+    /// One per check Armada actually dispatched, in id order.
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub dispatches: BTreeMap<CheckId, Dispatch>,
     /// Every event the shell fed the reducer, in order.
@@ -336,7 +336,7 @@ impl Journal {
                 dispatch.signature = Some(signature(check, exit_code, output, scrub));
                 Ok(())
             }
-            // A signature for a check char never dispatched is a char bug rather
+            // A signature for a check Armada never dispatched is an Armada bug rather
             // than a user error: the shell only reaches here from an exit it
             // observed, and it cannot have observed one it never started.
             None => Err(ArmadaError {
@@ -383,7 +383,7 @@ mod tests {
         )
     }
 
-    /// **Only recoverable by reimplementing char**, so it is recorded verbatim
+    /// **Only recoverable by reimplementing Armada**, so it is recorded verbatim
     /// — including a filename that is a legal POSIX name and an injection under
     /// a shell. The record's value is authority.
     #[test]
@@ -660,7 +660,7 @@ mod tests {
     }
 
     /// The shell can only reach here from an exit it observed, and it cannot
-    /// have observed one it never started — so this is char's bug, not the
+    /// have observed one it never started — so this is Armada's bug, not the
     /// caller's, and `armada_bug` is the class that says "stop; retrying will not
     /// help".
     #[test]

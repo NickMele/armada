@@ -1,15 +1,15 @@
-# charkit's own config — the dogfood target (ARCHITECTURE.md §2.6).
+# Armada's own config — the dogfood target (ARCHITECTURE.md §2.6).
 #
 # **This is a test subject, not the merge gate.** Through phase 6 the gate runs
-# the raw tools and one integration test asserts `char check --json` agrees with
+# the raw tools and one integration test asserts `armada manifest check --json` agrees with
 # them, so a bug in a half-built tool cannot lock its own repository. Phase 6 is
-# where `char check` becomes the gate; the raw commands below are the ones the
+# where `armada manifest check` becomes the gate; the raw commands below are the ones the
 # README keeps as the fallback afterwards.
 #
 # **A caveat that belongs next to the file rather than only in the document.**
 # This config is one component, pure Rust, no services, no ports and no
 # secrets — structurally the *simplest* shape the schema can express, so
-# dogfooding pulls the design toward it. "It works on charkit" is not evidence
+# dogfooding pulls the design toward it. "It works on Armada" is not evidence
 # the abstraction generalises; the six fixtures under `tests/fixtures/` and
 # phase 8 are.
 #
@@ -24,7 +24,7 @@ manifest:
 
   components:
 
-    charkit:
+    armada:
       # No `root:` and no `match:`: the component *is* the repo, so the default
       # (`**`, PLAN.md §4.1.1) is the correct glob rather than an omission.
       setup: cargo fetch

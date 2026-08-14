@@ -26,19 +26,19 @@ use crate::app::App;
 /// One verb's answer, so the renderer and the exit path exist once.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Output {
-    /// `char init`.
+    /// `armada manifest init`.
     Init(Box<Envelope<InitData>>),
-    /// `char init --dry-run`.
+    /// `armada manifest init --dry-run`.
     InitDryRun(Box<Envelope<InitDryRun>>),
-    /// `char clean`.
+    /// `armada manifest clean`.
     Clean(Box<Envelope<CleanData>>),
-    /// `char clean --dry-run`.
+    /// `armada manifest clean --dry-run`.
     CleanDryRun(Box<Envelope<CleanDryRun>>),
-    /// `char status`.
+    /// `armada manifest status`.
     Status(Box<Envelope<StatusData>>),
-    /// `char check`.
+    /// `armada manifest check`.
     Check(Box<Envelope<CheckData>>),
-    /// `char check --dry-run`.
+    /// `armada manifest check --dry-run`.
     CheckDryRun(Box<Envelope<CheckDryRun>>),
     /// A dispatched `commands:` entry.
     Dispatch(Box<Envelope<DispatchData>>),
@@ -62,10 +62,10 @@ impl Output {
     /// The process exit code.
     ///
     /// **A dispatched child's code passes through verbatim and is not
-    /// remapped.** char did not decide the outcome, so it does not get to
+    /// remapped.** Armada did not decide the outcome, so it does not get to
     /// classify it — and scripts return meaningful codes their own callers
-    /// already depend on. The ambiguity that creates against char's own `1`–`6`
-    /// is resolved by the envelope rather than by renumbering: **char's own
+    /// already depend on. The ambiguity that creates against Armada's own `1`–`6`
+    /// is resolved by the envelope rather than by renumbering: **Armada's own
     /// error codes can only occur when the child never ran**, and
     /// `data.dispatched` says which happened.
     pub fn exit_code(&self) -> u8 {
@@ -74,7 +74,7 @@ impl Output {
                 match envelope.data.child_exit {
                     Some(code) => code as u8,
                     // Killed by a signal: the shell convention, and the same
-                    // carve-out `ARCHITECTURE.md` §1.6 makes for char's own
+                    // carve-out `ARCHITECTURE.md` §1.6 makes for Armada's own
                     // 130 and 141.
                     None => 128,
                 }
@@ -95,7 +95,7 @@ impl Output {
 ///
 /// **Loading is not verifying.** No schema runs here: the structs reject
 /// anything they cannot turn into a typed value, and everything needing a
-/// second part of the document or the filesystem is `char config verify`'s
+/// second part of the document or the filesystem is `armada manifest config verify`'s
 /// (PLAN.md §4.1.1).
 pub fn load_config<R: Run, C: Clock, F: Fetch>(
     app: &App<R, C, F>,
@@ -116,7 +116,7 @@ pub fn load_config<R: Run, C: Clock, F: Fetch>(
 ///
 /// Returns `None` rather than failing: a sibling whose config no longer parses
 /// is still a workspace whose ports and containers must be reclaimed, and
-/// refusing to clean it because of a syntax error in a file char is not going
+/// refusing to clean it because of a syntax error in a file Armada is not going
 /// to execute would strand exactly the resources this verb exists to release.
 pub fn load_foreign_config(
     root: &std::path::Path,

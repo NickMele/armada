@@ -5,7 +5,7 @@ modules under one binary. **POSIX only — macOS and Linux. Not Windows**, becau
 signals and file locks are load-bearing here rather than incidental.
 
 > **Status: one module built, three to go.** **Manifest** — the workspace layer, formerly
-> charkit — has `init`, `clean`, `status` and repo `commands:` working over a machine-global
+> Armada — has `init`, `clean`, `status` and repo `commands:` working over a machine-global
 > store. `up`, `down`, `check`, `config` and `explain` are not built. **Guild**, **Fleet** and
 > **Helm** do not exist yet. The M0 research spike is **done** and its findings are recorded
 > in [`docs/PHASES.md`](docs/PHASES.md) §9.1. See [`docs/commands/reference.md`](docs/commands/reference.md) for

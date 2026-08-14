@@ -6,9 +6,9 @@
 //! else.** `${ref}` belongs to `secret_providers[].cmd` and arrives with
 //! secrets in phase 4.
 //!
-//! **The cap says what char *substitutes*, not what may appear.** Under
-//! `shell: true`, `${HOME}` is ordinary shell syntax and char passes it through
-//! untouched — banning it would mean char policing a language it explicitly
+//! **The cap says what Armada *substitutes*, not what may appear.** Under
+//! `shell: true`, `${HOME}` is ordinary shell syntax and Armada passes it through
+//! untouched — banning it would mean Armada policing a language it explicitly
 //! declined to parse. Under argv-split, which is the default, an unrecognised
 //! `${…}` is `bad_config`: nothing downstream would ever expand it, so it can
 //! only be a typo.
@@ -66,7 +66,7 @@ impl<'a> Vars<'a> {
 /// Where a template appears, which decides what is legal in it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Site {
-    /// A command char splits itself, or a selector char evaluates. An
+    /// A command Armada splits itself, or a selector Armada evaluates. An
     /// unrecognised `${…}` is `bad_config` — nothing would expand it.
     Argv,
     /// A command handed to `/bin/sh -c`. An unrecognised `${…}` is the shell's
@@ -135,7 +135,7 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
             None => Err(ArmadaError::bad_config(
                 at.clone(),
                 "`${files}` is not available here",
-                "remove it — a commands: entry runs ad hoc, so char has no file scope to compute",
+                "remove it — a commands: entry runs ad hoc, so Armada has no file scope to compute",
             )),
         };
     }
@@ -177,7 +177,7 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
             None => Err(ArmadaError::bad_config(
                 at.clone(),
                 format!("`{var}` is not set in the environment"),
-                format!("export {var} before running char, or remove the reference"),
+                format!("export {var} before running Armada, or remove the reference"),
             )),
         };
     }
@@ -186,8 +186,8 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
         Site::Shell => Ok(Expansion::PassThrough),
         Site::Argv | Site::EnvValue => Err(ArmadaError::bad_config(
             at.clone(),
-            format!("`${{{name}}}` is not one of the four substitutions char makes"),
-            "char substitutes ${port.NAME}, ${files}, ${component.root} and ${workspace.id}, \
+            format!("`${{{name}}}` is not one of the four substitutions Armada makes"),
+            "Armada substitutes ${port.NAME}, ${files}, ${component.root} and ${workspace.id}, \
              plus ${env.NAME} inside env: — set `shell: true` if a shell should expand it",
         )),
     }
@@ -197,7 +197,7 @@ fn unexpandable_files(at: &ConfigWhere) -> ArmadaError {
     ArmadaError::bad_config(
         at.clone(),
         "`${files}` cannot be used here — it expands to a list of arguments",
-        "use it in a check's `cmd:`, which char splits into argv",
+        "use it in a check's `cmd:`, which Armada splits into argv",
     )
 }
 
@@ -216,11 +216,11 @@ pub fn expand_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<Strin
                 ArmadaError::bad_config(
                     at.clone(),
                     "`${files}` is not available here",
-                    "remove it — a commands: entry runs ad hoc, so char has no file scope",
+                    "remove it — a commands: entry runs ad hoc, so Armada has no file scope",
                 )
             })?;
             // **Substitute the token first, insert the filename verbatim
-            // afterwards.** Inserting and then substituting re-scans char's own
+            // afterwards.** Inserting and then substituting re-scans Armada's own
             // placeholder syntax inside text from outside the trust boundary —
             // filenames are written by whoever pushed the branch. A file named
             // `${port.api}.py` would expand to a port number, and one holding
@@ -241,7 +241,7 @@ pub fn expand_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<Strin
     Ok(argv)
 }
 
-/// Wrap a command for `/bin/sh -c`, substituting char's own placeholders and
+/// Wrap a command for `/bin/sh -c`, substituting Armada's own placeholders and
 /// leaving everything else for the shell.
 pub fn shell_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<String>, ArmadaError> {
     let expanded = substitute(cmd, vars, Site::Shell, at)?;
@@ -331,9 +331,9 @@ fn unterminated(at: &ConfigWhere, quote: char) -> ArmadaError {
 
 /// Quote one argument for safe inclusion in a `/bin/sh -c` string.
 ///
-/// Needed where char appends caller-supplied argv to a `shell: true`
+/// Needed where Armada appends caller-supplied argv to a `shell: true`
 /// `commands:` entry: the passthrough arguments are the *caller's* text, and
-/// concatenating them raw would let `char worktrees ';rm -rf /'` mean something
+/// concatenating them raw would let `Armada worktrees ';rm -rf /'` mean something
 /// the repo never wrote.
 pub fn shell_quote(arg: &str) -> String {
     if !arg.is_empty()
@@ -493,7 +493,7 @@ mod tests {
         );
     }
 
-    /// The same trust boundary, one layer in: a filename is *data*, so char's
+    /// The same trust boundary, one layer in: a filename is *data*, so Armada's
     /// own placeholder syntax inside one is never re-scanned. The second name
     /// would otherwise fail `bad_config` and take the whole check with it.
     #[test]

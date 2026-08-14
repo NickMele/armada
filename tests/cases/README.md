@@ -4,7 +4,7 @@ Behaviour cases harvested from the source repo's check engine and written as **d
 translated test functions. `docs/harvest.md` is the behaviour spec these came from; this directory
 is the machine-readable half of it.
 
-**Why data.** The original suite is `run_fn`-injected and charkit has three seams behind a `Ctx`
+**Why data.** The original suite is `run_fn`-injected and Armada has three seams behind a `Ctx`
 (`ARCHITECTURE.md` §1.1). Porting the functions would port the harness, which does not fit. Porting
 the cases keeps the assertions — the valuable part — and lets the Rust suite drive them through
 whatever harness it wants.
@@ -69,7 +69,7 @@ is a test failure, not a silent empty result — a case must account for every c
 ### Asserting on invocations
 
 Argv is asserted by **property**, never by transcription, because the original's argv is that
-repo's toolchain and charkit's is config. Properties available:
+repo's toolchain and Armada's is config. Properties available:
 
 | Property | Meaning |
 |---|---|

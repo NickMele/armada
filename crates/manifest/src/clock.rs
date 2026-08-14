@@ -47,7 +47,7 @@ impl Clock for SystemClock {
 
 /// Format seconds since the epoch as `YYYY-MM-DDTHH:MM:SSZ`.
 ///
-/// Hand-rolled rather than a date crate: char formats one timestamp, never
+/// Hand-rolled rather than a date crate: Armada formats one timestamp, never
 /// parses one, never localises, and never does arithmetic on a calendar. A
 /// dependency for `strftime` would be the largest thing in the binary that does
 /// the least.

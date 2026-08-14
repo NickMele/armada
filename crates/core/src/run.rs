@@ -9,14 +9,14 @@
 //! ```
 //!
 //! **Nothing reclaimable lives here** (PLAN.md §4.2). A workspace directory is
-//! deleted by `rm -rf` or `git worktree remove`, neither of which consults char,
+//! deleted by `rm -rf` or `git worktree remove`, neither of which consults Armada,
 //! so anything recorded only here is gone precisely when it is most needed. Run
 //! artifacts are safe because a run without its workspace is meaningless anyway
 //! — which is exactly why the port block, the owned rows and the leases are in
 //! `~/.armada/manifest.db` instead.
 //!
 //! **Log growth is a separate problem with a separate answer.** Coupling
-//! retention to `char clean` would mean either logs live forever or you lose the
+//! retention to `armada manifest clean` would mean either logs live forever or you lose the
 //! evidence from a failed run the moment you release a port. So old run
 //! directories are reaped at the *start* of each run, keeping the most recent N
 //! and never touching one whose run lease is live.
@@ -32,8 +32,8 @@ use std::fmt;
 ///
 /// It excludes `I`, `L`, `O` and `U`: the first three because they are read as
 /// `1`, `1` and `0`, and `U` so that no id spells an English obscenity by
-/// accident. char ids are copied out of terminals and pasted into
-/// `char explain --run`, which is the case the alphabet was designed for.
+/// accident. Armada ids are copied out of terminals and pasted into
+/// `armada manifest explain --run`, which is the case the alphabet was designed for.
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /// Characters encoding the timestamp: 48 bits of milliseconds, which lasts
@@ -56,7 +56,7 @@ pub const RUN_ID_LEN: usize = TIME_LEN + ENTROPY_LEN;
 ///
 /// **What phase 3 decided, because the corpus specifies the shape and not the
 /// format.** PLAN.md writes `01J8X2` throughout — in `data.run_id`, in
-/// `.armada/run/01J8X2/logs/`, in `char explain --run 01J8X2` — and those six
+/// `.armada/run/01J8X2/logs/`, in `armada manifest explain --run 01J8X2` — and those six
 /// characters are exactly the leading edge of a time-ordered base32 id, so the
 /// format here is the illustration made real rather than a departure from it.
 /// The remaining characters are what stop two runs a millisecond apart from
@@ -97,14 +97,16 @@ impl RunId {
     /// **Validated rather than trusted, because the id becomes a path.**
     /// `ARMADA_RUN_ID` arrives from the environment (PLAN.md §2.4) and a child
     /// may set it to anything at all; a value of `../../etc` reaching
-    /// `.armada/run/<id>/` is a directory traversal in the one variable char
+    /// `.armada/run/<id>/` is a directory traversal in the one variable Armada
     /// promises to set for every process it spawns.
     pub fn parse(text: &str) -> Result<Self, ArmadaError> {
         let bad = |message: &str| ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: "run-id".to_string(),
             message: message.to_string(),
-            next_action: Some("`char status` lists the runs this workspace has kept".to_string()),
+            next_action: Some(
+                "`armada manifest status` lists the runs this workspace has kept".to_string(),
+            ),
         };
         if text.len() != RUN_ID_LEN {
             return Err(bad(&format!(
@@ -194,7 +196,7 @@ pub enum Nesting {
 /// **That condition is load-bearing, and the failure without it is the kind
 /// that only shows up under nesting.** PLAN.md §4.5 has a `commands:` entry
 /// inherit the parent environment *wholesale*, so both variables reach every
-/// child — including a `char check` invoked in a **different** workspace: a
+/// child — including a `armada manifest check` invoked in a **different** workspace: a
 /// nested workspace (§4.6), a `commands:` script that changes directory, a
 /// monorepo sub-invocation. Without the check such a child skips its own lease
 /// and reports the parent's run id, which allows two concurrent runs in one
@@ -202,9 +204,9 @@ pub enum Nesting {
 /// rarely and nondeterministically.
 ///
 /// **A malformed `ARMADA_RUN_ID` starts a fresh run rather than failing.** The
-/// variable is set by char and read back by char, so a value that is not a run
+/// variable is set by Armada and read back by Armada, so a value that is not a run
 /// id means something in between rewrote it — a wrapper script, a CI runner
-/// sanitising the environment. Refusing to run would make char fail in an
+/// sanitising the environment. Refusing to run would make Armada fail in an
 /// environment that is merely untidy, and the id becomes a *path*, so accepting
 /// it unvalidated is the one thing that must not happen.
 pub fn nesting(
@@ -227,7 +229,7 @@ pub fn nesting(
 /// What `.armada/run/<run-id>/state.json` holds.
 ///
 /// **Written when the check runs, because most of it cannot be recovered
-/// afterwards** (PLAN.md §3.4). `char explain` in phase 5 is a reader with
+/// afterwards** (PLAN.md §3.4). `armada manifest explain` in phase 5 is a reader with
 /// nothing to read without it: query `manifest.db` an hour later and it truthfully
 /// reports who holds the browser *now*, which is a different and useless answer
 /// to "what was `web:e2e` waiting on when it timed out".
@@ -246,7 +248,7 @@ pub struct RunRecord {
     pub started_at: String,
     /// The scheduler's state, which is the run.
     pub state: State,
-    /// What char knew at each dispatch, and the reducer's event sequence
+    /// What Armada knew at each dispatch, and the reducer's event sequence
     /// (PLAN.md §3.4).
     #[serde(default)]
     pub journal: Journal,
@@ -341,7 +343,7 @@ mod tests {
 
     /// **`ARMADA_RUN_ID` arrives from the environment and becomes a path.** A
     /// child may set it to anything, and `../../etc` reaching `.armada/run/<id>/`
-    /// is a traversal in the one variable char promises to set on every process
+    /// is a traversal in the one variable Armada promises to set on every process
     /// it spawns.
     #[test]
     fn a_run_id_that_would_escape_the_run_directory_is_refused() {
@@ -437,7 +439,7 @@ mod tests {
     }
 
     /// **The condition that is load-bearing.** `commands:` inherits the parent
-    /// environment wholesale, so both variables reach a `char check` invoked in
+    /// environment wholesale, so both variables reach a `armada manifest check` invoked in
     /// a *different* workspace — a nested workspace, a script that changed
     /// directory, a monorepo sub-invocation. Without this check that child skips
     /// its own lease and reports the parent's run id, which allows two
@@ -468,7 +470,7 @@ mod tests {
     }
 
     /// The id becomes a path, so accepting it unvalidated is the one thing that
-    /// must not happen — and refusing to run would make char fail in an
+    /// must not happen — and refusing to run would make Armada fail in an
     /// environment that is merely untidy.
     #[test]
     fn a_malformed_run_id_starts_a_fresh_run_rather_than_becoming_a_path() {
