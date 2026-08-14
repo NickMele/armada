@@ -131,6 +131,11 @@ contamination nothing else can catch.
 - **Phase 2.5 is first contact with a real repo** — the source repo adopts
   `init`/`clean`/`status`/`commands:` and keeps its own `check.py`. It is allowed to send
   changes back to `PLAN.md`; every later phase is not.
+- **Phase 3's harvest has landed.** The behaviour spec and every trap found in the source
+  check engine are in [`docs/harvest.md`](docs/harvest.md); the ported cases are data under
+  `tests/cases/`, one file per subsystem, schema in `tests/cases/README.md`. The implementer
+  builds from those two and **never opens the source repo** — and there is no second harvest,
+  so anything they lack is a question for the harvest doc, not the original.
 
 ---
 

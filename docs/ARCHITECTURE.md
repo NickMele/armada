@@ -55,7 +55,7 @@ and the production path pays nothing for. A test constructs `Ctx<FakeRun, FixedC
 FakeFetch>`; nothing is patched and nothing is dynamic.
 
 **Why injection at all.** This is the one pattern worth copying wholesale from the source
-repo. Its 2,694 test lines run hermetically with no mocking framework, because `run_fn` is a
+repo. Its test suite runs hermetically with no mocking framework, because `run_fn` is a
 *parameter*. Nothing patches `subprocess.run`; the test simply passes a different function.
 
 **Why three and not six.** The plan originally proposed six (adding filesystem, docker and
@@ -563,9 +563,9 @@ costs one edit and one run.
 behaviour.** Phase 2 had a coverage pass add an e2e assertion that the envelope
 reports `tool_failed` *"whatever the row said"* — a faithful description of a
 bug, pinned by a test that then defended it. This bears on
-[`PHASES.md`](PHASES.md) phase 3 specifically, where 2,694 lines of test cases
-are ported: those encode the *source repo's* behaviour, bugs included, and the
-harvest's job is to tell a bug fix worth keeping from a quirk worth dropping.
+[`PHASES.md`](PHASES.md) phase 3 specifically, where the source suite's test
+cases are ported: those encode the *source repo's* behaviour, bugs included,
+and the harvest's job is to tell a bug fix worth keeping from a quirk worth dropping.
 Read what an assertion claims, not merely whether it passes.
 
 ---
@@ -940,19 +940,21 @@ The plan called phase 3 a copy. It is a **clean-room rewrite**, split across two
 
 | | Reads | Produces |
 |---|---|---|
-| **Harvester** | The source repo, at the locally configured path (below) | `docs/harvest.md` — a behaviour spec plus a written list of every trap and bug-shaped branch found. Plus the ported test **cases**. |
+| **Harvester** | The source repo, at the locally configured path (below) | `docs/harvest.md` — a behaviour spec plus a written list of every trap and bug-shaped branch found. Plus the ported test **cases**, as data under `tests/cases/` — schema in `tests/cases/README.md`. |
 | **Implementer** | `PLAN.md`, this document, the fixtures, the harvest doc, the tests. **Never opens the source repo.** | `crates/` |
 
 **Why rewrite rather than copy.** Two reasons already force it. The scheduler is a reducer
 (§1.2) and the original's almost certainly is not, so the hardest part was being rewritten
-regardless. And reshaping 3,383 lines of foreign code into `core`/`adapters`/`cli` with a
-`Ctx` and three seams is usually more work than writing to the principles directly.
+regardless. And reshaping thousands of lines of foreign code — `PHASES.md` §9 has the
+measurement — into `core`/`adapters`/`cli` with a `Ctx` and three seams is usually more work
+than writing to the principles directly.
 
 **Why the harvest step is mandatory.** The value in those lines is not the code — it is the
 **empirically discovered bug fixes**, branches that exist because something broke in
 production once. Two are named in the plan ("load-bearing comments about two Playwright
-traps"). The ones that are *not* commented are the danger: a bug fix looks like an
-unremarkable three-line conditional, and nobody reviewing a rewrite notices it is missing.
+traps"); the harvest found three, and `docs/harvest.md` has them. The ones that are *not*
+commented are the danger: a bug fix looks like an unremarkable three-line conditional, and
+nobody reviewing a rewrite notices it is missing.
 This matters more here than in a normal rewrite, because charkit gives up continuous
 real-repo validation for the check engine until phase 6 — so knowledge lost cannot be re-derived by running the
 thing. You would rediscover those bugs in phase 6, the one PR the plan already flags as
@@ -997,18 +999,26 @@ regression suite in `xtask/tests/clean_room_hook.rs`. A guard added at the momen
 needed has already been unenforced for every commit before that, and a guard nothing
 exercises fails in the one direction nobody notices: silently permitting.
 
+**The allowlist names an agent, so that agent has to exist.** Phase 1 shipped the deny half
+without it, which left the hook denying the one agent it exists to permit. The definition is
+`.claude/agents/harvester.md`, tracked rather than local, and it landed in phase 3 with the
+harvest — its `name:` is the `agent_type` the hook allows, so renaming one without the other
+closes the clean room entirely.
+
 One narrowing the tests pin, because it is not obvious from the rule above: for a *writing*
 tool the guard matches the target path only, not the whole payload. The guarded fragment is
 arbitrary configured text, so a content match would deny writing that fragment into
 `.claude/clean-room.local` itself, or into any note about the boundary — ordinary work, and
 not the vector. Reading is.
 
-**The test cases are ported, not rewritten.** The source suite is 2,694 lines asserting on
-behaviour rather than implementation, and the plan calls it the single most valuable asset.
-Rewriting it from scratch discards the valuable part and keeps the cheap part. One honest
+**The test cases are ported, not rewritten.** The source suite asserts on behaviour rather
+than implementation, and the plan calls it the single most valuable asset. Rewriting it from
+scratch discards the valuable part and keeps the cheap part. One honest
 caveat: it is built around `run_fn` injection and charkit uses three seams behind a `Ctx`, so
 it is **port the cases, rewrite the harness** — the assertions survive, the setup does not,
-and the scheduler tests change shape because the scheduler did.
+and the scheduler tests change shape because the scheduler did. They land as data under
+`tests/cases/`, one file per subsystem, with the schema and the recorded exclusions in
+`tests/cases/README.md`.
 
 ---
 
@@ -1096,7 +1106,9 @@ when the copy and the owner disagree, the owner wins and the copy is the bug.
 The tiers are a rule about what a test may touch, not three directories: Rust puts unit tests
 in-module, so a `tests/unit/` would mean the pure core testing itself from outside its own
 crate. The golden snapshots the CLI tier asserts against are data rather than a tier, and live
-at `tests/golden/` (§1.6).
+at `tests/golden/` (§1.6). So are phase 3's ported check-engine cases, at `tests/cases/` —
+config plus recorded command outputs plus the expected verdict, one file per subsystem, with
+the schema in `tests/cases/README.md` (§2.7).
 
 Integration and e2e run on both `ubuntu-latest` and `macos-latest` in the Actions matrix.
 

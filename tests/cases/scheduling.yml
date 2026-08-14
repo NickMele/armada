@@ -1,0 +1,274 @@
+subsystem: scheduling
+source: check.py
+note: >-
+  Admission control, costs, exclusive resources and wall-clock ceilings. "footprint" is what
+  the scheduler reserves; "workers" is what reaches the tool's own parallelism flag. They are
+  two numbers and merging them is a documented outage — see docs/harvest.md SCH-1.
+  No case here expects a worker count. The engine can compute one and has no way to deliver
+  it: the worker flag is a literal the config author writes into `cmd:`, and PLAN.md §4.4's
+  substitution cap admits nothing that carries a grant into a command. Cases assert what the
+  engine decides — the reservation and the grant. The gap is docs/harvest.md §10.
+
+cases:
+
+  # --- budget -------------------------------------------------------------
+
+  - id: sched.budget.explicit-override-wins
+    given: { cores: 10, jobs: 3 }
+    expect: { budget: 3 }
+
+  - id: sched.budget.reserves-two-cores
+    trap: SCH-10
+    note: >-
+      Asserted as a literal rather than as arithmetic against the reservation constant, so
+      that widening the reservation to "all cores" cannot keep the case green.
+    given: { cores: 10, jobs: null }
+    expect: { budget: 8 }
+
+  - id: sched.budget.floors-at-one
+    given: { cores: 2, jobs: null }
+    expect: { budget: 1 }
+
+  - id: sched.budget.unavailable-core-count-floors-at-one
+    given: { cores: null, jobs: null }
+    expect: { budget: 1 }
+
+  # --- footprint vs workers ----------------------------------------------
+
+  - id: sched.footprint.defaults-to-cost
+    given: { check: { cost: 2, footprint: null } }
+    expect: { footprint: 2 }
+
+  - id: sched.footprint.containerised-check-reserves-its-whole-stack
+    trap: SCH-1
+    note: >-
+      A check declaring 4 workers booted six services with them. Weighted at 4 the scheduler
+      co-scheduled another check beside it and two synchronous tests failed, in a container
+      where they pass 820/820 alone. Starvation presents as an ordinary test failure.
+    given: { check: { cost: 4, footprint: 8 } }
+    expect: { footprint: 8 }
+
+  - id: sched.footprint.raising-it-does-not-raise-workers
+    trap: SCH-2
+    note: >-
+      The obvious fix for SCH-1 is to raise the cost, which is handed straight to the tool's
+      parallelism flag and makes the check spawn more work. This is why they cannot be merged.
+      Only the reservation half is assertable here: the engine reserves the footprint and
+      leaves the declared cost alone. The worker half is the config author's literal, and the
+      contract gives the engine no way to touch it — docs/harvest.md §10.
+    given: { check: { cost: 4, footprint: 8 }, budget: 16 }
+    expect: { granted: 8, declared_cost: 4 }
+
+  # --- admission order ----------------------------------------------------
+
+  - id: sched.order.heaviest-footprint-first
+    trap: SCH-4
+    given:
+      checks:
+        - { id: "a:lint", cost: 1, footprint: 1 }
+        - { id: "b:test", cost: 2, footprint: 9 }
+        - { id: "c:test", cost: 4, footprint: 4 }
+    expect: { order: ["b:test", "c:test", "a:lint"] }
+
+  - id: sched.order.tie-break-is-ascending-id
+    trap: SCH-5
+    note: an order depending on map iteration makes a flaky run unreproducible
+    given:
+      checks:
+        - { id: "z:lint", cost: 1, footprint: 1 }
+        - { id: "a:lint", cost: 1, footprint: 1 }
+        - { id: "m:test", cost: 5, footprint: 5 }
+    expect: { order: ["m:test", "a:lint", "z:lint"] }
+
+  - id: sched.order.is-stable-under-input-reversal
+    given:
+      checks:
+        - { id: "a:lint", cost: 1, footprint: 1 }
+        - { id: "z:lint", cost: 1, footprint: 1 }
+      reversed: true
+    expect: { order: ["a:lint", "z:lint"] }
+
+  # --- reservation --------------------------------------------------------
+
+  - id: sched.reserve.never-exceeds-the-budget
+    note: >-
+      Rewritten with mixed costs. The original used four reservations of cost 3 against a
+      budget of 4, which admits strictly one at a time — the observed peak could only ever
+      be 3, so the assertion could not detect over-admission.
+    given:
+      budget: 6
+      concurrent: [{ cost: 3 }, { cost: 1 }, { cost: 2 }, { cost: 3 }]
+    expect: { peak_in_flight_cost: 6 }
+
+  - id: sched.reserve.same-exclusive-serialises
+    trap: SCH-8
+    given:
+      budget: 8
+      concurrent:
+        - { cost: 1, exclusive: ["db"] }
+        - { cost: 1, exclusive: ["db"] }
+        - { cost: 1, exclusive: ["db"] }
+        - { cost: 1, exclusive: ["db"] }
+    expect: { peak_overlap: 1 }
+
+  - id: sched.reserve.different-exclusives-overlap
+    given:
+      budget: 8
+      concurrent:
+        - { cost: 1, exclusive: ["db"] }
+        - { cost: 1, exclusive: ["browser"] }
+      rendezvous: true
+    expect: { both_in_flight_simultaneously: true }
+
+  - id: sched.reserve.over-budget-check-is-clamped-and-runs-alone
+    trap: SCH-6
+    note: >-
+      Strengthened. The original asserted only that the body ran; it did not assert the
+      granted value, so a scheduler that granted the full request would have passed.
+    given: { budget: 2, request: { cost: 99 } }
+    expect: { granted: 2, ran: true }
+
+  - id: sched.reserve.clamped-grant-is-the-clamped-figure
+    trap: SCH-7
+    note: >-
+      Not covered by the original, which only tested the static default. The grant a clamped
+      reservation returns must be the clamped figure, never the request — a scheduler that
+      returns the request has admitted the check against 2 slots while telling it it has 4.
+      Whether that figure can reach the tool is a separate, open question: the worker flag is
+      written by the config author and PLAN.md §4.4 admits no substitution for the grant, so
+      as specified the clamp is decorative. Recorded in docs/harvest.md §10 for the
+      implementer to raise; this case asserts only the half the engine owns.
+    given: { budget: 2, check: { cost: 4, footprint: 4 } }
+    expect: { granted: 2 }
+
+  - id: sched.reserve.release-happens-on-failure
+    trap: SCH-8
+    note: >-
+      Not covered by the original. A check whose execution panics must return its slots and
+      release its exclusive names, or the run deadlocks behind a leak.
+    given: { budget: 4, sequence: [{ cost: 4, panics: true }, { cost: 4 }] }
+    expect: { second_admitted: true }
+
+  # --- mode filtering -----------------------------------------------------
+
+  - id: sched.mode.all-returns-everything
+    given: { mode: all }
+    expect: { selected: all }
+
+  - id: sched.mode.lint-selects-only-lint
+    given: { mode: lint }
+    expect: { every_selected_has_category: lint, non_empty: true }
+
+  - id: sched.mode.unknown-value-is-rejected
+    note: >-
+      The original accepted any string and returned an empty selection, so a typo checked
+      nothing and exited 0. Corrected here — see docs/harvest.md CAT-1.
+    given: { mode: lynt }
+    expect: { error: { class: bad_invocation } }
+
+  # --- ceilings -----------------------------------------------------------
+
+  - id: sched.timeout.every-check-declares-a-positive-budget
+    trap: CAT-3
+    given: { config: any }
+    expect: { every_check_timeout_gt: 0 }
+
+  - id: sched.timeout.declared-budget-reaches-the-runner
+    given: { check: { timeout_s: 123 } }
+    expect: { deadline_passed_to_seam: 123 }
+
+  - id: sched.timeout.is-its-own-verdict
+    trap: PRO-6
+    given:
+      check: { timeout_s: 30 }
+      run: [{ match: [], exit: 124, stderr: "killed\n" }]
+    expect:
+      status: TIMEOUT
+      summary_contains: ["timed out"]
+      failures: []
+
+  - id: sched.timeout.cannot-roll-up-to-a-pass
+    trap: ST-11
+    given:
+      results: { "ui:lint": PASS, "ui:e2e": TIMEOUT }
+    expect: { overall: FAILED, failing: ["ui:e2e"], error_class: timeout }
+
+  - id: sched.timeout.counts-as-done-for-progress
+    trap: ST-10
+    note: >-
+      Left out of the done tally, progress sits one short of total forever — an in-progress
+      run with nothing running, the exact report the ceiling exists to end.
+    given: { checks: { "ui:lint": PASS, "ui:e2e": TIMEOUT } }
+    expect: { done: 2, total: 2, failed: 1 }
+
+  - id: sched.timeout.is-rerun-by-again
+    trap: ST-25
+    given: { prior: { "a:lint": PASS, "b:e2e": TIMEOUT, "c:test": FAILED } }
+    expect: { rerun: ["b:e2e", "c:test"] }
+
+  - id: sched.timeout.report-labels-it-distinctly
+    note: >-
+      "Your code broke this" and "the tool stopped responding" need different responses.
+      Labelling a killed check FAILED sends the reader hunting for a broken test.
+    given: { checks: { "ui:e2e": { status: TIMEOUT, duration_ms: 1800000 } } }
+    expect: { report_contains: ["TIMED OUT"], overall: FAILED }
+
+  # --- structural invariants ---------------------------------------------
+
+  - id: sched.invariant.engine-suite-never-runs-in-its-own-containers
+    trap: CAT-2
+    note: >-
+      Kept as a tripwire. It is the suite that tests the container machinery, so running it
+      through that machinery lets a break in the seam take down the tests that detect it.
+    given: { config: any }
+    expect: { engine_component_checks_all_host: true }
+
+  - id: sched.invariant.host-run-check-must-redeclare-its-exclusive
+    trap: SCH-14
+    note: >-
+      Vacuous today by construction — every check it covers is container-run, so the loop
+      body never executes. Kept deliberately: it arms the moment someone flips a runner,
+      which is exactly when the original corruption returns. Do not delete it as dead.
+    given: { config: any }
+    expect: { every_host_check_that_was_containerised_declares_exclusive: true }
+
+excluded:
+
+  - id: sched.reserve.slots-and-names-are-taken-together
+    reason: >-
+      The invariant is real — no part of a reservation may be held while the rest is still
+      pending — but this case asserted it through an acquisition order the source does not
+      have. The source takes slots and exclusive names in one atomic step under a single
+      guard, so it states no order and this case had no source behaviour to port. charkit
+      reaches the same invariant by a different route: PLAN.md §4.3 requires exclusives
+      first, in sorted name order, then slots, because charkit's leases are machine-wide and
+      a cycle can span processes. That is a cross-process property, which PLAN.md §4.3
+      already specifies an integration test for; a single-process case here would pass under
+      either scheme and prove nothing. See docs/harvest.md §5.3.
+    replaced_by: null
+
+  - id: sched.order.assert-catalog-footprints
+    reason: >-
+      Several original cases assert relationships over the static catalogue's own entries
+      (every heavy check's footprint exceeds its cost, the three formerly-sharing checks are
+      all container-run). They pin that repo's topology, not engine behaviour.
+
+  - id: sched.invariant.one-tool-major-across-packages
+    reason: >-
+      Globs the source repo's package manifests to assert a workspace invariant. It is the
+      guard that made an unconditional worker flag safe there; it belongs to that repo's own
+      gate. The lesson survives as docs/harvest.md §6.1.
+
+  - id: sched.invariant.compose-service-cpu-ceilings
+    reason: >-
+      Hand-parses that repo's container topology to assert every service declares a CPU
+      ceiling below machine width. Phase 4 material at most, and it asserts over a file
+      charkit does not own. Recorded as trap CAT-4.
+
+  - id: sched.abort.handler-ordering-by-source-text
+    reason: >-
+      Reads the implementation file and compares substring indices to assert the signal
+      handler restores default disposition before doing any work. Untranslatable and
+      self-invalidating on any refactor. The behaviour is the highest-value untested
+      guarantee in the harvest and belongs at the integration tier — see process.yml.
+    replaced_by: null

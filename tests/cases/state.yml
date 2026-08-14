@@ -1,0 +1,427 @@
+subsystem: state
+source: check.py
+note: >-
+  Run state, leases, status, --again and detach. charkit's store is machine-global SQLite
+  with lease rows (PLAN.md §4.3), not a lock directory in a workspace, so most of these are
+  requirements expressed in a different medium: the assertion ports, the setup does not.
+  Writing an owner file becomes inserting a lease row.
+
+cases:
+
+  # --- the live surface ---------------------------------------------------
+
+  - id: state.live.published-before-the-first-check-finishes
+    trap: ST-1
+    note: >-
+      The founding defect. With only a results record written once at the end, a mid-flight
+      poll read the previous run's PASS and an agent concluded a still-running or already
+      crashed run had succeeded.
+    given: { begin: { run_id: "run-1", checks: ["api:lint"] } }
+    expect: { state: RUNNING, run_id: "run-1", checks: { "api:lint": QUEUED } }
+
+  - id: state.live.concurrent-transitions-neither-crash-nor-lose-updates
+    trap: ST-3
+    note: >-
+      The regression case for a shared temporary filename during atomic publish — one writer
+      renamed the shared temp away and the next got a missing-file error, killing the run at
+      0/12. A shared temp name reads as perfectly correct in review. SQLite transactions make
+      it unrepresentable, and the case still ports: run it as real threads against a real
+      database in a temporary directory.
+    given: { begin: { run_id: "race", checks: 12 }, threads: 12, flips_each: 15 }
+    expect: { raised: false, all_checks: PASS }
+
+  - id: state.live.reads-are-total
+    trap: ST-5
+    note: a status query must not crash exactly when the run is in trouble
+    given: { store: corrupt }
+    expect: { state: IDLE_OR_DEAD, raised: false }
+
+  - id: state.live.a-run-cannot-overwrite-a-different-runs-state
+    trap: ST-6
+    note: >-
+      The single most important ownership case. Three writes from a foreign run id must all
+      be discarded.
+    given:
+      begin: { run_id: "run-B" }
+      then: [{ finish: { run_id: "run-A" } }, { transition: { run_id: "run-A" } }, { abort: { run_id: "run-A" } }]
+    expect: { run_id: "run-B", state: RUNNING }
+
+  - id: state.live.holder-id-is-not-optional
+    trap: X-4
+    note: >-
+      Corrects a defect rather than porting it. The original lets a caller supplying no run
+      id through unconditionally, which disables the guard above for any call site that
+      forgets to thread the id. In charkit the holder is always known.
+    given: { begin: { run_id: "run-C" }, then: [{ transition: { run_id: null } }] }
+    expect: { error: { class: char_bug } }
+
+  # --- derived states -----------------------------------------------------
+
+  - id: state.derived.idle-when-nothing-is-running
+    trap: ST-7
+    note: >-
+      A watcher must be able to tell "nothing is running" from "I could not tell" — opposite
+      correct responses.
+    given: { store: empty }
+    expect: { state: IDLE, terminal: true }
+
+  - id: state.derived.dead-when-the-owning-process-vanished
+    trap: ST-8
+    given: { begin: { run_id: "run-2", pid: dead } }
+    expect: { state: DEAD, terminal: true }
+
+  - id: state.derived.running-while-the-pid-lives
+    given: { begin: { run_id: "run-3", pid: live, checks: 2 }, then: [{ pass: 1 }] }
+    expect: { state: RUNNING, terminal: false, done: 1, total: 2 }
+
+  - id: state.derived.starting-is-tolerated-within-the-grace
+    trap: ST-9
+    note: without the grace every detached run reads as already-failed for its first seconds
+    given: { state_on_disk: { state: STARTING, pid: null, age_s: 5 }, grace_s: 120 }
+    expect: { state: STARTING, terminal: false }
+
+  - id: state.derived.starting-past-the-grace-reads-dead
+    trap: ST-9
+    note: >-
+      A spawn that never produced a child — an interpreter resolve that blew up, a wedged
+      machine — otherwise sits STARTING forever and blocks every waiter.
+    given: { state_on_disk: { state: STARTING, pid: null, age_s: 130 }, grace_s: 120 }
+    expect: { state: DEAD, terminal: true }
+
+  - id: state.derived.running-with-no-pid-reads-dead-immediately
+    note: >-
+      Silent in the original, and the asymmetry is deliberate — the grace applies to STARTING
+      only, because RUNNING is published by the run itself and always carries a pid.
+    given: { state_on_disk: { state: RUNNING, pid: null, age_s: 5 } }
+    expect: { state: DEAD }
+
+  - id: state.derived.finish-is-terminal
+    given: { begin: { run_id: "run-4" }, then: [{ finish: FAILED }] }
+    expect: { state: FAILED, terminal: true }
+
+  - id: state.derived.abort-records-a-reason
+    given: { begin: { run_id: "run-5" }, then: [{ abort: { reason: SIGTERM } }] }
+    expect: { state: ABORTED, terminal: true, reason_contains: ["SIGTERM"] }
+
+  # --- progress counting --------------------------------------------------
+
+  - id: state.progress.skipped-counts-toward-neither
+    trap: ST-12
+    note: a scoped run can never reach completion, and the denominator lies
+    given: { checks: { "a:lint": PASS, "b:lint": SKIPPED, "c:test": PASS } }
+    expect: { done: 2, total: 2 }
+
+  - id: state.progress.skipped-is-not-a-failure
+    given: { results: { "a:lint": PASS, "a:migrate": SKIPPED, "b:lint": FAILED } }
+    expect: { overall: FAILED, failing: ["b:lint"] }
+
+  - id: state.progress.only-skips-and-passes-is-a-pass
+    given: { results: { "a:lint": PASS, "a:migrate": SKIPPED } }
+    expect: { overall: PASS, failing: [] }
+
+  - id: state.progress.every-selected-check-skipped-reports-skipped
+    note: >-
+      Not in the original, which had no such state. PLAN.md §3.1 requires it: claiming
+      approval when nothing ran is the failure mode SKIPPED exists to prevent.
+    given: { results: { "a:lint": SKIPPED, "b:lint": SKIPPED } }
+    expect: { overall: SKIPPED, exit: 0 }
+
+  - id: state.progress.failing-ids-are-sorted
+    note: silent in the original; non-deterministic output makes golden snapshots flap
+    given: { results: { "z:test": FAILED, "a:test": FAILED } }
+    expect: { failing: ["a:test", "z:test"] }
+
+  # --- the lease ----------------------------------------------------------
+
+  - id: state.lease.blocks-a-second-run-in-the-same-workspace
+    given: { held_by: { run_id: "live-run", pid: live } }
+    expect: { error: { class: bad_invocation }, message_contains: ["live-run"] }
+
+  - id: state.lease.error-names-the-holder-and-the-way-forward
+    trap: ST-19
+    note: >-
+      "Locked" without identity is unactionable. PLAN.md §3.2.1 requires next_action to name
+      --wait or --status.
+    given: { held_by: { run_id: "live-run", pid: 4212 } }
+    expect: { message_contains: ["live-run", "4212"], next_action_contains: ["--wait"] }
+
+  - id: state.lease.does-not-block-a-different-workspace
+    given: { held_by: { workspace: other } }
+    expect: { acquired: true }
+
+  - id: state.lease.stale-from-a-dead-process-is-reclaimed
+    trap: ST-14
+    note: >-
+      Confirmed live. One killed run poisoned the workspace permanently: every later run
+      failed instantly and the error told a human to delete a directory by hand — a required
+      manual step before the check command, and indistinguishable to a watching agent from a
+      run that is genuinely still going.
+    given: { held_by: { run_id: "dead-run", pid: dead, heartbeat: fresh } }
+    expect: { acquired: true, holder_after: { not: "dead-run" } }
+
+  - id: state.lease.live-pid-with-a-stale-heartbeat-is-reclaimed
+    trap: ST-14
+    note: >-
+      The other half of the conjunction. The OS recycles pids, so "pid exists" alone keeps a
+      long-gone run's lease alive forever.
+    given: { held_by: { run_id: "zombie", pid: live, heartbeat_age_s: 960 }, stale_after_s: 900 }
+    expect: { acquired: true, holder_after: { not: "zombie" } }
+
+  - id: state.lease.live-pid-with-a-fresh-heartbeat-still-blocks
+    trap: ST-14
+    given: { held_by: { run_id: "live-run", pid: live, heartbeat: fresh } }
+    expect: { acquired: false }
+
+  - id: state.lease.unreadable-record-is-reclaimable
+    trap: ST-15
+    note: a half-written record is itself evidence of a run that died mid-write
+    given: { held_by: corrupt }
+    expect: { acquired: true }
+
+  - id: state.lease.permission-error-on-a-liveness-probe-means-alive
+    trap: ST-13
+    note: another user's run must not have its lease stolen because you cannot signal it
+    given: { held_by: { pid: not-ours, probe: permission_denied, heartbeat: fresh } }
+    expect: { acquired: false }
+
+  - id: state.lease.records-the-run-id-it-was-given
+    trap: ST-37
+    note: a lease recording an unknown id makes a reclaim message correlate with nothing
+    given: { acquire_with: { run_id: "run-abc" } }
+    expect: { holder: "run-abc" }
+
+  - id: state.lease.heartbeat-refreshed-on-every-transition
+    trap: ST-16
+    note: a legitimately long check must not look hung and have its lease stolen mid-run
+    given: { begin: { run_id: "run-6" }, then: [{ transition: { at_s: 400 } }], stale_after_s: 900 }
+    expect: { heartbeat_age_after_s: 0 }
+
+  - id: state.lease.released-after-the-run
+    given: { acquire: true, release: true, acquire_again: true }
+    expect: { second_acquire: true }
+
+  # --- reaping ------------------------------------------------------------
+
+  - id: state.reap.only-a-true-group-leader
+    trap: ST-20
+    note: >-
+      The highest-consequence conditional in the harvest. A detached run creates its own
+      session and is a leader, so its tree is safe to kill. A foreground run shares its
+      invoking shell's group, and reaping that takes out the user's shell.
+    given:
+      records:
+        - { pid: dead, pgid: same-as-pid, expect: true }
+        - { pid: dead, pgid: the-shells-group, expect: false }
+        - { pid: live, pgid: same-as-pid, expect: false }
+        - { pid: dead, pgid: null, expect: false }
+        - { record: null, expect: false }
+    expect: { verdicts: [true, false, false, false, false] }
+
+  - id: state.reap.leadership-must-be-observed-not-asserted
+    trap: X-5
+    note: >-
+      Corrects a defect. The original records the group id as the pid whenever the pid is not
+      its own, which makes the interlock above satisfiable by unverified data. Record
+      leadership only when the writer created the session; treat any other record as
+      non-reapable.
+    given: { record: { pid: dead, pgid: unverified } }
+    expect: { reapable: false }
+
+  # --- waiting ------------------------------------------------------------
+
+  - id: state.wait.returns-the-terminal-verdict
+    given: { begin: { run_id: "run-7" }, then: [{ finish: PASS }], wait_ceiling_s: 1 }
+    expect: { state: PASS, exit: 0 }
+
+  - id: state.wait.ceiling-yields-a-verdict-rather-than-hanging
+    trap: ST-22
+    note: >-
+      PLAN.md §3.1 routes this to FAILED with class aborted — retryable, because the
+      actionable fact is that the machine was busy. Distinct from a check exceeding its own
+      timeout, which is a state the run itself writes.
+    given: { begin: { run_id: "run-8", pid: live }, wait_ceiling_s: 0.05 }
+    expect: { status: FAILED, error: { class: aborted } }
+
+  - id: state.wait.stops-promptly-on-a-dead-run
+    trap: ST-22
+    note: >-
+      The timing half is the assertion that matters. Express it against the injected clock as
+      "at most one poll", not as wall-clock arithmetic.
+    given: { begin: { run_id: "run-9", pid: dead }, wait_ceiling_s: 30 }
+    expect: { state: DEAD, polls_max: 1 }
+
+  - id: state.wait.checks-terminality-before-the-deadline
+    trap: ST-21
+    note: >-
+      Silent in the original. A run finishing exactly at the deadline must report its verdict
+      rather than a timeout.
+    given: { finishes_at_s: 5, wait_ceiling_s: 5 }
+    expect: { state: PASS }
+
+  - id: state.status.exits-on-the-query-not-the-verdict
+    trap: ST-23
+    note: >-
+      PLAN.md §3.1: this is the one place exit 0 does not mean the thing you asked about is
+      fine. A gate uses --wait, never --status.
+    given: { begin: { run_id: "run-10", pid: live } }
+    expect: { status: RUNNING, exit: 0 }
+
+  - id: state.status.takes-no-lease
+    trap: ST-24
+    note: otherwise it blocks on the very run it exists to report on
+    given: { held_by: { run_id: "live-run", pid: live } }
+    expect: { answered: true, lease_taken: false }
+
+  - id: state.status.envelope-shape-does-not-vary-by-state
+    note: >-
+      Corrects a defect. The original's idle response carries fewer keys than every other
+      state, so a consumer reading the run id off a status response gets a missing key
+      exactly when the answer is idle. ARCHITECTURE.md §1.6 fixes the envelope.
+    given: { store: empty }
+    expect: { envelope_keys: full, run_id: null }
+
+  # --- --again ------------------------------------------------------------
+
+  - id: state.again.errors-without-a-prior-run
+    given: { prior: null }
+    expect: { error: { class: bad_invocation } }
+
+  - id: state.again.selects-failed-and-timed-out
+    trap: ST-25
+    given: { prior: { "a:lint": PASS, "a:test": FAILED, "b:e2e": TIMEOUT, "c:lint": SKIPPED } }
+    expect: { rerun: ["a:test", "b:e2e"] }
+
+  - id: state.again.merge-keeps-prior-entries-identical
+    trap: ST-26
+    given:
+      prior: { "a:lint": { status: PASS, duration_ms: 840, log: "a.lint.log" }, "a:test": { status: FAILED } }
+      rerun_results: { "a:test": { status: PASS, duration_ms: 1500 } }
+    expect:
+      merged: { "a:lint": { status: PASS, duration_ms: 840, log: "a.lint.log" }, "a:test": { status: PASS } }
+
+  - id: state.again.overall-is-recomputed-from-the-merged-map
+    trap: ST-27
+    note: >-
+      Otherwise a rerun of one now-passing check reports a whole-run pass while three others
+      still fail.
+    given:
+      prior: { "a:test": FAILED, "b:test": FAILED }
+      rerun_results: { "a:test": PASS }
+    expect: { overall: FAILED, failing: ["b:test"] }
+
+  - id: state.again.publishes-a-live-run-row
+    trap: X-3
+    note: >-
+      Corrects a defect rather than porting it. The original's rerun path publishes no live
+      state at all and threads no transition callback, so a rerun is invisible to status and
+      wait for its entire duration — reading as the previous run's terminal verdict — and its
+      finish write is then silently discarded by the ownership guard.
+    given: { again: true }
+    expect: { state_during: RUNNING, run_id_during: not-the-prior-run }
+
+  - id: state.again.staleness-hint-fires-for-files-outside-the-rerun-scope
+    trap: ST-28
+    note: >-
+      A green rerun does not mean the tree is green. The comparison spans every prior check's
+      scope, not just the rerun's, or files covered by a passing check are reported as new on
+      every rerun.
+    given:
+      prior_scopes: { "a:test": ["services/api/models.py"], "a:lint": ["services/api/util.py"] }
+      current_files: ["services/api/models.py", "services/api/views.py"]
+    expect: { hint: { new_files: 1 } }
+
+  - id: state.again.no-hint-when-nothing-is-new
+    given:
+      prior_scopes: { "a:test": ["services/api/models.py"] }
+      current_files: ["services/api/models.py"]
+    expect: { hint: null }
+
+  # --- structured request -------------------------------------------------
+
+  - id: state.request.never-returns-a-previous-runs-state
+    trap: ST-29
+    note: >-
+      Confirmed live. Without the proof, a request that failed before running anything — a
+      bad target — fell through to loading the record and returned the previous run's
+      results: a confident verdict describing a run that never happened. Stale data presented
+      as a fresh answer is the worst failure available to a tool whose job is telling you
+      whether your code is good.
+    given:
+      prior_record: { run_id: "old", overall: PASS }
+      run_fails_before_starting: true
+    expect:
+      status: FAILED
+      error: { class: char_bug }
+      results: []
+      message_states_nothing_was_checked: true
+
+  - id: state.request.empty-explicit-file-list-is-an-error
+    given: { scope: files, files: [] }
+    expect: { error: { class: bad_invocation } }
+
+  # --- detach -------------------------------------------------------------
+
+  - id: state.detach.refuses-without-clobbering-a-live-run
+    trap: ST-31
+    note: >-
+      Confirmed live. Detach used to publish its placeholder before consulting the lease, so
+      one mistimed detach destroyed a healthy run's live state and then mislabelled its own
+      failure as death rather than contention. Refuse first, before touching shared state.
+    given: { held_by: { run_id: "live-run", pid: live } }
+    expect:
+      exit: 2
+      spawn_called: false
+      state_after: { run_id: "live-run" }
+
+  - id: state.detach.publishes-starting-before-the-child-exists
+    trap: ST-32
+    note: >-
+      Confirmed live. During cold start the pointer still described the previous run, so
+      detach-then-immediately-status read a stale terminal verdict and the agent concluded
+      the run it had just launched was already finished. The assertion is about ordering and
+      is sampled from inside the spawn seam.
+    given: { prior: { run_id: "old-run", state: PASS }, sample_at: spawn }
+    expect: { state_at_spawn: STARTING, run_id_at_spawn: { not: "old-run" } }
+
+  - id: state.detach.child-adopts-the-printed-run-id
+    trap: ST-34
+    note: otherwise the handle the command hands back correlates with nothing
+    given: { detach: { argv: ["--all-files"] } }
+    expect:
+      child_run_id_equals_printed: true
+      child_argv: { absent: ["--detach"] }
+
+  - id: state.detach.pid-is-patched-only-if-still-starting
+    trap: ST-35
+    note: >-
+      Silent in the original. A child that already published RUNNING must not be dragged
+      backwards by the parent's patch.
+    given: { child_publishes_running_before_patch: true }
+    expect: { state_after: RUNNING }
+
+excluded:
+
+  - id: state.report.table-suppression-disjunction
+    reason: >-
+      Asserts a three-way substring disjunction over the words in the table header, whose
+      first disjunct can never be true because the result line itself contains that word. It
+      does still fail if the table is present, so it is not fully vacuous — but it is
+      unreadable and near-vacuous. Port as a direct check for the absence of the header row.
+
+  - id: state.status.render-from-hand-built-inputs
+    reason: >-
+      Feeds hand-built status values to the renderer and then takes the last line of a
+      single-line string. The line-splitting is vacuous, and hand-built inputs mean the case
+      cannot catch the status query and the renderer drifting apart. Drive it from real
+      status values.
+
+  - id: state.lock.directory-semantics
+    reason: >-
+      Seven original cases assert over a lock directory and an owner file in the workspace.
+      The assertions port — blocked, reclaimed, released, identity recorded — and are present
+      above; the setup does not. charkit's lease rows are machine-global, which is also what
+      lets contention be expressed between two workspaces of one repo.
+
+  - id: state.target.dot-resolution
+    reason: Belongs to scope resolution, not to run state.
+    replaced_by: scope.target.dot-is-the-current-directory
