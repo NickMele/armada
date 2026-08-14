@@ -2,37 +2,48 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/nickmele/charkit/main/crates/core/schema/armada.schema.json",
   "title": "armada.yml",
-  "description": "The committed configuration for one Armada workspace. Specified in docs/PLAN.md §4. This schema is authoritative: the serde structs in crates/core mirror it, and the fixtures under tests/fixtures are what keep the two honest. Rules that can be decided from the value in front of you live here; rules needing a second part of the document, or the filesystem, live in `armada manifest config verify` (PLAN.md §5). Every pattern below is lookaround-free, because Armada validates with a Rust regex engine that has no lookahead.",
+  "description": "The committed configuration for one Armada workspace. Specified in docs/PLAN.md \u00a74. This schema is authoritative: the serde structs in crates/core mirror it, and the fixtures under tests/fixtures are what keep the two honest. Rules that can be decided from the value in front of you live here; rules needing a second part of the document, or the filesystem, live in `armada manifest config verify` (PLAN.md \u00a75). Every pattern below is lookaround-free, because Armada validates with a Rust regex engine that has no lookahead.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["manifest"],
+  "required": [
+    "manifest"
+  ],
   "properties": {
-    "manifest": { "$ref": "#/$defs/manifest" }
+    "manifest": {
+      "$ref": "#/$defs/manifest"
+    }
   },
-
   "$defs": {
     "manifest": {
-      "description": "The Manifest module's section: what this workspace is and how to operate it (PLAN.md §4, ARCHITECTURE.md §1.9). Sibling sections for the other modules do not exist yet; the file is nested from the start so that adding one never has to move every key that is already there.",
+      "description": "The Manifest module's section: what this workspace is and how to operate it (PLAN.md \u00a74, ARCHITECTURE.md \u00a71.9). Sibling sections for the other modules do not exist yet; the file is nested from the start so that adding one never has to move every key that is already there.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["version"],
+      "required": [
+        "version"
+      ],
       "properties": {
         "version": {
-          "description": "Config format version. Required — a config with no version is bad_config, since the whole point of the key is to exist before it is needed (PLAN.md §4.1).",
+          "description": "Config format version. Required \u2014 a config with no version is bad_config, since the whole point of the key is to exist before it is needed (PLAN.md \u00a74.1).",
           "const": 1
         },
         "components": {
-          "description": "A component is a named thing that may have source to check (`checks:`), a process to run (`run:`), or both. Two axes, not two kinds of thing (PLAN.md §4.1).",
+          "description": "A component is a named thing that may have source to check (`checks:`), a process to run (`run:`), or both. Two axes, not two kinds of thing (PLAN.md \u00a74.1).",
           "type": "object",
-          "propertyNames": { "$ref": "#/$defs/name" },
-          "additionalProperties": { "$ref": "#/$defs/component" }
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/component"
+          }
         },
         "commands": {
-          "description": "Repo-local verbs Armada dispatches but does not define (PLAN.md §4.5). Remaining argv passes through untouched and the child's exit code is returned verbatim.",
+          "description": "Repo-local verbs Armada dispatches but does not define (PLAN.md \u00a74.5). Remaining argv passes through untouched and the child's exit code is returned verbatim.",
           "type": "object",
           "propertyNames": {
             "allOf": [
-              { "$ref": "#/$defs/name" },
+              {
+                "$ref": "#/$defs/name"
+              },
               {
                 "not": {
                   "enum": [
@@ -47,183 +58,293 @@
                     "explain"
                   ]
                 },
-                "$comment": "A commands: entry may not shadow a built-in verb — it would silently break the one guarantee the project exists to provide (PLAN.md §4.5)."
+                "$comment": "A commands: entry may not shadow a built-in verb \u2014 it would silently break the one guarantee the project exists to provide (PLAN.md \u00a74.5)."
               }
             ]
           },
-          "additionalProperties": { "$ref": "#/$defs/commandEntry" }
+          "additionalProperties": {
+            "$ref": "#/$defs/commandEntry"
+          }
+        },
+        "skills": {
+          "description": "Repo-local knowledge: a named grant plus a pointer to prose (PLAN.md \u00a74.8). Armada owns the mechanical half and holds a path to the rest; nothing here ever parses the prose. A skill has no cmd: \u2014 a skill with its own command is a commands: entry wearing a hat.",
+          "type": "object",
+          "propertyNames": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/name"
+              },
+              {
+                "not": {
+                  "enum": [
+                    "init",
+                    "up",
+                    "down",
+                    "check",
+                    "clean",
+                    "status",
+                    "config",
+                    "agents-md",
+                    "explain"
+                  ]
+                },
+                "$comment": "Same rule and same reason as commands: a skill may not shadow a built-in verb (PLAN.md \u00a74.8)."
+              }
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/skillEntry"
+          }
         },
         "workspaces": {
-          "description": "Paths that are separate workspaces, each with its own complete armada.yml, excluded from this one (PLAN.md §4.6). A nested workspace inherits nothing. A root that is nothing but this key is legal.",
+          "description": "Paths that are separate workspaces, each with its own complete armada.yml, excluded from this one (PLAN.md \u00a74.6). A nested workspace inherits nothing. A root that is nothing but this key is legal.",
           "type": "array",
-          "items": { "$ref": "#/$defs/relPath" },
+          "items": {
+            "$ref": "#/$defs/relPath"
+          },
           "uniqueItems": true
         },
         "secrets": {
-          "description": "Environment variable name to a secret reference. The URI scheme selects the provider; the rest is `${ref}` (PLAN.md §4.7). A reference, never a value.",
+          "description": "Environment variable name to a secret reference. The URI scheme selects the provider; the rest is `${ref}` (PLAN.md \u00a74.7). A reference, never a value.",
           "type": "object",
-          "propertyNames": { "$ref": "#/$defs/envName" },
-          "additionalProperties": { "$ref": "#/$defs/secretRef" }
+          "propertyNames": {
+            "$ref": "#/$defs/envName"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/secretRef"
+          }
         },
         "secret_providers": {
-          "description": "A provider is a command that prints one secret to stdout — never an SDK integration (PLAN.md §4.7).",
+          "description": "A provider is a command that prints one secret to stdout \u2014 never an SDK integration (PLAN.md \u00a74.7).",
           "type": "object",
-          "propertyNames": { "$ref": "#/$defs/scheme" },
-          "additionalProperties": { "$ref": "#/$defs/secretProvider" }
+          "propertyNames": {
+            "$ref": "#/$defs/scheme"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/secretProvider"
+          }
         }
       }
     },
     "name": {
-      "description": "Component, check, port and exclusive names. `:` is reserved, because check ids are derived as `<component>:<check>` and `needs:` tells a component from a check id by the colon alone (PLAN.md §4.1).",
+      "description": "Component, check, port and exclusive names. `:` is reserved, because check ids are derived as `<component>:<check>` and `needs:` tells a component from a check id by the colon alone (PLAN.md \u00a74.1).",
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9_-]*$"
     },
-
     "scheme": {
-      "description": "A provider name is a URI scheme, so it uses the scheme grammar rather than the name grammar — `_` is legal in a name and illegal in a scheme, so `aws_sm:` would be a provider that can never be referenced (PLAN.md §4.7).",
+      "description": "A provider name is a URI scheme, so it uses the scheme grammar rather than the name grammar \u2014 `_` is legal in a name and illegal in a scheme, so `aws_sm:` would be a provider that can never be referenced (PLAN.md \u00a74.7).",
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9+.-]*$"
     },
-
     "envName": {
       "description": "A POSIX environment variable name.",
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
     },
-
     "relPath": {
-      "description": "A path relative to the workspace root. The schema rejects a leading `/`, any `..` segment, and the `.` / `./` spellings of the root — one idea, one spelling, so a glob cannot match in one config and not in another. `config verify` owns the rest, because only verify can normalise `a/../../b` or resolve a symlink (PLAN.md §5).",
+      "description": "A path relative to the workspace root. The schema rejects a leading `/`, any `..` segment, and the `.` / `./` spellings of the root \u2014 one idea, one spelling, so a glob cannot match in one config and not in another. `config verify` owns the rest, because only verify can normalise `a/../../b` or resolve a symlink (PLAN.md \u00a75).",
       "type": "string",
       "minLength": 1,
       "allOf": [
-        { "not": { "pattern": "^/" } },
-        { "not": { "pattern": "(^|/)\\.\\.(/|$)" } },
-        { "not": { "pattern": "^\\.$" } },
-        { "not": { "pattern": "^\\./" } }
+        {
+          "not": {
+            "pattern": "^/"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(^|/)\\.\\.(/|$)"
+          }
+        },
+        {
+          "not": {
+            "pattern": "^\\.$"
+          }
+        },
+        {
+          "not": {
+            "pattern": "^\\./"
+          }
+        }
       ]
     },
-
     "seconds": {
       "description": "A deadline in whole seconds.",
       "type": "integer",
       "minimum": 1
     },
-
     "command": {
-      "description": "A command string. Argv-split by default, respecting quotes; `shell: true` on the entry opts it into shell interpretation instead (PLAN.md §4.1). `${files}` is not available here — only a file-scoped check has a file set, and a silently empty expansion is the failure PLAN.md §4.1's empty-set rule exists to prevent.",
+      "description": "A command string. Argv-split by default, respecting quotes; `shell: true` on the entry opts it into shell interpretation instead (PLAN.md \u00a74.1). `${files}` is not available here \u2014 only a file-scoped check has a file set, and a silently empty expansion is the failure PLAN.md \u00a74.1's empty-set rule exists to prevent.",
       "type": "string",
       "minLength": 1,
       "allOf": [
         {
-          "not": { "pattern": "\\$\\{files\\}" },
-          "$comment": "`${files}` is legal only on a check's cmd:/fix: (PLAN.md §4.5)."
+          "not": {
+            "pattern": "\\$\\{files\\}"
+          },
+          "$comment": "`${files}` is legal only on a check's cmd:/fix: (PLAN.md \u00a74.5)."
         },
         {
-          "not": { "pattern": "\\$\\{env\\." },
-          "$comment": "`${env.NAME}` is legal only inside an env: block (PLAN.md §4.4)."
+          "not": {
+            "pattern": "\\$\\{env\\."
+          },
+          "$comment": "`${env.NAME}` is legal only inside an env: block (PLAN.md \u00a74.4)."
         },
         {
-          "not": { "pattern": "\\$\\{ref\\}" },
-          "$comment": "`${ref}` is legal only in secret_providers[].cmd (PLAN.md §4.4)."
+          "not": {
+            "pattern": "\\$\\{ref\\}"
+          },
+          "$comment": "`${ref}` is legal only in secret_providers[].cmd (PLAN.md \u00a74.4)."
         },
         {
-          "not": { "pattern": "\\$\\{[^}]*\\?\\?" },
-          "$comment": "No expression language: `${env.NAME ?? \"default\"}` is rejected by the schema, not merely undocumented (PLAN.md §4.4)."
+          "not": {
+            "pattern": "\\$\\{[^}]*\\?\\?"
+          },
+          "$comment": "No expression language: `${env.NAME ?? \"default\"}` is rejected by the schema, not merely undocumented (PLAN.md \u00a74.4)."
         }
       ]
     },
-
     "checkCommand": {
-      "description": "A check's `cmd:` or `fix:`. Identical to a command string except that `${files}` is available — and must stand alone as a whole token, because the placeholder expands to n argv elements and n arguments cannot be pasted inside one (PLAN.md §4.1).",
+      "description": "A check's `cmd:` or `fix:`. Identical to a command string except that `${files}` is available \u2014 and must stand alone as a whole token, because the placeholder expands to n argv elements and n arguments cannot be pasted inside one (PLAN.md \u00a74.1).",
       "type": "string",
       "minLength": 1,
       "allOf": [
-        { "not": { "pattern": "\\$\\{env\\." } },
-        { "not": { "pattern": "\\$\\{ref\\}" } },
-        { "not": { "pattern": "\\$\\{[^}]*\\?\\?" } },
         {
-          "not": { "pattern": "\\S\\$\\{files\\}" },
+          "not": {
+            "pattern": "\\$\\{env\\."
+          }
+        },
+        {
+          "not": {
+            "pattern": "\\$\\{ref\\}"
+          }
+        },
+        {
+          "not": {
+            "pattern": "\\$\\{[^}]*\\?\\?"
+          }
+        },
+        {
+          "not": {
+            "pattern": "\\S\\$\\{files\\}"
+          },
           "$comment": "`ruff check --stdin-filename=${files}` is bad_config."
         },
-        { "not": { "pattern": "\\$\\{files\\}\\S" } }
+        {
+          "not": {
+            "pattern": "\\$\\{files\\}\\S"
+          }
+        }
       ]
     },
-
     "envValue": {
-      "description": "An env: value. The four substitutions apply, plus a bare `${env.NAME}` read — unset is bad_config, naming the variable (PLAN.md §4.4). `${files}` is excluded: it expands to separate argv elements, which has no meaning inside one env value.",
+      "description": "An env: value. The four substitutions apply, plus a bare `${env.NAME}` read \u2014 unset is bad_config, naming the variable (PLAN.md \u00a74.4). `${files}` is excluded: it expands to separate argv elements, which has no meaning inside one env value.",
       "type": "string",
       "allOf": [
-        { "not": { "pattern": "\\$\\{files\\}" } },
-        { "not": { "pattern": "\\$\\{ref\\}" } },
-        { "not": { "pattern": "\\$\\{[^}]*\\?\\?" } }
+        {
+          "not": {
+            "pattern": "\\$\\{files\\}"
+          }
+        },
+        {
+          "not": {
+            "pattern": "\\$\\{ref\\}"
+          }
+        },
+        {
+          "not": {
+            "pattern": "\\$\\{[^}]*\\?\\?"
+          }
+        }
       ]
     },
-
     "env": {
-      "description": "Additive over the inherited environment — a child needing `$HOME` already has it (PLAN.md §4.5).",
+      "description": "Additive over the inherited environment \u2014 a child needing `$HOME` already has it (PLAN.md \u00a74.5).",
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/envName" },
-      "additionalProperties": { "$ref": "#/$defs/envValue" }
+      "propertyNames": {
+        "$ref": "#/$defs/envName"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/envValue"
+      }
     },
-
     "secretGrant": {
-      "description": "Names granted to this entry and nowhere else. Least privilege, and `grep -n \"secrets:\"` answers \"what can reach this token\" (PLAN.md §4.7). Every name must be declared in the top-level `secrets:` — checked by `config verify`, which is the only thing that can see both.",
+      "description": "Names granted to this entry and nowhere else. Least privilege, and `grep -n \"secrets:\"` answers \"what can reach this token\" (PLAN.md \u00a74.7). Every name must be declared in the top-level `secrets:` \u2014 checked by `config verify`, which is the only thing that can see both.",
       "type": "array",
-      "items": { "$ref": "#/$defs/envName" },
+      "items": {
+        "$ref": "#/$defs/envName"
+      },
       "uniqueItems": true
     },
-
     "secretRef": {
       "description": "`<scheme>://<ref>`. The scheme selects a declared provider; everything after it is substituted into that provider's `${ref}` as a single argv element.",
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9+.-]*://.+"
     },
-
     "secretProvider": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cmd"],
+      "required": [
+        "cmd"
+      ],
       "properties": {
         "cmd": {
-          "description": "Must contain `${ref}` — a provider cmd without it can never resolve anything (PLAN.md §4.4). There is deliberately no `shell:` key here: PLAN.md §4.7 rule 1 exists to keep `${ref}` out of a shell.",
+          "description": "Must contain `${ref}` \u2014 a provider cmd without it can never resolve anything (PLAN.md \u00a74.4). There is deliberately no `shell:` key here: PLAN.md \u00a74.7 rule 1 exists to keep `${ref}` out of a shell.",
           "type": "string",
           "minLength": 1,
           "allOf": [
-            { "pattern": "\\$\\{ref\\}" },
-            { "not": { "pattern": "\\$\\{files\\}" } },
             {
-              "not": { "pattern": "\\$\\{env\\." },
-              "$comment": "`${env.NAME}` is legal only inside an env: block (PLAN.md §4.4). A provider cmd is argv-split and has no shell: key, so nothing downstream would expand it."
+              "pattern": "\\$\\{ref\\}"
             },
-            { "not": { "pattern": "\\$\\{[^}]*\\?\\?" } }
+            {
+              "not": {
+                "pattern": "\\$\\{files\\}"
+              }
+            },
+            {
+              "not": {
+                "pattern": "\\$\\{env\\."
+              },
+              "$comment": "`${env.NAME}` is legal only inside an env: block (PLAN.md \u00a74.4). A provider cmd is argv-split and has no shell: key, so nothing downstream would expand it."
+            },
+            {
+              "not": {
+                "pattern": "\\$\\{[^}]*\\?\\?"
+              }
+            }
           ]
         }
       }
     },
-
     "setupStep": {
-      "description": "One step of `armada manifest init`. The object form exists so a single step can opt into shell interpretation — visible in the diff, so a reviewer can see exactly where shell semantics are live (PLAN.md §4.1).",
+      "description": "One step of `armada manifest init`. The object form exists so a single step can opt into shell interpretation \u2014 visible in the diff, so a reviewer can see exactly where shell semantics are live (PLAN.md \u00a74.1).",
       "oneOf": [
-        { "$ref": "#/$defs/command" },
+        {
+          "$ref": "#/$defs/command"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["cmd"],
+          "required": [
+            "cmd"
+          ],
           "properties": {
-            "cmd": { "$ref": "#/$defs/command" },
-            "shell": { "$ref": "#/$defs/shell" }
+            "cmd": {
+              "$ref": "#/$defs/command"
+            },
+            "shell": {
+              "$ref": "#/$defs/shell"
+            }
           }
         }
       ]
     },
-
     "shell": {
-      "description": "Opt this entry into shell interpretation, where `|| true`, pipes, redirection and inline assignments work. It covers every command string in the entry it appears on. Not a security boundary — an ergonomic escape in a config you already trust (PLAN.md §4.1).",
+      "description": "Opt this entry into shell interpretation, where `|| true`, pipes, redirection and inline assignments work. It covers every command string in the entry it appears on. Not a security boundary \u2014 an ergonomic escape in a config you already trust (PLAN.md \u00a74.1).",
       "type": "boolean"
     },
-
     "ready": {
-      "description": "Exactly one kind key, plus an optional timeout in seconds (default 60). A mapping with two kind keys is bad_config rather than a precedence rule nobody would remember (PLAN.md §6.0). Omitted defaults to `{none: true}`.",
+      "description": "Exactly one kind key, plus an optional timeout in seconds (default 60). A mapping with two kind keys is bad_config rather than a precedence rule nobody would remember (PLAN.md \u00a76.0). Omitted defaults to `{none: true}`.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -233,7 +354,7 @@
           "minLength": 1
         },
         "tcp": {
-          "description": "Ready when the port accepts a connection. A declared port NAME, never a number — a number would be the pre-claim port, which is never the one the service is on.",
+          "description": "Ready when the port accepts a connection. A declared port NAME, never a number \u2014 a number would be the pre-claim port, which is never the one the service is on.",
           "$ref": "#/$defs/name"
         },
         "log": {
@@ -246,33 +367,55 @@
           "$ref": "#/$defs/command"
         },
         "none": {
-          "description": "Ready immediately on spawn — the service is fire-and-forget.",
+          "description": "Ready immediately on spawn \u2014 the service is fire-and-forget.",
           "const": true
         },
-        "timeout": { "$ref": "#/$defs/seconds" }
+        "timeout": {
+          "$ref": "#/$defs/seconds"
+        }
       },
       "oneOf": [
-        { "required": ["http"] },
-        { "required": ["tcp"] },
-        { "required": ["log"] },
-        { "required": ["exec"] },
-        { "required": ["none"] }
+        {
+          "required": [
+            "http"
+          ]
+        },
+        {
+          "required": [
+            "tcp"
+          ]
+        },
+        {
+          "required": [
+            "log"
+          ]
+        },
+        {
+          "required": [
+            "exec"
+          ]
+        },
+        {
+          "required": [
+            "none"
+          ]
+        }
       ]
     },
-
     "ports": {
-      "description": "Port name to the port the service itself listens on. Armada claims a host port from this workspace's block and maps it; `${port.NAME}` always resolves to the host port (PLAN.md §4.1). The namespace is workspace-global, not per component, so two components may not declare the same name — `config verify` owns that check, since it needs the whole document.",
+      "description": "Port name to the port the service itself listens on. Armada claims a host port from this workspace's block and maps it; `${port.NAME}` always resolves to the host port (PLAN.md \u00a74.1). The namespace is workspace-global, not per component, so two components may not declare the same name \u2014 `config verify` owns that check, since it needs the whole document.",
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/name" },
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
       "additionalProperties": {
         "type": "integer",
         "minimum": 1,
         "maximum": 65535
       }
     },
-
     "needs": {
-      "description": "A component name means the service must be running; a check id (`core:build`) means that check must have passed in this run. The two forms are told apart by the colon (PLAN.md §4.1). Ordering, never a build graph.",
+      "description": "A component name means the service must be running; a check id (`core:build`) means that check must have passed in this run. The two forms are told apart by the colon (PLAN.md \u00a74.1). Ordering, never a build graph.",
       "type": "array",
       "items": {
         "type": "string",
@@ -280,159 +423,247 @@
       },
       "uniqueItems": true
     },
-
     "ownsSelector": {
-      "description": "A docker filter expression. Every selector is stamped with `${workspace.id}`, which is what lets `armada manifest clean` evaluate a commands: entry's declaration ad hoc (PLAN.md §4.5). Declared selectors may use the id alone; Armada's own filters use both labels (PLAN.md §2.3.1).",
+      "description": "A docker filter expression. Every selector is stamped with `${workspace.id}`, which is what lets `armada manifest clean` evaluate a commands: entry's declaration ad hoc (PLAN.md \u00a74.5). Declared selectors may use the id alone; Armada's own filters use both labels (PLAN.md \u00a72.3.1).",
       "type": "string",
       "minLength": 1
     },
-
     "ownsFiles": {
-      "description": "Paths this entry created, removed only by `armada manifest clean --artifacts` (PLAN.md §6.1). They cost disk but leak nothing machine-global, and deleting them makes the next init pay a full reinstall.",
+      "description": "Paths this entry created, removed only by `armada manifest clean --artifacts` (PLAN.md \u00a76.1). They cost disk but leak nothing machine-global, and deleting them makes the next init pay a full reinstall.",
       "type": "array",
-      "items": { "$ref": "#/$defs/relPath" },
+      "items": {
+        "$ref": "#/$defs/relPath"
+      },
       "uniqueItems": true
     },
-
     "ownsRelease": {
-      "description": "External resources Armada did not create and cannot reclaim — a database on a shared server, a cloud namespace. Recorded at `armada manifest init` and reported by `armada manifest status`, NEVER executed (PLAN.md §6.1). Takes no secrets grant anywhere, which is what keeps manifest.db free of secret references.",
+      "description": "External resources Armada did not create and cannot reclaim \u2014 a database on a shared server, a cloud namespace. Recorded at `armada manifest init` and reported by `armada manifest status`, NEVER executed (PLAN.md \u00a76.1). Takes no secrets grant anywhere, which is what keeps manifest.db free of secret references.",
       "oneOf": [
-        { "type": "string", "minLength": 1 },
+        {
+          "type": "string",
+          "minLength": 1
+        },
         {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "minItems": 1
         }
       ]
     },
-
     "ownsRun": {
-      "description": "What `run:` started (PLAN.md §6.0). The three owns: key sets are not the same set.",
+      "description": "What `run:` started (PLAN.md \u00a76.0). The three owns: key sets are not the same set.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "containers": { "$ref": "#/$defs/ownsSelector" },
-        "networks": { "$ref": "#/$defs/ownsSelector" },
-        "images": { "$ref": "#/$defs/ownsSelector" },
+        "containers": {
+          "$ref": "#/$defs/ownsSelector"
+        },
+        "networks": {
+          "$ref": "#/$defs/ownsSelector"
+        },
+        "images": {
+          "$ref": "#/$defs/ownsSelector"
+        },
         "ports": {
           "type": "array",
-          "items": { "$ref": "#/$defs/name" },
+          "items": {
+            "$ref": "#/$defs/name"
+          },
           "uniqueItems": true
         },
-        "files": { "$ref": "#/$defs/ownsFiles" },
-        "release": { "$ref": "#/$defs/ownsRelease" }
+        "files": {
+          "$ref": "#/$defs/ownsFiles"
+        },
+        "release": {
+          "$ref": "#/$defs/ownsRelease"
+        }
       }
     },
-
     "ownsComponent": {
-      "description": "What `setup:` created. No runtime handles, so no containers, networks, images or ports here (PLAN.md §6.0).",
+      "description": "What `setup:` created. No runtime handles, so no containers, networks, images or ports here (PLAN.md \u00a76.0).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "files": { "$ref": "#/$defs/ownsFiles" },
-        "release": { "$ref": "#/$defs/ownsRelease" }
+        "files": {
+          "$ref": "#/$defs/ownsFiles"
+        },
+        "release": {
+          "$ref": "#/$defs/ownsRelease"
+        }
       }
     },
-
     "ownsCommand": {
-      "description": "A selector, not a record — `armada manifest clean` evaluates it against docker and the filesystem, because a command runs ad hoc and has no \"while it was up\" window to record against. `ports:` is not available: the block is already claimed by `armada manifest init` (PLAN.md §4.5).",
+      "description": "A selector, not a record \u2014 `armada manifest clean` evaluates it against docker and the filesystem, because a command runs ad hoc and has no \"while it was up\" window to record against. `ports:` is not available: the block is already claimed by `armada manifest init` (PLAN.md \u00a74.5).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "containers": { "$ref": "#/$defs/ownsSelector" },
-        "networks": { "$ref": "#/$defs/ownsSelector" },
-        "images": { "$ref": "#/$defs/ownsSelector" },
-        "files": { "$ref": "#/$defs/ownsFiles" },
-        "release": { "$ref": "#/$defs/ownsRelease" }
+        "containers": {
+          "$ref": "#/$defs/ownsSelector"
+        },
+        "networks": {
+          "$ref": "#/$defs/ownsSelector"
+        },
+        "images": {
+          "$ref": "#/$defs/ownsSelector"
+        },
+        "files": {
+          "$ref": "#/$defs/ownsFiles"
+        },
+        "release": {
+          "$ref": "#/$defs/ownsRelease"
+        }
       }
     },
-
     "check": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cmd"],
+      "required": [
+        "cmd"
+      ],
       "properties": {
-        "cmd": { "$ref": "#/$defs/checkCommand" },
-        "fix": {
-          "description": "Run instead of `cmd:` under `armada manifest check --fix`. Checks that declare none are skipped by that flag (PLAN.md §3.2).",
+        "cmd": {
           "$ref": "#/$defs/checkCommand"
         },
-        "shell": { "$ref": "#/$defs/shell" },
+        "fix": {
+          "description": "Run instead of `cmd:` under `armada manifest check --fix`. Checks that declare none are skipped by that flag (PLAN.md \u00a73.2).",
+          "$ref": "#/$defs/checkCommand"
+        },
+        "shell": {
+          "$ref": "#/$defs/shell"
+        },
         "timeout": {
-          "description": "Seconds. Defaults to `check_timeout` from ~/.armada/machine.yml, itself 900 — a check with no deadline is a hung merge gate (PLAN.md §4.1).",
+          "description": "Seconds. Defaults to `check_timeout` from ~/.armada/machine.yml, itself 900 \u2014 a check with no deadline is a hung merge gate (PLAN.md \u00a74.1).",
           "$ref": "#/$defs/seconds"
         },
         "cost": {
-          "description": "CPU slots, machine-wide. Default 1 (PLAN.md §4.3).",
+          "description": "CPU slots, machine-wide. Default 1 (PLAN.md \u00a74.3).",
           "type": "integer",
           "minimum": 1
         },
         "scope": {
-          "description": "`file` (the default) passes `${files}`; `component` always runs over the whole component. An end-to-end suite scoped to two changed files tests nothing (PLAN.md §4.1).",
-          "enum": ["file", "component"]
+          "description": "`file` (the default) passes `${files}`; `component` always runs over the whole component. An end-to-end suite scoped to two changed files tests nothing (PLAN.md \u00a74.1).",
+          "enum": [
+            "file",
+            "component"
+          ]
         },
         "exclusive": {
-          "description": "Machine-wide mutexes, never shared. Acquired before cpu-slots and in sorted name order, which is what makes a cross-workspace deadlock impossible rather than unlikely (PLAN.md §4.3).",
+          "description": "Machine-wide mutexes, never shared. Acquired before cpu-slots and in sorted name order, which is what makes a cross-workspace deadlock impossible rather than unlikely (PLAN.md \u00a74.3).",
           "type": "array",
-          "items": { "$ref": "#/$defs/name" },
+          "items": {
+            "$ref": "#/$defs/name"
+          },
           "uniqueItems": true
         },
-        "needs": { "$ref": "#/$defs/needs" },
-        "env": { "$ref": "#/$defs/env" },
+        "needs": {
+          "$ref": "#/$defs/needs"
+        },
+        "env": {
+          "$ref": "#/$defs/env"
+        },
         "in": {
-          "description": "Run this check inside a running container, via an exec Armada builds itself from the file list and project name it already owns. Names a compose SERVICE, not a component — a component's compose files routinely define several. Implies `needs:` on the enclosing component, which must be `driver: compose` (PLAN.md §4.1).",
+          "description": "Run this check inside a running container, via an exec Armada builds itself from the file list and project name it already owns. Names a compose SERVICE, not a component \u2014 a component's compose files routinely define several. Implies `needs:` on the enclosing component, which must be `driver: compose` (PLAN.md \u00a74.1).",
           "$ref": "#/$defs/name"
         },
-        "secrets": { "$ref": "#/$defs/secretGrant" }
+        "secrets": {
+          "$ref": "#/$defs/secretGrant"
+        }
       },
       "allOf": [
         {
-          "$comment": "`shell: true` with `${files}` is unrepresentable, not warned about: a filename may contain `;` or `$(…)`, so under a shell anyone who can push a branch has code execution on every machine that runs `armada manifest check` on it (PLAN.md §4.1, traps.md).",
+          "$comment": "`shell: true` with `${files}` is unrepresentable, not warned about: a filename may contain `;` or `$(\u2026)`, so under a shell anyone who can push a branch has code execution on every machine that runs `armada manifest check` on it (PLAN.md \u00a74.1, traps.md).",
           "if": {
-            "properties": { "shell": { "const": true } },
-            "required": ["shell"]
+            "properties": {
+              "shell": {
+                "const": true
+              }
+            },
+            "required": [
+              "shell"
+            ]
           },
           "then": {
             "properties": {
-              "cmd": { "not": { "pattern": "\\$\\{files\\}" } },
-              "fix": { "not": { "pattern": "\\$\\{files\\}" } }
+              "cmd": {
+                "not": {
+                  "pattern": "\\$\\{files\\}"
+                }
+              },
+              "fix": {
+                "not": {
+                  "pattern": "\\$\\{files\\}"
+                }
+              }
             }
           }
         },
         {
-          "$comment": "A scope: component check containing ${files} says two opposite things, and quietly honouring one of them is how you get a suite that appears to run and covers nothing (PLAN.md §4.1).",
+          "$comment": "A scope: component check containing ${files} says two opposite things, and quietly honouring one of them is how you get a suite that appears to run and covers nothing (PLAN.md \u00a74.1).",
           "if": {
-            "properties": { "scope": { "const": "component" } },
-            "required": ["scope"]
+            "properties": {
+              "scope": {
+                "const": "component"
+              }
+            },
+            "required": [
+              "scope"
+            ]
           },
           "then": {
             "properties": {
-              "cmd": { "not": { "pattern": "\\$\\{files\\}" } },
-              "fix": { "not": { "pattern": "\\$\\{files\\}" } }
+              "cmd": {
+                "not": {
+                  "pattern": "\\$\\{files\\}"
+                }
+              },
+              "fix": {
+                "not": {
+                  "pattern": "\\$\\{files\\}"
+                }
+              }
             }
           }
         },
         {
-          "$comment": "A check with in: may not be granted secrets: — the only way to hand a value to an exec'd process is `-e KEY=value`, which puts it in argv (PLAN.md §4.1, ARCHITECTURE.md §1.8).",
-          "if": { "required": ["in"] },
-          "then": { "not": { "required": ["secrets"] } }
+          "$comment": "A check with in: may not be granted secrets: \u2014 the only way to hand a value to an exec'd process is `-e KEY=value`, which puts it in argv (PLAN.md \u00a74.1, ARCHITECTURE.md \u00a71.8).",
+          "if": {
+            "required": [
+              "in"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "secrets"
+              ]
+            }
+          }
         }
       ]
     },
-
     "run": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["driver"],
+      "required": [
+        "driver"
+      ],
       "properties": {
         "driver": {
-          "description": "Two drivers only. No vendor-named drivers (PLAN.md §6).",
-          "enum": ["compose", "command"]
+          "description": "Two drivers only. No vendor-named drivers (PLAN.md \u00a76).",
+          "enum": [
+            "compose",
+            "command"
+          ]
         },
         "file": {
-          "description": "compose only. A list, because repos commonly already run base plus override and the resolve step must receive the same file set they do (PLAN.md §6.0).",
+          "description": "compose only. A list, because repos commonly already run base plus override and the resolve step must receive the same file set they do (PLAN.md \u00a76.0).",
           "type": "array",
-          "items": { "$ref": "#/$defs/relPath" },
+          "items": {
+            "$ref": "#/$defs/relPath"
+          },
           "minItems": 1
         },
         "cmd": {
@@ -440,102 +671,235 @@
           "$ref": "#/$defs/command"
         },
         "stop": {
-          "description": "command only. Optional; the default is killpg — SIGTERM, 10s grace, then SIGKILL, unconditionally (PLAN.md §6).",
+          "description": "command only. Optional; the default is killpg \u2014 SIGTERM, 10s grace, then SIGKILL, unconditionally (PLAN.md \u00a76).",
           "$ref": "#/$defs/command"
         },
-        "shell": { "$ref": "#/$defs/shell" },
-        "ports": { "$ref": "#/$defs/ports" },
-        "ready": { "$ref": "#/$defs/ready" },
-        "needs": { "$ref": "#/$defs/needs" },
-        "env": { "$ref": "#/$defs/env" },
-        "owns": { "$ref": "#/$defs/ownsRun" },
-        "secrets": { "$ref": "#/$defs/secretGrant" }
+        "shell": {
+          "$ref": "#/$defs/shell"
+        },
+        "ports": {
+          "$ref": "#/$defs/ports"
+        },
+        "ready": {
+          "$ref": "#/$defs/ready"
+        },
+        "needs": {
+          "$ref": "#/$defs/needs"
+        },
+        "env": {
+          "$ref": "#/$defs/env"
+        },
+        "owns": {
+          "$ref": "#/$defs/ownsRun"
+        },
+        "secrets": {
+          "$ref": "#/$defs/secretGrant"
+        }
       },
       "allOf": [
         {
           "if": {
-            "properties": { "driver": { "const": "compose" } },
-            "required": ["driver"]
+            "properties": {
+              "driver": {
+                "const": "compose"
+              }
+            },
+            "required": [
+              "driver"
+            ]
           },
           "then": {
-            "required": ["file"],
+            "required": [
+              "file"
+            ],
             "not": {
               "anyOf": [
-                { "required": ["cmd"] },
-                { "required": ["stop"] },
-                { "required": ["shell"] }
+                {
+                  "required": [
+                    "cmd"
+                  ]
+                },
+                {
+                  "required": [
+                    "stop"
+                  ]
+                },
+                {
+                  "required": [
+                    "shell"
+                  ]
+                }
               ]
             }
           }
         },
         {
           "if": {
-            "properties": { "driver": { "const": "command" } },
-            "required": ["driver"]
+            "properties": {
+              "driver": {
+                "const": "command"
+              }
+            },
+            "required": [
+              "driver"
+            ]
           },
           "then": {
-            "required": ["cmd"],
-            "not": { "required": ["file"] }
+            "required": [
+              "cmd"
+            ],
+            "not": {
+              "required": [
+                "file"
+              ]
+            }
           }
         }
       ]
     },
-
     "component": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "root": {
-          "description": "Where this component's source lives. NOT a working directory — every check runs from the workspace root, and `${files}` paths are workspace-relative (PLAN.md §4.1). It scopes `match:` and resolves executables for `config verify`.",
+          "description": "Where this component's source lives. NOT a working directory \u2014 every check runs from the workspace root, and `${files}` paths are workspace-relative (PLAN.md \u00a74.1). It scopes `match:` and resolves executables for `config verify`.",
           "$ref": "#/$defs/relPath"
         },
         "match": {
           "description": "Globs, workspace-relative, that decide which changed files select this component. `armada manifest check --all-files` sets `${files}` from these instead of from the diff.",
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true
         },
         "setup": {
-          "description": "What `armada manifest init` runs. A single step or a sequence. Armada is idempotent in its own state; whether re-running a step is safe is a property of the repo's commands (PLAN.md §4.1).",
+          "description": "What `armada manifest init` runs. A single step or a sequence. Armada is idempotent in its own state; whether re-running a step is safe is a property of the repo's commands (PLAN.md \u00a74.1).",
           "oneOf": [
-            { "$ref": "#/$defs/setupStep" },
+            {
+              "$ref": "#/$defs/setupStep"
+            },
             {
               "type": "array",
-              "items": { "$ref": "#/$defs/setupStep" },
+              "items": {
+                "$ref": "#/$defs/setupStep"
+              },
               "minItems": 1
             }
           ]
         },
-        "owns": { "$ref": "#/$defs/ownsComponent" },
-        "run": { "$ref": "#/$defs/run" },
+        "owns": {
+          "$ref": "#/$defs/ownsComponent"
+        },
+        "run": {
+          "$ref": "#/$defs/run"
+        },
         "checks": {
-          "description": "Check ids are derived as `<component>:<check>` — never written by hand, so they cannot drift, collide or be typo'd (PLAN.md §4.1).",
+          "description": "Check ids are derived as `<component>:<check>` \u2014 never written by hand, so they cannot drift, collide or be typo'd (PLAN.md \u00a74.1).",
           "type": "object",
-          "propertyNames": { "$ref": "#/$defs/name" },
-          "additionalProperties": { "$ref": "#/$defs/check" }
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/check"
+          }
         }
       }
     },
-
     "commandEntry": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cmd"],
+      "required": [
+        "cmd"
+      ],
       "properties": {
-        "cmd": { "$ref": "#/$defs/command" },
+        "cmd": {
+          "$ref": "#/$defs/command"
+        },
         "help": {
           "description": "One line, for `armada --help` and the managed AGENTS.md block.",
           "type": "string",
           "minLength": 1
         },
-        "shell": { "$ref": "#/$defs/shell" },
-        "env": { "$ref": "#/$defs/env" },
-        "stdio": {
-          "description": "`pipe` lets Armada scrub the child's output; `inherit` preserves its TTY, so colours and interactive prompts work. Default is inferred — pipe when the entry grants secrets, inherit otherwise — but inference is wrong in both directions, so the repo may say. `--json` overrides this and forces pipe (PLAN.md §4.5).",
-          "enum": ["inherit", "pipe"]
+        "shell": {
+          "$ref": "#/$defs/shell"
         },
-        "owns": { "$ref": "#/$defs/ownsCommand" },
-        "secrets": { "$ref": "#/$defs/secretGrant" }
+        "env": {
+          "$ref": "#/$defs/env"
+        },
+        "stdio": {
+          "description": "`pipe` lets Armada scrub the child's output; `inherit` preserves its TTY, so colours and interactive prompts work. Default is inferred \u2014 pipe when the entry grants secrets, inherit otherwise \u2014 but inference is wrong in both directions, so the repo may say. `--json` overrides this and forces pipe (PLAN.md \u00a74.5).",
+          "enum": [
+            "inherit",
+            "pipe"
+          ]
+        },
+        "owns": {
+          "$ref": "#/$defs/ownsCommand"
+        },
+        "secrets": {
+          "$ref": "#/$defs/secretGrant"
+        }
+      }
+    },
+    "skillEntry": {
+      "description": "One skill. `uses:` and `verify:` are references into this same document, which is what makes a skill verifiable at authoring time rather than in a fresh worktree at the worst moment.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "doc"
+      ],
+      "properties": {
+        "summary": {
+          "description": "One line, for listings, MCP responses and generated frontmatter. Same kind of value as help: on a commands: entry.",
+          "type": "string",
+          "minLength": 1
+        },
+        "doc": {
+          "description": "Workspace-relative path to the prose. `config verify` checks it exists and resolves inside the root; nothing reads it.",
+          "$ref": "#/$defs/relPath"
+        },
+        "uses": {
+          "description": "commands: keys this skill may invoke. References, never new capability \u2014 every name must already be declared, which `config verify` enforces, so a skill can only name capability a human already reviewed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "verify": {
+          "description": "What proves the work landed. Naming it here is what lets a skill emit a real verdict under PLAN.md \u00a714.3 rather than an assertion.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "check"
+          ],
+          "properties": {
+            "check": {
+              "description": "Check ids or component:check selectors, as `armada manifest check --scope` accepts.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          }
+        },
+        "touches": {
+          "description": "Advisory globs. Not enforced \u2014 used for the scope lens and to let a review step notice edits far outside where this skill was expected to work.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        }
       }
     }
   }

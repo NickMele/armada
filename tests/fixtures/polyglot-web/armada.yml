@@ -105,6 +105,31 @@ manifest:
           exclusive: [browser]
           needs: [api, web]
 
+  # The full `skills:` shape (PLAN.md §4.8). This fixture owns the axis because
+  # it is the only one with `commands:` to grant and two components' checks to
+  # verify against — a skill's whole value is that both are cross-references,
+  # resolved at authoring time rather than in a fresh worktree.
+  skills:
+
+    add-endpoint:
+      summary: Add an API endpoint, OpenAPI first, then the generated client
+      doc: docs/skills/add-endpoint.md
+      # Grants nothing new: `tickets` is declared below. A skill can only ever
+      # name capability the repository already declared.
+      uses: [tickets]
+      verify:
+        check: [api:types, web:lint]
+      touches:
+        - "backend/openapi.yaml"
+        - "frontend/src/generated/**"
+
+    # Minimal legal skill: summary and doc only. A skill that grants nothing and
+    # verifies nothing is still a real thing — it is prose the repo wants an
+    # agent to read, with a name.
+    triage-flake:
+      summary: Work out whether a failing test is flaky or genuinely broken
+      doc: docs/skills/add-endpoint.md
+
   commands:
 
     # A grant *and* `stdio: inherit`: this script prompts for confirmation, so it

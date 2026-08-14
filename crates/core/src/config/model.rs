@@ -86,6 +86,10 @@ pub struct Config {
     /// Repo-local verbs Armada dispatches but does not define.
     #[serde(default)]
     pub commands: BTreeMap<String, CommandEntry>,
+    /// Repo-local knowledge, rendered per harness. Armada holds the mechanical
+    /// half and a path; it never parses the prose (ARCHITECTURE.md §1.9).
+    #[serde(default)]
+    pub skills: BTreeMap<String, SkillEntry>,
     /// Paths that are separate workspaces, excluded from this one.
     #[serde(default)]
     pub workspaces: Vec<String>,
@@ -248,6 +252,42 @@ pub struct CommandEntry {
     /// Secret names granted to this entry and nowhere else.
     #[serde(default)]
     pub secrets: Vec<String>,
+}
+
+/// A named grant plus a pointer to prose (PLAN.md §4.8).
+///
+/// **Deliberately has no `cmd:`.** A skill with its own command is a
+/// `commands:` entry wearing a hat, and if that were the design the honest move
+/// would be to delete `skills:` entirely. A skill is a name, a grant and a
+/// document; execution stays with the thing that already executes.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SkillEntry {
+    /// One line, for listings, MCP responses and generated frontmatter.
+    pub summary: String,
+    /// Workspace-relative path to the prose. Existence is verified; the
+    /// contents are never read by anything in core.
+    pub doc: String,
+    /// `commands:` keys this skill may invoke. Every name must already be
+    /// declared — `config verify` rejects one that is not, which is what stops
+    /// a skill smuggling in capability the repository never granted.
+    #[serde(default)]
+    pub uses: Vec<String>,
+    /// The check scope that proves the work landed. Feeds the verdict evidence
+    /// rule of PLAN.md §14.3.
+    #[serde(default)]
+    pub verify: Option<SkillVerify>,
+    /// Advisory globs. Not enforced; used for scoping and review.
+    #[serde(default)]
+    pub touches: Vec<String>,
+}
+
+/// What proves a skill's work landed.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SkillVerify {
+    /// Check ids or `component:check` selectors, as `check --scope` accepts.
+    pub check: Vec<String>,
 }
 
 /// A secret provider: a command that prints one secret to stdout.
