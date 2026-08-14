@@ -1,12 +1,23 @@
-# charkit — implementation plan
+# Armada — implementation plan
 
-> **Status:** Phases 0, 1 and 2 complete. This document is the complete
-> specification — a fresh agent should be able to execute it without any prior conversation.
+> **Status:** the complete specification — a fresh agent should be able to execute it without
+> any prior conversation.
+>
+> **This document is in two parts.** §1–§12 specify **Manifest**, the workspace module formerly
+> called charkit; that specification is unchanged by the widening of scope, because Manifest is
+> agent-agnostic by design ([`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9). §13–§15 specify the
+> three modules stacked on it: **Guild**, **Fleet** and **Surface**. Part II is deliberately
+> thinner, because the M0 spike found that most of the machinery it appeared to need already
+> exists ([`PHASES.md`](PHASES.md) §9.1).
+>
 > **§4.1.1 records the five things this document left undecided and phase 1 had to settle**,
 > along with every change the six fixtures forced. The config contract is frozen from here.
 >
 > **`PHASES.md` §0.1 and §0.2 are superseded by [`ARCHITECTURE.md`](ARCHITECTURE.md)**, which records what
 > was actually decided. Everything else here stands.
+>
+> **For usage rather than specification, see [`reference.md`](reference.md)** — one page per
+> command with arguments, behaviour, output and dependencies.
 >
 > **Precedence: where this document and `ARCHITECTURE.md` disagree, `ARCHITECTURE.md` wins.**
 > This is the specification of what to build; that is the record of what was decided about
@@ -2763,3 +2774,261 @@ independent analyses reaching the same conclusion from different reasoning.
 ## 12. Notes for the implementing agent
 
 > **Moved to [`PHASES.md`](PHASES.md).**
+
+---
+
+# Part II — the three modules charkit did not have
+
+Everything above specifies **Manifest**: what a workspace is, how it is configured, how it is
+owned and reclaimed. That specification is unchanged by the widening of scope, because Manifest
+is agent-agnostic by design ([`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9) and nothing below cares
+what a workspace is used for.
+
+What follows specifies the three modules stacked on top of it. Each is deliberately thinner
+than §1–§7, because the M0 spike found that most of the machinery they appeared to need already
+exists ([`PHASES.md`](PHASES.md) §9.1).
+
+---
+
+## 13. Guild — the portable half
+
+The guild is **machine-global user state**, not repository content. It is you: how you work,
+how you want to be spoken to, which skills and plugins you use, what your workflows are. Armada
+builds it by interviewing you, seeds it from what is already on the machine, and syncs it
+between your machines. **No part of it ever enters this repository.**
+
+### 13.1 Layout, and the line between what syncs and what does not
+
+```
+~/.armada/
+├── guild/                 # SYNCS — a git repo Armada manages
+│   ├── voice.md
+│   ├── expectations.md
+│   ├── how-i-work.md
+│   ├── skills/
+│   ├── hooks/
+│   ├── subagents/
+│   ├── workflows/         # design.yml · plan.yml · feature.yml · bug.yml
+│   ├── plugins.yml        # marketplaces + enabled plugins
+│   └── mcp.yml            # servers you want everywhere
+├── manifest.db            # NEVER SYNCS — ports, containers, leases on THIS machine
+├── sessions/              # NEVER SYNCS — session index
+├── workspaces/            # NEVER SYNCS — the git worktrees themselves
+└── machine.yml            # NEVER SYNCS — paths, secrets, capacity
+```
+
+**The line is not "content syncs, state does not".** The guild *is* state and it *does* sync.
+The line is: **what describes you syncs; what describes this machine and its running processes
+never does.** Syncing `manifest.db` to another machine would claim ports that do not exist
+there and record containers that were never started.
+
+### 13.2 Why it is not repository content
+
+An earlier draft committed guild content to a repository — either this one, publishing personal
+material, or a second private one to keep in step. Both were wrong. Making the guild global
+deletes the distribution problem rather than solving it: Claude Code already reads `~/.claude/`
+on every project, so a global guild is in effect everywhere with **no per-repository step at
+all**.
+
+Projection survives only for what must be repository-local: a managed region in the repo's own
+memory file, and any MCP server or setting that only makes sense there. That is the sole part
+that needs reversible bookkeeping — a manifest of what was placed and a hash of each file, so
+re-sync updates only what you have not touched and `--remove` reverses exactly.
+
+### 13.3 Packaging: what a plugin can and cannot carry
+
+[`PHASES.md`](PHASES.md) §9.1 F4 measured this. A Claude Code plugin carries skills, subagents,
+hooks, MCP servers, monitors, LSP servers and a `bin/` added to `PATH` — but **cannot carry a
+memory file**, and a plugin's own `settings.json` supports only two keys.
+
+So Guild has two halves. The mechanical half ships as a plugin and inherits Claude Code's
+installer, versioning and marketplace for free. The personal half — the memory fragments and
+the settings keys — Guild writes itself. The second half is smaller and is where all the value
+is.
+
+### 13.4 The interview
+
+`armada init` on a machine with no guild asks one question first — *do you already have a
+guild?* — with three answers: pull it from a remote, import a bundle, or build one now.
+Building one starts by **reading what is already there**: `~/.claude/` skills, subagents, hooks,
+plugin and marketplace registrations, settings and memory. The guild starts nearly complete
+rather than empty.
+
+The interview then asks only what it cannot read: voice, what "done" means, how you work,
+confirmation of the four starter workflows, and default budget ceilings. Everything it writes is
+a plain file. **The interview is a convenience and never the only way in** — a tool that can
+only be configured through a wizard is a tool you cannot fix at one in the morning.
+
+### 13.5 Sync
+
+`~/.armada/guild/` is a git repository Armada manages: it commits on change and pushes to a
+private remote named once during the interview. `export` and `import` produce a single bundle
+for a machine that will never hold your credentials. Conflicts surface as conflicts.
+
+The import step **refuses to adopt credential-shaped values**; those belong in `machine.yml`,
+which never syncs. This is built with the importer rather than retrofitted, because a secret
+that has already reached a remote cannot be un-pushed.
+
+---
+
+## 14. Fleet — the agents you do not talk to
+
+### 14.1 What a session is
+
+**A UUID, a git worktree, a port block, and a transcript.** The process is temporary; the
+session is not. This is the single most important correction in the plan's history: three
+successive designs — a hidden multiplexer, an Armada-owned pty, a bespoke session journal — all
+descended from the assumption that a session must be a live terminal somebody owns. It does not,
+because Claude Code already persists sessions itself ([`PHASES.md`](PHASES.md) §9.1 F1).
+
+Fleet mints the UUID **before anything runs**, so the durable handle exists before the process
+does, ownership is recorded up front, and cleanup can find the session afterwards even when the
+directory is gone. Worktrees live under `~/.armada/workspaces/`, outside the repository, so a
+stray delete in the parent cannot take out live sessions.
+
+Fleet invents no worktree concept. `git worktree` is the only primitive; Fleet adds **policy
+only** — where it lives, what it is named, that it gets a port block from Manifest, and that it
+is recorded.
+
+### 14.2 Classification belongs here, not to Surface
+
+One cheap model call turns task text into a workflow name, with an explicit override and the
+confidence surfaced so a guess is visible as a guess. It lives in Fleet because it is needed the
+moment a session can be spawned — long before Surface exists. Putting it in the orchestrator
+would make every other caller worse for no gain ([`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9).
+
+### 14.3 Verdicts and ceilings — the two ways a loop ends
+
+A loop terminates because it succeeded, or because it ran out of rope. Both are required, and
+neither is optional.
+
+**The verdict** reuses the `--json` envelope of §3.1 with one added field, so the system has
+exactly one machine-readable output shape:
+
+```json
+{
+  "schema_version": 1,
+  "module": "fleet",
+  "step": "implement",
+  "verdict": "pass",
+  "evidence": [
+    { "kind": "check", "scope": "test", "exit": 0 },
+    { "kind": "check", "scope": "lint", "exit": 0 }
+  ],
+  "attempts": 2,
+  "next": "review"
+}
+```
+
+| Verdict | Meaning |
+|---|---|
+| `pass` | Advance to `next`. |
+| `fail` | Retry the same step with the evidence attached, until a ceiling stops it. |
+| `blocked` | Cannot proceed without an external change. Stop, record why, raise to the inbox. |
+| `needs_human` | A judgement call is yours — or a ceiling was reached. |
+
+**The rule that keeps this honest: a verdict is only `pass` if it carries evidence an external
+command produced.** An agent asserting that tests pass is not evidence; an `armada manifest
+check` exit code is. This is why the loop genuinely depends on Manifest's `check` verb and
+cannot be faked earlier.
+
+**The ceilings** come from the guild, are overridable per workflow and per run, and are read off
+data Claude Code already emits — `total_cost_usd`, `usage`, `num_turns` and `duration_api_ms`
+from the turn's `result` event ([`PHASES.md`](PHASES.md) §9.1 F2). Fleet builds no accounting
+layer.
+
+```yaml
+budget:
+  max_iterations: 12
+  max_tokens: 400_000
+  max_wall_clock: 45m
+  on_exhausted: needs_human   # never: silent stop
+```
+
+`rate_limit_event` reports the current window and its reset, so the orchestrator can decline to
+spawn when a reset is close. That is strictly better than a fixed concurrency cap, which was
+only ever a proxy for the same thing.
+
+**Exhaustion is a first-class outcome, not a crash.** The session stops, records what it spent
+and where it reached, and raises it to the inbox.
+
+### 14.4 Workflows are data, not code
+
+A workflow is a file in your guild — its ordered steps, which skill runs each one, and what
+verdict advances it. The alternative is a Rust function, which would mean editing, rebuilding
+and releasing to change "run review before the check instead of after". As data it syncs between
+machines with the rest of the guild and can be fixed at one in the morning.
+
+```yaml
+# ~/.armada/guild/workflows/bug.yml
+steps:
+  - id: reproduce
+    skill: reproduce-bug
+    verify: { must: failing_test_exists }   # the test must FAIL first
+  - id: fix
+    skill: implement
+    verify: { must: check_passes, scope: [test, lint] }
+  - id: land
+    skill: commit-local
+on_blocked: needs_human
+```
+
+| Type | Terminal gate | Ends at |
+|---|---|---|
+| **design** | Always `needs_human` — design has no automated pass condition | A review artifact |
+| **plan** | `needs_human` on the finished plan | Your approval, before any build workflow spawns |
+| **feature** | `check` green and review clean | A local branch |
+| **bug** | The test must fail first, then pass | A local branch |
+
+Design and plan **always** end at you. Only feature and bug can close autonomously, and only
+because `check` gives them something objective to close against.
+
+---
+
+## 15. Surface — the one agent you do talk to
+
+### 15.1 The orchestrator is a session, not a UI
+
+Typing `armada` launches a Claude Code session running an orchestrator persona from your guild,
+with Armada's MCP server as its toolbelt, resuming the same conversation each day. It requires
+no interface work, which is why it ships with Fleet rather than after everything else.
+
+Its toolbelt is `fleet.*` and `manifest.*` — spawn, status, probe, answer, kill, and the
+workspace verbs. Its job is **decompose, delegate, aggregate, report**. Classification is not
+its job (§14.2).
+
+**Because the orchestrator is a session, a terminal UI or an app that hosts it later is a
+rendering choice and not an architecture change.** Nothing in Manifest, Guild or Fleet moves
+when one is built. That is the property that makes the ambient-view question safe to defer:
+what you see when you are *not* talking is additive, and it is the only decision in this plan
+that gets cheaper and better-informed by waiting.
+
+### 15.2 Two structural rules
+
+**The orchestrator reads summaries, never raw transcripts.** If it reads worker transcripts it
+fills its window in three sessions and starts forgetting the fleet. This is a design constraint,
+not a tuning knob.
+
+**Probe never interrupts a worker.** It summarises the worker's transcript with a cheap model.
+Messaging a busy agent to ask how it is going costs you the thing you were measuring.
+
+### 15.3 The inbox — how it stays aware without polling
+
+Workers append to `~/.armada/inbox.jsonl`: by MCP call when they have a question, and by `Stop`
+and `Notification` hooks when they go idle or get stuck. **Hooks are the spine** — an agent can
+forget to report progress, but it cannot forget to stop, which is what makes "needs my
+attention" reliable rather than best-effort.
+
+Two mechanisms deliver it, both verified in [`PHASES.md`](PHASES.md) §9.1 F3:
+
+| Mechanism | When it fires | Role |
+|---|---|---|
+| A plugin **monitor** tailing the inbox | Mid-turn, live | Push |
+| A **`Stop` hook** on the orchestrator | Turn end, if anything is unread | Backstop — nothing is ever lost |
+
+Both are configuration rather than code. **No daemon**, and no polling: the file is
+append-only, so it survives every kind of crash, which is the same reasoning that put Manifest's
+ownership store on disk rather than in a process (§4.3).
+
+A monitor runs in interactive sessions only. That fits — the orchestrator is interactive and the
+workers are headless — but it means a monitor can never be a worker-side mechanism.

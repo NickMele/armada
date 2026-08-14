@@ -2,8 +2,13 @@
 
 Instructions for coding agents working in this repository.
 
-**charkit** is a CLI (`char`) giving coding agents one consistent vocabulary for managing a
-repo's tech stack. Rust (2021 edition), POSIX only.
+**Armada** is a CLI (`armada`) — a suite for working with coding agents across every repo and
+machine. Four modules under one binary: **Manifest** (what a workspace is), **Guild** (your
+portable setup), **Fleet** (the agents you don't talk to), **Surface** (the one you do). Rust
+(2021 edition), POSIX only.
+
+**Nothing points upward** — Manifest may not reference Fleet, Guild may not reference Surface.
+`ARCHITECTURE.md` §1.9, enforced by `cargo xtask boundaries`.
 
 ## Read these first, in order
 
@@ -34,105 +39,53 @@ measured   decided           specified  sequenced   derived
 
 ## Rules that are easy to break by accident
 
-### 1. Never write these strings under `src/` or `tests/`
+### 1. Two rules were retired — do not reinstate them by accident
 
-```
-tilt   NEXT_PUBLIC   .claude   backend/   web/
-```
+The contamination grep and the clean-room rule existed for one reason: this repository was
+public. It is private now, and both were deleted in M1 along with `xtask/src/contamination.rs`,
+`xtask/src/privacy.rs` and the clean-room hook. Their reasoning is kept in `ARCHITECTURE.md`
+§2.4 and `ARCHITECTURE.md` §2.7 rather than erased, because a rule that vanishes without a reason gets reinvented.
 
-...plus **the source repo's own name**, which is not written here because this repo is public.
-It is appended to the pattern from `CHARKIT_CONTAMINATION_EXTRA` or an untracked
-`.claude/contamination.local` — `ARCHITECTURE.md` §2.4. Treat it as on the list whether or not
-your checkout has it configured.
+**What did not go away is the risk the grep was a poor proxy for.** A green grep only proved the
+absence of *crude* contamination. The failure that matters is invisible to it: an abstraction
+shaped around one repository because that is the only repository anyone looked at.
 
-A grep runs in the merge gate over both directories and **has no allowlist**. If it fires, the
-code changes — not the pattern. **The pattern itself lives in `ARCHITECTURE.md` §2.4 and is
-stated nowhere else**, including here — a copy inside a markdown table is unrunnable. `tests/` is in scope because phase 3 ports test
-*cases* from the source repo, which makes them the second transcription vector.
+**So the six fixtures are now the whole of this discipline.** They live at
+`tests/fixtures/<name>/` with a golden resolved snapshot beside each. The rule that replaces the
+grep:
 
-**One exception: `docs/harvest.md`.** It is not greped, because its job is to describe the
-source repo and a ban would forbid recording the assumptions you are meant to strip. It has a
-different rule instead — see rule 2.
+> When a repository shape turns up that the fixtures do not cover, **add a fixture before adding
+> the feature**.
 
-**The source repo's name is banned in every tracked file, not only those two directories — and
-so is your home directory.** `cargo xtask privacy`, inside `doclint`, matches the configured
-names anywhere in the repo — in a file's contents *and in its own path*, so do not name a file
-after that repo either — plus the literal `$HOME` of the machine running it. This repo is
-public and its prose is the larger surface, which is where every reference that has had to be
-removed so far actually lived. Write paths relative to the repo or as `~/`. `docs/harvest.md`
-is exempt from the name rule and not from the home-directory one; both are stated in
-`ARCHITECTURE.md` §2.4, along with how CI is told the name it cannot read from the checkout.
+Still true regardless, and now a matter of taste rather than a gate: prefer neutral examples in
+docs and fixtures — `cmd: foreman start`, `root: services/api` — because an example naming one
+real project's layout is the first step toward code that assumes it.
 
-This includes docstrings, comments and test fixture strings. When you need to illustrate the
-`command` driver or a component root, use neutral examples:
+### 2. Write paths relative to the repo, or as `~/`
 
-<!-- doclint: skip — a yes/no pair, so the same key appears twice -->
-```yaml
-# yes
-cmd: foreman start
-root: services/api
+The `$HOME` ban was part of the retired privacy gate, but the habit is worth keeping on its own
+merits: an absolute path in a document is wrong on every machine except the one it was written
+on, and this project's whole premise is working across several.
 
-# no - these fail the gate
-cmd: tilt up --stream
-match: ["backend/**"]
-```
+### 3. Check which milestone you are in before writing code
 
-Note the pattern is `backend/` **with a slash** — bare `root: backend` does not match it. Do
-not rely on that; use neutral names regardless.
+Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
 
-**`tests/fixtures/` is exempt.** A fixture config describes a hypothetical repo, so naming
-that repo's real directories is the fixture working. Everything else under `tests/` is
-covered.
+- **M0 is complete** — the research spike. Its findings are `PHASES.md` §9.1 and they are
+  **evidence, not recollection**: resumable sessions, budget telemetry, the inbox mechanisms and
+  plugin coverage were all measured. If one turns out to be wrong, fix the finding and say which.
+- **Manifest is partly built.** The config contract is frozen: the JSON Schema is authoritative,
+  the structs mirroring it are in `crates/core`, and six fixtures have a golden resolved snapshot
+  each. **What phase 1 decided and the fixtures forced is `PLAN.md` §4.1.1** — read it before
+  adding a config key. The ownership layer exists behind `init` / `clean` / `status` and the
+  `commands:` dispatcher. `up`, `down`, `check`, `config` and `explain` are **not built**.
+- **M1 is next** and is restructure plus subtraction. A behaviour change in M1 is a defect.
+- **Guild, Fleet and Surface do not exist.** Their specification is `PLAN.md` §13–§15 and their
+  usage is [`docs/reference.md`](docs/reference.md).
 
-The reasoning is in `ARCHITECTURE.md` §2.4. Short version: the tool was ported out of an
-existing polyglot monorepo, and this catches the port dragging that repo's specifics along
-with it.
-
-### 2. Only phase 3's *harvester* may read the source repo
-
-The source repo is the private monorepo the tool is being ported out of. This
-repo never names it: its path is configured locally, in `.claude/clean-room.local` or
-`CHARKIT_CLEAN_ROOM_PATH` (`ARCHITECTURE.md` §2.7). Every other phase, and phase 3's
-implementer, works from `docs/PLAN.md`, `ARCHITECTURE.md`, the fixtures, and
-`docs/harvest.md`.
-
-**This is enforced, not requested.** A `PreToolUse` hook default-denies that path for every
-agent and allows it only for the harvester, inspecting the whole `tool_input` — so `Read`,
-`Glob`, `Grep`, and a `Bash` line containing `rg`, `find`, `cat` or `python -c` are all
-covered. If you are not the harvester, you will be denied rather than trusted. If nothing is
-configured the hook permits everything — see `ARCHITECTURE.md` §2.7 for why it cannot fail
-closed.
-
-If a phase feels like it needs to look at that repo, **the plan is underspecified — fix the
-plan, do not peek.**
-
-**Writing `docs/harvest.md`?** It describes *behaviour*, never carries *implementation*.
-Prose, tables and trap descriptions; short config or regex fragments are fine; no verbatim
-implementation code. The test is: could this be pasted into `src/` and compile? Transcribed
-paths get caught downstream by the grep — pasted structure does not, and structure is the
-contamination nothing else can catch.
-
-### 3. Check what phase you are in before writing code
-
-- **Phase 0 is complete.** It produced these documents.
-- **Phase 1 is complete.** The config contract is frozen: the JSON Schema is
-  `crates/core/schema/char.schema.json` (authoritative), the structs mirroring it are in
-  `crates/core`, and the six fixtures live at `tests/fixtures/<name>/char.yml` with a golden
-  resolved snapshot beside each. **What it decided, and what the fixtures forced, is
-  `PLAN.md` §4.1.1** — read it before adding a config key. Full sequencing in
-  [`docs/PHASES.md`](docs/PHASES.md).
-- **Phase 2 is complete.** The ownership layer exists: workspace resolution, the two derived
-  identities, `.char/`, `~/.char/char.db` with lease-based claiming, the process-group
-  spawn/kill wrapper, the scope lens, and the verbs `init` / `clean` / `status` plus the
-  `commands:` dispatcher. **What it settled — the shape of `Ctx` and the three seams, the claim
-  loop's reducer, where `~/.char/config.toml` is read, the golden-snapshot layout, and
-  `char.db`'s DDL — is recorded in [`docs/PHASES.md`](docs/PHASES.md), phase 2**, along with two
-  defects it found in `PLAN.md`. `up`, `down` and `check` are not built.
-- **Phase 2.5 is first contact with a real repo** — the source repo adopts
-  `init`/`clean`/`status`/`commands:` and keeps its own `check.py`. It is allowed to send
-  changes back to `PLAN.md`; every later phase is not.
-
----
+**`manifest check` blocks M4.** The workflow loop cannot close without it, because a verdict is
+only `pass` if it carries evidence an external command produced. Manifest's remaining verbs are
+first-class work, not background work.
 
 ## Architecture rules, in short
 

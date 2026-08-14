@@ -28,6 +28,10 @@
 # Ignored here rather than in .git/info/exclude so the rule survives a clone.
 .gnhf/
 
+# Review artifacts. Scratch HTML built for a browser review loop, carrying
+# whatever the session was about — same reasoning as .gnhf/ above.
+.lavish/
+
 # macOS
 .DS_Store
 

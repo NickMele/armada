@@ -1,10 +1,16 @@
-# charkit — architecture
+# Armada — architecture
 
-> **Status:** agreed in Phase 0 (see [`PHASES.md`](PHASES.md)). Phases 1 and 2 have landed:
-> the `char.yml` contract exists as a schema, the structs that mirror it and six fixtures, and
-> the ownership layer exists behind `init`, `clean`, `status` and the `commands:` dispatcher.
-> The three seams, the reducer's shape for the claim loop and the `--json` envelope are now
-> code rather than sketches. `up`, `down` and `check` are not built.
+> **Status:** the eight principles in §1 were agreed for charkit and **all eight carry forward
+> unchanged** to Armada's four modules — they were written about subprocesses, clocks and
+> networks, not about repositories, so widening the scope did not touch them. §1.9 adds the one
+> rule the four-module shape needs. Two SDLC rules were **retired** when the repository went
+> private: the contamination grep (§2.4) and the clean-room rule (§2.7). Both are recorded
+> rather than deleted.
+>
+> The **Manifest** module — formerly charkit — has landed its config contract, six fixtures and
+> the ownership layer behind `init`, `clean`, `status` and `commands:`. The three seams, the
+> reducer's shape for the claim loop and the `--json` envelope are code rather than sketches.
+> `up`, `down` and `check` are not built, and neither are Guild, Fleet or Surface.
 >
 > This document records **principles and the reasoning behind them**. The reasoning is the
 > load-bearing part: a rule without its reason gets discarded the first time it is
@@ -18,8 +24,8 @@
 
 | § | | |
 |---|---|---|
-| **1** | Architecture principles | 1.1 seams · 1.2 pure core & the reducer · 1.3 no logic in commands · 1.4 no ambient state · 1.5 dependencies inward · 1.6 machine-readable output & exit codes · 1.7 typed failures · 1.8 secrets |
-| **2** | SDLC principles | 2.1 TDD scope · 2.1.1 what a green test does not prove · 2.1.2 spec divergence · 2.2 branching · 2.3 commits · 2.4 the merge gate & contamination grep · 2.5 versioning · 2.6 dogfooding · 2.7 phase 3 clean-room · **2.8 document ownership & precedence** |
+| **1** | Architecture principles | 1.1 seams · 1.2 pure core & the reducer · 1.3 no logic in commands · 1.4 no ambient state · 1.5 dependencies inward · 1.6 machine-readable output & exit codes · 1.7 typed failures · 1.8 secrets · **1.9 four modules, nothing points upward** |
+| **2** | SDLC principles | 2.1 TDD scope · 2.1.1 what a green test does not prove · 2.1.2 spec divergence · 2.2 branching · 2.3 commits · 2.4 the merge gate (contamination grep retired) · 2.5 versioning · 2.6 dogfooding · 2.7 clean-room rule retired · **2.8 document ownership & precedence** |
 | **3** | Decisions recorded, and the test tiers | |
 | **4** | What was deliberately not decided | |
 
@@ -517,6 +523,40 @@ machine-readable shape — this says what that shape may never contain.
 value, and char does not control commands invoked outside it. What it guarantees is that the
 default path is safe.
 
+### 1.9 Four modules, and nothing points upward
+
+Armada is one binary containing four modules. They stack, and **a module may only depend on
+modules below it**:
+
+| Module | Owns | May depend on |
+|---|---|---|
+| **Surface** | The orchestrator you talk to, its MCP toolbelt, the inbox | Fleet, Guild, Manifest |
+| **Fleet** | Sessions, worktrees, classification, budgets, workflows | Guild, Manifest |
+| **Guild** | Your voice, skills, hooks, subagents, workflows — synced between machines | *nothing* |
+| **Manifest** | What a workspace is and how to operate it | *nothing* |
+
+Manifest and Guild are siblings and neither may reference the other: Manifest describes a
+repository, Guild describes a person, and a dependency in either direction would mean one of
+those descriptions had leaked into the other.
+
+**The rule that matters is the negative one.** Manifest may not name Fleet. Guild may not name
+Surface. The reason is not tidiness — it is that **Manifest must keep knowing nothing about
+agents**. It is the bottom of the stack precisely because it is agent-agnostic, and that is
+what makes it usable by hand, by a script, by CI, and by four parallel agents at once. The
+first time a session id is threaded into Manifest "just for this one call", Manifest stops
+being a tool about repositories and becomes part of an agent framework, and every one of those
+other callers is now carrying an agent framework they did not want.
+
+This is mechanically enforced by the same check that already enforces §1.5 —
+`xtask/src/boundaries.rs` — because a layering rule that is only written down is a layering
+rule with a half-life. §1.5 is the general principle; this is its concrete shape for the four
+modules, and the two are the same rule stated at different altitudes.
+
+**Corollary for new work:** when a feature seems to need an upward dependency, the feature is
+in the wrong module. Classification looked like the orchestrator's job and belongs to Fleet,
+because a session must be classifiable before Surface exists. Ask which is the lowest module
+that could own a thing, and put it there.
+
 ---
 
 ## 2. SDLC principles
@@ -656,8 +696,32 @@ The gate is `.github/workflows/gate.yml`, and it is:
 | 2 | **typecheck** — the compiler. `cargo build` failing *is* the typecheck | both platforms |
 | 3 | **tests** — unit, integration and e2e tiers | both platforms |
 | 4 | **coverage ratchet** — may never drop | `cargo llvm-cov` against `.coverage-floor` |
-| 5 | **crate boundaries** — the layers contract from §1.5 | `cargo xtask boundaries` |
-| 6 | **the contamination grep**, plus the privacy gate that covers what it does not reach | inside `cargo xtask doclint` |
+| 5 | **module boundaries** — the layers contract from §1.5 and the module rule from §1.9 | `cargo xtask boundaries` |
+| 6 | ~~the contamination grep and the privacy gate~~ — **retired, see below** | — |
+
+#### Check 6 is retired, and what replaced it
+
+The contamination grep banned a set of strings under `src/` and `tests/`, and the privacy gate
+banned a configured repository name and the literal `$HOME` across every tracked file. **Both
+existed for exactly one reason: this repository was public.** It is now private, so both were
+deleted in M1 ([`PHASES.md`](PHASES.md) §8.3) along with `xtask/src/contamination.rs`,
+`xtask/src/privacy.rs` and the clean-room hook.
+
+This is recorded rather than simply removed because **a rule that vanishes without a reason
+gets reinvented** — six months from now, someone finds the empty hole where a gate check was
+and either restores it pointlessly or wonders what it was hiding.
+
+**What did not go away is the risk the grep was a bad proxy for.** A green grep only ever
+proved the absence of *crude* contamination — a hardcoded package directory, a vendor
+assumption sitting in code instead of config. The failure that actually matters is invisible to
+any grep: **an abstraction shaped around one repository because that is the only repository
+anyone looked at.** Nothing catches that except being made to satisfy several repositories at
+once.
+
+So the **six config fixtures are now the whole of this discipline**, where before they were half
+of it. That makes them more load-bearing than they were, not less. The rule that replaces check
+6: *when a repository shape turns up that the fixtures do not cover, add a fixture before adding
+the feature.*
 
 Plus one the list did not have, because it is a claim two documents make rather than a rule:
 **the MSRV builds.** `rust-version` is read out of `Cargo.toml` and the workspace is built with
@@ -668,6 +732,18 @@ consumer compiles, so they do not get to set the floor a source build has to cle
 **The coverage floor lives in `.coverage-floor`**, one number, so raising it is a reviewable
 one-line diff rather than a value buried in a workflow. A missing floor file fails the job
 *after* printing the measurement, which is how the first one gets set.
+
+---
+
+> **Everything from here to §2.5 is historical.** It describes the contamination grep and the
+> privacy gate as they ran while this repository was public. Both are **retired** — see "Check 6
+> is retired" above for what replaced them. It is kept, in the present tense it was written in,
+> because §2.4's own argument is that a rule deleted without its reasoning gets reinvented, and
+> because the reasoning here is the most careful part of it: *why the check reads a file's path
+> and not only its contents*, and *why it matches the running machine's `$HOME` rather than the
+> shape of a home path*. Both arguments generalise to any future check of this kind.
+>
+> **Do not treat any of it as a current rule.** Nothing below is enforced.
 
 **The contamination grep.** This document is its **single owner** — PLAN, AGENTS and README
 link here rather than restating it, because a fact stated in four places drifts, and this one
@@ -934,7 +1010,23 @@ fixtures and phase 8 are.
 
 ---
 
-### 2.7 Phase 3 is clean-room
+### 2.7 The clean-room rule — retired
+
+> **Retired in M1** ([`PHASES.md`](PHASES.md) §8.3), together with the contamination grep in
+> §2.4. The rule below split the check-engine work across two agents so that the one writing
+> code had never seen the source repository. It existed to protect a **public** repository from
+> importing a private one's specifics; with this repository private, the threat it was built
+> against no longer exists.
+>
+> **One part of its reasoning survives and is worth carrying forward:** the value in ported code
+> is not the code, it is the **empirically discovered bug fixes** — branches that exist because
+> something broke once, which look like unremarkable three-line conditionals and which nobody
+> reviewing a rewrite notices are missing. Whenever behaviour is reimplemented rather than
+> moved, harvest those deliberately. That is a rewriting discipline, not a privacy one, and it
+> outlives the rule that carried it.
+>
+> The original text is kept below because §2.4 argues that a rule deleted without its reasoning
+> gets reinvented, and that applies to this one too.
 
 The plan called phase 3 a copy. It is a **clean-room rewrite**, split across two agents:
 
