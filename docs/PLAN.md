@@ -464,6 +464,43 @@ Plus: `char config scan`, `char config verify`, `char agents-md [--write|--verif
 `char explain [<check-id>]` (§3.4), and any repo-local verbs the repo declares in `commands:`
 (§4.5) — which char dispatches but does not define.
 
+#### Reserved, not built: root-level aliases for the most-used verbs
+
+**M1 is the moment this regresses, which is why it is recorded here rather than left to
+memory.** Today these verbs sit at the root — `char check`. M1 namespaces them under their
+module, so the same command becomes `armada manifest check`. That is correct: Armada is a suite
+and these verbs are specific to a workspace it happens to be working in. It also makes the
+thing you type fifty times a day four words long.
+
+The intended resolution is that the most-used verbs also answer at the root, `armada check`
+being `armada manifest check`. Three rules make that safe, and all three are load-bearing:
+
+**1. Dynamic availability is safe; dynamic meaning is not.** `armada check` must *always* mean
+`armada manifest check`. Outside a workspace it fails with "no `armada.yml` here" — it never
+resolves to a different module's verb because of where you are standing. What may vary with
+context is only what `--help` lists and what shell completion offers. Anything more breaks the
+promise this section opens with: **six verbs, identical in every repo, the entire surface an
+agent memorizes.** A verb whose meaning depends on the working directory breaks it the first
+time a script runs from the wrong one.
+
+**2. A verb may be promoted only if exactly one module owns it.**
+
+| | Verbs |
+|---|---|
+| Promotable — Manifest only | `check` `up` `down` `clean` `status` `explain` |
+| Promotable — Fleet only | `spawn` `ls` `board` `kill` `answer` `inbox` |
+| **Never** | `init` — three modules own it, and `armada init` is already machine setup |
+| **Never** | `edit` `push` `pull` — Guild-only, but too generic to spend the root namespace on |
+
+**3. The real cost is the schema, not the CLI.** §4.5 forbids a `commands:` entry from
+shadowing a built-in verb. Promoting an alias **grows that forbidden list** — the moment
+`check` is a root verb, no repository may declare a command named `check`. So the alias set and
+the schema rule land together, and this gets more expensive the longer it waits, because every
+repository that declares one of those names in the meantime becomes a migration.
+
+Not built, and deliberately not scheduled: it is ergonomics, and it should be decided after M1
+has actually made the four-word form the default and it is clear which verbs genuinely chafe.
+
 **`char init` means exactly one thing: make this workspace ready.** An earlier draft also
 assigned it §5's layer-1 evidence scan, which by definition runs where no `char.yml` exists —
 so that verb had two unrelated behaviours, two output shapes, and could only fail in the
