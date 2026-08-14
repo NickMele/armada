@@ -1,17 +1,25 @@
 //! The real [`Fetch`] seam, and the bind probe that is deliberately not one.
 //!
-//! **The bind probe is not a ready-check and must not be confused with one.**
-//! `fetch` answers "is the service up?"; the probe answers "is this port
-//! taken?", and it does so with `bind()` rather than `connect()` — a
-//! `connect()` answers the opposite question and reports a listening-but-idle
-//! socket as free.
+//! **The port probe is not a ready-check and must not be confused with one.**
+//! `fetch` answers "is *this service* up?" against a URL or a port the config
+//! named; the probe answers "is this port held by anything at all?", which is a
+//! question about the machine.
 //!
-//! **Measured, and it is the reason the probe binds twice:** an IPv6-only
-//! listener is invisible to an IPv4 bind probe, and modern Node resolving
-//! `localhost` to `::1` makes that the ordinary dev server rather than an
-//! exotic case. So Armada binds **both** `127.0.0.1` and `[::1]` and treats
-//! either `EADDRINUSE` as taken. `SO_REUSEPORT` on both sides remains
-//! undetectable; that is a stated limit, not a bug (`docs/traps.md`).
+//! **It asks twice, on both families, in two ways**, and every one of those is
+//! a measured blind spot rather than belt and braces:
+//!
+//! | Holder | Seen by |
+//! |---|---|
+//! | a listener on `127.0.0.1` | the bind |
+//! | a listener on `::1` only — modern Node resolving `localhost` | the bind, on the second family |
+//! | **a wildcard listener, which is every published container** | **the connect** |
+//! | a socket bound but never `listen()`ed | the bind |
+//! | `SO_REUSEPORT` on both sides | neither — a stated limit, not a bug |
+//!
+//! The third row is the one that cost something: `SO_REUSEADDR`, which Rust
+//! sets on every `TcpListener::bind`, lets a specific-address bind succeed
+//! while a wildcard holder exists, so the bind alone reported every container
+//! Armada had ever published as free (`docs/traps.md`).
 
 use armada_core::ctx::Fetch;
 use armada_core::error::{ArmadaError, ErrClass};
@@ -71,16 +79,66 @@ impl Fetch for RealFetch {
 
 /// Whether anything holds this port, on either family.
 ///
-/// Binding is the probe: Armada asks the kernel the same question the service
-/// will ask, and gets the same answer. It costs one `bind()` per family and
-/// releases both immediately.
+/// **Two probes, because one of them cannot see the holder that matters most.**
+/// Binding asks the kernel the question a service is about to ask; connecting
+/// asks whether anything is accepting. Either answering yes is "taken".
+///
+/// # Why the bind alone is not enough
+///
+/// Measured on darwin 2026-08-14 against Docker 29.6.2, and it corrects an
+/// entry in `docs/traps.md` that said the opposite. Docker publishes a port by
+/// binding the **wildcard** — `0.0.0.0:5460` and `[::]:5460` — and Rust's
+/// `TcpListener::bind` sets `SO_REUSEADDR` on Unix, which under BSD semantics
+/// permits binding a *specific* address while a wildcard holder exists:
+///
+/// ```text
+/// holder: docker publishing 0.0.0.0:5460 and [::]:5460
+///   bind 127.0.0.1:5460 without SO_REUSEADDR  -> EADDRINUSE   (taken)
+///   bind 127.0.0.1:5460 with    SO_REUSEADDR  -> SUCCEEDS     (reads as FREE)
+/// ```
+///
+/// So the bind probe reported **every container Armada has ever published** as
+/// free. `armada manifest up` reported `RESERVED` for a healthy compose
+/// service, `armada manifest status` rendered it `DOWN` while it was serving
+/// traffic, and `init`'s `CONFLICT` detection could not see a container at all
+/// — which is the one holder this project exists to manage.
+///
+/// The standard library gives no way to unset `SO_REUSEADDR`, and a fourth
+/// `unsafe` call is a change to a design invariant (`ARCHITECTURE.md` §1). A
+/// `connect()` needs neither and sees exactly the case the bind misses.
+///
+/// **`PLAN.md` §3.1's objection to `connect()` does not hold**, and it is worth
+/// naming because it is why the connect was left out: it says a connect
+/// *"reports a listening-but-idle socket as free"*. Measured, it does not — a
+/// `connect()` to any listening socket completes whether or not the listener
+/// ever reads. What a connect genuinely cannot see is a socket bound without
+/// `listen()`, which the bind probe does see; the two are complementary, which
+/// is why both are asked.
 pub fn port_is_taken(port: u16) -> bool {
     let v4 = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let v6 = SocketAddr::from((Ipv6Addr::LOCALHOST, port));
     // A bind that fails for any reason at all is "taken" as far as Armada is
     // concerned: it could not have the port either way, and reporting a port
     // it cannot use as free is the failure that matters.
-    !bindable(v4) || !bindable(v6)
+    if !bindable(v4) || !bindable(v6) {
+        return true;
+    }
+    // The wildcard case. Only reached when the bind said free, so the ordinary
+    // free port pays one `connect()` to a closed loopback port, which is an
+    // immediate `ECONNREFUSED` rather than a wait.
+    accepting(v4) || accepting(v6)
+}
+
+/// Whether anything completes a connection here.
+const PROBE_CONNECT: Duration = Duration::from_millis(250);
+
+/// Whether something is listening, as opposed to merely bound.
+///
+/// A short deadline rather than the default: a port a firewall blackholes would
+/// otherwise stall a `status` that is meant to be cheap enough to poll, and a
+/// loopback connection that has not completed in 250 ms is not a local service.
+fn accepting(address: SocketAddr) -> bool {
+    TcpStream::connect_timeout(&address, PROBE_CONNECT).is_ok()
 }
 
 fn bindable(address: SocketAddr) -> bool {
@@ -155,6 +213,51 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         assert!(port_is_taken(port));
         drop(listener);
+    }
+
+    /// **The blind spot that made every published container read as free.**
+    ///
+    /// Docker publishes by binding the *wildcard*, and Rust's
+    /// `TcpListener::bind` sets `SO_REUSEADDR`, which under BSD semantics
+    /// permits binding a specific address while a wildcard holder exists — so
+    /// the bind half of the probe answers FREE for a port that is serving
+    /// traffic. This reproduces the holder without needing a daemon: what the
+    /// kernel reacts to is the *shape* of the holder, not the fact that Docker
+    /// made it.
+    ///
+    /// The second assertion is what makes the first mean something. Without it
+    /// this test would pass against the old code on any platform where the
+    /// kernel happened to refuse the bind for an unrelated reason, and the
+    /// regression it guards would walk straight back in.
+    #[test]
+    fn a_wildcard_holder_is_seen_even_though_the_bind_probe_cannot_see_it() {
+        let holder = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).expect("a wildcard listener");
+        let port = holder.local_addr().unwrap().port();
+
+        assert!(
+            port_is_taken(port),
+            "a wildcard holder on {port} read as free — every published \
+             container is invisible to `status` and to `init`'s CONFLICT check"
+        );
+        assert!(
+            bindable(SocketAddr::from((Ipv4Addr::LOCALHOST, port))),
+            "SO_REUSEADDR no longer defeats a specific-address bind here, so \
+             this platform does not have the behaviour the connect probe exists \
+             for — re-measure before trusting either half"
+        );
+        drop(holder);
+    }
+
+    /// A socket that is listening and never reads is **taken**, which is the
+    /// claim PLAN.md §3.1 got backwards when it ruled `connect()` out for
+    /// "reporting a listening-but-idle socket as free".
+    #[test]
+    fn a_listening_but_idle_socket_is_not_reported_free() {
+        let idle = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
+        let port = idle.local_addr().unwrap().port();
+        // Nothing ever calls `accept`, which is the "idle" in the claim.
+        assert!(accepting(SocketAddr::from((Ipv4Addr::LOCALHOST, port))));
+        drop(idle);
     }
 
     /// The measured blind spot the two-family probe exists to close: a

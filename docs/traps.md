@@ -129,15 +129,51 @@ came back different.
 
 | Holder | IPv4 `bind()` probe |
 |---|---|
-| `0.0.0.0`, `127.0.0.1`, `::` (v4-mapped) | `EADDRINUSE` — correctly detected |
+| `127.0.0.1` | `EADDRINUSE` — correctly detected |
+| **`0.0.0.0` or `::`, probe with `SO_REUSEADDR`** | **succeeds — reports FREE** |
 | **`::1` only, `IPV6_V6ONLY`** | **succeeds — reports FREE** |
 | `SO_REUSEPORT` on holder **and** probe | **succeeds — reports FREE** |
 | `SO_REUSEPORT` on holder, plain probe | `EADDRINUSE` |
 
-**`SO_REUSEADDR` does not defeat the probe** — an earlier draft of `PLAN.md` §3.1 said it did,
-and cited this file for a measurement that was never here. What defeats it is an IPv6-only
-listener, and modern Node resolving `localhost` to `::1` makes that the ordinary dev server
-rather than an exotic case.
+**`SO_REUSEADDR` *does* defeat the probe against a wildcard holder, and the row above is a
+correction.** Re-measured 2026-08-14 on darwin, against Docker 29.6.2, while `armada manifest
+up` was reporting `RESERVED` for a container that was serving traffic:
+
+```
+holder: docker publishing 0.0.0.0:5460 and [::]:5460
+  bind 127.0.0.1:5460 without SO_REUSEADDR  -> EADDRINUSE   (taken)
+  bind 127.0.0.1:5460 with    SO_REUSEADDR  -> SUCCEEDS     (reads as FREE)
+  bind [::1]:5460     with    SO_REUSEADDR  -> SUCCEEDS     (reads as FREE)
+  connect 127.0.0.1:5460                    -> OK           (something answers)
+```
+
+Two things make this bite rather than being a footnote. **Rust's `TcpListener::bind` sets
+`SO_REUSEADDR` on every socket** and the standard library offers no way to unset it, so char's
+probe is the `with` row and never the `without` row. And **Docker publishes by binding the
+wildcard**, so this is not an exotic holder — it is every container char has ever started.
+
+**If you assume otherwise:** the probe reports every published port as free. `armada manifest
+up` reports `RESERVED` for a healthy compose service, `armada manifest status` renders it
+`DOWN` while it is serving traffic, and `init`'s `CONFLICT` detection cannot see a container at
+all — which is the single holder this project exists to manage. It reads as a bug in the port
+*transform*, which is where an afternoon goes.
+
+**The fix is a second probe, not a different one.** A `connect()` sees the wildcard holder; the
+bind sees a socket bound without `listen()`, which a connect cannot. They are complementary,
+so `port_is_taken` asks both and takes either yes.
+
+> **This entry has now been wrong in both directions, which is the instructive part.** An early
+> `PLAN.md` §3.1 draft claimed `SO_REUSEADDR` defeated the probe and cited this file for a
+> measurement that was not here — so the claim was struck, correctly, as uncited. Striking an
+> uncited claim is not the same as measuring its negation, and the replacement text asserted
+> the negation as though it had been. Nobody had run it either way until a container reported
+> itself down. **An entry that says "X does not happen" needs the same evidence as one that
+> says it does.**
+
+**`PLAN.md` §3.1's stated reason for rejecting `connect()` is also wrong**, and is corrected
+with it: it says a connect *"reports a listening-but-idle socket as free"*. Measured, a
+`connect()` to a listening socket completes whether or not the listener ever calls `accept` —
+idleness is invisible to it. The real limit is narrower and is the one stated above.
 
 ### A bind probe is itself a bind, so two concurrent probes collide
 

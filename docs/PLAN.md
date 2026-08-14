@@ -727,11 +727,20 @@ nothing about what is bound days later, and the bindability probe has a measured
 **an IPv6-only listener is invisible to an IPv4 probe**, and `localhost` resolving to `::1` is
 what modern Node does. So Armada probes **both** `127.0.0.1` and `[::1]` and treats either
 `EADDRINUSE` as taken. `SO_REUSEPORT` on both sides remains undetectable and is a stated limit,
-not a bug. An earlier draft named `SO_REUSEADDR` as the defeating case and cited
-[`traps.md`](traps.md) for a measurement that was not there; `SO_REUSEADDR` does not defeat it. `CONFLICT` is the only way a port taken by a
-non-Armada process reaches a caller instead of surfacing as a mysterious bind failure. It costs one `bind()` attempt per declared port, on both `127.0.0.1` and `[::1]` — **not a
-`connect()`**, which answers the opposite question and reports a listening-but-idle socket as
-free.
+not a bug.
+
+**It costs a `bind()` per family and, when those say free, a `connect()` — and the connect is
+not optional.** Measured: `SO_REUSEADDR`, which Rust sets on every `TcpListener::bind` and
+which the standard library gives no way to unset, permits a specific-address bind while a
+**wildcard** holder exists — and Docker publishes by binding the wildcard. So the bind alone
+reports every container Armada has ever started as free, which had `up` answering `RESERVED`
+for a service that was serving traffic. Two earlier claims in this paragraph were wrong and
+both are corrected in [`traps.md`](traps.md): that `SO_REUSEADDR` does not defeat the probe,
+and that a `connect()` *"reports a listening-but-idle socket as free"* — it does not, and
+idleness is invisible to it. The two probes see different holders and Armada asks both.
+
+`CONFLICT` is the only way a port taken by a
+non-Armada process reaches a caller instead of surfacing as a mysterious bind failure.
 
 | State | Meaning |
 |---|---|
