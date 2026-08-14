@@ -29,6 +29,37 @@ columns, same order, same words, minus the styling.
 receives frames of animation, and the one consumer the envelope exists for is the one that
 breaks.
 
+## The banner
+
+```
+ █████╗ ██████╗ ███╗   ███╗ █████╗ ██████╗  █████╗
+██╔══██╗██╔══██╗████╗ ████║██╔══██╗██╔══██╗██╔══██╗
+███████║██████╔╝██╔████╔██║███████║██║  ██║███████║
+██╔══██║██╔══██╗██║╚██╔╝██║██╔══██║██║  ██║██╔══██║
+██║  ██║██║  ██║██║ ╚═╝ ██║██║  ██║██████╔╝██║  ██║
+╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝
+```
+
+Six lines, 51 columns, signal amber.
+
+| Shows on | Never shows on |
+|---|---|
+| `armada` with no arguments — entering Helm | any verb |
+| `armada init` | `--help` |
+| | non-TTY stdout |
+| | `--json`, or `--color never` |
+
+**Two places, both of which are moments of orientation rather than work.** A banner on a verb
+is a banner in the way; a banner on `--help` is in the way of the one thing you reach for when
+you are in a hurry.
+
+**It is suppressed below 51 columns** rather than wrapped. A wrapped wordmark is worse than no
+wordmark, and a terminal that narrow has more pressing problems.
+
+**It never reaches non-TTY output.** That is not a nicety — an agent running `armada init` in a
+worktree reads stdout, and six lines of block characters at the top of that is noise it has to
+learn to skip. Same rule as progress: anything decorative is for the person, not the parser.
+
 ## Palette
 
 

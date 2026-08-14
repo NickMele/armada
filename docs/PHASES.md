@@ -168,6 +168,7 @@ The help text is hard to read, nothing is aligned, and nothing is coloured.
 | **Tables** | One aligned-column renderer for `status`, `check` and later `fleet ls`. Terminal-width aware, degrading by truncating a column rather than wrapping a row. |
 | **Help** | Restructured. The current output is a wall of flags with no grouping and inconsistent alignment. |
 | **Progress** | Spinners and per-check progress for long runs — **on stderr**, so `\| jq` never sees a frame. |
+| **Banner** | ANSI Shadow wordmark on bare `armada` and `armada init` only. Suppressed below 51 columns, on non-TTY, and under `--json` ([`commands/render.md`](commands/render.md)). |
 | **Colour control** | `--color auto\|always\|never`, `NO_COLOR` honoured. Decided once, in one place. |
 
 **Done when:** `armada manifest check` is pleasant at a terminal, identical in structure when
