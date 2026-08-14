@@ -37,7 +37,7 @@ claude --agent helm --mcp armada --resume <helm-session-uuid>
 
 | Piece | Comes from |
 |---|---|
-| The persona | `~/.armada/guild/subagents/helm.md` — **yours**, editable, synced |
+| The persona | `~/.armada/guild/subagents/helm.md` — **yours**, editable, synced. Seeded from [`templates/guild/subagents/helm.md`](../../../templates/guild/subagents/helm.md); the four behaviours it fixes and why are in [`PLAN.md`](../../PLAN.md) §15.4. |
 | The toolbelt | [`mcp.md`](mcp.md) — `fleet.*` and `manifest.*` |
 | The conversation | A stable uuid in `~/.armada/`, so it is the same conversation each day |
 | Awareness | [`inbox.md`](inbox.md) — a monitor plus a `Stop` hook |

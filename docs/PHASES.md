@@ -156,6 +156,7 @@ its own. See [`PLAN.md`](PLAN.md) §13.
 | Import | Adopts what is already in `~/.claude/`: skills, subagents, hooks, plugin and marketplace registrations, settings, `CLAUDE.md`. The guild starts nearly complete rather than empty, which is the difference between a tool you set up once and one you abandon during setup. |
 | Interview | Asks only what it cannot read: voice, expectations, how-you-work, workflow confirmation, budget ceilings. Everything it writes is a plain file you can edit afterwards. |
 | Sync | `~/.armada/guild/` **is** a git repo Armada manages, pushed to a private remote named once during the interview. `export` / `import` bundles are the escape hatch for a machine that will never hold your credentials. |
+| Starter persona | `guild init` copies [`templates/guild/subagents/helm.md`](../templates/guild/subagents/helm.md) into `~/.armada/guild/subagents/`, then never touches it again — it is yours from that moment ([`PLAN.md`](PLAN.md) §15.4). Without it M3 has an orchestrator with no persona to run. |
 | Secret guard | Import refuses to adopt credential-shaped values; those stay in `machine.yml`, which never syncs. Built here, not retrofitted. |
 | `manifest render` | Renders a repo's declared skills into a harness format ([`PLAN.md`](PLAN.md) §4.8). Lands here rather than M1 because the managed-region and reversal bookkeeping is the same machinery guild projection needs ([`PLAN.md`](PLAN.md) §13.2) — building it once, for both, is the point. |
 
