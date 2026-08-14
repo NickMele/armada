@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "verb": "skills",
+  "workspace": "<workspace>",
+  "status": "OK",
+  "error": null,
+  "data": {
+    "results": [
+      {
+        "id": "add-endpoint",
+        "status": "OK",
+        "reason": "Add an API endpoint, OpenAPI first"
+      }
+    ],
+    "skills": [
+      {
+        "name": "add-endpoint",
+        "summary": "Add an API endpoint, OpenAPI first",
+        "doc": "docs/skills/add-endpoint.md",
+        "uses": [
+          {
+            "name": "tickets",
+            "cmd": "./exiter.sh 0"
+          }
+        ],
+        "verify": [
+          "repo:ok"
+        ],
+        "touches": [
+          "openapi.yaml"
+        ]
+      }
+    ]
+  }
+}

@@ -41,7 +41,7 @@ pub mod term;
 
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
-    ResultRow, ScanData, StatusData, Unreclaimed, VerifyData,
+    ResultRow, ScanData, SkillsData, StatusData, Unreclaimed, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::id::WorkspaceId;
@@ -73,6 +73,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Dispatch(envelope) => dispatch(envelope, style),
         Output::Scan(envelope) => scan(envelope, style, width),
         Output::Verify(envelope) => verify(envelope, style, width),
+        Output::Skills(envelope) => skills(envelope, style, width),
     }
 }
 
@@ -1043,6 +1044,98 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
             ));
         }
     }
+    out
+}
+
+// ---------------------------------------------------------------------- skills
+
+/// `armada manifest skills`, and `skills show <name>`.
+///
+/// **`declared` is a render-only word**, lowercase for the reason this module's
+/// header gives: the envelope has no status that means it. Listing a skill says
+/// the repository declares it, not that anything about it passed — whether its
+/// `uses:` and `verify.check` resolve is `armada manifest config verify`'s
+/// answer, on a different verb, so a word here that read as a verdict would be
+/// claiming something this verb never checked.
+///
+/// **The grant table is drawn only for `show`**, and it is the same shape
+/// `status` draws its holdings with: a lowercase word, the thing, and the
+/// reference. `uses:` is expanded to what each command actually runs, because
+/// the one question a reader has about a grant is what it lets the skill do.
+fn skills(envelope: &Envelope<SkillsData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = header(style, envelope.workspace.as_ref(), None, None, width);
+
+    let mut table = Table::new(columns("skill", "detail", false)).indent(2);
+    for row in &data.results {
+        table = table.row(vec![
+            token("declared", Role::BeaconGreen),
+            Cell::plain(row.id.clone()),
+            detail_cell(style, row.reason.as_deref()),
+        ]);
+    }
+    out.push_str(&table.render(style, width));
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    // **One skill means `show`**, which is the only shape that has room for the
+    // grants: on a listing they would be four columns nobody can read at eighty.
+    if let [skill] = data.skills.as_slice() {
+        let mut grants = Table::new(columns("name", "detail", false)).indent(2);
+        for granted in &skill.uses {
+            grants = grants.row(vec![
+                token("grants", Role::RadarCyan),
+                Cell::plain(granted.name.clone()),
+                detail_cell(style, Some(granted.cmd.as_str())),
+            ]);
+        }
+        for scope in &skill.verify {
+            grants = grants.row(vec![
+                token("verifies", Role::BeaconGreen),
+                Cell::plain("check"),
+                Cell::muted(scope.clone()),
+            ]);
+        }
+        grants = grants.row(vec![
+            // **`reads` and never `holds`.** Armada holds the path and reads
+            // nothing; the row says what the *skill's* reader will open.
+            token("reads", Role::SteelGrey),
+            Cell::plain("doc"),
+            Cell::muted(skill.doc.clone()),
+        ]);
+        for glob in &skill.touches {
+            grants = grants.row(vec![
+                // Advisory, and the word says so: `touches:` feeds the scope
+                // lens and lets a review step notice edits far outside it. It
+                // is not enforced anywhere.
+                token("touches", Role::FlareOrange),
+                Cell::plain("glob"),
+                Cell::muted(glob.clone()),
+            ]);
+        }
+        out.push_str(&grants.render(style, width));
+        out.push('\n');
+    }
+
+    // **A grant that resolved to nothing is counted, not hidden.** It is a
+    // `config verify` failure, and this verb is not that one — but a reader
+    // looking at a list of grants should not have to run a second command to
+    // find out that one of them names nothing.
+    let unresolved = data
+        .skills
+        .iter()
+        .flat_map(|skill| skill.uses.iter())
+        .filter(|granted| granted.cmd.is_empty())
+        .count();
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            format::count(data.skills.len(), "skill"),
+            format::count(unresolved, "unresolved reference"),
+        ],
+    ));
     out
 }
 

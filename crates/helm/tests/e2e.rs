@@ -1048,6 +1048,67 @@ fn config_verify_runs_the_suite_for_real_when_pass_one_passes() {
     assert_eq!(payload["data"]["pass_2"]["results"][0]["status"], "PASS");
 }
 
+/// **There is no way to run a skill, and its absence is the design**
+/// (PLAN.md §4.8). Only an end-to-end run establishes that: the parser is where
+/// a third subcommand would have to appear, and the unit tests call the verb
+/// past it.
+#[test]
+fn a_skill_can_be_listed_and_resolved_and_never_run() {
+    let machine = Machine::new();
+    let repo = machine.repo(
+        "main",
+        "manifest:\n  version: 1\n  commands:\n    tickets: { cmd: ./exiter.sh 0 }\n  \
+         skills:\n    add-endpoint:\n      summary: Add an API endpoint\n      \
+         doc: docs/skills/add-endpoint.md\n      uses: [tickets]\n",
+    );
+
+    let listed = machine.run(&repo, &["manifest", "skills", "--json"]);
+    let payload: Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert_eq!(listed.status.code(), Some(0), "{payload}");
+    assert_eq!(payload["data"]["skills"][0]["name"], "add-endpoint");
+    // `uses:` grants nothing new, so what it resolves to is the command the
+    // repository already declared.
+    assert_eq!(
+        payload["data"]["skills"][0]["uses"][0]["cmd"],
+        "./exiter.sh 0"
+    );
+
+    let shown = machine.run(&repo, &["manifest", "skills", "show", "add-endpoint"]);
+    let text = String::from_utf8_lossy(&shown.stdout);
+    // Words rather than column positions: the widths are the golden fixtures'
+    // to pin, and asserting them here would fail twice for one change.
+    let row = |words: &[&str]| {
+        text.lines()
+            .any(|line| line.split_whitespace().collect::<Vec<_>>() == words)
+    };
+    assert!(row(&["grants", "tickets", "./exiter.sh", "0"]), "{text}");
+    assert!(
+        row(&["reads", "doc", "docs/skills/add-endpoint.md"]),
+        "{text}"
+    );
+
+    // An unknown name is the *caller's* mistake, not the config's.
+    let unknown = machine.run(&repo, &["manifest", "skills", "show", "nope", "--json"]);
+    let payload: Value = serde_json::from_slice(&unknown.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "bad_invocation");
+    assert_eq!(unknown.status.code(), Some(2));
+
+    // And there is no runner, in any spelling.
+    for args in [
+        &["manifest", "skills", "run", "add-endpoint", "--json"][..],
+        &["manifest", "skills", "add-endpoint", "--json"][..],
+    ] {
+        let refused = machine.run(&repo, args);
+        let payload: Value = serde_json::from_slice(&refused.stdout).unwrap();
+        assert_eq!(
+            payload["error"]["class"],
+            "bad_invocation",
+            "`armada {}` was accepted: {payload}",
+            args.join(" ")
+        );
+    }
+}
+
 fn namespace_of(db: &std::path::Path) -> String {
     rusqlite::Connection::open(db)
         .ok()

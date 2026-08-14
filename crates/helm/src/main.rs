@@ -132,7 +132,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Clean { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
-        Invocation::Config { json, .. } => *json,
+        Invocation::Config { json, .. } | Invocation::Skills { json, .. } => *json,
         Invocation::Version | Invocation::Help(_) => false,
     }
 }
@@ -243,6 +243,7 @@ fn dispatch(
             args::ConfigSub::Scan => unreachable!("answered before the workspace is resolved"),
             args::ConfigSub::Verify => verbs::config::verify(&mut app, progress),
         },
+        Invocation::Skills { show, .. } => verbs::skills::run(&mut app, show.as_deref()),
         Invocation::Version | Invocation::Help(_) => unreachable!("handled before dispatch"),
     }
 }

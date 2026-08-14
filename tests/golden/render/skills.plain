@@ -1,0 +1,7 @@
+armada  3d9cc7ba
+
+  STATUS    SKILL         DETAIL
+  declared  add-endpoint  Add an API endpoint, OpenAPI first, then the generate…
+  declared  triage-flake  Work out whether a failing test is flaky or genuinely…
+
+OK  2 skills, 0 unresolved references

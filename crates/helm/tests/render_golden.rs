@@ -29,8 +29,8 @@
 //! than a flag you reach for without reading.
 
 use armada_core::envelope::{
-    CheckData, CleanData, DispatchData, Envelope, InitData, PortReport, Released, ResultRow,
-    ScanData, StatusData, Unreclaimed, VerifyData,
+    CheckData, CleanData, DispatchData, Envelope, GrantedCommand, InitData, PortReport, Released,
+    ResolvedSkillView, ResultRow, ScanData, SkillsData, StatusData, Unreclaimed, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::id::WorkspaceId;
@@ -431,6 +431,73 @@ fn config_verify_matches_its_fixture() {
         },
     }));
     assert_render("config-verify", &output);
+}
+
+/// The two skills the `polyglot-web` fixture declares, which is the fixture
+/// that owns the `skills:` axis: one with the full shape and one minimal.
+fn declared_skills() -> Vec<ResolvedSkillView> {
+    vec![
+        ResolvedSkillView {
+            name: "add-endpoint".to_string(),
+            summary: "Add an API endpoint, OpenAPI first, then the generated client".to_string(),
+            doc: "docs/skills/add-endpoint.md".to_string(),
+            uses: vec![GrantedCommand {
+                name: "tickets".to_string(),
+                cmd: "uv run scripts/tickets.py".to_string(),
+            }],
+            verify: vec!["api:types".to_string(), "web:lint".to_string()],
+            touches: vec![
+                "backend/openapi.yaml".to_string(),
+                "frontend/src/generated/**".to_string(),
+            ],
+        },
+        // **A skill that grants nothing and verifies nothing is still a real
+        // thing** — prose the repository wants read, with a name. The listing
+        // has to draw it exactly as it draws the other.
+        ResolvedSkillView {
+            name: "triage-flake".to_string(),
+            summary: "Work out whether a failing test is flaky or genuinely broken".to_string(),
+            doc: "docs/skills/triage-flake.md".to_string(),
+            uses: Vec::new(),
+            verify: Vec::new(),
+            touches: Vec::new(),
+        },
+    ]
+}
+
+fn skills_envelope(skills: Vec<ResolvedSkillView>) -> Output {
+    let results = skills
+        .iter()
+        .map(|skill| {
+            let mut row = ResultRow::new(skill.name.clone(), Status::Ok);
+            row.reason = Some(skill.summary.clone());
+            row
+        })
+        .collect();
+    Output::Skills(Box::new(Envelope::ok(
+        "skills",
+        Some(workspace()),
+        Status::Ok,
+        SkillsData { results, skills },
+    )))
+}
+
+/// `armada manifest skills` — the listing.
+#[test]
+fn skills_matches_its_fixture() {
+    assert_render("skills", &skills_envelope(declared_skills()));
+}
+
+/// `armada manifest skills show <name>` — one skill, grants expanded.
+///
+/// **The grant table is what `show` adds**, and it is the same shape `status`
+/// draws its holdings with. It is drawn only here because at eighty columns a
+/// listing cannot carry four columns of it, which is the whole reason the two
+/// views differ at all.
+#[test]
+fn skills_show_matches_its_fixture() {
+    let one = declared_skills().into_iter().take(1).collect();
+    assert_render("skills-show", &skills_envelope(one));
 }
 
 /// `armada --help`, which is the page the milestone was opened for.

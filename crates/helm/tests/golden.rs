@@ -375,6 +375,46 @@ fn config_verify_matches_its_snapshot() {
     assert_golden("config-verify", &json);
 }
 
+/// `armada manifest skills` — the resolved structure, whole.
+///
+/// **The one snapshot that pins `uses:` being expanded.** The config declares a
+/// grant and the command behind it; the payload has to carry both, because the
+/// CLI table, a future MCP response and the generated frontmatter are three
+/// renderings of this structure and a rename here would silently disagree with
+/// two of them.
+#[test]
+fn skills_matches_its_snapshot() {
+    let scenario = scenario(SKILLS_CONFIG);
+    let json = run_verb(&scenario, |app| verbs::skills::run(app, None));
+    assert_golden("skills", &json);
+}
+
+/// A skill with the full shape, and the `commands:` entry its grant names.
+const SKILLS_CONFIG: &str = "\
+manifest:
+  version: 1
+  commands:
+    tickets:
+      cmd: ./exiter.sh 0
+      help: Report stale tickets
+  components:
+    repo:
+      match: [\"*.yml\"]
+      checks:
+        ok:
+          cmd: \"true\"
+          scope: component
+  skills:
+    add-endpoint:
+      summary: Add an API endpoint, OpenAPI first
+      doc: docs/skills/add-endpoint.md
+      uses: [tickets]
+      verify:
+        check: [repo:ok]
+      touches:
+        - \"openapi.yaml\"
+";
+
 /// A config that passes pass 1 and whose one check passes pass 2.
 ///
 /// `match:` names a file the scratch repo really has, because a glob that

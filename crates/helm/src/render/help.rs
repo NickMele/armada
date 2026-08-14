@@ -80,7 +80,7 @@ const LENS: [(&str, &str); 2] = [
 /// **Not alphabetical.** `config` comes first because a repository has no
 /// `armada.yml` before it runs, `init` next because nothing else works until
 /// *it* has run, and `clean` last because it undoes the rest.
-const MANIFEST: [Page; 5] = [
+const MANIFEST: [Page; 6] = [
     Page {
         name: "config",
         summary: "report the evidence, then verify what was written",
@@ -142,6 +142,19 @@ const MANIFEST: [Page; 5] = [
         notes: &[
             "A selector is <component>:<check>, a component, or a check name.",
             "One selector, or several paths — never both (PLAN.md §3.2).",
+        ],
+    },
+    Page {
+        name: "skills",
+        summary: "what this repository knows about itself",
+        usage: &[
+            "armada manifest skills [--json]",
+            "armada manifest skills show <name> [--json]",
+        ],
+        flags: &[],
+        notes: &[
+            "A skill is a named grant plus a pointer to prose Armada never parses.",
+            "There is deliberately no way to run one (PLAN.md §4.8).",
         ],
     },
     Page {

@@ -10,13 +10,14 @@ pub mod clean;
 pub mod config;
 pub mod dispatch;
 pub mod init;
+pub mod skills;
 pub mod status;
 
 use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
-    ScanData, StatusData, VerifyData,
+    ScanData, SkillsData, StatusData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -47,6 +48,8 @@ pub enum Output {
     Scan(Box<Envelope<ScanData>>),
     /// `armada manifest config verify`.
     Verify(Box<Envelope<VerifyData>>),
+    /// `armada manifest skills`, or `skills show <name>`.
+    Skills(Box<Envelope<SkillsData>>),
 }
 
 impl Output {
@@ -63,6 +66,7 @@ impl Output {
             Output::Dispatch(e) => e.to_json(),
             Output::Scan(e) => e.to_json(),
             Output::Verify(e) => e.to_json(),
+            Output::Skills(e) => e.to_json(),
         }
     }
 
@@ -96,6 +100,7 @@ impl Output {
             Output::Dispatch(e) => e.exit_code(),
             Output::Scan(e) => e.exit_code(),
             Output::Verify(e) => e.exit_code(),
+            Output::Skills(e) => e.exit_code(),
         }
     }
 }
