@@ -162,15 +162,16 @@ fn init_reaps_an_orphans_labelled_resources_and_leaves_everyone_elses_alone() {
     let machine = Machine::new();
     let main = machine.repo("main", CONFIG);
     let doomed = machine.worktree(&main, "doomed");
-    machine.run(&main, &["init"]);
+    machine.run(&main, &["manifest", "init"]);
 
     let live: Value =
-        serde_json::from_slice(&machine.run(&main, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&machine.run(&main, &["manifest", "status", "--json"]).stdout)
+            .unwrap();
     let live_id = live["data"]["results"][0]["id"]
         .as_str()
         .unwrap()
         .to_string();
-    let doomed_json = machine.run(&doomed, &["init", "--json"]);
+    let doomed_json = machine.run(&doomed, &["manifest", "init", "--json"]);
     let doomed_payload: Value = serde_json::from_slice(&doomed_json.stdout).unwrap();
     let doomed_id = doomed_payload["workspace"].as_str().unwrap().to_string();
     let namespace = namespace_of(&machine);
@@ -251,7 +252,7 @@ fn init_reaps_an_orphans_labelled_resources_and_leaves_everyone_elses_alone() {
     std::fs::remove_dir_all(&doomed).unwrap();
 
     let third = machine.worktree(&main, "third");
-    let output = machine.run(&third, &["init", "--json"]);
+    let output = machine.run(&third, &["manifest", "init", "--json"]);
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
 
     let removed: Vec<String> = payload["data"]["reaped"]["resources"]
@@ -323,7 +324,8 @@ fn a_commands_owns_selector_is_reclaimed_after_the_command_has_exited() {
     let machine = Machine::new();
     let repo = machine.repo("main", OWNS_CONFIG);
     let payload: Value =
-        serde_json::from_slice(&machine.run(&repo, &["init", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "init", "--json"]).stdout)
+            .unwrap();
     let id = payload["workspace"].as_str().unwrap().to_string();
 
     let network = format!("char-test-owns-{}", std::process::id());
@@ -346,7 +348,7 @@ fn a_commands_owns_selector_is_reclaimed_after_the_command_has_exited() {
         .unwrap();
     }
 
-    let output = machine.run(&repo, &["worktrees"]);
+    let output = machine.run(&repo, &["manifest", "worktrees"]);
     assert!(
         output.status.success(),
         "{}",
@@ -355,7 +357,7 @@ fn a_commands_owns_selector_is_reclaimed_after_the_command_has_exited() {
     assert!(exists("network", &network), "the command did not create it");
 
     // The command has exited. Nothing recorded it; only the declaration exists.
-    let cleaned = machine.run(&repo, &["clean", "--json"]);
+    let cleaned = machine.run(&repo, &["manifest", "clean", "--json"]);
     assert!(
         cleaned.status.success(),
         "{}",
@@ -389,7 +391,7 @@ fn a_force_rebuild_dry_run_names_the_orphan_and_removes_nothing() {
 
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
     let namespace = namespace_of(&machine);
 
     let orphan_net = format!("char-test-dry-{}", std::process::id());
@@ -419,6 +421,7 @@ fn a_force_rebuild_dry_run_names_the_orphan_and_removes_nothing() {
     let previewed = machine.run(
         &repo,
         &[
+            "manifest",
             "clean",
             "--dry-run",
             "--all",

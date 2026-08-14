@@ -1,10 +1,10 @@
-//! `char` — the binary.
+//! `armada` — the binary.
 //!
 //! The entrypoint does the four things that must be right before any verb
 //! exists, and then gets out of the way:
 //!
 //! 1. **Restores `SIGPIPE`**, before a single byte is written — measured, Rust
-//!    ignores it and `char status | head` panics with exit 101 otherwise
+//!    ignores it and `armada manifest status | head` panics with exit 101 otherwise
 //!    (`docs/traps.md`).
 //! 2. **Reads the ambient world exactly once** — cwd, `$HOME`, the environment
 //!    — and passes it down. Nothing below this file may reach for any of them
@@ -38,26 +38,31 @@ use std::process::ExitCode;
 use verbs::Output;
 
 const USAGE: &str = "\
-char — one consistent vocabulary for managing a repo's tech stack
+armada — one consistent vocabulary for managing a repo's tech stack
 
-  char init      [--json] [--dry-run]            claim this workspace: ports, .char/, setup
-  char clean     [--json] [--dry-run] [--project|--all]
-                 [--orphaned] [--artifacts] [--force]
+  armada manifest init    [--json] [--dry-run]   claim this workspace: ports, .char/, setup
+  armada manifest clean   [--json] [--dry-run] [--project|--all]
+                          [--orphaned] [--artifacts] [--force]
                                                  release what this workspace owns
-  char clean --orphaned --force-rebuild          rebuild an unreadable ~/.char/char.db
-  char status    [--json] [--project|--all]      what is running, mine, and stale
-  char check     [--json] [--dry-run] [--all-files] [--fix] [--wait]
-                 [--files <path>…] [--component <name>] [--jobs <n>] [<selector>]
+  armada manifest clean --orphaned --force-rebuild
+                                                 rebuild an unreadable ~/.char/char.db
+  armada manifest status  [--json] [--project|--all]
+                                                 what is running, mine, and stale
+  armada manifest check   [--json] [--dry-run] [--all-files] [--fix] [--wait]
+                          [--files <path>…] [--component <name>] [--jobs <n>] [<selector>]
                                                  lint / format / test
-  char <name> …                                  a commands: entry from this repo's char.yml
+  armada manifest <name> …                       a commands: entry from this repo's char.yml
 
-  char --version
-  char --help
+  armada --version
+  armada --help
 
-Global flags come before the verb. Everything after a commands: name is the
-child's, including flags char itself defines.
+Global flags come before the module. Everything after a commands: name is the
+child's, including flags Armada itself defines.
 
-Not built yet: up, down, config, agents-md, explain, and check's --detach/--status.
+Manifest is the module that is built. Not built yet: the `armada init`,
+`doctor`, `guild`, `fleet`, `helm` and `bridge` surfaces (PHASES.md §8), and
+Manifest's own up, down, config, agents-md, explain, and check's
+--detach/--status.
 ";
 
 fn main() -> ExitCode {
@@ -78,7 +83,7 @@ fn main() -> ExitCode {
 
     match invocation {
         Invocation::Version => {
-            write_out(&format!("char {}\n", env!("CARGO_PKG_VERSION")));
+            write_out(&format!("armada {}\n", env!("CARGO_PKG_VERSION")));
             ExitCode::SUCCESS
         }
         Invocation::Help => {
@@ -114,14 +119,14 @@ fn dispatch(
     let home = home.ok_or_else(|| CharError {
         class: ErrClass::Environment,
         r#where: "HOME".to_string(),
-        message: "$HOME is not set, so char cannot find ~/.char/".to_string(),
+        message: "$HOME is not set, so Armada cannot find ~/.char/".to_string(),
         next_action: Some("set HOME, then retry unchanged".to_string()),
     })?;
 
     let run = RealRun;
 
-    // **The recovery path runs before anything is opened.** `char clean
-    // --orphaned --force-rebuild` exists for a `char.db` char cannot read, and
+    // **The recovery path runs before anything is opened.** `armada manifest clean
+    // --orphaned --force-rebuild` exists for a `char.db` Armada cannot read, and
     // `app::build` opens that database — so routing it through the ordinary
     // path would fail on exactly the thing it exists to repair. It also needs
     // no workspace: it is most useful from a shell that happens to be anywhere.
@@ -199,7 +204,7 @@ fn dispatch(
 
 /// The invocation `--force-rebuild` insists on, or `None` if this is it.
 ///
-/// **`char clean --orphaned --force-rebuild` is the invocation `PLAN.md` §4.3
+/// **`armada manifest clean --orphaned --force-rebuild` is the invocation `PLAN.md` §4.3
 /// spells, so it is the one that has to work.** `--all` is accepted too and
 /// changes nothing: the pass is machine-scoped either way, because it
 /// enumerates every labelled resource on the daemon and removes on `ENOENT`
@@ -220,7 +225,7 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<CharE
             class: ErrClass::BadInvocation,
             r#where: r#where.to_string(),
             message,
-            next_action: Some("`char clean --orphaned --force-rebuild`".to_string()),
+            next_action: Some("`armada manifest clean --orphaned --force-rebuild`".to_string()),
         })
     };
 
@@ -270,7 +275,7 @@ fn fail(error: CharError, json: bool) -> ExitCode {
         // cannot be "always the invoking workspace" when there isn't one.
         let envelope: Envelope<NoData> = Envelope {
             schema_version: armada_core::envelope::SCHEMA_VERSION,
-            verb: "char".to_string(),
+            verb: "armada".to_string(),
             workspace: None,
             status: Status::Failed,
             error: Some(error),

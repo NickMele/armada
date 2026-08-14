@@ -60,7 +60,7 @@ fn ours(workspace: &WorkspaceId, pgid: i32, cwd: &Path) -> OwnedRow {
 
 fn init(machine: &Machine, repo: &Path) -> WorkspaceId {
     let payload: Value =
-        serde_json::from_slice(&machine.run(repo, &["init", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&machine.run(repo, &["manifest", "init", "--json"]).stdout).unwrap();
     WorkspaceId::from_stored(
         payload["workspace"]
             .as_str()
@@ -70,7 +70,7 @@ fn init(machine: &Machine, repo: &Path) -> WorkspaceId {
 }
 
 fn clean(machine: &Machine, repo: &Path) -> Value {
-    let output = machine.run(repo, &["clean", "--json"]);
+    let output = machine.run(repo, &["manifest", "clean", "--json"]);
     serde_json::from_slice(&output.stdout)
         .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&output.stdout)))
 }

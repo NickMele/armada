@@ -49,11 +49,11 @@ impl Clock for AdvancedClock {
 fn a_lease_whose_holder_was_killed_is_reclaimed_once_it_goes_cold() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
     // A real holder: a dispatched `commands:` entry takes the run lease for as
     // long as its child runs.
-    let mut holder = machine.spawn(&repo, &["sleeper"]);
+    let mut holder = machine.spawn(&repo, &["manifest", "sleeper"]);
     let db_path = machine.home.path().join(".char/char.db");
     wait_for(|| lease_rows(&db_path) == 1);
 
@@ -71,7 +71,7 @@ fn a_lease_whose_holder_was_killed_is_reclaimed_once_it_goes_cold() {
     // Still warm: the next claimant fails fast rather than stealing it. Acting
     // on state char cannot prove is stale is the mistake this whole design
     // avoids.
-    let blocked = machine.run(&repo, &["init", "--json"]);
+    let blocked = machine.run(&repo, &["manifest", "init", "--json"]);
     let payload: Value = serde_json::from_slice(&blocked.stdout).unwrap();
     assert_eq!(payload["error"]["class"], "bad_invocation");
 

@@ -16,7 +16,7 @@ use std::process::{Child, Command, Output, Stdio};
 
 /// The binary this workspace just built.
 pub fn char_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_char"))
+    PathBuf::from(env!("CARGO_BIN_EXE_armada"))
 }
 
 /// A scratch machine: one `$HOME`, one `char.db`, and repos under it.

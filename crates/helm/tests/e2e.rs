@@ -42,8 +42,8 @@ fn two_worktrees_claim_non_overlapping_blocks_concurrently() {
 
     // Started together rather than in sequence: the interesting failure is the
     // one where both read the free-block set before either writes.
-    let first = machine.spawn(&main, &["init", "--json"]);
-    let second = machine.spawn(&worktree, &["init", "--json"]);
+    let first = machine.spawn(&main, &["manifest", "init", "--json"]);
+    let second = machine.spawn(&worktree, &["manifest", "init", "--json"]);
     let first = first.wait_with_output().unwrap();
     let second = second.wait_with_output().unwrap();
     for output in [&first, &second] {
@@ -69,7 +69,7 @@ fn two_worktrees_claim_non_overlapping_blocks_concurrently() {
     // `--project` is the orchestrating agent's view, and it must be the same
     // answer from either sibling: they share one `--git-common-dir`.
     for cwd in [&main, &worktree] {
-        let status = machine.run(cwd, &["status", "--project", "--json"]);
+        let status = machine.run(cwd, &["manifest", "status", "--project", "--json"]);
         let payload: Value = serde_json::from_slice(&status.stdout).unwrap();
         let ids: Vec<&str> = payload["data"]["results"]
             .as_array()
@@ -89,13 +89,16 @@ fn init_in_a_third_workspace_reclaims_a_deleted_ones_block_and_says_so() {
     let machine = Machine::new();
     let main = machine.repo("main", CONFIG);
     let doomed = machine.worktree(&main, "doomed");
-    machine.run(&main, &["init"]);
+    machine.run(&main, &["manifest", "init"]);
     let doomed_payload: Value =
-        serde_json::from_slice(&machine.run(&doomed, &["init", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&machine.run(&doomed, &["manifest", "init", "--json"]).stdout)
+            .unwrap();
     let doomed_id = doomed_payload["workspace"].as_str().unwrap().to_string();
     let live_block = block_of(
-        &serde_json::from_slice::<Value>(&machine.run(&main, &["status", "--json"]).stdout)
-            .unwrap()["data"]["results"][0],
+        &serde_json::from_slice::<Value>(
+            &machine.run(&main, &["manifest", "status", "--json"]).stdout,
+        )
+        .unwrap()["data"]["results"][0],
     );
 
     // `rm -rf`, which is what actually happens to a worktree — and measured,
@@ -105,7 +108,7 @@ fn init_in_a_third_workspace_reclaims_a_deleted_ones_block_and_says_so() {
     std::fs::remove_dir_all(&doomed).unwrap();
 
     let third = machine.worktree(&main, "third");
-    let output = machine.run(&third, &["init", "--json"]);
+    let output = machine.run(&third, &["manifest", "init", "--json"]);
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
 
     // Reported, never silent. A tool that removes things without saying so is
@@ -121,14 +124,18 @@ fn init_in_a_third_workspace_reclaims_a_deleted_ones_block_and_says_so() {
     );
 
     // The live one is untouched — flat siblings, no cascade.
-    let after = machine.run(&main, &["status", "--json"]);
+    let after = machine.run(&main, &["manifest", "status", "--json"]);
     let after: Value = serde_json::from_slice(&after.stdout).unwrap();
     assert_eq!(block_of(&after["data"]["results"][0]), live_block);
 
     // And the block is genuinely free again: `--all` no longer knows the
     // deleted workspace.
-    let all: Value =
-        serde_json::from_slice(&machine.run(&main, &["status", "--all", "--json"]).stdout).unwrap();
+    let all: Value = serde_json::from_slice(
+        &machine
+            .run(&main, &["manifest", "status", "--all", "--json"])
+            .stdout,
+    )
+    .unwrap();
     let ids: Vec<&str> = all["data"]["results"]
         .as_array()
         .unwrap()
@@ -145,22 +152,29 @@ fn clean_orphaned_reclaims_a_deleted_workspace_from_anywhere() {
     let machine = Machine::new();
     let main = machine.repo("main", CONFIG);
     let doomed = machine.worktree(&main, "doomed");
-    machine.run(&main, &["init"]);
-    let doomed_id = workspace_id(&machine.run(&doomed, &["init", "--json"]));
+    machine.run(&main, &["manifest", "init"]);
+    let doomed_id = workspace_id(&machine.run(&doomed, &["manifest", "init", "--json"]));
 
     std::fs::remove_dir_all(&doomed).unwrap();
 
     // From a directory that is not a workspace at all.
     let outside = machine.outside();
-    let output = machine.run(&outside, &["clean", "--all", "--orphaned", "--json"]);
+    let output = machine.run(
+        &outside,
+        &["manifest", "clean", "--all", "--orphaned", "--json"],
+    );
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let all: Value =
-        serde_json::from_slice(&machine.run(&main, &["status", "--all", "--json"]).stdout).unwrap();
+    let all: Value = serde_json::from_slice(
+        &machine
+            .run(&main, &["manifest", "status", "--all", "--json"])
+            .stdout,
+    )
+    .unwrap();
     let ids: Vec<&str> = all["data"]["results"]
         .as_array()
         .unwrap()
@@ -184,18 +198,21 @@ fn clean_orphaned_reclaims_a_deleted_workspace_from_anywhere() {
 fn a_dispatched_command_receives_its_argv_untouched_and_returns_its_own_code() {
     let machine = Machine::new();
     let repo = machine.repo("main", DISPATCH_CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let output = machine.run(&repo, &["echoer", "prune", "--dry-run", "--", "-x"]);
+    let output = machine.run(
+        &repo,
+        &["manifest", "echoer", "prune", "--dry-run", "--", "-x"],
+    );
     let seen = String::from_utf8_lossy(&output.stdout);
     assert_eq!(seen.trim(), "prune --dry-run -- -x");
 
     // Verbatim: 3 is char's own `bad_config`, and this is the child's 3.
-    let output = machine.run(&repo, &["exiter", "3"]);
+    let output = machine.run(&repo, &["manifest", "exiter", "3"]);
     assert_eq!(output.status.code(), Some(3));
 
     // `data.dispatched` is what makes that unambiguous.
-    let output = machine.run(&repo, &["--json", "exiter", "3"]);
+    let output = machine.run(&repo, &["--json", "manifest", "exiter", "3"]);
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(payload["data"]["dispatched"], Value::Bool(true));
     assert_eq!(payload["data"]["child_exit"], Value::from(3));
@@ -209,9 +226,9 @@ fn a_dispatched_command_receives_its_argv_untouched_and_returns_its_own_code() {
 fn a_dispatched_command_gets_a_layered_environment_and_the_workspace_id() {
     let machine = Machine::new();
     let repo = machine.repo("main", DISPATCH_CONFIG);
-    let id = workspace_id(&machine.run(&repo, &["init", "--json"]));
+    let id = workspace_id(&machine.run(&repo, &["manifest", "init", "--json"]));
 
-    let output = machine.run(&repo, &["enver"]);
+    let output = machine.run(&repo, &["manifest", "enver"]);
     let seen = String::from_utf8_lossy(&output.stdout);
     let mut lines = seen.lines();
     assert_eq!(lines.next().unwrap(), format!("declared={id}"));
@@ -229,9 +246,9 @@ fn a_dispatched_command_gets_a_layered_environment_and_the_workspace_id() {
 fn a_command_that_cannot_start_is_chars_own_failure_and_says_so() {
     let machine = Machine::new();
     let repo = machine.repo("main", DISPATCH_CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let output = machine.run(&repo, &["--json", "missing"]);
+    let output = machine.run(&repo, &["--json", "manifest", "missing"]);
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(payload["data"]["dispatched"], Value::Bool(false));
     assert_eq!(payload["error"]["class"], "bad_config");
@@ -247,9 +264,9 @@ fn a_command_that_cannot_start_is_chars_own_failure_and_says_so() {
 fn a_second_mutating_verb_in_one_workspace_fails_fast_naming_the_holder() {
     let machine = Machine::new();
     let repo = machine.repo("main", DISPATCH_CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let mut holder = machine.spawn(&repo, &["sleeper"]);
+    let mut holder = machine.spawn(&repo, &["manifest", "sleeper"]);
     // Wait until the lease row actually exists rather than guessing.
     let db = machine.home.path().join(".char/char.db");
     for _ in 0..200 {
@@ -259,7 +276,7 @@ fn a_second_mutating_verb_in_one_workspace_fails_fast_naming_the_holder() {
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
 
-    let blocked = machine.run(&repo, &["init", "--json"]);
+    let blocked = machine.run(&repo, &["manifest", "init", "--json"]);
     let payload: Value = serde_json::from_slice(&blocked.stdout).unwrap();
     assert_eq!(payload["error"]["class"], "bad_invocation");
     assert_eq!(blocked.status.code(), Some(2));
@@ -288,7 +305,7 @@ fn a_parse_time_failure_answers_in_the_envelope_when_json_was_asked_for() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
 
-    let output = machine.run(&repo, &["--json", "check"]);
+    let output = machine.run(&repo, &["--json", "manifest", "check"]);
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|e| {
         panic!(
             "{e}: stdout {:?}, stderr {:?}",
@@ -304,7 +321,7 @@ fn a_parse_time_failure_answers_in_the_envelope_when_json_was_asked_for() {
 
     // The case that already worked: parses fine, fails afterwards.
     let outside = machine.outside();
-    let output = machine.run(&outside, &["--json", "bogusverb"]);
+    let output = machine.run(&outside, &["--json", "manifest", "bogusverb"]);
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(payload["error"]["class"], "bad_config");
 }
@@ -323,7 +340,7 @@ fn version_and_help_answer_from_outside_a_workspace() {
     let version = machine.run(&outside, &["--version"]);
     assert!(version.status.success());
     assert!(
-        String::from_utf8_lossy(&version.stdout).starts_with("char "),
+        String::from_utf8_lossy(&version.stdout).starts_with("armada "),
         "{:?}",
         String::from_utf8_lossy(&version.stdout)
     );
@@ -331,7 +348,7 @@ fn version_and_help_answer_from_outside_a_workspace() {
     let help = machine.run(&outside, &["--help"]);
     assert!(help.status.success());
     let text = String::from_utf8_lossy(&help.stdout);
-    assert!(text.contains("char init"), "{text}");
+    assert!(text.contains("armada manifest init"), "{text}");
     // The limits are stated in the usage rather than discovered by running one.
     assert!(text.contains("Not built yet"), "{text}");
 }
@@ -344,7 +361,7 @@ fn init_dry_run_previews_the_claim_and_claims_nothing() {
     let machine = Machine::new();
     let repo = machine.repo("main", SETUP_CONFIG);
 
-    let output = machine.run(&repo, &["init", "--dry-run", "--json"]);
+    let output = machine.run(&repo, &["manifest", "init", "--dry-run", "--json"]);
     assert!(output.status.success());
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     let block = &payload["data"]["would_claim"];
@@ -358,7 +375,10 @@ fn init_dry_run_previews_the_claim_and_claims_nothing() {
     assert!(!repo.join(".char").exists(), ".char/ must not be created");
     let all: Value = serde_json::from_slice(
         &machine
-            .run(&machine.outside(), &["status", "--all", "--json"])
+            .run(
+                &machine.outside(),
+                &["manifest", "status", "--all", "--json"],
+            )
             .stdout,
     )
     .unwrap();
@@ -369,7 +389,7 @@ fn init_dry_run_previews_the_claim_and_claims_nothing() {
     );
 
     // And the human rendering says, first, that nothing happened.
-    let human = machine.run(&repo, &["init", "--dry-run"]);
+    let human = machine.run(&repo, &["manifest", "init", "--dry-run"]);
     assert!(String::from_utf8_lossy(&human.stdout).starts_with("dry run"));
 }
 
@@ -380,7 +400,7 @@ fn a_setup_step_that_exits_non_zero_fails_the_row_and_the_verb() {
     let machine = Machine::new();
     let repo = machine.repo("main", FAILING_SETUP_CONFIG);
 
-    let output = machine.run(&repo, &["init", "--json"]);
+    let output = machine.run(&repo, &["manifest", "init", "--json"]);
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(payload["status"], "FAILED");
     assert_eq!(payload["error"]["class"], "tool_failed");
@@ -398,7 +418,8 @@ fn a_setup_step_that_exits_non_zero_fails_the_row_and_the_verb() {
     // The block was still claimed: the failure is the repo's command, and
     // refusing to remember the workspace would strand the block.
     let status: Value =
-        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "status", "--json"]).stdout)
+            .unwrap();
     assert_eq!(status["data"]["results"].as_array().unwrap().len(), 1);
 }
 
@@ -410,7 +431,7 @@ fn a_setup_step_that_cannot_start_is_bad_config_and_prints_to_stderr() {
     let machine = Machine::new();
     let repo = machine.repo("main", UNSTARTABLE_SETUP_CONFIG);
 
-    let output = machine.run(&repo, &["init", "--json"]);
+    let output = machine.run(&repo, &["manifest", "init", "--json"]);
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     let error = &payload["data"]["results"][0]["error"];
     assert_eq!(error["class"], "bad_config");
@@ -439,7 +460,7 @@ fn a_setup_step_that_cannot_start_is_bad_config_and_prints_to_stderr() {
 
     // Human: a failed verb's report belongs on stderr, so a pipeline reading
     // stdout is never handed an error report as if it were an answer.
-    let human = machine.run(&repo, &["init"]);
+    let human = machine.run(&repo, &["manifest", "init"]);
     assert!(!human.status.success());
     assert!(human.stdout.is_empty(), "nothing goes to stdout on failure");
     let text = String::from_utf8_lossy(&human.stderr);
@@ -454,10 +475,13 @@ fn a_setup_step_that_cannot_start_is_bad_config_and_prints_to_stderr() {
 fn clean_previews_what_it_would_release_and_releases_none_of_it() {
     let machine = Machine::new();
     let repo = machine.repo("main", OWNS_CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
     std::fs::write(repo.join("node_modules"), "artifact").unwrap();
 
-    let output = machine.run(&repo, &["clean", "--dry-run", "--artifacts", "--json"]);
+    let output = machine.run(
+        &repo,
+        &["manifest", "clean", "--dry-run", "--artifacts", "--json"],
+    );
     assert!(output.status.success());
     let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
     let data = &payload["data"];
@@ -475,7 +499,8 @@ fn clean_previews_what_it_would_release_and_releases_none_of_it() {
     assert!(repo.join("node_modules").exists());
     assert!(repo.join(".char").exists());
     let status: Value =
-        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "status", "--json"]).stdout)
+            .unwrap();
     assert_eq!(status["data"]["results"].as_array().unwrap().len(), 1);
 }
 
@@ -484,10 +509,10 @@ fn clean_previews_what_it_would_release_and_releases_none_of_it() {
 fn clean_artifacts_deletes_the_declared_files_and_reports_the_external_command() {
     let machine = Machine::new();
     let repo = machine.repo("main", OWNS_CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
     std::fs::write(repo.join("node_modules"), "artifact").unwrap();
 
-    let output = machine.run(&repo, &["clean", "--artifacts", "--json"]);
+    let output = machine.run(&repo, &["manifest", "clean", "--artifacts", "--json"]);
     assert!(
         output.status.success(),
         "{}",
@@ -509,7 +534,8 @@ fn clean_artifacts_deletes_the_declared_files_and_reports_the_external_command()
     assert!(!repo.join("node_modules").exists(), "the artifact went");
     assert!(!repo.join(".char").exists(), ".char/ went with it");
     let status: Value =
-        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "status", "--json"]).stdout)
+            .unwrap();
     assert_eq!(status["data"]["results"].as_array().unwrap().len(), 0);
 }
 
@@ -519,9 +545,9 @@ fn clean_artifacts_deletes_the_declared_files_and_reports_the_external_command()
 fn status_renders_for_a_terminal_on_stdout() {
     let machine = Machine::new();
     let repo = machine.repo("main", OWNS_CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let output = machine.run(&repo, &["status"]);
+    let output = machine.run(&repo, &["manifest", "status"]);
     assert!(output.status.success());
     let text = String::from_utf8_lossy(&output.stdout);
     assert!(text.starts_with("scope workspace\n"), "{text}");
@@ -634,7 +660,7 @@ fn the_binary_under_test_is_the_one_this_workspace_built() {
 fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
     let db = machine.home.path().join(".char/char.db");
     let namespace_before = namespace_of(&db);
@@ -642,21 +668,33 @@ fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
 
     // The premise: an ordinary verb cannot get past opening it, and says so as
     // `environment` — the machine is broken, the repo is fine.
-    let broken = machine.run(&repo, &["status", "--json"]);
+    let broken = machine.run(&repo, &["manifest", "status", "--json"]);
     let payload: Value = serde_json::from_slice(&broken.stdout).unwrap();
     assert_eq!(payload["error"]["class"], "environment");
     assert_eq!(broken.status.code(), Some(6));
 
     // `--orphaned` is required, because it is what bounds the removal to
     // workspaces whose directory is gone.
-    let unbounded = machine.run(&repo, &["clean", "--all", "--force-rebuild", "--json"]);
+    let unbounded = machine.run(
+        &repo,
+        &["manifest", "clean", "--all", "--force-rebuild", "--json"],
+    );
     let payload: Value = serde_json::from_slice(&unbounded.stdout).unwrap();
     assert_eq!(payload["error"]["class"], "bad_invocation");
 
     // The invocation `PLAN.md` §4.3 spells, run from inside a workspace and
     // without `--all`: the corpus documents this exact form, so this exact form
     // is what has to work.
-    let rebuilt = machine.run(&repo, &["clean", "--orphaned", "--force-rebuild", "--json"]);
+    let rebuilt = machine.run(
+        &repo,
+        &[
+            "manifest",
+            "clean",
+            "--orphaned",
+            "--force-rebuild",
+            "--json",
+        ],
+    );
     assert!(
         rebuilt.status.success(),
         "{}",
@@ -689,7 +727,10 @@ fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
     );
 
     // And the store works again.
-    assert!(machine.run(&repo, &["status", "--all"]).status.success());
+    assert!(machine
+        .run(&repo, &["manifest", "status", "--all"])
+        .status
+        .success());
     let namespace_after = namespace_of(&db);
     assert_ne!(namespace_after, "", "a fresh database has a namespace");
     assert_ne!(
@@ -707,7 +748,7 @@ fn force_rebuild_recovers_a_database_no_other_verb_can_open() {
 fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
     let db = machine.home.path().join(".char/char.db");
     let junk = b"this is not a database";
@@ -716,6 +757,7 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
     let previewed = machine.run(
         &repo,
         &[
+            "manifest",
             "clean",
             "--dry-run",
             "--all",
@@ -771,7 +813,8 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
     // And the recovery is still needed, which is the same statement from the
     // other side: nothing was repaired.
     let after: Value =
-        serde_json::from_slice(&machine.run(&repo, &["status", "--json"]).stdout).unwrap();
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "status", "--json"]).stdout)
+            .unwrap();
     assert_eq!(after["error"]["class"], "environment");
 }
 
@@ -786,10 +829,11 @@ fn force_rebuild_under_dry_run_changes_nothing_on_disk() {
 fn force_rebuild_refuses_every_flag_that_has_no_meaning_on_it() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
     for args in [
         &[
+            "manifest",
             "clean",
             "--all",
             "--orphaned",
@@ -798,6 +842,7 @@ fn force_rebuild_refuses_every_flag_that_has_no_meaning_on_it() {
             "--json",
         ][..],
         &[
+            "manifest",
             "clean",
             "--all",
             "--orphaned",
@@ -811,7 +856,7 @@ fn force_rebuild_refuses_every_flag_that_has_no_meaning_on_it() {
         assert_eq!(
             payload["error"]["class"],
             "bad_invocation",
-            "`char {}` was accepted: {payload}",
+            "`armada {}` was accepted: {payload}",
             args.join(" ")
         );
         assert_eq!(refused.status.code(), Some(2));

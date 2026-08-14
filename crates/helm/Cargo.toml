@@ -19,8 +19,12 @@ description = "armada — one consistent vocabulary for managing a repo's tech s
 name = "armada_helm"
 path = "src/lib.rs"
 
+# One binary, named for the suite rather than for this crate. There is no
+# `char` shim: it was never published, so a clean break costs nothing
+# (PHASES.md §8.3). There is deliberately no `helm` on PATH either — Kubernetes
+# owns that name (`docs/glossary.md`).
 [[bin]]
-name = "char"
+name = "armada"
 path = "src/main.rs"
 
 [dependencies]

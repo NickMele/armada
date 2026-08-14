@@ -2,19 +2,26 @@
 //!
 //! **Hand-rolled rather than a parser crate**, for one reason that decides it:
 //! a `commands:` entry's remaining argv must reach the child **untouched**
-//! (PLAN.md §4.5), including flags char itself defines. `char worktrees prune
-//! --dry-run` runs `… prune --dry-run`, and `--dry-run` there is the child's.
-//! A general parser has to be told to stop parsing, and being told wrongly is
-//! silent.
+//! (PLAN.md §4.5), including flags Armada itself defines. `armada manifest
+//! worktrees prune --dry-run` runs `… prune --dry-run`, and `--dry-run` there
+//! is the child's. A general parser has to be told to stop parsing, and being
+//! told wrongly is silent.
 //!
 //! So the grammar is stated rather than inferred:
 //!
 //! ```text
-//! char [global flags] <verb> [verb flags]        for the verbs char owns
-//! char [global flags] <name> [anything at all]   for a commands: entry
+//! armada [global flags] manifest <verb> [verb flags]      the verbs Manifest owns
+//! armada [global flags] manifest <name> [anything at all] a commands: entry
 //! ```
 //!
 //! Everything after a `commands:` name is the child's, whatever it looks like.
+//!
+//! **The module name is a level of the grammar, not a prefix on a verb name.**
+//! `armada manifest check` is Manifest's `check`; `armada fleet ls` will be
+//! Fleet's `ls`, and the two never have to disambiguate a shared word
+//! ([`glossary.md`](../../../docs/glossary.md), `ARCHITECTURE.md` §1.9). The
+//! cost is that the most-used verbs got longer, which PHASES.md §8.3 records as
+//! an intended trade with a reserved-not-built resolution (PLAN.md §3).
 
 use armada_core::error::{CharError, ErrClass};
 use armada_core::scope::Lens;
@@ -22,13 +29,13 @@ use armada_core::scope::Lens;
 /// A parsed invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Invocation {
-    /// `char --version`.
+    /// `armada --version`.
     Version,
-    /// `char --help`, or `char` with nothing at all.
+    /// `armada --help`, or `armada` with nothing at all.
     Help,
-    /// `char init`.
+    /// `armada manifest init`.
     Init(Common),
-    /// `char clean`.
+    /// `armada manifest clean`.
     Clean {
         /// The flags every verb shares.
         common: Common,
@@ -41,9 +48,9 @@ pub enum Invocation {
         /// Rebuild an unreadable `char.db` from labels alone.
         force_rebuild: bool,
     },
-    /// `char status`.
+    /// `armada manifest status`.
     Status(Common),
-    /// `char check`.
+    /// `armada manifest check`.
     Check(Box<Check>),
     /// A `commands:` entry, with everything after its name.
     Dispatch {
@@ -63,7 +70,7 @@ pub enum Invocation {
 /// answers with "not built yet" — so a failure before a verb exists still has
 /// to answer in the envelope. The flag rides out with the error rather than
 /// being re-scanned from argv by the caller, because a second scan would be a
-/// second grammar: it cannot tell char's own `--json` from one belonging to a
+/// second grammar: it cannot tell Armada's own `--json` from one belonging to a
 /// `commands:` child, which is the distinction this whole module exists to draw.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseFailure {
@@ -73,7 +80,7 @@ pub struct ParseFailure {
     pub json: bool,
 }
 
-/// `char check`, with the flags PLAN.md §3.2 gives it.
+/// `armada manifest check`, with the flags PLAN.md §3.2 gives it.
 ///
 /// A struct rather than eight variant fields, because `check` takes more flags
 /// than every other verb put together and a variant that wide makes every match
@@ -112,7 +119,7 @@ pub struct Common {
     pub lens: Lens,
 }
 
-/// The verbs char owns. A `commands:` entry may not shadow one — the schema
+/// The verbs Manifest owns. A `commands:` entry may not shadow one — the schema
 /// rejects that, because without the rule a repo can silently break the one
 /// guarantee the project exists to provide.
 pub const BUILTIN_VERBS: [&str; 9] = [
@@ -127,13 +134,31 @@ pub const BUILTIN_VERBS: [&str; 9] = [
     "explain",
 ];
 
+/// The module names, plus the two top-level verbs, that `armada` claims.
+///
+/// Only `manifest` is built. The rest are claimed for the same reason
+/// [`BUILTIN_VERBS`] are: a name that is going to mean one thing must not mean
+/// something else for a release first. Each carries the milestone that builds
+/// it (PHASES.md §8).
+const RESERVED_TOP_LEVEL: [(&str, &str); 6] = [
+    (
+        "init",
+        "M2 — machine setup; `armada manifest init` claims a workspace",
+    ),
+    ("doctor", "M2 — what this machine is missing"),
+    ("guild", "M2 — your portable setup"),
+    ("fleet", "M3 — the agents you do not talk to"),
+    ("helm", "M3 — the one agent you do talk to"),
+    ("bridge", "M3 — the live screen"),
+];
+
 /// Parse an argument vector, excluding `argv[0]`.
 pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
     let mut json = false;
     let mut index = 0;
 
-    // Global flags come first, before the verb. After a `commands:` name
-    // nothing is char's, so this is the only place a global flag can be given
+    // Global flags come first, before the module. After a `commands:` name
+    // nothing is Armada's, so this is the only place a global flag can be given
     // for a dispatched command — and that is stated in the help rather than
     // inferred from position.
     while index < args.len() {
@@ -149,10 +174,38 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
         }
     }
 
-    let Some(verb) = args.get(index) else {
+    let Some(module) = args.get(index) else {
         return Ok(Invocation::Help);
     };
-    let rest = &args[index + 1..];
+
+    if module != "manifest" {
+        let name = module.as_str();
+        if name.starts_with('-') {
+            return Err(failure(unknown_flag(name), json));
+        }
+        let json = json || args[index + 1..].iter().any(|a| a == "--json");
+        let message = match RESERVED_TOP_LEVEL.iter().find(|(n, _)| *n == name) {
+            Some((_, milestone)) => format!("`armada {name}` is not built yet — {milestone}"),
+            None => format!("unknown command `{name}`"),
+        };
+        return Err(failure(
+            CharError {
+                class: ErrClass::BadInvocation,
+                r#where: name.to_string(),
+                message,
+                next_action: Some(
+                    "`armada manifest <verb>` is the module that is built; `armada --help` lists it"
+                        .to_string(),
+                ),
+            },
+            json,
+        ));
+    }
+
+    let Some(verb) = args.get(index + 1) else {
+        return Ok(Invocation::Help);
+    };
+    let rest = &args[index + 2..];
 
     match verb.as_str() {
         "init" => Ok(Invocation::Init(common(rest, json, &["--dry-run"])?)),
@@ -163,7 +216,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
                     CharError {
                         class: ErrClass::BadInvocation,
                         r#where: "status".to_string(),
-                        message: "`char status` reads; there is nothing to dry-run".to_string(),
+                        message: "`armada manifest status` reads; there is nothing to dry-run"
+                            .to_string(),
                         next_action: Some("drop --dry-run".to_string()),
                     },
                     common.json,
@@ -193,22 +247,22 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
             })
         }
         // Every built-in name is claimed, including the ones this phase does
-        // not implement. Otherwise `char check` in a repo declaring a `check:`
+        // not implement. Otherwise `armada manifest check` in a repo declaring a `check:`
         // command would dispatch to it — and the one guarantee the project
         // exists to provide is that the verbs mean the same thing everywhere.
         name if BUILTIN_VERBS.contains(&name) => Err(failure(
             CharError {
                 class: ErrClass::BadInvocation,
                 r#where: verb.clone(),
-                message: format!("`char {verb}` is not built yet"),
+                message: format!("`armada manifest {verb}` is not built yet"),
                 next_action: Some(
                     "phase 2 ships init, clean and status, plus the repo's own commands:"
                         .to_string(),
                 ),
             },
-            // The name is a built-in, so the rest is char's own argv and not a
-            // child's: `char check --json` asks for the envelope just as
-            // `char --json check` does.
+            // The name is a built-in, so the rest is Armada's own argv and not a
+            // child's: `armada manifest check --json` asks for the envelope just as
+            // `armada --json manifest check` does.
             json || rest.iter().any(|a| a == "--json"),
         )),
         name if name.starts_with('-') => Err(failure(unknown_flag(name), json)),
@@ -224,12 +278,12 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
 ///
 /// **Not routed through [`common`]**, because `check` takes no scope lens: a run
 /// is this workspace's by definition, and accepting `--project` silently would
-/// let a caller believe they had asked for something char never does.
+/// let a caller believe they had asked for something Armada never does.
 fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
     let mut parsed = Check {
         // Settled before the loop, so that how a failure is *reported* does not
-        // depend on where in the line the offending flag sits: `char check
-        // --detach --json` and `char check --json --detach` are the same
+        // depend on where in the line the offending flag sits: `armada manifest check
+        // --detach --json` and `armada manifest check --json --detach` are the same
         // failure. `common` does the same, for the same reason.
         json: json || rest.iter().any(|a| a == "--json"),
         ..Default::default()
@@ -273,7 +327,7 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
             },
             // Reserved by PLAN.md §3 and not built in this phase. Refused by
             // name rather than falling through to "unknown flag", because the
-            // flag *is* known and the honest answer is that char cannot do it
+            // flag *is* known and the honest answer is that Armada cannot do it
             // yet — an agent told "unknown flag" would go looking for a typo.
             "--detach" | "--status" => {
                 return Err(failure(
@@ -282,7 +336,7 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
                         r#where: arg.to_string(),
                         message: format!("`{arg}` is not built yet"),
                         next_action: Some(
-                            "run `char check` in the foreground; `--wait` queues behind another run"
+                            "run `armada manifest check` in the foreground; `--wait` queues behind another run"
                                 .to_string(),
                         ),
                     },
@@ -295,7 +349,7 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
     }
 
     // **One selector, or several paths.** Two bare words that are not paths are
-    // two different questions — `char check api lint` might mean the component
+    // two different questions — `armada manifest check api lint` might mean the component
     // or the check — and guessing is the thing §3.2's grammar exists to avoid.
     match positionals.len() {
         0 => {}
@@ -311,9 +365,11 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
                 CharError {
                     class: ErrClass::BadInvocation,
                     r#where: positionals.join(" "),
-                    message: "`char check` takes one selector, or several paths".to_string(),
+                    message: "`armada manifest check` takes one selector, or several paths"
+                        .to_string(),
                     next_action: Some(
-                        "`char check <component>:<check>`, or `--files a.py b.py`".to_string(),
+                        "`armada manifest check <component>:<check>`, or `--files a.py b.py`"
+                            .to_string(),
                     ),
                 },
                 parsed.json,
@@ -329,15 +385,15 @@ fn needs_a_value(flag: &str) -> CharError {
         class: ErrClass::BadInvocation,
         r#where: flag.to_string(),
         message: format!("`{flag}` needs a value"),
-        next_action: Some("`char --help` lists what each verb takes".to_string()),
+        next_action: Some("`armada --help` lists what each verb takes".to_string()),
     }
 }
 
 fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, ParseFailure> {
     let mut common = Common {
         // Settled before the loop, so that how a failure is *reported* does not
-        // depend on where in the line the offending flag sits: `char init
-        // --turbo --json` and `char init --json --turbo` are the same failure.
+        // depend on where in the line the offending flag sits: `armada manifest init
+        // --turbo --json` and `armada manifest init --json --turbo` are the same failure.
         json: json || rest.iter().any(|a| a == "--json"),
         ..Default::default()
     };
@@ -378,7 +434,7 @@ fn unknown_flag(flag: &str) -> CharError {
         class: ErrClass::BadInvocation,
         r#where: flag.to_string(),
         message: format!("unknown flag `{flag}`"),
-        next_action: Some("`char --help` lists what each verb takes".to_string()),
+        next_action: Some("`armada --help` lists what each verb takes".to_string()),
     }
 }
 
@@ -391,13 +447,14 @@ mod tests {
     }
 
     #[test]
-    fn bare_char_is_help_rather_than_an_error() {
+    fn bare_armada_is_help_rather_than_an_error() {
         assert_eq!(parse(&[]).unwrap(), Invocation::Help);
     }
 
     #[test]
     fn init_takes_json_and_dry_run() {
-        let Invocation::Init(common) = parse(&args(&["init", "--json", "--dry-run"])).unwrap()
+        let Invocation::Init(common) =
+            parse(&args(&["manifest", "init", "--json", "--dry-run"])).unwrap()
         else {
             panic!()
         };
@@ -406,10 +463,13 @@ mod tests {
 
     #[test]
     fn the_scope_lens_is_the_same_flag_on_status_and_clean() {
-        let Invocation::Status(status) = parse(&args(&["status", "--project"])).unwrap() else {
+        let Invocation::Status(status) =
+            parse(&args(&["manifest", "status", "--project"])).unwrap()
+        else {
             panic!()
         };
-        let Invocation::Clean { common, .. } = parse(&args(&["clean", "--project"])).unwrap()
+        let Invocation::Clean { common, .. } =
+            parse(&args(&["manifest", "clean", "--project"])).unwrap()
         else {
             panic!()
         };
@@ -419,7 +479,7 @@ mod tests {
 
     #[test]
     fn project_and_all_together_is_bad_invocation() {
-        let err = parse(&args(&["status", "--project", "--all"]))
+        let err = parse(&args(&["manifest", "status", "--project", "--all"]))
             .unwrap_err()
             .error;
         assert_eq!(err.class, ErrClass::BadInvocation);
@@ -428,17 +488,27 @@ mod tests {
 
     #[test]
     fn an_unknown_flag_is_bad_invocation_and_says_where_to_look() {
-        let err = parse(&args(&["init", "--turbo"])).unwrap_err().error;
+        let err = parse(&args(&["manifest", "init", "--turbo"]))
+            .unwrap_err()
+            .error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert!(err.next_action.is_some());
     }
 
     /// The done-when: subcommands and flags reach the child untouched. Note
-    /// `--dry-run` here is the child's, even though char defines a flag by
+    /// `--dry-run` here is the child's, even though Armada defines a flag by
     /// that name.
     #[test]
     fn a_dispatched_commands_entry_keeps_every_argument_it_was_given() {
-        let parsed = parse(&args(&["worktrees", "prune", "--dry-run", "--", "-x"])).unwrap();
+        let parsed = parse(&args(&[
+            "manifest",
+            "worktrees",
+            "prune",
+            "--dry-run",
+            "--",
+            "-x",
+        ]))
+        .unwrap();
         assert_eq!(
             parsed,
             Invocation::Dispatch {
@@ -450,20 +520,20 @@ mod tests {
     }
 
     #[test]
-    fn a_global_json_before_the_command_name_is_chars() {
+    fn a_global_json_before_the_command_name_is_armadas() {
         let Invocation::Dispatch { name, argv, json } =
-            parse(&args(&["--json", "worktrees", "--json"])).unwrap()
+            parse(&args(&["--json", "manifest", "worktrees", "--json"])).unwrap()
         else {
             panic!()
         };
-        assert!(json, "the leading one is char's");
+        assert!(json, "the leading one is Armada's");
         assert_eq!(name, "worktrees");
         assert_eq!(argv, args(&["--json"]), "the trailing one is the child's");
     }
 
     #[test]
     fn a_verb_that_is_not_built_yet_says_so_rather_than_dispatching_it() {
-        let err = parse(&args(&["up"])).unwrap_err().error;
+        let err = parse(&args(&["manifest", "up"])).unwrap_err().error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert!(err.message.contains("not built yet"));
     }
@@ -474,26 +544,26 @@ mod tests {
     #[test]
     fn a_parse_failure_carries_out_the_json_it_had_already_seen() {
         for words in [
-            &["--json", "up"][..],
-            &["up", "--json"][..],
-            &["--json", "init", "--turbo"][..],
-            &["init", "--turbo", "--json"][..],
+            &["--json", "manifest", "up"][..],
+            &["manifest", "up", "--json"][..],
+            &["--json", "manifest", "init", "--turbo"][..],
+            &["manifest", "init", "--turbo", "--json"][..],
         ] {
             let failure = parse(&args(words)).unwrap_err();
-            assert!(failure.json, "`char {}` lost --json", words.join(" "));
+            assert!(failure.json, "`armada {}` lost --json", words.join(" "));
             assert_eq!(failure.error.class, ErrClass::BadInvocation);
         }
-        assert!(!parse(&args(&["up"])).unwrap_err().json);
+        assert!(!parse(&args(&["manifest", "up"])).unwrap_err().json);
     }
 
     /// Every built-in name is claimed, including the ones phase 2 does not
-    /// implement — otherwise `char check` in a repo declaring a `check:`
+    /// implement — otherwise `armada manifest check` in a repo declaring a `check:`
     /// command would dispatch to it and mean something different here than
     /// everywhere else.
     #[test]
     fn no_builtin_verb_can_be_reached_by_dispatch() {
         for verb in BUILTIN_VERBS {
-            let parsed = parse(&args(&[verb]));
+            let parsed = parse(&args(&["manifest", verb]));
             assert!(
                 !matches!(parsed, Ok(Invocation::Dispatch { .. })),
                 "`{verb}` dispatched"
@@ -503,7 +573,35 @@ mod tests {
 
     #[test]
     fn status_refuses_a_dry_run_because_it_changes_nothing() {
-        assert!(parse(&args(&["status", "--dry-run"])).is_err());
+        assert!(parse(&args(&["manifest", "status", "--dry-run"])).is_err());
+    }
+
+    /// The module name is a grammar level, so a bare module is as incomplete as
+    /// a bare `armada` and gets the same answer rather than an error.
+    #[test]
+    fn a_module_with_no_verb_is_help() {
+        assert_eq!(parse(&args(&["manifest"])).unwrap(), Invocation::Help);
+    }
+
+    /// A module that does not exist yet says which milestone builds it, rather
+    /// than falling through to Manifest's `commands:` dispatch — which is what
+    /// would silently give a repo the power to define `armada fleet`.
+    #[test]
+    fn a_module_that_is_not_built_yet_names_its_milestone() {
+        for (name, _) in RESERVED_TOP_LEVEL {
+            let err = parse(&args(&[name])).unwrap_err().error;
+            assert_eq!(err.class, ErrClass::BadInvocation);
+            assert!(err.message.contains("not built yet"), "`{name}`");
+        }
+    }
+
+    /// Only Manifest dispatches to a repo's `commands:`. A bare word at the top
+    /// level is a module name, and an unknown one is an unknown command.
+    #[test]
+    fn a_repo_command_is_not_reachable_without_its_module() {
+        let err = parse(&args(&["worktrees", "prune"])).unwrap_err().error;
+        assert_eq!(err.class, ErrClass::BadInvocation);
+        assert!(err.message.contains("unknown command"), "{}", err.message);
     }
 
     #[test]

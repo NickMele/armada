@@ -99,12 +99,12 @@ fn two_processes_declaring_two_exclusives_in_opposite_orders_both_complete() {
     let machine = Machine::new();
     let one = machine.repo("one", ONE_ORDER);
     let other = machine.repo("other", OTHER_ORDER);
-    machine.run(&one, &["init"]);
-    machine.run(&other, &["init"]);
+    machine.run(&one, &["manifest", "init"]);
+    machine.run(&other, &["manifest", "init"]);
 
     let started = Instant::now();
-    let mut first = machine.spawn(&one, &["check", "--json"]);
-    let mut second = machine.spawn(&other, &["check", "--json"]);
+    let mut first = machine.spawn(&one, &["manifest", "check", "--json"]);
+    let mut second = machine.spawn(&other, &["manifest", "check", "--json"]);
 
     // Two two-second checks that cannot overlap take about four seconds. The
     // bound is generous and still fails long before `acquire_timeout` would.
@@ -130,12 +130,12 @@ fn one_exclusive_is_one_mutex_for_the_whole_machine() {
     let machine = Machine::new();
     let one = machine.repo("one", ONE_ORDER);
     let other = machine.repo("other", ONE_ORDER);
-    machine.run(&one, &["init"]);
-    machine.run(&other, &["init"]);
+    machine.run(&one, &["manifest", "init"]);
+    machine.run(&other, &["manifest", "init"]);
 
     let started = Instant::now();
-    let mut first = machine.spawn(&one, &["check"]);
-    let mut second = machine.spawn(&other, &["check"]);
+    let mut first = machine.spawn(&one, &["manifest", "check"]);
+    let mut second = machine.spawn(&other, &["manifest", "check"]);
     assert!(wait_bounded(&mut first, Duration::from_secs(60)).is_some());
     assert!(wait_bounded(&mut second, Duration::from_secs(60)).is_some());
     let elapsed = started.elapsed();
@@ -160,14 +160,14 @@ fn the_run_that_queued_recorded_what_it_waited_on_and_who_held_it() {
     let machine = Machine::new();
     let one = machine.repo("one", ONE_ORDER);
     let other = machine.repo("other", ONE_ORDER);
-    machine.run(&one, &["init"]);
-    machine.run(&other, &["init"]);
+    machine.run(&one, &["manifest", "init"]);
+    machine.run(&other, &["manifest", "init"]);
 
-    let mut first = machine.spawn(&one, &["check", "--json"]);
+    let mut first = machine.spawn(&one, &["manifest", "check", "--json"]);
     // Long enough for the first run to be holding `browser` when the second
     // asks for it, and short enough that the first has not finished.
     std::thread::sleep(Duration::from_millis(700));
-    let second = machine.run(&other, &["check", "--json"]);
+    let second = machine.run(&other, &["manifest", "check", "--json"]);
     assert!(wait_bounded(&mut first, Duration::from_secs(60)).is_some());
 
     let payload = envelope(&second);
@@ -225,12 +225,12 @@ fn two_runs_each_wanting_the_whole_budget_take_turns_rather_than_splitting_it() 
 
     let one = machine.repo("one", EXPENSIVE);
     let other = machine.repo("other", EXPENSIVE);
-    machine.run(&one, &["init"]);
-    machine.run(&other, &["init"]);
+    machine.run(&one, &["manifest", "init"]);
+    machine.run(&other, &["manifest", "init"]);
 
     let started = Instant::now();
-    let mut first = machine.spawn(&one, &["check"]);
-    let mut second = machine.spawn(&other, &["check"]);
+    let mut first = machine.spawn(&one, &["manifest", "check"]);
+    let mut second = machine.spawn(&other, &["manifest", "check"]);
     assert!(wait_bounded(&mut first, Duration::from_secs(60)).is_some());
     assert!(wait_bounded(&mut second, Duration::from_secs(60)).is_some());
 
@@ -267,12 +267,12 @@ fn the_cpu_budget_is_the_machines_and_not_each_runs() {
 
     let one = machine.repo("one", SLEEPER);
     let other = machine.repo("other", SLEEPER);
-    machine.run(&one, &["init"]);
-    machine.run(&other, &["init"]);
+    machine.run(&one, &["manifest", "init"]);
+    machine.run(&other, &["manifest", "init"]);
 
     let started = Instant::now();
-    let mut first = machine.spawn(&one, &["check"]);
-    let mut second = machine.spawn(&other, &["check"]);
+    let mut first = machine.spawn(&one, &["manifest", "check"]);
+    let mut second = machine.spawn(&other, &["manifest", "check"]);
     assert!(wait_bounded(&mut first, Duration::from_secs(60)).is_some());
     assert!(wait_bounded(&mut second, Duration::from_secs(60)).is_some());
 

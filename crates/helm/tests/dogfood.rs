@@ -62,7 +62,7 @@ fn char_check_agrees_with_the_raw_tool_on_charkits_own_config() {
     // every other suite here safe to run concurrently.
     let home = tempfile::tempdir().expect("a scratch home");
     let output = Command::new(support::char_binary())
-        .args(["check", "charkit:fmt", "--json"])
+        .args(["manifest", "check", "charkit:fmt", "--json"])
         .current_dir(&root)
         .env("HOME", home.path())
         .output()
@@ -123,7 +123,7 @@ fn every_check_charkit_declares_is_reachable_by_its_id() {
         // `--dry-run` reaches the plan without running anything, which is what
         // makes it safe to ask this of `charkit:test`.
         let output = Command::new(support::char_binary())
-            .args(["check", id, "--dry-run", "--json"])
+            .args(["manifest", "check", id, "--dry-run", "--json"])
             .current_dir(&root)
             .env("HOME", home.path())
             .output()

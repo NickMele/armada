@@ -59,9 +59,9 @@ fn record(repo: &Path, run_id: &str) -> RunRecord {
 fn a_failing_check_fails_the_run_with_the_tools_own_class() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let output = machine.run(&repo, &["check", "--json"]);
+    let output = machine.run(&repo, &["manifest", "check", "--json"]);
     let payload = envelope(&output);
 
     assert_eq!(payload["status"], "FAILED");
@@ -80,9 +80,9 @@ fn a_failing_check_fails_the_run_with_the_tools_own_class() {
 fn a_run_with_some_passes_and_some_failures_is_failed_and_never_partial() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let payload = envelope(&machine.run(&repo, &["check", "--json"]));
+    let payload = envelope(&machine.run(&repo, &["manifest", "check", "--json"]));
     assert_eq!(payload["status"], "FAILED");
     assert_ne!(payload["status"], "PARTIAL");
 }
@@ -94,9 +94,9 @@ fn a_run_with_some_passes_and_some_failures_is_failed_and_never_partial() {
 fn a_file_scoped_check_on_a_clean_tree_is_skipped_with_a_reason_and_no_log() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let payload = envelope(&machine.run(&repo, &["check", "app:lint", "--json"]));
+    let payload = envelope(&machine.run(&repo, &["manifest", "check", "app:lint", "--json"]));
     let lint = row(&payload, "app:lint");
     assert_eq!(lint["status"], "SKIPPED");
     assert_eq!(lint["reason"], "no matching files");
@@ -114,11 +114,11 @@ fn a_file_scoped_check_on_a_clean_tree_is_skipped_with_a_reason_and_no_log() {
 fn a_changed_file_makes_its_file_scoped_check_run() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
     std::fs::create_dir_all(repo.join("src")).unwrap();
     std::fs::write(repo.join("src/a.py"), "x\n").unwrap();
 
-    let payload = envelope(&machine.run(&repo, &["check", "app:lint", "--json"]));
+    let payload = envelope(&machine.run(&repo, &["manifest", "check", "app:lint", "--json"]));
     assert_eq!(row(&payload, "app:lint")["status"], "PASS");
 }
 
@@ -132,9 +132,9 @@ fn a_changed_file_makes_its_file_scoped_check_run() {
 fn a_real_runs_record_replays_to_the_state_it_persisted() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let payload = envelope(&machine.run(&repo, &["check", "--json"]));
+    let payload = envelope(&machine.run(&repo, &["manifest", "check", "--json"]));
     let run_id = payload["data"]["run_id"].as_str().expect("a run id");
     let record = record(&repo, run_id);
 
@@ -156,9 +156,9 @@ fn a_real_runs_record_replays_to_the_state_it_persisted() {
 fn the_dispatch_record_carries_the_argv_that_ran_and_no_environment_value() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let payload = envelope(&machine.run(&repo, &["check", "app:fail", "--json"]));
+    let payload = envelope(&machine.run(&repo, &["manifest", "check", "app:fail", "--json"]));
     let run_id = payload["data"]["run_id"].as_str().expect("a run id");
     let record = record(&repo, run_id);
 
@@ -195,11 +195,11 @@ fn the_dispatch_record_carries_the_argv_that_ran_and_no_environment_value() {
 fn two_runs_of_one_failure_produce_the_same_signature() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
     let mut digests = Vec::new();
     for _ in 0..2 {
-        let payload = envelope(&machine.run(&repo, &["check", "app:fail", "--json"]));
+        let payload = envelope(&machine.run(&repo, &["manifest", "check", "app:fail", "--json"]));
         let run_id = payload["data"]["run_id"].as_str().unwrap().to_string();
         let record = record(&repo, &run_id);
         digests.push(
@@ -224,9 +224,9 @@ fn two_runs_of_one_failure_produce_the_same_signature() {
 fn a_check_needing_a_service_that_is_not_running_is_refused_by_name() {
     let machine = Machine::new();
     let repo = machine.repo("main", NEEDS_A_SERVICE);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let output = machine.run(&repo, &["check", "app:test", "--json"]);
+    let output = machine.run(&repo, &["manifest", "check", "app:test", "--json"]);
     let payload = envelope(&output);
 
     assert_eq!(payload["error"]["class"], "bad_invocation");
@@ -262,9 +262,9 @@ fn a_check_needing_a_service_that_is_not_running_is_refused_by_name() {
 fn a_blocked_check_beside_a_failing_one_reports_the_invocation() {
     let machine = Machine::new();
     let repo = machine.repo("main", NEEDS_A_SERVICE);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let output = machine.run(&repo, &["check", "--json"]);
+    let output = machine.run(&repo, &["manifest", "check", "--json"]);
     let payload = envelope(&output);
 
     assert_eq!(row(&payload, "app:fail")["status"], "FAILED");
@@ -279,9 +279,9 @@ fn a_blocked_check_beside_a_failing_one_reports_the_invocation() {
 fn a_check_that_needs_nothing_still_runs_beside_a_blocked_one() {
     let machine = Machine::new();
     let repo = machine.repo("main", NEEDS_A_SERVICE);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let payload = envelope(&machine.run(&repo, &["check", "--json"]));
+    let payload = envelope(&machine.run(&repo, &["manifest", "check", "--json"]));
     assert_eq!(row(&payload, "app:free")["status"], "PASS");
 }
 
@@ -311,9 +311,9 @@ components:
 fn a_second_run_in_one_workspace_fails_fast_and_names_the_way_to_queue() {
     let machine = Machine::new();
     let repo = machine.repo("main", SLOW);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let mut first = machine.spawn(&repo, &["check"]);
+    let mut first = machine.spawn(&repo, &["manifest", "check"]);
     // Wait for the run lease to appear rather than sleeping a guess.
     let db = machine.home.path().join(".char/char.db");
     let start = std::time::Instant::now();
@@ -321,7 +321,7 @@ fn a_second_run_in_one_workspace_fails_fast_and_names_the_way_to_queue() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
 
-    let second = machine.run(&repo, &["check", "--json"]);
+    let second = machine.run(&repo, &["manifest", "check", "--json"]);
     let payload = envelope(&second);
     assert_eq!(payload["error"]["class"], "bad_invocation");
     assert_eq!(second.status.code(), Some(2));
@@ -344,11 +344,11 @@ fn two_worktrees_run_at_the_same_time_without_contending() {
     let machine = Machine::new();
     let repo = machine.repo("main", SLOW);
     let other = machine.worktree(&repo, "wt-1");
-    machine.run(&repo, &["init"]);
-    machine.run(&other, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
+    machine.run(&other, &["manifest", "init"]);
 
-    let mut first = machine.spawn(&repo, &["check"]);
-    let second = machine.run(&other, &["check", "--json"]);
+    let mut first = machine.spawn(&repo, &["manifest", "check"]);
+    let second = machine.run(&other, &["manifest", "check", "--json"]);
     let payload = envelope(&second);
 
     assert_ne!(
@@ -387,9 +387,9 @@ fn lease_held(db: &Path, kind: &str) -> bool {
 fn a_typo_in_a_selector_is_refused_and_lists_what_would_have_worked() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let output = machine.run(&repo, &["check", "lnit", "--json"]);
+    let output = machine.run(&repo, &["manifest", "check", "lnit", "--json"]);
     let payload = envelope(&output);
     assert_eq!(payload["error"]["class"], "bad_invocation");
     assert_eq!(output.status.code(), Some(2));
@@ -409,9 +409,9 @@ fn a_conventional_selector_matching_nothing_exits_zero() {
         "main",
         "version: 1\ncomponents:\n  app:\n    checks:\n      audit: { cmd: \"./exiter.sh 0\" }\n",
     );
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let output = machine.run(&repo, &["check", "e2e", "--json"]);
+    let output = machine.run(&repo, &["manifest", "check", "e2e", "--json"]);
     let payload = envelope(&output);
     assert_eq!(payload["status"], "SKIPPED");
     assert_eq!(output.status.code(), Some(0));
@@ -423,9 +423,9 @@ fn a_conventional_selector_matching_nothing_exits_zero() {
 fn a_dry_run_shows_the_argv_and_writes_no_run() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    machine.run(&repo, &["init"]);
+    machine.run(&repo, &["manifest", "init"]);
 
-    let payload = envelope(&machine.run(&repo, &["check", "--dry-run", "--json"]));
+    let payload = envelope(&machine.run(&repo, &["manifest", "check", "--dry-run", "--json"]));
     let would: Vec<String> = payload["data"]["would_run"]
         .as_array()
         .expect("would_run")
@@ -450,7 +450,7 @@ fn the_two_reserved_flags_say_they_are_not_built_rather_than_unknown() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
     for flag in ["--detach", "--status"] {
-        let output = machine.run(&repo, &["check", flag, "--json"]);
+        let output = machine.run(&repo, &["manifest", "check", flag, "--json"]);
         let payload = envelope(&output);
         assert_eq!(payload["error"]["class"], "bad_invocation", "{flag}");
         assert!(
