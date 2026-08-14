@@ -27,3 +27,4 @@ pub mod net;
 pub mod posix;
 pub mod process;
 pub mod runs;
+pub mod scan;

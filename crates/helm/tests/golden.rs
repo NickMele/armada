@@ -344,6 +344,19 @@ fn check_matches_its_snapshot() {
 /// The clock is injected and the path is passed in, so two runs of the same
 /// verb on two machines produce the same bytes. If this ever fails, the
 /// snapshots are about to start rotting.
+/// `armada manifest config scan`, over the one fixture with no `armada.yml`.
+///
+/// **No scenario and no redaction.** A scan has no workspace, claims no ports
+/// and mints no run id, so there is nothing in the payload that differs between
+/// two correct machines — which is also why it is the one snapshot here that
+/// reads a fixture directory rather than a scratch repo.
+#[test]
+fn config_scan_matches_its_snapshot() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/next-prisma");
+    let output = verbs::config::scan(&root).expect("a readable directory always answers");
+    assert_golden("config-scan", &output.to_json());
+}
+
 #[test]
 fn the_payloads_are_deterministic_across_runs() {
     let first = run_verb(&scenario(CONFIG), |app| verbs::init::run(app, false));

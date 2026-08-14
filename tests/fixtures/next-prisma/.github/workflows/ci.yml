@@ -1,0 +1,17 @@
+name: ci
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Six steps, four of which run a command. A scan counts every step and
+      # lists only the commands, which is what makes `6 steps` and four
+      # entries in the evidence agree.
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build

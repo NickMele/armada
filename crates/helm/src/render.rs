@@ -41,7 +41,7 @@ pub mod term;
 
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
-    ResultRow, StatusData, Unreclaimed,
+    ResultRow, ScanData, StatusData, Unreclaimed,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::id::WorkspaceId;
@@ -71,6 +71,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Check(envelope) => check(envelope, style, width),
         Output::CheckDryRun(envelope) => check_dry(envelope, style, width),
         Output::Dispatch(envelope) => dispatch(envelope, style),
+        Output::Scan(envelope) => scan(envelope, style, width),
     }
 }
 
@@ -722,6 +723,213 @@ fn clean_dry(envelope: &Envelope<CleanDryRun>, style: Style, width: usize) -> St
         &["dry run".to_string(), "nothing was changed".to_string()],
     ));
     out
+}
+
+// ----------------------------------------------------------------- config scan
+
+/// `armada manifest config scan` — layer 1 of PLAN.md §5.
+///
+/// Three things the agreed layout settles here, each because of what it costs
+/// the reader — who is, on this verb more than any other, the agent about to
+/// author the config:
+///
+/// 1. **A row for every kind, present or not.** `absent  makefile  —` says
+///    Armada looked; a missing row says nothing at all, and the author cannot
+///    tell those apart.
+/// 2. **No truncation in the sections.** All fourteen scripts print. Evidence
+///    with a `…9 more` on it is evidence somebody has to fetch separately,
+///    which is how the one script that mattered gets missed.
+/// 3. **It ends by offering to hand over.** It has produced evidence and
+///    evidence is not a config, so the last thing it prints is the choice.
+///    `ARCHITECTURE.md` §1.9 permits that: the rule governs *inputs*, and
+///    printing a choice is an output. Reading the answer is not Armada's —
+///    nothing here consumes one.
+fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+
+    let here = if data.evidence.config_present {
+        "armada.yml is here already"
+    } else {
+        "no armada.yml here"
+    };
+    let mut out = format!(
+        "{}{}{}\n\n",
+        style.paint(Role::FlareOrange, here),
+        style.between(),
+        style.paint(Role::SteelGrey, "this is evidence and not a config")
+    );
+
+    // **The kind list is the renderer's and the values are the envelope's.**
+    // Which six kinds are drawn is layout, frozen by the fixture; whether each
+    // one found anything is read from `results[]` and decided nowhere here.
+    let mut kinds = Table::new(columns("kind", "detail", false)).indent(2);
+    for kind in armada_core::scan::KINDS {
+        let mut found = data.results.iter().filter(|row| row.id == kind).peekable();
+        if found.peek().is_none() {
+            kinds = kinds.row(vec![
+                token("absent", Role::SteelGrey),
+                Cell::plain(kind),
+                detail_cell(style, None),
+            ]);
+            continue;
+        }
+        for row in found {
+            kinds = kinds.row(vec![
+                token("found", Role::BeaconGreen),
+                Cell::plain(kind),
+                detail_cell(style, row.reason.as_deref()),
+            ]);
+        }
+    }
+    out.push_str(&kinds.render(style, width));
+
+    let evidence = &data.evidence;
+    for source in &evidence.scripts {
+        let mut table = pairs();
+        for script in &source.scripts {
+            table = table.row(vec![
+                Cell::painted(script.name.clone(), Role::RadarCyan),
+                Cell::muted(script.cmd.clone()),
+            ]);
+        }
+        out.push_str(&section(
+            style,
+            width,
+            &format!("{} scripts", source.file),
+            Some("verbatim and not interpreted"),
+            &table,
+        ));
+    }
+
+    let mut tools = pairs();
+    for pyproject in &evidence.pyproject {
+        tools = tools.row(vec![
+            Cell::painted(pyproject.file.clone(), Role::RadarCyan),
+            Cell::muted(pyproject.tools.join(", ")),
+        ]);
+    }
+    out.push_str(&section(
+        style,
+        width,
+        "pyproject tool sections",
+        None,
+        &tools,
+    ));
+
+    let mut targets = pairs();
+    for makefile in &evidence.makefiles {
+        targets = targets.row(vec![
+            Cell::painted(makefile.file.clone(), Role::RadarCyan),
+            Cell::muted(makefile.targets.join(", ")),
+        ]);
+    }
+    out.push_str(&section(style, width, "makefile targets", None, &targets));
+
+    // **One section over every compose file**, because a service is a service
+    // whichever file declared it and a reader scanning for `postgres` should
+    // not have to know which one.
+    let mut services = pairs();
+    for compose in &evidence.compose {
+        for service in &compose.services {
+            services = services.row(vec![
+                Cell::painted(service.name.clone(), Role::RadarCyan),
+                Cell::muted(service.ports.join(", ")),
+            ]);
+        }
+    }
+    out.push_str(&section(style, width, "compose services", None, &services));
+
+    let runs: Vec<String> = evidence
+        .ci
+        .iter()
+        .flat_map(|workflow| workflow.runs.clone())
+        .collect();
+    if !runs.is_empty() {
+        out.push('\n');
+        out.push_str(&heading(
+            style,
+            "ci steps",
+            Some("the best existing evidence of what you actually run"),
+        ));
+        // **Not a table cell.** A flexible column truncates, and the one rule
+        // this verb has is that evidence is never cut. A long line overhangs,
+        // which is honest.
+        out.push_str(&format!(
+            "    {}\n",
+            style.paint(Role::SteelGrey, &runs.join(style.between()))
+        ));
+    }
+
+    let mut globs = pairs();
+    for workspace in &evidence.workspace_globs {
+        globs = globs.row(vec![
+            Cell::painted(workspace.file.clone(), Role::RadarCyan),
+            Cell::muted(workspace.globs.join(", ")),
+        ]);
+    }
+    out.push_str(&section(style, width, "workspace globs", None, &globs));
+
+    out.push_str(&format!(
+        "\n{} {}\n\n",
+        style.strong(Role::SignalAmber, "Evidence only."),
+        style.paint(
+            Role::SteelGrey,
+            "Armada does not guess which of these you actually run."
+        )
+    ));
+    out.push_str(&handover(style, width));
+    out
+}
+
+/// The choice `scan` ends on.
+///
+/// **Printed and never read.** Manifest may emit anything an agent will read
+/// and may accept nothing an agent produced (`ARCHITECTURE.md` §1.9), so this
+/// is two lines of output and no prompt: whatever runs the first option is a
+/// caller above Manifest, not Manifest.
+fn handover(style: Style, width: usize) -> String {
+    Table::new(vec![Column::fixed(""), Column::flexible("")])
+        .headerless()
+        .indent(2)
+        .row(vec![
+            Cell::plain("1 let an agent write it with me"),
+            Cell::muted("opens claude here"),
+        ])
+        .row(vec![
+            Cell::plain("2 print the evidence and stop"),
+            Cell::muted("I will write armada.yml myself"),
+        ])
+        .render(style, width)
+}
+
+/// A titled block of evidence, or nothing at all when there is none of it.
+fn section(style: Style, width: usize, title: &str, aside: Option<&str>, table: &Table) -> String {
+    if table.is_empty() {
+        return String::new();
+    }
+    format!(
+        "\n{}{}",
+        heading(style, title, aside),
+        table.render(style, width)
+    )
+}
+
+/// A section title, and the half-sentence that says what the section is for.
+fn heading(style: Style, title: &str, aside: Option<&str>) -> String {
+    let mut line = format!("  {}", style.paint(Role::SignalAmber, title));
+    if let Some(aside) = aside {
+        line.push_str(style.between());
+        line.push_str(&style.paint(Role::SteelGrey, aside));
+    }
+    line.push('\n');
+    line
+}
+
+/// A name and its value, aligned — the one shape every evidence section takes.
+fn pairs() -> Table {
+    Table::new(vec![Column::fixed(""), Column::flexible("")])
+        .headerless()
+        .indent(4)
 }
 
 // ------------------------------------------------------------------- the parts

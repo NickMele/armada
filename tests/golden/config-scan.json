@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "verb": "config scan",
+  "workspace": null,
+  "status": "OK",
+  "error": null,
+  "data": {
+    "results": [
+      {
+        "id": "lockfile",
+        "status": "OK",
+        "path": "pnpm-lock.yaml",
+        "reason": "pnpm-lock.yaml, pnpm@9"
+      },
+      {
+        "id": "scripts",
+        "status": "OK",
+        "path": "package.json",
+        "reason": "14 in package.json"
+      },
+      {
+        "id": "compose",
+        "status": "OK",
+        "path": "docker-compose.yml",
+        "reason": "docker-compose.yml, 3 services"
+      },
+      {
+        "id": "ci",
+        "status": "OK",
+        "path": ".github/workflows/ci.yml",
+        "reason": ".github/workflows/ci.yml, 6 steps"
+      }
+    ],
+    "evidence": {
+      "config_present": false,
+      "lockfiles": [
+        {
+          "file": "pnpm-lock.yaml",
+          "manager": "pnpm@9"
+        }
+      ],
+      "scripts": [
+        {
+          "file": "package.json",
+          "scripts": [
+            {
+              "name": "dev",
+              "cmd": "next dev"
+            },
+            {
+              "name": "build",
+              "cmd": "next build"
+            },
+            {
+              "name": "test",
+              "cmd": "vitest run"
+            },
+            {
+              "name": "test:e2e",
+              "cmd": "playwright test"
+            },
+            {
+              "name": "lint",
+              "cmd": "eslint ."
+            },
+            {
+              "name": "lint:fix",
+              "cmd": "eslint . --fix"
+            },
+            {
+              "name": "typecheck",
+              "cmd": "tsc --noEmit"
+            },
+            {
+              "name": "db:migrate",
+              "cmd": "prisma migrate deploy"
+            },
+            {
+              "name": "db:seed",
+              "cmd": "prisma db seed"
+            },
+            {
+              "name": "gen:types",
+              "cmd": "prisma generate"
+            },
+            {
+              "name": "start",
+              "cmd": "next start"
+            },
+            {
+              "name": "analyze",
+              "cmd": "ANALYZE=true next build"
+            },
+            {
+              "name": "clean",
+              "cmd": "rm -rf .next node_modules/.cache"
+            },
+            {
+              "name": "storybook",
+              "cmd": "storybook dev -p 6006"
+            }
+          ]
+        }
+      ],
+      "pyproject": [],
+      "makefiles": [],
+      "compose": [
+        {
+          "file": "docker-compose.yml",
+          "services": [
+            {
+              "name": "postgres",
+              "ports": [
+                "5432"
+              ]
+            },
+            {
+              "name": "redis",
+              "ports": [
+                "6379"
+              ]
+            },
+            {
+              "name": "mailhog",
+              "ports": [
+                "1025",
+                "8025"
+              ]
+            }
+          ]
+        }
+      ],
+      "ci": [
+        {
+          "file": ".github/workflows/ci.yml",
+          "steps": 6,
+          "runs": [
+            "pnpm install --frozen-lockfile",
+            "pnpm lint",
+            "pnpm test",
+            "pnpm build"
+          ]
+        }
+      ],
+      "workspace_globs": []
+    }
+  }
+}

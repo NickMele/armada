@@ -1,12 +1,13 @@
 [1m[38;2;255;169;64marmada manifest — one repository's stack: ports, services, checks[0m
 
 [1m[38;2;255;169;64mVERBS[0m
+  config  [38;2;107;114;128mreport the evidence, then verify what was written[0m
   init    [38;2;107;114;128mclaim this workspace: ports, .armada/, setup[0m
   status  [38;2;107;114;128mwhat is running, what is mine, what is stale[0m
   check   [38;2;107;114;128mlint, format and test — the verb a gate calls[0m
   clean   [38;2;107;114;128mrelease what this workspace owns[0m
 
 [1m[38;2;255;169;64mNOT BUILT YET[0m
-  up, down, config, agents-md, explain  [38;2;107;114;128mreserved; see PHASES.md §8[0m
+  up, down, skills, render, agents-md, explain  [38;2;107;114;128mreserved; see PHASES.md §8[0m
 
 `armada manifest <verb> --help` for one verb's flags.

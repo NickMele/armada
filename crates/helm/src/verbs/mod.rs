@@ -7,15 +7,16 @@
 
 pub mod check;
 pub mod clean;
+pub mod config;
 pub mod dispatch;
 pub mod init;
 pub mod status;
 
-use armada_core::config::{self, ResolvedConfig};
+use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
-    StatusData,
+    ScanData, StatusData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -42,6 +43,8 @@ pub enum Output {
     CheckDryRun(Box<Envelope<CheckDryRun>>),
     /// A dispatched `commands:` entry.
     Dispatch(Box<Envelope<DispatchData>>),
+    /// `armada manifest config scan`.
+    Scan(Box<Envelope<ScanData>>),
 }
 
 impl Output {
@@ -56,6 +59,7 @@ impl Output {
             Output::Check(e) => e.to_json(),
             Output::CheckDryRun(e) => e.to_json(),
             Output::Dispatch(e) => e.to_json(),
+            Output::Scan(e) => e.to_json(),
         }
     }
 
@@ -87,6 +91,7 @@ impl Output {
             Output::Check(e) => e.exit_code(),
             Output::CheckDryRun(e) => e.exit_code(),
             Output::Dispatch(e) => e.exit_code(),
+            Output::Scan(e) => e.exit_code(),
         }
     }
 }
@@ -102,8 +107,8 @@ pub fn load_config<R: Run, C: Clock, F: Fetch>(
 ) -> Result<(Workspace, ResolvedConfig), armada_core::error::ArmadaError> {
     let workspace = app.ctx.workspace()?.clone();
     let text = config_file::read(&workspace.config_path())?;
-    let parsed = config::parse(&text, &workspace.config_label)?;
-    let resolved = config::resolve(
+    let parsed = config_contract::parse(&text, &workspace.config_label)?;
+    let resolved = config_contract::resolve(
         parsed,
         &app.machine.config_defaults(),
         &workspace.config_label,
@@ -123,6 +128,6 @@ pub fn load_foreign_config(
     machine: &MachineConfig,
 ) -> Option<ResolvedConfig> {
     let text = std::fs::read_to_string(root.join("armada.yml")).ok()?;
-    let parsed = config::parse(&text, "armada.yml").ok()?;
-    config::resolve(parsed, &machine.config_defaults(), "armada.yml").ok()
+    let parsed = config_contract::parse(&text, "armada.yml").ok()?;
+    config_contract::resolve(parsed, &machine.config_defaults(), "armada.yml").ok()
 }

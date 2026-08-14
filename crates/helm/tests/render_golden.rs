@@ -30,7 +30,7 @@
 
 use armada_core::envelope::{
     CheckData, CleanData, DispatchData, Envelope, InitData, PortReport, Released, ResultRow,
-    StatusData, Unreclaimed,
+    ScanData, StatusData, Unreclaimed,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::id::WorkspaceId;
@@ -356,6 +356,31 @@ fn a_refused_dispatch_matches_its_fixture() {
         },
     )));
     assert_render("dispatch-refused", &output);
+}
+
+/// `armada manifest config scan`, over the one fixture with no `armada.yml`.
+///
+/// **Rendered from the real directory, not from a hand-built envelope.** Every
+/// other case here constructs its payload, because the world it describes —
+/// leases, pids, port claims — has no on-disk form. A scan's world is exactly a
+/// directory, so building the envelope by hand would test the renderer against
+/// a scan nobody performed, and the two parsers between the files and the table
+/// are where this verb's mistakes live.
+#[test]
+fn config_scan_matches_its_fixture() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/next-prisma");
+    let files = armada_manifest::scan::read(&root);
+    let evidence = armada_core::scan::scan(&files);
+    let output = Output::Scan(Box::new(Envelope::ok(
+        "config scan",
+        None,
+        Status::Ok,
+        ScanData {
+            results: armada_core::scan::findings(&evidence),
+            evidence,
+        },
+    )));
+    assert_render("config-scan", &output);
 }
 
 /// `armada --help`, which is the page the milestone was opened for.

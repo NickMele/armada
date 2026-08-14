@@ -517,6 +517,99 @@ pub struct InitDryRun {
     pub would_reap: ReapPlan,
 }
 
+/// `armada manifest config scan` — layer 1 of PLAN.md §5.
+///
+/// **Two views of one scan, and neither is derived from the other by a
+/// reader.** `results[]` is the summary a caller iterates the same way it
+/// iterates every other verb's — one row per finding, with the file it came
+/// from in `path` and the one-line detail in `reason`. `evidence` is the
+/// verbatim material that summary counts: every script, every service, every
+/// CI step. The agent authoring the config wants the second; a script asking
+/// "is there a compose file here" wants the first.
+///
+/// **There is no absent row.** A kind that turned nothing up contributes
+/// nothing to `results[]`, because an absence is not a finding — the human
+/// render says `absent` for it, which is a statement about the fixed set of
+/// kinds it draws rather than about anything the scan produced.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct ScanData {
+    /// One row per finding, in the order the human render draws them.
+    pub results: Vec<ResultRow>,
+    /// The facts themselves, uninterpreted and untruncated.
+    pub evidence: crate::scan::Evidence,
+}
+
+/// `armada manifest config verify` — layer 3 of PLAN.md §5.
+///
+/// **Two passes, and only the first is cheap.** `results[]` is pass 1: static,
+/// seconds, nothing executed. `pass_2` is the real run of the check suite, and
+/// it is `None` whenever pass 1 did not pass — *not attempted* rather than
+/// *skipped*, which is why the field is absent instead of empty.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct VerifyData {
+    /// Pass 1, one row per static check.
+    pub results: Vec<ResultRow>,
+    /// Entries under `shell: true`, which have **no `argv[0]` to resolve**
+    /// (PLAN.md §5). Counted rather than guessed at or silently passed: the
+    /// string is a program in a language Armada does not parse, and this number
+    /// is the honest cost of that key.
+    pub unchecked: usize,
+    /// Pass 2, when pass 1 passed and the suite therefore ran for real.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pass_2: Option<Box<CheckData>>,
+}
+
+/// `armada manifest skills` and `armada manifest skills show <name>`.
+///
+/// **There is deliberately no way to run one** (PLAN.md §4.8). "Add a
+/// migration" has no deterministic expansion; the `commands:` entry it names
+/// does, and that already has a verb. A runner would mean Armada choosing
+/// arguments on the user's behalf, which is precisely what §5's layer 1
+/// refuses to do.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct SkillsData {
+    /// One row per skill listed, in name order.
+    pub results: Vec<ResultRow>,
+    /// The resolved skills themselves — the same structure the CLI table, a
+    /// future MCP response and the generated frontmatter are three renderings
+    /// of, so a skill cannot mean one thing to a shell caller and another to an
+    /// agent.
+    pub skills: Vec<ResolvedSkillView>,
+}
+
+/// One skill, resolved: its grants expanded to the commands they name.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ResolvedSkillView {
+    /// The declared name.
+    pub name: String,
+    /// One line, for listings and generated frontmatter.
+    pub summary: String,
+    /// Workspace-relative path to the prose. **Held, never parsed**
+    /// (`ARCHITECTURE.md` §1.9).
+    pub doc: String,
+    /// The `commands:` entries this skill may invoke, and what each of them
+    /// runs. **`uses:` grants nothing** — every name here was already declared
+    /// under `commands:`, which is what makes a repo-authored skill safe to
+    /// load.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub uses: Vec<GrantedCommand>,
+    /// The check scope that proves the work landed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub verify: Vec<String>,
+    /// Advisory globs. Not enforced.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub touches: Vec<String>,
+}
+
+/// A `commands:` entry a skill names, with the command it resolves to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GrantedCommand {
+    /// The `commands:` key.
+    pub name: String,
+    /// What that entry runs, as the config declares it.
+    pub cmd: String,
+}
+
 /// A body with nothing in it, for a failure that never got as far as one.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct NoData {}

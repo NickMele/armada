@@ -53,13 +53,12 @@ fn pending_dir() -> PathBuf {
 /// The commands whose layout is agreed and unbuilt, and the milestone that owns
 /// each. Named here so a fixture cannot be quietly dropped, and so the list can
 /// be read against `PHASES.md` §8.
-const PENDING: [(&str, &str); 7] = [
+const PENDING: [(&str, &str); 6] = [
     (
         "init-machine",
         "M2 — `armada init`, the first command on a new machine",
     ),
     ("doctor", "M2 — `armada doctor`"),
-    ("config-scan", "not built — `armada manifest config scan`"),
     (
         "config-verify",
         "not built — `armada manifest config verify`",

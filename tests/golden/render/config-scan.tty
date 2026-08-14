@@ -1,0 +1,38 @@
+[38;2;255;180;84mno armada.yml here[0m · [38;2;107;114;128mthis is evidence and not a config[0m
+
+  [1m[38;2;107;114;128mSTATUS[0m  [1m[38;2;107;114;128mKIND[0m       [1m[38;2;107;114;128mDETAIL[0m
+  [38;2;61;220;132mfound[0m   lockfile   [38;2;107;114;128mpnpm-lock.yaml, pnpm@9[0m
+  [38;2;61;220;132mfound[0m   scripts    [38;2;107;114;128m14 in package.json[0m
+  [38;2;61;220;132mfound[0m   compose    [38;2;107;114;128mdocker-compose.yml, 3 services[0m
+  [38;2;61;220;132mfound[0m   ci         [38;2;107;114;128m.github/workflows/ci.yml, 6 steps[0m
+  [38;2;107;114;128mabsent[0m  pyproject  [38;2;107;114;128m—[0m
+  [38;2;107;114;128mabsent[0m  makefile   [38;2;107;114;128m—[0m
+
+  [38;2;255;169;64mpackage.json scripts[0m · [38;2;107;114;128mverbatim and not interpreted[0m
+    [38;2;92;225;230mdev[0m         [38;2;107;114;128mnext dev[0m
+    [38;2;92;225;230mbuild[0m       [38;2;107;114;128mnext build[0m
+    [38;2;92;225;230mtest[0m        [38;2;107;114;128mvitest run[0m
+    [38;2;92;225;230mtest:e2e[0m    [38;2;107;114;128mplaywright test[0m
+    [38;2;92;225;230mlint[0m        [38;2;107;114;128meslint .[0m
+    [38;2;92;225;230mlint:fix[0m    [38;2;107;114;128meslint . --fix[0m
+    [38;2;92;225;230mtypecheck[0m   [38;2;107;114;128mtsc --noEmit[0m
+    [38;2;92;225;230mdb:migrate[0m  [38;2;107;114;128mprisma migrate deploy[0m
+    [38;2;92;225;230mdb:seed[0m     [38;2;107;114;128mprisma db seed[0m
+    [38;2;92;225;230mgen:types[0m   [38;2;107;114;128mprisma generate[0m
+    [38;2;92;225;230mstart[0m       [38;2;107;114;128mnext start[0m
+    [38;2;92;225;230manalyze[0m     [38;2;107;114;128mANALYZE=true next build[0m
+    [38;2;92;225;230mclean[0m       [38;2;107;114;128mrm -rf .next node_modules/.cache[0m
+    [38;2;92;225;230mstorybook[0m   [38;2;107;114;128mstorybook dev -p 6006[0m
+
+  [38;2;255;169;64mcompose services[0m
+    [38;2;92;225;230mpostgres[0m  [38;2;107;114;128m5432[0m
+    [38;2;92;225;230mredis[0m     [38;2;107;114;128m6379[0m
+    [38;2;92;225;230mmailhog[0m   [38;2;107;114;128m1025, 8025[0m
+
+  [38;2;255;169;64mci steps[0m · [38;2;107;114;128mthe best existing evidence of what you actually run[0m
+    [38;2;107;114;128mpnpm install --frozen-lockfile · pnpm lint · pnpm test · pnpm build[0m
+
+[1m[38;2;255;169;64mEvidence only.[0m [38;2;107;114;128mArmada does not guess which of these you actually run.[0m
+
+  1 let an agent write it with me  [38;2;107;114;128mopens claude here[0m
+  2 print the evidence and stop    [38;2;107;114;128mI will write armada.yml myself[0m

@@ -928,6 +928,62 @@ fn force_rebuild_refuses_every_flag_that_has_no_meaning_on_it() {
     }
 }
 
+/// **`config scan` in a directory that is not a workspace at all**, which is
+/// the only situation it ever runs in (PLAN.md §5): a repository has no
+/// `armada.yml` and this is how it gets one.
+///
+/// Every other verb resolves a workspace first and fails without one. Nothing
+/// but an end-to-end run establishes that this one does not — the unit tests
+/// call the verb directly, past the entrypoint where that decision is made.
+#[test]
+fn config_scan_answers_in_a_directory_with_no_workspace() {
+    let machine = Machine::new();
+    let loose = machine.root.path().join("not-a-workspace");
+    std::fs::create_dir_all(&loose).unwrap();
+    std::fs::write(
+        loose.join("package.json"),
+        r#"{"scripts":{"test":"vitest run","lint":"eslint ."}}"#,
+    )
+    .unwrap();
+    std::fs::write(loose.join("package-lock.json"), "{}").unwrap();
+
+    let output = machine.run(&loose, &["manifest", "config", "scan", "--json"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "scan reports rather than judges: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["workspace"], Value::Null, "nothing was claimed");
+    assert_eq!(payload["data"]["evidence"]["config_present"], false);
+    let scripts = &payload["data"]["evidence"]["scripts"][0]["scripts"];
+    assert_eq!(scripts[0]["name"], "test", "declaration order, not sorted");
+    assert_eq!(scripts[1]["name"], "lint");
+
+    // The human render is the one an authoring agent actually reads, and it
+    // ends by offering to hand over (PLAN.md §5, ARCHITECTURE.md §1.9 — the
+    // rule governs inputs, and printing a choice is an output).
+    let human = machine.run(&loose, &["manifest", "config", "scan"]);
+    let text = String::from_utf8_lossy(&human.stdout);
+    assert!(text.starts_with("no armada.yml here"), "{text}");
+    assert!(text.contains("Evidence only."), "{text}");
+    assert!(text.contains("1 let an agent write it with me"), "{text}");
+    assert!(!text.contains('\x1b'), "a pipe gets no escapes: {text}");
+}
+
+/// The half that is not built yet says so, rather than dispatching to a
+/// `commands:` entry that happens to be called `verify`.
+#[test]
+fn config_verify_is_claimed_and_answers_that_it_is_not_built() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    let refused = machine.run(&repo, &["manifest", "config", "verify", "--json"]);
+    let payload: Value = serde_json::from_slice(&refused.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "bad_invocation");
+    assert_eq!(refused.status.code(), Some(2));
+}
+
 fn namespace_of(db: &std::path::Path) -> String {
     rusqlite::Connection::open(db)
         .ok()

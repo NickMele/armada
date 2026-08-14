@@ -132,6 +132,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Clean { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
+        Invocation::Config { json, .. } => *json,
         Invocation::Version | Invocation::Help(_) => false,
     }
 }
@@ -169,6 +170,19 @@ fn dispatch(
             return Err(refusal);
         }
         return verbs::clean::rebuild(&run, &SystemClock, home, common.dry_run);
+    }
+
+    // **`config scan` is the one verb that runs in a repo with no `armada.yml`
+    // at all** (PLAN.md §2.1), and it is answered here for that reason: routing
+    // it through workspace resolution would fail on exactly the situation it
+    // exists for. It reads a directory, takes no lease and opens no database,
+    // so it needs none of what `app::build` assembles.
+    if let Invocation::Config {
+        sub: args::ConfigSub::Scan,
+        ..
+    } = &invocation
+    {
+        return verbs::config::scan(cwd);
     }
 
     // Two invocations legitimately run outside any workspace: asking about
@@ -225,7 +239,25 @@ fn dispatch(
         Invocation::Dispatch { name, argv, json } => {
             verbs::dispatch::run(&mut app, &name, &argv, json)
         }
+        Invocation::Config { sub, .. } => Err(not_built_yet(match sub {
+            args::ConfigSub::Scan => unreachable!("answered before the workspace is resolved"),
+            args::ConfigSub::Verify => "config verify",
+        })),
         Invocation::Version | Invocation::Help(_) => unreachable!("handled before dispatch"),
+    }
+}
+
+/// A name Armada claims and has not built yet.
+///
+/// **Claimed rather than left free**, on the rule `args.rs` states for every
+/// other reserved name: a name that is going to mean one thing must not mean
+/// something else for a release first.
+fn not_built_yet(verb: &str) -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: verb.to_string(),
+        message: format!("`armada manifest {verb}` is not built yet"),
+        next_action: Some("`armada manifest config scan` is the half that is".to_string()),
     }
 }
 

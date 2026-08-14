@@ -71,6 +71,13 @@ pub enum Invocation {
     Status(Common),
     /// `armada manifest check`.
     Check(Box<Check>),
+    /// `armada manifest config <scan|verify>`.
+    Config {
+        /// Which half of the sandwich (PLAN.md §5).
+        sub: ConfigSub,
+        /// Emit the envelope rather than human output.
+        json: bool,
+    },
     /// A `commands:` entry, with everything after its name.
     Dispatch {
         /// The entry's name.
@@ -80,6 +87,20 @@ pub enum Invocation {
         /// `--json` forces `pipe` and makes stdout carry the envelope alone.
         json: bool,
     },
+}
+
+/// Which layer of the bootstrap sandwich `config` was asked for (PLAN.md §5).
+///
+/// **Two subcommands with one purpose between them**: let an agent produce a
+/// working config for a repository it has never seen, with no human in the
+/// loop. Layer 2 — the authoring — is deliberately not a subcommand, because it
+/// is not Armada's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigSub {
+    /// Layer 1: report facts, decide nothing.
+    Scan,
+    /// Layer 3: pass 1 static, then pass 2 for real.
+    Verify,
 }
 
 /// A parse failure, carrying the `--json` the parser had **already seen** when
@@ -144,7 +165,7 @@ pub struct Common {
 /// The verbs Manifest owns. A `commands:` entry may not shadow one — the schema
 /// rejects that, because without the rule a repo can silently break the one
 /// guarantee the project exists to provide.
-pub const BUILTIN_VERBS: [&str; 9] = [
+pub const BUILTIN_VERBS: [&str; 11] = [
     "init",
     "up",
     "down",
@@ -152,6 +173,8 @@ pub const BUILTIN_VERBS: [&str; 9] = [
     "clean",
     "status",
     "config",
+    "skills",
+    "render",
     "agents-md",
     "explain",
 ];
@@ -174,12 +197,12 @@ pub const RESERVED_TOP_LEVEL: [(&str, &str); 6] = [
     ("bridge", "M3 — the live screen"),
 ];
 
-/// The verbs with a help page of their own — the four Manifest has built.
+/// The verbs with a help page of their own — the ones Manifest has built.
 ///
 /// A separate list from [`BUILTIN_VERBS`], because that one claims names,
 /// several of which answer "not built yet": giving `armada manifest up --help` a
 /// page would promise a verb that does not exist.
-const BUILT_PAGES: [&str; 4] = ["init", "status", "check", "clean"];
+const BUILT_PAGES: [&str; 5] = ["init", "status", "check", "clean", "config"];
 
 /// `--help` in either spelling.
 fn is_help(arg: &str) -> bool {
@@ -300,6 +323,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             Ok(Invocation::Status(common))
         }
         "check" => Ok(Invocation::Check(Box::new(check(rest, json, color)?))),
+        "config" => config(rest, json, color),
         "clean" => {
             let common = common(
                 rest,
@@ -459,6 +483,80 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
     }
 
     Ok(parsed)
+}
+
+/// `armada manifest config <scan|verify>`.
+///
+/// **The subcommand is required and is not defaulted.** `scan` reports and
+/// `verify` runs the check suite for real; guessing which one a bare `config`
+/// meant would, on the wrong guess, be a full build nobody asked for.
+fn config(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    let json = json || rest.iter().any(|a| a == "--json");
+    *color = color_in(rest, *color).map_err(|e| failure(e, json))?;
+
+    let sub = match positional(rest).first().map(String::as_str) {
+        Some("scan") => ConfigSub::Scan,
+        Some("verify") => ConfigSub::Verify,
+        other => {
+            return Err(failure(
+                ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: other.unwrap_or("config").to_string(),
+                    message: match other {
+                        Some(word) => {
+                            format!("`armada manifest config {word}` is not a subcommand")
+                        }
+                        None => "`armada manifest config` needs a subcommand".to_string(),
+                    },
+                    next_action: Some(
+                        "`armada manifest config scan` reports evidence; \
+                         `armada manifest config verify` validates a written one"
+                            .to_string(),
+                    ),
+                },
+                json,
+            ))
+        }
+    };
+    only_flags(rest, json, &[])?;
+    Ok(Invocation::Config { sub, json })
+}
+
+/// The bare words of a verb's own argv, with the flags Armada owns removed.
+fn positional(rest: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut index = 0;
+    while index < rest.len() {
+        let arg = rest[index].as_str();
+        index += 1;
+        match arg {
+            "--color" => index += 1,
+            flag if flag.starts_with('-') => {}
+            word => out.push(word.to_string()),
+        }
+    }
+    out
+}
+
+/// Refuse any flag beyond the shared ones and `allowed`.
+fn only_flags(rest: &[String], json: bool, allowed: &[&str]) -> Result<(), ParseFailure> {
+    for arg in rest {
+        let arg = arg.as_str();
+        if !arg.starts_with('-')
+            || arg == "--json"
+            || arg == "--color"
+            || arg.starts_with("--color=")
+            || allowed.contains(&arg)
+        {
+            continue;
+        }
+        return Err(failure(unknown_flag(arg), json));
+    }
+    Ok(())
 }
 
 fn needs_a_value(flag: &str) -> ArmadaError {
@@ -743,6 +841,51 @@ mod tests {
     #[test]
     fn status_refuses_a_dry_run_because_it_changes_nothing() {
         assert!(parse(&args(&["manifest", "status", "--dry-run"])).is_err());
+    }
+
+    #[test]
+    fn config_takes_one_of_its_two_subcommands() {
+        for (word, expected) in [("scan", ConfigSub::Scan), ("verify", ConfigSub::Verify)] {
+            let Invocation::Config { sub, json } = parse(&args(&["manifest", "config", word]))
+                .unwrap()
+                .invocation
+            else {
+                panic!("`config {word}` did not parse")
+            };
+            assert_eq!(sub, expected);
+            assert!(!json);
+        }
+        assert!(
+            parse(&args(&["manifest", "config", "scan", "--json"]))
+                .unwrap()
+                .invocation
+                == Invocation::Config {
+                    sub: ConfigSub::Scan,
+                    json: true
+                }
+        );
+    }
+
+    /// **The subcommand is required and is not defaulted.** `verify` runs the
+    /// check suite for real, so guessing which one a bare `config` meant would,
+    /// on the wrong guess, be a full build nobody asked for.
+    #[test]
+    fn a_bare_config_is_refused_rather_than_defaulted() {
+        for words in [
+            &["manifest", "config"][..],
+            &["manifest", "config", "validate"][..],
+        ] {
+            let err = parse(&args(words)).unwrap_err().error;
+            assert_eq!(err.class, ErrClass::BadInvocation);
+            assert!(err.next_action.unwrap().contains("config scan"));
+        }
+    }
+
+    #[test]
+    fn config_refuses_a_flag_it_does_not_take() {
+        let failure = parse(&args(&["manifest", "config", "scan", "--all", "--json"])).unwrap_err();
+        assert_eq!(failure.error.class, ErrClass::BadInvocation);
+        assert!(failure.json, "the envelope is still owed an answer");
     }
 
     /// The module name is a grammar level, so a bare module is as incomplete as
