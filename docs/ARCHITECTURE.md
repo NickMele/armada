@@ -563,6 +563,27 @@ Module, Job, Drone, Helm, Bridge and Board, and of the three status enums. A ter
 meaning two things is a defect; the glossary exists so that is detectable rather than a matter
 of taste.
 
+#### The rule governs inputs, not outputs
+
+"Manifest must know nothing about agents" needs one clarification, because without it the rule
+forbids something Manifest has done correctly since phase 1.
+
+**Manifest may *emit* anything, including artifacts only an agent will ever read. It may never
+*accept* agent-shaped input** — a Job id, a model name, a transcript — or make a decision that
+depends on one.
+
+Emitting is safe because the output is derived from repository facts and a non-agent caller can
+simply ignore it. `char agents-md` ([`PLAN.md`](PLAN.md) §5.1) writes a managed block into
+`AGENTS.md` and nobody has ever considered that a violation; `char render`
+([`PLAN.md`](PLAN.md) §4.8) writes skill files on the same terms. Accepting is what does the
+damage, because it drags the agent framework into every other caller's lap — which is the
+failure the negative rule above exists to prevent.
+
+The practical test, when a new feature looks like it might breach this: **ask what Manifest
+would have to be told.** If the answer is only repository facts, the feature is legal however
+agent-flavoured its output looks. If Manifest would have to be handed something that only exists
+because an agent is running, it belongs in Fleet or Helm.
+
 **Corollary for new work:** when a feature seems to need an upward dependency, the feature is
 in the wrong module. Classification looked like the orchestrator's job and belongs to Fleet,
 because a Job must be classifiable before Helm exists. Ask which is the lowest module

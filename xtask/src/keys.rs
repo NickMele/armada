@@ -24,6 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// a phase. Everything else is reported and not enforced.
 const MUST_BE_BOTH: &[&str] = &[
     "components",
+    "skills",
     "checks",
     "run",
     "cmd",

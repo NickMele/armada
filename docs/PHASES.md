@@ -117,6 +117,7 @@ renames everything *and* adds a feature has an unreviewable diff.
 | **Managed blocks** | The `<!-- char:begin -->` / `<!-- char:end -->` markers and the `char agents-md` verb ([`PLAN.md`](PLAN.md) §5.1). Existing markers in the wild must still be recognised for one release, or a re-run appends a second block instead of replacing the first. |
 | **Docs** | Convert [`PLAN.md`](PLAN.md) §1–§12, [`ARCHITECTURE.md`](ARCHITECTURE.md), [`AGENTS.md`](../AGENTS.md) and [`traps.md`](traps.md) from `char` spelling to `armada`. Part II of `PLAN.md` and everything under `docs/manifest/`, `docs/guild/`, `docs/fleet/`, `docs/helm/` is already converted. Delete the transition notes on each shipped reference page once they are true. |
 | **Deletes** | `xtask/src/privacy.rs`, `xtask/src/contamination.rs`, the clean-room hook and its test, and the doc sections that explain them — **only after the repo is actually private**, not before ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4, §2.7). |
+| **Skills** | `skills:` schema, resolution, the four `config verify` cross-reference checks, `manifest skills` / `skills show`, and a fixture exercising it ([`PLAN.md`](PLAN.md) §4.8). Lands here because it changes `armada.yml`, and every fixture and golden snapshot is being rewritten in this milestone anyway — doing it twice is the avoidable cost. |
 | **Boundary check** | `xtask/src/boundaries.rs` generalises from "core depends on nothing concrete" to the module dependency rule in [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9. Today it enforces only the crate layering of [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5, because three of the four modules have no crates. |
 
 > **The rename touches live resources, which is the one part that is not a search-and-replace.**
@@ -150,6 +151,7 @@ its own. See [`PLAN.md`](PLAN.md) §13.
 | Interview | Asks only what it cannot read: voice, expectations, how-you-work, workflow confirmation, budget ceilings. Everything it writes is a plain file you can edit afterwards. |
 | Sync | `~/.armada/guild/` **is** a git repo Armada manages, pushed to a private remote named once during the interview. `export` / `import` bundles are the escape hatch for a machine that will never hold your credentials. |
 | Secret guard | Import refuses to adopt credential-shaped values; those stay in `machine.yml`, which never syncs. Built here, not retrofitted. |
+| `manifest render` | Renders a repo's declared skills into a harness format ([`PLAN.md`](PLAN.md) §4.8). Lands here rather than M1 because the managed-region and reversal bookkeeping is the same machinery guild projection needs ([`PLAN.md`](PLAN.md) §13.2) — building it once, for both, is the point. |
 
 **Split the packaging.** §9.1 F4 found that a Claude Code plugin carries skills, subagents,
 hooks, MCP servers, monitors and a `bin/` on `PATH` — but **cannot carry `CLAUDE.md` or user
@@ -201,6 +203,11 @@ what keeps it a rendering choice rather than an architectural one ([`PLAN.md`](P
 delivers fleet events into the conversation live, and a `Stop` hook refuses to end a turn while
 anything is unread. Both are configuration rather than code, and both were demonstrated in the
 spike.
+
+**Skills merge lands here too.** Fleet projects the guild's skills and the repo's rendered ones
+into each Job's worktree, with the collision policy of [`PLAN.md`](PLAN.md) §14.5 — repo wins,
+shadow always reported. Helm's toolbelt gains `manifest.skills` and `manifest.skill`
+([`commands/helm/mcp.md`](commands/helm/mcp.md)).
 
 **Done when:** you type `armada`, say "add rate limiting to the API and find out why the
 nightly job is flaky", and two isolated Jobs run, report, and bring you the one decision

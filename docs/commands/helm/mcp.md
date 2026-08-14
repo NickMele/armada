@@ -33,6 +33,8 @@ Normally registered rather than run by hand — the orchestrator launches it, an
 | `manifest.check` | [`../manifest/check.md`](../manifest/check.md) | The objective gate. |
 | `manifest.up` / `.down` / `.status` / `.clean` | corresponding pages | Workspace operations. |
 | `manifest.explain` | [`../manifest/explain.md`](../manifest/explain.md) | Evidence a stack trace does not carry. |
+| `manifest.skills` | [`../manifest/skills.md`](../manifest/skills.md) | What this repo knows about itself. Summaries only — Helm holds a routing table, not prose. |
+| `manifest.skill` | [`../manifest/skills.md`](../manifest/skills.md) | One skill resolved, **including the doc body**. A Drone calls this; Helm does not. |
 
 **Drones get a smaller toolbelt** — they may report and ask, not spawn. A Drone able to spawn
 Drones is a fork bomb with a budget.

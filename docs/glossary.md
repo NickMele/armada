@@ -27,6 +27,7 @@ They stack, and nothing points upward ([`ARCHITECTURE.md`](ARCHITECTURE.md) §1.
 | **Job** | The durable unit of work: a uuid, a git worktree, a port block, a transcript, a budget, and eventually a verdict. Survives crashes, reboots, and the death of its Drone. | A process. A Job with nothing running is the ordinary resting state. |
 | **Drone** | The process executing a Job. Temporary by design. | The work itself. Killing a Drone does not end its Job. |
 | **Contract** | **The guarantee a verb makes** — what `armada manifest check` promises to do and what states it may end in. Used this way throughout [`PLAN.md`](PLAN.md) §3 and the `--json` envelope. | A task. That is a Job. |
+| **Skill** | Repo-local knowledge: a named grant plus a pointer to prose ([`PLAN.md`](PLAN.md) §4.8). The mechanical half lives in `armada.yml`; the prose is a markdown file Manifest never parses. A guild skill is the same idea, owned by you rather than the repo. | A script. It has no `cmd:` and cannot be run — only listed, resolved and rendered. |
 | **Workflow** | An ordered set of steps in your guild — `design`, `plan`, `feature`, `bug` — naming which skill runs each step and what verdict advances it ([`PLAN.md`](PLAN.md) §14.4). | Hardcoded. It is data, editable at one in the morning. |
 
 **One Job has at most one live Drone.** The two words exist because their lifetimes differ, not

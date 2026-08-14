@@ -2218,6 +2218,109 @@ contained it. Today the default path is unsafe, and that is the actual bug.
 **Schema lands in phase 1; implementation in phase 4**, when `up` exists and there is
 something to inject into.
 
+### 4.8 `skills:` — repo-local knowledge char holds a pointer to
+
+A repository knows things about itself that no global skill can: how a migration is added
+*here*, what a component looks like *in this design system*, which of four test commands is the
+one that counts. `commands:` (§4.5) carries the invocation. It carries none of the judgement
+around it, and the judgement is the part an agent in an unfamiliar repo gets wrong.
+
+**A skill is two halves, and char may only own one of them.**
+
+| Half | Lives in | char's relationship to it |
+|---|---|---|
+| **Mechanical** — which commands it may run, what verifies it, what it touches | `char.yml` | Owns it. Ordinary config, cross-referenced and verified. |
+| **Prose** — the reasoning, the conventions, the worked example | a markdown file in the repo | **Holds a path. Never parses a word of it.** |
+
+That split is what keeps this inside `ARCHITECTURE.md` §1.9. The mechanical half is
+indistinguishable in kind from `commands:` and `checks:` — a human, a script or CI can read it
+and nothing about it is agent-shaped. The prose half char treats exactly as it already treats
+`AGENTS.md` (§5.1): it writes to it and points at it, and never reads it back as instruction.
+
+```yaml
+skills:
+
+  add-migration:
+    summary: Add a Prisma migration and regenerate the client
+    doc: docs/skills/add-migration.md
+    uses: [migrate-new, migrate-apply]
+    verify:
+      check: [test, types]
+    touches:
+      - "prisma/migrations/**"
+      - "prisma/schema.prisma"
+
+  add-component:
+    summary: Add a UI component following the design system in packages/ui
+    doc: docs/skills/add-component.md
+    uses: [gen-types]
+    verify:
+      check: [lint, test]
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `summary` | yes | One line, for listings, routing and generated frontmatter. Same kind of value as `help:` on a `commands:` entry. |
+| `doc` | yes | Workspace-relative path to the prose. Existence is verified; contents are never read by core. |
+| `uses` | no | `commands:` keys this skill may invoke. **References, never new capability.** |
+| `verify` | no | The check scope that proves the work landed — the same string `char check --scope` accepts. |
+| `touches` | no | Advisory globs. Feeds the scope lens and lets a review step notice edits far outside them. |
+
+**`uses:` grants nothing.** Every name in it must already be declared under `commands:`, so a
+skill can never smuggle an invocation past `config verify`. This is the property that makes a
+repo-authored skill safe to load: it can only name capability the repository already declared in
+a file a human reviewed.
+
+**`verify:` is what makes a skill produce a real verdict.** §14.3 says a verdict is only `PASS`
+if it carries evidence an external command produced. Naming the check scope on the skill is what
+makes that automatic instead of something a workflow author has to remember.
+
+**There is deliberately no `cmd:`.** A skill with its own command is a `commands:` entry wearing
+a hat, and if that were the design the honest move would be to delete `skills:` entirely. A
+skill is *a named grant plus prose*; execution stays with the thing that already executes.
+
+#### char cannot run a skill, and that is the point
+
+There is no `char skill <name> run`. "Add a migration" has no deterministic expansion; `pnpm
+prisma migrate dev --create-only` does, and that already has a verb. A runner would mean char
+choosing arguments on the user's behalf, which is precisely what §5's layer 1 refuses to do.
+
+What char offers instead is three read paths over one resolved structure:
+
+| Verb | Does |
+|---|---|
+| `char skills` | List declared skills with their grants and verify scope. |
+| `char skills show <name>` | One skill, resolved — grants expanded to the real commands, plus the doc path. |
+| `char render --harness <name>` | Write the pair out as skill files a harness loads. |
+
+**`render` writes into a managed region** delimited exactly as §5.1's `AGENTS.md` block is, so a
+hand-edit outside the markers survives a re-render, and `--verify` exits non-zero when the output
+is stale — which makes it an ordinary entry in `checks:`.
+
+`render` is the one verb here that looks like it might breach §1.9, and `ARCHITECTURE.md` §1.9
+resolves it: **the rule governs inputs, not outputs.** char may emit a file an agent reads; it
+may never accept a Job id, a model name or a transcript.
+
+#### What `config verify` gains
+
+Four checks, all pass 1 (§5), all cross-reference:
+
+- every `doc:` path exists and resolves inside the workspace root
+- every `uses:` entry names a declared `commands:` key
+- every `verify.check` scope resolves to real check ids
+- no skill name shadows a built-in verb — same rule and same reason as §4.5
+
+That last set is the whole argument for a schema block rather than a loose directory of markdown:
+a skill naming a command or a check that does not exist fails in seconds at authoring time,
+instead of in a fresh worktree at the worst moment.
+
+#### One thing this section does not decide
+
+**Name collisions with guild skills belong to Fleet, not here** (§14, and
+`ARCHITECTURE.md` §1.9 — Manifest may not name Guild). The policy is settled and recorded at
+§14.5 so it is not relitigated: **the repo's skill wins, the shadow is always reported, and
+`guild:<name>` reaches the shadowed one explicitly.**
+
 ---
 
 ## 5. Bootstrap: the three-layer sandwich
@@ -2286,6 +2389,9 @@ instead of on the first real run, in a fresh worktree, at the worst moment. It c
 - declared ports fit the block
 - every `match:` glob hits at least one file
 - no `commands:` entry shadows a built-in verb (§4.5)
+- every `skills:` entry resolves: its `doc:` path exists inside the workspace root, every
+  `uses:` name is a declared `commands:` key, every `verify.check` scope names real check ids,
+  and no skill name shadows a built-in verb (§4.8)
 - every `in:` names a component whose `run.driver` is `compose`
 - no two components declare the same `ports:` name — `${port.NAME}` is workspace-global
 - *(the schema already makes `shell: true` with `${files}` unrepresentable — see §4.1)*
@@ -3044,6 +3150,42 @@ on_blocked: needs_human
 
 Design and plan **always** end at you. Only feature and bug can close autonomously, and only
 because `check` gives them something objective to close against.
+
+### 14.5 Where a Drone's skills come from, and who wins a collision
+
+A Drone sees skills from two places, and they are owned by different modules:
+
+| Source | Owner | Is |
+|---|---|---|
+| `~/.armada/guild/skills/` | Guild (§13) | How **you** work. Present in every repo. |
+| `armada.yml`'s `skills:`, rendered | Manifest (§4.8) | How **this repo** works. |
+
+**Merging them is Fleet's job**, and structurally can only be Fleet's: Guild and Manifest are
+siblings and neither may reference the other (`ARCHITECTURE.md` §1.9), so Fleet is the lowest
+module that can see both. It projects the merged set into the Job's worktree at spawn.
+
+**The repo wins a name collision, and the shadow is always reported.** A bare `implement`
+resolves to the repository's; `guild:implement` reaches the shadowed one explicitly. Both
+`armada fleet ls --skills` and `armada doctor` name every shadow they find.
+
+The reasoning, since this one has a real cost either way:
+
+- **The specific context beats the general one.** A repo declaring `implement` is saying
+  "implementing *here* means running codegen first", and honouring that is the entire reason
+  repo skills exist. Namespacing everything would make workflows carry a per-repo prefix, which
+  is the per-repository setup step Armada was built to delete.
+- **The cost is that a repository can change what your own workflow step means.** That is
+  tolerable only because it is never silent, which is why the shadow report is part of the rule
+  rather than a nicety.
+- **A repo skill can still only invoke commands that repo already declared** (§4.8), so a
+  shadow can redirect judgement but cannot smuggle in capability.
+
+> **Reserved, not built: a trust boundary for repositories you did not write.** Everything above
+> assumes you are the author or the reviewer. Running Armada across cloned third-party
+> repositories makes a repo skill an instruction channel into your agent from a file you never
+> read, and the honest answer is a per-repository trust decision rather than a global policy.
+> No fixture needs it yet, and guessing at the shape now would be worse than leaving the hole
+> named.
 
 ---
 
