@@ -27,7 +27,8 @@ cargo xtask <command>
   contamination   the ARCHITECTURE.md §2.4 grep, over crates/ and tests/
   privacy         the ARCHITECTURE.md §2.4 leak rules, over every tracked file
   history         the same rules over every ref and commit — a report, not a gate
-  boundaries      the ARCHITECTURE.md §1.5 layers contract, over the crate graph
+  boundaries      the ARCHITECTURE.md §1.5 and §1.9 layers contract, over the
+                  crate graph: dependencies point inward, nothing points upward
 
 Exit: 0 clean, 1 findings, 2 could not run.
 ";
