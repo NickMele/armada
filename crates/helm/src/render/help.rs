@@ -160,7 +160,16 @@ const MANIFEST: [Page; 4] = [
 /// Draw a page.
 pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
     match topic {
-        Topic::Bare | Topic::Root => root(style, terminal),
+        // **The wordmark's one place on this page, and only on this topic.**
+        // Bare `armada` is the moment of orientation; `--help` is the page you
+        // reached for in a hurry (`docs/commands/render.md`). `banner` decides
+        // for itself whether the reader is a person.
+        Topic::Bare => format!(
+            "{}{}",
+            super::banner::banner(style, terminal),
+            root(style, terminal)
+        ),
+        Topic::Root => root(style, terminal),
         Topic::Manifest => manifest(style, terminal),
         Topic::Verb(name) => match MANIFEST.iter().find(|page| page.name == name) {
             Some(page) => verb(page, style, terminal),
@@ -441,5 +450,20 @@ mod tests {
     fn the_help_is_unpainted_for_a_pipe_and_painted_for_a_terminal() {
         assert!(!root_page().contains('\x1b'));
         assert!(render(Topic::Root, Style::painted(), Terminal::at(100)).contains('\x1b'));
+    }
+
+    /// **The wordmark is on bare `armada` and on nothing else here.** A banner
+    /// above `--help` is a banner in the way of the one page someone reaches for
+    /// when they are in a hurry (`docs/commands/render.md`).
+    #[test]
+    fn the_wordmark_is_on_bare_armada_and_on_no_other_page() {
+        let wide = Terminal::at(120);
+        assert!(render(Topic::Bare, Style::painted(), wide).contains("█████╗"));
+        for topic in [Topic::Root, Topic::Manifest, Topic::Verb("check")] {
+            assert!(
+                !render(topic, Style::painted(), wide).contains('█'),
+                "{topic:?} drew the wordmark"
+            );
+        }
     }
 }

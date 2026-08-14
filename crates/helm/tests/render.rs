@@ -47,6 +47,26 @@ fn nothing_a_captured_stdout_receives_contains_an_ansi_escape() {
     }
 }
 
+/// **The wordmark never reaches a captured stdout**, on the one invocation that
+/// draws it for a person (`docs/commands/render.md`). Six lines of block
+/// characters at the top of what an agent reads is noise it has to learn to
+/// skip — the same reasoning that puts progress on stderr.
+#[test]
+fn the_wordmark_is_absent_from_a_captured_stdout() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+
+    for args in [&[][..], &["--color", "always"][..]] {
+        let text = String::from_utf8_lossy(&machine.run(&repo, args).stdout).into_owned();
+        assert!(
+            !text.contains('█') && !text.contains('╗'),
+            "`armada {}` drew the wordmark into a pipe: {text}",
+            args.join(" ")
+        );
+        assert!(text.contains("USAGE"), "the page itself is still there");
+    }
+}
+
 /// A refusal goes to stderr, and stderr is captured just as often — frequently
 /// into a log file even when someone is watching stdout.
 #[test]
