@@ -733,19 +733,40 @@ The gate is `.github/workflows/gate.yml`, and it is:
 
 #### Check 6 is scheduled for retirement, and what will replace it
 
-> **⚠️ Not yet retired. This repository is still public and both checks are live.**
-> `xtask/src/contamination.rs`, `xtask/src/privacy.rs` and the clean-room hook all exist and
-> still run — `cargo xtask doclint` names `contamination, privacy` in its own output. **Keep
-> satisfying them.** The retirement below happens in M1 ([`PHASES.md`](PHASES.md) §8.3), at the
-> same moment the repository goes private, and not before. Until `git remote -v` points at a
-> private repository and `xtask/src/privacy.rs` is gone, treat every rule in this section as in
-> force.
+> **⚠️ This repository stays public, permanently.** An earlier decision took it private in M1
+> and was **reversed** — the reasoning is in the decision table at the end of this document, and
+> it is the same reasoning that chose public in the first place: release binaries ship via a
+> `curl` one-liner, so the package is public in effect regardless, and a public package with a
+> private source has no issue tracker and no source link.
+>
+> **What follows from that: the privacy gate is permanent, not transitional.** `cargo xtask
+> privacy` and `cargo xtask history` are ordinary standing checks. The contamination grep and
+> the clean-room rule (§2.7) still retire, but on their own merits rather than because the
+> repository changed — see below and §2.7.
 
-The contamination grep bans a set of strings under `src/` and `tests/`, and the privacy gate
-bans a configured repository name and the literal `$HOME` across every tracked file. **Both
-exist for exactly one reason: this repository is public.** When it goes private in M1 both are
-deleted, along with `xtask/src/contamination.rs`, `xtask/src/privacy.rs` and the clean-room
-hook.
+The contamination grep bans a set of strings under `src/` and `tests/`; the privacy gate bans a
+configured repository name and the literal `$HOME` across every tracked file. **Both exist
+because this repository is public.** Since it stays public, the gate stays — but the grep does
+not, because §2.4's own argument below is that the grep was a bad proxy and the fixtures replaced
+it.
+
+#### The gate fails loudly when it is switched off
+
+**A check that cannot match is indistinguishable from a clean repository**, and this section's
+whole discipline is refusing to let that stand. The name rule needs a private repository name to
+look for — `.claude/contamination.local` locally, the `CHARKIT_CONTAMINATION_EXTRA` secret on
+CI. Without one it matches nothing.
+
+An earlier version handled this by *labelling* the run `privacy (name rule unconfigured)` and
+exiting `0`. The label was visible and the exit code was not, and **an exit code is what a merge
+gate, a script and an agent in a hurry actually read.** A standing check that passes quietly
+while switched off is worse than no check: it converts "nobody verified this" into "verified
+clean".
+
+So an unarmed run is now a **finding**, and `privacy`, `history` and `doclint` all exit non-zero.
+The message names both ways to arm it. An outside contributor who has neither the local file nor
+the secret sets `CHARKIT_PRIVACY_UNCONFIGURED_OK=1` — deliberately, because an opt-out reachable
+by accident would recreate exactly the failure this catches.
 
 This is recorded rather than simply removed because **a rule that vanishes without a reason
 gets reinvented** — six months from now, someone finds the empty hole where a gate check was
@@ -1053,15 +1074,17 @@ fixtures and phase 8 are.
 
 ### 2.7 The clean-room rule — scheduled for retirement, still in force
 
-> **⚠️ Not yet retired. The hook exists at `.claude/hooks/clean-room.sh` and still fires.**
-> Retirement happens **in M1** ([`PHASES.md`](PHASES.md) §8.3), together with the contamination
-> grep in §2.4, at the moment the repository goes private. The rule below splits the
-> check-engine work across two agents so that the one writing code has never seen the source
-> repository. It protects a **public** repository from importing a private one's specifics —
-> and this repository is public today, so the threat it was built against is live.
+> **⚠️ Still in force until its retirement commit lands. The hook is at
+> `.claude/hooks/clean-room.sh` and still fires.**
 >
-> **Never disable it by setting `CHARKIT_CLEAN_ROOM_PATH=""`.** That silences the guard rather
-> than satisfying it.
+> **It retires because its job is done, not because the repository changed.** The repository
+> stays public (§2.4). This rule split the check-engine work across two agents so the one
+> writing code never opened the source repository — and **the harvest has landed**:
+> `docs/harvest.md` and `tests/cases/` exist, and the implementer's work is merged. A hook that
+> now blocks reads nobody needs is friction with no remaining benefit.
+>
+> **Until that commit lands, never disable it by setting `CHARKIT_CLEAN_ROOM_PATH=""`.** That
+> silences the guard rather than satisfying it, and the difference is the whole subject of §2.4.
 >
 > **One part of its reasoning survives and is worth carrying forward:** the value in ported code
 > is not the code, it is the **empirically discovered bug fixes** — branches that exist because

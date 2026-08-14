@@ -69,10 +69,59 @@ pub fn name_rule_armed(root: &Path) -> bool {
     !extra_alternatives(root, std::env::var(EXTRA_ENV).ok()).is_empty()
 }
 
+/// Opts a checkout out of [`unconfigured_finding`], for someone who genuinely
+/// cannot arm the rule.
+///
+/// It has to be an explicit act. The whole failure this guards against is a
+/// disarmed gate that looks armed, and an opt-out that can be reached by
+/// accident recreates it.
+pub const UNCONFIGURED_OK_ENV: &str = "CHARKIT_PRIVACY_UNCONFIGURED_OK";
+
+/// A finding when the name rule cannot run, unless it was opted out of.
+///
+/// **The label was not enough.** Suffixing the summary with `(name rule
+/// unconfigured)` made the disarmed state *visible*, but it still exited `0`,
+/// and an exit code is what a script, a merge gate and an agent in a hurry
+/// actually read. This repository is public permanently now, so the gate is a
+/// standing check rather than a transitional one, and a standing check that
+/// silently passes when it is switched off is worse than no check at all — it
+/// converts "nobody verified this" into "verified clean".
+///
+/// Non-zero by default; `CHARKIT_PRIVACY_UNCONFIGURED_OK=1` for an outside
+/// contributor who has neither the local file nor the repository secret and is
+/// not in a position to get either.
+pub fn unconfigured_finding(root: &Path) -> Option<Finding> {
+    unconfigured(
+        name_rule_armed(root),
+        std::env::var(UNCONFIGURED_OK_ENV).is_ok(),
+    )
+}
+
+/// The decision, with the environment already read — so it is testable without
+/// mutating process-global state from a parallel test run.
+fn unconfigured(armed: bool, acknowledged: bool) -> Option<Finding> {
+    if armed || acknowledged {
+        return None;
+    }
+    Some(Finding {
+        file: ".claude/contamination.local".into(),
+        line: 0,
+        message: format!(
+            "the private-name rule is UNCONFIGURED, so this gate checked nothing for it — \
+             that is the guard being off, not passing. Arm it with a private repo name in \
+             `.claude/contamination.local`, or the `{EXTRA_ENV}` secret on CI. If you cannot \
+             have either, set `{UNCONFIGURED_OK_ENV}=1` to acknowledge it deliberately \
+             (ARCHITECTURE.md §2.4)"
+        ),
+    })
+}
+
 pub fn check(root: &Path) -> Result<Vec<Finding>, String> {
     let names = extra_alternatives(root, std::env::var(EXTRA_ENV).ok());
     let home = std::env::var("HOME").ok();
-    scan(root, &tracked(root)?, &names, home.as_deref())
+    let mut findings = scan(root, &tracked(root)?, &names, home.as_deref())?;
+    findings.extend(unconfigured_finding(root));
+    Ok(findings)
 }
 
 /// This machine's home, normalised, or nothing if it is too short to identify
@@ -215,8 +264,14 @@ const HISTORY: &str = "(reachable commits)";
 /// commit already merged would fail it forever, including the ones that did the
 /// scrubbing. So it reports, on request, and the gate keeps guarding the only
 /// thing a PR can still change: the tree.
+/// `history` needs the loud failure more than `check` does, not less: its
+/// `$HOME` rule finds nothing in a repository whose commits were all written
+/// elsewhere, so an unconfigured run is *expected* to be silent — and silence
+/// on exactly the surface the operator asked about reads as an all-clear.
 pub fn history(root: &Path) -> Result<Vec<Finding>, String> {
-    scan_history(root, &needles(root))
+    let mut findings = scan_history(root, &needles(root))?;
+    findings.extend(unconfigured_finding(root));
+    Ok(findings)
 }
 
 /// Every banned literal as one list. The two rules differ in the working tree —
@@ -546,6 +601,44 @@ mod tests {
             "not caught unconfigured"
         );
         assert_eq!(findings(&root, &files, &[INVENTED], None).len(), 1);
+    }
+
+    /// The label said "unconfigured" and exited 0. An exit code is what a merge
+    /// gate and an agent in a hurry actually read, so the label alone let a
+    /// switched-off guard read as a pass.
+    #[test]
+    fn an_unarmed_gate_is_a_finding_rather_than_a_silent_pass() {
+        assert!(
+            unconfigured(false, false).is_some(),
+            "an unarmed name rule must fail loudly, not pass quietly"
+        );
+    }
+
+    #[test]
+    fn an_armed_gate_says_nothing() {
+        assert!(unconfigured(true, false).is_none());
+    }
+
+    /// The opt-out exists for an outside contributor with neither the local file
+    /// nor the repository secret. It has to be deliberate: an opt-out reachable
+    /// by accident recreates the exact failure this finding exists to catch.
+    #[test]
+    fn the_opt_out_silences_it_but_only_when_asked() {
+        assert!(unconfigured(false, true).is_none());
+    }
+
+    /// The message has to say what to do. A gate that fails without naming the
+    /// fix gets bypassed rather than satisfied.
+    #[test]
+    fn the_message_names_both_ways_to_arm_it_and_the_opt_out() {
+        let f = unconfigured(false, false).expect("unarmed");
+        for needle in [
+            EXTRA_ENV,
+            UNCONFIGURED_OK_ENV,
+            ".claude/contamination.local",
+        ] {
+            assert!(f.message.contains(needle), "message omits `{needle}`");
+        }
     }
 
     #[test]

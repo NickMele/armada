@@ -40,3 +40,7 @@
 *~
 .idea/
 .vscode/
+
+# Agent worktrees. Transient checkouts a subagent works in; they are git repos
+# of their own and must never be committed into this one.
+.claude/worktrees/
