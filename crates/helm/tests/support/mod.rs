@@ -120,6 +120,19 @@ impl Machine {
         self.command(cwd, args).output().expect("Armada runs")
     }
 
+    /// Run with extra variables layered on the deliberately small environment.
+    ///
+    /// The rendering suite needs it: `NO_COLOR` is the one input to the colour
+    /// decision that is not a flag, and `env_clear` above means a test cannot
+    /// set it by exporting it in the parent.
+    pub fn run_with_env(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
+        let mut command = self.command(cwd, args);
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        command.output().expect("Armada runs")
+    }
+
     /// Start and leave running.
     pub fn spawn(&self, cwd: &Path, args: &[&str]) -> Child {
         self.command(cwd, args)

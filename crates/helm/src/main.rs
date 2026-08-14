@@ -32,7 +32,7 @@ use armada_manifest::process::RealRun;
 use armada_manifest::{discovery, posix};
 use render::style::Style;
 use std::collections::BTreeMap;
-use std::io::{IsTerminal, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -75,11 +75,12 @@ fn main() -> ExitCode {
     let inherited: BTreeMap<String, String> = std::env::vars().collect();
 
     // **The terminal is ambient state, so it is read here and passed down**
-    // (`ARCHITECTURE.md` §1.4). `NO_COLOR` comes out of the environment map this
+    // (`ARCHITECTURE.md` §1.4) — the same rule that puts cwd and `$HOME` on the
+    // three lines above. `NO_COLOR` comes out of the environment map this
     // function already built, rather than from a second `std::env` call in the
-    // renderer — one read, one answer, and a test can set it.
+    // renderer: one read, one answer, and a test can set it.
+    let terminal = render::term::Terminal::detect();
     let no_color = inherited.contains_key("NO_COLOR");
-    let stdout_is_tty = std::io::stdout().is_terminal();
 
     let parsed = match args::parse(&argv) {
         Ok(parsed) => parsed,
@@ -87,11 +88,11 @@ fn main() -> ExitCode {
         // parser carries out the flag it had already seen, so a machine caller
         // probing a verb that does not exist yet still reads an envelope.
         Err(failure) => {
-            let style = Style::decide(failure.color, stdout_is_tty, no_color);
+            let style = Style::decide(failure.color, terminal.stdout_is_tty, no_color);
             return fail(failure.error, failure.json, style);
         }
     };
-    let style = Style::decide(parsed.color, stdout_is_tty, no_color);
+    let style = Style::decide(parsed.color, terminal.stdout_is_tty, no_color);
 
     match parsed.invocation {
         Invocation::Version => {

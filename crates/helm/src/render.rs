@@ -10,6 +10,7 @@
 
 pub mod palette;
 pub mod style;
+pub mod term;
 
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,

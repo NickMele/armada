@@ -31,6 +31,17 @@ path = "src/main.rs"
 armada-manifest = { path = "../manifest" }
 armada-core = { path = "../core" }
 serde_json = { workspace = true }
+# **The whole of M1.5's rendering dependency budget** (`docs/commands/render.md`):
+# the standard library answers "is this a terminal" via `IsTerminal`, and this
+# answers "how wide" via one `ioctl`. No curses, no terminfo database, and no
+# colour crate — the palette is twelve escape literals in `render/palette.rs`,
+# which is less code than a dependency's feature flags.
+#
+# Not done with `libc` — which `armada-manifest` already carries — because
+# `ARCHITECTURE.md` §1 permits exactly four `unsafe` calls, all of them in that
+# crate's POSIX module. A fifth would be a change to a design invariant, and a
+# terminal's width is not worth one.
+terminal_size = "0.4"
 
 [dev-dependencies]
 rusqlite = { version = "0.40.2", features = ["bundled"] }
