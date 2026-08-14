@@ -3025,15 +3025,53 @@ is.
 ### 13.4 The interview
 
 `armada init` on a machine with no guild asks one question first — *do you already have a
-guild?* — with three answers: pull it from a remote, import a bundle, or build one now.
-Building one starts by **reading what is already there**: `~/.claude/` skills, subagents, hooks,
-plugin and marketplace registrations, settings and memory. The guild starts nearly complete
-rather than empty.
+guild?* — with three answers: pull it from a remote, import a bundle, or build one now. Only
+the third reaches the interview.
 
-The interview then asks only what it cannot read: voice, what "done" means, how you work,
-confirmation of the four starter workflows, and default budget ceilings. Everything it writes is
-a plain file. **The interview is a convenience and never the only way in** — a tool that can
-only be configured through a wizard is a tool you cannot fix at one in the morning.
+#### Import runs first, and does most of the work
+
+Building a guild starts by **reading what is already there**: `~/.claude/` skills, subagents,
+hooks, plugin and marketplace registrations, settings, and `CLAUDE.md`. The guild starts nearly
+complete rather than empty, which is the difference between a tool you configure once and one
+you abandon during setup.
+
+**`CLAUDE.md` is split into the three fragments of §13.1** — `voice.md` (how to talk),
+`expectations.md` (what "done" means), `how-i-work.md` (process and tooling). Each is
+separately editable and separately projected, which one file would not be.
+
+#### Five questions, and none of them ask you to confirm the import
+
+The interview asks what cannot be read from the machine, **from scratch**:
+
+| # | Asks | Default if skipped |
+|---|---|---|
+| 1 | How do you want to be spoken to? | whatever import wrote to `voice.md` |
+| 2 | What does "done" mean — when is work finished? | `expectations.md` as imported |
+| 3 | How do you work? Branching, review, what you want done without asking. | `how-i-work.md` as imported |
+| 4 | Default budget ceilings. | the per-workflow ceilings in §14.6 |
+| 5 | A private git remote to sync the guild to. | none — sync is off, `export` still works |
+
+**It does not show you a parsed split and ask you to correct it.** That was considered and
+rejected: reviewing a machine's guess at how to carve up your own memory file is more work than
+answering the question, and it produces a worse answer — you would be editing its interpretation
+rather than saying what you mean. Import populates the files; the interview asks fresh; your
+answers win where they overlap.
+
+**Four starter workflows are not confirmed either.** They are copied, and
+`armada guild edit` changes them. A confirmation step on a file you have not read yet is
+theatre.
+
+#### It can always be skipped
+
+Every question has a default, and `armada init --defaults` takes all of them. A skipped
+interview leaves a working guild and `armada doctor` reports it as incomplete, naming the
+fragments that are still whatever import produced.
+
+**A tool that can only be configured through a wizard is a tool you cannot fix at one in the
+morning.** Everything the interview writes is a plain file in `~/.armada/guild/`; editing those
+directly is the supported path, not a workaround. What the interview must never do is finish
+silently in a state that looks configured and is not — the same rule the privacy gate now
+follows (`ARCHITECTURE.md` §2.4).
 
 ### 13.5 Sync
 

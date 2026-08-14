@@ -10,7 +10,7 @@ rebuild a guild from scratch.
 ## Synopsis
 
 ```sh
-armada guild init [--from <path>] [--no-import] [--remote <url>] [--json]
+armada guild init [--from <path>] [--no-import] [--remote <url>] [--defaults] [--json]
 ```
 
 ## Arguments
@@ -20,6 +20,7 @@ armada guild init [--from <path>] [--no-import] [--remote <url>] [--json]
 | `--from <path>` | directory | `~/.claude` | Where to import an existing setup from. |
 | `--no-import` | flag | off | Start empty. Skips step 1 entirely. |
 | `--remote <url>` | git remote | — | Set the sync remote without being asked. |
+| `--defaults` | flag | off | Take every default answer. Leaves a working guild, reported incomplete by `armada doctor`. |
 | `--force` | flag | off | Overwrite an existing guild. Refuses without it. |
 
 ## How it works
@@ -35,18 +36,26 @@ The importer **refuses to adopt credential-shaped values.** Anything that looks 
 goes to `machine.yml`, which never syncs. A secret that has reached a remote cannot be
 un-pushed, so this is built here rather than retrofitted.
 
-### 2. Ask only what it cannot read
+### 2. Ask five questions, from scratch
 
-| Asked | Written to |
-|---|---|
-| How should agents write to you? | `voice.md` |
-| What does "done" mean — coverage, review, commit style? | `expectations.md` |
-| Branch conventions, when to ask vs decide, parallelism appetite | `how-i-work.md` |
-| Confirm or edit the four starter workflows | `workflows/*.yml` |
-| Default iteration, token and wall-clock ceilings | `workflows/*.yml` |
+| # | Asked | Written to | Default if skipped |
+|---|---|---|---|
+| 1 | How should agents write to you? | `voice.md` | what import wrote |
+| 2 | What does "done" mean — coverage, review, commit style? | `expectations.md` | what import wrote |
+| 3 | How do you work? Branching, when to ask versus decide, parallelism appetite. | `how-i-work.md` | what import wrote |
+| 4 | Default iteration, token and wall-clock ceilings | `workflows/*.yml` | the per-workflow ceilings of [`PLAN.md`](../../PLAN.md) §14.6 |
+| 5 | A private git remote to sync to | `machine.yml` | none — sync off, `export` still works |
 
-Each question is pre-filled from what the import found, so most are a confirmation rather than
-an answer. Your existing memory file already answers most of the voice question.
+**Questions are not pre-filled with the import's guess.** Reviewing a machine's interpretation
+of your own memory file is more work than answering, and it produces a worse answer: you end up
+editing its reading rather than saying what you mean. Import populates the files; these
+questions ask fresh; your answers win where they overlap.
+
+**The four starter workflows are copied, not confirmed.** A confirmation step on a file you
+have not read yet is theatre — [`edit.md`](edit.md) changes them once you have an opinion.
+
+`--defaults` takes every default and finishes. The guild works; `armada doctor` reports which
+fragments are still whatever import produced.
 
 ### 3. Initialise the repository
 

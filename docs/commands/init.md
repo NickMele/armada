@@ -10,7 +10,7 @@ This sets up *you, here*.
 ## Synopsis
 
 ```sh
-armada init [--guild <remote>] [--bundle <path>] [--no-interview] [--json]
+armada init [--guild <remote>] [--bundle <path>] [--defaults] [--json]
 ```
 
 ## Arguments
@@ -19,7 +19,7 @@ armada init [--guild <remote>] [--bundle <path>] [--no-interview] [--json]
 |---|---|---|---|
 | `--guild <remote>` | git remote URL | — | Skip the prompt and pull an existing guild from this remote. |
 | `--bundle <path>` | file path | — | Skip the prompt and import an existing guild from a bundle. |
-| `--no-interview` | flag | off | Run the checks and create an empty guild. For scripted setup; you configure it later with [`guild/edit.md`](guild/edit.md). |
+| `--defaults` | flag | off | Take the default answer to every interview question. Leaves a **working** guild, not an empty one, and `armada doctor` reports it as incomplete. |
 | `--force` | flag | off | Re-run against an existing `~/.armada/`. Refuses without this. |
 
 `--guild` and `--bundle` are mutually exclusive.
@@ -35,7 +35,9 @@ armada init [--guild <remote>] [--bundle <path>] [--no-interview] [--json]
    - **Pull from a remote** — clones it into `~/.armada/guild/`. Done in seconds; this is the
      second-machine path.
    - **Import a bundle** — unpacks a file. For a machine that will never hold your credentials.
-   - **Build one now** — hands off to [`guild/init.md`](guild/init.md).
+   - **Build one now** — imports `~/.claude/` first, then asks **five** questions
+     ([`PLAN.md`](../PLAN.md) §13.4). Import does most of the work; the interview asks only
+     what cannot be read from the machine, and every question has a default.
 4. **Writes `machine.yml`** — paths, capacity, and anything machine-specific. This file
    **never syncs** ([`PLAN.md`](../PLAN.md) §13.1).
 
