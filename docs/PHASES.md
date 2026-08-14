@@ -210,6 +210,24 @@ marketplace and no install step, which is exactly the shape a personal guild wan
 **Done when:** on a machine that has never seen Armada, `armada init` → pull → a working setup,
 and a `git diff` in the guild repo shows what changed since the other machine.
 
+#### What landed, and what did not
+
+The done-when is met and run rather than reasoned about: `crates/helm/tests/guild.rs` drives the
+real binary against real `git`, two scratch `$HOME`s and a bare repository standing in for the
+private remote. Built: `armada init`, `armada doctor`, `armada guild init` with the five-question
+interview, and `guild pull` / `push` / `export` / `import`. The starters, the secret guard and the
+three agreed layouts are in and frozen.
+
+Four things this milestone did **not** build, each with the reason it is a milestone of its own
+rather than a gap:
+
+| Not built | Why |
+|---|---|
+| **Projection** | `guild pull` and `import` update the guild; nothing yet re-writes the managed regions of `~/.claude/` from it, and `armada doctor`'s fourth group has nothing to compare against until something does ([`PLAN.md`](PLAN.md) §13.2). A `doctor` reporting `ok` for a check that ran nothing would be worse than one that does not report it at all. |
+| **`manifest render`** | Listed in the table above because its managed-region bookkeeping is the same machinery projection needs. It is the same milestone as projection, and neither is half-useful without the other. |
+| **`armada guild edit` and `guild verify`** | Reserved by name and refused by name. `edit` is `$EDITOR` plus the validation `verify` performs, so building it first would mean building half of `verify` twice. |
+| **`armada doctor --fix`** | Refused by name rather than half-implemented: every finding already carries the command that fixes it, so `--fix` is a convenience over a surface that already works, and one that silently did half of what it promised would be worse than one that says it is not built. |
+
 ### 8.5 M3 — Fleet, Helm and the Bridge
 
 The product. Everything before this exists to make this possible.

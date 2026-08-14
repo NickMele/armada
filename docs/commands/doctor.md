@@ -2,7 +2,9 @@
 
 Report what this machine is missing or has drifted on. Read-only.
 
-> **Status: not built — M2.** ([`PHASES.md`](../PHASES.md) §8.4)
+> **Status: built — M2**, less the projection group, which needs a projector to
+> compare against and lands with one, and `--fix`, which is refused by name.
+> ([`PHASES.md`](../PHASES.md) §8.4)
 
 ## Synopsis
 
@@ -31,17 +33,32 @@ rest.
 
 ## Output
 
-One line per check: `ok`, `warn`, or `fail`, with the specific delta rather than a verdict.
+One row per check, with the specific delta rather than a verdict, and a `→` line naming the
+command that fixes each problem. Frozen byte for byte by `tests/golden/render/doctor.plain`.
 
 ```
-ok    tooling      git 2.51 · claude 2.x · docker
-ok    layout       ~/.armada complete
-warn  guild        3 commits behind origin — run `armada guild pull`
-ok    projection   in sync
+  STATUS   CHECK        DETAIL                      TIME
+  ok       git          2.51.0                         -
+  ok       claude       2.0.14                         -
+  missing  docker       compose driver unavailable     -
+  stale    guild        3 commits behind origin        -
+  partial  guild        voice.md still as imported     -
+  ok       manifest.db  2 workspaces, 0 orphans        -
+
+NEEDS ATTENTION  3 ok, 1 missing, 2 warnings
+  -> install docker, or accept that compose repos will not start
+  -> armada guild pull
 ```
+
+The status words are `ok`, `found`, `created`, `missing`, `stale`, `partial` and `offline` —
+lowercase on the screen and lowercase in the payload, because nothing here ends a run and none
+of them maps to an exit code. `NEEDS ATTENTION` is the one uppercase word in Armada's output
+that is not a `Status`; it is in the payload under `data.headline`, spelled exactly as it is
+printed.
 
 `--json` returns one result per check with `status`, `detail`, and `remedy` — the exact command
-that would fix it.
+that would fix it. A check that passed carries no `remedy`, and neither does a problem whose fix
+is prose rather than a command.
 
 ## Dependencies
 

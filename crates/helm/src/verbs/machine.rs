@@ -117,6 +117,11 @@ pub fn run(
     let mut imported = Vec::new();
     let mut asked = Vec::new();
     let mut skipped = 0;
+    // **Only the third answer reaches the interview** (PLAN.md §13.4), so the
+    // other two report no questions rather than five they never put. A summary
+    // reading `5 questions, 0 skipped` after a clone would be describing an
+    // interview that did not happen.
+    let mut questions = 0;
 
     match chosen {
         FROM_REMOTE => {
@@ -160,6 +165,7 @@ pub fn run(
                 imported = envelope.data.imported.clone();
                 imported.insert(0, format!("imported from {}", place.claude_shown()));
                 skipped = envelope.data.skipped;
+                questions = envelope.data.questions;
             }
         }
     }
@@ -177,7 +183,7 @@ pub fn run(
             }),
             imported,
             asked,
-            questions: QUESTIONS.len(),
+            questions,
             skipped,
             guild_path: shown(&place.armada_home.join("guild")),
         },

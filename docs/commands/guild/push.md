@@ -2,7 +2,7 @@
 
 Send local guild changes to the remote.
 
-> **Status: not built — M2.**
+> **Status: built — M2.**
 
 ## Synopsis
 

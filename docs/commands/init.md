@@ -2,7 +2,7 @@
 
 Set up **this machine**. Run once per box.
 
-> **Status: not built — M2.** ([`PHASES.md`](../PHASES.md) §8.4)
+> **Status: built — M2.** ([`PHASES.md`](../PHASES.md) §8.4)
 
 Not to be confused with [`manifest/init.md`](manifest/init.md), which sets up a *workspace*.
 This sets up *you, here*.
@@ -43,16 +43,37 @@ armada init [--guild <remote>] [--bundle <path>] [--defaults] [--json]
 
 ## Output
 
-Human-readable: a checklist, then the guild summary.
+A transcript: the checklist, the one question and what was typed, what import adopted, each
+interview prompt as it was put, and the verdict. Frozen byte for byte by
+`tests/golden/render/init-machine.plain`.
 
 ```
-✓ git 2.51    ✓ claude 2.x    ✓ docker running
-Guild pulled from <remote>: 19 skills · 12 hooks · 4 workflows · voice, expectations, how-i-work
-Ready.
+  STATUS   CHECK       DETAIL                      TIME
+  found    git         2.51.0                         -
+  found    claude      2.0.14                         -
+  missing  docker      not required by every repo     -
+  created  ~/.armada/  guild, jobs, workspaces        -
+
+Do you already have a guild?
+  1 pull from a remote  2 import a bundle  3 build one now  > 3
+
+  imported from ~/.claude/, 19 skills, 12 hooks, 4 plugins, CLAUDE.md
+
+1/5  How should agents write to you?
+     (enter to keep what import found) >
+
+READY  guild at ~/.armada/guild, 5 questions, 0 skipped
 ```
 
-`--json` returns the envelope with one result per preflight check plus one for the guild, each
-carrying `status` and the version or path found.
+**The prompts themselves go to stderr**, on the same rule that puts progress there
+([`render.md`](render.md)): stdout carries the finished transcript once, at the end, so
+`armada init --json` needs no special case — the questions appear on the terminal and the
+payload on stdout, and neither is in the other's way. A run with no terminal takes every
+default rather than writing a prompt into a log file nobody can answer.
+
+`--json` returns the envelope with one result per preflight check plus one for the directories
+created, **and the questions that were asked** — the one verb that holds a conversation is the
+one whose payload has to be an account of the same run the terminal saw.
 
 ## Dependencies
 

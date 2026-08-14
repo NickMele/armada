@@ -871,15 +871,15 @@ fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize
     }
 
     out.push('\n');
-    out.push_str(&summary(
-        style,
-        envelope.status,
-        &[
-            format!("guild at {}", data.guild_path),
-            format::count(data.questions, "question"),
-            format!("{} skipped", data.skipped),
-        ],
-    ));
+    // **The question counts appear only when there was an interview.** Pulling
+    // a guild from a remote asks nothing, and `5 questions, 0 skipped` under a
+    // clone would be describing something that did not happen.
+    let mut facts = vec![format!("guild at {}", data.guild_path)];
+    if data.questions > 0 {
+        facts.push(format::count(data.questions, "question"));
+        facts.push(format!("{} skipped", data.skipped));
+    }
+    out.push_str(&summary(style, envelope.status, &facts));
     if let Some(error) = &envelope.error {
         out.push_str(&error_lines(error, style));
     }

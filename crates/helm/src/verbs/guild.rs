@@ -394,10 +394,53 @@ pub fn clone(run: &impl Run, place: &Where, remote: &str) -> Result<(), ArmadaEr
             next_action: Some("`armada guild pull` brings it up to date".to_string()),
         });
     }
-    // `git clone` makes the directory itself, and refuses a non-empty one.
-    // `armada init` created it empty, so it is removed rather than cloned into.
-    let _ = std::fs::remove_dir(guild.root());
+    // **`git clone` makes the directory itself and refuses a non-empty one**,
+    // and `armada init` has already created `guild/` with its four empty
+    // subdirectories — so the scaffold is removed before the clone rather than
+    // cloned into. Measured: without this, `armada init --guild <url>` — the
+    // whole second-machine path — fails with *destination path 'guild' already
+    // exists and is not an empty directory*.
+    //
+    // **Only a scaffold is removed.** If anything holds a file, this refuses:
+    // `remove_dir_all` on a directory somebody has put content in is the one
+    // unrecoverable mistake this verb could make.
+    if let Some(file) = a_file_under(guild.root()) {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: shown(guild.root()),
+            message: format!(
+                "{} holds {file}, and cloning over it would lose it",
+                shown(guild.root())
+            ),
+            next_action: Some(
+                "move it aside, or `armada guild init` and then `armada guild pull`".to_string(),
+            ),
+        });
+    }
+    let _ = std::fs::remove_dir_all(guild.root());
     repo::clone(run, remote, guild.root())
+}
+
+/// The first regular file anywhere under a directory, guild-relative, or `None`
+/// for a tree of empty directories.
+fn a_file_under(root: &Path) -> Option<String> {
+    fn walk(root: &Path, at: &Path) -> Option<String> {
+        for entry in std::fs::read_dir(at).ok()?.filter_map(Result::ok) {
+            let path = entry.path();
+            let found = if path.is_dir() {
+                walk(root, &path)
+            } else {
+                path.strip_prefix(root)
+                    .ok()
+                    .map(|relative| relative.display().to_string())
+            };
+            if found.is_some() {
+                return found;
+            }
+        }
+        None
+    }
+    walk(root, root)
 }
 
 /// The remote, or the refusal `guild/push.md` and `pull.md` both specify:
@@ -476,12 +519,17 @@ fn change_set(
             names.dedup();
             SyncItem {
                 status,
-                item: area,
+                item: area.clone(),
                 // **A conflict says what happened, not which files.** The names
                 // are already in the ITEM column for a fragment, and for an
                 // area the useful fact is that both sides moved.
                 detail: if status == Sync::Conflict {
                     "edited here and on origin".to_string()
+                } else if names.len() == 1 && names[0] == *area {
+                    // A file at the guild's root is its own area, so naming it
+                    // twice — `changed  voice.md  voice.md` — says nothing the
+                    // ITEM column has not already said.
+                    String::new()
                 } else {
                     names.join(", ")
                 },

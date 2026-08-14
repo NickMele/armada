@@ -2,7 +2,7 @@
 
 Restore a guild from a bundle.
 
-> **Status: not built — M2.**
+> **Status: built — M2**, less the projection step (see [`pull.md`](pull.md)).
 
 ## Synopsis
 

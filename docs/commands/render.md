@@ -2,7 +2,9 @@
 
 How Armada renders for a person, for an agent, and for a parser.
 
-> **Status: not built — M1.5.** Specified in [`../PLAN.md`](../PLAN.md) §3.1.1.
+> **Status: built — M1.5.** Specified in [`../PLAN.md`](../PLAN.md) §3.1.1, and frozen by the
+> golden pairs in `tests/golden/render/` — one `.tty` and one `.plain` per case, rendered at
+> one width, so the only difference between them is styling.
 
 ## Three audiences
 

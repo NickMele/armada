@@ -2,7 +2,9 @@
 
 Bring this machine's guild up to date.
 
-> **Status: not built — M2.**
+> **Status: built — M2**, less the re-projection step, which needs a projector
+> and lands with one. A pull today updates the guild; re-writing what Claude
+> Code reads from it is the projector's half.
 
 ## Synopsis
 

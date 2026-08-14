@@ -222,9 +222,56 @@ pub fn clone(run: &impl Run, url: &str, guild: &Path) -> Result<(), ArmadaError>
 }
 
 /// Fetch, then measure the distance in both directions.
+///
+/// **A remote with no `main` on it is not a failure**, and getting that wrong
+/// broke the one invocation every guild makes exactly once: the *first* push to
+/// a freshly created private repository, where `git fetch origin main` answers
+/// `couldn't find remote ref main`. An empty remote is zero commits behind, not
+/// an error — the distinction between "the remote has nothing" and "the remote
+/// is unreachable" is the whole of it, and only the second is worth reporting.
 pub fn fetch(run: &impl Run, guild: &Path) -> Result<Divergence, ArmadaError> {
-    git(run, guild, &["fetch", REMOTE, BRANCH])?;
+    let (ok, _, stderr) = try_git(run, guild, &["fetch", REMOTE, BRANCH])?;
+    if !ok {
+        if empty_remote(&stderr) {
+            // **Every local commit is ahead of nothing**, and saying so is the
+            // difference between a first push that reports `pushed 1 commit`
+            // and one that reports `already in step` while pushing a commit.
+            return Ok(Divergence {
+                ahead: commits(run, guild)?,
+                behind: 0,
+            });
+        }
+        return Err(ArmadaError {
+            class: ErrClass::ToolFailed,
+            r#where: format!("git fetch {REMOTE} {BRANCH}"),
+            message: first_line(&stderr).unwrap_or_else(|| "git fetch failed".to_string()),
+            next_action: Some("check the remote is reachable, then retry unchanged".to_string()),
+        });
+    }
     divergence(run, guild)
+}
+
+/// How many commits this guild has, for the case where there is nothing to
+/// compare against.
+fn commits(run: &impl Run, guild: &Path) -> Result<usize, ArmadaError> {
+    let (ok, stdout, _) = try_git(run, guild, &["rev-list", "--count", "HEAD"])?;
+    Ok(ok
+        .then(|| stdout.trim().parse().ok())
+        .flatten()
+        .unwrap_or(0))
+}
+
+/// Whether a failed fetch means the remote simply has nothing on this branch.
+///
+/// **Matched on git's own words, and that is a knowing trade.** There is no
+/// exit code for it — every fetch failure is `1` — so the alternative is a
+/// `git ls-remote` before every fetch, which is a second network round trip on
+/// the verb that runs most. A wording change would make a first push report a
+/// real error instead of succeeding, which is loud rather than silent.
+fn empty_remote(stderr: &str) -> bool {
+    let lowered = stderr.to_ascii_lowercase();
+    lowered.contains("couldn't find remote ref")
+        || lowered.contains("does not appear to be a git") && lowered.contains("empty")
 }
 
 /// How far apart local and `origin/main` are, without fetching.
@@ -463,6 +510,53 @@ mod tests {
         let apart = divergence(&run, guild()).unwrap();
         assert!(apart.in_step());
         assert!(!apart.diverged());
+    }
+
+    /// **The first push to a fresh private repository**, which every guild
+    /// makes exactly once and which an earlier version of this function broke:
+    /// `git fetch origin main` against an empty remote says `couldn't find
+    /// remote ref main`, and that is zero commits behind rather than an error.
+    #[test]
+    fn a_remote_with_nothing_on_it_is_in_step_rather_than_a_failure() {
+        struct EmptyRemote;
+        impl Run for EmptyRemote {
+            fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+                let fetching = request.argv.contains(&"fetch".to_string());
+                Ok(RunOutput {
+                    code: Some(if fetching { 1 } else { 0 }),
+                    signal: None,
+                    stdout: String::new(),
+                    stderr: if fetching {
+                        "fatal: couldn't find remote ref main\n".to_string()
+                    } else {
+                        String::new()
+                    },
+                    timed_out: false,
+                })
+            }
+        }
+        assert!(fetch(&EmptyRemote, guild()).unwrap().in_step());
+    }
+
+    /// **A remote that cannot be reached still fails**, which is the whole
+    /// point of the distinction: only one of the two is worth reporting.
+    #[test]
+    fn a_remote_that_cannot_be_reached_is_still_a_failure() {
+        struct Unreachable;
+        impl Run for Unreachable {
+            fn call(&self, _: &RunRequest) -> Result<RunOutput, SpawnError> {
+                Ok(RunOutput {
+                    code: Some(128),
+                    signal: None,
+                    stdout: String::new(),
+                    stderr: "fatal: Could not read from remote repository.\n".to_string(),
+                    timed_out: false,
+                })
+            }
+        }
+        let error = fetch(&Unreachable, guild()).unwrap_err();
+        assert_eq!(error.class, ErrClass::ToolFailed);
+        assert!(error.message.contains("Could not read"), "{error:?}");
     }
 
     /// The words in the STATUS column, read from git's own status letters.

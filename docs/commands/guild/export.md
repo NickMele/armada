@@ -2,7 +2,7 @@
 
 Write the whole guild to one portable file.
 
-> **Status: not built — M2.**
+> **Status: built — M2.**
 
 The escape hatch for a machine that will never hold your git credentials, and the thing you
 reach for when a remote is not worth setting up.
