@@ -360,6 +360,11 @@ impl CheckState {
 #[serde(rename_all = "snake_case")]
 pub enum Ending {
     /// SIGINT.
+    ///
+    /// **Nothing produces this yet**, and the gap is recorded in
+    /// `docs/PHASES.md` under phase 3: char installs no SIGINT handler, so an
+    /// interrupted run dies on the default disposition and its `setsid`'d
+    /// children keep running. The arm below is what the handler will feed.
     Interrupted,
     /// The workspace root stat returned `ENOENT` — the directory was deleted
     /// under the run.

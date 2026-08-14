@@ -529,6 +529,34 @@ inference deleted the filter, a field on every verdict, and a restated message.
 The lesson worth carrying: *a rule stated in two documents is worth checking for
 a third possibility — that one of them never made the claim.*
 
+#### One gap phase 3 leaves open
+
+**`Event::Interrupted` has no producer.** Both reducers handle it and both are
+unit-tested on it, but nothing in the shell delivers it: there is no SIGINT
+handler anywhere in `crates/`, only the SIGPIPE restore at the entrypoint. So a
+`char check` that is interrupted dies on the default disposition instead of
+ending its run.
+
+Measured, by sending SIGINT to a real run:
+
+| | What happens today |
+|---|---|
+| exit code | **130**, which is correct — [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.6 makes signals the one carve-out from `exit = f(error.class)` |
+| run lease | left in `~/.char/char.db` until the heartbeat goes cold, so a retry inside the minute fails fast with "a run is already in flight" |
+| **children** | **keep running.** They are `setsid`'d into their own sessions, so the signal never reaches them |
+
+The third row is the one that matters: `PLAN.md` §2.3's premise is that no
+process outlives its workspace, and an interrupted run currently leaves its test
+suites running. It is phase 3's gap rather than phase 2's — the check engine is
+what spawns them, and `char clean` reclaims them only when somebody runs it.
+
+The shape of the fix, so it is not rediscovered: a handler sets a flag, the
+scheduler loop feeds `Event::Interrupted` on the next turn, and the path that
+already exists takes over — it kills each running group, marks the rest
+`ABORTED`, and ends the run `aborted`. The loop must not block, so the handler
+sets an atomic and the loop polls it rather than doing any work in the handler
+itself.
+
 ### Phase 4 — Services: `up` / `down`
 
 Both drivers, five ready-check kinds, `needs:` ordering, `owns:`, everything started
