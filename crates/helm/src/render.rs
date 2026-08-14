@@ -10,6 +10,7 @@
 
 pub mod palette;
 pub mod style;
+pub mod table;
 pub mod term;
 
 use armada_core::envelope::{
