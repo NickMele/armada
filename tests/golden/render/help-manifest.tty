@@ -3,12 +3,14 @@
 [1m[38;2;255;169;64mVERBS[0m
   config  [38;2;107;114;128mreport the evidence, then verify what was written[0m
   init    [38;2;107;114;128mclaim this workspace: ports, .armada/, setup[0m
+  up      [38;2;107;114;128mstart this workspace's services, and wait until they answer[0m
+  down    [38;2;107;114;128mstop this workspace's services; keep the port block[0m
   status  [38;2;107;114;128mwhat is running, what is mine, what is stale[0m
   check   [38;2;107;114;128mlint, format and test — the verb a gate calls[0m
   skills  [38;2;107;114;128mwhat this repository knows about itself[0m
   clean   [38;2;107;114;128mrelease what this workspace owns[0m
 
 [1m[38;2;255;169;64mNOT BUILT YET[0m
-  up, down, render, agents-md, explain  [38;2;107;114;128mreserved; see PHASES.md §8[0m
+  render, agents-md, explain  [38;2;107;114;128mreserved; see PHASES.md §8[0m
 
 `armada manifest <verb> --help` for one verb's flags.

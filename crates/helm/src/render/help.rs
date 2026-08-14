@@ -82,7 +82,7 @@ const LENS: [(&str, &str); 2] = [
 /// **Not alphabetical.** `config` comes first because a repository has no
 /// `armada.yml` before it runs, `init` next because nothing else works until
 /// *it* has run, and `clean` last because it undoes the rest.
-const MANIFEST: [Page; 6] = [
+const MANIFEST: [Page; 8] = [
     Page {
         name: "config",
         summary: "report the evidence, then verify what was written",
@@ -102,6 +102,29 @@ const MANIFEST: [Page; 6] = [
         usage: &["armada manifest init [--json] [--dry-run]"],
         flags: &[("--dry-run", "report what would happen; change nothing")],
         notes: &["Reaps what is no longer owned before it claims anything."],
+    },
+    Page {
+        name: "up",
+        summary: "start this workspace's services, and wait until they answer",
+        usage: &["armada manifest up [<component>] [--json] [--dry-run]"],
+        flags: &[(
+            "--dry-run",
+            "report the argv and the ready-checks; start nothing",
+        )],
+        notes: &[
+            "Started is not ready: a service is up when its ready-check passes.",
+            "Everything it starts is recorded before it is confirmed working.",
+        ],
+    },
+    Page {
+        name: "down",
+        summary: "stop this workspace's services; keep the port block",
+        usage: &["armada manifest down [<component>] [--json]"],
+        flags: &[],
+        notes: &[
+            "down is pause and clean is release — the port block is kept.",
+            "Dependents stop before their dependencies.",
+        ],
     },
     Page {
         name: "status",

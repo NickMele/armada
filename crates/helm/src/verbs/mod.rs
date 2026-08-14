@@ -14,6 +14,7 @@ pub mod guild;
 pub mod init;
 pub mod machine;
 pub mod preflight;
+pub mod services;
 pub mod skills;
 pub mod status;
 
@@ -22,7 +23,7 @@ use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope,
     GuildBundleData, GuildInitData, GuildSyncData, InitData, InitDryRun, MachineInitData, ScanData,
-    SkillsData, StatusData, VerifyData,
+    ServicesData, SkillsData, StatusData, UpDryRun, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -41,6 +42,12 @@ pub enum Output {
     Clean(Box<Envelope<CleanData>>),
     /// `armada manifest clean --dry-run`.
     CleanDryRun(Box<Envelope<CleanDryRun>>),
+    /// `armada manifest up`.
+    Up(Box<Envelope<ServicesData>>),
+    /// `armada manifest up --dry-run`.
+    UpDryRun(Box<Envelope<UpDryRun>>),
+    /// `armada manifest down`.
+    Down(Box<Envelope<ServicesData>>),
     /// `armada manifest status`.
     Status(Box<Envelope<StatusData>>),
     /// `armada manifest check`.
@@ -75,6 +82,9 @@ impl Output {
             Output::InitDryRun(e) => e.to_json(),
             Output::Clean(e) => e.to_json(),
             Output::CleanDryRun(e) => e.to_json(),
+            Output::Up(e) => e.to_json(),
+            Output::UpDryRun(e) => e.to_json(),
+            Output::Down(e) => e.to_json(),
             Output::Status(e) => e.to_json(),
             Output::Check(e) => e.to_json(),
             Output::CheckDryRun(e) => e.to_json(),
@@ -114,6 +124,9 @@ impl Output {
             Output::InitDryRun(e) => e.exit_code(),
             Output::Clean(e) => e.exit_code(),
             Output::CleanDryRun(e) => e.exit_code(),
+            Output::Up(e) => e.exit_code(),
+            Output::UpDryRun(e) => e.exit_code(),
+            Output::Down(e) => e.exit_code(),
             Output::Status(e) => e.exit_code(),
             Output::Check(e) => e.exit_code(),
             Output::CheckDryRun(e) => e.exit_code(),

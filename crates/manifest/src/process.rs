@@ -102,18 +102,55 @@ impl ProcessGroup {
             command.env(key, value);
         }
 
-        match request.stdio {
+        // A document on stdin needs a pipe to write it down, whatever the
+        // output streams do.
+        let stdin = match request.stdin {
+            Some(_) => Stdio::piped(),
+            None => Stdio::null(),
+        };
+        match &request.stdio {
             StdioMode::Capture => {
                 command
-                    .stdin(Stdio::null())
+                    .stdin(stdin)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
             }
             StdioMode::Inherit => {
                 command
-                    .stdin(Stdio::inherit())
+                    .stdin(match request.stdin {
+                        Some(_) => Stdio::piped(),
+                        None => Stdio::inherit(),
+                    })
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit());
+            }
+            // **A real file descriptor, so the child outlives Armada.** A
+            // service started under `Capture` would hold the read end of a pipe
+            // Armada is about to drop, and the first write after that is
+            // `EPIPE` — which kills the service moments after `up` reported it
+            // healthy.
+            StdioMode::Log(path) => {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let file = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .map_err(|e| SpawnError {
+                        program: program.clone(),
+                        kind: SpawnErrorKind::Other,
+                        message: format!("cannot open {}: {e}", path.display()),
+                    })?;
+                let stderr = file.try_clone().map_err(|e| SpawnError {
+                    program: program.clone(),
+                    kind: SpawnErrorKind::Other,
+                    message: format!("cannot open {}: {e}", path.display()),
+                })?;
+                command
+                    .stdin(stdin)
+                    .stdout(Stdio::from(file))
+                    .stderr(Stdio::from(stderr));
             }
         }
 
@@ -130,6 +167,19 @@ impl ProcessGroup {
             },
             message: e.to_string(),
         })?;
+
+        // **Written and then closed, before anything waits.** compose reads the
+        // whole document before it does any work, so a handle left open is a
+        // child that never sees EOF and never starts the stack. A document
+        // larger than the pipe buffer would deadlock a caller that wrote it
+        // after `wait`, which is why it happens here.
+        if let Some(text) = &request.stdin {
+            if let Some(mut pipe) = child.stdin.take() {
+                use std::io::Write;
+                let _ = pipe.write_all(text.as_bytes());
+                let _ = pipe.flush();
+            }
+        }
 
         // With `setsid` the child *is* its own group leader, so its pid is the
         // pgid. Without it the child joins Armada's group, and killing that would

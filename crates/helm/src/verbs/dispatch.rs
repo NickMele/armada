@@ -126,7 +126,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
 
     let request = RunRequest::new(argv.clone(), workspace.root.clone())
         .env(env)
-        .stdio(stdio);
+        .stdio(stdio.clone());
     // No timeout: how long a repo's own command takes is the repo's business,
     // and Armada's deadlines exist for the calls Armada makes on its own account.
     //

@@ -68,6 +68,32 @@ pub fn create_armada_dir(root: &Path) -> Result<PathBuf, ArmadaError> {
     Ok(dir)
 }
 
+/// Where a service's output goes: `.armada/logs/<component>.log` (PLAN.md §4.2).
+///
+/// **Outside `run/`, because `armada manifest up` is not a run and has no
+/// run-id.** An earlier draft gave the only log path as `run/<run-id>/logs/`,
+/// which left `armada manifest status` reporting a crashed service with nowhere
+/// to point.
+pub fn service_log(root: &Path, component: &str) -> PathBuf {
+    root.join(service_log_reference(component))
+}
+
+/// The same path, workspace-relative — what `results[].log` carries, for the
+/// same reason `check`'s does: a payload full of absolute paths is a payload
+/// that differs between two machines running the same repo.
+pub fn service_log_reference(component: &str) -> String {
+    format!(".armada/logs/{component}.log")
+}
+
+/// A service's log so far, or empty when it has written nothing yet.
+///
+/// **Absence is not an error.** A `log:` ready-check is asked the instant the
+/// service starts, which is reliably before the file exists — treating that as
+/// a failure would make every `log:` check fail on its first probe.
+pub fn read_service_log(root: &Path, component: &str) -> String {
+    std::fs::read_to_string(service_log(root, component)).unwrap_or_default()
+}
+
 /// Remove `.armada/` entirely. Absent is success — `clean` is idempotent.
 pub fn remove_armada_dir(root: &Path) -> Result<bool, ArmadaError> {
     let dir = root.join(".armada");

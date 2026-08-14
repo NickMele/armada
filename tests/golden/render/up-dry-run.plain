@@ -1,0 +1,9 @@
+armada  3d9cc7ba
+
+  STATUS  SERVICE   DETAIL
+  would   postgres  docker compose -f - -p armada-3d9cc7ba --project-directory …
+  would   web       pnpm dev --port 5461
+  wait    postgres  tcp pg (5460) (90s)
+  wait    web       http http://127.0.0.1:5461/healthz (60s)
+
+UP  dry run, nothing was started

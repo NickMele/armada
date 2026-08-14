@@ -56,6 +56,28 @@ pub const PROBE_INTERVAL_MS: u64 = 250;
 /// What a row says when a signal reached the run before it did.
 const INTERRUPTED: &str = "interrupted before it was started";
 
+/// Whether a `log:` ready-check has matched yet.
+///
+/// **Unanchored, over the whole file, and a `bad_config` when the pattern will
+/// not compile** (PLAN.md §6.0). The pattern is the repo's, so a broken one is
+/// the repo's to fix — and a probe that silently never matches would burn the
+/// whole `ready.timeout:` and then report `TIMEOUT`, sending the reader to look
+/// at a service that came up fine.
+pub fn log_matched(
+    text: &str,
+    pattern: &str,
+    at: crate::error::ConfigWhere,
+) -> Result<bool, ArmadaError> {
+    let regex = regex::Regex::new(pattern).map_err(|e| {
+        ArmadaError::bad_config(
+            at,
+            format!("`ready.log:` is not a regex: {e}"),
+            "correct the pattern, or use `ready: {tcp: <port-name>}`",
+        )
+    })?;
+    Ok(regex.is_match(text))
+}
+
 /// Which verb is driving.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -114,6 +136,10 @@ pub struct Row {
     pub error: Option<ArmadaError>,
     /// Prose the status alone does not carry.
     pub reason: Option<String>,
+    /// What Armada executed for it.
+    pub argv: Vec<String>,
+    /// Where its output went.
+    pub log: Option<String>,
 }
 
 impl Row {
@@ -127,8 +153,37 @@ impl Row {
             owns: Vec::new(),
             error: None,
             reason: None,
+            argv: Vec::new(),
+            log: None,
         }
     }
+}
+
+/// What the shell learned when it performed an [`Action::Start`] or an
+/// [`Action::Stop`]: the handles, the vector, and where the output went.
+///
+/// **One value rather than three fields on two events**, because every one of
+/// them is known at the same moment and none of them can be re-derived
+/// afterwards — `${port.NAME}` has already been substituted by then, so the
+/// config no longer says what ran.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Attempt {
+    /// `<kind>:<reference>`, the grammar `results[].owns[]` uses.
+    pub owns: Vec<String>,
+    /// The exact vector, post-substitution.
+    pub argv: Vec<String>,
+    /// Workspace-relative path to the service's log, when it has one.
+    pub log: Option<String>,
+    /// The ready-check this service is about to be waited on, in words —
+    /// `http http://127.0.0.1:5460/healthz`.
+    ///
+    /// **The row's `reason` for a service that worked**, because
+    /// [`commands/manifest/up.md`] asks the payload to name *"the ready-check
+    /// that was waited on"* and a row that says only `UP` cannot answer *what
+    /// was it waiting for* — which is the first question asked of a `TIMEOUT`.
+    ///
+    /// [`commands/manifest/up.md`]: ../../../docs/commands/manifest/up.md
+    pub ready: Option<String>,
 }
 
 /// One settled service, in the shape `data.results[]` wants.
@@ -144,8 +199,13 @@ pub struct ServiceResult {
     pub owns: Vec<String>,
     /// Its own failure.
     pub error: Option<ArmadaError>,
-    /// Prose the status alone does not carry.
+    /// Prose the status alone does not carry — for `up`, the ready-check that
+    /// was waited on.
     pub reason: Option<String>,
+    /// What Armada actually executed for it, post-substitution.
+    pub argv: Vec<String>,
+    /// Where its output went, for a service the shell gave a log file.
+    pub log: Option<String>,
 }
 
 impl From<&ServiceResult> for ResultRow {
@@ -155,6 +215,8 @@ impl From<&ServiceResult> for ResultRow {
         row.owns = result.owns.clone();
         row.error = result.error.clone();
         row.reason = result.reason.clone();
+        row.argv = result.argv.clone();
+        row.log = result.log.clone();
         row
     }
 }
@@ -254,17 +316,24 @@ pub enum Event {
         /// What the store said.
         error: ArmadaError,
     },
-    /// It exists, and these are the handles Armada now holds for it.
+    /// It exists, and this is everything the shell learned starting it.
     Spawned {
         /// Whose service.
         service: String,
-        /// `<kind>:<reference>`, the grammar `results[].owns[]` uses.
-        owns: Vec<String>,
+        /// The handles, the argv, and the log.
+        attempt: Attempt,
     },
     /// It never started.
+    ///
+    /// **It still carries an [`Attempt`]**, because a driver can create some of
+    /// what it was asked for and then fail — a `compose up` that started two
+    /// containers and could not start the third. Those two are Armada's, and a
+    /// failure that dropped their ids on the floor would strand them.
     SpawnFailed {
         /// Whose service.
         service: String,
+        /// Whatever was created before it failed.
+        attempt: Attempt,
         /// **The class the shell decided**, because the same failure is a
         /// different class depending on who asked: a missing `docker` is
         /// `environment`, a `cmd:` that is not on `PATH` is `bad_config`.
@@ -290,10 +359,13 @@ pub enum Event {
         /// What went wrong.
         error: ArmadaError,
     },
-    /// The service is stopped and confirmed gone.
+    /// The service is stopped and **confirmed gone**. Not "the signal was
+    /// sent": `down` reports `DOWN` only once the group is confirmed empty.
     Stopped {
         /// Whose service.
         service: String,
+        /// What the shell ran to stop it.
+        attempt: Attempt,
     },
     /// It would not stop. **A real leak**, so it fails the row.
     StopFailed {
@@ -369,7 +441,7 @@ const fn subject_of(event: &Event) -> Option<&String> {
         | Event::Ready { service }
         | Event::NotReady { service }
         | Event::ReadyFailed { service, .. }
-        | Event::Stopped { service }
+        | Event::Stopped { service, .. }
         | Event::StopFailed { service, .. } => Some(service),
         Event::Started | Event::Tick { .. } | Event::Interrupted => None,
     }
@@ -446,9 +518,9 @@ pub fn step(mut state: State, event: Event) -> (State, Vec<Action>) {
                 &mut actions,
             );
         }
-        Event::Spawned { service, owns } => {
+        Event::Spawned { service, attempt } => {
             if let Some(row) = state.rows.get_mut(&service) {
-                row.owns = owns;
+                record_attempt(row, attempt);
                 row.phase = Phase::Waiting;
                 row.waiting_since = Some(state.now_mono);
             }
@@ -457,7 +529,14 @@ pub fn step(mut state: State, event: Event) -> (State, Vec<Action>) {
             });
             return (state, actions);
         }
-        Event::SpawnFailed { service, error } => {
+        Event::SpawnFailed {
+            service,
+            attempt,
+            error,
+        } => {
+            if let Some(row) = state.rows.get_mut(&service) {
+                record_attempt(row, attempt);
+            }
             settle(
                 &mut state,
                 &service,
@@ -491,7 +570,10 @@ pub fn step(mut state: State, event: Event) -> (State, Vec<Action>) {
                 &mut actions,
             );
         }
-        Event::Stopped { service } => {
+        Event::Stopped { service, attempt } => {
+            if let Some(row) = state.rows.get_mut(&service) {
+                record_attempt(row, attempt);
+            }
             let status = state.direction.success();
             settle(&mut state, &service, status, None, None, &mut actions);
         }
@@ -604,6 +686,28 @@ fn advance(state: &mut State, actions: &mut Vec<Action>) {
     }
 }
 
+/// Fold what the shell learned into the row.
+///
+/// **Handles accumulate rather than replace.** `up` and `down` both touch a row
+/// once, but a driver that reports twice must not lose the first set — the ids
+/// are the whole reclaimability guarantee.
+fn record_attempt(row: &mut Row, attempt: Attempt) {
+    for id in attempt.owns {
+        if !row.owns.contains(&id) {
+            row.owns.push(id);
+        }
+    }
+    if !attempt.argv.is_empty() {
+        row.argv = attempt.argv;
+    }
+    if attempt.log.is_some() {
+        row.log = attempt.log;
+    }
+    if attempt.ready.is_some() {
+        row.reason = attempt.ready;
+    }
+}
+
 /// Settle one row and emit it.
 fn settle(
     state: &mut State,
@@ -619,7 +723,12 @@ fn settle(
     row.phase = Phase::Settled;
     row.status = status;
     row.error = error;
-    row.reason = reason;
+    // A cascade or an interrupt says why this row never ran, and that outranks
+    // the ready-check it would have waited on. Anything else leaves the
+    // ready-check in place — it is what `up.md` asks the payload to name.
+    if reason.is_some() {
+        row.reason = reason;
+    }
 
     let duration_ms = row
         .began_mono
@@ -631,6 +740,8 @@ fn settle(
         owns: row.owns.clone(),
         error: row.error.clone(),
         reason: row.reason.clone(),
+        argv: row.argv.clone(),
+        log: row.log.clone(),
     };
     actions.push(Action::Emit { result });
 }
@@ -803,7 +914,10 @@ mod tests {
             state,
             Event::Spawned {
                 service: "db".to_string(),
-                owns: vec!["container:armada-a3f91c02-db-1".to_string()],
+                attempt: Attempt {
+                    owns: vec!["container:armada-a3f91c02-db-1".to_string()],
+                    ..Attempt::default()
+                },
             },
         );
         assert_eq!(
@@ -854,7 +968,10 @@ mod tests {
             state,
             Event::Spawned {
                 service: "db".to_string(),
-                owns: vec!["container:armada-a3f91c02-db-1".to_string()],
+                attempt: Attempt {
+                    owns: vec!["container:armada-a3f91c02-db-1".to_string()],
+                    ..Attempt::default()
+                },
             },
         )
         .0;
@@ -903,7 +1020,7 @@ mod tests {
             state,
             Event::Spawned {
                 service: "db".to_string(),
-                owns: Vec::new(),
+                attempt: Attempt::default(),
             },
         )
         .0;
@@ -953,7 +1070,7 @@ mod tests {
             state,
             Event::Spawned {
                 service: "fire".to_string(),
-                owns: Vec::new(),
+                attempt: Attempt::default(),
             },
         )
         .0;
@@ -988,6 +1105,7 @@ mod tests {
             state,
             Event::SpawnFailed {
                 service: "db".to_string(),
+                attempt: Attempt::default(),
                 error: ArmadaError {
                     class: ErrClass::ToolFailed,
                     r#where: "db".to_string(),
@@ -1030,7 +1148,7 @@ mod tests {
             state,
             Event::Spawned {
                 service: "a".to_string(),
-                owns: Vec::new(),
+                attempt: Attempt::default(),
             },
         )
         .0;
@@ -1052,6 +1170,7 @@ mod tests {
             state,
             Event::SpawnFailed {
                 service: "b".to_string(),
+                attempt: Attempt::default(),
                 error: ArmadaError {
                     class: ErrClass::ToolFailed,
                     r#where: "b".to_string(),
@@ -1127,6 +1246,7 @@ mod tests {
             state,
             Event::Stopped {
                 service: "web".to_string(),
+                attempt: Attempt::default(),
             },
         );
         assert_eq!(state.rows["web"].status, Status::Down);
@@ -1182,7 +1302,7 @@ mod tests {
             state,
             Event::Spawned {
                 service: "a".to_string(),
-                owns: Vec::new(),
+                attempt: Attempt::default(),
             },
         )
         .0;
@@ -1219,7 +1339,7 @@ mod tests {
             state,
             Event::Spawned {
                 service: "db".to_string(),
-                owns: Vec::new(),
+                attempt: Attempt::default(),
             },
         )
         .0;
@@ -1238,6 +1358,89 @@ mod tests {
             panic!("{actions:?}")
         };
         assert_eq!(result.duration_ms, Some(2_500));
+    }
+
+    /// **The argv and the ready-check reach the row**, because `up.md`'s
+    /// payload asks for both by name and neither can be reconstructed
+    /// afterwards: `${port.NAME}` has already been substituted, so the config
+    /// no longer says what ran or what was waited on.
+    #[test]
+    fn a_row_carries_what_ran_and_what_it_waited_for() {
+        let mut state = up(&["db"]);
+        state = drive(state, Event::Started).0;
+        state = drive(
+            state,
+            Event::Recorded {
+                service: "db".to_string(),
+            },
+        )
+        .0;
+        state = drive(
+            state,
+            Event::Spawned {
+                service: "db".to_string(),
+                attempt: Attempt {
+                    owns: vec!["pgid:4212".to_string()],
+                    argv: vec!["postgres".to_string(), "-p".to_string(), "5460".to_string()],
+                    log: Some(".armada/logs/db.log".to_string()),
+                    ready: Some("tcp pg".to_string()),
+                },
+            },
+        )
+        .0;
+        let (_, actions) = drive(
+            state,
+            Event::Ready {
+                service: "db".to_string(),
+            },
+        );
+        let Some(Action::Emit { result }) = actions
+            .iter()
+            .find(|a| matches!(a, Action::Emit { .. }))
+            .cloned()
+        else {
+            panic!("{actions:?}")
+        };
+        assert_eq!(result.argv, vec!["postgres", "-p", "5460"]);
+        assert_eq!(result.reason.as_deref(), Some("tcp pg"));
+        assert_eq!(result.log.as_deref(), Some(".armada/logs/db.log"));
+        assert_eq!(result.owns, vec!["pgid:4212"]);
+    }
+
+    /// **A driver that created two of three and then failed keeps the two.**
+    /// Dropping their ids on the floor is the strand this whole ordering exists
+    /// to prevent.
+    #[test]
+    fn a_start_that_failed_part_way_keeps_what_it_had_already_created() {
+        let mut state = up(&["stack"]);
+        state = drive(state, Event::Started).0;
+        state = drive(
+            state,
+            Event::Recorded {
+                service: "stack".to_string(),
+            },
+        )
+        .0;
+        let (state, _) = drive(
+            state,
+            Event::SpawnFailed {
+                service: "stack".to_string(),
+                attempt: Attempt {
+                    owns: vec!["container:one".to_string(), "network:two".to_string()],
+                    ..Attempt::default()
+                },
+                error: ArmadaError {
+                    class: ErrClass::ToolFailed,
+                    r#where: "stack".to_string(),
+                    message: "compose exited 1".to_string(),
+                    next_action: None,
+                },
+            },
+        );
+        assert_eq!(
+            state.rows["stack"].owns,
+            vec!["container:one", "network:two"]
+        );
     }
 
     /// The run finishes once. A second `Finish` would have the shell write two

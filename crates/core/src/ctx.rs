@@ -62,13 +62,26 @@ impl<R: Run, C: Clock, F: Fetch> Ctx<R, C, F> {
 }
 
 /// Where a child's output goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StdioMode {
     /// Armada reads the child's stdout and stderr, and can therefore scrub them.
     Capture,
     /// The child keeps Armada's own descriptors — colours, progress bars and
     /// prompts work, and Armada sees nothing.
     Inherit,
+    /// Both streams go to this file, and **Armada holds no end of the pipe**.
+    ///
+    /// **This is the only mode a service may be started in** (PLAN.md §4.2:
+    /// `.armada/logs/<component>.log`). A service outlives the `armada manifest
+    /// up` that started it, so [`StdioMode::Capture`] would leave Armada holding
+    /// the read end of a pipe it is about to drop — and the first write after
+    /// that is `EPIPE`, which kills the service moments after `up` reports it
+    /// healthy. A real file descriptor survives the parent by construction.
+    ///
+    /// It is also what makes a `log:` ready-check possible at all: the regex is
+    /// matched against a file both Armada and a human can read, rather than
+    /// against a stream only the starting process ever sees.
+    Log(PathBuf),
 }
 
 /// One subprocess, fully specified.
@@ -96,6 +109,15 @@ pub struct RunRequest {
     /// can be reached with one `killpg`. Measured: this is mutually exclusive
     /// with `process_group(0)` (`docs/traps.md`), so it is one flag and not two.
     pub new_session: bool,
+    /// Written to the child's stdin and then closed.
+    ///
+    /// **One field, for one caller: the compose driver.** `docker compose -f -`
+    /// takes the transformed document on stdin precisely so it is never written
+    /// to disk — measured, `docker compose config` inlines `env_file:` and
+    /// `${VAR}` values, so a persisted copy is a cleartext credentials file for
+    /// every repo (PLAN.md §6.0). A `String` rather than a path for the same
+    /// reason: there is no path.
+    pub stdin: Option<String>,
 }
 
 impl RunRequest {
@@ -109,7 +131,14 @@ impl RunRequest {
             stdio: StdioMode::Capture,
             timeout: None,
             new_session: true,
+            stdin: None,
         }
+    }
+
+    /// Hand the child a document on stdin. See [`RunRequest::stdin`].
+    pub fn with_stdin(mut self, text: impl Into<String>) -> Self {
+        self.stdin = Some(text.into());
+        self
     }
 
     /// Set the deadline. Every docker call needs one: measured, the docker CLI

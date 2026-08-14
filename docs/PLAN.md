@@ -1936,7 +1936,16 @@ run_retention: 10       # runs kept; see the 10 MB per-check log cap (§3.1)
 check_timeout: 900      # per-check default, overridable per check (§4.1)
 acquire_timeout: 2400   # cumulative wait for leases before FAILED/aborted (§4.3)
 docker_timeout: 30      # Armada's own deadline on every docker call (§6)
+up_timeout: 600         # …except the ones that do work rather than ask (§6)
 ```
+
+**`up_timeout` is the seventh key, and it was specified with a value and no home.**
+§6's deadline table names it and gives it a default — 600s on `compose up`, `build`, `pull`,
+`down` and `rm` — while this section listed six keys and did not carry it. Machine capacity
+lives here, so it lives here. The gap between the two is the point: measured, a stock
+`docker compose up -d` with `depends_on: {condition: service_healthy}` took **43 seconds**, so
+a blanket 30 kills it and reports `environment`, exit 6 — *"fix the machine"* when nothing is
+wrong with it.
 
 **`armada.yml` declares how expensive a check is; this file declares how much the machine has.**
 They cannot be the same file: `armada.yml` is committed, and a repo cannot know your core count.

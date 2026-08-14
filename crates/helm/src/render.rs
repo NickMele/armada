@@ -42,7 +42,7 @@ pub mod term;
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope, Finding,
     GuildBundleData, GuildInitData, GuildSyncData, Headline, InitData, InitDryRun, MachineInitData,
-    ResultRow, ScanData, SkillsData, StatusData, Unreclaimed, VerifyData,
+    ResultRow, ScanData, ServicesData, SkillsData, StatusData, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::id::WorkspaceId;
@@ -66,6 +66,9 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
     match output {
         Output::Init(envelope) => init(envelope, style, width),
         Output::InitDryRun(envelope) => init_dry(envelope, style, width),
+        Output::Up(envelope) => services(envelope, style, width, "service"),
+        Output::UpDryRun(envelope) => up_dry(envelope, style, width),
+        Output::Down(envelope) => services(envelope, style, width, "service"),
         Output::Clean(envelope) => clean(envelope, style, width),
         Output::CleanDryRun(envelope) => clean_dry(envelope, style, width),
         Output::Status(envelope) => status(envelope, style, width),
@@ -716,6 +719,157 @@ fn init_dry(envelope: &Envelope<InitDryRun>, style: Style, width: usize) -> Stri
         style,
         envelope.status,
         &["dry run".to_string(), "nothing was changed".to_string()],
+    ));
+    out
+}
+
+// ------------------------------------------------------------------ up / down
+
+/// `armada manifest up` and `armada manifest down`.
+///
+/// **One renderer for both**, because the envelope is one shape and the words
+/// in it already differ: a row says `UP` or `DOWN`, and the summary reads off
+/// `envelope.status`. A second function would be a second place for the two
+/// verbs to drift apart, which is the failure `render.rs` exists as one file to
+/// prevent.
+///
+/// Three tables, and each earns its place:
+///
+/// 1. **The services**, `STATUS · NAME · DETAIL · TIME`. DETAIL is the row's
+///    error when it has one and otherwise the ready-check that was waited on —
+///    which is the first thing anyone asks of a `TIMEOUT`, and the thing that
+///    makes a bare `UP` mean something.
+/// 2. **The ports**, probed at report time and never remembered. `up`'s whole
+///    output is worthless without the number a browser is pointed at.
+/// 3. **The block**, spelled `kept`. `down` keeps it — that is the entire
+///    distinction from `clean` — and a reader who cannot see that it was kept
+///    has to run `status` to find out.
+fn services(envelope: &Envelope<ServicesData>, style: Style, width: usize, noun: &str) -> String {
+    let data = &envelope.data;
+    let block = style.span(data.port_block.from, data.port_block.to);
+    let mut out = header(
+        style,
+        envelope.workspace.as_ref(),
+        None,
+        Some(format!(
+            "{} {}",
+            style.paint(Role::SteelGrey, "ports"),
+            style.paint(Role::NavalBlue, &block)
+        )),
+        width,
+    );
+
+    let mut table = Table::new(columns(noun, "detail", true)).indent(2);
+    for row in &data.results {
+        // The failure outranks the ready-check: a row that failed is being read
+        // for why, and a row that did not is being read for what it waited on.
+        let detail = row
+            .error
+            .as_ref()
+            .map(|e| e.message.clone())
+            .or_else(|| row.reason.clone());
+        // **A log path only on a row that did not work**, the same rule `check`
+        // applies: a path under every healthy service is a line nobody reads,
+        // and it buries the one that matters.
+        let note = row
+            .log
+            .clone()
+            .filter(|_| !matches!(row.status, Status::Up | Status::Down));
+        table = table.row_with_note(
+            vec![
+                verdict(row.status),
+                Cell::plain(row.id.clone()),
+                detail_cell(style, detail.as_deref()),
+                time_cell(style, row.duration_ms),
+            ],
+            note,
+        );
+    }
+    if !table.is_empty() {
+        out.push_str(&table.render(style, width));
+        out.push('\n');
+    }
+
+    let mut ports = Table::new(columns("port", "detail", false)).indent(2);
+    for row in &data.results {
+        for (name, report) in &row.ports {
+            ports = ports.row(vec![
+                token(port_word(report.state), Role::for_port(report.state)),
+                Cell::plain(name.clone()),
+                Cell::painted(report.port.to_string(), Role::NavalBlue),
+            ]);
+        }
+    }
+    if !ports.is_empty() {
+        out.push_str(&ports.render(style, width));
+        out.push('\n');
+    }
+
+    // **Stated, not implied.** `down` keeps the block so the next `up` gets the
+    // same ports, which keeps URLs, bookmarks and `.env` files valid across a
+    // restart — and a reader who cannot see that has to go and check.
+    let kept = Table::new(columns("resource", "detail", false))
+        .indent(2)
+        .row(vec![
+            token("kept", Role::BeaconGreen),
+            Cell::plain("ports"),
+            Cell::painted(block, Role::NavalBlue),
+        ]);
+    out.push_str(&kept.render(style, width));
+    out.push('\n');
+
+    // **Counted against the row's success state, not the envelope's.** A
+    // `PARTIAL` run reading "1 partial" would be counting the wrong thing: the
+    // question is how many services reached the state the verb was asked for.
+    let reached = data
+        .results
+        .iter()
+        .filter(|row| matches!(row.status, Status::Up | Status::Down))
+        .count();
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            format::count(data.results.len(), noun),
+            format!("{reached} {}", envelope.verb),
+        ],
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// `armada manifest up --dry-run`.
+///
+/// **The wait is shown beside the spawn**, because it is the half that takes
+/// the time: a preview naming the argv and hiding the ready-check would preview
+/// the fast part of `up`.
+fn up_dry(envelope: &Envelope<UpDryRun>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = header(style, envelope.workspace.as_ref(), None, None, width);
+
+    let mut table = Table::new(columns("service", "detail", false)).indent(2);
+    for (word, lines) in [("would", &data.would_run), ("wait", &data.would_wait)] {
+        for line in lines {
+            // `<service>: <the rest>` — the shell builds it that way so the
+            // name lands in the NAME column rather than at the head of DETAIL.
+            let (service, detail) = line.split_once(": ").unwrap_or(("", line.as_str()));
+            table = table.row(vec![
+                token(word, Role::FlareOrange),
+                Cell::plain(service),
+                Cell::muted(detail.trim()),
+            ]);
+        }
+    }
+    out.push_str(&table.render(style, width));
+    if !table.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &["dry run".to_string(), "nothing was started".to_string()],
     ));
     out
 }

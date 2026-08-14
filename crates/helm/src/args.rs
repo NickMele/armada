@@ -54,6 +54,22 @@ pub enum Invocation {
     Help(Topic),
     /// `armada manifest init`.
     Init(Common),
+    /// `armada manifest up`, or `armada manifest down`.
+    ///
+    /// **One variant for two verbs**, because they take the same line: a
+    /// component selector, `--json`, and `--dry-run` on the one that changes
+    /// something. `direction` is what they differ by, and that is the whole
+    /// difference (PLAN.md §3).
+    Services {
+        /// Start, or stop.
+        direction: armada_core::lifecycle::Direction,
+        /// The component to act on, or `None` for all of them.
+        selector: Option<String>,
+        /// Emit the envelope rather than human output.
+        json: bool,
+        /// Change nothing; report the argv and the ready-checks.
+        dry_run: bool,
+    },
     /// `armada manifest clean`.
     Clean {
         /// The flags every verb shares.
@@ -335,7 +351,9 @@ const GUILD_BUILT: [&str; 5] = ["init", "pull", "push", "export", "import"];
 /// A separate list from [`BUILTIN_VERBS`], because that one claims names,
 /// several of which answer "not built yet": giving `armada manifest up --help` a
 /// page would promise a verb that does not exist.
-const BUILT_PAGES: [&str; 6] = ["init", "status", "check", "clean", "config", "skills"];
+const BUILT_PAGES: [&str; 8] = [
+    "init", "up", "down", "status", "check", "clean", "config", "skills",
+];
 
 /// `--help` in either spelling.
 fn is_help(arg: &str) -> bool {
@@ -448,6 +466,8 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
 
     match verb.as_str() {
         "init" => Ok(Invocation::Init(common(rest, json, color, &["--dry-run"])?)),
+        "up" => services(rest, json, color, armada_core::lifecycle::Direction::Up),
+        "down" => services(rest, json, color, armada_core::lifecycle::Direction::Down),
         "status" => {
             let common = common(rest, json, color, &[])?;
             if common.dry_run {
@@ -867,6 +887,54 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
     Ok(Invocation::Guild(Box::new(invocation)))
 }
 
+/// `armada manifest up [<selector>]` and `armada manifest down [<selector>]`.
+///
+/// **No scope lens, and that is deliberate.** `--project` and `--all` reach
+/// workspaces that are not this one, and starting another agent's services is
+/// the opposite of what the flat-siblings model promises (PLAN.md §2.2). They
+/// are refused by [`only_flags`] like any other unknown flag.
+///
+/// **`down` takes no `--dry-run`.** Its preview would be *"the services this
+/// workspace declares"*, which `armada manifest status` already answers and
+/// answers better, because it probes the ports rather than reading the config.
+fn services(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+    direction: armada_core::lifecycle::Direction,
+) -> Result<Invocation, ParseFailure> {
+    let json = json || rest.iter().any(|a| a == "--json");
+    *color = color_in(rest, *color).map_err(|e| failure(e, json))?;
+
+    let up = direction == armada_core::lifecycle::Direction::Up;
+    let allowed: &[&str] = if up { &["--dry-run"] } else { &[] };
+    only_flags(rest, json, allowed)?;
+
+    let words = positional(rest);
+    let verb = if up { "up" } else { "down" };
+    if words.len() > 1 {
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: words.join(" "),
+                message: format!("`armada manifest {verb}` takes one component, or none"),
+                next_action: Some(format!(
+                    "`armada manifest {verb}` acts on every service; \
+                     `armada manifest {verb} <component>` on one"
+                )),
+            },
+            json,
+        ));
+    }
+
+    Ok(Invocation::Services {
+        direction,
+        selector: words.into_iter().next(),
+        json,
+        dry_run: up && rest.iter().any(|a| a == "--dry-run"),
+    })
+}
+
 /// `armada manifest config <scan|verify>`.
 ///
 /// **The subcommand is required and is not defaulted.** `scan` reports and
@@ -1229,7 +1297,7 @@ mod tests {
 
     #[test]
     fn a_verb_that_is_not_built_yet_says_so_rather_than_dispatching_it() {
-        let err = parse(&args(&["manifest", "up"])).unwrap_err().error;
+        let err = parse(&args(&["manifest", "explain"])).unwrap_err().error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert!(err.message.contains("not built yet"));
     }
@@ -1240,8 +1308,8 @@ mod tests {
     #[test]
     fn a_parse_failure_carries_out_the_json_it_had_already_seen() {
         for words in [
-            &["--json", "manifest", "up"][..],
-            &["manifest", "up", "--json"][..],
+            &["--json", "manifest", "explain"][..],
+            &["manifest", "explain", "--json"][..],
             &["--json", "manifest", "init", "--turbo"][..],
             &["manifest", "init", "--turbo", "--json"][..],
         ] {
@@ -1249,7 +1317,7 @@ mod tests {
             assert!(failure.json, "`armada {}` lost --json", words.join(" "));
             assert_eq!(failure.error.class, ErrClass::BadInvocation);
         }
-        assert!(!parse(&args(&["manifest", "up"])).unwrap_err().json);
+        assert!(!parse(&args(&["manifest", "explain"])).unwrap_err().json);
     }
 
     /// Every built-in name is claimed, including the ones phase 2 does not
@@ -1435,7 +1503,7 @@ mod tests {
     #[test]
     fn a_parse_failure_carries_out_the_color_it_had_already_seen() {
         for words in [
-            &["--color", "never", "manifest", "up"][..],
+            &["--color", "never", "manifest", "explain"][..],
             &["manifest", "init", "--turbo", "--color", "never"][..],
             &["manifest", "check", "--detach", "--color", "never"][..],
         ] {

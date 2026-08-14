@@ -31,8 +31,8 @@
 use armada_core::envelope::{
     Asked, CheckData, CleanData, DispatchData, DoctorData, Envelope, Finding, GrantedCommand,
     GuildChoice, GuildSyncData, Headline, Health, InitData, MachineInitData, PortReport, Released,
-    ResolvedSkillView, ResultRow, ScanData, SkillsData, StatusData, Sync, SyncItem, Unreclaimed,
-    VerifyData,
+    ResolvedSkillView, ResultRow, ScanData, ServicesData, SkillsData, StatusData, Sync, SyncItem,
+    Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::id::WorkspaceId;
@@ -187,6 +187,119 @@ fn init_matches_its_fixture() {
         },
     )));
     assert_render("init", &output);
+}
+
+/// `armada manifest up`: one service ready, one that never answered.
+///
+/// **The case is deliberately mixed**, because `PARTIAL` is the state the two
+/// verbs added and the one a single-row fixture could not pin: "three of five
+/// worked" and "nothing worked" demand different actions and would otherwise
+/// both read `FAILED` (PLAN.md §3.1). It also freezes the two things a bare
+/// status word cannot say — the ready-check that was waited on, and the log
+/// path, which appears under the row that failed and under no other.
+#[test]
+fn up_matches_its_fixture() {
+    let mut postgres = ResultRow::new("postgres", Status::Up);
+    postgres.duration_ms = Some(1_900);
+    postgres.reason = Some("tcp pg (5460)".to_string());
+    postgres.owns = vec!["container:armada-3d9cc7ba-postgres-1".to_string()];
+    postgres.ports = BTreeMap::from([(
+        "pg".to_string(),
+        PortReport {
+            port: 5460,
+            state: PortState::Listening,
+        },
+    )]);
+
+    let mut web = ResultRow::new("web", Status::Timeout);
+    web.duration_ms = Some(60_000);
+    web.log = Some(".armada/logs/web.log".to_string());
+    web.reason = Some("http http://127.0.0.1:5461/healthz".to_string());
+    web.owns = vec!["pgid:4212".to_string()];
+    web.ports = BTreeMap::from([(
+        "web".to_string(),
+        PortReport {
+            port: 5461,
+            state: PortState::Reserved,
+        },
+    )]);
+    web.error = Some(ArmadaError {
+        class: ErrClass::Timeout,
+        r#where: "web".to_string(),
+        message: "the ready-check did not pass within 60s".to_string(),
+        next_action: Some("raise `ready.timeout:`, or read the service's log".to_string()),
+    });
+
+    let mut envelope = Envelope::failed(
+        "up",
+        Some(workspace()),
+        ArmadaError {
+            class: ErrClass::Timeout,
+            r#where: "web".to_string(),
+            message: "1 of 2 services did not succeed".to_string(),
+            next_action: Some("raise `ready.timeout:`, or read the service's log".to_string()),
+        },
+        ServicesData {
+            port_block: block(),
+            results: vec![postgres, web],
+        },
+    );
+    envelope.status = Status::Partial;
+    assert_render("up", &Output::Up(Box::new(envelope)));
+}
+
+/// `armada manifest down`: stopped, and the port block **kept**.
+///
+/// That last row is the whole distinction from `clean`, and a reader who
+/// cannot see it has to run `status` to find out whether the next `up` gets the
+/// same ports.
+#[test]
+fn down_matches_its_fixture() {
+    let mut web = ResultRow::new("web", Status::Down);
+    web.duration_ms = Some(320);
+    let mut postgres = ResultRow::new("postgres", Status::Down);
+    postgres.duration_ms = Some(1_100);
+    postgres.ports = BTreeMap::from([(
+        "pg".to_string(),
+        PortReport {
+            port: 5460,
+            state: PortState::Reserved,
+        },
+    )]);
+
+    let output = Output::Down(Box::new(Envelope::ok(
+        "down",
+        Some(workspace()),
+        Status::Down,
+        ServicesData {
+            port_block: block(),
+            results: vec![web, postgres],
+        },
+    )));
+    assert_render("down", &output);
+}
+
+/// `armada manifest up --dry-run`: the argv, and the wait beside it.
+#[test]
+fn up_dry_run_matches_its_fixture() {
+    let output = Output::UpDryRun(Box::new(Envelope::ok(
+        "up",
+        Some(workspace()),
+        Status::Up,
+        UpDryRun {
+            would_run: vec![
+                "postgres: docker compose -f - -p armada-3d9cc7ba --project-directory \
+                 /scratch/repo up -d"
+                    .to_string(),
+                "web: pnpm dev --port 5461".to_string(),
+            ],
+            would_wait: vec![
+                "postgres: tcp pg (5460) (90s)".to_string(),
+                "web: http http://127.0.0.1:5461/healthz (60s)".to_string(),
+            ],
+        },
+    )));
+    assert_render("up-dry-run", &output);
 }
 
 /// `armada manifest status`: what is running, what is mine, what is stale.

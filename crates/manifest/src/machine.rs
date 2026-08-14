@@ -38,10 +38,16 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// The six documented keys, and no others.
+/// The seven documented keys, and no others.
 ///
-/// Adding a seventh is a contract change: PLAN.md §4.3.1 is the owner of this
-/// list, and phase 2 codes against it rather than extending it.
+/// Adding an eighth is a contract change: PLAN.md §4.3.1 is the owner of this
+/// list, and this crate codes against it rather than extending it.
+///
+/// **`up_timeout` is the seventh, and it arrived as a reconciliation rather
+/// than an addition.** PLAN.md §6 names it and gives it a default — 600s on
+/// `compose up`, `build`, `pull`, `down` and `rm` — while §4.3.1 listed six
+/// keys and did not carry it, so the setting was specified with a value and no
+/// home. §4.3.1 is where machine capacity lives, so that is where it went.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MachineConfig {
     /// The machine's CPU budget, in slots.
@@ -56,6 +62,9 @@ pub struct MachineConfig {
     pub acquire_timeout: u32,
     /// Armada's own deadline on every docker call.
     pub docker_timeout: u32,
+    /// Armada's deadline on the docker calls that do **work** rather than ask a
+    /// question: `compose up`, `build`, `pull`, `down`, `rm`.
+    pub up_timeout: u32,
 }
 
 /// The file, as written. Every key optional: a `machine.yml` that sets one
@@ -69,6 +78,7 @@ struct MachineConfigFile {
     check_timeout: Option<u32>,
     acquire_timeout: Option<u32>,
     docker_timeout: Option<u32>,
+    up_timeout: Option<u32>,
 }
 
 impl MachineConfig {
@@ -90,6 +100,15 @@ impl MachineConfig {
             // in the same way, and the fixtures caught it both times.
             acquire_timeout: 2400,
             docker_timeout: 30,
+            // **Ten times `docker_timeout`, and the gap is the point.**
+            // Measured, a stock `docker compose up -d` with
+            // `depends_on: {condition: service_healthy}` took 43 seconds and a
+            // `compose exec` running a check took 45 — so a blanket 30 kills
+            // both and reports `environment`, exit 6: "fix the machine" when
+            // nothing is wrong with it. A question that cannot be answered in
+            // thirty seconds means a wedged daemon; a slow build is a slow
+            // build (PLAN.md §6).
+            up_timeout: 600,
         }
     }
 
@@ -121,7 +140,7 @@ impl MachineConfig {
             message: format!("cannot parse {}: {e}", path.display()),
             next_action: Some(format!(
                 "fix {} — the keys are cpu_slots, port_block_size, run_retention, \
-                 check_timeout, acquire_timeout and docker_timeout",
+                 check_timeout, acquire_timeout, docker_timeout and up_timeout",
                 path.display()
             )),
         })?;
@@ -134,6 +153,7 @@ impl MachineConfig {
             check_timeout: file.check_timeout.unwrap_or(defaults.check_timeout),
             acquire_timeout: file.acquire_timeout.unwrap_or(defaults.acquire_timeout),
             docker_timeout: file.docker_timeout.unwrap_or(defaults.docker_timeout),
+            up_timeout: file.up_timeout.unwrap_or(defaults.up_timeout),
         })
     }
 
@@ -159,6 +179,17 @@ impl MachineConfig {
     /// is recovery.
     pub fn docker_deadline(&self) -> Duration {
         Duration::from_secs(self.docker_timeout as u64)
+    }
+
+    /// Armada's deadline on a docker call that does work rather than asks a
+    /// question.
+    ///
+    /// **The distinction is not cosmetic** (PLAN.md §6). Only the question
+    /// calls are `environment` on expiry — a question that cannot be answered
+    /// in thirty seconds means the daemon is wedged. A `compose up` that runs
+    /// long is a slow build, so it expires as `timeout`.
+    pub fn up_deadline(&self) -> Duration {
+        Duration::from_secs(self.up_timeout as u64)
     }
 
     /// The acquisition ceiling in milliseconds.
@@ -308,7 +339,7 @@ mod tests {
         std::fs::write(
             home.path().join("machine.yml"),
             "cpu_slots: 6\nport_block_size: 20\nrun_retention: 4\n\
-             check_timeout: 60\nacquire_timeout: 3000\ndocker_timeout: 15\n",
+             check_timeout: 60\nacquire_timeout: 3000\ndocker_timeout: 15\nup_timeout: 900\n",
         )
         .unwrap();
         let config = MachineConfig::read(home.path()).unwrap();
@@ -321,9 +352,23 @@ mod tests {
                 check_timeout: 60,
                 acquire_timeout: 3000,
                 docker_timeout: 15,
+                up_timeout: 900,
             }
         );
         assert_eq!(config.config_defaults().check_timeout, 60);
+    }
+
+    /// **The two docker deadlines are separate, and the gap is the point.**
+    /// Measured, a stock `docker compose up -d` with
+    /// `depends_on: {condition: service_healthy}` took 43 seconds — so a
+    /// blanket 30 kills it and reports `environment`, exit 6: "fix the machine"
+    /// when nothing is wrong with it (PLAN.md §6).
+    #[test]
+    fn work_gets_a_longer_deadline_than_a_question() {
+        let defaults = MachineConfig::defaults();
+        assert_eq!(defaults.docker_deadline(), Duration::from_secs(30));
+        assert_eq!(defaults.up_deadline(), Duration::from_secs(600));
+        assert!(defaults.up_deadline() > defaults.docker_deadline());
     }
 
     #[test]

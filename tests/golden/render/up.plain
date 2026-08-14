@@ -1,0 +1,19 @@
+armada  3d9cc7ba                                                 ports 5460-5469
+
+  STATUS   SERVICE   DETAIL                                     TIME
+  UP       postgres  tcp pg (5460)                              1.9s
+  TIMEOUT  web       the ready-check did not pass within 60s  1m 00s
+           .armada/logs/web.log
+
+  STATUS  PORT  DETAIL
+  UP      pg    5460
+  DOWN    web   5461
+
+  STATUS  RESOURCE  DETAIL
+  kept    ports     5460-5469
+
+PARTIAL  2 services, 1 up
+error: 1 of 2 services did not succeed
+  where: web
+  class: timeout
+  next:  raise `ready.timeout:`, or read the service's log

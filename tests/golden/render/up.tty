@@ -1,0 +1,19 @@
+[1m[38;2;255;169;64marmada[0m  [38;2;107;114;128m3d9cc7ba[0m                                                 [38;2;107;114;128mports[0m [38;2;76;159;232m5460–5469[0m
+
+  [1m[38;2;107;114;128mSTATUS[0m   [1m[38;2;107;114;128mSERVICE[0m   [1m[38;2;107;114;128mDETAIL[0m                                     [1m[38;2;107;114;128mTIME[0m
+  [38;2;61;220;132mUP[0m       postgres  [38;2;107;114;128mtcp pg (5460)[0m                              [38;2;107;114;128m1.9s[0m
+  [38;2;255;180;84mTIMEOUT[0m  web       [38;2;107;114;128mthe ready-check did not pass within 60s[0m  [38;2;107;114;128m1m 00s[0m
+           [38;2;107;114;128m.armada/logs/web.log[0m
+
+  [1m[38;2;107;114;128mSTATUS[0m  [1m[38;2;107;114;128mPORT[0m  [1m[38;2;107;114;128mDETAIL[0m
+  [38;2;61;220;132mUP[0m      pg    [38;2;76;159;232m5460[0m
+  [38;2;107;114;128mDOWN[0m    web   [38;2;76;159;232m5461[0m
+
+  [1m[38;2;107;114;128mSTATUS[0m  [1m[38;2;107;114;128mRESOURCE[0m  [1m[38;2;107;114;128mDETAIL[0m
+  [38;2;61;220;132mkept[0m    ports     [38;2;76;159;232m5460–5469[0m
+
+[1m[38;2;255;180;84mPARTIAL[0m  [38;2;107;114;128m2 services · 1 up[0m
+[1m[38;2;255;92;92merror:[0m 1 of 2 services did not succeed
+  where: web
+  class: timeout
+  next:  raise `ready.timeout:`, or read the service's log

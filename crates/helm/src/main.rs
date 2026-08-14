@@ -137,6 +137,7 @@ fn reporter(
 fn json_wanted(invocation: &Invocation) -> bool {
     match invocation {
         Invocation::Init(common) | Invocation::Status(common) => common.json,
+        Invocation::Services { json, .. } => *json,
         Invocation::Clean { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
@@ -356,6 +357,12 @@ fn dispatch(
 
     match invocation {
         Invocation::Init(common) => verbs::init::run(&mut app, common.dry_run),
+        Invocation::Services {
+            direction,
+            selector,
+            dry_run,
+            ..
+        } => verbs::services::run(&mut app, direction, selector.as_deref(), dry_run),
         Invocation::Status(common) => verbs::status::run(&mut app, common),
         Invocation::Clean {
             common,

@@ -186,6 +186,21 @@ pub struct ResultRow {
     /// Where this row's output went.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log: Option<String>,
+    /// The exact vector Armada executed for this row, post-substitution.
+    ///
+    /// **`armada manifest up`'s documented payload asks for it by name**
+    /// ([`commands/manifest/up.md`]: *"one result per component with argv, the
+    /// ready-check that was waited on, the wait duration, and the assigned
+    /// ports"*), and it is the one fact about a service that is impossible to
+    /// reconstruct afterwards — `${port.NAME}` has already been substituted and
+    /// the config no longer says what ran.
+    ///
+    /// Additive, so `schema_version` stays 1, and omitted when empty, so no
+    /// verb that spawns nothing gains a key.
+    ///
+    /// [`commands/manifest/up.md`]: ../../../docs/commands/manifest/up.md
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub argv: Vec<String>,
     /// How long it took.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
@@ -214,6 +229,7 @@ impl ResultRow {
             waiting_on: None,
             reason: None,
             log: None,
+            argv: Vec::new(),
             duration_ms: None,
             error: None,
         }
@@ -379,6 +395,42 @@ pub struct InitData {
     pub reaped: ReapPlan,
     /// One row per component.
     pub results: Vec<ResultRow>,
+}
+
+/// `armada manifest up` and `armada manifest down`.
+///
+/// **One body for both verbs, because they answer the same question from two
+/// sides.** `up` reports what it started and `down` what it stopped; both carry
+/// one row per component and the workspace's port block, and PLAN.md §3.1 is
+/// explicit that `init`, `up`, `down` and `status` all emit `results[]` — *"that
+/// is what lets the two states with ports but no running services (`init`, and
+/// `down` which keeps the block) report them without a second, duplicate
+/// top-level map."*
+///
+/// **`down` carries the block precisely because it keeps it.** That is the whole
+/// distinction from `clean`: `down` is pause and `clean` is release, and the
+/// next `up` gets the same ports, which keeps URLs, bookmarks and `.env` files
+/// valid across a restart.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ServicesData {
+    /// The span reserved for this workspace. Held across `down`.
+    pub port_block: PortBlock,
+    /// One row per selected component, in the order it was acted on —
+    /// dependency order for `up`, the reverse for `down`.
+    pub results: Vec<ResultRow>,
+}
+
+/// `--dry-run` on `armada manifest up`: what would run, and nothing changed.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct UpDryRun {
+    /// The exact argv each selected service would be given, in start order.
+    /// **Not a re-derivation**: it is produced by the same code path that would
+    /// have executed it.
+    pub would_run: Vec<String>,
+    /// The ready-check each one would then be waited on, and for how long. A
+    /// preview that showed the spawn and hid the wait would hide the half that
+    /// takes the time.
+    pub would_wait: Vec<String>,
 }
 
 /// `armada manifest check` (PLAN.md §3.1).

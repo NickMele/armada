@@ -3,12 +3,14 @@ armada manifest — one repository's stack: ports, services, checks
 VERBS
   config  report the evidence, then verify what was written
   init    claim this workspace: ports, .armada/, setup
+  up      start this workspace's services, and wait until they answer
+  down    stop this workspace's services; keep the port block
   status  what is running, what is mine, what is stale
   check   lint, format and test — the verb a gate calls
   skills  what this repository knows about itself
   clean   release what this workspace owns
 
 NOT BUILT YET
-  up, down, render, agents-md, explain  reserved; see PHASES.md §8
+  render, agents-md, explain  reserved; see PHASES.md §8
 
 `armada manifest <verb> --help` for one verb's flags.

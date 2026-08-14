@@ -1,0 +1,9 @@
+[1m[38;2;255;169;64marmada[0m  [38;2;107;114;128m3d9cc7ba[0m
+
+  [1m[38;2;107;114;128mSTATUS[0m  [1m[38;2;107;114;128mSERVICE[0m   [1m[38;2;107;114;128mDETAIL[0m
+  [38;2;255;180;84mwould[0m   postgres  [38;2;107;114;128mdocker compose -f - -p armada-3d9cc7ba --project-directory …[0m
+  [38;2;255;180;84mwould[0m   web       [38;2;107;114;128mpnpm dev --port 5461[0m
+  [38;2;255;180;84mwait[0m    postgres  [38;2;107;114;128mtcp pg (5460) (90s)[0m
+  [38;2;255;180;84mwait[0m    web       [38;2;107;114;128mhttp http://127.0.0.1:5461/healthz (60s)[0m
+
+[1m[38;2;61;220;132mUP[0m  [38;2;107;114;128mdry run · nothing was started[0m
