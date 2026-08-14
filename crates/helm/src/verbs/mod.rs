@@ -8,7 +8,11 @@
 pub mod check;
 pub mod clean;
 pub mod dispatch;
+pub mod doctor;
+pub mod guild;
 pub mod init;
+pub mod machine;
+pub mod preflight;
 pub mod status;
 
 use armada_core::config::{self, ResolvedConfig};

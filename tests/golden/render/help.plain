@@ -11,6 +11,17 @@ MANIFEST — what a workspace is and how to operate it
   clean   release what this workspace owns
   <name>  a commands: entry from this repo's armada.yml
 
+GUILD — you, portable: voice, skills, hooks, workflows
+  init    build your guild by interviewing you
+  pull    bring this machine's guild up to date
+  push    send local guild changes to the remote
+  export  write the whole guild to one portable file
+  import  restore a guild from a bundle
+
+THIS MACHINE
+  init    set up this machine: checks, ~/.armada/, and your guild
+  doctor  what this machine is missing, and what fixes it
+
 GLOBAL FLAGS
   --json          answer in the envelope (PLAN.md §3.1), not as text
   --color <when>  auto (default), always, never; NO_COLOR wins
@@ -18,7 +29,8 @@ GLOBAL FLAGS
   -V, --version   the version
 
 NOT BUILT YET
-  armada init, doctor, guild, fleet, helm, bridge       M2 and M3
+  armada fleet, helm, bridge                            M3
+  armada guild edit, verify                             M2
   armada manifest up, down, config, agents-md, explain  reserved
   armada manifest check --detach, --status              reserved
 

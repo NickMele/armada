@@ -59,6 +59,7 @@ name = "armada-helm"
 version = "0.1.0"
 dependencies = [
  "armada-core",
+ "armada-guild",
  "armada-manifest",
  "rusqlite",
  "serde_json",

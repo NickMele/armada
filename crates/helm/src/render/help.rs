@@ -22,7 +22,7 @@
 //! from `args.rs`'s own constants rather than being retyped here, so a verb
 //! cannot ship without appearing on this page — there is a test.
 
-use crate::args::{BUILTIN_VERBS, RESERVED_TOP_LEVEL};
+use crate::args::{BUILTIN_VERBS, GUILD_VERBS, RESERVED_TOP_LEVEL, TOP_LEVEL_VERBS};
 
 use super::palette::Role;
 use super::style::Style;
@@ -40,6 +40,8 @@ pub enum Topic {
     Root,
     /// `armada manifest`, or `armada manifest --help`.
     Manifest,
+    /// `armada guild`, or `armada guild --help`.
+    Guild,
     /// `armada manifest <verb> --help`.
     Verb(&'static str),
 }
@@ -171,6 +173,7 @@ pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
         ),
         Topic::Root => root(style, terminal),
         Topic::Manifest => manifest(style, terminal),
+        Topic::Guild => guild(style, terminal),
         Topic::Verb(name) => match MANIFEST.iter().find(|page| page.name == name) {
             Some(page) => verb(page, style, terminal),
             // Unreachable through `args::parse`, which only produces a
@@ -213,6 +216,29 @@ fn root(style: Style, terminal: Terminal) -> String {
     out.push_str(&two_column(&verbs).render(style, width));
 
     out.push('\n');
+    out.push_str(&heading(
+        style,
+        "GUILD — you, portable: voice, skills, hooks, workflows",
+    ));
+    out.push_str(
+        &two_column(
+            &GUILD_VERBS
+                .iter()
+                .filter(|(_, summary)| !summary.starts_with("M2 "))
+                .copied()
+                .collect::<Vec<_>>(),
+        )
+        .render(style, width),
+    );
+
+    out.push('\n');
+    out.push_str(&heading(style, "THIS MACHINE"));
+    // **`armada init` and `armada manifest init` are two verbs**, and the one
+    // place a reader is most likely to confuse them is this page — so the line
+    // says which is which rather than leaving the module level to imply it.
+    out.push_str(&two_column(&TOP_LEVEL_VERBS).render(style, width));
+
+    out.push('\n');
     out.push_str(&heading(style, "GLOBAL FLAGS"));
     out.push_str(
         &two_column(&[
@@ -233,6 +259,48 @@ fn root(style: Style, terminal: Terminal) -> String {
     out.push_str(
         "Global flags come before the module. Everything after a commands: name is the\n\
          child's, including flags Armada itself defines.\n",
+    );
+    out
+}
+
+/// `armada guild`, the module page.
+fn guild(style: Style, terminal: Terminal) -> String {
+    let width = terminal.usable_width();
+    let mut out = format!(
+        "{}\n\n",
+        style.strong(
+            Role::SignalAmber,
+            "armada guild \u{2014} you, portable: machine-global, and synced between your machines"
+        )
+    );
+    out.push_str(&heading(style, "VERBS"));
+    out.push_str(
+        &two_column(
+            &GUILD_VERBS
+                .iter()
+                .filter(|(_, summary)| !summary.starts_with("M2 "))
+                .copied()
+                .collect::<Vec<_>>(),
+        )
+        .render(style, width),
+    );
+    out.push('\n');
+    out.push_str(&heading(style, "NOT BUILT YET"));
+    out.push_str(
+        &two_column(
+            &GUILD_VERBS
+                .iter()
+                .filter(|(_, summary)| summary.starts_with("M2 "))
+                .map(|(name, summary)| (*name, summary.trim_start_matches("M2 \u{2014} ")))
+                .collect::<Vec<_>>(),
+        )
+        .render(style, width),
+    );
+    out.push('\n');
+    out.push_str(
+        "Nothing in ~/.armada/guild/ is repository content, and no part of it is ever\n\
+         committed to a project. machine.yml, manifest.db, jobs/ and workspaces/ never\n\
+         sync (PLAN.md \u{a7}13.1).\n",
     );
     out
 }
@@ -344,7 +412,11 @@ fn not_built(style: Style, width: usize) -> String {
         .indent(2)
         .row(vec![
             Cell::plain(format!("armada {}", modules.join(", "))),
-            Cell::muted("M2 and M3"),
+            Cell::muted("M3"),
+        ])
+        .row(vec![
+            Cell::plain("armada guild edit, verify"),
+            Cell::muted("M2"),
         ])
         .row(vec![
             Cell::plain(format!("armada manifest {}", manifest_verbs.join(", "))),

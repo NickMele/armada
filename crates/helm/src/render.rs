@@ -786,6 +786,42 @@ fn fix_lines(rows: &[Finding], style: Style) -> String {
     out
 }
 
+/// *Do you already have a guild?* — **live**, as it is put to a person.
+///
+/// Ends at the caret with a space and no newline, because that is where the
+/// cursor sits and the terminal's own echo completes the line. The record in
+/// [`machine_init`] is this string with the answer put back, which is what
+/// makes the two identical rather than merely similar.
+pub fn guild_question(question: &str, options: &[&str], style: Style) -> String {
+    let mut out = format!("{}\n", style.paint(Role::SignalAmber, question));
+    // **The three answers on one line**, because a menu of three is a list you
+    // scan rather than read.
+    out.push_str("  ");
+    for (index, option) in options.iter().enumerate() {
+        out.push_str(&style.paint(Role::NavalBlue, &(index + 1).to_string()));
+        out.push(' ');
+        out.push_str(option);
+        out.push_str("  ");
+    }
+    out.push_str(&style.paint(Role::SteelGrey, style.caret()));
+    out.push(' ');
+    out
+}
+
+/// One interview question — **live**, as it is put to a person.
+///
+/// The hint is indented to line up under the prompt rather than under the
+/// number: it belongs to the question, not to the count.
+pub fn interview_prompt(asked: &armada_core::envelope::Asked, style: Style) -> String {
+    format!(
+        "{}  {}\n     {} {} ",
+        style.paint(Role::SignalAmber, &format!("{}/{}", asked.number, asked.of)),
+        style.paint(Role::SteelGrey, &asked.prompt),
+        style.paint(Role::SteelGrey, &asked.hint),
+        style.paint(Role::RadarCyan, style.caret())
+    )
+}
+
 /// `armada init` — set up **this machine**.
 ///
 /// **The one verb whose render is a transcript**, because it is the one verb
@@ -806,24 +842,15 @@ fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize
     let mut out = machine_table(&data.results, style, width).render(style, width);
 
     if let Some(choice) = &data.guild {
+        let options: Vec<&str> = choice.options.iter().map(String::as_str).collect();
         out.push('\n');
+        out.push_str(&guild_question(&choice.question, &options, style));
+        // **The answer is the terminal's own echo when it is live**, and this
+        // is the same line replayed with what was typed put back.
         out.push_str(&format!(
             "{}\n",
-            style.paint(Role::SignalAmber, &choice.question)
+            style.paint(Role::RadarCyan, &choice.chosen.to_string())
         ));
-        // **The options and the answer on one line**, because the question has
-        // three answers and a menu of three is a list you scan rather than read.
-        let mut line = String::from("  ");
-        for (index, option) in choice.options.iter().enumerate() {
-            line.push_str(&style.paint(Role::NavalBlue, &(index + 1).to_string()));
-            line.push(' ');
-            line.push_str(option);
-            line.push_str("  ");
-        }
-        line.push_str(&style.paint(Role::SteelGrey, style.caret()));
-        line.push(' ');
-        line.push_str(&style.paint(Role::RadarCyan, &choice.chosen.to_string()));
-        out.push_str(&format!("{line}\n"));
     }
 
     if !data.imported.is_empty() {
@@ -836,18 +863,11 @@ fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize
 
     for asked in &data.asked {
         out.push('\n');
-        out.push_str(&format!(
-            "{}  {}\n",
-            style.paint(Role::SignalAmber, &format!("{}/{}", asked.number, asked.of)),
-            style.paint(Role::SteelGrey, &asked.prompt)
-        ));
-        // Indented to line up under the prompt rather than under the number:
-        // the hint belongs to the question, not to the count.
-        out.push_str(&format!(
-            "     {} {}\n",
-            style.paint(Role::SteelGrey, &asked.hint),
-            style.paint(Role::RadarCyan, style.caret())
-        ));
+        // **The trailing space goes.** Live, it is where the cursor sits; in
+        // the record it would be trailing whitespace, which is what makes a
+        // diff of two captured outputs unreadable (`render/table.rs`).
+        out.push_str(interview_prompt(asked, style).trim_end());
+        out.push('\n');
     }
 
     out.push('\n');
@@ -946,7 +966,7 @@ fn sync_facts(data: &GuildSyncData) -> Vec<String> {
         Some(remote) => facts.push(remote.clone()),
         // Sync off is the documented default and not a broken state, so it is
         // stated rather than left as an absence a reader has to notice.
-        None => facts.push("no remote — export still works".to_string()),
+        None => facts.push("no remote, export still works".to_string()),
     }
     facts
 }
@@ -998,7 +1018,7 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
             style,
             Some(match &data.remote {
                 Some(remote) => remote.as_str(),
-                None => "no remote — sync off, export still works",
+                None => "no remote: sync off, export still works",
             }),
         ),
         time_cell(style, None),
@@ -1024,7 +1044,19 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
 /// `armada guild export` and `armada guild import`.
 fn guild_bundle(envelope: &Envelope<GuildBundleData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut table = Table::new(columns("bundle", "detail", true)).indent(2);
+    // **The bundle's column is flexible and every other verb's name column is
+    // fixed**, because this one holds a *path* rather than an id. Measured: an
+    // absolute path in a fixed column pushes DETAIL past eighty and the flexible
+    // column truncates the one fact the row exists to carry. A path's tail is
+    // the least valuable part of it, which is exactly what `Column::flexible`
+    // is for.
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::flexible("bundle"),
+        Column::flexible("detail"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
     table = table.row(vec![
         token(
             if data.bytes.is_some() {
@@ -1078,7 +1110,7 @@ fn guild_bundle(envelope: &Envelope<GuildBundleData>, style: Style, width: usize
         table = table.row(vec![
             token("conflict", Role::DistressRed),
             Cell::plain(conflict.clone()),
-            detail_cell(style, Some("edited here — left alone")),
+            detail_cell(style, Some("edited here, left alone")),
             time_cell(style, None),
         ]);
     }
