@@ -24,6 +24,7 @@ pub mod error;
 pub mod glob;
 pub mod id;
 pub mod lease;
+pub mod lifecycle;
 pub mod ports;
 pub mod reap;
 pub mod registry;
