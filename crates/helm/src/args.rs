@@ -124,7 +124,7 @@ pub struct Check {
     pub all_files: bool,
     /// `--fix`: run `fix:` instead of `cmd:`.
     pub fix: bool,
-    /// `--jobs N`: this run's CPU budget, overriding the machine's.
+    /// `--concurrency N`: this run's CPU budget, overriding the machine's.
     pub jobs: Option<u32>,
     /// `--wait`: queue for the run lease instead of failing fast.
     pub wait: bool,
@@ -399,12 +399,12 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
                 }
                 _ => return Err(failure(needs_a_value("--component"), parsed.json)),
             },
-            "--jobs" => match rest.get(index).and_then(|n| n.parse::<u32>().ok()) {
+            "--concurrency" => match rest.get(index).and_then(|n| n.parse::<u32>().ok()) {
                 Some(jobs) if jobs > 0 => {
                     parsed.jobs = Some(jobs);
                     index += 1;
                 }
-                _ => return Err(failure(needs_a_value("--jobs"), parsed.json)),
+                _ => return Err(failure(needs_a_value("--concurrency"), parsed.json)),
             },
             // Reserved by PLAN.md §3 and not built in this phase. Refused by
             // name rather than falling through to "unknown flag", because the

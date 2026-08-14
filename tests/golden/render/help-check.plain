@@ -11,7 +11,7 @@ FLAGS
   --wait              queue for the run lease instead of failing fast
   --files <path>…     run only the checks these paths belong to
   --component <name>  every check on one component
-  --jobs <n>          this run's CPU budget, overriding the machine's
+  --concurrency <n>   this run's CPU budget, overriding the machine's
   --json              answer in the envelope (PLAN.md §3.1), not as text
   --color <when>      auto (default), always, never; NO_COLOR wins
 

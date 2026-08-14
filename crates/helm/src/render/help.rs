@@ -121,7 +121,7 @@ const MANIFEST: [Page; 4] = [
             ),
             ("--component <name>", "every check on one component"),
             (
-                "--jobs <n>",
+                "--concurrency <n>",
                 "this run's CPU budget, overriding the machine's",
             ),
         ],
