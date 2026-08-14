@@ -3100,6 +3100,26 @@ answers win where they overlap.
 `armada guild edit` changes them. A confirmation step on a file you have not read yet is
 theatre.
 
+#### Onboarding a repository is a shipped skill, and the guild owns it after that
+
+`guild init` writes [`templates/guild/skills/onboard-repo/`](../templates/guild/skills/onboard-repo/SKILL.md)
+into `~/.armada/guild/skills/`, on the same terms as the four workflows: a starter you did not
+have to author, yours to edit from the moment it lands.
+
+**The procedure is user-level even though the answers are repo-level.** How you want to be
+onboarded — asked one task at a time, shown where each guess came from, nothing written before
+you confirm — is the same in every repository. *Which* script is the test command is not, and
+that comes from the scan every time. Conflating the two is what makes the distinction look
+wrong.
+
+**Why ship one rather than leave it to a prompt.** Without it, onboarding is as good as the
+sentence you happened to type that day, and the step most likely to be dropped is the last one —
+a real `config verify` before declaring success. The skill exists so "configured" means verified
+rather than asserted, every time.
+
+**It is also the guild's first real content.** A guild whose `skills/` directory is empty on day
+one is a concept; one with a skill you can read and edit is a thing.
+
 #### It can always be skipped
 
 Every question has a default, and `armada init --defaults` takes all of them. A skipped
