@@ -19,7 +19,7 @@
 
 use armada_core::ctx::{Clock, Fetch, Run, RunRequest, StdioMode};
 use armada_core::envelope::{DispatchData, Envelope};
-use armada_core::error::{CharError, ConfigWhere, ErrClass, Status};
+use armada_core::error::{ArmadaError, ConfigWhere, ErrClass, Status};
 use armada_core::lease::{LeaseId, Policy};
 use armada_core::template::{self, Site, Vars};
 use std::collections::BTreeMap;
@@ -34,13 +34,13 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     name: &str,
     passthrough: &[String],
     json: bool,
-) -> Result<Output, CharError> {
+) -> Result<Output, ArmadaError> {
     let (workspace, config) = load_config(app)?;
 
     let Some(entry) = config.commands.get(name).cloned() else {
         let mut available: Vec<&str> = config.commands.keys().map(String::as_str).collect();
         available.sort();
-        return Err(CharError {
+        return Err(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: name.to_string(),
             message: format!("`char {name}` is not a verb and this repo declares no such command"),
@@ -191,7 +191,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
         Err(spawn) => Ok(Output::Dispatch(Box::new(Envelope::failed(
             "commands",
             Some(workspace.id.clone()),
-            CharError::bad_config(
+            ArmadaError::bad_config(
                 at,
                 format!(
                     "`{}` could not be started: {}",

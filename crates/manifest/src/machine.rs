@@ -33,7 +33,7 @@ use armada_core::ctx::Run;
 // questions from `/proc` and spawns nothing.
 #[cfg(not(target_os = "linux"))]
 use armada_core::ctx::RunRequest;
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -94,13 +94,13 @@ impl MachineConfig {
     }
 
     /// Read `<armada_home>/machine.yml`, or take the defaults if it is not there.
-    pub fn read(armada_home: &Path) -> Result<Self, CharError> {
+    pub fn read(armada_home: &Path) -> Result<Self, ArmadaError> {
         let path = armada_home.join("machine.yml");
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::defaults()),
             Err(e) => {
-                return Err(CharError {
+                return Err(ArmadaError {
                     class: ErrClass::Environment,
                     r#where: path.display().to_string(),
                     message: format!("cannot read {}: {e}", path.display()),
@@ -115,7 +115,7 @@ impl MachineConfig {
         // silence is a machine budget that does not apply, which is the
         // "unstated default is a per-implementer decision" failure with the
         // user in the implementer's seat.
-        let file: MachineConfigFile = serde_yaml_ng::from_str(&text).map_err(|e| CharError {
+        let file: MachineConfigFile = serde_yaml_ng::from_str(&text).map_err(|e| ArmadaError {
             class: ErrClass::Environment,
             r#where: path.display().to_string(),
             message: format!("cannot parse {}: {e}", path.display()),

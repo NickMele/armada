@@ -19,7 +19,7 @@
 mod support;
 
 use armada_core::ctx::{Clock, Ctx, Run, RunOutput, RunRequest, SpawnError};
-use armada_core::error::CharError;
+use armada_core::error::ArmadaError;
 use armada_core::scope::Lens;
 use armada_helm::verbs::Output;
 use armada_helm::{app, verbs};
@@ -210,7 +210,7 @@ fn scenario(config: &str) -> Scenario {
 
 fn run_verb(
     scenario: &Scenario,
-    verb: impl FnOnce(&mut app::App<NoDocker, FrozenClock, RealFetch>) -> Result<Output, CharError>,
+    verb: impl FnOnce(&mut app::App<NoDocker, FrozenClock, RealFetch>) -> Result<Output, ArmadaError>,
 ) -> String {
     let _serialised = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let run = NoDocker;

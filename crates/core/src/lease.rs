@@ -23,7 +23,7 @@
 //! reducer, never on a background timer, so a wedged loop is a loop that stopped
 //! renewing.
 
-use crate::error::{CharError, ErrClass};
+use crate::error::{ArmadaError, ErrClass};
 use crate::id::WorkspaceId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -196,7 +196,7 @@ pub enum Phase {
     /// Held by this process.
     Granted,
     /// Given up, with the reason.
-    Failed(CharError),
+    Failed(ArmadaError),
 }
 
 /// One claim in progress.
@@ -275,7 +275,7 @@ pub enum ClaimAction {
     /// Stop: the lease is held.
     Granted,
     /// Stop: give up, with this error.
-    Failed(CharError),
+    Failed(ArmadaError),
 }
 
 /// The claim loop, as a reducer.
@@ -365,7 +365,7 @@ pub fn step(state: ClaimState, event: ClaimEvent) -> (ClaimState, Vec<ClaimActio
         }
 
         ClaimEvent::Interrupted => {
-            let error = CharError {
+            let error = ArmadaError {
                 class: ErrClass::Aborted,
                 r#where: state.lease.key.clone(),
                 message: "interrupted while waiting for a lease".to_string(),
@@ -458,8 +458,8 @@ fn waiting_on(lease: &LeaseId, holder: &Holder) -> WaitingOn {
     }
 }
 
-fn already_held(lease: &LeaseId, holder: &Holder) -> CharError {
-    CharError {
+fn already_held(lease: &LeaseId, holder: &Holder) -> ArmadaError {
+    ArmadaError {
         class: ErrClass::BadInvocation,
         r#where: lease.kind.to_string(),
         message: format!(
@@ -473,7 +473,7 @@ fn already_held(lease: &LeaseId, holder: &Holder) -> CharError {
     }
 }
 
-fn ceiling_expired(phase: &Phase, waited_ms: u64) -> CharError {
+fn ceiling_expired(phase: &Phase, waited_ms: u64) -> ArmadaError {
     // Retryable, because the actionable fact is that the machine was busy
     // rather than that this check is slow.
     let held_by = match phase {
@@ -481,7 +481,7 @@ fn ceiling_expired(phase: &Phase, waited_ms: u64) -> CharError {
         Phase::Start | Phase::Attempting | Phase::Granted | Phase::Failed(_) => None,
     }
     .unwrap_or_default();
-    CharError {
+    ArmadaError {
         class: ErrClass::Aborted,
         r#where: "lease".to_string(),
         message: format!(

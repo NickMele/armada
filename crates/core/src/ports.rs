@@ -10,7 +10,7 @@
 //! lives in [`crate::lease`]'s reducer rather than in a loop of its own.
 
 use crate::config::ResolvedConfig;
-use crate::error::{CharError, ConfigWhere, ErrClass};
+use crate::error::{ArmadaError, ConfigWhere, ErrClass};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -105,7 +105,7 @@ pub fn assign_ports(
     config: &ResolvedConfig,
     block: PortBlock,
     file: &str,
-) -> Result<BTreeMap<String, u16>, CharError> {
+) -> Result<BTreeMap<String, u16>, ArmadaError> {
     let mut names: Vec<&String> = config
         .components
         .values()
@@ -116,7 +116,7 @@ pub fn assign_ports(
     names.dedup();
 
     if names.len() > block.size() as usize {
-        return Err(CharError {
+        return Err(ArmadaError {
             class: ErrClass::BadConfig,
             r#where: ConfigWhere::Path {
                 file: file.to_string(),

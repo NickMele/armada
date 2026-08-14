@@ -23,7 +23,7 @@
 //! cost is that the most-used verbs got longer, which PHASES.md §8.3 records as
 //! an intended trade with a reserved-not-built resolution (PLAN.md §3).
 
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::scope::Lens;
 
 /// A parsed invocation.
@@ -75,7 +75,7 @@ pub enum Invocation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseFailure {
     /// What went wrong.
-    pub error: CharError,
+    pub error: ArmadaError,
     /// How to report it.
     pub json: bool,
 }
@@ -189,7 +189,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
             None => format!("unknown command `{name}`"),
         };
         return Err(failure(
-            CharError {
+            ArmadaError {
                 class: ErrClass::BadInvocation,
                 r#where: name.to_string(),
                 message,
@@ -213,7 +213,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
             let common = common(rest, json, &[])?;
             if common.dry_run {
                 return Err(failure(
-                    CharError {
+                    ArmadaError {
                         class: ErrClass::BadInvocation,
                         r#where: "status".to_string(),
                         message: "`armada manifest status` reads; there is nothing to dry-run"
@@ -251,7 +251,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
         // command would dispatch to it — and the one guarantee the project
         // exists to provide is that the verbs mean the same thing everywhere.
         name if BUILTIN_VERBS.contains(&name) => Err(failure(
-            CharError {
+            ArmadaError {
                 class: ErrClass::BadInvocation,
                 r#where: verb.clone(),
                 message: format!("`armada manifest {verb}` is not built yet"),
@@ -331,7 +331,7 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
             // yet — an agent told "unknown flag" would go looking for a typo.
             "--detach" | "--status" => {
                 return Err(failure(
-                    CharError {
+                    ArmadaError {
                         class: ErrClass::BadInvocation,
                         r#where: arg.to_string(),
                         message: format!("`{arg}` is not built yet"),
@@ -362,7 +362,7 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
         }
         _ => {
             return Err(failure(
-                CharError {
+                ArmadaError {
                     class: ErrClass::BadInvocation,
                     r#where: positionals.join(" "),
                     message: "`armada manifest check` takes one selector, or several paths"
@@ -380,8 +380,8 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
     Ok(parsed)
 }
 
-fn needs_a_value(flag: &str) -> CharError {
-    CharError {
+fn needs_a_value(flag: &str) -> ArmadaError {
+    ArmadaError {
         class: ErrClass::BadInvocation,
         r#where: flag.to_string(),
         message: format!("`{flag}` needs a value"),
@@ -413,7 +413,7 @@ fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, Parse
 
     common.lens = Lens::from_flags(project, all).ok_or_else(|| {
         failure(
-            CharError {
+            ArmadaError {
                 class: ErrClass::BadInvocation,
                 r#where: "scope".to_string(),
                 message: "--project and --all are two different scopes".to_string(),
@@ -425,12 +425,12 @@ fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, Parse
     Ok(common)
 }
 
-fn failure(error: CharError, json: bool) -> ParseFailure {
+fn failure(error: ArmadaError, json: bool) -> ParseFailure {
     ParseFailure { error, json }
 }
 
-fn unknown_flag(flag: &str) -> CharError {
-    CharError {
+fn unknown_flag(flag: &str) -> ArmadaError {
+    ArmadaError {
         class: ErrClass::BadInvocation,
         r#where: flag.to_string(),
         message: format!("unknown flag `{flag}`"),

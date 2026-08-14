@@ -177,23 +177,29 @@ fn init_reaps_an_orphans_labelled_resources_and_leaves_everyone_elses_alone() {
     let namespace = namespace_of(&machine);
 
     let suffix = std::process::id();
-    let orphan_net = format!("char-test-orphan-{suffix}");
-    let orphan_vol = format!("char-test-orphanvol-{suffix}");
-    let live_net = format!("char-test-live-{suffix}");
-    let foreign_net = format!("char-test-foreign-{suffix}");
+    let orphan_net = format!("armada-test-orphan-{suffix}");
+    let orphan_vol = format!("armada-test-orphanvol-{suffix}");
+    let live_net = format!("armada-test-live-{suffix}");
+    let foreign_net = format!("armada-test-foreign-{suffix}");
 
-    // The orphan's, stamped exactly as char stamps its own.
+    // The orphan's, stamped exactly as Armada stamps its own.
     docker(&[
         "network",
         "create",
         "--label",
-        &format!("char.workspace={doomed_id}"),
+        &format!("armada.workspace={doomed_id}"),
         "--label",
-        &format!("char.workspace_path={}", doomed.display()),
+        &format!("armada.workspace_path={}", doomed.display()),
         "--label",
-        &format!("char.namespace={namespace}"),
+        &format!("armada.namespace={namespace}"),
         &orphan_net,
     ]);
+    // **Stamped in the pre-M1 namespace on purpose.** `clean` and `init`'s reap
+    // pass must recognise `char.*` for one release, or every resource created
+    // before the rename is orphaned on the machine it is sitting on
+    // (PHASES.md §8.3). Covered here rather than only in the docker adapter's
+    // unit tests because the filter is built for a real daemon and the failure
+    // — a `--filter` that ands rather than ors — is invisible to a fake.
     docker(&[
         "volume",
         "create",
@@ -211,26 +217,26 @@ fn init_reaps_an_orphans_labelled_resources_and_leaves_everyone_elses_alone() {
         "network",
         "create",
         "--label",
-        &format!("char.workspace={live_id}"),
+        &format!("armada.workspace={live_id}"),
         "--label",
-        &format!("char.workspace_path={}", main.display()),
+        &format!("armada.workspace_path={}", main.display()),
         "--label",
-        &format!("char.namespace={namespace}"),
+        &format!("armada.namespace={namespace}"),
         &live_net,
     ]);
     // A different installation sharing this daemon — the ordinary devcontainer
     // setup. Its path is `ENOENT` from here, which under the pre-namespace
-    // design is exactly how a host-side `char init` reaped a live workspace's
+    // design is exactly how a host-side `armada manifest init` reaped a live workspace's
     // containers.
     docker(&[
         "network",
         "create",
         "--label",
-        "char.workspace=deadbeef",
+        "armada.workspace=deadbeef",
         "--label",
-        "char.workspace_path=/workspaces/repo",
+        "armada.workspace_path=/workspaces/repo",
         "--label",
-        "char.namespace=some-other-installation",
+        "armada.namespace=some-other-installation",
         &foreign_net,
     ]);
 
@@ -238,11 +244,11 @@ fn init_reaps_an_orphans_labelled_resources_and_leaves_everyone_elses_alone() {
     // failed when no image can be obtained, so the suite depends on a daemon
     // and not on a registry.
     let orphan_container = labelled_container(
-        &format!("char-test-orphan-c-{suffix}"),
+        &format!("armada-test-orphan-c-{suffix}"),
         &[
-            format!("char.workspace={doomed_id}"),
-            format!("char.workspace_path={}", doomed.display()),
-            format!("char.namespace={namespace}"),
+            format!("armada.workspace={doomed_id}"),
+            format!("armada.workspace_path={}", doomed.display()),
+            format!("armada.namespace={namespace}"),
         ],
     );
     if orphan_container.is_none() {
@@ -306,12 +312,12 @@ fn init_reaps_an_orphans_labelled_resources_and_leaves_everyone_elses_alone() {
     }
 }
 
-/// **A declared `owns:` selector is reclaimed by `char clean` after the command
+/// **A declared `owns:` selector is reclaimed by `armada manifest clean` after the command
 /// has already exited.**
 ///
 /// This is a distinct code path from reading the `owned` table, and that is the
 /// point: a `commands:` entry runs ad hoc, so there is no "while it was up"
-/// window to record against. char stores the *declaration* and evaluates it
+/// window to record against. Armada stores the *declaration* and evaluates it
 /// against docker at `clean` time — which works because every selector is
 /// stamped with `${workspace.id}`.
 #[test]
@@ -328,8 +334,8 @@ fn a_commands_owns_selector_is_reclaimed_after_the_command_has_exited() {
             .unwrap();
     let id = payload["workspace"].as_str().unwrap().to_string();
 
-    let network = format!("char-test-owns-{}", std::process::id());
-    // The repo's own script, creating a resource char never sees created and
+    let network = format!("armada-test-owns-{}", std::process::id());
+    // The repo's own script, creating a resource Armada never sees created and
     // knows about only through the declaration.
     std::fs::write(
         repo.join("make-net.sh"),
@@ -380,7 +386,7 @@ fn a_commands_owns_selector_is_reclaimed_after_the_command_has_exited() {
 /// The other half of the preview contract, and the half only a daemon can
 /// answer: `clean --dry-run --all --orphaned --force-rebuild` names the
 /// resource it would remove **and leaves it there**. The rebuild path is the
-/// one place char removes across namespaces, so a preview that removed anyway
+/// one place Armada removes across namespaces, so a preview that removed anyway
 /// would be the most expensive way to learn what a flag does.
 #[test]
 fn a_force_rebuild_dry_run_names_the_orphan_and_removes_nothing() {
@@ -394,19 +400,19 @@ fn a_force_rebuild_dry_run_names_the_orphan_and_removes_nothing() {
     machine.run(&repo, &["manifest", "init"]);
     let namespace = namespace_of(&machine);
 
-    let orphan_net = format!("char-test-dry-{}", std::process::id());
+    let orphan_net = format!("armada-test-dry-{}", std::process::id());
     docker(&[
         "network",
         "create",
         "--label",
-        "char.workspace=deadbeef",
+        "armada.workspace=deadbeef",
         "--label",
-        &format!("char.workspace_path={}", repo.join("gone").display()),
+        &format!("armada.workspace_path={}", repo.join("gone").display()),
         "--label",
-        &format!("char.namespace={namespace}"),
+        &format!("armada.namespace={namespace}"),
         &orphan_net,
     ]);
-    // char names a network by its id, so that is what the preview will print.
+    // Armada names a network by its id, so that is what the preview will print.
     let orphan_id = docker(&[
         "network",
         "ls",

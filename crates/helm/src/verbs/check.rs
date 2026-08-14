@@ -23,7 +23,7 @@ use armada_core::config::{ResolvedCheck, ResolvedComponent, ResolvedConfig, Scop
 use armada_core::ctx::{Clock, Fetch, Run, RunRequest, SpawnErrorKind, StdioMode};
 use armada_core::dispatch::{Dispatch, Journal, Scrub};
 use armada_core::envelope::{CheckData, CheckDryRun, Envelope};
-use armada_core::error::{CharError, ConfigWhere, ErrClass, Status};
+use armada_core::error::{ArmadaError, ConfigWhere, ErrClass, Status};
 use armada_core::lease::{self, LeaseId, LeaseKind, Policy};
 use armada_core::reap::PathStat;
 use armada_core::run::{RunId, RunRecord};
@@ -55,7 +55,7 @@ const TURN_MS: u64 = 20;
 pub fn run<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     args: &Check,
-) -> Result<Output, CharError> {
+) -> Result<Output, ArmadaError> {
     let (workspace, config) = load_config(app)?;
     let selection = select_checks(&config, args)?;
     let candidates = candidate_files(app, &workspace, args, &selection)?;
@@ -86,7 +86,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
 
 // ------------------------------------------------------------------ selection
 
-fn select_checks(config: &ResolvedConfig, args: &Check) -> Result<Selection, CharError> {
+fn select_checks(config: &ResolvedConfig, args: &Check) -> Result<Selection, ArmadaError> {
     let selector = match (&args.component, &args.selector, args.files.is_empty()) {
         (Some(component), _, _) => Selector::Component(component.clone()),
         (None, Some(word), _) => select::classify(word),
@@ -107,7 +107,7 @@ fn candidate_files<R: Run, C: Clock, F: Fetch>(
     workspace: &Workspace,
     args: &Check,
     selection: &Selection,
-) -> Result<Vec<String>, CharError> {
+) -> Result<Vec<String>, ArmadaError> {
     // An explicit list wins: the caller said exactly which files.
     if let Some(files) = &selection.files {
         return Ok(files.clone());
@@ -131,7 +131,7 @@ fn assigned_ports<R: Run, C: Clock, F: Fetch>(
     app: &App<R, C, F>,
     workspace: &Workspace,
     config: &ResolvedConfig,
-) -> Result<BTreeMap<String, u16>, CharError> {
+) -> Result<BTreeMap<String, u16>, ArmadaError> {
     let declares_ports = config
         .components
         .values()
@@ -150,7 +150,7 @@ fn assigned_ports<R: Run, C: Clock, F: Fetch>(
             armada_core::ports::assign_ports(config, block, &workspace.config_label)
         }
         (None, false) => Ok(BTreeMap::new()),
-        (None, true) => Err(CharError {
+        (None, true) => Err(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: "port_block".to_string(),
             message: "this workspace holds no port block, so `${port.…}` cannot resolve"
@@ -175,7 +175,7 @@ fn build_plans(
     ports: &BTreeMap<String, u16>,
     workspace: &Workspace,
     args: &Check,
-) -> Result<Vec<Plan>, CharError> {
+) -> Result<Vec<Plan>, ArmadaError> {
     let mut plans = Vec::new();
     for id in &selection.checks {
         let Some((component, check)) = find_check(config, id) else {
@@ -209,7 +209,7 @@ fn plan_for(
     ports: &BTreeMap<String, u16>,
     workspace: &Workspace,
     args: &Check,
-) -> Result<Plan, CharError> {
+) -> Result<Plan, ArmadaError> {
     let at = ConfigWhere::Path {
         file: workspace.config_label.clone(),
         path: format!("components.*.checks.{}", id),
@@ -305,7 +305,7 @@ fn plan_for(
 /// `in:` implies `needs:` on the enclosing component (PLAN.md §4.1): the
 /// container has to be running before char can exec into it, so a check that
 /// declares one is gated exactly like a check that names the component.
-fn blocked_on_a_service(check: &ResolvedCheck) -> Option<CharError> {
+fn blocked_on_a_service(check: &ResolvedCheck) -> Option<ArmadaError> {
     let mut services: Vec<String> = check
         .needs
         .iter()
@@ -326,7 +326,7 @@ fn blocked_on_a_service(check: &ResolvedCheck) -> Option<CharError> {
     }
 
     let named = services.join(", ");
-    Some(CharError {
+    Some(ArmadaError {
         class: ErrClass::BadInvocation,
         r#where: check.id.clone(),
         message: format!("`{}` needs {named}, which is not running", check.id),
@@ -342,7 +342,7 @@ fn dry<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
     plans: Vec<Plan>,
-) -> Result<Envelope<CheckDryRun>, CharError> {
+) -> Result<Envelope<CheckDryRun>, ArmadaError> {
     let mut preview = CheckDryRun::default();
     for plan in &plans {
         match &plan.skip {
@@ -375,7 +375,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     workspace: &Workspace,
     plans: Vec<Plan>,
     args: &Check,
-) -> Result<Envelope<CheckData>, CharError> {
+) -> Result<Envelope<CheckData>, ArmadaError> {
     let run_id = RunId::mint(app.ctx.now.wall_ms(), entropy(app));
     app.run = Some(run_id.clone());
 
@@ -451,7 +451,7 @@ struct Loop {
     /// it. `results[]` is one row per check, and the last thing char knew is
     /// the one worth reporting.
     rows: BTreeMap<CheckId, CheckResult>,
-    finish: Option<(Status, Option<CharError>)>,
+    finish: Option<(Status, Option<ArmadaError>)>,
     scrub: Scrub,
     run_id: RunId,
     ceiling_ms: u64,
@@ -468,7 +468,7 @@ fn drive<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
     it: &mut Loop,
-) -> Result<(), CharError> {
+) -> Result<(), ArmadaError> {
     // **The clock before the run, and that ordering is not cosmetic.** A pure
     // reducer cannot read a clock, so `Tick` is where it learns one — and a
     // `Started` that arrives first computes every deadline from a `now_mono` of
@@ -523,7 +523,7 @@ fn perform<R: Run, C: Clock, F: Fetch>(
     it: &mut Loop,
     action: Action,
     queue: &mut Vec<Event>,
-) -> Result<(), CharError> {
+) -> Result<(), ArmadaError> {
     match action {
         Action::Acquire { check, kind } => acquire(app, workspace, it, &check, kind, queue),
         Action::Release { check, kind } => {
@@ -605,7 +605,7 @@ fn acquire<R: Run, C: Clock, F: Fetch>(
     check: &CheckId,
     kind: LeaseKind,
     queue: &mut Vec<Event>,
-) -> Result<(), CharError> {
+) -> Result<(), ArmadaError> {
     let cost = it
         .state
         .checks
@@ -617,7 +617,7 @@ fn acquire<R: Run, C: Clock, F: Fetch>(
     // loop reports on every turn, and a fifteen-minute wait would otherwise put
     // eighteen hundred identical rows in the record.
     let mut denials: Vec<armada_core::lease::WaitingOn> = Vec::new();
-    let outcome: Result<Vec<LeaseId>, CharError> = match kind {
+    let outcome: Result<Vec<LeaseId>, ArmadaError> = match kind {
         LeaseKind::Exclusive => {
             let mut taken = Vec::new();
             let mut failure = None;
@@ -705,7 +705,7 @@ fn spawn<R: Run, C: Clock, F: Fetch>(
     env: EnvDelta,
     cwd: PathBuf,
     queue: &mut Vec<Event>,
-) -> Result<(), CharError> {
+) -> Result<(), ArmadaError> {
     // **One syscall, before each dispatch** (PLAN.md §2.3.1). A run whose
     // workspace is deleted under it must notice, because every symptom is
     // misleading: writes to an already-open log fd succeed silently into an
@@ -823,11 +823,11 @@ fn collect_deadlines<R: Run, C: Clock, F: Fetch>(
 /// A run that fell out of the loop without the scheduler finishing it.
 ///
 /// Unreachable by construction — the loop's only exit is `Finish` — and stated
-/// as a `char_bug` rather than as an `unwrap`, because a panic here would lose a
+/// as a `armada_bug` rather than as an `unwrap`, because a panic here would lose a
 /// run that already happened along with its record.
-fn never_finished() -> CharError {
-    CharError {
-        class: ErrClass::CharBug,
+fn never_finished() -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::ArmadaBug,
         r#where: "check".to_string(),
         message: "the run loop ended without a verdict".to_string(),
         next_action: None,

@@ -26,7 +26,7 @@
 //! (`ARCHITECTURE.md` §1.8) — a diagnosis channel that bypassed the scrubber
 //! would make that invariant an invariant with an exception.
 
-use crate::error::CharError;
+use crate::error::ArmadaError;
 use crate::id::WorkspaceId;
 use crate::lease::LeaseKind;
 use crate::schedule::{CheckId, Event, Plan};
@@ -330,7 +330,7 @@ impl Journal {
         exit_code: i32,
         output: &str,
         scrub: &Scrub,
-    ) -> Result<(), CharError> {
+    ) -> Result<(), ArmadaError> {
         match self.dispatches.get_mut(check) {
             Some(dispatch) => {
                 dispatch.signature = Some(signature(check, exit_code, output, scrub));
@@ -339,8 +339,8 @@ impl Journal {
             // A signature for a check char never dispatched is a char bug rather
             // than a user error: the shell only reaches here from an exit it
             // observed, and it cannot have observed one it never started.
-            None => Err(CharError {
-                class: crate::error::ErrClass::CharBug,
+            None => Err(ArmadaError {
+                class: crate::error::ErrClass::ArmadaBug,
                 r#where: check.to_string(),
                 message: format!("a failure was recorded for {check}, which was never dispatched"),
                 next_action: None,
@@ -661,7 +661,7 @@ mod tests {
 
     /// The shell can only reach here from an exit it observed, and it cannot
     /// have observed one it never started — so this is char's bug, not the
-    /// caller's, and `char_bug` is the class that says "stop; retrying will not
+    /// caller's, and `armada_bug` is the class that says "stop; retrying will not
     /// help".
     #[test]
     fn a_signature_for_a_check_that_never_ran_is_a_char_bug() {
@@ -669,7 +669,7 @@ mod tests {
         let error = journal
             .failed(&CheckId::new("ghost:test"), 1, "", &scrub())
             .unwrap_err();
-        assert_eq!(error.class, crate::error::ErrClass::CharBug);
+        assert_eq!(error.class, crate::error::ErrClass::ArmadaBug);
         assert_eq!(error.class.exit_code(), 70);
     }
 }

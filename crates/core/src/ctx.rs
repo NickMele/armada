@@ -22,7 +22,7 @@
 //! Traits rather than boxed closures, so a fake is a zero-cost substitution the
 //! compiler checks and the production path pays nothing for.
 
-use crate::error::CharError;
+use crate::error::ArmadaError;
 use crate::workspace::Workspace;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -49,11 +49,11 @@ pub struct Ctx<R: Run, C: Clock, F: Fetch> {
 }
 
 impl<R: Run, C: Clock, F: Fetch> Ctx<R, C, F> {
-    /// The workspace, or a `char_bug` — reaching for one inside a verb that
+    /// The workspace, or a `armada_bug` — reaching for one inside a verb that
     /// declared it needs none is a programming error, not a user error.
-    pub fn workspace(&self) -> Result<&Workspace, CharError> {
-        self.workspace.as_ref().ok_or_else(|| CharError {
-            class: crate::error::ErrClass::CharBug,
+    pub fn workspace(&self) -> Result<&Workspace, ArmadaError> {
+        self.workspace.as_ref().ok_or_else(|| ArmadaError {
+            class: crate::error::ErrClass::ArmadaBug,
             r#where: "ctx.workspace".to_string(),
             message: "this verb needs a workspace and was given none".to_string(),
             next_action: None,
@@ -260,7 +260,7 @@ pub trait Clock {
 /// the shape of the value does not change under every verb when they land.
 pub trait Fetch {
     /// GET, and report the status code.
-    fn http_status(&self, url: &str, timeout: Duration) -> Result<u16, CharError>;
+    fn http_status(&self, url: &str, timeout: Duration) -> Result<u16, ArmadaError>;
     /// Connect, and report whether anything answered.
-    fn tcp_connect(&self, host: &str, port: u16, timeout: Duration) -> Result<bool, CharError>;
+    fn tcp_connect(&self, host: &str, port: u16, timeout: Duration) -> Result<bool, ArmadaError>;
 }

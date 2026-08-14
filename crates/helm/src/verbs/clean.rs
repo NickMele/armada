@@ -31,7 +31,7 @@ use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     aggregate, CleanData, CleanDryRun, Envelope, Released, ResultRow, Unreclaimed,
 };
-use armada_core::error::{CharError, ConfigWhere, ErrClass, Status};
+use armada_core::error::{ArmadaError, ConfigWhere, ErrClass, Status};
 use armada_core::id::WorkspaceId;
 use armada_core::lease::{is_cold, LeaseId, LeaseKind, Policy};
 use armada_core::reap::{LabelledResource, LeftAlone, PathStat, ReapPlan, ReapTarget, Reported};
@@ -65,7 +65,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     common: Common,
     filters: Filters,
-) -> Result<Output, CharError> {
+) -> Result<Output, ArmadaError> {
     let me = app.ctx.workspace.as_ref().map(|w| w.id.clone());
     let project = app.ctx.workspace.as_ref().and_then(|w| w.project.clone());
 
@@ -121,7 +121,7 @@ fn clean_all<R: Run, C: Clock, F: Fetch>(
     filters: Filters,
     me: Option<&WorkspaceId>,
     holds_my_run_lease: bool,
-) -> Result<Envelope<CleanData>, CharError> {
+) -> Result<Envelope<CleanData>, ArmadaError> {
     let mut reaped = app.reap()?;
     let mut results = Vec::new();
     let mut skipped = Vec::new();
@@ -196,7 +196,7 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     row: &WorkspaceRow,
     filters: Filters,
     skipped: &mut Vec<String>,
-) -> Result<ResultRow, CharError> {
+) -> Result<ResultRow, ArmadaError> {
     let mut released = Released::default();
     // **Everything that would not go is named, in one of two channels that must
     // not merge.** `refused` is a reclaim char attempted and could not
@@ -318,7 +318,7 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
     result.path = Some(row.path.display().to_string());
     result.released = Some(released);
     if !refused.is_empty() {
-        result.error = Some(CharError {
+        result.error = Some(ArmadaError {
             class: ErrClass::ToolFailed,
             r#where: row.id.to_string(),
             message: refused.join("; "),
@@ -333,7 +333,7 @@ fn clean_one<R: Run, C: Clock, F: Fetch>(
 /// Tally one kind's removals, and name the handles that would not go.
 fn count_removed(
     kind: docker::Kind,
-    removed: &[(String, Option<CharError>)],
+    removed: &[(String, Option<ArmadaError>)],
     released: &mut Released,
     refused: &mut Vec<String>,
 ) {
@@ -360,7 +360,7 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
     released: &mut Released,
     refused: &mut Vec<String>,
     skipped: &mut Vec<String>,
-) -> Result<(), CharError> {
+) -> Result<(), ArmadaError> {
     let ports =
         armada_core::ports::assign_ports(config, row.ports, "armada.yml").unwrap_or_default();
 
@@ -435,7 +435,7 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
 fn remove_artifacts<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     row: &WorkspaceRow,
-) -> Result<usize, CharError> {
+) -> Result<usize, ArmadaError> {
     // A no-op under `--orphaned`, where the directory and its files are already
     // gone with the workspace.
     if fs::stat(&row.path) == PathStat::Missing {
@@ -490,7 +490,7 @@ fn declared_files(config: &ResolvedConfig) -> Vec<&String> {
 fn collect_unreclaimed<R: Run, C: Clock, F: Fetch>(
     app: &App<R, C, F>,
     row: &WorkspaceRow,
-) -> Result<Vec<Unreclaimed>, CharError> {
+) -> Result<Vec<Unreclaimed>, ArmadaError> {
     Ok(app
         .db
         .owned(Some(&row.id))?
@@ -507,7 +507,7 @@ fn collect_unreclaimed<R: Run, C: Clock, F: Fetch>(
 fn holds_a_live_lease<R: Run, C: Clock, F: Fetch>(
     app: &App<R, C, F>,
     workspace: &WorkspaceId,
-) -> Result<bool, CharError> {
+) -> Result<bool, ArmadaError> {
     let now = app.ctx.now.mono();
     Ok(app.db.leases()?.iter().any(|lease| {
         lease.workspace.as_ref() == Some(workspace)
@@ -523,7 +523,7 @@ fn dry<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     selected: &[WorkspaceRow],
     filters: Filters,
-) -> Result<Envelope<CleanDryRun>, CharError> {
+) -> Result<Envelope<CleanDryRun>, ArmadaError> {
     let plan = app.plan_reap()?;
     let mut preview = CleanDryRun {
         would_release: selected
@@ -629,7 +629,7 @@ pub fn rebuild<R: Run, C: Clock>(
     now: &C,
     home: &Path,
     dry_run: bool,
-) -> Result<Output, CharError> {
+) -> Result<Output, ArmadaError> {
     let armada_home = armada_manifest::machine::armada_home(home);
     let db_path = armada_home.join("manifest.db");
 
@@ -748,7 +748,7 @@ pub fn rebuild<R: Run, C: Clock>(
         .into_iter()
         .map(|(workspace, refused)| {
             let mut row = ResultRow::new(workspace.clone(), Status::Failed);
-            row.error = Some(CharError {
+            row.error = Some(ArmadaError {
                 class: ErrClass::ToolFailed,
                 r#where: workspace,
                 message: refused.join("; "),

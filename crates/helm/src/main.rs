@@ -25,7 +25,7 @@ use armada_helm::{app, args, render, verbs};
 use args::Invocation;
 use armada_core::ctx::Ctx;
 use armada_core::envelope::{Envelope, NoData};
-use armada_core::error::{CharError, ErrClass, Status};
+use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_manifest::clock::SystemClock;
 use armada_manifest::net::RealFetch;
 use armada_manifest::process::RealRun;
@@ -115,8 +115,8 @@ fn dispatch(
     cwd: &std::path::Path,
     home: Option<&std::path::Path>,
     inherited: BTreeMap<String, String>,
-) -> Result<Output, CharError> {
-    let home = home.ok_or_else(|| CharError {
+) -> Result<Output, ArmadaError> {
+    let home = home.ok_or_else(|| ArmadaError {
         class: ErrClass::Environment,
         r#where: "HOME".to_string(),
         message: "$HOME is not set, so Armada cannot find ~/.armada/".to_string(),
@@ -219,9 +219,9 @@ fn dispatch(
 /// meaning here. The rebuild reads no `armada.yml`, so there are no declared
 /// `owns.files` to delete, and it takes no lease, so there is no liveness guard
 /// to override.
-fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<CharError> {
+fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<ArmadaError> {
     let refusal = |r#where: &str, message: String| {
-        Some(CharError {
+        Some(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: r#where.to_string(),
             message,
@@ -267,7 +267,7 @@ fn emit(output: Output, json: bool) -> ExitCode {
     ExitCode::from(output.exit_code())
 }
 
-fn fail(error: CharError, json: bool) -> ExitCode {
+fn fail(error: ArmadaError, json: bool) -> ExitCode {
     let code = error.class.exit_code();
     if json {
         // The envelope shape never varies. `workspace` is `null` when

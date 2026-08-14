@@ -10,7 +10,7 @@
 //! arrives with the rest of the ownership layer in phase 2. This module reads a
 //! path it is given.
 
-use armada_core::error::{CharError, ConfigWhere, ErrClass};
+use armada_core::error::{ArmadaError, ConfigWhere, ErrClass};
 use std::path::Path;
 
 /// Read a config file, mapping an I/O failure into char's own vocabulary.
@@ -19,16 +19,16 @@ use std::path::Path;
 /// anything else about the filesystem is `environment`: the repo is fine and
 /// the machine is not, which is the distinction that decides whether an agent
 /// edits a file or a human fixes a disk (`ARCHITECTURE.md` §1.7).
-pub fn read(path: &Path) -> Result<String, CharError> {
+pub fn read(path: &Path) -> Result<String, ArmadaError> {
     std::fs::read_to_string(path).map_err(|e| {
         let display = path.display().to_string();
         match e.kind() {
-            std::io::ErrorKind::NotFound => CharError::bad_config(
+            std::io::ErrorKind::NotFound => ArmadaError::bad_config(
                 ConfigWhere::File { file: display },
                 "no armada.yml here",
                 "run `char config scan` to gather evidence, then author a armada.yml",
             ),
-            _ => CharError {
+            _ => ArmadaError {
                 class: ErrClass::Environment,
                 r#where: display,
                 message: format!("could not read armada.yml: {e}"),

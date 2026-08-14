@@ -10,7 +10,7 @@
 //! to make safe.
 
 use armada_core::ctx::{Clock, Ctx, Fetch, Run};
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::id::WorkspaceId;
 use armada_core::lease::{
     is_cold, ClaimAction, ClaimEvent, ClaimState, LeaseId, LeaseKind, Policy,
@@ -100,7 +100,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         lease: LeaseId,
         policy: Policy,
         ceiling_ms: Option<u64>,
-    ) -> Result<LeaseId, CharError> {
+    ) -> Result<LeaseId, ArmadaError> {
         self.acquire_reporting(lease, policy, ceiling_ms, &mut |_| {})
     }
 
@@ -118,7 +118,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         policy: Policy,
         ceiling_ms: Option<u64>,
         on_wait: &mut dyn FnMut(armada_core::lease::WaitingOn),
-    ) -> Result<LeaseId, CharError> {
+    ) -> Result<LeaseId, ArmadaError> {
         let pid = armada_manifest::posix::pid();
         let started = machine::process_start_at(&self.ctx.run, &self.cwd(), pid);
 
@@ -193,8 +193,8 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                 Some(next) => event = next,
                 // A step that produced no action to react to would spin.
                 None => {
-                    return Err(CharError {
-                        class: ErrClass::CharBug,
+                    return Err(ArmadaError {
+                        class: ErrClass::ArmadaBug,
                         r#where: "lease".to_string(),
                         message: format!("the claim loop stalled in {:?}", state.phase),
                         next_action: None,
@@ -226,7 +226,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         total: u32,
         ceiling_ms: Option<u64>,
         on_wait: &mut dyn FnMut(armada_core::lease::WaitingOn),
-    ) -> Result<Vec<LeaseId>, CharError> {
+    ) -> Result<Vec<LeaseId>, ArmadaError> {
         let pid = armada_manifest::posix::pid();
         let started = machine::process_start_at(&self.ctx.run, &self.cwd(), pid);
         let claim = LeaseId {
@@ -300,8 +300,8 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
             match pending {
                 Some(next) => event = next,
                 None => {
-                    return Err(CharError {
-                        class: ErrClass::CharBug,
+                    return Err(ArmadaError {
+                        class: ErrClass::ArmadaBug,
                         r#where: "cpu-slot".to_string(),
                         message: format!("the slot claim stalled in {:?}", state.phase),
                         next_action: None,
@@ -312,7 +312,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     }
 
     /// Give a lease back.
-    pub fn release(&mut self, lease: &LeaseId) -> Result<(), CharError> {
+    pub fn release(&mut self, lease: &LeaseId) -> Result<(), ArmadaError> {
         self.db.release_lease(lease.kind, &lease.key)
     }
 
@@ -367,7 +367,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     }
 
     /// Whether the daemon is reachable.
-    pub fn docker_ready(&mut self) -> Result<(), CharError> {
+    pub fn docker_ready(&mut self) -> Result<(), ArmadaError> {
         self.docker_call(|run, cwd, timeout, tick| docker::daemon_ready(run, cwd, timeout, tick))
     }
 
@@ -375,7 +375,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     pub fn docker_list_labelled(
         &mut self,
         kind: docker::Kind,
-    ) -> Result<Vec<LabelledResource>, CharError> {
+    ) -> Result<Vec<LabelledResource>, ArmadaError> {
         self.docker_call(|run, cwd, timeout, tick| {
             docker::list_labelled(run, cwd, timeout, kind, tick)
         })
@@ -386,7 +386,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         &mut self,
         kind: docker::Kind,
         selector: &str,
-    ) -> Result<Vec<String>, CharError> {
+    ) -> Result<Vec<String>, ArmadaError> {
         self.docker_call(|run, cwd, timeout, tick| {
             docker::list_by_selector(run, cwd, timeout, kind, selector, tick)
         })
@@ -397,7 +397,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         &mut self,
         kind: docker::Kind,
         references: &[String],
-    ) -> Vec<(String, Option<CharError>)> {
+    ) -> Vec<(String, Option<ArmadaError>)> {
         self.docker_call(|run, cwd, timeout, tick| {
             docker::remove(run, cwd, timeout, kind, references, tick)
         })
@@ -408,7 +408,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// See [`Db::release_workspace`](armada_manifest::db::Db::release_workspace):
     /// `clean` dismantles a workspace while standing on that workspace's own
     /// run lease.
-    pub fn forget_workspace(&mut self, workspace: &WorkspaceId) -> Result<(), CharError> {
+    pub fn forget_workspace(&mut self, workspace: &WorkspaceId) -> Result<(), ArmadaError> {
         let held = std::mem::take(&mut self.held);
         let outcome = self.db.release_workspace(workspace, &held);
         self.held = held;
@@ -421,7 +421,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// pass would do rather than an approximation of it. Listing and stat-ing
     /// change nothing, so the preview is free of side effects and identical to
     /// the decision the executing pass makes a moment later.
-    pub fn plan_reap(&mut self) -> Result<ReapPlan, CharError> {
+    pub fn plan_reap(&mut self) -> Result<ReapPlan, ArmadaError> {
         let mut plan = ReapPlan::default();
 
         // Pass 1: the registry.
@@ -486,7 +486,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     /// new one — true for churn, false for the last one. Delete worktree 5 of 5
     /// and nothing reaps until somebody creates worktree 6, which on a
     /// shrinking project is never.
-    pub fn reap(&mut self) -> Result<ReapPlan, CharError> {
+    pub fn reap(&mut self) -> Result<ReapPlan, ArmadaError> {
         let mut plan = self.plan_reap()?;
         let mut survived: Vec<String> = Vec::new();
 
@@ -559,7 +559,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
     pub fn stop_owned_processes(
         &mut self,
         workspace: &WorkspaceId,
-    ) -> Result<StopSummary, CharError> {
+    ) -> Result<StopSummary, ArmadaError> {
         let rows = self.db.owned(Some(workspace))?;
         let mut summary = StopSummary::default();
 
@@ -616,7 +616,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
 /// SIGKILL — which is a real leak and fails the row that owns it. Merging them
 /// would make a benign race under five concurrent worktrees exit 1, and that is
 /// the concurrency this project is built around.
-pub fn skipped_enumeration(error: &CharError) -> String {
+pub fn skipped_enumeration(error: &ArmadaError) -> String {
     format!("labelled resources: {}", error.message)
 }
 
@@ -635,7 +635,7 @@ pub fn build<R: Run, C: Clock, F: Fetch>(
     ctx: Ctx<R, C, F>,
     home: &Path,
     inherited: BTreeMap<String, String>,
-) -> Result<App<R, C, F>, CharError> {
+) -> Result<App<R, C, F>, ArmadaError> {
     let db = Db::open(&machine::armada_home(home))?;
     let namespace = db.namespace()?;
     let machine_config = MachineConfig::read(&machine::armada_home(home))?;
@@ -650,7 +650,7 @@ pub fn build<R: Run, C: Clock, F: Fetch>(
     // across a reboot and every recorded pgid is unreclaimable — so char would
     // either steal live leases or leak processes forever, and both are worse
     // than refusing to run on a platform that cannot answer.
-    let boot_id = machine::boot_id(&ctx.run, &cwd).ok_or_else(|| CharError {
+    let boot_id = machine::boot_id(&ctx.run, &cwd).ok_or_else(|| ArmadaError {
         class: ErrClass::Environment,
         r#where: "boot_id".to_string(),
         message: "this machine reports no boot id".to_string(),
@@ -685,8 +685,8 @@ pub fn with_lease<R: Run, C: Clock, F: Fetch, T>(
     lease: LeaseId,
     policy: Policy,
     ceiling_ms: Option<u64>,
-    body: impl FnOnce(&mut App<R, C, F>) -> Result<T, CharError>,
-) -> Result<T, CharError> {
+    body: impl FnOnce(&mut App<R, C, F>) -> Result<T, ArmadaError>,
+) -> Result<T, ArmadaError> {
     let held = app.acquire(lease, policy, ceiling_ms)?;
     app.held.push(held.clone());
     let outcome = body(app);

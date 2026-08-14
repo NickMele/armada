@@ -8,7 +8,7 @@
 //! identity.
 
 use armada_core::ctx::{Run, RunRequest};
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -156,7 +156,7 @@ pub fn merge_base(run: &impl Run, root: &Path) -> Option<(String, String)> {
 /// record as one path silently attributes a file to the wrong name — which is
 /// the failure the NUL delimiter was adopted to prevent, reintroduced one layer
 /// up.
-pub fn changed_files(run: &impl Run, root: &Path, base: &str) -> Result<Vec<String>, CharError> {
+pub fn changed_files(run: &impl Run, root: &Path, base: &str) -> Result<Vec<String>, ArmadaError> {
     let mut files = nul_separated(
         run,
         root,
@@ -174,7 +174,7 @@ pub fn changed_files(run: &impl Run, root: &Path, base: &str) -> Result<Vec<Stri
 
 /// Every file git is tracking, which is what `--all-files` expands the globs
 /// against.
-pub fn tracked_files(run: &impl Run, root: &Path) -> Result<Vec<String>, CharError> {
+pub fn tracked_files(run: &impl Run, root: &Path) -> Result<Vec<String>, ArmadaError> {
     let mut files = nul_separated(run, root, &["git", "ls-files", "-z"])?;
     files.sort();
     files.dedup();
@@ -182,14 +182,14 @@ pub fn tracked_files(run: &impl Run, root: &Path) -> Result<Vec<String>, CharErr
 }
 
 /// Run a git command whose output is NUL-separated paths.
-fn nul_separated(run: &impl Run, root: &Path, argv: &[&str]) -> Result<Vec<String>, CharError> {
+fn nul_separated(run: &impl Run, root: &Path, argv: &[&str]) -> Result<Vec<String>, ArmadaError> {
     let request = RunRequest::new(
         argv.iter().map(|a| (*a).to_string()).collect(),
         root.to_path_buf(),
     )
     .timeout(GIT_TIMEOUT);
 
-    let output = run.call(&request).map_err(|e| CharError {
+    let output = run.call(&request).map_err(|e| ArmadaError {
         class: ErrClass::Environment,
         r#where: "git".to_string(),
         message: format!("cannot run git: {}", e.message),
@@ -197,7 +197,7 @@ fn nul_separated(run: &impl Run, root: &Path, argv: &[&str]) -> Result<Vec<Strin
     })?;
 
     if !output.ok() {
-        return Err(CharError {
+        return Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: "git".to_string(),
             message: format!("`{}` failed: {}", argv.join(" "), output.stderr.trim()),

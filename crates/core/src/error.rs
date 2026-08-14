@@ -27,7 +27,7 @@ pub enum ErrClass {
     /// The machine char runs on is broken. Fix the machine, retry unchanged.
     Environment,
     /// charkit broke. Stop; retrying will not help.
-    CharBug,
+    ArmadaBug,
 }
 
 impl ErrClass {
@@ -46,13 +46,13 @@ impl ErrClass {
             ErrClass::Timeout => 4,
             ErrClass::Aborted => 5,
             ErrClass::Environment => 6,
-            ErrClass::CharBug => 70,
+            ErrClass::ArmadaBug => 70,
         }
     }
 
     /// Strictness, for aggregating `results[]` into the envelope's one error.
     ///
-    /// `char_bug > environment > bad_config > bad_invocation > timeout >
+    /// `armada_bug > environment > bad_config > bad_invocation > timeout >
     /// aborted > tool_failed` (PLAN.md §3.1). The strictly-worse signal wins
     /// because acting on the milder one wastes the time the stricter one was
     /// reporting — a run containing a `TIMEOUT` exits 4, not 1, so a gate
@@ -75,7 +75,7 @@ impl ErrClass {
             ErrClass::BadInvocation => 3,
             ErrClass::BadConfig => 4,
             ErrClass::Environment => 5,
-            ErrClass::CharBug => 6,
+            ErrClass::ArmadaBug => 6,
         }
     }
 }
@@ -95,7 +95,7 @@ impl fmt::Display for ErrClass {
             ErrClass::Timeout => "timeout",
             ErrClass::Aborted => "aborted",
             ErrClass::Environment => "environment",
-            ErrClass::CharBug => "char_bug",
+            ErrClass::ArmadaBug => "armada_bug",
         })
     }
 }
@@ -144,7 +144,7 @@ impl fmt::Display for ConfigWhere {
 
 /// A typed failure: which class, where, and what to do next.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CharError {
+pub struct ArmadaError {
     /// The class. The exit code follows from it and from nothing else.
     pub class: ErrClass,
     /// A config path for `bad_config`; a `results[]` id for every other class.
@@ -158,14 +158,14 @@ pub struct CharError {
     pub next_action: Option<String>,
 }
 
-impl CharError {
+impl ArmadaError {
     /// A `bad_config`, which is the only class phase 1 can produce.
     pub fn bad_config(
         r#where: ConfigWhere,
         message: impl Into<String>,
         next_action: impl Into<String>,
     ) -> Self {
-        CharError {
+        ArmadaError {
             class: ErrClass::BadConfig,
             r#where: r#where.to_string(),
             message: message.into(),
@@ -174,13 +174,13 @@ impl CharError {
     }
 }
 
-impl fmt::Display for CharError {
+impl fmt::Display for ArmadaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.r#where, self.message)
     }
 }
 
-impl std::error::Error for CharError {}
+impl std::error::Error for ArmadaError {}
 
 /// The state a verb ends in, or reports mid-flight.
 ///
@@ -268,7 +268,7 @@ mod tests {
         }
         for class in [
             ErrClass::BadConfig,
-            ErrClass::CharBug,
+            ErrClass::ArmadaBug,
             ErrClass::ToolFailed,
             ErrClass::Environment,
         ] {
@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(ErrClass::Timeout.exit_code(), 4);
         assert_eq!(ErrClass::Aborted.exit_code(), 5);
         assert_eq!(ErrClass::Environment.exit_code(), 6);
-        assert_eq!(ErrClass::CharBug.exit_code(), 70);
+        assert_eq!(ErrClass::ArmadaBug.exit_code(), 70);
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod tests {
         let mut classes = [
             ErrClass::BadConfig,
             ErrClass::ToolFailed,
-            ErrClass::CharBug,
+            ErrClass::ArmadaBug,
             ErrClass::Timeout,
             ErrClass::Environment,
             ErrClass::Aborted,
@@ -314,7 +314,7 @@ mod tests {
                 ErrClass::BadInvocation,
                 ErrClass::BadConfig,
                 ErrClass::Environment,
-                ErrClass::CharBug,
+                ErrClass::ArmadaBug,
             ]
         );
     }
@@ -346,8 +346,8 @@ mod tests {
             "\"bad_config\""
         );
         assert_eq!(
-            serde_json::to_string(&ErrClass::CharBug).unwrap(),
-            "\"char_bug\""
+            serde_json::to_string(&ErrClass::ArmadaBug).unwrap(),
+            "\"armada_bug\""
         );
     }
 

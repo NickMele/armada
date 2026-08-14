@@ -53,7 +53,7 @@ cases:
       id through unconditionally, which disables the guard above for any call site that
       forgets to thread the id. In charkit the holder is always known.
     given: { begin: { run_id: "run-C" }, then: [{ transition: { run_id: null } }] }
-    expect: { error: { class: char_bug } }
+    expect: { error: { class: armada_bug } }
 
   # --- derived states -----------------------------------------------------
 
@@ -351,7 +351,7 @@ cases:
       run_fails_before_starting: true
     expect:
       status: FAILED
-      error: { class: char_bug }
+      error: { class: armada_bug }
       results: []
       message_states_nothing_was_checked: true
 

@@ -23,7 +23,7 @@
 //!   obvious lease code works in every test with one writer and fails
 //!   nondeterministically under the contention the design exists to handle.
 
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::id::{ProjectId, WorkspaceId};
 use armada_core::lease::{Holder, LeaseId, LeaseKind};
 use armada_core::ports::{choose_block, PortBlock};
@@ -104,7 +104,7 @@ pub enum SlotOutcome {
 
 impl Db {
     /// Open, creating the database and its schema if this is a first run.
-    pub fn open(armada_home: &Path) -> Result<Self, CharError> {
+    pub fn open(armada_home: &Path) -> Result<Self, ArmadaError> {
         std::fs::create_dir_all(armada_home).map_err(|e| {
             environment(
                 armada_home.display().to_string(),
@@ -152,14 +152,14 @@ impl Db {
     /// returned here early, and asked for a namespace that was not there yet —
     /// `manifest.db: Query returned no rows`, from a database that was merely
     /// half a heartbeat young.
-    fn migrate(&mut self) -> Result<(), CharError> {
+    fn migrate(&mut self) -> Result<(), ArmadaError> {
         let version: i64 = self
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|e| map_sqlite(&self.path, e))?;
 
         if version > USER_VERSION {
-            return Err(CharError {
+            return Err(ArmadaError {
                 class: ErrClass::Environment,
                 r#where: self.path.display().to_string(),
                 message: format!(
@@ -251,7 +251,7 @@ impl Db {
     }
 
     /// Carry a namespace recovered from a replaced database into this one.
-    pub fn adopt_namespace(&mut self, namespace: &str) -> Result<(), CharError> {
+    pub fn adopt_namespace(&mut self, namespace: &str) -> Result<(), ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -265,7 +265,7 @@ impl Db {
     }
 
     /// This installation's namespace.
-    pub fn namespace(&self) -> Result<String, CharError> {
+    pub fn namespace(&self) -> Result<String, ArmadaError> {
         self.conn
             .query_row(
                 "SELECT value FROM meta WHERE key = ?1",
@@ -291,7 +291,7 @@ impl Db {
     }
 
     /// Every claimed workspace.
-    pub fn workspaces(&self) -> Result<Vec<WorkspaceRow>, CharError> {
+    pub fn workspaces(&self) -> Result<Vec<WorkspaceRow>, ArmadaError> {
         let mut statement = self
             .conn
             .prepare("SELECT id, path, project, port_from, port_to, claimed_at FROM workspaces")
@@ -326,7 +326,7 @@ impl Db {
         project: Option<&ProjectId>,
         size: u16,
         claimed_at: &str,
-    ) -> Result<ClaimOutcome, CharError> {
+    ) -> Result<ClaimOutcome, ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -417,7 +417,7 @@ impl Db {
         &mut self,
         workspace: &WorkspaceId,
         keep: &[LeaseId],
-    ) -> Result<(), CharError> {
+    ) -> Result<(), ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -460,7 +460,7 @@ impl Db {
     }
 
     /// Everything one workspace owns, or everything on the machine.
-    pub fn owned(&self, workspace: Option<&WorkspaceId>) -> Result<Vec<OwnedRow>, CharError> {
+    pub fn owned(&self, workspace: Option<&WorkspaceId>) -> Result<Vec<OwnedRow>, ArmadaError> {
         let sql = "SELECT workspace, kind, \"ref\", boot_id, pid_started_at FROM owned";
         let mut statement = self
             .conn
@@ -514,7 +514,7 @@ impl Db {
     /// creating and the other destroying. Spawn-then-record leaks a pgid if
     /// char dies in between; record-then-spawn leaves a row pointing at
     /// nothing, which the next `init` reaps for free.
-    pub fn record_owned(&mut self, row: &OwnedRow) -> Result<(), CharError> {
+    pub fn record_owned(&mut self, row: &OwnedRow) -> Result<(), ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -540,7 +540,7 @@ impl Db {
         workspace: &WorkspaceId,
         kind: OwnedKind,
         reference: &str,
-    ) -> Result<(), CharError> {
+    ) -> Result<(), ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -559,7 +559,7 @@ impl Db {
         &mut self,
         workspace: &WorkspaceId,
         kind: OwnedKind,
-    ) -> Result<(), CharError> {
+    ) -> Result<(), ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -573,7 +573,7 @@ impl Db {
     }
 
     /// Every held lease.
-    pub fn leases(&self) -> Result<Vec<LeaseRow>, CharError> {
+    pub fn leases(&self) -> Result<Vec<LeaseRow>, ArmadaError> {
         let mut statement = self
             .conn
             .prepare(
@@ -608,7 +608,7 @@ impl Db {
         boot_id: &str,
         pid: i32,
         pid_started_at: Option<&str>,
-    ) -> Result<AcquireOutcome, CharError> {
+    ) -> Result<AcquireOutcome, ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -697,7 +697,7 @@ impl Db {
         boot_id: &str,
         pid: i32,
         pid_started_at: Option<&str>,
-    ) -> Result<SlotOutcome, CharError> {
+    ) -> Result<SlotOutcome, ArmadaError> {
         let want = count.min(total).max(1);
         let tx = self
             .conn
@@ -795,7 +795,7 @@ impl Db {
     /// background timer keeps ticking while the scheduler is wedged, so the
     /// lease looks healthy forever and you need a TTL to catch it. A
     /// loop-driven heartbeat simply stops.
-    pub fn renew(&mut self, lease: &LeaseId, heartbeat_mono: u64) -> Result<(), CharError> {
+    pub fn renew(&mut self, lease: &LeaseId, heartbeat_mono: u64) -> Result<(), ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -823,7 +823,7 @@ impl Db {
         kind: LeaseKind,
         key: &str,
         observed: &LeaseRow,
-    ) -> Result<bool, CharError> {
+    ) -> Result<bool, ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -849,7 +849,7 @@ impl Db {
     /// Release a lease, or reclaim a dead one — the same statement, and that is
     /// deliberate: reclaiming *is* releasing somebody else's row, and having
     /// one path means the reclaim cannot drift from the release.
-    pub fn release_lease(&mut self, kind: LeaseKind, key: &str) -> Result<(), CharError> {
+    pub fn release_lease(&mut self, kind: LeaseKind, key: &str) -> Result<(), ArmadaError> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -878,7 +878,7 @@ impl Db {
 /// The wait is char's own, bounded by the same budget as every other statement,
 /// and `SQLITE_BUSY` is the only code it retries: a busy database becomes
 /// available, and a corrupt or unopenable one never does.
-fn set_wal(conn: &Connection, path: &Path) -> Result<(), CharError> {
+fn set_wal(conn: &Connection, path: &Path) -> Result<(), ArmadaError> {
     let deadline = std::time::Instant::now() + Duration::from_millis(BUSY_TIMEOUT_MS);
     loop {
         let error = match conn.pragma_update(None, "journal_mode", "WAL") {
@@ -935,7 +935,7 @@ fn parse_kind(text: &str) -> LeaseKind {
 /// measured, a full disk looks healthy from the lease's point of view: a claim
 /// fails with `SQLITE_FULL` while a *smaller* subsequent write still succeeds,
 /// so heartbeats keep renewing and nothing gets reclaimed.
-fn map_sqlite(path: &Path, error: rusqlite::Error) -> CharError {
+fn map_sqlite(path: &Path, error: rusqlite::Error) -> ArmadaError {
     let extended = match &error {
         rusqlite::Error::SqliteFailure(inner, _) => inner.extended_code,
         _ => 0,
@@ -949,7 +949,7 @@ fn map_sqlite(path: &Path, error: rusqlite::Error) -> CharError {
         ),
         // SQLITE_BUSY_SNAPSHOT: never retryable, and always char's bug — it
         // means a transaction read and then wrote without BEGIN IMMEDIATE.
-        517 => (ErrClass::CharBug, None),
+        517 => (ErrClass::ArmadaBug, None),
         11 | 13 | 14 => (
             ErrClass::Environment,
             Some(format!(
@@ -960,7 +960,7 @@ fn map_sqlite(path: &Path, error: rusqlite::Error) -> CharError {
         _ => (ErrClass::Environment, None),
     };
 
-    CharError {
+    ArmadaError {
         class,
         r#where: path.display().to_string(),
         message: format!("manifest.db: {error}"),
@@ -968,8 +968,8 @@ fn map_sqlite(path: &Path, error: rusqlite::Error) -> CharError {
     }
 }
 
-fn environment(location: String, message: String) -> CharError {
-    CharError {
+fn environment(location: String, message: String) -> ArmadaError {
+    ArmadaError {
         class: ErrClass::Environment,
         r#where: location,
         message,
@@ -987,7 +987,7 @@ fn environment(location: String, message: String) -> CharError {
 /// from reaping each other's resources, and a fixed stand-in makes two
 /// installations that both hit the failure compare *equal* — which is the
 /// cross-reap the label exists to prevent, arriving silently.
-fn random_uuid() -> Result<String, CharError> {
+fn random_uuid() -> Result<String, ArmadaError> {
     use std::io::Read;
     let mut bytes = [0u8; 16];
     let mut file = std::fs::File::open("/dev/urandom")
@@ -1309,7 +1309,7 @@ mod tests {
 
         // 517, SQLITE_BUSY_SNAPSHOT: never retryable, and always char's bug.
         let snapshot = mapped(517);
-        assert_eq!(snapshot.class, ErrClass::CharBug);
+        assert_eq!(snapshot.class, ErrClass::ArmadaBug);
         assert_eq!(snapshot.next_action, None);
 
         // 11, 13, 14 — corrupt, full, cannot-open: the machine is broken, and

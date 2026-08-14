@@ -19,7 +19,7 @@
 //! obvious fix (reorder the snapshot) hides that the renderer stopped emitting
 //! the documented order. See `docs/traps.md`.
 
-use crate::error::{CharError, ErrClass, Status};
+use crate::error::{ArmadaError, ErrClass, Status};
 use crate::id::{ProjectId, WorkspaceId};
 use crate::lease::WaitingOn;
 use crate::ports::{PortBlock, PortState};
@@ -51,7 +51,7 @@ pub struct Envelope<D: Serialize> {
     /// The terminal state — or, for the three read verbs only, a progress one.
     pub status: Status,
     /// The typed error, or `null`.
-    pub error: Option<CharError>,
+    pub error: Option<ArmadaError>,
     /// The per-verb body.
     pub data: D,
 }
@@ -73,7 +73,7 @@ impl<D: Serialize> Envelope<D> {
     /// specific terminal state applies (PLAN.md §3.2.2) — which includes
     /// `char status`, whose only success state is `OK` and which otherwise had
     /// no way to report that it failed.
-    pub fn failed(verb: &str, workspace: Option<WorkspaceId>, error: CharError, data: D) -> Self {
+    pub fn failed(verb: &str, workspace: Option<WorkspaceId>, error: ArmadaError, data: D) -> Self {
         Envelope {
             schema_version: SCHEMA_VERSION,
             verb: verb.to_string(),
@@ -98,7 +98,7 @@ impl<D: Serialize> Envelope<D> {
             // still parse.
             format!(
                 "{{\"schema_version\":{SCHEMA_VERSION},\"verb\":\"unknown\",\"workspace\":null,\
-                 \"status\":\"FAILED\",\"error\":{{\"class\":\"char_bug\",\"where\":\"renderer\",\
+                 \"status\":\"FAILED\",\"error\":{{\"class\":\"armada_bug\",\"where\":\"renderer\",\
                  \"message\":\"could not serialize the envelope: {e}\"}},\"data\":{{}}}}"
             )
         });
@@ -163,7 +163,7 @@ pub struct ResultRow {
     pub duration_ms: Option<u64>,
     /// This row's own failure.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<CharError>,
+    pub error: Option<ArmadaError>,
 }
 
 impl ResultRow {
@@ -197,7 +197,7 @@ impl ResultRow {
 /// precedence, so two implementations cannot disagree** (PLAN.md §3.1):
 ///
 /// ```text
-/// char_bug > environment > bad_config > bad_invocation > timeout > aborted > tool_failed
+/// armada_bug > environment > bad_config > bad_invocation > timeout > aborted > tool_failed
 /// ```
 ///
 /// The strictly-worse signal wins because acting on the milder one wastes the
@@ -216,7 +216,7 @@ impl ResultRow {
 /// `subject` names what the rows are — `checks`, `workspaces`, `services` —
 /// because the id grammar differs per verb and the message should read in the
 /// caller's vocabulary.
-pub fn aggregate(results: &[ResultRow], subject: &str) -> Option<CharError> {
+pub fn aggregate(results: &[ResultRow], subject: &str) -> Option<ArmadaError> {
     // A row that failed without attaching an error of its own still counts: a
     // verb reporting success over a `FAILED` row is the shape a consumer least
     // expects.
@@ -233,7 +233,7 @@ pub fn aggregate(results: &[ResultRow], subject: &str) -> Option<CharError> {
 
     let (worst, class) = *failures.iter().max_by_key(|(_, class)| class.severity())?;
 
-    Some(CharError {
+    Some(ArmadaError {
         class,
         // The id from `results[]`, which is the actionable thing for every
         // class but `bad_config` — and for that one the row's own `where` is
@@ -500,7 +500,7 @@ mod tests {
 
     fn failed(id: &str, class: ErrClass) -> ResultRow {
         let mut row = ResultRow::new(id, Status::Failed);
-        row.error = Some(CharError {
+        row.error = Some(ArmadaError {
             class,
             r#where: id.to_string(),
             message: format!("{id} did not"),
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     fn the_whole_precedence_order_holds_pairwise() {
-        // char_bug > environment > bad_config > bad_invocation > timeout >
+        // armada_bug > environment > bad_config > bad_invocation > timeout >
         // aborted > tool_failed
         let order = [
             ErrClass::ToolFailed,
@@ -550,7 +550,7 @@ mod tests {
             ErrClass::BadInvocation,
             ErrClass::BadConfig,
             ErrClass::Environment,
-            ErrClass::CharBug,
+            ErrClass::ArmadaBug,
         ];
         for (i, milder) in order.iter().enumerate() {
             for worse in order.iter().skip(i + 1) {
@@ -691,7 +691,7 @@ mod tests {
     #[test]
     fn a_bad_config_aggregate_keeps_its_next_action() {
         let mut row = ResultRow::new("api", Status::Failed);
-        row.error = Some(CharError::bad_config(
+        row.error = Some(ArmadaError::bad_config(
             crate::error::ConfigWhere::Path {
                 file: "armada.yml".into(),
                 path: "components.api.setup".into(),
@@ -753,7 +753,7 @@ mod tests {
         let envelope = Envelope::failed(
             "init",
             None,
-            CharError {
+            ArmadaError {
                 class: ErrClass::Environment,
                 r#where: "docker".into(),
                 message: "daemon unreachable".into(),

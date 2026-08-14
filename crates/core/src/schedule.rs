@@ -41,7 +41,7 @@
 //! Nothing here spawns, kills, sleeps or touches a lease; it decides that those
 //! should happen and says so.
 
-use crate::error::{CharError, ErrClass, Status};
+use crate::error::{ArmadaError, ErrClass, Status};
 use crate::id::WorkspaceId;
 use crate::lease::{LeaseKind, WaitingOn, RENEW_INTERVAL_MS};
 use serde::{Deserialize, Serialize};
@@ -194,7 +194,7 @@ pub struct Plan {
     /// do — while this is `FAILED` and exit 2, and the caller has to change
     /// what they asked for before any other result means anything.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub blocked: Option<CharError>,
+    pub blocked: Option<ArmadaError>,
     /// Why this check will not run at all, decided before the run started —
     /// an empty `${files}` set being the case that matters. A file-scoped check
     /// is **never invoked with no arguments**: `ruff check` with no paths checks
@@ -304,7 +304,7 @@ pub struct Outcome {
     /// This check's terminal state.
     pub status: Status,
     /// This check's own failure, when it has one.
-    pub error: Option<CharError>,
+    pub error: Option<ArmadaError>,
     /// Prose for the states where the status alone does not say enough:
     /// `SKIPPED`'s "no matching files", and the failed prerequisite a cascaded
     /// `ABORTED` names.
@@ -598,7 +598,7 @@ pub enum Action {
         /// The run's terminal state.
         status: Status,
         /// The run's one error, or `None`.
-        error: Option<CharError>,
+        error: Option<ArmadaError>,
     },
     /// Reap any finished child, without blocking.
     ///
@@ -632,7 +632,7 @@ pub struct CheckResult {
     /// minutes".
     pub waiting_on: Option<WaitingOn>,
     /// Its own failure.
-    pub error: Option<CharError>,
+    pub error: Option<ArmadaError>,
     /// Prose the status alone does not carry.
     pub reason: Option<String>,
 }
@@ -739,7 +739,7 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 // must be total over every sequence that can reach it,
                 // including one a later binary replays out of `state.json`
                 // after a clock the shell believed was monotonic was not — and
-                // a panic in the pure core is a `char_bug` for a run that
+                // a panic in the pure core is a `armada_bug` for a run that
                 // already happened. Found by perturbing a recorded sequence.
                 let waited = now.saturating_sub(since);
                 let waiting_on = waiting_on(kind, &entry.plan, &holder, waited, budget);
@@ -783,7 +783,7 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
         Event::SpawnFailed { check, err } => {
             let outcome = Outcome {
                 status: Status::Failed,
-                error: Some(CharError {
+                error: Some(ArmadaError {
                     class: err,
                     r#where: check.to_string(),
                     message: format!("{check} could not be started"),
@@ -832,7 +832,7 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 status: Status::Failed,
                 // **Retryable**, because the actionable fact is that the machine
                 // was busy rather than that this check is slow.
-                error: Some(CharError {
+                error: Some(ArmadaError {
                     class: ErrClass::Aborted,
                     r#where: check.to_string(),
                     message: match &held_by {
@@ -910,7 +910,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
         // elapsed.
         Some(Stopping::Deadline) => Outcome {
             status: Status::Timeout,
-            error: Some(CharError {
+            error: Some(ArmadaError {
                 class: ErrClass::Timeout,
                 r#where: check.to_string(),
                 message: format!("exceeded timeout: {}s", entry.plan.timeout_ms / 1000),
@@ -939,7 +939,7 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
         },
         None => Outcome {
             status: Status::Failed,
-            error: Some(CharError {
+            error: Some(ArmadaError {
                 class: ErrClass::ToolFailed,
                 r#where: check.to_string(),
                 message: format!("exited {code}"),
@@ -1292,7 +1292,7 @@ fn end_run(state: &mut State, actions: &mut Vec<Action>) {
 }
 
 /// The run's verdict, once every check has one.
-fn terminal(state: &State) -> Option<(Status, Option<CharError>)> {
+fn terminal(state: &State) -> Option<(Status, Option<ArmadaError>)> {
     let settled = state
         .checks
         .values()
@@ -1309,13 +1309,13 @@ fn terminal(state: &State) -> Option<(Status, Option<CharError>)> {
         return Some((
             Status::Aborted,
             Some(match ending {
-                Ending::Interrupted => CharError {
+                Ending::Interrupted => ArmadaError {
                     class: ErrClass::Aborted,
                     r#where: "run".to_string(),
                     message: "interrupted".to_string(),
                     next_action: None,
                 },
-                Ending::WorkspaceGone => CharError {
+                Ending::WorkspaceGone => ArmadaError {
                     class: ErrClass::Environment,
                     r#where: "run".to_string(),
                     message: format!("the workspace was deleted: {}", state.root.display()),
@@ -1362,7 +1362,7 @@ impl State {
     /// know that. An earlier version filtered the rows here instead, which put
     /// the same rule in two places and made the aggregate's own count describe
     /// the slice rather than the run.
-    fn run_error(&self) -> Option<CharError> {
+    fn run_error(&self) -> Option<ArmadaError> {
         let rows: Vec<crate::envelope::ResultRow> = self
             .checks
             .values()
@@ -1487,7 +1487,7 @@ mod tests {
         )
     }
 
-    fn finish_of(actions: &[Action]) -> Option<(Status, Option<CharError>)> {
+    fn finish_of(actions: &[Action]) -> Option<(Status, Option<ArmadaError>)> {
         actions.iter().find_map(|action| match action {
             Action::Finish { status, error } => Some((*status, error.clone())),
             _ => None,
@@ -1690,7 +1690,7 @@ mod tests {
 
     /// **A clock that goes backwards must not panic the pure core.** A
     /// suspend-excluding monotonic reading should never move backwards, and a
-    /// reducer that assumes it does is a `char_bug` on a run that already
+    /// reducer that assumes it does is a `armada_bug` on a run that already
     /// happened — including one a later binary replays out of `state.json`.
     /// Found by perturbing a recorded event sequence, not by reasoning.
     #[test]
@@ -2053,7 +2053,7 @@ mod tests {
     #[test]
     fn a_check_blocked_on_a_service_fails_bad_invocation_and_names_it() {
         let mut test = plan("api:test");
-        test.blocked = Some(CharError {
+        test.blocked = Some(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: "api:test".to_string(),
             message: "`api:test` needs postgres, which is not running".to_string(),
@@ -2087,7 +2087,7 @@ mod tests {
     #[test]
     fn a_blocked_check_beside_a_failing_one_reports_the_invocation() {
         let mut blocked = plan("api:test");
-        blocked.blocked = Some(CharError {
+        blocked.blocked = Some(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: "api:test".to_string(),
             message: "needs postgres".to_string(),
@@ -2122,7 +2122,7 @@ mod tests {
     fn a_blocked_check_with_no_matching_files_is_skipped_rather_than_refused() {
         let mut test = plan("api:test");
         test.skip = Some("no matching files".to_string());
-        test.blocked = Some(CharError {
+        test.blocked = Some(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: "api:test".to_string(),
             message: "needs postgres".to_string(),
@@ -2501,7 +2501,7 @@ mod tests {
             },
             Event::SpawnFailed {
                 check: id("nobody:here"),
-                err: ErrClass::CharBug,
+                err: ErrClass::ArmadaBug,
             },
             Event::Deadline {
                 check: id("api:lint"),

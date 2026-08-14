@@ -1,20 +1,29 @@
 //! docker, as an ordinary adapter module: it builds argv and calls `ctx.run`.
 //!
 //! **Stamp at creation, reap by stamp.** Every container, network, volume and
-//! built image char creates carries three labels, and all three are load-bearing:
+//! built image Armada creates carries three labels, and all three are load-bearing:
 //!
 //! | Label | Why it is not redundant |
 //! |---|---|
-//! | `char.workspace` | the owner |
-//! | `char.workspace_path` | `workspace_id` is a **one-way hash**, so from the id alone char cannot recover the path and cannot ask whether that workspace still exists. Without this, a missing row is indistinguishable from a dead workspace — and the database is per-`$HOME` while the daemon is per-machine, so that mistake deletes a *running* workspace's containers |
-//! | `char.namespace` | scopes the mechanism to one filesystem view. Two char installations sharing a daemon is the ordinary devcontainer setup, and `/workspaces/repo` is `ENOENT` from the host |
+//! | `armada.workspace` | the owner |
+//! | `armada.workspace_path` | `workspace_id` is a **one-way hash**, so from the id alone Armada cannot recover the path and cannot ask whether that workspace still exists. Without this, a missing row is indistinguishable from a dead workspace — and the database is per-`$HOME` while the daemon is per-machine, so that mistake deletes a *running* workspace's containers |
+//! | `armada.namespace` | scopes the mechanism to one filesystem view. Two Armada installations sharing a daemon is the ordinary devcontainer setup, and `/workspaces/repo` is `ENOENT` from the host |
 //!
-//! **char's own filters use both the id and the path**, never the id alone:
-//! `workspace_id` is 32 bits, and a collision would have `char clean` in one
-//! workspace destroy another's live containers.
+//! **Armada's own filters use both the id and the path**, never the id alone:
+//! `workspace_id` is 32 bits, and a collision would have `armada manifest
+//! clean` in one workspace destroy another's live containers.
+//!
+//! **Both namespaces are recognised, and only one is written.** These labels
+//! are stamped on containers, networks and volumes that exist on the machine
+//! right now, and a build that renamed the namespace without reading the old
+//! one would leave every pre-M1 resource unowned and unreclaimable — the exact
+//! failure the ownership layer was built to prevent (PLAN.md §2.3). So `clean`
+//! and `init`'s reap pass find `char.*` as well as `armada.*`, for one release
+//! (PHASES.md §8.3). Nothing new is ever stamped `char.*`, so the old
+//! namespace drains rather than persisting.
 
 use armada_core::ctx::{Run, RunRequest, SpawnErrorKind};
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::id::WorkspaceId;
 use armada_core::reap::LabelledResource;
 use armada_core::registry::OwnedKind;
@@ -23,11 +32,23 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// The owning workspace's id.
-pub const LABEL_WORKSPACE: &str = "char.workspace";
+pub const LABEL_WORKSPACE: &str = "armada.workspace";
 /// The owning workspace's realpath, so a reap can `stat` it.
-pub const LABEL_WORKSPACE_PATH: &str = "char.workspace_path";
+pub const LABEL_WORKSPACE_PATH: &str = "armada.workspace_path";
 /// The installation, so a shared daemon does not become a shared fate.
-pub const LABEL_NAMESPACE: &str = "char.namespace";
+pub const LABEL_NAMESPACE: &str = "armada.namespace";
+
+/// The same three, as pre-M1 resources carry them.
+///
+/// **Read, never written.** A migration rather than a compatibility layer: the
+/// resources exist, they are on somebody's machine, and the alternative to
+/// reading them is orphaning them. Removing this block is a deliberate act one
+/// release later, not a cleanup (PHASES.md §8.3).
+pub const LEGACY_LABEL_WORKSPACE: &str = "char.workspace";
+/// The pre-M1 spelling of [`LABEL_WORKSPACE_PATH`].
+pub const LEGACY_LABEL_WORKSPACE_PATH: &str = "char.workspace_path";
+/// The pre-M1 spelling of [`LABEL_NAMESPACE`].
+pub const LEGACY_LABEL_NAMESPACE: &str = "char.namespace";
 
 /// The four things char stamps and reaps.
 ///
@@ -118,7 +139,7 @@ pub fn daemon_ready(
     cwd: &Path,
     timeout: Duration,
     tick: &mut dyn FnMut(),
-) -> Result<(), CharError> {
+) -> Result<(), ArmadaError> {
     let request = RunRequest::new(
         ["docker", "version", "--format", "{{.Server.Version}}"]
             .iter()
@@ -132,25 +153,25 @@ pub fn daemon_ready(
     tick();
     match outcome {
         Ok(output) if output.ok() => Ok(()),
-        Ok(output) if output.timed_out => Err(CharError {
+        Ok(output) if output.timed_out => Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: "docker".to_string(),
             message: format!("the Docker daemon did not answer within {timeout:?}"),
             next_action: Some("check that Docker is running and responsive".to_string()),
         }),
-        Ok(output) => Err(CharError {
+        Ok(output) => Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: "docker".to_string(),
             message: format!("the Docker daemon is unreachable: {}", output.stderr.trim()),
             next_action: Some("start Docker, then retry unchanged".to_string()),
         }),
-        Err(e) if e.kind == SpawnErrorKind::NotFound => Err(CharError {
+        Err(e) if e.kind == SpawnErrorKind::NotFound => Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: "docker".to_string(),
             message: "docker is not on PATH".to_string(),
             next_action: Some("install Docker, then retry unchanged".to_string()),
         }),
-        Err(e) => Err(CharError {
+        Err(e) => Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: "docker".to_string(),
             message: format!("cannot run docker: {}", e.message),
@@ -159,25 +180,34 @@ pub fn daemon_ready(
     }
 }
 
-/// Every resource of one kind carrying `char.workspace`, with its three labels.
+/// Every resource of one kind carrying an owner label, with its three labels.
+///
+/// **Two `ls` calls, not one filter with two values.** Measured and stated in
+/// docker's own documentation: repeating `--filter label=…` **ands** the
+/// conditions, so a single call asking for both namespaces matches only
+/// resources carrying both — which is nothing. The union is therefore taken
+/// here, deduplicated by reference, and the `inspect` that follows is still one
+/// call.
 pub fn list_labelled(
     run: &impl Run,
     cwd: &Path,
     timeout: Duration,
     kind: Kind,
     tick: &mut dyn FnMut(),
-) -> Result<Vec<LabelledResource>, CharError> {
-    let mut argv = kind.list_argv();
-    argv.push("--filter".to_string());
-    argv.push(format!("label={LABEL_WORKSPACE}"));
+) -> Result<Vec<LabelledResource>, ArmadaError> {
+    let mut ids: Vec<String> = Vec::new();
+    for owner in [LABEL_WORKSPACE, LEGACY_LABEL_WORKSPACE] {
+        let mut argv = kind.list_argv();
+        argv.push("--filter".to_string());
+        argv.push(format!("label={owner}"));
 
-    let listed = call(run, cwd, timeout, argv, tick)?;
-    let ids: Vec<String> = listed
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect();
+        let listed = call(run, cwd, timeout, argv, tick)?;
+        for id in listed.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            if !ids.iter().any(|seen| seen == id) {
+                ids.push(id.to_string());
+            }
+        }
+    }
     if ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -202,24 +232,33 @@ pub fn list_labelled(
         .collect())
 }
 
+/// One `inspect` line, in either label namespace.
+///
+/// The current spelling wins where a resource somehow carries both, which is
+/// only reachable by hand: nothing has ever written the two together.
 fn parse_inspect_line(line: &str, kind: Kind) -> Option<LabelledResource> {
     let (reference, labels) = line.split_once('\t')?;
     let labels: BTreeMap<String, String> = serde_json::from_str(labels).unwrap_or_default();
-    let workspace = labels.get(LABEL_WORKSPACE)?;
+    let either = |current: &str, legacy: &str| {
+        labels
+            .get(current)
+            .or_else(|| labels.get(legacy))
+            .map(String::to_owned)
+    };
+    let workspace = either(LABEL_WORKSPACE, LEGACY_LABEL_WORKSPACE)?;
     Some(LabelledResource {
         kind: kind.owned_kind(),
         reference: reference.trim().to_string(),
-        workspace: WorkspaceId::from_stored(workspace.clone()),
-        // A resource stamped by a char too old to write the path label has no
-        // path to stat. `PathBuf::new()` stats as `Missing`, which would make
-        // it reapable — so it is stamped with a path that cannot exist and is
-        // reported instead, because "labelled, unknowable" is exactly the case
-        // the rule says never to remove.
-        workspace_path: labels
-            .get(LABEL_WORKSPACE_PATH)
+        workspace: WorkspaceId::from_stored(workspace),
+        // A resource stamped by an Armada too old to write the path label has
+        // no path to stat. `PathBuf::new()` stats as `Missing`, which would
+        // make it reapable — so it is stamped with a path that cannot exist and
+        // is reported instead, because "labelled, unknowable" is exactly the
+        // case the rule says never to remove.
+        workspace_path: either(LABEL_WORKSPACE_PATH, LEGACY_LABEL_WORKSPACE_PATH)
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("/nonexistent/char-unstamped")),
-        namespace: labels.get(LABEL_NAMESPACE).cloned(),
+            .unwrap_or_else(|| PathBuf::from("/nonexistent/armada-unstamped")),
+        namespace: either(LABEL_NAMESPACE, LEGACY_LABEL_NAMESPACE),
     })
 }
 
@@ -239,7 +278,7 @@ pub fn list_by_selector(
     kind: Kind,
     selector: &str,
     tick: &mut dyn FnMut(),
-) -> Result<Vec<String>, CharError> {
+) -> Result<Vec<String>, ArmadaError> {
     let mut argv = kind.list_argv();
     argv.push("--filter".to_string());
     argv.push(selector.to_string());
@@ -260,7 +299,7 @@ pub fn remove(
     kind: Kind,
     references: &[String],
     tick: &mut dyn FnMut(),
-) -> Vec<(String, Option<CharError>)> {
+) -> Vec<(String, Option<ArmadaError>)> {
     references
         .iter()
         .map(|reference| {
@@ -304,11 +343,11 @@ fn call(
     timeout: Duration,
     argv: Vec<String>,
     tick: &mut dyn FnMut(),
-) -> Result<String, CharError> {
+) -> Result<String, ArmadaError> {
     let request = RunRequest::new(argv.clone(), cwd.to_path_buf()).timeout(timeout);
     let output = run.call_with_tick(&request, tick);
     tick();
-    let output = output.map_err(|e| CharError {
+    let output = output.map_err(|e| ArmadaError {
         class: ErrClass::Environment,
         r#where: "docker".to_string(),
         message: match e.kind {
@@ -319,7 +358,7 @@ fn call(
     })?;
 
     if output.timed_out {
-        return Err(CharError {
+        return Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: "docker".to_string(),
             message: format!("`{}` exceeded char's docker timeout", argv.join(" ")),
@@ -327,7 +366,7 @@ fn call(
         });
     }
     if !output.ok() {
-        return Err(CharError {
+        return Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: "docker".to_string(),
             message: format!("`{}` failed: {}", argv.join(" "), output.stderr.trim()),
@@ -376,12 +415,17 @@ mod tests {
     }
 
     /// The argv assertion this whole seam exists for: `--filter
-    /// label=char.workspace` selects char's resources, and writing it without
-    /// the `label=` prefix or against the wrong subcommand silently selects
-    /// everything or nothing.
+    /// label=armada.workspace` selects Armada's resources, and writing it
+    /// without the `label=` prefix or against the wrong subcommand silently
+    /// selects everything or nothing.
+    ///
+    /// **Both namespaces, one call each.** Repeating `--filter label=…` ands
+    /// the conditions, so asking for both in one call matches nothing at all —
+    /// which is a silent no-op, and exactly the shape of failure that would
+    /// orphan every pre-M1 resource on the machine.
     #[test]
-    fn listing_filters_on_the_workspace_label() {
-        let run = FakeRun::with(&["", ""]);
+    fn listing_filters_on_the_workspace_label_in_both_namespaces() {
+        let run = FakeRun::with(&["", "", ""]);
         list_labelled(
             &run,
             cwd(),
@@ -398,8 +442,67 @@ mod tests {
                 "-a",
                 "-q",
                 "--filter",
+                "label=armada.workspace"
+            ]
+        );
+        assert_eq!(
+            run.seen.borrow()[1],
+            vec![
+                "docker",
+                "ps",
+                "-a",
+                "-q",
+                "--filter",
                 "label=char.workspace"
             ]
+        );
+    }
+
+    /// A resource stamped before M1 is found, attributed and reapable. This is
+    /// the migration PHASES.md §8.3 calls the one behaviour M1 is allowed to
+    /// add: renaming the namespace without reading the old one leaves every
+    /// container, network and volume on the machine unowned.
+    #[test]
+    fn a_resource_in_the_old_namespace_is_still_found_and_attributed() {
+        let run = FakeRun::with(&[
+            "",
+            "c1\n",
+            "c1\t{\"char.workspace\":\"a3f91c02\",\
+             \"char.workspace_path\":\"/srv/repo\",\"char.namespace\":\"ns-1\"}\n",
+        ]);
+        let found = list_labelled(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Container,
+            &mut || {},
+        )
+        .unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].workspace, WorkspaceId::from_stored("a3f91c02"));
+        assert_eq!(found[0].workspace_path, PathBuf::from("/srv/repo"));
+        assert_eq!(found[0].namespace.as_deref(), Some("ns-1"));
+    }
+
+    /// The union is by reference, so a resource somehow carrying both
+    /// namespaces is inspected once rather than removed twice.
+    #[test]
+    fn a_resource_listed_by_both_filters_is_inspected_once() {
+        let run = FakeRun::with(&["c1\n", "c1\n", "c1\t{\"armada.workspace\":\"a3f91c02\"}\n"]);
+        let found = list_labelled(
+            &run,
+            cwd(),
+            Duration::from_secs(30),
+            Kind::Container,
+            &mut || {},
+        )
+        .unwrap();
+        assert_eq!(found.len(), 1);
+        let inspect = run.seen.borrow()[2].clone();
+        assert_eq!(
+            inspect.iter().filter(|a| *a == "c1").count(),
+            1,
+            "{inspect:?}"
         );
     }
 
@@ -407,7 +510,7 @@ mod tests {
     fn a_stopped_container_is_still_listed() {
         // `-a` is the difference between reaping a stopped container and
         // leaving it holding its name and its volumes.
-        let run = FakeRun::with(&[""]);
+        let run = FakeRun::with(&["", "", ""]);
         list_labelled(
             &run,
             cwd(),
@@ -423,8 +526,9 @@ mod tests {
     fn labels_are_read_through_inspect_because_image_ls_cannot_format_them() {
         let run = FakeRun::with(&[
             "sha256:abc\n",
-            "sha256:abc\t{\"char.workspace\":\"a3f91c02\",\
-             \"char.workspace_path\":\"/srv/repo\",\"char.namespace\":\"ns-1\"}\n",
+            "",
+            "sha256:abc\t{\"armada.workspace\":\"a3f91c02\",\
+             \"armada.workspace_path\":\"/srv/repo\",\"armada.namespace\":\"ns-1\"}\n",
         ]);
         let found = list_labelled(
             &run,
@@ -434,8 +538,8 @@ mod tests {
             &mut || {},
         )
         .unwrap();
-        assert_eq!(run.seen.borrow()[1][2], "--type=image");
-        assert!(run.seen.borrow()[1][4].contains(".Config.Labels"));
+        assert_eq!(run.seen.borrow()[2][2], "--type=image");
+        assert!(run.seen.borrow()[2][4].contains(".Config.Labels"));
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].workspace, WorkspaceId::from_stored("a3f91c02"));
         assert_eq!(found[0].workspace_path, PathBuf::from("/srv/repo"));
@@ -444,7 +548,7 @@ mod tests {
 
     #[test]
     fn networks_and_volumes_read_their_labels_from_a_different_path() {
-        let run = FakeRun::with(&["net1\n", "net1\t{\"char.workspace\":\"a3f91c02\"}\n"]);
+        let run = FakeRun::with(&["net1\n", "", "net1\t{\"armada.workspace\":\"a3f91c02\"}\n"]);
         list_labelled(
             &run,
             cwd(),
@@ -453,7 +557,7 @@ mod tests {
             &mut || {},
         )
         .unwrap();
-        let argv = run.seen.borrow()[1].clone();
+        let argv = run.seen.borrow()[2].clone();
         assert!(argv[4].contains("json .Labels"), "{argv:?}");
         assert!(!argv[4].contains(".Config"), "{argv:?}");
     }
@@ -462,19 +566,19 @@ mod tests {
     /// can contain is one that eventually mis-attributes a resource.
     #[test]
     fn a_label_value_containing_a_delimiter_survives_parsing() {
-        let line = "c1\t{\"char.workspace\":\"a3f91c02\",\
-                    \"char.workspace_path\":\"/srv/od\\td\\nname\"}";
+        let line = "c1\t{\"armada.workspace\":\"a3f91c02\",\
+                    \"armada.workspace_path\":\"/srv/od\\td\\nname\"}";
         let parsed = parse_inspect_line(line, Kind::Container).unwrap();
         assert_eq!(parsed.workspace_path, PathBuf::from("/srv/od\td\nname"));
     }
 
     /// "Labelled, no path" is not "labelled, path missing". A resource stamped
-    /// by a char too old to write the path label must be **reported**, and the
-    /// stand-in path is what makes that fall out of the ordinary rule.
+    /// by an Armada too old to write the path label must be **reported**, and
+    /// the stand-in path is what makes that fall out of the ordinary rule.
     #[test]
     fn a_resource_with_no_path_label_is_never_reapable() {
         let parsed =
-            parse_inspect_line("c1\t{\"char.workspace\":\"a3f91c02\"}", Kind::Container).unwrap();
+            parse_inspect_line("c1\t{\"armada.workspace\":\"a3f91c02\"}", Kind::Container).unwrap();
         assert_eq!(parsed.namespace, None);
         let (remove, reported) = armada_core::reap::resource_pass(
             &[(parsed, armada_core::reap::PathStat::Missing)],
@@ -532,7 +636,7 @@ mod tests {
         assert!(ticks >= 3, "one tick per `docker rm` at least, got {ticks}");
 
         // Two calls inside one function, for the same reason.
-        let run = FakeRun::with(&["c1\n", "c1\t{\"char.workspace\":\"a3f91c02\"}\n"]);
+        let run = FakeRun::with(&["c1\n", "", "c1\t{\"armada.workspace\":\"a3f91c02\"}\n"]);
         let mut ticks = 0;
         list_labelled(
             &run,
@@ -543,8 +647,8 @@ mod tests {
         )
         .unwrap();
         assert!(
-            ticks >= 2,
-            "the `ls` and the `inspect` both tick, got {ticks}"
+            ticks >= 3,
+            "both `ls` calls and the `inspect` tick, got {ticks}"
         );
     }
 

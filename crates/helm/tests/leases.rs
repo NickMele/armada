@@ -100,7 +100,7 @@ fn init_with_clock(
     machine: &Machine,
     repo: &Path,
     clock: AdvancedClock,
-) -> Result<verbs::Output, armada_core::error::CharError> {
+) -> Result<verbs::Output, armada_core::error::ArmadaError> {
     let run = RealRun;
     let workspace = discovery::resolve(&run, repo)?;
     let ctx = Ctx {

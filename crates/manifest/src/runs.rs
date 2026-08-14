@@ -8,7 +8,7 @@
 //! unlinked inode that still accepts writes, and those are exactly the ones a
 //! fake gets wrong.
 
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::run::{log_name, runs_to_reap, RunId, RunRecord};
 use armada_core::schedule::CheckId;
 use std::io;
@@ -40,7 +40,7 @@ pub fn log_reference(run: &RunId, check: &CheckId) -> String {
 }
 
 /// Create `.armada/run/<run-id>/logs/`.
-pub fn prepare(root: &Path, run: &RunId) -> Result<PathBuf, CharError> {
+pub fn prepare(root: &Path, run: &RunId) -> Result<PathBuf, ArmadaError> {
     let dir = run_dir(root, run);
     let logs = dir.join("logs");
     std::fs::create_dir_all(&logs).map_err(|e| environment(&logs, "create", &e))?;
@@ -54,7 +54,7 @@ pub fn prepare(root: &Path, run: &RunId) -> Result<PathBuf, CharError> {
 /// `.DS_Store`, a directory someone copied there to look at — none of them are
 /// char's, and none of them is a reason for `char check` to refuse to start.
 /// What char reaps is what char can prove it wrote.
-pub fn present(root: &Path) -> Result<Vec<RunId>, CharError> {
+pub fn present(root: &Path) -> Result<Vec<RunId>, ArmadaError> {
     let dir = runs_dir(root);
     let entries = match std::fs::read_dir(&dir) {
         Ok(entries) => entries,
@@ -87,7 +87,7 @@ pub fn reap(
     root: &Path,
     retention: u32,
     live: &[RunId],
-) -> Result<(Vec<RunId>, Vec<String>), CharError> {
+) -> Result<(Vec<RunId>, Vec<String>), ArmadaError> {
     let present = present(root)?;
     let mut removed = Vec::new();
     let mut skipped = Vec::new();
@@ -116,13 +116,13 @@ pub fn reap(
 /// atomic within a filesystem, so a reader sees either the previous record or
 /// this one and never half of one — and a run's record is rewritten on every
 /// state change, so the window is not a rare one.
-pub fn write_record(root: &Path, record: &RunRecord) -> Result<PathBuf, CharError> {
+pub fn write_record(root: &Path, record: &RunRecord) -> Result<PathBuf, ArmadaError> {
     let dir = run_dir(root, &record.run_id);
     let target = dir.join("state.json");
     let temporary = dir.join("state.json.writing");
 
-    let json = serde_json::to_string_pretty(record).map_err(|e| CharError {
-        class: ErrClass::CharBug,
+    let json = serde_json::to_string_pretty(record).map_err(|e| ArmadaError {
+        class: ErrClass::ArmadaBug,
         r#where: target.display().to_string(),
         message: format!("cannot serialize the run record: {e}"),
         next_action: None,
@@ -134,8 +134,8 @@ pub fn write_record(root: &Path, record: &RunRecord) -> Result<PathBuf, CharErro
     Ok(target)
 }
 
-fn environment(path: &Path, verb: &str, error: &io::Error) -> CharError {
-    CharError {
+fn environment(path: &Path, verb: &str, error: &io::Error) -> ArmadaError {
+    ArmadaError {
         class: ErrClass::Environment,
         r#where: path.display().to_string(),
         message: format!("cannot {verb} {}: {error}", path.display()),

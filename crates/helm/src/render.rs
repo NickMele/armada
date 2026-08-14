@@ -12,7 +12,7 @@ use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
     StatusData,
 };
-use armada_core::error::CharError;
+use armada_core::error::ArmadaError;
 use armada_core::reap::ReapPlan;
 
 use crate::verbs::Output;
@@ -266,7 +266,7 @@ fn reaped(plan: &ReapPlan) -> String {
 }
 
 /// The error, in the shape PLAN.md §3.2.1 prints it.
-pub fn error_lines(error: &CharError) -> String {
+pub fn error_lines(error: &ArmadaError) -> String {
     let mut out = format!("error: {}\n", error.message);
     out.push_str(&format!("  where: {}\n", error.r#where));
     out.push_str(&format!("  class: {}\n", error.class));
@@ -298,8 +298,8 @@ mod tests {
         }
     }
 
-    fn failure() -> CharError {
-        CharError {
+    fn failure() -> ArmadaError {
+        ArmadaError {
             class: ErrClass::ToolFailed,
             r#where: "api".to_string(),
             message: "`npm ci` exited 1".to_string(),
@@ -567,7 +567,7 @@ mod tests {
     /// remedy line is omitted rather than printed empty when there is none.
     #[test]
     fn an_error_without_a_remedy_prints_three_lines_and_not_four() {
-        let text = error_lines(&CharError {
+        let text = error_lines(&ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: "--force-rebuild".to_string(),
             message: "not built yet".to_string(),

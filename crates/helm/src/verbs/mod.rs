@@ -99,7 +99,7 @@ impl Output {
 /// (PLAN.md §4.1.1).
 pub fn load_config<R: Run, C: Clock, F: Fetch>(
     app: &App<R, C, F>,
-) -> Result<(Workspace, ResolvedConfig), armada_core::error::CharError> {
+) -> Result<(Workspace, ResolvedConfig), armada_core::error::ArmadaError> {
     let workspace = app.ctx.workspace()?.clone();
     let text = config_file::read(&workspace.config_path())?;
     let parsed = config::parse(&text, &workspace.config_label)?;

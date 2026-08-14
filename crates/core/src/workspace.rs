@@ -11,7 +11,7 @@
 //! accidental nested config then fails loudly instead of silently creating a
 //! second owner for the same source.
 
-use crate::error::{CharError, ConfigWhere, ErrClass};
+use crate::error::{ArmadaError, ConfigWhere, ErrClass};
 use crate::id::{ProjectId, WorkspaceId};
 use std::path::{Path, PathBuf};
 
@@ -76,7 +76,7 @@ pub struct Candidate {
 /// caller's cwd up to the git root produces. `searched` is every directory the
 /// walk visited, so the zero case can name them rather than saying only that
 /// nothing was found.
-pub fn choose_root(candidates: &[Candidate], searched: &[PathBuf]) -> Result<PathBuf, CharError> {
+pub fn choose_root(candidates: &[Candidate], searched: &[PathBuf]) -> Result<PathBuf, ArmadaError> {
     match candidates {
         [] => Err(no_config(searched)),
         [only] => Ok(only.dir.clone()),
@@ -108,13 +108,13 @@ fn declares(outer: &Candidate, inner: &Path) -> bool {
         .any(|declared| Path::new(declared.trim_end_matches('/')) == relative)
 }
 
-fn no_config(searched: &[PathBuf]) -> CharError {
+fn no_config(searched: &[PathBuf]) -> ArmadaError {
     let list = searched
         .iter()
         .map(|p| p.display().to_string())
         .collect::<Vec<_>>()
         .join(", ");
-    CharError {
+    ArmadaError {
         class: ErrClass::BadConfig,
         r#where: "armada.yml".to_string(),
         message: format!("no armada.yml in any directory up to the git root: {list}"),
@@ -125,8 +125,8 @@ fn no_config(searched: &[PathBuf]) -> CharError {
     }
 }
 
-fn undeclared_nesting(inner: &Path, outer: &Path) -> CharError {
-    CharError::bad_config(
+fn undeclared_nesting(inner: &Path, outer: &Path) -> ArmadaError {
+    ArmadaError::bad_config(
         ConfigWhere::Path {
             file: format!("{}/armada.yml", outer.display()),
             path: "workspaces".to_string(),

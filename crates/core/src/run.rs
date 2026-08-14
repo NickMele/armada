@@ -22,7 +22,7 @@
 //! and never touching one whose run lease is live.
 
 use crate::dispatch::Journal;
-use crate::error::{CharError, ErrClass};
+use crate::error::{ArmadaError, ErrClass};
 use crate::id::WorkspaceId;
 use crate::schedule::{CheckId, State};
 use serde::{Deserialize, Serialize};
@@ -99,8 +99,8 @@ impl RunId {
     /// may set it to anything at all; a value of `../../etc` reaching
     /// `.armada/run/<id>/` is a directory traversal in the one variable char
     /// promises to set for every process it spawns.
-    pub fn parse(text: &str) -> Result<Self, CharError> {
-        let bad = |message: &str| CharError {
+    pub fn parse(text: &str) -> Result<Self, ArmadaError> {
+        let bad = |message: &str| ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: "run-id".to_string(),
             message: message.to_string(),

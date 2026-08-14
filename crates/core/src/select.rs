@@ -24,7 +24,7 @@
 //! underlying tool directly is faster, and it is right.
 
 use crate::config::ResolvedConfig;
-use crate::error::{CharError, ErrClass};
+use crate::error::{ArmadaError, ErrClass};
 use crate::glob;
 use crate::schedule::CheckId;
 use std::collections::BTreeSet;
@@ -95,7 +95,7 @@ pub struct Selection {
 /// that never ran; erroring on both teaches agents to write
 /// `char check lint || true`, which suppresses *every* error the command can
 /// raise and converts a local annoyance into a total loss of signal.
-pub fn resolve(config: &ResolvedConfig, selector: &Selector) -> Result<Selection, CharError> {
+pub fn resolve(config: &ResolvedConfig, selector: &Selector) -> Result<Selection, ArmadaError> {
     let requested = match selector {
         Selector::Everything => every_check(config),
         Selector::Component(name) => {
@@ -139,12 +139,12 @@ pub fn resolve(config: &ResolvedConfig, selector: &Selector) -> Result<Selection
 /// disambiguate with `--component`.** Rare, and better than picking one
 /// silently — the two answers are different runs and nothing downstream could
 /// tell which was meant.
-fn resolve_word(config: &ResolvedConfig, word: &str) -> Result<Selection, CharError> {
+fn resolve_word(config: &ResolvedConfig, word: &str) -> Result<Selection, ArmadaError> {
     let is_component = config.components.contains_key(word);
     let as_check = by_check_name(config, word);
 
     if is_component && !as_check.is_empty() {
-        return Err(CharError {
+        return Err(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: word.to_string(),
             message: format!(
@@ -340,8 +340,8 @@ pub fn skip_reason(scope: crate::config::Scope, files: &[String]) -> Option<Stri
 /// fresh clone, on a detached HEAD, and under a CI shallow clone where the
 /// merge-base is genuinely not present — all cases where the honest answer is
 /// that the caller has to say what they meant.
-pub fn no_merge_base(tried: &[&str]) -> CharError {
-    CharError {
+pub fn no_merge_base(tried: &[&str]) -> ArmadaError {
+    ArmadaError {
         class: ErrClass::BadInvocation,
         r#where: "merge-base".to_string(),
         message: format!(
@@ -356,10 +356,10 @@ pub fn no_merge_base(tried: &[&str]) -> CharError {
 ///
 /// **The error teaches the vocabulary rather than merely rejecting**, which is
 /// the whole reason `next_action` carries the available selectors.
-fn no_such(config: &ResolvedConfig, name: &str, kind: &str) -> CharError {
+fn no_such(config: &ResolvedConfig, name: &str, kind: &str) -> ArmadaError {
     let mut available: Vec<String> = config.components.keys().cloned().collect();
     available.extend(every_check(config).iter().map(|id| id.to_string()));
-    CharError {
+    ArmadaError {
         class: ErrClass::BadInvocation,
         r#where: name.to_string(),
         message: format!("no {kind} named `{name}` in this workspace"),

@@ -14,7 +14,7 @@
 //! undetectable; that is a stated limit, not a bug (`docs/traps.md`).
 
 use armada_core::ctx::Fetch;
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::time::Duration;
@@ -24,7 +24,7 @@ use std::time::Duration;
 pub struct RealFetch;
 
 impl Fetch for RealFetch {
-    fn http_status(&self, url: &str, timeout: Duration) -> Result<u16, CharError> {
+    fn http_status(&self, url: &str, timeout: Duration) -> Result<u16, ArmadaError> {
         let (host, port, path) = split_url(url)?;
         let address = (host.as_str(), port)
             .to_socket_addrs()
@@ -56,7 +56,7 @@ impl Fetch for RealFetch {
             .ok_or_else(|| environment(format!("{url}: no status line")))
     }
 
-    fn tcp_connect(&self, host: &str, port: u16, timeout: Duration) -> Result<bool, CharError> {
+    fn tcp_connect(&self, host: &str, port: u16, timeout: Duration) -> Result<bool, ArmadaError> {
         let addresses = (host, port)
             .to_socket_addrs()
             .map_err(|e| environment(format!("cannot resolve {host}: {e}")))?;
@@ -107,7 +107,7 @@ fn parse_status_line(bytes: &[u8]) -> Option<u16> {
     line.split_whitespace().nth(1)?.parse().ok()
 }
 
-fn split_url(url: &str) -> Result<(String, u16, String), CharError> {
+fn split_url(url: &str) -> Result<(String, u16, String), ArmadaError> {
     let rest = url
         .strip_prefix("http://")
         .ok_or_else(|| environment(format!("{url}: only http:// URLs are supported")))?;
@@ -126,8 +126,8 @@ fn split_url(url: &str) -> Result<(String, u16, String), CharError> {
     Ok((host, port, path.to_string()))
 }
 
-fn environment(message: String) -> CharError {
-    CharError {
+fn environment(message: String) -> ArmadaError {
+    ArmadaError {
         class: ErrClass::Environment,
         r#where: "network".to_string(),
         message,

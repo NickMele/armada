@@ -16,7 +16,7 @@
 
 use armada_core::config::declared_workspaces;
 use armada_core::ctx::Run;
-use armada_core::error::CharError;
+use armada_core::error::ArmadaError;
 use armada_core::id::ProjectId;
 use armada_core::workspace::{choose_root, Candidate, Workspace};
 use std::path::{Path, PathBuf};
@@ -30,7 +30,7 @@ use crate::{fs, git};
 /// ceremony: `--project` and `--all` operate on workspaces that are *not* the
 /// current directory, so a function that can re-derive "the workspace" from cwd
 /// makes scoping to a different one require lying about cwd.
-pub fn resolve(run: &impl Run, cwd: &Path) -> Result<Workspace, CharError> {
+pub fn resolve(run: &impl Run, cwd: &Path) -> Result<Workspace, ArmadaError> {
     let cwd = fs::canonical(cwd)?;
     let stop_at = git::root(run, &cwd).and_then(|root| fs::canonical(&root).ok());
 

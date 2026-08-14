@@ -24,7 +24,7 @@ use super::resolved::{
     Need, ReadyKind, ResolvedCheck, ResolvedCommand, ResolvedComponent, ResolvedConfig,
     ResolvedReady, ResolvedRun, ResolvedService, ResolvedSetupStep, Scope, Stdio,
 };
-use crate::error::{CharError, ConfigWhere};
+use crate::error::{ArmadaError, ConfigWhere};
 use std::collections::BTreeMap;
 
 /// Machine-level defaults, from `~/.armada/machine.yml` (PLAN.md §4.3.1).
@@ -74,7 +74,7 @@ pub const SECTION: &str = "manifest";
 ///
 /// `file` is the workspace-relative path the error should cite, which is
 /// `armada.yml` for an ordinary workspace and `<path>/armada.yml` for a nested one.
-pub fn parse(text: &str, file: &str) -> Result<Config, CharError> {
+pub fn parse(text: &str, file: &str) -> Result<Config, ArmadaError> {
     let config: Config = serde_yaml_ng::from_str::<Document>(text)
         .map(|document| document.manifest)
         .map_err(|e| {
@@ -92,11 +92,11 @@ pub fn parse(text: &str, file: &str) -> Result<Config, CharError> {
                     file: file.to_string(),
                 },
             };
-            CharError::bad_config(location, e.to_string(), SEE_SCHEMA)
+            ArmadaError::bad_config(location, e.to_string(), SEE_SCHEMA)
         })?;
 
     if config.version != 1 {
-        return Err(CharError::bad_config(
+        return Err(ArmadaError::bad_config(
             ConfigWhere::Path {
                 file: file.to_string(),
                 path: format!("{SECTION}.version"),
@@ -148,7 +148,7 @@ pub fn resolve(
     config: Config,
     defaults: &Defaults,
     file: &str,
-) -> Result<ResolvedConfig, CharError> {
+) -> Result<ResolvedConfig, ArmadaError> {
     let mut components = BTreeMap::new();
     for (name, component) in config.components {
         let resolved = resolve_component(&name, component, defaults, file)?;
@@ -182,7 +182,7 @@ fn resolve_component(
     component: Component,
     defaults: &Defaults,
     file: &str,
-) -> Result<ResolvedComponent, CharError> {
+) -> Result<ResolvedComponent, ArmadaError> {
     let match_globs = match component.match_globs {
         Some(globs) => globs,
         None => default_match_globs(component.root.as_deref(), component.checks.is_empty()),
@@ -263,12 +263,12 @@ fn resolve_check(
     check: Check,
     defaults: &Defaults,
     file: &str,
-) -> Result<ResolvedCheck, CharError> {
+) -> Result<ResolvedCheck, ArmadaError> {
     let scope = match check.scope.as_deref() {
         None | Some("file") => Scope::File,
         Some("component") => Scope::Component,
         Some(other) => {
-            return Err(CharError::bad_config(
+            return Err(ArmadaError::bad_config(
                 ConfigWhere::Path {
                     file: file.to_string(),
                     path: format!("{SECTION}.components.{component}.checks.{name}.scope"),
@@ -308,7 +308,7 @@ fn resolve_run(
     run: Run,
     defaults: &Defaults,
     file: &str,
-) -> Result<ResolvedRun, CharError> {
+) -> Result<ResolvedRun, ArmadaError> {
     let at = |suffix: &str| ConfigWhere::Path {
         file: file.to_string(),
         path: format!("{SECTION}.components.{component}.run{suffix}"),
@@ -340,14 +340,14 @@ fn resolve_run(
     match run.driver.as_str() {
         "compose" => {
             let file_list = run.file.ok_or_else(|| {
-                CharError::bad_config(
+                ArmadaError::bad_config(
                     at(""),
                     "`driver: compose` needs a `file:` list",
                     "add `file: [docker-compose.yml]`, or switch to `driver: command`",
                 )
             })?;
             if file_list.is_empty() {
-                return Err(CharError::bad_config(
+                return Err(ArmadaError::bad_config(
                     at(".file"),
                     "`file:` is empty",
                     "list at least the base compose file",
@@ -359,7 +359,7 @@ fn resolve_run(
                 ("shell", run.shell.is_some()),
             ] {
                 if present {
-                    return Err(CharError::bad_config(
+                    return Err(ArmadaError::bad_config(
                         at(&format!(".{key}")),
                         format!("`{key}:` belongs to `driver: command`, not `driver: compose`"),
                         format!("remove `{key}:`, or switch this service to `driver: command`"),
@@ -373,14 +373,14 @@ fn resolve_run(
         }
         "command" => {
             if run.file.is_some() {
-                return Err(CharError::bad_config(
+                return Err(ArmadaError::bad_config(
                     at(".file"),
                     "`file:` belongs to `driver: compose`, not `driver: command`",
                     "remove `file:`, or switch this service to `driver: compose`",
                 ));
             }
             let cmd = run.cmd.ok_or_else(|| {
-                CharError::bad_config(
+                ArmadaError::bad_config(
                     at(""),
                     "`driver: command` needs a `cmd:`",
                     "add the command that starts this service",
@@ -393,7 +393,7 @@ fn resolve_run(
                 common,
             })
         }
-        other => Err(CharError::bad_config(
+        other => Err(ArmadaError::bad_config(
             at(".driver"),
             format!("unknown driver `{other}`"),
             "use `compose` or `command` — there are deliberately no vendor-named drivers",
@@ -406,7 +406,7 @@ fn resolve_ready(
     ready: Option<Ready>,
     defaults: &Defaults,
     file: &str,
-) -> Result<ResolvedReady, CharError> {
+) -> Result<ResolvedReady, ArmadaError> {
     // An omitted `ready:` is `{none: true}`, and `char up` then reports UP on
     // spawn — which is why a service with a real health endpoint declares one.
     let Some(ready) = ready else {
@@ -442,14 +442,14 @@ fn resolve_ready(
     // nobody would remember (PLAN.md §6.0).
     let mut kinds = kinds.into_iter();
     let Some(kind) = kinds.next() else {
-        return Err(CharError::bad_config(
+        return Err(ArmadaError::bad_config(
             at,
             "`ready:` names no kind",
             "give exactly one of `http:`, `tcp:`, `log:`, `exec:` or `none: true`",
         ));
     };
     if kinds.next().is_some() {
-        return Err(CharError::bad_config(
+        return Err(ArmadaError::bad_config(
             at,
             "`ready:` names more than one kind",
             "give exactly one of `http:`, `tcp:`, `log:`, `exec:` or `none: true`",
@@ -466,7 +466,7 @@ fn resolve_command(
     name: &str,
     entry: CommandEntry,
     file: &str,
-) -> Result<ResolvedCommand, CharError> {
+) -> Result<ResolvedCommand, ArmadaError> {
     // The default is inferred — `pipe` when the entry grants secrets, so char
     // can scrub what it writes; `inherit` otherwise, so colours and prompts
     // work. Inference is wrong in both directions, which is why the key exists
@@ -477,7 +477,7 @@ fn resolve_command(
         None if entry.secrets.is_empty() => Stdio::Inherit,
         None => Stdio::Pipe,
         Some(other) => {
-            return Err(CharError::bad_config(
+            return Err(ArmadaError::bad_config(
                 ConfigWhere::Path {
                     file: file.to_string(),
                     path: format!("{SECTION}.commands.{name}.stdio"),

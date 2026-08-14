@@ -15,7 +15,7 @@
 use armada_core::config::ResolvedConfig;
 use armada_core::ctx::{Clock, Fetch, Run, RunRequest, StdioMode};
 use armada_core::envelope::{aggregate, Envelope, InitData, InitDryRun, PortReport, ResultRow};
-use armada_core::error::{CharError, ConfigWhere, ErrClass, Status};
+use armada_core::error::{ArmadaError, ConfigWhere, ErrClass, Status};
 use armada_core::lease::{LeaseId, Policy};
 use armada_core::ports::{self, PortBlock, PortState};
 use armada_core::registry::{OwnedKind, OwnedRow};
@@ -39,7 +39,7 @@ const CLAIM_ATTEMPTS: usize = 16;
 pub fn run<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     dry_run: bool,
-) -> Result<Output, CharError> {
+) -> Result<Output, ArmadaError> {
     let (workspace, config) = load_config(app)?;
 
     if dry_run {
@@ -59,7 +59,7 @@ fn claim_and_prepare<R: Run, C: Clock, F: Fetch>(
     workspace: &Workspace,
     config: &ResolvedConfig,
     lease: &LeaseId,
-) -> Result<Envelope<InitData>, CharError> {
+) -> Result<Envelope<InitData>, ArmadaError> {
     let reaped = app.reap()?;
 
     let claimed_at = app.ctx.now.wall_rfc3339();
@@ -98,7 +98,7 @@ fn claim<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
     claimed_at: &str,
-) -> Result<PortBlock, CharError> {
+) -> Result<PortBlock, ArmadaError> {
     for _ in 0..CLAIM_ATTEMPTS {
         let outcome = app.db.claim_block(
             &workspace.id,
@@ -111,7 +111,7 @@ fn claim<R: Run, C: Clock, F: Fetch>(
             ClaimOutcome::Claimed(block) | ClaimOutcome::AlreadyHeld(block) => return Ok(block),
             ClaimOutcome::Lost => continue,
             ClaimOutcome::Exhausted => {
-                return Err(CharError {
+                return Err(ArmadaError {
                     class: ErrClass::Environment,
                     r#where: "ports".to_string(),
                     message: format!(
@@ -128,7 +128,7 @@ fn claim<R: Run, C: Clock, F: Fetch>(
             }
         }
     }
-    Err(CharError {
+    Err(ArmadaError {
         class: ErrClass::Aborted,
         r#where: "ports".to_string(),
         message: format!("lost the port-block race {CLAIM_ATTEMPTS} times"),
@@ -149,7 +149,7 @@ fn record_release_commands<R: Run, C: Clock, F: Fetch>(
     workspace: &Workspace,
     config: &ResolvedConfig,
     ports: &BTreeMap<String, u16>,
-) -> Result<(), CharError> {
+) -> Result<(), ArmadaError> {
     // Cleared first so a declaration removed from `armada.yml` stops being
     // reported, rather than accumulating every version the repo ever had.
     app.db.clear_kind(&workspace.id, OwnedKind::Release)?;
@@ -205,7 +205,7 @@ fn run_setup<R: Run, C: Clock, F: Fetch>(
     config: &ResolvedConfig,
     ports: &BTreeMap<String, u16>,
     lease: &LeaseId,
-) -> Result<Vec<ResultRow>, CharError> {
+) -> Result<Vec<ResultRow>, ArmadaError> {
     let mut results = Vec::new();
 
     for (name, component) in &config.components {
@@ -286,7 +286,7 @@ fn run_setup<R: Run, C: Clock, F: Fetch>(
                 Ok(output) if output.ok() => {}
                 Ok(output) => {
                     row.status = Status::Failed;
-                    row.error = Some(CharError {
+                    row.error = Some(ArmadaError {
                         class: ErrClass::ToolFailed,
                         r#where: name.clone(),
                         message: format!(
@@ -307,7 +307,7 @@ fn run_setup<R: Run, C: Clock, F: Fetch>(
                     // statement being wrong, not the machine's — which is why
                     // the seam returns a typed spawn failure and lets each
                     // caller classify it.
-                    row.error = Some(CharError::bad_config(
+                    row.error = Some(ArmadaError::bad_config(
                         at.clone(),
                         format!(
                             "`{}` could not be started: {}",
@@ -332,7 +332,7 @@ fn dry<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
     config: &ResolvedConfig,
-) -> Result<Envelope<InitDryRun>, CharError> {
+) -> Result<Envelope<InitDryRun>, ArmadaError> {
     let rows = app.db.workspaces()?;
     let held = rows.iter().find(|row| row.id == workspace.id);
     let taken: Vec<PortBlock> = rows.iter().map(|row| row.ports).collect();

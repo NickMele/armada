@@ -21,7 +21,7 @@
 //! would word-split a filename containing a space and execute one containing a
 //! semicolon (`docs/traps.md`). Expanding a token into *n* tokens cannot.
 
-use crate::error::{CharError, ConfigWhere};
+use crate::error::{ArmadaError, ConfigWhere};
 use std::collections::BTreeMap;
 
 /// Everything a template may refer to.
@@ -85,7 +85,7 @@ pub fn substitute(
     vars: &Vars,
     site: Site,
     at: &ConfigWhere,
-) -> Result<String, CharError> {
+) -> Result<String, ArmadaError> {
     let mut out = String::with_capacity(input.len());
     let mut rest = input;
 
@@ -125,14 +125,14 @@ enum Expansion {
     Files,
 }
 
-fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expansion, CharError> {
+fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expansion, ArmadaError> {
     if name == "workspace.id" {
         return Ok(Expansion::Value(vars.workspace_id.to_string()));
     }
     if name == "files" {
         return match vars.files {
             Some(_) => Ok(Expansion::Files),
-            None => Err(CharError::bad_config(
+            None => Err(ArmadaError::bad_config(
                 at.clone(),
                 "`${files}` is not available here",
                 "remove it — a commands: entry runs ad hoc, so char has no file scope to compute",
@@ -142,7 +142,7 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
     if name == "component.root" {
         return match vars.component_root {
             Some(root) => Ok(Expansion::Value(root.to_string())),
-            None => Err(CharError::bad_config(
+            None => Err(ArmadaError::bad_config(
                 at.clone(),
                 "`${component.root}` is used where no component root is in scope",
                 "set `root:` on the component, or drop the placeholder",
@@ -152,7 +152,7 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
     if let Some(port) = name.strip_prefix("port.") {
         return match vars.ports.get(port) {
             Some(number) => Ok(Expansion::Value(number.to_string())),
-            None => Err(CharError::bad_config(
+            None => Err(ArmadaError::bad_config(
                 at.clone(),
                 format!("no port named `{port}` is declared in this workspace"),
                 format!(
@@ -163,7 +163,7 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
     }
     if let Some(var) = name.strip_prefix("env.") {
         if site != Site::EnvValue {
-            return Err(CharError::bad_config(
+            return Err(ArmadaError::bad_config(
                 at.clone(),
                 format!("`${{env.{var}}}` is only legal inside an `env:` block"),
                 "move the read into `env:`, where environment composition lives",
@@ -174,7 +174,7 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
             // The loud error is the stopping point, and it has to stay one:
             // the moment `${env.X}` has a default operator, the cap this
             // section spends forty lines defending is gone (PLAN.md §4.4).
-            None => Err(CharError::bad_config(
+            None => Err(ArmadaError::bad_config(
                 at.clone(),
                 format!("`{var}` is not set in the environment"),
                 format!("export {var} before running char, or remove the reference"),
@@ -184,7 +184,7 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
 
     match site {
         Site::Shell => Ok(Expansion::PassThrough),
-        Site::Argv | Site::EnvValue => Err(CharError::bad_config(
+        Site::Argv | Site::EnvValue => Err(ArmadaError::bad_config(
             at.clone(),
             format!("`${{{name}}}` is not one of the four substitutions char makes"),
             "char substitutes ${port.NAME}, ${files}, ${component.root} and ${workspace.id}, \
@@ -193,8 +193,8 @@ fn expand(name: &str, vars: &Vars, site: Site, at: &ConfigWhere) -> Result<Expan
     }
 }
 
-fn unexpandable_files(at: &ConfigWhere) -> CharError {
-    CharError::bad_config(
+fn unexpandable_files(at: &ConfigWhere) -> ArmadaError {
+    ArmadaError::bad_config(
         at.clone(),
         "`${files}` cannot be used here — it expands to a list of arguments",
         "use it in a check's `cmd:`, which char splits into argv",
@@ -207,13 +207,13 @@ fn unexpandable_files(at: &ConfigWhere) -> CharError {
 /// A token containing `${files}` becomes one token per file; an empty file set
 /// removes the token entirely rather than leaving an empty argument, because an
 /// empty string argument means "this path" to most tools.
-pub fn expand_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<String>, CharError> {
+pub fn expand_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<String>, ArmadaError> {
     let tokens = split_argv(cmd, at)?;
     let mut argv = Vec::with_capacity(tokens.len());
     for token in tokens {
         if token.contains("${files}") {
             let files = vars.files.ok_or_else(|| {
-                CharError::bad_config(
+                ArmadaError::bad_config(
                     at.clone(),
                     "`${files}` is not available here",
                     "remove it — a commands: entry runs ad hoc, so char has no file scope",
@@ -243,7 +243,7 @@ pub fn expand_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<Strin
 
 /// Wrap a command for `/bin/sh -c`, substituting char's own placeholders and
 /// leaving everything else for the shell.
-pub fn shell_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<String>, CharError> {
+pub fn shell_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<String>, ArmadaError> {
     let expanded = substitute(cmd, vars, Site::Shell, at)?;
     Ok(vec!["/bin/sh".to_string(), "-c".to_string(), expanded])
 }
@@ -255,7 +255,7 @@ pub fn shell_argv(cmd: &str, vars: &Vars, at: &ConfigWhere) -> Result<Vec<String
 /// It deliberately implements *no* expansion: `$`, `*`, `~`, `|` and `&&` are
 /// ordinary characters here. A repo that needs a shell says `shell: true` and
 /// gets a real one.
-pub fn split_argv(cmd: &str, at: &ConfigWhere) -> Result<Vec<String>, CharError> {
+pub fn split_argv(cmd: &str, at: &ConfigWhere) -> Result<Vec<String>, ArmadaError> {
     let mut argv: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut have_token = false;
@@ -312,7 +312,7 @@ pub fn split_argv(cmd: &str, at: &ConfigWhere) -> Result<Vec<String>, CharError>
     }
 
     if argv.is_empty() {
-        return Err(CharError::bad_config(
+        return Err(ArmadaError::bad_config(
             at.clone(),
             "the command is empty",
             "give it something to run",
@@ -321,8 +321,8 @@ pub fn split_argv(cmd: &str, at: &ConfigWhere) -> Result<Vec<String>, CharError>
     Ok(argv)
 }
 
-fn unterminated(at: &ConfigWhere, quote: char) -> CharError {
-    CharError::bad_config(
+fn unterminated(at: &ConfigWhere, quote: char) -> ArmadaError {
+    ArmadaError::bad_config(
         at.clone(),
         format!("unterminated {quote} quote in the command"),
         "close the quote",

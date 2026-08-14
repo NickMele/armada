@@ -13,7 +13,7 @@
 
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{Envelope, PortReport, ResultRow, StatusData, Unreclaimed};
-use armada_core::error::{CharError, Status};
+use armada_core::error::{ArmadaError, Status};
 use armada_core::lease::is_cold;
 use armada_core::ports::PortState;
 use armada_core::reap::PathStat;
@@ -29,7 +29,7 @@ use crate::verbs::{load_foreign_config, Output};
 pub fn run<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     common: Common,
-) -> Result<Output, CharError> {
+) -> Result<Output, ArmadaError> {
     let me = app.ctx.workspace.as_ref().map(|w| w.id.clone());
     let project = app.ctx.workspace.as_ref().and_then(|w| w.project.clone());
 

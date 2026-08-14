@@ -6,7 +6,7 @@
 //! inode that still accepts writes — are exactly the ones a fake gets wrong.
 //! Tests use a real `tempfile::TempDir`.
 
-use armada_core::error::{CharError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::reap::PathStat;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 /// Load-bearing for identity: two paths reaching one directory must not
 /// produce two `workspace_id`s, and a symlinked checkout is the ordinary way
 /// that happens (PLAN.md §2.2).
-pub fn canonical(path: &Path) -> Result<PathBuf, CharError> {
-    std::fs::canonicalize(path).map_err(|e| CharError {
+pub fn canonical(path: &Path) -> Result<PathBuf, ArmadaError> {
+    std::fs::canonicalize(path).map_err(|e| ArmadaError {
         class: ErrClass::Environment,
         r#where: path.display().to_string(),
         message: format!("cannot resolve path: {e}"),
@@ -55,10 +55,10 @@ pub fn stat(path: &Path) -> PathStat {
 /// `git worktree remove`, neither of which consults char — so anything recorded
 /// only here is gone precisely when it is most needed. Everything reclaimable
 /// lives in `~/.armada/manifest.db` instead.
-pub fn create_armada_dir(root: &Path) -> Result<PathBuf, CharError> {
+pub fn create_armada_dir(root: &Path) -> Result<PathBuf, ArmadaError> {
     let dir = root.join(".armada");
     for path in [dir.clone(), dir.join("logs"), dir.join("run")] {
-        std::fs::create_dir_all(&path).map_err(|e| CharError {
+        std::fs::create_dir_all(&path).map_err(|e| ArmadaError {
             class: ErrClass::Environment,
             r#where: path.display().to_string(),
             message: format!("cannot create {}: {e}", path.display()),
@@ -69,12 +69,12 @@ pub fn create_armada_dir(root: &Path) -> Result<PathBuf, CharError> {
 }
 
 /// Remove `.armada/` entirely. Absent is success — `clean` is idempotent.
-pub fn remove_armada_dir(root: &Path) -> Result<bool, CharError> {
+pub fn remove_armada_dir(root: &Path) -> Result<bool, ArmadaError> {
     let dir = root.join(".armada");
     match std::fs::remove_dir_all(&dir) {
         Ok(()) => Ok(true),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(CharError {
+        Err(e) => Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: dir.display().to_string(),
             message: format!("cannot remove .armada/: {e}"),
@@ -89,13 +89,13 @@ pub fn remove_armada_dir(root: &Path) -> Result<bool, CharError> {
 /// declared path is a claim about this workspace's own tree, and `..` in one
 /// would make `char clean --artifacts --all` a machine-wide `rm -rf` driven by
 /// a committed file.
-pub fn remove_owned_file(root: &Path, declared: &str) -> Result<bool, CharError> {
+pub fn remove_owned_file(root: &Path, declared: &str) -> Result<bool, ArmadaError> {
     let target = root.join(declared);
     let escapes = target
         .components()
         .any(|c| matches!(c, std::path::Component::ParentDir));
     if escapes || Path::new(declared).is_absolute() {
-        return Err(CharError::bad_config(
+        return Err(ArmadaError::bad_config(
             armada_core::error::ConfigWhere::Path {
                 file: "armada.yml".to_string(),
                 path: "owns.files".to_string(),
@@ -116,7 +116,7 @@ pub fn remove_owned_file(root: &Path, declared: &str) -> Result<bool, CharError>
     match result {
         Ok(()) => Ok(true),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(CharError {
+        Err(e) => Err(ArmadaError {
             class: ErrClass::Environment,
             r#where: target.display().to_string(),
             message: format!("cannot remove {}: {e}", target.display()),
