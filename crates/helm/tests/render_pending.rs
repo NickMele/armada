@@ -53,15 +53,16 @@ fn pending_dir() -> PathBuf {
 /// The commands whose layout is agreed and unbuilt, and the milestone that owns
 /// each. Named here so a fixture cannot be quietly dropped, and so the list can
 /// be read against `PHASES.md` §8.
-const PENDING: [(&str, &str); 5] = [
-    (
-        "init-machine",
-        "M2 — `armada init`, the first command on a new machine",
-    ),
-    ("doctor", "M2 — `armada doctor`"),
+/// **Five moved up, and only Fleet's two are left.** `config-scan` and
+/// `config-verify` shipped with `armada manifest config`; `init-machine`,
+/// `doctor` and `guild-pull` shipped with M2. Each is now an ordinary byte
+/// comparison in `render_golden.rs` with a `.tty` twin beside it, which is
+/// exactly what this file's header says happens when the milestone that owns a
+/// layout ships it — and that the list shrank to two without either milestone
+/// renegotiating a layout is the evidence the approach worked.
+const PENDING: [(&str, &str); 2] = [
     ("fleet-ls", "M3 — `armada fleet ls`"),
     ("fleet-spawn", "M3 — `armada fleet spawn`"),
-    ("guild-pull", "M2 — `armada guild pull`"),
 ];
 
 fn fixture(name: &str) -> String {

@@ -1,12 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/manifest", "crates/helm", "xtask"]
+members = ["crates/core", "crates/manifest", "crates/guild", "crates/helm", "xtask"]
 
 # Dependencies point inward (ARCHITECTURE.md §1.5) and nothing points upward
-# (§1.9): `core` is pure, `manifest` — the module's imperative shell — depends
-# on core only, and `helm` is the only crate that depends on both and wires
-# them together. The crate graph is the enforcement for the direction; `cargo
-# xtask boundaries` is the enforcement for who may name whom.
+# (§1.9): `core` is pure; `manifest` and `guild` — two modules' imperative
+# shells — depend on core only and are siblings that may not name each other;
+# and `helm` is the only crate that depends on all of them and wires them
+# together. The crate graph is the enforcement for the direction; `cargo xtask
+# boundaries` is the enforcement for who may name whom.
 
 [workspace.package]
 edition = "2021"

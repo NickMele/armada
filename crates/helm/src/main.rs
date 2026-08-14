@@ -93,7 +93,15 @@ fn main() -> ExitCode {
                 Style::decide(parsed.color, terminal.stderr_is_tty, no_color),
                 terminal,
             );
-            match dispatch(other, &cwd, home.as_deref(), inherited, progress.as_mut()) {
+            match dispatch(
+                other,
+                &cwd,
+                home.as_deref(),
+                inherited,
+                progress.as_mut(),
+                style,
+                terminal,
+            ) {
                 Ok(output) => emit(output, json, style, terminal),
                 Err(error) => fail(error, json, style),
             }
@@ -133,16 +141,129 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
         Invocation::Config { json, .. } | Invocation::Skills { json, .. } => *json,
+        Invocation::MachineInit(init) => init.json,
+        Invocation::Doctor { json, .. } => *json,
+        Invocation::Guild(guild) => guild.json(),
         Invocation::Version | Invocation::Help(_) => false,
     }
 }
 
+/// The verbs that describe **this machine** rather than a workspace.
+///
+/// They run before workspace discovery and before `app::build`, and both halves
+/// of that matter. `armada init` is the first thing anyone types, on a machine
+/// with no `~/.armada/` and usually from a directory with no `armada.yml`;
+/// routing it through the ordinary path would make it fail on the absence of
+/// exactly the things it exists to create. `armada doctor` is run *because*
+/// something is wrong, including an unreadable `manifest.db` — which
+/// `app::build` opens. The same reasoning `clean --force-rebuild` already
+/// carries above.
+fn machine_scoped(
+    invocation: Invocation,
+    place: &verbs::guild::Where,
+    style: Style,
+    terminal: render::term::Terminal,
+) -> Option<Result<Output, ArmadaError>> {
+    let run = RealRun;
+    // **The prompt is written to stderr, exactly as the spinner is.** stdout
+    // carries the finished transcript once, at the end, which is what keeps
+    // `armada init --json` working without a special case.
+    let mut ask: Box<dyn armada_helm::ask::Ask> = if terminal.stderr_is_tty {
+        Box::new(armada_helm::ask::AtTheTerminal::new(
+            std::io::stderr(),
+            std::io::BufReader::new(std::io::stdin()),
+            style,
+        ))
+    } else {
+        // No terminal, no interview. Every question has a default and taking
+        // all of them leaves a working guild (PLAN.md §13.4) — a prompt written
+        // into a log file that nobody can answer would hang a CI run instead.
+        Box::new(armada_helm::ask::Defaults)
+    };
+
+    Some(match invocation {
+        Invocation::MachineInit(init) => {
+            if init.defaults {
+                ask = Box::new(armada_helm::ask::Defaults);
+            }
+            verbs::machine::run(
+                &run,
+                place,
+                ask.as_mut(),
+                &verbs::machine::Options {
+                    guild: init.guild.clone(),
+                    bundle: init.bundle.clone(),
+                    defaults: init.defaults,
+                    force: init.force,
+                },
+            )
+        }
+        Invocation::Doctor { fix, .. } => {
+            if fix {
+                return Some(Err(ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: "--fix".to_string(),
+                    message: "`armada doctor --fix` is not built yet".to_string(),
+                    next_action: Some(
+                        "every finding names the command that fixes it; run that".to_string(),
+                    ),
+                }));
+            }
+            verbs::doctor::run(&run, place)
+        }
+        Invocation::Guild(guild) => match *guild {
+            args::GuildInvocation::Init {
+                from,
+                no_import,
+                remote,
+                defaults,
+                force,
+                ..
+            } => {
+                if defaults {
+                    ask = Box::new(armada_helm::ask::Defaults);
+                }
+                verbs::guild::init(
+                    &run,
+                    place,
+                    ask.as_mut(),
+                    &verbs::guild::InitOptions {
+                        from: from.map(PathBuf::from),
+                        no_import,
+                        remote,
+                        force,
+                    },
+                )
+            }
+            args::GuildInvocation::Pull { .. } => verbs::guild::pull(&run, place),
+            args::GuildInvocation::Push { force, .. } => verbs::guild::push(&run, place, force),
+            args::GuildInvocation::Export {
+                out,
+                include_secrets,
+                ..
+            } => verbs::guild::export(
+                &run,
+                place,
+                out.as_deref().map(std::path::Path::new),
+                include_secrets,
+            ),
+            args::GuildInvocation::Import {
+                path, merge, force, ..
+            } => verbs::guild::import_bundle(&run, place, &place.cwd.join(&path), merge, force),
+        },
+        _ => return None,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
 fn dispatch(
     invocation: Invocation,
     cwd: &std::path::Path,
     home: Option<&std::path::Path>,
     inherited: BTreeMap<String, String>,
     progress: &mut dyn render::progress::Progress,
+    style: Style,
+    terminal: render::term::Terminal,
 ) -> Result<Output, ArmadaError> {
     let home = home.ok_or_else(|| ArmadaError {
         class: ErrClass::Environment,
@@ -152,6 +273,23 @@ fn dispatch(
     })?;
 
     let run = RealRun;
+
+    // **This machine's own verbs run before anything of a workspace's is
+    // opened.** See `machine_scoped` for why both halves of that matter.
+    if matches!(
+        invocation,
+        Invocation::MachineInit(_) | Invocation::Doctor { .. } | Invocation::Guild(_)
+    ) {
+        let place = verbs::guild::Where {
+            armada_home: armada_manifest::machine::armada_home(home),
+            cwd: cwd.to_path_buf(),
+            claude_home: home.join(".claude"),
+        };
+        if let Some(outcome) = machine_scoped(invocation, &place, style, terminal) {
+            return outcome;
+        }
+        unreachable!("every machine-scoped invocation is handled");
+    }
 
     // **The recovery path runs before anything is opened.** `armada manifest clean
     // --orphaned --force-rebuild` exists for a `manifest.db` Armada cannot read, and
@@ -245,6 +383,9 @@ fn dispatch(
         },
         Invocation::Skills { show, .. } => verbs::skills::run(&mut app, show.as_deref()),
         Invocation::Version | Invocation::Help(_) => unreachable!("handled before dispatch"),
+        Invocation::MachineInit(_) | Invocation::Doctor { .. } | Invocation::Guild(_) => {
+            unreachable!("machine-scoped, and handled above")
+        }
     }
 }
 
@@ -303,6 +444,16 @@ fn emit(output: Output, json: bool, style: Style, terminal: render::term::Termin
     if json {
         write_out(&output.to_json());
     } else {
+        // **The wordmark's second site** (`docs/commands/render.md`), and it is
+        // drawn here rather than inside the renderer: the golden pair for
+        // `armada init` is rendered at one width for both audiences, and a
+        // decoration that appears in only one of them is not a *styling*
+        // difference the pair property can express. Every suppression rule
+        // still lives in `render::banner`, so this call site cannot draw it
+        // under conditions the other one refuses.
+        if matches!(output, Output::MachineInit(_)) {
+            write_out(&render::banner::banner(style, terminal));
+        }
         let text = render::human(&output, style, terminal);
         if output.exit_code() == 0 {
             write_out(&text);

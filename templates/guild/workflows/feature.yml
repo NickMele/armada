@@ -1,38 +1,46 @@
-# yaml-language-server: $schema=./workflow.schema.json
-# Feature — build something new, with your approval on the approach.
+# feature — plan, approval, implement, review, land.
 #
-# The plan step STOPS. `human_approves` raises the plan to the inbox and waits;
-# nothing is written until you answer. That is the whole difference between
-# this and letting a Drone loose on a one-line prompt.
-description: Build a feature, pausing for approval on the approach before writing code.
+# Ends on a local branch, but only after you approved the approach.
+#
+# The first step runs `plan` as a **sub-Job** — its own uuid, worktree, budget
+# and record — so the plan you approved is a durable artifact you can point at
+# later rather than a paragraph buried in a longer Job's transcript. The
+# parent's ceilings are suspended while it runs, because approval can take
+# hours and a wall clock that kept ticking would kill a Job because you went to
+# lunch (PLAN.md §14.6).
+name: feature
+description: Plan it, get your approval, build it, have it reviewed, land it on a branch.
+ends_at: branch
 
 budget:
-  max_iterations: 20
-  max_tokens: 600000
-  max_wall_clock: 90m
+  iterations: 20
+  tokens: 600000
+  wall_clock: 90m
   on_exhausted: needs_human
 
 steps:
-  # A sub-Job running plan.yml: its own uuid, worktree, budget and record, so
-  # the plan you approved is a durable thing you can point at later. This
-  # parent's ceilings are suspended while it runs — approval can take hours,
-  # and a wall clock that keeps ticking would kill a Job for your lunch break.
   - id: plan
     workflow: plan
     verify: { must: subjob_passed }
 
-  - id: implement
-    skill: implement
-    verify: { must: check_passes, scope: [test, lint, types] }
+  # The stop that makes the workflow worth running. Everything after this is
+  # expensive and everything before it is cheap.
+  - id: approval
+    verify: { must: human_approves }
 
-  # Fleet spawns the reviewer, not this Drone. A Drone that can spawn Drones is
-  # a fork bomb with a budget, so `review_clean` is satisfied by Fleet starting
-  # a second Job with the diff and the original task, in its own context.
+  - id: implement
+    skill: implement-change
+    scope: changed
+    verify: { must: check_passes }
+
+  # No `skill:` — Fleet satisfies this one by spawning a reviewer Job with the
+  # diff and the original task, in its own context. The Drone under review never
+  # calls `fleet.spawn`: a worker able to spawn workers is a fork bomb with a
+  # budget. An independent context is also the point — a reviewer sharing the
+  # implementer's context shares its blind spots.
   - id: review
     verify: { must: review_clean }
 
   - id: land
-    skill: commit-local
+    skill: land-branch
     verify: { must: branch_exists }
-
-on_blocked: needs_human

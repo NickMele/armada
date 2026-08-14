@@ -1,28 +1,33 @@
-# yaml-language-server: $schema=./workflow.schema.json
-# Plan — turn a rough intent into a specification someone can execute.
+# plan — research, write a plan, hand over.
 #
-# Always ends at you, and nothing builds until you approve. A plan workflow
-# that spawned its own implementation would be a feature workflow with extra
-# steps and no approval gate.
-description: Turn a rough intent into an executable plan.
+# Ends at you, **before anything builds**. The expensive failure is not bad
+# code, it is correct code solving the wrong problem, and the cheapest moment to
+# catch that is before the work exists (PLAN.md §14.6).
+#
+# Run on its own, `plan` terminates at approval. As `feature`'s first step it
+# continues past it — which is why `feature` names this workflow rather than
+# splicing its steps in. Textual inclusion would have made those two the same
+# thing and quietly changed what `plan` means.
+name: plan
+description: Research a task and write a plan, for you to approve before anything is built.
+ends_at: human
 
 budget:
-  max_iterations: 15
-  max_tokens: 500000
-  max_wall_clock: 90m
+  iterations: 15
+  tokens: 500000
+  wall_clock: 90m
   on_exhausted: needs_human
 
 steps:
   - id: research
-    skill: research-codebase
+    skill: explore-codebase
     verify: { must: always }
 
-  - id: write_plan
+  - id: write-plan
     skill: write-plan
-    verify: { must: artifact_exists }
+    verify:
+      must: artifact_exists
+      artifact: PLAN.md
 
-  - id: hand_over
-    skill: summarise-for-human
+  - id: approve
     verify: { must: human_approves }
-
-on_blocked: needs_human

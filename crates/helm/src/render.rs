@@ -40,7 +40,8 @@ pub mod table;
 pub mod term;
 
 use armada_core::envelope::{
-    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
+    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope, Finding,
+    GuildBundleData, GuildInitData, GuildSyncData, Headline, InitData, InitDryRun, MachineInitData,
     ResultRow, ScanData, SkillsData, StatusData, Unreclaimed, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
@@ -74,7 +75,407 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Scan(envelope) => scan(envelope, style, width),
         Output::Verify(envelope) => verify(envelope, style, width),
         Output::Skills(envelope) => skills(envelope, style, width),
+        Output::MachineInit(envelope) => machine_init(envelope, style, width),
+        Output::Doctor(envelope) => doctor(envelope, style, width),
+        Output::GuildSync(envelope) => guild_sync(envelope, style, width),
+        Output::GuildInit(envelope) => guild_init(envelope, style, width),
+        Output::GuildBundle(envelope) => guild_bundle(envelope, style, width),
     }
+}
+
+// ------------------------------------------------------------- M2: the machine
+// and the guild
+
+/// The `STATUS · CHECK · DETAIL · TIME` table both machine verbs draw.
+///
+/// **`armada init` and `armada doctor` share it because they are asking one
+/// question** — what is the state of this machine — and a reader who has met
+/// one has met the other. The `TIME` column is present and empty on every row:
+/// nothing here is timed, and the column stays so the four columns of the
+/// agreed layout are the same four columns everywhere (`render.rs`'s header).
+fn machine_table(rows: &[Finding], style: Style, width: usize) -> Table {
+    let mut table = Table::new(columns("check", "detail", true)).indent(2);
+    for row in rows {
+        table = table.row(vec![
+            token(row.status.word(), Role::for_health(row.status)),
+            Cell::plain(row.check.clone()),
+            detail_cell(style, Some(row.detail.as_str())),
+            time_cell(style, None),
+        ]);
+    }
+    let _ = width;
+    table
+}
+
+/// The `→` lines. **The point of `armada doctor`**: a check that reports a
+/// problem without the command that fixes it sends the reader to the
+/// documentation, which is most of what the verb exists to save.
+fn fix_lines(rows: &[Finding], style: Style) -> String {
+    let mut out = String::new();
+    for remedy in rows.iter().filter_map(|row| row.remedy.as_deref()) {
+        out.push_str(&format!(
+            "  {}\n",
+            style.paint(Role::SteelGrey, &format!("{} {remedy}", style.arrow()))
+        ));
+    }
+    out
+}
+
+/// *Do you already have a guild?* — **live**, as it is put to a person.
+///
+/// Ends at the caret with a space and no newline, because that is where the
+/// cursor sits and the terminal's own echo completes the line. The record in
+/// [`machine_init`] is this string with the answer put back, which is what
+/// makes the two identical rather than merely similar.
+pub fn guild_question(question: &str, options: &[&str], style: Style) -> String {
+    let mut out = format!("{}\n", style.paint(Role::SignalAmber, question));
+    // **The three answers on one line**, because a menu of three is a list you
+    // scan rather than read.
+    out.push_str("  ");
+    for (index, option) in options.iter().enumerate() {
+        out.push_str(&style.paint(Role::NavalBlue, &(index + 1).to_string()));
+        out.push(' ');
+        out.push_str(option);
+        out.push_str("  ");
+    }
+    out.push_str(&style.paint(Role::SteelGrey, style.caret()));
+    out.push(' ');
+    out
+}
+
+/// One interview question — **live**, as it is put to a person.
+///
+/// The hint is indented to line up under the prompt rather than under the
+/// number: it belongs to the question, not to the count.
+pub fn interview_prompt(asked: &armada_core::envelope::Asked, style: Style) -> String {
+    format!(
+        "{}  {}\n     {} {} ",
+        style.paint(Role::SignalAmber, &format!("{}/{}", asked.number, asked.of)),
+        style.paint(Role::SteelGrey, &asked.prompt),
+        style.paint(Role::SteelGrey, &asked.hint),
+        style.paint(Role::RadarCyan, style.caret())
+    )
+}
+
+/// `armada init` — set up **this machine**.
+///
+/// **The one verb whose render is a transcript**, because it is the one verb
+/// that holds a conversation. The preflight table, the one question and what
+/// was typed, what import adopted, each interview prompt as it was put, and the
+/// verdict. `tests/golden/render/init-machine.plain` is the specification and
+/// this follows it.
+///
+/// **The wordmark is not drawn here**, though `armada init` is one of its two
+/// sites (`docs/commands/render.md`). It is drawn at the call site in `main`,
+/// for a reason that is about the fixtures rather than about taste: the pair of
+/// golden files is rendered at one width for both audiences, and a decoration
+/// that appears in only one of them is not a *styling* difference the pair test
+/// can express. Every suppression rule still lives in `render::banner`, so the
+/// second call site cannot draw it under conditions the first refuses.
+fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = machine_table(&data.results, style, width).render(style, width);
+
+    if let Some(choice) = &data.guild {
+        let options: Vec<&str> = choice.options.iter().map(String::as_str).collect();
+        out.push('\n');
+        out.push_str(&guild_question(&choice.question, &options, style));
+        // **The answer is the terminal's own echo when it is live**, and this
+        // is the same line replayed with what was typed put back.
+        out.push_str(&format!(
+            "{}\n",
+            style.paint(Role::RadarCyan, &choice.chosen.to_string())
+        ));
+    }
+
+    if !data.imported.is_empty() {
+        out.push('\n');
+        out.push_str(&format!(
+            "  {}\n",
+            style.paint(Role::SteelGrey, &data.imported.join(style.between()))
+        ));
+    }
+
+    for asked in &data.asked {
+        out.push('\n');
+        // **The trailing space goes.** Live, it is where the cursor sits; in
+        // the record it would be trailing whitespace, which is what makes a
+        // diff of two captured outputs unreadable (`render/table.rs`).
+        out.push_str(interview_prompt(asked, style).trim_end());
+        out.push('\n');
+    }
+
+    out.push('\n');
+    // **The question counts appear only when there was an interview.** Pulling
+    // a guild from a remote asks nothing, and `5 questions, 0 skipped` under a
+    // clone would be describing something that did not happen.
+    let mut facts = vec![format!("guild at {}", data.guild_path)];
+    if data.questions > 0 {
+        facts.push(format::count(data.questions, "question"));
+        facts.push(format!("{} skipped", data.skipped));
+    }
+    out.push_str(&summary(style, envelope.status, &facts));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// `armada doctor` — what this machine is missing.
+fn doctor(envelope: &Envelope<DoctorData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = machine_table(&data.results, style, width).render(style, width);
+    out.push('\n');
+    out.push_str(&match data.headline {
+        Some(word) => headline(style, word, &data.tally),
+        None => summary(style, envelope.status, &data.tally),
+    });
+    out.push_str(&fix_lines(&data.results, style));
+    out
+}
+
+/// `armada guild pull` and `armada guild push`.
+///
+/// **The rows describe the change set, and `applied` says whether any of it
+/// landed.** On a divergence nothing is written — `guild/pull.md` states that
+/// as an exit code — so the rows are what is *waiting*, and the summary line is
+/// where a reader is told which of the two they are looking at. Reading the
+/// rows as "what happened" when nothing happened is the one misreading this
+/// layout can produce, and it is why `applied` exists in the envelope at all.
+fn guild_sync(envelope: &Envelope<GuildSyncData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("item", "detail", true)).indent(2);
+    for row in &data.results {
+        table = table.row(vec![
+            token(row.status.word(), Role::for_sync(row.status)),
+            Cell::plain(row.item.clone()),
+            detail_cell(style, Some(row.detail.as_str())),
+            time_cell(style, None),
+        ]);
+    }
+    let mut out = table.render(style, width);
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    let conflicts = data
+        .results
+        .iter()
+        .filter(|row| row.status == armada_core::envelope::Sync::Conflict)
+        .count();
+
+    out.push_str(&match data.headline {
+        Some(word) => {
+            // **The remedy is on the summary line rather than under it**, which
+            // is the one place this differs from `doctor`: there is exactly one
+            // thing to do about a conflicted guild, and a `→` line under a
+            // one-item summary is a second line saying the same thing.
+            let mut facts = vec![format::count(conflicts, "conflict")];
+            if !data.applied {
+                facts.push("resolve in ~/.armada/guild".to_string());
+                facts.push("then armada guild push".to_string());
+            }
+            headline(style, word, &facts)
+        }
+        None => summary(style, envelope.status, &sync_facts(data)),
+    });
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// What a sync that worked has to report: how far it moved, and where to.
+fn sync_facts(data: &GuildSyncData) -> Vec<String> {
+    let mut facts = Vec::new();
+    if data.behind > 0 {
+        facts.push(format!("pulled {}", format::count(data.behind, "commit")));
+    }
+    if data.ahead > 0 {
+        facts.push(format!("pushed {}", format::count(data.ahead, "commit")));
+    }
+    if facts.is_empty() {
+        facts.push("already in step".to_string());
+    }
+    match &data.remote {
+        Some(remote) => facts.push(remote.clone()),
+        // Sync off is the documented default and not a broken state, so it is
+        // stated rather than left as an absence a reader has to notice.
+        None => facts.push("no remote, export still works".to_string()),
+    }
+    facts
+}
+
+/// `armada guild init`.
+fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("step", "detail", true)).indent(2);
+    table = table.row(vec![
+        token("imported", Role::BeaconGreen),
+        Cell::plain("~/.claude/"),
+        detail_cell(style, Some(&data.imported.join(", "))),
+        time_cell(style, None),
+    ]);
+    // **Always a row, even when nothing was withheld.** "Armada looked and
+    // found no credentials" and "nobody looked" read identically otherwise, and
+    // only one of them is a guarantee — the same reasoning `clean` keeps its
+    // table for.
+    table = table.row(vec![
+        token(
+            "withheld",
+            if data.withheld.is_empty() {
+                Role::SteelGrey
+            } else {
+                Role::FlareOrange
+            },
+        ),
+        Cell::plain(format::count(data.withheld.len(), "value")),
+        detail_cell(
+            style,
+            Some(&if data.withheld.is_empty() {
+                "no credential-shaped values found".to_string()
+            } else {
+                format!("{} -> machine.yml", ids(&data.withheld, KEEP))
+            }),
+        ),
+        time_cell(style, None),
+    ]);
+    table = table.row(vec![
+        token("wrote", Role::BeaconGreen),
+        Cell::plain(format::count(data.wrote.len(), "file")),
+        detail_cell(style, Some(&ids(&data.wrote, KEEP))),
+        time_cell(style, None),
+    ]);
+    table = table.row(vec![
+        token("guild", Role::BeaconGreen),
+        Cell::plain("initialised"),
+        detail_cell(
+            style,
+            Some(match &data.remote {
+                Some(remote) => remote.as_str(),
+                None => "no remote: sync off, export still works",
+            }),
+        ),
+        time_cell(style, None),
+    ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            format!("guild at {}", data.guild_path),
+            format::count(data.questions, "question"),
+            format!("{} skipped", data.skipped),
+        ],
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// `armada guild export` and `armada guild import`.
+fn guild_bundle(envelope: &Envelope<GuildBundleData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    // **The bundle's column is flexible and every other verb's name column is
+    // fixed**, because this one holds a *path* rather than an id. Measured: an
+    // absolute path in a fixed column pushes DETAIL past eighty and the flexible
+    // column truncates the one fact the row exists to carry. A path's tail is
+    // the least valuable part of it, which is exactly what `Column::flexible`
+    // is for.
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::flexible("bundle"),
+        Column::flexible("detail"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
+    table = table.row(vec![
+        token(
+            if data.bytes.is_some() {
+                "exported"
+            } else {
+                "imported"
+            },
+            Role::BeaconGreen,
+        ),
+        Cell::plain(data.path.clone()),
+        detail_cell(style, Some(&data.contents.join(", "))),
+        time_cell(style, None),
+    ]);
+    // **Reported either way.** "The file that never syncs did not sync" is the
+    // fact `--include-secrets` exists to make checkable, and a line that only
+    // appears when it went wrong is a line nobody learns to look for.
+    table = table.row(vec![
+        token(
+            "secrets",
+            if data.secrets {
+                Role::FlareOrange
+            } else {
+                Role::BeaconGreen
+            },
+        ),
+        Cell::plain(if data.secrets { "included" } else { "excluded" }),
+        // **No em dash in a cell.** A typographic character in a table is one
+        // the agent audience would also receive, since `Cell` text is not
+        // styled — decoration that differs by audience goes through `Style`, and
+        // there is no `Style` form of an aside. A colon says the same thing in
+        // both renders.
+        detail_cell(
+            style,
+            Some(if data.secrets {
+                "machine.yml travelled: this machine, not you"
+            } else {
+                "machine.yml stays here"
+            }),
+        ),
+        time_cell(style, None),
+    ]);
+    for skipped in &data.skipped {
+        table = table.row(vec![
+            token("skipped", Role::SteelGrey),
+            Cell::plain(skipped.clone()),
+            detail_cell(style, Some("this machine has its own")),
+            time_cell(style, None),
+        ]);
+    }
+    for conflict in &data.conflicts {
+        table = table.row(vec![
+            token("conflict", Role::DistressRed),
+            Cell::plain(conflict.clone()),
+            detail_cell(style, Some("edited here, left alone")),
+            time_cell(style, None),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(
+        &match (data.conflicts.is_empty(), envelope.error.is_some()) {
+            (false, _) => headline(
+                style,
+                Headline::NeedsAttention,
+                &[
+                    format::count(data.conflicts.len(), "conflict"),
+                    "left as they were".to_string(),
+                ],
+            ),
+            _ => summary(
+                style,
+                envelope.status,
+                &match data.bytes {
+                    Some(bytes) => vec![format::bytes(bytes)],
+                    None => Vec::new(),
+                },
+            ),
+        },
+    );
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
 }
 
 // ------------------------------------------------------------------- the parts
@@ -126,16 +527,35 @@ fn header(
 
 /// The last line: the verb's own verdict, then what it is counted from.
 fn summary(style: Style, status: Status, facts: &[String]) -> String {
+    headlined(style, &verdict_strong(style, status), facts)
+}
+
+/// The same line, led by a render-only [`Headline`] instead of a [`Status`].
+///
+/// **Two verbs need this and no others.** `armada doctor` and `armada guild
+/// pull` report the condition of a *machine* rather than the outcome of a
+/// *run*, and `FAILED` there would say the command failed — which it did not.
+/// The word is in the payload under `data.headline`, spelled exactly as it is
+/// printed, which is what keeps this module's uppercase rule intact.
+fn headline(style: Style, headline: Headline, facts: &[String]) -> String {
+    headlined(
+        style,
+        &style.strong(Role::FlareOrange, &headline.to_string()),
+        facts,
+    )
+}
+
+fn headlined(style: Style, lead: &str, facts: &[String]) -> String {
     if facts.is_empty() {
-        return format!("{}\n", verdict_strong(style, status));
+        return format!("{lead}\n");
     }
     format!(
-        "{}  {}\n",
-        verdict_strong(style, status),
+        "{lead}  {}\n",
         style.paint(Role::SteelGrey, &facts.join(style.between()))
     )
 }
 
+/// A terminal state, spelled as the envelope spells it and coloured to agree.
 /// A terminal state, spelled as the envelope spells it and coloured to agree.
 ///
 /// **Never padded here.** An escape sequence is characters a terminal does not
@@ -1706,6 +2126,157 @@ mod tests {
         assert_eq!(
             rendered(&Output::Dispatch(Box::new(refused)), Style::plain()),
             "error: `npm ci` exited 1\n  where: api\n  class: tool_failed\n  next:  run it by hand\n"
+        );
+    }
+
+    // ------------------------------------------------------------------ M2
+
+    fn a_guild_init(withheld: &[&str], remote: Option<&str>, skipped: usize) -> Output {
+        Output::GuildInit(Box::new(Envelope::ok(
+            "guild init",
+            None,
+            Status::Ready,
+            armada_core::envelope::GuildInitData {
+                guild_path: "~/.armada/guild".to_string(),
+                imported: vec!["19 skills".to_string(), "12 hooks".to_string()],
+                withheld: withheld.iter().map(|s| s.to_string()).collect(),
+                wrote: vec![
+                    "voice.md".to_string(),
+                    "expectations.md".to_string(),
+                    "how-i-work.md".to_string(),
+                    "workflows/bug.yml".to_string(),
+                ],
+                remote: remote.map(str::to_string),
+                questions: 5,
+                skipped,
+            },
+        )))
+    }
+
+    /// **The withheld row is drawn even when nothing was withheld**, because
+    /// "Armada looked and found no credentials" and "nobody looked" read
+    /// identically as an absence — and only one of them is a guarantee. Same
+    /// reasoning as `clean` keeping its table.
+    #[test]
+    fn guild_init_says_so_when_it_withheld_nothing() {
+        let text = rendered(&a_guild_init(&[], None, 5), Style::plain());
+        assert!(
+            has_row(
+                &text,
+                &[
+                    "withheld",
+                    "0",
+                    "values",
+                    "no",
+                    "credential-shaped",
+                    "values",
+                    "found",
+                    "-"
+                ]
+            ),
+            "{text}"
+        );
+        assert!(text.contains("5 questions, 5 skipped"), "{text}");
+    }
+
+    /// A withheld value is named by **key**, and the destination is stated: the
+    /// one fact a reader needs is where to go and look.
+    #[test]
+    fn guild_init_names_the_withheld_key_and_where_it_went() {
+        let text = rendered(
+            &a_guild_init(&["settings.json:env.GITHUB_TOKEN"], None, 0),
+            Style::plain(),
+        );
+        assert!(text.contains("settings.json:env.GITHUB_TOKEN"), "{text}");
+        assert!(text.contains("machine.yml"), "{text}");
+    }
+
+    /// **Sync off is stated, not left as an absence.** It is the documented
+    /// default and `export` still works, so a reader must be able to tell it
+    /// from a remote that failed to be recorded.
+    #[test]
+    fn a_guild_with_no_remote_says_sync_is_off_rather_than_leaving_a_gap() {
+        let text = rendered(&a_guild_init(&[], None, 0), Style::plain());
+        assert!(text.contains("no remote"), "{text}");
+        assert!(text.contains("export still works"), "{text}");
+
+        let with = rendered(
+            &a_guild_init(&[], Some("git@example.com:me/guild.git"), 0),
+            Style::plain(),
+        );
+        assert!(with.contains("git@example.com:me/guild.git"), "{with}");
+    }
+
+    fn a_bundle(secrets: bool, conflicts: &[&str]) -> Output {
+        Output::GuildBundle(Box::new(Envelope::ok(
+            "guild export",
+            None,
+            Status::Ready,
+            armada_core::envelope::GuildBundleData {
+                path: "./guild.tar.zst".to_string(),
+                bytes: Some(421_888),
+                contents: vec!["19 skills".to_string(), "4 workflows".to_string()],
+                secrets,
+                skipped: Vec::new(),
+                conflicts: conflicts.iter().map(|s| s.to_string()).collect(),
+            },
+        )))
+    }
+
+    /// **Reported either way.** "The file that never syncs did not sync" is the
+    /// fact `--include-secrets` exists to make checkable, and a line that only
+    /// appears when it went wrong is a line nobody learns to look for.
+    #[test]
+    fn a_bundle_states_whether_machine_yml_travelled_in_both_cases() {
+        let without = rendered(&a_bundle(false, &[]), Style::plain());
+        assert!(has_row(
+            &without,
+            &["secrets", "excluded", "machine.yml", "stays", "here", "-"]
+        ));
+        assert!(without.contains("412 KB"), "{without}");
+
+        let with = rendered(&a_bundle(true, &[]), Style::plain());
+        assert!(with.contains("included"), "{with}");
+        assert!(
+            with.contains("this machine, not you"),
+            "including it says what that means: {with}"
+        );
+        // A table cell is not styled, so a typographic character in one reaches
+        // the agent audience too. There is no `Style` form of an aside, so
+        // there are no asides in cells.
+        for glyph in ['—', '–', '…', '›', '→'] {
+            assert!(!with.contains(glyph), "a {glyph} reached a cell: {with}");
+        }
+    }
+
+    /// A merge that skipped a file ends on `NEEDS ATTENTION`, because a file
+    /// that did not land is a thing a person has to decide about.
+    #[test]
+    fn a_bundle_with_a_conflict_needs_a_person() {
+        let text = rendered(&a_bundle(false, &["voice.md"]), Style::plain());
+        assert!(text.contains("NEEDS ATTENTION"), "{text}");
+        assert!(text.contains("1 conflict"), "{text}");
+        assert!(text.contains("left as they were"), "{text}");
+    }
+
+    /// A sync with nothing to do says so, and says where it syncs to — the two
+    /// facts a reader is checking when they run `pull` and nothing happens.
+    #[test]
+    fn a_sync_that_moved_nothing_still_reports_the_remote() {
+        let facts = sync_facts(&armada_core::envelope::GuildSyncData {
+            remote: Some("git@example.com:me/guild.git".to_string()),
+            ahead: 0,
+            behind: 0,
+            results: Vec::new(),
+            applied: true,
+            headline: None,
+        });
+        assert_eq!(
+            facts,
+            vec![
+                "already in step".to_string(),
+                "git@example.com:me/guild.git".to_string()
+            ]
         );
     }
 

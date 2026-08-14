@@ -1,32 +1,38 @@
-# yaml-language-server: $schema=./workflow.schema.json
-# Bug — reproduce it first, then fix it.
+# bug — reproduce, fix, review, land.
 #
-# `failing_test_exists` is the gate that makes this workflow trustworthy: the
-# test must FAIL before any fix is written. Without it a Drone can "fix" a bug
-# it never reproduced and close green, which is the failure mode that makes
-# autonomous bug-fixing worthless.
-description: Reproduce a failure with a failing test, then fix it.
+# Ends on a local branch. **The test must fail first.**
+#
+# `failing_test_exists` is one of the two predicates that make the starter set
+# trustworthy (PLAN.md §14.6). Without it a Drone "fixes" a bug it never
+# reproduced and closes green, and the only evidence anyone has is its own
+# assertion that the problem is gone.
+name: bug
+description: Reproduce it with a failing test, fix it, have it reviewed, land it on a branch.
+ends_at: branch
 
 budget:
-  max_iterations: 20
-  max_tokens: 600000
-  max_wall_clock: 90m
+  iterations: 20
+  tokens: 600000
+  wall_clock: 90m
   on_exhausted: needs_human
 
 steps:
+  # The evidence is the check run that reports the named test *failing*. An
+  # agent asserting "I reproduced it" is not evidence; a non-zero exit code is.
   - id: reproduce
-    skill: reproduce-bug
-    verify: { must: failing_test_exists }
+    skill: reproduce-failure
+    verify:
+      must: failing_test_exists
+      test: ${task.test}
 
   - id: fix
-    skill: implement
-    verify: { must: check_passes, scope: [test, lint] }
+    skill: implement-change
+    scope: changed
+    verify: { must: check_passes }
 
   - id: review
     verify: { must: review_clean }
 
   - id: land
-    skill: commit-local
+    skill: land-branch
     verify: { must: branch_exists }
-
-on_blocked: needs_human

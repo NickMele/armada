@@ -94,6 +94,105 @@ pub enum Invocation {
         /// `--json` forces `pipe` and makes stdout carry the envelope alone.
         json: bool,
     },
+    /// `armada init` — **this machine**, not a workspace.
+    MachineInit(Box<MachineInit>),
+    /// `armada doctor`.
+    Doctor {
+        /// Emit the envelope.
+        json: bool,
+        /// Repair what is safely repairable.
+        fix: bool,
+    },
+    /// `armada guild <verb>`.
+    Guild(Box<GuildInvocation>),
+}
+
+/// `armada init`, with the flags `docs/commands/init.md` gives it.
+///
+/// A struct rather than variant fields for the same reason [`Check`] is one:
+/// five flags inline makes every `match` on [`Invocation`] unreadable.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MachineInit {
+    /// Emit the envelope.
+    pub json: bool,
+    /// Skip the prompt and clone the guild from here.
+    pub guild: Option<String>,
+    /// Skip the prompt and unpack this bundle.
+    pub bundle: Option<String>,
+    /// Take the default answer to every interview question.
+    pub defaults: bool,
+    /// Re-run against an existing `~/.armada/`.
+    pub force: bool,
+}
+
+/// One of Guild's verbs, and its own flags.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GuildInvocation {
+    /// `armada guild init`.
+    Init {
+        /// Emit the envelope.
+        json: bool,
+        /// Where to import an existing setup from.
+        from: Option<String>,
+        /// Start empty.
+        no_import: bool,
+        /// Set the sync remote without being asked.
+        remote: Option<String>,
+        /// Take every default answer.
+        defaults: bool,
+        /// Overwrite an existing guild.
+        force: bool,
+    },
+    /// `armada guild push`.
+    Push {
+        /// Emit the envelope.
+        json: bool,
+        /// Force-push. Refused unless the remote is strictly behind.
+        force: bool,
+    },
+    /// `armada guild pull`.
+    ///
+    /// **Takes nothing but `--json`.** Pulling is not a decision with options;
+    /// the decisions are what to do when it will not fast-forward, and those
+    /// are reported rather than flagged (`guild/pull.md`).
+    Pull {
+        /// Emit the envelope.
+        json: bool,
+    },
+    /// `armada guild export`.
+    Export {
+        /// Emit the envelope.
+        json: bool,
+        /// Where to write.
+        out: Option<String>,
+        /// Include `machine.yml`. **Off by default** — the whole point of that
+        /// file is that it does not travel.
+        include_secrets: bool,
+    },
+    /// `armada guild import`.
+    Import {
+        /// Emit the envelope.
+        json: bool,
+        /// The bundle. Required.
+        path: String,
+        /// Merge rather than replace; conflicts are reported and skipped.
+        merge: bool,
+        /// Replace an existing guild.
+        force: bool,
+    },
+}
+
+impl GuildInvocation {
+    /// Whether this invocation asked for the envelope.
+    pub fn json(&self) -> bool {
+        match self {
+            GuildInvocation::Init { json, .. }
+            | GuildInvocation::Push { json, .. }
+            | GuildInvocation::Pull { json }
+            | GuildInvocation::Export { json, .. }
+            | GuildInvocation::Import { json, .. } => *json,
+        }
+    }
 }
 
 /// Which layer of the bootstrap sandwich `config` was asked for (PLAN.md §5).
@@ -186,23 +285,50 @@ pub const BUILTIN_VERBS: [&str; 11] = [
     "explain",
 ];
 
-/// The module names, plus the two top-level verbs, that `armada` claims.
+/// The module names, plus the top-level verbs, that `armada` claims and has
+/// **not** built.
 ///
-/// Only `manifest` is built. The rest are claimed for the same reason
-/// [`BUILTIN_VERBS`] are: a name that is going to mean one thing must not mean
-/// something else for a release first. Each carries the milestone that builds
-/// it (PHASES.md §8).
-pub const RESERVED_TOP_LEVEL: [(&str, &str); 6] = [
-    (
-        "init",
-        "M2 — machine setup; `armada manifest init` claims a workspace",
-    ),
-    ("doctor", "M2 — what this machine is missing"),
-    ("guild", "M2 — your portable setup"),
+/// They are claimed for the same reason [`BUILTIN_VERBS`] are: a name that is
+/// going to mean one thing must not mean something else for a release first.
+/// Each carries the milestone that builds it (PHASES.md §8).
+///
+/// **M2 emptied three rows out of this table** — `init`, `doctor` and `guild`
+/// are built, and moved to [`TOP_LEVEL_VERBS`] and [`GUILD_VERBS`].
+pub const RESERVED_TOP_LEVEL: [(&str, &str); 3] = [
     ("fleet", "M3 — the agents you do not talk to"),
     ("helm", "M3 — the one agent you do talk to"),
     ("bridge", "M3 — the live screen"),
 ];
+
+/// The top-level verbs that are built, and what each is for.
+///
+/// **`init` here is a different verb from `manifest init`, and the help says
+/// so**: this one sets up *you, here*; that one claims a workspace.
+pub const TOP_LEVEL_VERBS: [(&str, &str); 2] = [
+    (
+        "init",
+        "set up this machine: checks, ~/.armada/, and your guild",
+    ),
+    ("doctor", "what this machine is missing, and what fixes it"),
+];
+
+/// Guild's verbs, built and unbuilt alike.
+///
+/// The unbuilt two are claimed for the same reason every other reserved name
+/// is, and they answer by name rather than as an unknown verb — a caller told
+/// "unknown" would go looking for a typo.
+pub const GUILD_VERBS: [(&str, &str); 7] = [
+    ("init", "build your guild by interviewing you"),
+    ("pull", "bring this machine's guild up to date"),
+    ("push", "send local guild changes to the remote"),
+    ("export", "write the whole guild to one portable file"),
+    ("import", "restore a guild from a bundle"),
+    ("edit", "M2 — open a guild file, validate it, commit it"),
+    ("verify", "M2 — cross-check every workflow, skill and scope"),
+];
+
+/// The Guild verbs this milestone built. The rest answer "not built yet".
+const GUILD_BUILT: [&str; 5] = ["init", "pull", "push", "export", "import"];
 
 /// The verbs with a help page of their own — the ones Manifest has built.
 ///
@@ -271,7 +397,17 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         if name.starts_with('-') {
             return Err(failure(unknown_flag(name), json));
         }
-        let json = json || args[index + 1..].iter().any(|a| a == "--json");
+        let rest = &args[index + 1..];
+        // **The two machine verbs and the Guild module, before the fallthrough.**
+        // `armada init` is a different verb from `armada manifest init` and the
+        // grammar keeps them apart by the level they sit at, not by a prefix.
+        match name {
+            "init" => return machine_init(rest, json, color),
+            "doctor" => return doctor(rest, json, color),
+            "guild" => return guild(rest, json, color),
+            _ => {}
+        }
+        let json = json || rest.iter().any(|a| a == "--json");
         let message = match RESERVED_TOP_LEVEL.iter().find(|(n, _)| *n == name) {
             Some((_, milestone)) => format!("`armada {name}` is not built yet — {milestone}"),
             None => format!("unknown command `{name}`"),
@@ -282,8 +418,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
                 r#where: name.to_string(),
                 message,
                 next_action: Some(
-                    "`armada manifest <verb>` is the module that is built; `armada --help` lists it"
-                        .to_string(),
+                    "`armada --help` lists the modules and verbs that are built".to_string(),
                 ),
             },
             json,
@@ -491,6 +626,245 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
     }
 
     Ok(parsed)
+}
+
+// ---------------------------------------------------------------- M2: the
+// machine, and the guild
+
+/// A small flag reader for the M2 verbs.
+///
+/// **Shared rather than five near-copies**, because five hand-written flag
+/// loops is five places to forget that `--json` and `--color` are Armada's
+/// everywhere. `takes_value` names the flags whose next argument is theirs;
+/// everything else is a switch, and an unrecognised flag is refused rather than
+/// ignored.
+struct Flags {
+    /// Switches that were present.
+    switches: Vec<String>,
+    /// Flags with values, in the order given.
+    values: Vec<(String, String)>,
+    /// Bare words, in order.
+    positionals: Vec<String>,
+    /// Whether the envelope was asked for.
+    json: bool,
+}
+
+impl Flags {
+    fn on(&self, flag: &str) -> bool {
+        self.switches.iter().any(|s| s == flag)
+    }
+
+    fn value(&self, flag: &str) -> Option<String> {
+        self.values
+            .iter()
+            .find(|(name, _)| name == flag)
+            .map(|(_, value)| value.clone())
+    }
+}
+
+fn flags(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+    r#where: &str,
+    allowed: &[&str],
+    takes_value: &[&str],
+) -> Result<Flags, ParseFailure> {
+    // Settled before the loop, so that how a failure is *reported* does not
+    // depend on where in the line the offending flag sits — the same rule
+    // `common` and `check` follow.
+    let json = json || rest.iter().any(|a| a == "--json");
+    *color = color_in(rest, *color).map_err(|e| failure(e, json))?;
+
+    let mut parsed = Flags {
+        switches: Vec::new(),
+        values: Vec::new(),
+        positionals: Vec::new(),
+        json,
+    };
+    let mut index = 0;
+    while index < rest.len() {
+        let arg = rest[index].as_str();
+        index += 1;
+        match arg {
+            "--json" => {}
+            // Already read by `color_in`; here only to consume its value so it
+            // is not mistaken for a positional.
+            "--color" => index += 1,
+            flag if flag.starts_with("--color=") => {}
+            flag if takes_value.contains(&flag) => match rest.get(index) {
+                Some(value) if !value.starts_with("--") => {
+                    parsed.values.push((flag.to_string(), value.clone()));
+                    index += 1;
+                }
+                _ => return Err(failure(needs_a_value(flag), json)),
+            },
+            flag if allowed.contains(&flag) => parsed.switches.push(flag.to_string()),
+            flag if flag.starts_with('-') => return Err(failure(unknown_flag(flag), json)),
+            word => parsed.positionals.push(word.to_string()),
+        }
+    }
+    let _ = r#where;
+    Ok(parsed)
+}
+
+/// `armada init` — **this machine**.
+fn machine_init(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    let parsed = flags(
+        rest,
+        json,
+        color,
+        "init",
+        &["--defaults", "--force"],
+        &["--guild", "--bundle"],
+    )?;
+    let guild = parsed.value("--guild");
+    let bundle = parsed.value("--bundle");
+    // **Mutually exclusive, and refused rather than ordered.** Both name where
+    // an existing guild comes from, and picking one for the caller would be
+    // guessing at the question the flag exists to answer.
+    if guild.is_some() && bundle.is_some() {
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: "--guild --bundle".to_string(),
+                message: "--guild and --bundle are two different sources for one guild".to_string(),
+                next_action: Some("pass one of them".to_string()),
+            },
+            parsed.json,
+        ));
+    }
+    Ok(Invocation::MachineInit(Box::new(MachineInit {
+        json: parsed.json,
+        guild,
+        bundle,
+        defaults: parsed.on("--defaults"),
+        force: parsed.on("--force"),
+    })))
+}
+
+fn doctor(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    let parsed = flags(rest, json, color, "doctor", &["--fix"], &[])?;
+    Ok(Invocation::Doctor {
+        json: parsed.json,
+        fix: parsed.on("--fix"),
+    })
+}
+
+/// `armada guild <verb>`.
+///
+/// **The module name is a level of the grammar**, exactly as `manifest` is, so
+/// a bare `armada guild` is as incomplete as a bare `armada` and gets that
+/// module's page rather than an error.
+fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocation, ParseFailure> {
+    let Some(verb) = rest.first() else {
+        return Ok(Invocation::Help(Topic::Guild));
+    };
+    if is_help(verb) {
+        return Ok(Invocation::Help(Topic::Guild));
+    }
+    let tail = &rest[1..];
+    let name = verb.as_str();
+
+    if !GUILD_BUILT.contains(&name) {
+        let json = json || tail.iter().any(|a| a == "--json");
+        let message = match GUILD_VERBS.iter().find(|(n, _)| *n == name) {
+            Some((_, summary)) => format!("`armada guild {name}` is not built yet — {summary}"),
+            None => format!("unknown verb `armada guild {name}`"),
+        };
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: format!("guild {name}"),
+                message,
+                next_action: Some("`armada guild --help` lists what is built".to_string()),
+            },
+            json,
+        ));
+    }
+
+    let invocation = match name {
+        "init" => {
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "guild init",
+                &["--no-import", "--defaults", "--force"],
+                &["--from", "--remote"],
+            )?;
+            GuildInvocation::Init {
+                json: parsed.json,
+                from: parsed.value("--from"),
+                no_import: parsed.on("--no-import"),
+                remote: parsed.value("--remote"),
+                defaults: parsed.on("--defaults"),
+                force: parsed.on("--force"),
+            }
+        }
+        "pull" => {
+            let parsed = flags(tail, json, color, "guild pull", &[], &[])?;
+            GuildInvocation::Pull { json: parsed.json }
+        }
+        "push" => {
+            let parsed = flags(tail, json, color, "guild push", &["--force"], &[])?;
+            GuildInvocation::Push {
+                json: parsed.json,
+                force: parsed.on("--force"),
+            }
+        }
+        "export" => {
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "guild export",
+                &["--include-secrets"],
+                &["--out"],
+            )?;
+            GuildInvocation::Export {
+                json: parsed.json,
+                out: parsed.value("--out"),
+                include_secrets: parsed.on("--include-secrets"),
+            }
+        }
+        _ => {
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "guild import",
+                &["--merge", "--force"],
+                &[],
+            )?;
+            let Some(path) = parsed.positionals.first().cloned() else {
+                return Err(failure(
+                    ArmadaError {
+                        class: ErrClass::BadInvocation,
+                        r#where: "guild import".to_string(),
+                        message: "`armada guild import` needs the bundle to import".to_string(),
+                        next_action: Some("`armada guild import ./guild.tar.zst`".to_string()),
+                    },
+                    parsed.json,
+                ));
+            };
+            GuildInvocation::Import {
+                json: parsed.json,
+                path,
+                merge: parsed.on("--merge"),
+                force: parsed.on("--force"),
+            }
+        }
+    };
+    Ok(Invocation::Guild(Box::new(invocation)))
 }
 
 /// `armada manifest config <scan|verify>`.
@@ -1102,6 +1476,184 @@ mod tests {
         let err = parse(&args(&["worktrees", "prune"])).unwrap_err().error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert!(err.message.contains("unknown command"), "{}", err.message);
+    }
+
+    // ------------------------------------------------------------------ M2
+
+    /// **`armada init` and `armada manifest init` are two different verbs**,
+    /// and the grammar keeps them apart by the level they sit at. One claims a
+    /// workspace; the other sets up the machine.
+    #[test]
+    fn the_two_inits_are_two_verbs_at_two_levels() {
+        assert!(matches!(
+            parse(&args(&["init"])).unwrap().invocation,
+            Invocation::MachineInit(_)
+        ));
+        assert!(matches!(
+            parse(&args(&["manifest", "init"])).unwrap().invocation,
+            Invocation::Init(_)
+        ));
+    }
+
+    #[test]
+    fn init_takes_the_flags_its_page_documents() {
+        let Invocation::MachineInit(init) = parse(&args(&[
+            "init",
+            "--guild",
+            "git@example.com:me/guild.git",
+            "--defaults",
+            "--force",
+            "--json",
+        ]))
+        .unwrap()
+        .invocation
+        else {
+            panic!()
+        };
+        assert_eq!(init.guild.as_deref(), Some("git@example.com:me/guild.git"));
+        assert!(init.defaults && init.force && init.json);
+    }
+
+    /// **Two sources for one guild is refused, not ordered.** Picking one for
+    /// the caller would be guessing at the question the flag exists to answer.
+    #[test]
+    fn a_remote_and_a_bundle_together_is_bad_invocation() {
+        let err = parse(&args(&["init", "--guild", "u", "--bundle", "b"]))
+            .unwrap_err()
+            .error;
+        assert_eq!(err.class, ErrClass::BadInvocation);
+        assert_eq!(err.class.exit_code(), 2);
+    }
+
+    /// The module name is a grammar level, so a bare `armada guild` is as
+    /// incomplete as a bare `armada` and gets that module's page.
+    #[test]
+    fn a_bare_guild_is_its_module_page() {
+        assert_eq!(
+            parse(&args(&["guild"])).unwrap().invocation,
+            Invocation::Help(Topic::Guild)
+        );
+        assert_eq!(
+            parse(&args(&["guild", "--help"])).unwrap().invocation,
+            Invocation::Help(Topic::Guild)
+        );
+    }
+
+    #[test]
+    fn every_built_guild_verb_parses_with_its_own_flags() {
+        for (line, expected) in [
+            (vec!["guild", "pull"], GuildInvocation::Pull { json: false }),
+            (
+                vec!["guild", "push", "--force"],
+                GuildInvocation::Push {
+                    json: false,
+                    force: true,
+                },
+            ),
+            (
+                vec!["guild", "export", "--include-secrets"],
+                GuildInvocation::Export {
+                    json: false,
+                    out: None,
+                    include_secrets: true,
+                },
+            ),
+            (
+                vec!["guild", "import", "./g.tar.zst", "--merge"],
+                GuildInvocation::Import {
+                    json: false,
+                    path: "./g.tar.zst".to_string(),
+                    merge: true,
+                    force: false,
+                },
+            ),
+        ] {
+            let Invocation::Guild(parsed) = parse(&args(&line)).unwrap().invocation else {
+                panic!("`armada {}` did not parse as a guild verb", line.join(" "))
+            };
+            assert_eq!(*parsed, expected, "`armada {}`", line.join(" "));
+        }
+    }
+
+    /// **`pull` takes nothing but `--json`.** Pulling is not a decision with
+    /// options; the decisions are what to do when it will not fast-forward, and
+    /// those are reported rather than flagged.
+    #[test]
+    fn pull_refuses_a_flag_it_does_not_have() {
+        let err = parse(&args(&["guild", "pull", "--force"]))
+            .unwrap_err()
+            .error;
+        assert_eq!(err.class, ErrClass::BadInvocation);
+        assert!(err.message.contains("--force"), "{}", err.message);
+    }
+
+    /// `import` needs the bundle, and says which invocation it wanted rather
+    /// than which flag was missing.
+    #[test]
+    fn import_without_a_bundle_says_what_it_needed() {
+        let err = parse(&args(&["guild", "import"])).unwrap_err().error;
+        assert_eq!(err.class, ErrClass::BadInvocation);
+        assert!(err.next_action.unwrap().contains("guild.tar.zst"));
+    }
+
+    /// **An unbuilt Guild verb answers by name.** A caller told "unknown" would
+    /// go looking for a typo — the same rule `manifest up` already follows.
+    #[test]
+    fn an_unbuilt_guild_verb_names_itself_rather_than_reading_as_a_typo() {
+        for verb in ["edit", "verify"] {
+            let err = parse(&args(&["guild", verb])).unwrap_err().error;
+            assert!(err.message.contains("not built yet"), "`{verb}`");
+            assert!(err.message.contains(verb), "`{verb}`");
+        }
+        let unknown = parse(&args(&["guild", "frobnicate"])).unwrap_err().error;
+        assert!(unknown.message.contains("unknown verb"), "{unknown:?}");
+    }
+
+    /// Every M2 verb answers `--json`, including on the failure path — the same
+    /// guarantee every other verb makes.
+    #[test]
+    fn the_machine_verbs_carry_json_wherever_it_is_spelled() {
+        for line in [
+            &["--json", "doctor"][..],
+            &["doctor", "--json"][..],
+            &["--json", "guild", "pull"][..],
+            &["guild", "pull", "--json"][..],
+        ] {
+            let parsed = parse(&args(line)).unwrap().invocation;
+            let json = match parsed {
+                Invocation::Doctor { json, .. } => json,
+                Invocation::Guild(guild) => guild.json(),
+                _ => panic!("`armada {}` did not parse", line.join(" ")),
+            };
+            assert!(json, "`armada {}` lost --json", line.join(" "));
+        }
+        let failure = parse(&args(&["guild", "edit", "--json"])).unwrap_err();
+        assert!(
+            failure.json,
+            "a refusal lost the --json it had already seen"
+        );
+    }
+
+    /// Nothing claimed here is claimed twice: a name that is built must not
+    /// also answer "not built yet".
+    #[test]
+    fn no_name_is_both_built_and_reserved() {
+        for (built, _) in TOP_LEVEL_VERBS {
+            assert!(
+                !RESERVED_TOP_LEVEL.iter().any(|(name, _)| *name == built),
+                "`{built}` is both built and reserved"
+            );
+        }
+        for built in GUILD_BUILT {
+            let (_, summary) = GUILD_VERBS
+                .iter()
+                .find(|(name, _)| *name == built)
+                .unwrap_or_else(|| panic!("`guild {built}` is built and unlisted"));
+            assert!(
+                !summary.starts_with("M2 "),
+                "`guild {built}` is built and listed as unbuilt"
+            );
+        }
     }
 
     #[test]

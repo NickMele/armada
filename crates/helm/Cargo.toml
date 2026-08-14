@@ -29,6 +29,11 @@ path = "src/main.rs"
 
 [dependencies]
 armada-manifest = { path = "../manifest" }
+# Guild and Manifest are siblings that may not name each other
+# (ARCHITECTURE.md §1.9); this is the crate where the two meet, which is what
+# "Helm is the only crate that depends on both and wires them together" means
+# in practice.
+armada-guild = { path = "../guild" }
 armada-core = { path = "../core" }
 serde_json = { workspace = true }
 # **The whole of M1.5's rendering dependency budget** (`docs/commands/render.md`):

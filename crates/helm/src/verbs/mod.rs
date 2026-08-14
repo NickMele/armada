@@ -9,15 +9,20 @@ pub mod check;
 pub mod clean;
 pub mod config;
 pub mod dispatch;
+pub mod doctor;
+pub mod guild;
 pub mod init;
+pub mod machine;
+pub mod preflight;
 pub mod skills;
 pub mod status;
 
 use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
-    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
-    ScanData, SkillsData, StatusData, VerifyData,
+    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope,
+    GuildBundleData, GuildInitData, GuildSyncData, InitData, InitDryRun, MachineInitData, ScanData,
+    SkillsData, StatusData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -50,6 +55,16 @@ pub enum Output {
     Verify(Box<Envelope<VerifyData>>),
     /// `armada manifest skills`, or `skills show <name>`.
     Skills(Box<Envelope<SkillsData>>),
+    /// `armada init` — the machine, not a workspace.
+    MachineInit(Box<Envelope<MachineInitData>>),
+    /// `armada doctor`.
+    Doctor(Box<Envelope<DoctorData>>),
+    /// `armada guild pull` and `armada guild push`.
+    GuildSync(Box<Envelope<GuildSyncData>>),
+    /// `armada guild init`.
+    GuildInit(Box<Envelope<GuildInitData>>),
+    /// `armada guild export` and `armada guild import`.
+    GuildBundle(Box<Envelope<GuildBundleData>>),
 }
 
 impl Output {
@@ -67,6 +82,11 @@ impl Output {
             Output::Scan(e) => e.to_json(),
             Output::Verify(e) => e.to_json(),
             Output::Skills(e) => e.to_json(),
+            Output::MachineInit(e) => e.to_json(),
+            Output::Doctor(e) => e.to_json(),
+            Output::GuildSync(e) => e.to_json(),
+            Output::GuildInit(e) => e.to_json(),
+            Output::GuildBundle(e) => e.to_json(),
         }
     }
 
@@ -101,6 +121,11 @@ impl Output {
             Output::Scan(e) => e.exit_code(),
             Output::Verify(e) => e.exit_code(),
             Output::Skills(e) => e.exit_code(),
+            Output::MachineInit(e) => e.exit_code(),
+            Output::Doctor(e) => e.exit_code(),
+            Output::GuildSync(e) => e.exit_code(),
+            Output::GuildInit(e) => e.exit_code(),
+            Output::GuildBundle(e) => e.exit_code(),
         }
     }
 }

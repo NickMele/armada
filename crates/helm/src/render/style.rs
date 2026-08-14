@@ -136,6 +136,19 @@ impl Style {
         }
     }
 
+    /// The caret an interview prompt ends on.
+    ///
+    /// `armada init` is the one verb that asks questions, and this is the
+    /// character the cursor sits after. One column either way, like
+    /// [`Style::nothing`].
+    pub fn caret(self) -> &'static str {
+        if self.color {
+            "›"
+        } else {
+            ">"
+        }
+    }
+
     /// The marker on a line that says what to do about the line above it.
     ///
     /// **A fix line is the point of a report** — a check that names a problem
@@ -251,6 +264,31 @@ mod tests {
         assert_eq!(
             person.span(5460, 5469).chars().count(),
             agent.span(5460, 5469).chars().count()
+        );
+    }
+
+    /// The prompt caret folds like every other glyph, and keeps its column.
+    #[test]
+    fn the_prompt_caret_is_one_column_in_both_audiences() {
+        assert_eq!(Style::painted().caret(), "›");
+        assert_eq!(Style::plain().caret(), ">");
+        assert_eq!(
+            Style::painted().caret().chars().count(),
+            Style::plain().caret().chars().count()
+        );
+    }
+
+    /// **The one decorative character whose forms differ in width**, and the one
+    /// place that is allowed: a fix line is prose with nothing after it, so
+    /// there is no column to shear.
+    #[test]
+    fn the_fix_arrow_folds_to_ascii_and_is_prose_rather_than_a_column() {
+        assert_eq!(Style::painted().arrow(), "→");
+        assert_eq!(Style::plain().arrow(), "->");
+        assert_ne!(
+            Style::painted().arrow().chars().count(),
+            Style::plain().arrow().chars().count(),
+            "if these ever match, say so here rather than leaving the note stale"
         );
     }
 

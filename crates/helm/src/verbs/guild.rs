@@ -1,0 +1,748 @@
+//! `armada guild <verb>` — the sequencing, and nothing that decides anything.
+//!
+//! Every rule this file appears to apply was decided in `armada-guild`:
+//! whether a value is credential-shaped, what a fast-forward is, whether a
+//! bundle validates. What lives here is the order the adapter calls go in
+//! (`ARCHITECTURE.md` §1.3), and the one thing only Helm can do — wire Guild's
+//! answers into the envelope `render.rs` draws.
+//!
+//! **Helm is the only crate that may name both Guild and Manifest** (§1.9), so
+//! this is where `armada_home` — Manifest's — meets `Guild::at` — Guild's. That
+//! is not a workaround for the sibling rule; it is the sibling rule working.
+
+use armada_core::ctx::Run;
+use armada_core::envelope::{
+    Envelope, GuildBundleData, GuildInitData, GuildSyncData, Headline, Sync, SyncItem,
+};
+use armada_core::error::{ArmadaError, ErrClass, Status};
+use armada_guild::interview::{self, Answers, Question, QUESTIONS};
+use armada_guild::layout::Guild;
+use armada_guild::{bundle, import, inventory, machine, repo, starters};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use crate::ask::Ask;
+use crate::verbs::Output;
+
+/// Everything a Guild verb needs from the machine, gathered at the entrypoint.
+///
+/// **`~/.armada` arrives as a value rather than being resolved here**, which is
+/// `ARCHITECTURE.md` §1.4 — nothing below the entrypoint reads `$HOME` — and
+/// also what lets the whole test suite point `armada init` at a `TempDir`
+/// instead of at somebody's real guild.
+pub struct Where {
+    /// `~/.armada/`.
+    pub armada_home: PathBuf,
+    /// Where the working directory is, for the subprocess seam.
+    pub cwd: PathBuf,
+    /// Where an import reads from, when the caller did not say.
+    pub claude_home: PathBuf,
+}
+
+impl Where {
+    /// The guild under this `~/.armada/`.
+    pub fn guild(&self) -> Guild {
+        Guild::at(&self.armada_home)
+    }
+
+    /// Where an import reads from, as a person writes it — `~/.claude/`, on
+    /// every machine. A golden fixture cannot hold a real home directory.
+    pub fn claude_shown(&self) -> String {
+        import::display(&self.claude_home)
+    }
+}
+
+/// `armada guild init` — import, interview, and make it a repository.
+///
+/// The three steps of `docs/commands/guild/init.md`, in that order, and the
+/// order is the point: **import runs first and does most of the work**, so the
+/// interview is five questions rather than thirty.
+pub fn init(
+    run: &impl Run,
+    place: &Where,
+    ask: &mut dyn Ask,
+    options: &InitOptions,
+) -> Result<Output, ArmadaError> {
+    let guild = place.guild();
+    if guild.exists() && !options.force {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: guild.root().display().to_string(),
+            message: "a guild is already here".to_string(),
+            next_action: Some(
+                "`armada guild init --force` replaces it; `armada guild edit` changes one file"
+                    .to_string(),
+            ),
+        });
+    }
+
+    // 1. Adopt what is already on the machine.
+    let from = options
+        .from
+        .clone()
+        .unwrap_or_else(|| place.claude_home.clone());
+    let imported = if options.no_import {
+        import::run(Path::new("/nonexistent"), &guild).map_err(|e| unwritable(guild.root(), &e))?
+    } else {
+        import::run(&from, &guild).map_err(|e| unwritable(guild.root(), &e))?
+    };
+
+    // 2. Ask the five, from scratch. Every one of them has a default, and
+    //    `--defaults` is an `Ask` that takes all of them.
+    let mut answers = interview(ask, QUESTIONS.len());
+    if let Some(remote) = &options.remote {
+        answers.remote = Some(remote.clone());
+    }
+
+    // Your answer wins over the import where the two overlap (PLAN.md §13.4).
+    let mut wrote = Vec::new();
+    for fragment in armada_guild::memory::FRAGMENTS {
+        if let Some(answer) = answers.fragment(fragment) {
+            std::fs::write(guild.path(fragment), format!("{}\n", answer.trim()))
+                .map_err(|e| unwritable(&guild.path(fragment), &e))?;
+        }
+        wrote.push(fragment.to_string());
+    }
+    wrote
+        .extend(starters::write(guild.root(), &answers).map_err(|e| unwritable(guild.root(), &e))?);
+
+    // 3. The repository, and the remote if one was named.
+    if !guild.exists() {
+        repo::init(run, guild.root(), "guild: imported and interviewed")?;
+    } else {
+        repo::commit_all(run, guild.root(), "guild: re-initialised")?;
+    }
+    if let Some(remote) = &answers.remote {
+        repo::set_remote(run, guild.root(), remote)?;
+    }
+
+    let withheld: Vec<String> = imported
+        .withheld
+        .iter()
+        .map(|w| format!("{}:{}", w.source, w.key))
+        .collect();
+    machine::record(&place.armada_home, &answers, &imported.withheld)
+        .map_err(|e| unwritable(&place.armada_home, &e))?;
+
+    Ok(Output::GuildInit(Box::new(Envelope::ok(
+        "guild init",
+        None,
+        Status::Ready,
+        GuildInitData {
+            guild_path: shown(guild.root()),
+            imported: imported.inventory.facts(),
+            withheld,
+            wrote,
+            remote: answers.remote.clone(),
+            questions: QUESTIONS.len(),
+            skipped: answers.skipped(),
+        },
+    ))))
+}
+
+/// What `armada guild init` was asked for.
+#[derive(Debug, Clone, Default)]
+pub struct InitOptions {
+    /// `--from <path>`.
+    pub from: Option<PathBuf>,
+    /// `--no-import`.
+    pub no_import: bool,
+    /// `--remote <url>`.
+    pub remote: Option<String>,
+    /// `--force`.
+    pub force: bool,
+}
+
+/// Put the five questions and collect what comes back.
+///
+/// **Every answer is optional and nothing is re-asked.** An unparseable ceiling
+/// takes the documented default rather than looping: a loop is a loop a piped
+/// stdin cannot escape, and the default is a working outcome.
+pub fn interview(ask: &mut dyn Ask, _of: usize) -> Answers {
+    let mut answers = Answers::default();
+    for question in QUESTIONS {
+        let asked = armada_core::envelope::Asked {
+            number: question.number,
+            of: QUESTIONS.len(),
+            prompt: question.prompt.to_string(),
+            hint: question.hint.to_string(),
+        };
+        let Some(given) = ask.question(&asked) else {
+            continue;
+        };
+        record(&mut answers, question, &given);
+    }
+    answers
+}
+
+fn record(answers: &mut Answers, question: Question, given: &str) {
+    match question.number {
+        1 => answers.voice = Some(given.to_string()),
+        2 => answers.expectations = Some(given.to_string()),
+        3 => answers.how_i_work = Some(given.to_string()),
+        4 => answers.ceilings = interview::parse_ceilings(given).ok(),
+        _ => answers.remote = Some(given.to_string()),
+    }
+}
+
+/// `armada guild pull` — bring this machine's guild up to date.
+///
+/// **A fast-forward or nothing.** On a divergence this changes not one byte and
+/// reports both counts and every file touched on both sides, which is the whole
+/// of `guild/pull.md`'s exit-code contract.
+pub fn pull(run: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
+    let guild = place.guild();
+    let remote = require_remote(run, &guild)?;
+    let apart = repo::fetch(run, guild.root())?;
+    let incoming = repo::incoming(run, guild.root())?;
+    let outgoing = repo::outgoing(run, guild.root())?;
+
+    let diverged = apart.diverged();
+    if !diverged && apart.behind > 0 {
+        repo::fast_forward(run, guild.root())?;
+    }
+
+    let results = change_set(&incoming, &outgoing, diverged, Some(&guild));
+    let conflicts = results
+        .iter()
+        .filter(|row| row.status == Sync::Conflict)
+        .count();
+    let applied = !diverged;
+
+    let data = GuildSyncData {
+        remote: Some(remote),
+        ahead: apart.ahead,
+        behind: apart.behind,
+        results,
+        applied,
+        headline: (conflicts > 0).then_some(Headline::NeedsAttention),
+    };
+
+    Ok(Output::GuildSync(Box::new(if diverged {
+        Envelope::failed(
+            "guild pull",
+            None,
+            ArmadaError {
+                class: ErrClass::ToolFailed,
+                r#where: shown(guild.root()),
+                message: format!("the guild has diverged: {}", apart.written()),
+                next_action: Some(
+                    "resolve it in ~/.armada/guild, then `armada guild push`".to_string(),
+                ),
+            },
+            data,
+        )
+    } else {
+        Envelope::ok("guild pull", None, Status::Ready, data)
+    })))
+}
+
+/// `armada guild push` — send local changes.
+pub fn push(run: &impl Run, place: &Where, force: bool) -> Result<Output, ArmadaError> {
+    let guild = place.guild();
+    let remote = require_remote(run, &guild)?;
+    // **Commit first**, so an edit made outside `armada guild edit` is not left
+    // behind — the first half of the drift failure `PHASES.md` §11 names.
+    repo::commit_all(run, guild.root(), "guild: local changes")?;
+    let apart = repo::fetch(run, guild.root())?;
+
+    if apart.diverged() && !force {
+        let outgoing = repo::outgoing(run, guild.root())?;
+        let incoming = repo::incoming(run, guild.root())?;
+        let results = change_set(&incoming, &outgoing, true, Some(&guild));
+        return Ok(Output::GuildSync(Box::new(Envelope::failed(
+            "guild push",
+            None,
+            ArmadaError {
+                class: ErrClass::ToolFailed,
+                r#where: shown(guild.root()),
+                message: format!("the guild has diverged: {}", apart.written()),
+                next_action: Some("`armada guild pull` first".to_string()),
+            },
+            GuildSyncData {
+                remote: Some(remote),
+                ahead: apart.ahead,
+                behind: apart.behind,
+                results,
+                applied: false,
+                headline: Some(Headline::NeedsAttention),
+            },
+        ))));
+    }
+    // **`--force` is refused unless the remote is strictly behind**, which is
+    // to say unless it discards nothing. Checked here rather than trusted to
+    // `--force-with-lease`, so the refusal names what would have been lost.
+    if force && apart.behind > 0 {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: "--force".to_string(),
+            message: format!(
+                "--force would discard {} the remote has and this machine does not",
+                crate::render::format::count(apart.behind, "commit")
+            ),
+            next_action: Some("`armada guild pull` first".to_string()),
+        });
+    }
+
+    let outgoing = repo::outgoing(run, guild.root())?;
+    repo::push(run, guild.root(), force)?;
+
+    Ok(Output::GuildSync(Box::new(Envelope::ok(
+        "guild push",
+        None,
+        Status::Ready,
+        GuildSyncData {
+            remote: Some(remote),
+            ahead: apart.ahead,
+            behind: 0,
+            results: change_set(&outgoing, &[], false, None),
+            applied: true,
+            headline: None,
+        },
+    ))))
+}
+
+/// `armada guild export`.
+pub fn export(
+    run: &impl Run,
+    place: &Where,
+    out: Option<&Path>,
+    include_secrets: bool,
+) -> Result<Output, ArmadaError> {
+    let guild = place.guild();
+    let out = out
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| place.cwd.join(bundle::DEFAULT_OUT));
+    let exported = bundle::export(run, &guild, &place.armada_home, &out, include_secrets)?;
+
+    Ok(Output::GuildBundle(Box::new(Envelope::ok(
+        "guild export",
+        None,
+        Status::Ready,
+        GuildBundleData {
+            path: shown(&exported.path),
+            bytes: Some(exported.bytes),
+            contents: exported.inventory.facts(),
+            secrets: exported.secrets,
+            skipped: Vec::new(),
+            conflicts: Vec::new(),
+        },
+    ))))
+}
+
+/// `armada guild import`.
+pub fn import_bundle(
+    run: &impl Run,
+    place: &Where,
+    path: &Path,
+    merge: bool,
+    force: bool,
+) -> Result<Output, ArmadaError> {
+    let guild = place.guild();
+    if guild.exists() && !merge && !force {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: shown(guild.root()),
+            message: "a guild is already here".to_string(),
+            next_action: Some(
+                "`--merge` keeps yours where the two differ; `--force` replaces it".to_string(),
+            ),
+        });
+    }
+    let unpacked = bundle::import(run, path, &guild, &place.armada_home, merge)?;
+    // A bundle carries no history, so the imported guild starts a fresh one.
+    if guild.exists() {
+        repo::commit_all(run, guild.root(), "guild: imported from a bundle")?;
+    } else {
+        repo::init(run, guild.root(), "guild: imported from a bundle")?;
+    }
+
+    let mut skipped = Vec::new();
+    if unpacked.machine_skipped {
+        skipped.push("machine.yml".to_string());
+    }
+    let conflicts = unpacked.conflicts.clone();
+    let data = GuildBundleData {
+        path: shown(path),
+        bytes: None,
+        contents: unpacked.inventory.facts(),
+        secrets: false,
+        skipped,
+        conflicts,
+    };
+    Ok(Output::GuildBundle(Box::new(Envelope::ok(
+        "guild import",
+        None,
+        if unpacked.conflicts.is_empty() {
+            Status::Ready
+        } else {
+            Status::Partial
+        },
+        data,
+    ))))
+}
+
+/// Clone a guild from a remote — `armada init --guild`, and the second-machine
+/// path `PHASES.md` §8.4's done-when describes.
+pub fn clone(run: &impl Run, place: &Where, remote: &str) -> Result<(), ArmadaError> {
+    let guild = place.guild();
+    if guild.exists() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: shown(guild.root()),
+            message: "a guild is already here".to_string(),
+            next_action: Some("`armada guild pull` brings it up to date".to_string()),
+        });
+    }
+    // **`git clone` makes the directory itself and refuses a non-empty one**,
+    // and `armada init` has already created `guild/` with its four empty
+    // subdirectories — so the scaffold is removed before the clone rather than
+    // cloned into. Measured: without this, `armada init --guild <url>` — the
+    // whole second-machine path — fails with *destination path 'guild' already
+    // exists and is not an empty directory*.
+    //
+    // **Only a scaffold is removed.** If anything holds a file, this refuses:
+    // `remove_dir_all` on a directory somebody has put content in is the one
+    // unrecoverable mistake this verb could make.
+    if let Some(file) = a_file_under(guild.root()) {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: shown(guild.root()),
+            message: format!(
+                "{} holds {file}, and cloning over it would lose it",
+                shown(guild.root())
+            ),
+            next_action: Some(
+                "move it aside, or `armada guild init` and then `armada guild pull`".to_string(),
+            ),
+        });
+    }
+    let _ = std::fs::remove_dir_all(guild.root());
+    repo::clone(run, remote, guild.root())
+}
+
+/// The first regular file anywhere under a directory, guild-relative, or `None`
+/// for a tree of empty directories.
+fn a_file_under(root: &Path) -> Option<String> {
+    fn walk(root: &Path, at: &Path) -> Option<String> {
+        for entry in std::fs::read_dir(at).ok()?.filter_map(Result::ok) {
+            let path = entry.path();
+            let found = if path.is_dir() {
+                walk(root, &path)
+            } else {
+                path.strip_prefix(root)
+                    .ok()
+                    .map(|relative| relative.display().to_string())
+            };
+            if found.is_some() {
+                return found;
+            }
+        }
+        None
+    }
+    walk(root, root)
+}
+
+/// The remote, or the refusal `guild/push.md` and `pull.md` both specify:
+/// **exit `2`, and point at `export`.**
+fn require_remote(run: &impl Run, guild: &Guild) -> Result<String, ArmadaError> {
+    if !guild.exists() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: shown(guild.root()),
+            message: "there is no guild here".to_string(),
+            next_action: Some("`armada init`, or `armada guild init`".to_string()),
+        });
+    }
+    repo::remote(run, guild.root())?.ok_or_else(|| ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: shown(guild.root()),
+        message: "this guild has no remote, so there is nothing to sync with".to_string(),
+        next_action: Some(
+            "`armada guild export` writes a bundle instead; a remote is set by \
+             `armada guild init --remote <url>`"
+                .to_string(),
+        ),
+    })
+}
+
+/// Group the change set by the area of the guild it touches.
+///
+/// **One row per area, not per file**, which is the agreed layout
+/// (`tests/golden/render/guild-pull.plain`): `skills`, `hooks`, `workflows` and
+/// the three fragments by name. A guild with forty skills would otherwise print
+/// forty rows on a verb whose whole job is to be glanced at.
+///
+/// A path touched on **both** sides is a `conflict`, and it is reported rather
+/// than resolved. `diverged` is what decides whether the outgoing side counts:
+/// on a fast-forward there is nothing local to conflict with.
+fn change_set(
+    incoming: &[repo::Touched],
+    outgoing: &[repo::Touched],
+    diverged: bool,
+    guild: Option<&Guild>,
+) -> Vec<SyncItem> {
+    let local: Vec<&str> = outgoing.iter().map(|t| t.path.as_str()).collect();
+    // Keyed on **the outcome first and the area second**, which is also the
+    // order the rows come out in (`tests/golden/render/guild-pull.plain`):
+    // everything that arrived, then everything that changed, then the conflicts,
+    // then what did not move. A reader scanning the STATUS column is scanning
+    // for one word, and sorting by area would scatter it.
+    //
+    // The pair is the key rather than the area alone, so one area can appear
+    // once as `added` and once as `conflict` — which is what happens when a
+    // skill arrives and another is edited on both sides.
+    let mut grouped: BTreeMap<(usize, String), (Sync, Vec<String>)> = BTreeMap::new();
+
+    for touched in incoming {
+        let (area, name) = area_of(&touched.path);
+        let status = if diverged && local.contains(&touched.path.as_str()) {
+            Sync::Conflict
+        } else {
+            match touched.change {
+                repo::Change::Added => Sync::Added,
+                repo::Change::Changed => Sync::Changed,
+                repo::Change::Removed => Sync::Removed,
+            }
+        };
+        grouped
+            .entry((rank(status), area))
+            .or_insert((status, Vec::new()))
+            .1
+            .push(name);
+    }
+
+    let mut rows: Vec<SyncItem> = grouped
+        .into_iter()
+        .map(|((_, area), (status, mut names))| {
+            names.sort();
+            names.dedup();
+            SyncItem {
+                status,
+                item: area.clone(),
+                // **A conflict says what happened, not which files.** The names
+                // are already in the ITEM column for a fragment, and for an
+                // area the useful fact is that both sides moved.
+                detail: if status == Sync::Conflict {
+                    "edited here and on origin".to_string()
+                } else if names.len() == 1 && names[0] == *area {
+                    // A file at the guild's root is its own area, so naming it
+                    // twice — `changed  voice.md  voice.md` — says nothing the
+                    // ITEM column has not already said.
+                    String::new()
+                } else {
+                    names.join(", ")
+                },
+            }
+        })
+        .collect();
+
+    // **What did not move is reported too.** A pull that lists three areas and
+    // says nothing about the fourth leaves a reader wondering whether it was
+    // checked — the same reasoning `clean` keeps its table for.
+    if let Some(guild) = guild {
+        let touched: Vec<&str> = rows.iter().map(|row| row.item.as_str()).collect();
+        rows.extend(unchanged(guild, &touched));
+    }
+    rows
+}
+
+/// Where each outcome sits in the STATUS column's reading order.
+///
+/// Declared here rather than derived from the enum's discriminant, so a variant
+/// added to `Sync` for some other reason cannot silently reorder a frozen
+/// layout.
+const fn rank(status: Sync) -> usize {
+    match status {
+        Sync::Added => 0,
+        Sync::Changed => 1,
+        Sync::Removed => 2,
+        Sync::Conflict => 3,
+        Sync::Unchanged => 4,
+    }
+}
+
+/// One row per guild area the change set did not touch, with how many files it
+/// holds.
+fn unchanged(guild: &Guild, touched: &[&str]) -> Vec<SyncItem> {
+    armada_guild::layout::GUILD_DIRECTORIES
+        .iter()
+        .filter(|area| !touched.contains(area))
+        .filter_map(|area| {
+            let count = std::fs::read_dir(guild.path(area))
+                .map(|listing| listing.filter_map(Result::ok).count())
+                .unwrap_or(0);
+            // An area with nothing in it is not "unchanged", it is empty, and a
+            // row saying `unchanged  hooks  0` is a row about nothing.
+            (count > 0).then(|| SyncItem {
+                status: Sync::Unchanged,
+                item: (*area).to_string(),
+                detail: count.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// The area a guild-relative path belongs to, and the name within it.
+///
+/// `skills/add-migration/SKILL.md` is `skills` and `add-migration`;
+/// `voice.md` is its own area and its own name, because a fragment is a file a
+/// person edits directly and naming it `.` would hide the one that changed.
+fn area_of(path: &str) -> (String, String) {
+    match path.split_once('/') {
+        Some((area, rest)) => (
+            area.to_string(),
+            rest.split('/').next().unwrap_or(rest).to_string(),
+        ),
+        None => (path.to_string(), path.to_string()),
+    }
+}
+
+/// A path as a person writes it. A golden fixture cannot hold a real home
+/// directory, and nor should any output — it is the same string on every
+/// machine and says nothing.
+fn shown(path: &Path) -> String {
+    let text = path.display().to_string();
+    match text.find("/.armada") {
+        Some(at) => format!("~{}", &text[at..]),
+        None => text,
+    }
+}
+
+fn unwritable(path: &Path, error: &std::io::Error) -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::Environment,
+        r#where: path.display().to_string(),
+        message: format!("cannot write {}: {error}", path.display()),
+        next_action: Some("check the path is writable, then retry unchanged".to_string()),
+    }
+}
+
+/// What is in a guild, for `doctor` and for the summary lines.
+pub fn inventory_of(guild: &Guild) -> inventory::Inventory {
+    inventory::Inventory::of(guild.root())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn touched(path: &str, change: repo::Change) -> repo::Touched {
+        repo::Touched {
+            path: path.to_string(),
+            change,
+        }
+    }
+
+    /// **One row per area, not per file.** A guild with forty skills would
+    /// otherwise print forty rows on a verb whose whole job is to be glanced at.
+    #[test]
+    fn a_change_set_groups_by_the_area_of_the_guild_it_touches() {
+        let rows = change_set(
+            &[
+                touched("skills/add-migration/SKILL.md", repo::Change::Added),
+                touched("skills/triage-flake/SKILL.md", repo::Change::Added),
+                touched("hooks/stop-notify.sh", repo::Change::Changed),
+            ],
+            &[],
+            false,
+            None,
+        );
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].status, Sync::Added);
+        assert_eq!(rows[0].item, "skills");
+        assert_eq!(rows[0].detail, "add-migration, triage-flake");
+        assert_eq!(rows[1].item, "hooks");
+        assert_eq!(rows[1].detail, "stop-notify.sh");
+    }
+
+    /// **A path touched on both sides is a conflict, and it is reported.** The
+    /// row is named for the file rather than for its area, because a fragment
+    /// is a file a person opens.
+    #[test]
+    fn a_path_touched_on_both_sides_is_a_conflict() {
+        let rows = change_set(
+            &[touched("voice.md", repo::Change::Changed)],
+            &[touched("voice.md", repo::Change::Changed)],
+            true,
+            None,
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, Sync::Conflict);
+        assert_eq!(rows[0].item, "voice.md");
+        assert_eq!(rows[0].detail, "edited here and on origin");
+    }
+
+    /// On a fast-forward there is nothing local to conflict with, so the same
+    /// two sides are not a conflict.
+    #[test]
+    fn the_same_path_is_not_a_conflict_when_the_histories_have_not_diverged() {
+        let rows = change_set(
+            &[touched("voice.md", repo::Change::Changed)],
+            &[touched("voice.md", repo::Change::Changed)],
+            false,
+            None,
+        );
+        assert_eq!(rows[0].status, Sync::Changed);
+    }
+
+    #[test]
+    fn a_path_is_split_into_the_area_and_the_name_within_it() {
+        assert_eq!(
+            area_of("skills/add-migration/SKILL.md"),
+            ("skills".to_string(), "add-migration".to_string())
+        );
+        assert_eq!(
+            area_of("voice.md"),
+            ("voice.md".to_string(), "voice.md".to_string())
+        );
+    }
+
+    /// A path is shown the way a person writes it, so no output and no fixture
+    /// ever carries a real home directory.
+    #[test]
+    fn a_guild_path_is_shown_the_way_a_person_writes_it() {
+        assert_eq!(
+            shown(Path::new("/Users/agent/.armada/guild")),
+            "~/.armada/guild"
+        );
+        assert_eq!(shown(Path::new("/tmp/elsewhere")), "/tmp/elsewhere");
+    }
+
+    /// The interview puts all five and records each answer against the file it
+    /// belongs to.
+    #[test]
+    fn the_interview_puts_five_questions_and_files_each_answer() {
+        let mut ask = crate::ask::Scripted {
+            answers: vec![
+                Some("brief".to_string()),
+                None,
+                None,
+                Some("8, 200k, 30m".to_string()),
+                Some("git@example.com:me/guild.git".to_string()),
+            ],
+            ..crate::ask::Scripted::default()
+        };
+        let answers = interview(&mut ask, QUESTIONS.len());
+
+        assert_eq!(ask.asked.len(), 5);
+        assert_eq!(ask.asked[0].of, 5);
+        assert_eq!(answers.voice.as_deref(), Some("brief"));
+        assert_eq!(answers.expectations, None);
+        assert_eq!(answers.ceilings.unwrap().iterations, 8);
+        assert_eq!(answers.skipped(), 2);
+    }
+
+    /// **An unreadable ceiling takes the default rather than looping.** A loop
+    /// is a loop a piped stdin cannot escape, and the default works.
+    #[test]
+    fn an_unreadable_ceiling_falls_back_to_the_default() {
+        let mut ask = crate::ask::Scripted {
+            answers: vec![None, None, None, Some("lots".to_string()), None],
+            ..crate::ask::Scripted::default()
+        };
+        let answers = interview(&mut ask, QUESTIONS.len());
+        assert_eq!(answers.ceilings, None);
+        assert_eq!(answers.skipped(), 5);
+    }
+}

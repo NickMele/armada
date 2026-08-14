@@ -29,8 +29,10 @@
 //! than a flag you reach for without reading.
 
 use armada_core::envelope::{
-    CheckData, CleanData, DispatchData, Envelope, GrantedCommand, InitData, PortReport, Released,
-    ResolvedSkillView, ResultRow, ScanData, SkillsData, StatusData, Unreclaimed, VerifyData,
+    Asked, CheckData, CleanData, DispatchData, DoctorData, Envelope, Finding, GrantedCommand,
+    GuildChoice, GuildSyncData, Headline, Health, InitData, MachineInitData, PortReport, Released,
+    ResolvedSkillView, ResultRow, ScanData, SkillsData, StatusData, Sync, SyncItem, Unreclaimed,
+    VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::id::WorkspaceId;
@@ -500,6 +502,159 @@ fn skills_show_matches_its_fixture() {
     assert_render("skills-show", &skills_envelope(one));
 }
 
+// ------------------------------------------------------------------- M2: the
+// three layouts that came up out of `pending/`
+
+fn finding(check: &str, status: Health, detail: &str, remedy: Option<&str>) -> Finding {
+    Finding {
+        check: check.to_string(),
+        status,
+        detail: detail.to_string(),
+        remedy: remedy.map(str::to_string),
+    }
+}
+
+/// **`armada init` on a machine that has never seen Armada** — the transcript,
+/// including the one question and the first interview prompt.
+///
+/// Transcribed from `docs/reference-output/command-output.html` into
+/// `pending/init-machine.plain` before any of this existed, and moved up here
+/// unchanged. The drawing shows question 1 and then the verdict rather than all
+/// five, which is what it froze and therefore what this renders.
+///
+/// **The wordmark is not in this fixture**, though `armada init` is one of its
+/// two sites. It is drawn in `main`: the pair of files is rendered at one width
+/// for both audiences, and a decoration that appears in only one of them is not
+/// a *styling* difference the pair property can express.
+#[test]
+fn armada_init_matches_its_fixture() {
+    let output = Output::MachineInit(Box::new(Envelope::ok(
+        "init",
+        None,
+        Status::Ready,
+        MachineInitData {
+            results: vec![
+                finding("git", Health::Found, "2.51.0", None),
+                finding("claude", Health::Found, "2.0.14", None),
+                finding(
+                    "docker",
+                    Health::Missing,
+                    "not required by every repo",
+                    None,
+                ),
+                finding(
+                    "~/.armada/",
+                    Health::Created,
+                    "guild, jobs, workspaces",
+                    None,
+                ),
+            ],
+            guild: Some(GuildChoice {
+                question: "Do you already have a guild?".to_string(),
+                options: vec![
+                    "pull from a remote".to_string(),
+                    "import a bundle".to_string(),
+                    "build one now".to_string(),
+                ],
+                chosen: 3,
+            }),
+            imported: vec![
+                "imported from ~/.claude/".to_string(),
+                "19 skills".to_string(),
+                "12 hooks".to_string(),
+                "4 plugins".to_string(),
+                "CLAUDE.md".to_string(),
+            ],
+            asked: vec![Asked {
+                number: 1,
+                of: 5,
+                prompt: "How should agents write to you?".to_string(),
+                hint: "(enter to keep what import found)".to_string(),
+            }],
+            questions: 5,
+            skipped: 0,
+            guild_path: "~/.armada/guild".to_string(),
+        },
+    )));
+    assert_render("init-machine", &output);
+}
+
+/// **`armada doctor`, and the `→` lines that are the point of it.**
+///
+/// One correction to the transcribed fixture, made by hand and recorded here
+/// rather than absorbed: the drawing's summary reads `4 ok · 1 missing · 2
+/// warnings` over a table with **three** `ok` rows. Six rows, seven counted.
+/// The tally is derived from the rows by [`armada_helm::verbs`], so shipping the
+/// drawing's arithmetic would have meant either freezing a summary that
+/// miscounts its own table or hand-writing a tally the code cannot produce.
+/// The layout is untouched; one digit is not the layout.
+#[test]
+fn doctor_matches_its_fixture() {
+    let results = vec![
+        finding("git", Health::Ok, "2.51.0", None),
+        finding("claude", Health::Ok, "2.0.14", None),
+        finding(
+            "docker",
+            Health::Missing,
+            "compose driver unavailable",
+            Some("install docker, or accept that compose repos will not start"),
+        ),
+        finding(
+            "guild",
+            Health::Stale,
+            "3 commits behind origin",
+            Some("armada guild pull"),
+        ),
+        // **No remedy, and that is not an omission.** The fix for a fragment
+        // still as imported is to write it, which is prose rather than a
+        // command — and a `→` line reading "edit it" is the documentation
+        // round-trip `doctor` exists to save.
+        finding("guild", Health::Partial, "voice.md still as imported", None),
+        finding("manifest.db", Health::Ok, "2 workspaces, 0 orphans", None),
+    ];
+    let output = Output::Doctor(Box::new(Envelope::ok(
+        "doctor",
+        None,
+        Status::Partial,
+        DoctorData {
+            tally: DoctorData::tally(&results),
+            headline: DoctorData::headline(&results),
+            results,
+        },
+    )));
+    assert_render("doctor", &output);
+}
+
+/// **`armada guild pull` that found a conflict**, which is the case worth
+/// freezing: nothing was applied, and the rows are what is waiting.
+#[test]
+fn guild_pull_matches_its_fixture() {
+    let item = |status: Sync, item: &str, detail: &str| SyncItem {
+        status,
+        item: item.to_string(),
+        detail: detail.to_string(),
+    };
+    let output = Output::GuildSync(Box::new(Envelope::ok(
+        "guild pull",
+        None,
+        Status::Failed,
+        GuildSyncData {
+            remote: Some("git@example.com:me/guild.git".to_string()),
+            ahead: 2,
+            behind: 3,
+            results: vec![
+                item(Sync::Added, "skills", "add-migration, triage-flake"),
+                item(Sync::Changed, "hooks", "stop-notify.sh"),
+                item(Sync::Conflict, "voice.md", "edited here and on origin"),
+                item(Sync::Unchanged, "workflows", "4"),
+            ],
+            applied: false,
+            headline: Some(Headline::NeedsAttention),
+        },
+    )));
+    assert_render("guild-pull", &output);
+}
+
 /// `armada --help`, which is the page the milestone was opened for.
 #[test]
 fn the_help_pages_match_their_fixtures() {
@@ -693,6 +848,7 @@ fn strip_ansi(text: &str) -> String {
 /// [`Style::arrow`]: armada_helm::render::style::Style::arrow
 fn fold(text: &str) -> String {
     text.replace(['—', '–'], "-")
+        .replace('›', ">")
         .replace('→', "->")
         .replace(" · ", ", ")
 }
