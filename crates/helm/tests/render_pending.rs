@@ -28,6 +28,13 @@
 //! | no ANSI escape | this is the agent's render; colour is the other file |
 //! | eighty columns, no trailing space | it has to fit and it has to diff |
 //!
+//! **Typographic characters fold to ASCII here, as they do everywhere else.**
+//! `doctor`'s fix lines are `→` at a terminal and `->` for an agent, on the same
+//! rule that makes an em dash a hyphen (`render/style.rs`). The fix lines
+//! themselves are settled and not optional: a check that reports a problem
+//! without the command that fixes it sends the reader to the documentation,
+//! which is most of what `doctor` exists to save.
+//!
 //! # When the verb ships
 //!
 //! The milestone that builds it authors the `.tty` twin — the colour of each
