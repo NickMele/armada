@@ -16,6 +16,7 @@ and the three status enums. These pages use them without re-explaining them.
 |---|---|---|
 | [`init.md`](init.md) | `armada init` — set up **this machine** | M2 |
 | [`doctor.md`](doctor.md) | `armada doctor` — what this machine is missing | M2 |
+| [`render.md`](render.md) | Output, colour and the palette — how every verb renders | M1.5 |
 | [`helm/helm.md`](helm/helm.md) | `armada` — enter Helm | M3 |
 | [`helm/bridge.md`](helm/bridge.md) | `armada bridge` — the live screen | M3 |
 

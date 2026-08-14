@@ -91,29 +91,8 @@ capability**, which is what keeps it a rendering choice rather than an architect
 
 ## Palette
 
-One palette, defined here, used by every coloured surface Armada renders.
-
-| Role | Hex | Used for |
-|---|---|---|
-| void / bg | `#0A0E14` | background |
-| foreground | `#E6E8EB` | body text |
-| signal amber | `#FFA940` | `RUNNING`, headings, the prompt |
-| naval blue | `#4C9FE8` | Job and Drone identifiers |
-| beacon green | `#3DDC84` | `OK`, `PASS`, live indicator |
-| distress red | `#FF5C5C` | `BLOCKED`, `FAILED` |
-| flare orange | `#FFB454` | `STALLED` |
-| radar cyan | `#5CE1E6` | `QUEUED`, tool calls |
-| stasis purple | `#C792EA` | `PAUSED` |
-| abort pink | `#FF7AB6` | `ABORTED` |
-| steel grey | `#6B7280` | box drawing, muted text |
-| deep slate | `#1E2530` | borders, fills |
-
-**Truecolor is the target and there is no 16-colour fallback.** Signal amber and flare orange
-are one ANSI step apart; at 16 colours both become bright yellow and the `RUNNING` / `STALLED`
-distinction disappears — precisely where a fallback would need to work. Terminals in scope here
-are truecolor. On a terminal that is not, the Bridge degrades to monochrome with the state word
-carrying the meaning, since state is already spelled out in text rather than signalled by colour
-alone.
+One palette, shared with every coloured surface Armada renders, defined in
+[`../render.md`](../render.md).
 
 ## Dependencies
 

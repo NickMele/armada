@@ -720,6 +720,45 @@ free.
 are services. That is what lets the two states with ports but no running services (`init`, and
 `down` which keeps the block) report them without a second, duplicate top-level map.
 
+### 3.1.1 The human render — three audiences, one envelope
+
+`--json` is the machine contract and §3.1 specifies it. What it does not specify is the other
+output, and "whatever `render.rs` happens to print" is not a specification.
+
+**There are three audiences, not two.**
+
+| Audience | Detected by | Gets |
+|---|---|---|
+| A person at a terminal | stdout is a TTY | Colour, aligned tables, progress |
+| **An agent reading stdout** | stdout is not a TTY | The same structure, no ANSI, no progress, no redraw |
+| A parser | `--json` | The envelope and nothing else |
+
+**The middle row is the one that gets forgotten, and it is the common case here.** Agents call
+this CLI constantly and most of them do not pass `--json` — they run `armada manifest status`
+and read what comes back. Output that is only legible with colour is output an agent reads as
+noise, and escape codes in a captured string are worse than noise. Non-TTY human output is a
+first-class mode, not a degraded one: same columns, same order, same words, minus the styling.
+
+**Progress goes to stderr. Always.** A spinner on stdout means `armada manifest check | jq`
+receives frames of animation, and the one consumer the envelope exists for is the one that
+breaks. Anything that redraws, animates or reports intermediate state is stderr; stdout carries
+the result.
+
+**Colour is decided once, in one place.** `--color auto|always|never`, defaulting to `auto`.
+`auto` means colour when stdout is a TTY **and** `NO_COLOR` is unset. `NO_COLOR` is honoured
+whatever its value — that is the standard, and arguing with it costs a bug report from someone
+who set it deliberately.
+
+**Truecolor is the target and there is no 16-colour fallback** — the palette is one page,
+shared with the Bridge, and its two ambers collapse to the same yellow at 16 colours
+([`commands/render.md`](commands/render.md)). Terminals that cannot do truecolor get the
+no-colour path, which is a supported mode rather than a broken one.
+
+**One renderer, not one per verb.** `render.rs` is already the single place human output is
+produced, and it stays that way: a table helper, a status token helper and a palette, used by
+every verb. The moment a verb formats its own output, two verbs disagree about what a column
+is called.
+
 ### 3.2 Selectors
 
 Check ids are derived as `<component>:<check>` (§4.1), so Armada always holds the complete set

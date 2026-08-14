@@ -61,6 +61,7 @@ that matters when the whole thing is built in evenings.
 |---|---|---|---|
 | **M0** | — | Research spike: four questions, throwaway prototypes, findings | **done** — §9.1 |
 | **M1** | all | One tree: rename, four crates, one binary, private repo, subtraction | **done, less two rows** — §8.3 |
+| **M1.5** | Manifest | The render layer: palette, tables, help, progress. Three audiences, one envelope | next |
 | **M2** | Guild | `armada init`, the interview, import from `~/.claude/`, sync | |
 | **M3** | Fleet + Helm | Jobs and Drones, budgets, inbox — **and Helm and the Bridge on top** | the product |
 | **M4** | Fleet | Workflow loops with real verification | blocked on `check --detach` / `--status` |
@@ -153,6 +154,26 @@ was scheduled here to share one rewrite of the fixtures, and that saving is spen
 now, so it can land in any milestone. The **Repo** and **Deletes** rows are not outstanding —
 they were overtaken by the decision to stay public
 ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4).
+
+### 8.3.1 M1.5 — the render layer
+
+**Inserted after M1, because using the CLI made the gap obvious.** Everything before this
+specified `--json` carefully and left human output to whatever `render.rs` happened to print.
+The help text is hard to read, nothing is aligned, and nothing is coloured.
+
+| | |
+|---|---|
+| **Palette** | Promoted out of the Bridge page into [`commands/render.md`](commands/render.md), shared by every coloured surface. Truecolor, no 16-colour fallback. |
+| **Three audiences** | TTY human, **non-TTY human**, `--json` ([`PLAN.md`](PLAN.md) §3.1.1). The middle one is the common case: agents call this CLI and mostly do not pass `--json`. |
+| **Tables** | One aligned-column renderer for `status`, `check` and later `fleet ls`. Terminal-width aware, degrading by truncating a column rather than wrapping a row. |
+| **Help** | Restructured. The current output is a wall of flags with no grouping and inconsistent alignment. |
+| **Progress** | Spinners and per-check progress for long runs — **on stderr**, so `\| jq` never sees a frame. |
+| **Colour control** | `--color auto\|always\|never`, `NO_COLOR` honoured. Decided once, in one place. |
+
+**Done when:** `armada manifest check` is pleasant at a terminal, identical in structure when
+piped, byte-identical to today under `--json`, and `armada --help` can be read without
+squinting. **No verb changes behaviour** — this is a renderer, and a behaviour change here is
+a defect.
 
 ### 8.4 M2 — Guild
 
