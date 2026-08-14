@@ -2,8 +2,7 @@
 
 Bring this workspace's services up and ready-checked.
 
-> **Status: not built.** Answers `bad_invocation` today. ([`PHASES.md`](../../PHASES.md) §8.6 depends
-> on `check`, not on this; `up` has no milestone blocker other than being unwritten.)
+> **Status: built.**
 
 ## Synopsis
 
@@ -42,8 +41,16 @@ redis     ready  0.3s
 web       ready  4.1s  http://localhost:41200
 ```
 
-`--json` returns one result per component with argv, the ready-check that was waited on, the
-wait duration, and the assigned ports.
+`--json` returns one result per component with `argv`, the ready-check that was waited on in
+`reason`, the wait duration, the assigned ports, and `owns[]` — the ids of everything Armada
+now holds for it, in the `<kind>:<reference>` grammar ([`PLAN.md`](../../PLAN.md) §3.1).
+
+**Services are started one at a time.** `needs:` already forces a dependency to be *ready*
+before its dependent starts, so concurrency would only overlap two independent ready-checks —
+and a second concurrent scheduler is a second place a deadlock can hide.
+
+**A service whose dependency did not come up is `SKIPPED`**, naming the one that stopped it,
+rather than started into a failure two levels from its own logs.
 
 ## Dependencies
 

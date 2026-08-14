@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "verb": "down",
+  "workspace": "<workspace>",
+  "status": "DOWN",
+  "error": null,
+  "data": {
+    "port_block": {
+      "from": 5460,
+      "to": 5469
+    },
+    "results": [
+      {
+        "id": "api",
+        "status": "DOWN",
+        "ports": {
+          "api": {
+            "port": 5460,
+            "state": "RESERVED"
+          }
+        },
+        "duration_ms": 0
+      }
+    ]
+  }
+}

@@ -20,6 +20,7 @@ mod support;
 
 use armada_core::ctx::{Clock, Ctx, Run, RunOutput, RunRequest, SpawnError};
 use armada_core::error::ArmadaError;
+use armada_core::lifecycle::Direction;
 use armada_core::registry::{OwnedKind, OwnedRow};
 use armada_core::scope::Lens;
 use armada_helm::verbs::Output;
@@ -138,6 +139,12 @@ impl Redactions {
         // real assertion. Measured by trying: the first version of this
         // redaction rewrote `init`'s stable `0` and broke its snapshot.
         out = redact_field(&out, "\"run_id\": \"", "\"", "<run>");
+        // **A process group id, for the same reason as the run id.** It is the
+        // kernel's, so it differs between two correct runs — and it is the one
+        // value in `up`'s payload that does. The `pgid:` prefix stays, because
+        // the grammar `<kind>:<reference>` is exactly what this snapshot is
+        // here to freeze.
+        out = redact_field(&out, "\"pgid:", "\"", "<pgid>");
         out = redact_run_paths(&out);
         out
     }
@@ -238,19 +245,46 @@ fn init_matches_its_snapshot() {
     assert_golden("init", &json);
 }
 
-/// **The owned resources are recorded by hand, and they have to be.**
+/// `armada manifest up`, and then `armada manifest down` over the same
+/// workspace.
 ///
-/// `results[].owns[]` is populated from the machine store, and the only thing
-/// that writes to it today is `init`, which records a declared `owns.release:`
-/// and nothing else — containers, volumes and process groups arrive with `up`,
-/// which is not built (PLAN.md §6.0). So no reachable invocation produces a
-/// non-empty `owns[]`, and a snapshot that waited for one would carry the field
-/// only after the milestone that could have renamed it.
+/// **One scenario for two snapshots, because the second only means anything
+/// after the first.** `down`'s payload is a claim about services that were
+/// running, and a `down` over a workspace that never came up would freeze the
+/// empty case while looking like the ordinary one.
 ///
-/// That is exactly the failure this suite exists to catch: **key renames**,
-/// which every other test misses because they assert on value objects. Writing
-/// the rows directly puts the store in the state `up` will put it in, which is
-/// the state the payload has to be right for.
+/// The service is `sleep`, which is the honest shape here: it starts, it stays
+/// up, and the only handle it has is its process group — so the snapshot
+/// carries a real `owns[]` written by the verb rather than by the test.
+#[test]
+fn up_and_down_match_their_snapshots() {
+    let scenario = scenario(SERVICES);
+    run_verb(&scenario, |app| verbs::init::run(app, false));
+
+    let json = run_verb(&scenario, |app| {
+        verbs::services::run(app, Direction::Up, None, false)
+    });
+    assert_golden("up", &json);
+
+    let json = run_verb(&scenario, |app| {
+        verbs::services::run(app, Direction::Down, None, false)
+    });
+    assert_golden("down", &json);
+}
+
+/// **The owned resources are recorded by hand**, and it stays that way now that
+/// `up` writes real ones.
+///
+/// `up` records containers, volumes and process groups, so a non-empty `owns[]`
+/// is reachable — but every one of those values is the kernel's or the
+/// daemon's, and a snapshot built from them would be a snapshot of two
+/// redactions. Writing two rows directly puts the store in exactly the state
+/// `up` leaves it in, with references a human chose, and `status` is the verb
+/// under test rather than `up`.
+///
+/// The failure this suite exists to catch is a **key rename**, which every
+/// other test misses because they assert on value objects. That is a property
+/// of the payload's shape, and the shape is the same either way.
 #[test]
 fn status_matches_its_snapshot() {
     let scenario = scenario(CONFIG);
@@ -452,6 +486,24 @@ manifest:
         lint: { cmd: \"./exiter.sh 0\" }
         types: { cmd: \"./exiter.sh 0\", scope: component }
         test: { cmd: \"./exiter.sh 2\", scope: component }
+";
+
+/// A workspace whose one component is a **service**, for the two verbs that act
+/// on one.
+///
+/// Separate from [`CONFIG`] rather than folded into it: `CONFIG`'s `run.cmd` is
+/// a script the scratch repo does not have, which is right for the verbs that
+/// never spawn it and useless for the two that do.
+const SERVICES: &str = "\
+manifest:
+  version: 1
+  components:
+    api:
+      run:
+        driver: command
+        cmd: sleep 300
+        ports: { api: 3000 }
+        ready: { none: true }
 ";
 
 const CONFIG: &str = "\

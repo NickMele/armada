@@ -2,7 +2,7 @@
 
 Stop this workspace's services. Keep the port block.
 
-> **Status: not built.** Answers `bad_invocation` today.
+> **Status: built.**
 
 The distinction from [`clean.md`](clean.md) is the whole reason both exist: `down` is
 **pause**, `clean` is **release**. `down` keeps the port block so the next `up` gets the same
@@ -38,7 +38,16 @@ postgres  stopped
 ports     41200–41209 kept
 ```
 
-`--json` returns one result per component plus the retained port block.
+`--json` returns one result per component plus the retained port block, in the same
+`data` shape [`up.md`](up.md) answers in.
+
+**A stop is confirmed, not merely signalled.** `down` reports `DOWN` for a `command` service
+only once its process group is gone — SIGTERM, a grace period, then SIGKILL, an unconditional
+escalation rather than a retry, because a leader that ignores SIGTERM immunises its whole
+group and ignores the second one too. A group that survives SIGKILL fails the row.
+
+**A named volume survives `down`.** It is the workspace's data, and `clean` is what releases
+it.
 
 ## Dependencies
 

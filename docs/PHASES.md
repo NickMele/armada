@@ -287,9 +287,9 @@ evidence an external command produced; an agent asserting "tests pass" is not ev
 exit code is. The engine that produces that exit code is built and dogfooded — scope
 resolution, the scheduler, the run directory and verdict aggregation, with what it settled and
 the one gap it leaves open in §9.3. What it still refuses by name is `--detach` and `--status`,
-so a loop can run a check to completion but cannot yet start one and poll it. Manifest's
-remaining verbs — `up`, `down`, `config`, `agents-md`, `explain` — are first-class Armada work
-and not background work.
+so a loop can run a check to completion but cannot yet start one and poll it. `up` and `down` have since landed with them; Manifest's
+remaining verbs — `agents-md` and `explain` — are first-class Armada work and not background
+work.
 
 **Done when:** a bug workflow reproduces a failure, writes a test that fails first, fixes it,
 gets `check` green, and lands on a local branch, with no human turn in the middle and a hard
@@ -485,7 +485,7 @@ grandchild — the only way to see this, since the orphan is invisible from insi
 
 | Risk | Why it bites | Mitigation |
 |---|---|---|
-| **Manifest stalls** | Fleet and Helm are more interesting. Manifest stops where `check` left it — no `up`, no `down`, no `explain` — and M4's loop never gets the detached run it needs. | Manifest's remaining verbs are milestones, not background work. What `check` still does not do is named in §8.6 for this reason. |
+| **Manifest stalls** | Fleet and Helm are more interesting. Manifest stops where `check` left it — no `explain` — and M4's loop never gets the detached run it needs. | Manifest's remaining verbs are milestones, not background work. What `check` still does not do is named in §8.6 for this reason. |
 | **Rebuilding what exists** | Three designs in this plan were withdrawn after finding the job already done — a multiplexer, a terminal emulator, a session journal. Fleet is where this keeps happening, because "orchestrate parallel agents" sounds like infrastructure. | Standing rule for Fleet: before building a mechanism, check whether Claude Code, git, or something already installed does it. Armada's own code should be policy and glue. |
 | **Guild drift between machines** | A hook edited on one machine and a skill on another, neither pulled, and the two setups silently diverge. | Auto-commit on change; warn on start when the guild is behind its remote; `armada doctor` shows the delta. Conflicts surface as conflicts, never as a silent overwrite. |
 | **Guild carries a secret** | An imported settings file or MCP config holds a token and it reaches a remote — private, but still a remote. | The import guard in §8.4. Built in M2, not retrofitted. |
