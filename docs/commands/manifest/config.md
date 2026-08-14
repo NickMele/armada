@@ -80,6 +80,11 @@ grouped by what produced it and **never truncated**. All fourteen scripts print:
 authoring the config reads this same stdout, and evidence with a `…9 more` on it is evidence
 somebody has to fetch separately, which is how the one script that mattered gets missed.
 
+The one line that could grow without bound — the CI steps — **wraps rather than truncating**,
+and it is the only place the renderer wraps anything. Both of the usual answers are wrong here:
+a flexible column would drop the tail, and one line would run to seven hundred columns on a
+repository whose gate has a dozen steps.
+
 It ends by offering to hand over to an agent. `ARCHITECTURE.md` §1.9 permits that — the rule
 governs *inputs*, and printing a choice is an output. **Armada prints the choice and reads no
 answer**; whatever acts on one is a caller above Manifest.

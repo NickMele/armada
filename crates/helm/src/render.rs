@@ -853,13 +853,9 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
             "ci steps",
             Some("the best existing evidence of what you actually run"),
         ));
-        // **Not a table cell.** A flexible column truncates, and the one rule
-        // this verb has is that evidence is never cut. A long line overhangs,
-        // which is honest.
-        out.push_str(&format!(
-            "    {}\n",
-            style.paint(Role::SteelGrey, &runs.join(style.between()))
-        ));
+        // **Not a table cell, because a flexible column truncates** and the one
+        // rule this verb has is that evidence is never cut.
+        out.push_str(&wrapped(style, &runs, width));
     }
 
     let mut globs = pairs();
@@ -914,6 +910,57 @@ fn section(style: Style, width: usize, title: &str, aside: Option<&str>, table: 
         heading(style, title, aside),
         table.render(style, width)
     )
+}
+
+/// A run of items, separated and **wrapped rather than cut**.
+///
+/// The only place in the renderer that wraps, and it exists because this is the
+/// only place that may not truncate: a repository whose CI runs twelve commands
+/// has twelve pieces of evidence, and both of the usual answers are wrong here
+/// — a flexible column would drop the tail, and one line would run to seven
+/// hundred columns.
+///
+/// **The break points are computed from the wider separator, not from the one
+/// this audience gets.** `·` and `, ` differ by a column, so a greedy fit
+/// measured per audience would break at different items and the two renders
+/// would stop being one render twice — which is the property
+/// `render_golden.rs` asserts. Measuring both against the wider form costs a
+/// column of slack in the plain render and keeps the two identical.
+fn wrapped(style: Style, items: &[String], width: usize) -> String {
+    const INDENT: usize = 4;
+    /// The wider of the two separators, in columns.
+    const SEPARATOR: usize = 3;
+
+    let budget = width.saturating_sub(INDENT);
+    let mut lines: Vec<Vec<&str>> = Vec::new();
+    let mut used = 0;
+    for item in items {
+        let cost = term::display_width(item);
+        match lines.last_mut() {
+            // A single item wider than the line still gets a line of its own
+            // and overhangs, which is honest: it is evidence, and cutting it is
+            // the one thing this section may not do.
+            Some(line) if used + SEPARATOR + cost <= budget => {
+                line.push(item);
+                used += SEPARATOR + cost;
+            }
+            _ => {
+                lines.push(vec![item]);
+                used = cost;
+            }
+        }
+    }
+
+    lines
+        .into_iter()
+        .map(|line| {
+            format!(
+                "{}{}\n",
+                " ".repeat(INDENT),
+                style.paint(Role::SteelGrey, &line.join(style.between()))
+            )
+        })
+        .collect()
 }
 
 /// A section title, and the half-sentence that says what the section is for.
@@ -1551,6 +1598,49 @@ mod tests {
         let text = rendered(&Output::Status(Box::new(envelope)), Style::plain());
         assert!(text.contains("UP      api        5460"), "{text}");
         assert!(text.contains("DOWN    web        5461"), "{text}");
+    }
+
+    /// **Wrapped and never cut**, which is the one rule `config scan` has: a
+    /// repository whose CI runs twelve commands has twelve pieces of evidence,
+    /// and the author reading them is the one who has to find the one that
+    /// mattered.
+    #[test]
+    fn evidence_too_wide_for_a_line_wraps_and_loses_nothing() {
+        let items: Vec<String> = (0..8)
+            .map(|n| format!("pnpm run task-number-{n}"))
+            .collect();
+        let text = wrapped(Style::plain(), &items, 80);
+        assert!(text.lines().count() > 1, "one line: {text}");
+        for line in text.lines() {
+            assert!(line.len() <= 80, "{line:?}");
+        }
+        for item in &items {
+            assert!(text.contains(item.as_str()), "{item} was cut: {text}");
+        }
+        assert!(!text.contains('…'), "evidence was truncated: {text}");
+    }
+
+    /// **The two audiences break at the same items**, because the break points
+    /// are measured against the wider separator rather than against the one
+    /// this audience gets. Without that, `·` and `, ` would wrap differently
+    /// and the two renders would stop being one render twice.
+    #[test]
+    fn wrapping_breaks_at_the_same_places_for_both_audiences() {
+        let items: Vec<String> = (0..9)
+            .map(|n| format!("command-{n} --with-a-flag"))
+            .collect();
+        let plain = wrapped(Style::plain(), &items, 80);
+        let painted = wrapped(Style::painted(), &items, 80);
+        assert_eq!(fold(&strip_ansi(&painted)), plain);
+    }
+
+    /// A single item wider than the line gets a line of its own and overhangs.
+    /// Cutting it is the one thing this section may not do.
+    #[test]
+    fn one_item_too_wide_for_any_line_overhangs_rather_than_being_cut() {
+        let long = "x".repeat(120);
+        let text = wrapped(Style::plain(), std::slice::from_ref(&long), 80);
+        assert_eq!(text, format!("    {long}\n"));
     }
 
     /// A long list is cut with a count rather than an ellipsis: the count is
