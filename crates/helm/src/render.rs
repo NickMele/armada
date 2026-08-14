@@ -931,12 +931,13 @@ fn workspace_block(
     });
     let mut out = header(style, Some(&id), row.path.as_deref(), block, width);
 
-    let mut components = Table::new(vec![
-        Column::fixed("status"),
-        Column::fixed("component"),
-        Column::flexible("port"),
-    ])
-    .indent(2);
+    // **`PORT · DETAIL`, not `COMPONENT · PORT`.** Every row here comes from
+    // `results[].ports`, which is keyed by *port name* — so the old header
+    // called `redis` a component when the component was `cache`, and put the
+    // number under a heading that named the thing beside it. `init` and `up`
+    // both draw this table as `STATUS · PORT · DETAIL`; this one was the odd
+    // one out, and one renderer means one answer.
+    let mut components = Table::new(columns("port", "detail", false)).indent(2);
     for (name, report) in &row.ports {
         components = components.row(vec![
             // **Probed at report time, never remembered** (PLAN.md §3.1), and
@@ -2170,8 +2171,15 @@ mod tests {
             },
         );
         let text = rendered(&Output::Status(Box::new(envelope)), Style::plain());
-        assert!(text.contains("UP      api        5460"), "{text}");
-        assert!(text.contains("DOWN    web        5461"), "{text}");
+        // Through `has_row`, because column widths belong to the golden
+        // fixtures: pinning them here too fails twice for one change and says
+        // nothing the fixture did not.
+        assert!(has_row(&text, &["UP", "api", "5460"]), "{text}");
+        assert!(has_row(&text, &["DOWN", "web", "5461"]), "{text}");
+        // **The header names what the rows actually are.** These come from
+        // `results[].ports`, keyed by port name — so a `COMPONENT` heading
+        // called `api` a component when the component was something else.
+        assert!(text.contains("STATUS  PORT  DETAIL"), "{text}");
     }
 
     /// **Wrapped and never cut**, which is the one rule `config scan` has: a

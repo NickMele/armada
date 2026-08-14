@@ -305,12 +305,24 @@ fn republish(
     };
 
     for entry in ports.iter_mut() {
-        let target = target_of(entry);
-        let Some(target) = target else {
-            // Nothing published: `ports: ["5432"]` exposes a container port
-            // without binding a host one, so there is no collision to prevent.
-            continue;
-        };
+        // **Every entry under `ports:` publishes, so every entry is rewritten
+        // or refused.** An entry Armada cannot read is refused rather than
+        // skipped, for the same reason an undeclared one is: skipping it leaves
+        // compose to publish it, and a port Armada did not place is a port
+        // outside the claimed block.
+        let target = target_of(entry).ok_or_else(|| {
+            ArmadaError::bad_config(
+                ConfigWhere::Path {
+                    file: config_label.to_string(),
+                    path: format!("components.*.run.ports (service `{service_name}`)"),
+                },
+                format!(
+                    "Armada cannot read a `ports:` entry on the compose service \
+                     `{service_name}`, so it cannot move it into the claimed block"
+                ),
+                "write the entry as `\"<container-port>\"` or `\"<host>:<container>\"`",
+            )
+        })?;
         let name = names.get(&target).ok_or_else(|| {
             ArmadaError::bad_config(
                 ConfigWhere::Path {
@@ -336,25 +348,34 @@ fn republish(
     Ok(())
 }
 
-/// The container port an entry publishes, or `None` when it publishes nothing.
+/// The container port an entry publishes, or `None` when Armada cannot read it.
 ///
-/// Three spellings, because `docker compose config` emits the long one and a
-/// document that reached here another way may not have been through it.
+/// **Every entry under `ports:` publishes something — `published` being absent
+/// means *ephemeral*, not *none*.** Measured on darwin against Docker 29.6.2 and
+/// Compose v5.3.1: `ports: ["6379"]` resolves to `{mode: ingress, target: 6379,
+/// protocol: tcp}` with no `published` key, and the container comes up on a
+/// random host port (`docs/traps.md`). The key that exposes without publishing
+/// is `expose:`, which is a different key and never reaches here.
+///
+/// An earlier version required `published` to be present and skipped the entry
+/// when it was not, on the reasoning that a bare port "exposes a container port
+/// without binding a host one". That was wrong, and it was wrong in the
+/// direction this whole module exists to prevent: the claimed block was
+/// silently bypassed, the service came up on an ephemeral port, and a `tcp:`
+/// ready-check waited on the claimed one until it timed out.
 fn target_of(entry: &Value) -> Option<u16> {
     match entry {
-        Value::Mapping(map) => {
-            // A long-form entry with no `published` exposes the port without
-            // binding a host one.
-            map.get("published")?;
-            map.get("target").and_then(port_of)
-        }
-        // `"5460:5432"`, or `"127.0.0.1:5460:5432"`. The container port is
-        // last; a form with no colon publishes nothing.
+        // The long form `docker compose config` emits. `target` is the
+        // container port whether or not `published` is there.
+        Value::Mapping(map) => map.get("target").and_then(port_of),
+        // `"5460:5432"`, `"127.0.0.1:5460:5432"`, or a bare `"5432"` — the
+        // container port is last in every one of them.
         Value::String(text) => {
-            let (_, container) = text.rsplit_once(':')?;
+            let container = text.rsplit(':').next()?;
             container.split('/').next()?.parse().ok()
         }
-        Value::Number(_) => None,
+        // `ports: [5432]`, which YAML reads as an integer.
+        Value::Number(number) => number.as_u64().and_then(|n| u16::try_from(n).ok()),
         _ => None,
     }
 }
@@ -368,6 +389,11 @@ fn port_of(value: &Value) -> Option<u16> {
 }
 
 /// Write the claimed port back, keeping whatever shape the entry arrived in.
+///
+/// **Inserting `published` where there was none is the fix for the ephemeral
+/// case**, and it is the same operation as replacing one that was there: the
+/// entry either names its host port or gets one at random, and Armada's job is
+/// to make sure it is the claimed one either way.
 fn set_published(entry: &mut Value, port: u16) {
     match entry {
         Value::Mapping(map) => {
@@ -378,6 +404,12 @@ fn set_published(entry: &mut Value, port: u16) {
         Value::String(text) => {
             let container = text.rsplit(':').next().unwrap_or_default().to_string();
             *text = format!("{port}:{container}");
+        }
+        // An integer entry, `ports: [5432]`, becomes the string form: there is
+        // nowhere in a scalar to put a second number.
+        Value::Number(number) => {
+            let container = number.as_u64().unwrap_or_default();
+            *entry = Value::from(format!("{port}:{container}"));
         }
         _ => {}
     }
@@ -531,19 +563,88 @@ volumes:
         assert!(error.next_action.unwrap().contains("ports:"));
     }
 
-    /// A container port exposed without a host binding cannot collide, so there
-    /// is nothing to rewrite and nothing to refuse.
+    /// **A bare `ports:` entry publishes on an *ephemeral* host port, and this
+    /// is the assertion that was backwards.**
+    ///
+    /// Measured against Docker 29.6.2 and Compose v5.3.1: `ports: ["6379"]`
+    /// resolves to `{mode: ingress, target: 6379}` with no `published` key, and
+    /// the container comes up on a random host port — 55918 in the run that
+    /// established it (`docs/traps.md`). The first version of this test asserted
+    /// the entry was *left alone*, on the reasoning that it "exposes a container
+    /// port without binding a host one". That is `expose:`, which is a different
+    /// key. The consequence was the exact failure the transform exists to
+    /// prevent, arriving silently: the claimed block was bypassed, the service
+    /// came up somewhere else, and a `tcp:` ready-check waited on a port nothing
+    /// was ever going to bind.
     #[test]
-    fn a_port_that_publishes_nothing_is_left_alone() {
-        let doc = run("services:\n  api:\n    image: alpine\n    ports:\n    - \"9999\"\n");
-        assert_eq!(doc["services"]["api"]["ports"][0].as_str(), Some("9999"));
-
-        let doc = run(
-            "services:\n  api:\n    image: alpine\n    ports:\n    - target: 9999\n      mode: ingress\n",
+    fn a_bare_port_is_published_into_the_block_rather_than_left_ephemeral() {
+        // The long form `config` emits for a bare entry.
+        let doc = run("services:\n  db:\n    image: postgres:16\n    ports:\n    \
+             - mode: ingress\n      target: 5432\n      protocol: tcp\n");
+        assert_eq!(
+            doc["services"]["db"]["ports"][0]["published"].as_str(),
+            Some("5460"),
+            "a bare entry kept its ephemeral publish"
         );
-        assert!(doc["services"]["api"]["ports"][0]
-            .get("published")
-            .is_none());
+
+        // `host_ip` and no published, which `"127.0.0.1::5432"` resolves to.
+        let doc = run("services:\n  db:\n    image: postgres:16\n    ports:\n    \
+             - mode: ingress\n      host_ip: 127.0.0.1\n      target: 5432\n");
+        let port = &doc["services"]["db"]["ports"][0];
+        assert_eq!(port["published"].as_str(), Some("5460"));
+        assert_eq!(
+            port["host_ip"].as_str(),
+            Some("127.0.0.1"),
+            "the declared interface was dropped"
+        );
+
+        // The short spellings, for a document that did not come through
+        // `config`: a bare string, and a bare integer.
+        let doc = run("services:\n  db:\n    image: postgres:16\n    ports:\n    - \"5432\"\n");
+        assert_eq!(
+            doc["services"]["db"]["ports"][0].as_str(),
+            Some("5460:5432")
+        );
+
+        let doc = run("services:\n  db:\n    image: postgres:16\n    ports:\n    - 5432\n");
+        assert_eq!(
+            doc["services"]["db"]["ports"][0].as_str(),
+            Some("5460:5432")
+        );
+    }
+
+    /// A bare entry naming a port nothing declares is refused, exactly as a
+    /// published one is — it publishes too, so it collides too.
+    #[test]
+    fn a_bare_port_that_no_component_declares_is_bad_config() {
+        let error = transform(
+            "services:\n  mailhog:\n    image: mailhog/mailhog\n    ports:\n    \
+             - mode: ingress\n      target: 8025\n",
+            &names(),
+            &assigned(),
+            &labels(),
+            "armada.yml",
+        )
+        .unwrap_err();
+        assert_eq!(error.class, ErrClass::BadConfig);
+        assert!(error.message.contains("8025"), "{}", error.message);
+    }
+
+    /// **An entry Armada cannot read is refused, not skipped.** Skipping leaves
+    /// compose to publish it, and a port Armada did not place is a port outside
+    /// the claimed block — which is the whole failure.
+    #[test]
+    fn an_unreadable_ports_entry_is_refused_rather_than_left_to_compose() {
+        let error = transform(
+            "services:\n  db:\n    image: postgres:16\n    ports:\n    - [5432]\n",
+            &names(),
+            &assigned(),
+            &labels(),
+            "armada.yml",
+        )
+        .unwrap_err();
+        assert_eq!(error.class, ErrClass::BadConfig);
+        assert!(error.message.contains("cannot read"), "{}", error.message);
     }
 
     /// The short spelling keeps its shape, so a document that did not come

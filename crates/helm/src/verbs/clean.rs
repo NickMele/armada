@@ -152,6 +152,32 @@ fn clean_all<R: Run, C: Clock, F: Fetch>(
         results.push(clean_one(app, row, filters, &mut reaped.skipped)?);
     }
 
+    // **What this run then released is no longer "kept".**
+    //
+    // The reap pass runs first and answers a narrower question than the verb
+    // does: *did the reaper remove this?* A live workspace's own containers are
+    // labelled and their path exists, so pass 2 correctly reports them as left
+    // alone — and then `clean_one`, a few lines above, removes them. Both halves
+    // are right and the envelope describes the **run**, so reporting `kept` for
+    // a container that is gone by the time anyone reads it is a statement the
+    // run has already falsified.
+    //
+    // Only the workspaces this run actually released are subtracted. One that
+    // was skipped for a live lease keeps its report, because nothing removed
+    // anything of its.
+    let released: Vec<&WorkspaceId> = selected
+        .iter()
+        .map(|row| &row.id)
+        .filter(|id| {
+            results
+                .iter()
+                .any(|row| row.id == id.to_string() && row.status == Status::Clean)
+        })
+        .collect();
+    reaped
+        .reported
+        .retain(|report| !released.contains(&&report.workspace));
+
     // **The one implementation of the precedence rule.** Counting rows here
     // would be a second one, and PLAN.md §3.1's stated reason for fixing the
     // order is that two implementations cannot disagree — so the class, the

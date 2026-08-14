@@ -181,13 +181,17 @@ manifest:
         driver: compose
         file: [docker-compose.yml]
         ports: { cache: 6379 }
-        ready: { none: true }
+        ready: { tcp: cache, timeout: 60 }
 ",
     );
 
-    // **The base file publishes 6379 on 6379**, deliberately: the transform has
-    // to move it into the claimed block, and a fixture that already used a free
-    // port would pass without the transform doing anything.
+    // **A bare `ports:` entry, deliberately, and it is the harder case.**
+    // Measured: a bare entry resolves to `{mode: ingress, target: 6379}` with no
+    // `published` key, and Docker then publishes it on an *ephemeral* host port
+    // — so a transform that skipped it would leave the service somewhere the
+    // claimed block does not cover, and the `tcp:` ready-check below would wait
+    // on 5460 until it timed out. That is exactly what happened before this test
+    // existed (`docs/traps.md`).
     //
     // A named volume and no `networks:` block, because those are the two the
     // daemon creates and does *not* inherit the service's labels.
@@ -199,7 +203,7 @@ manifest:
                  image: {image}\n    \
                  command: [\"sleep\", \"300\"]\n    \
                  ports:\n      \
-                   - \"6379:6379\"\n    \
+                   - \"6379\"\n    \
                  volumes:\n      \
                    - cachedata:/data\n\
              volumes:\n  \
@@ -231,6 +235,20 @@ manifest:
             .as_u64()
             .expect("an assigned port");
         assert_ne!(assigned, 6379, "the base port survived the transform");
+        // **The ready-check passed, which is the half a label assertion cannot
+        // prove.** `tcp: cache` waits on the *claimed* port, so `UP` above is
+        // already evidence the service is reachable there rather than on an
+        // ephemeral one — and the port row says so too.
+        // **The ready-check passed and the port reads as bound**, which is the
+        // half a label assertion cannot prove. `tcp: cache` waits on the
+        // *claimed* port, so `UP` is already evidence the service is reachable
+        // there rather than on an ephemeral one — and `LISTENING` is the probe
+        // agreeing, which it could not do until it learned to see a wildcard
+        // holder.
+        assert_eq!(
+            envelope["data"]["results"][0]["ports"]["cache"]["state"], "LISTENING",
+            "the claimed port does not read as bound: {envelope:#}"
+        );
         let published = docker(&["port", &format!("armada-{id}-cache-1"), "6379/tcp"]);
         assert!(
             published.contains(&assigned.to_string()),
@@ -303,7 +321,28 @@ manifest:
         );
     }));
 
-    cleanup();
+    let cleaned: Value = serde_json::from_slice(
+        &armada(&machine, &repo, &["manifest", "clean", "--force", "--json"]).stdout,
+    )
+    .expect("the envelope parses");
+
+    // **`clean` does not report as `kept` what it then removed.** The reap pass
+    // runs first and answers a narrower question than the verb does — *did the
+    // reaper remove this?* — so a live workspace's own containers are correctly
+    // left alone by it and removed a moment later by the release. Both halves
+    // are right; the envelope describes the run, so a `kept` row for a container
+    // that is gone by the time anyone reads it is a statement the run has
+    // already falsified.
+    let kept: Vec<&Value> = cleaned["data"]["reaped"]["reported"]
+        .as_array()
+        .map(|rows| rows.iter().collect())
+        .unwrap_or_default();
+    assert!(
+        kept.is_empty(),
+        "`clean` reported {} resource(s) as kept and then removed them: {:#}",
+        kept.len(),
+        cleaned["data"]["reaped"]
+    );
 
     // 4. **No orphans.** The claim the whole ownership layer exists for.
     for (what, remaining) in [
