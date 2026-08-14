@@ -348,10 +348,58 @@ fn version_and_help_answer_from_outside_a_workspace() {
     let help = machine.run(&outside, &["--help"]);
     assert!(help.status.success());
     let text = String::from_utf8_lossy(&help.stdout);
-    assert!(text.contains("armada manifest init"), "{text}");
-    // The limits are stated in the usage rather than discovered by running one.
-    assert!(text.contains("Not built yet"), "{text}");
+    assert!(text.contains("armada manifest <name>"), "{text}");
+    // The limits are stated on the page rather than discovered by running one.
+    assert!(text.contains("NOT BUILT YET"), "{text}");
 }
+
+/// **A page per verb**, reachable where a reader would reach for it — and only
+/// for a verb Armada owns. `armada manifest <a commands: entry> --help` is the
+/// child's `--help`, exactly as its `--dry-run` is the child's (PLAN.md §4.5).
+#[test]
+fn help_answers_at_every_level_of_the_grammar() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", HELP_CONFIG);
+
+    for (args, expected) in [
+        (&["manifest", "--help"][..], "armada manifest — "),
+        (&["manifest"][..], "armada manifest — "),
+        (
+            &["manifest", "check", "--help"][..],
+            "armada manifest check",
+        ),
+        (&["manifest", "clean", "-h"][..], "armada manifest clean"),
+    ] {
+        let output = machine.run(&repo, args);
+        assert!(output.status.success(), "`armada {}`", args.join(" "));
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            text.starts_with(expected),
+            "`armada {}` answered: {text}",
+            args.join(" ")
+        );
+    }
+
+    // The child's, passed through untouched — `echoer` prints its argv.
+    let child = machine.run(&repo, &["manifest", "echoer", "--help"]);
+    assert_eq!(
+        String::from_utf8_lossy(&child.stdout).trim(),
+        "--help",
+        "a commands: entry's --help was swallowed"
+    );
+}
+
+const HELP_CONFIG: &str = "\
+manifest:
+  version: 1
+  components:
+    api:
+      root: services/api
+  commands:
+    echoer:
+      cmd: echo
+      help: Echo whatever it is given
+";
 
 /// `init --dry-run` decides everything and changes nothing: no block is
 /// claimed, no `.armada/` appears, and the workspace is still unknown to the

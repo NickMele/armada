@@ -38,34 +38,6 @@ use std::process::ExitCode;
 
 use verbs::Output;
 
-const USAGE: &str = "\
-armada — one consistent vocabulary for managing a repo's tech stack
-
-  armada manifest init    [--json] [--dry-run]   claim this workspace: ports, .armada/, setup
-  armada manifest clean   [--json] [--dry-run] [--project|--all]
-                          [--orphaned] [--artifacts] [--force]
-                                                 release what this workspace owns
-  armada manifest clean --orphaned --force-rebuild
-                                                 rebuild an unreadable ~/.armada/manifest.db
-  armada manifest status  [--json] [--project|--all]
-                                                 what is running, mine, and stale
-  armada manifest check   [--json] [--dry-run] [--all-files] [--fix] [--wait]
-                          [--files <path>…] [--component <name>] [--jobs <n>] [<selector>]
-                                                 lint / format / test
-  armada manifest <name> …                       a commands: entry from this repo's armada.yml
-
-  armada --version
-  armada --help
-
-Global flags come before the module. Everything after a commands: name is the
-child's, including flags Armada itself defines.
-
-Manifest is the module that is built. Not built yet: the `armada init`,
-`doctor`, `guild`, `fleet`, `helm` and `bridge` surfaces (PHASES.md §8), and
-Manifest's own up, down, config, agents-md, explain, and check's
---detach/--status.
-";
-
 fn main() -> ExitCode {
     posix::restore_sigpipe();
 
@@ -99,8 +71,8 @@ fn main() -> ExitCode {
             write_out(&format!("armada {}\n", env!("CARGO_PKG_VERSION")));
             ExitCode::SUCCESS
         }
-        Invocation::Help => {
-            write_out(USAGE);
+        Invocation::Help(topic) => {
+            write_out(&render::help::render(topic, style, terminal));
             ExitCode::SUCCESS
         }
         other => {
@@ -119,7 +91,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Clean { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
-        Invocation::Version | Invocation::Help => false,
+        Invocation::Version | Invocation::Help(_) => false,
     }
 }
 
@@ -211,7 +183,7 @@ fn dispatch(
         Invocation::Dispatch { name, argv, json } => {
             verbs::dispatch::run(&mut app, &name, &argv, json)
         }
-        Invocation::Version | Invocation::Help => unreachable!("handled before dispatch"),
+        Invocation::Version | Invocation::Help(_) => unreachable!("handled before dispatch"),
     }
 }
 

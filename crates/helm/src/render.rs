@@ -8,6 +8,7 @@
 //! failure, which resources were skipped and why — it was decided upstream and
 //! this file is reading a field.
 
+pub mod help;
 pub mod palette;
 pub mod style;
 pub mod table;

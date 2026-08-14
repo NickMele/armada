@@ -26,6 +26,7 @@
 use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::scope::Lens;
 
+use crate::render::help::Topic;
 use crate::render::style::ColorChoice;
 
 /// What the whole line asked for: one verb, and the one global rendering
@@ -47,8 +48,10 @@ pub struct Parsed {
 pub enum Invocation {
     /// `armada --version`.
     Version,
-    /// `armada --help`, or `armada` with nothing at all.
-    Help,
+    /// `armada --help`, `armada manifest --help`, `armada manifest check
+    /// --help`, or `armada` with nothing at all — which is a different page
+    /// (`docs/commands/render.md`: the wordmark shows there and nowhere else).
+    Help(Topic),
     /// `armada manifest init`.
     Init(Common),
     /// `armada manifest clean`.
@@ -159,7 +162,7 @@ pub const BUILTIN_VERBS: [&str; 9] = [
 /// [`BUILTIN_VERBS`] are: a name that is going to mean one thing must not mean
 /// something else for a release first. Each carries the milestone that builds
 /// it (PHASES.md §8).
-const RESERVED_TOP_LEVEL: [(&str, &str); 6] = [
+pub const RESERVED_TOP_LEVEL: [(&str, &str); 6] = [
     (
         "init",
         "M2 — machine setup; `armada manifest init` claims a workspace",
@@ -170,6 +173,18 @@ const RESERVED_TOP_LEVEL: [(&str, &str); 6] = [
     ("helm", "M3 — the one agent you do talk to"),
     ("bridge", "M3 — the live screen"),
 ];
+
+/// The verbs with a help page of their own — the four Manifest has built.
+///
+/// A separate list from [`BUILTIN_VERBS`], because that one claims names,
+/// several of which answer "not built yet": giving `armada manifest up --help` a
+/// page would promise a verb that does not exist.
+const BUILT_PAGES: [&str; 4] = ["init", "status", "check", "clean"];
+
+/// `--help` in either spelling.
+fn is_help(arg: &str) -> bool {
+    arg == "--help" || arg == "-h"
+}
 
 /// Parse an argument vector, excluding `argv[0]`.
 ///
@@ -198,7 +213,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
     while index < args.len() {
         match args[index].as_str() {
             "--version" | "-V" => return Ok(Invocation::Version),
-            "--help" | "-h" => return Ok(Invocation::Help),
+            "--help" | "-h" => return Ok(Invocation::Help(Topic::Root)),
             "--json" => {
                 json = true;
                 index += 1;
@@ -213,8 +228,12 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         }
     }
 
+    // **Bare `armada` is its own page**, not `--help`. Both list the same
+    // things, but only one of them is the moment of orientation the wordmark
+    // belongs to (`docs/commands/render.md`) — a banner above the page you
+    // reached for because you are in a hurry is a banner in the way.
     let Some(module) = args.get(index) else {
-        return Ok(Invocation::Help);
+        return Ok(Invocation::Help(Topic::Bare));
     };
 
     if module != "manifest" {
@@ -241,10 +260,26 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         ));
     }
 
+    // A module with no verb is as incomplete as a bare `armada`, and gets that
+    // module's page rather than an error.
     let Some(verb) = args.get(index + 1) else {
-        return Ok(Invocation::Help);
+        return Ok(Invocation::Help(Topic::Manifest));
     };
+    if is_help(verb) {
+        return Ok(Invocation::Help(Topic::Manifest));
+    }
     let rest = &args[index + 2..];
+
+    // **A page per verb, and only for a verb Armada owns.** `armada manifest
+    // worktrees --help` is the *child's* `--help`, exactly as its `--dry-run` is
+    // the child's — the rule this whole module exists to keep (PLAN.md §4.5).
+    if let Some(page) = BUILT_PAGES
+        .iter()
+        .find(|name| *name == verb)
+        .filter(|_| rest.iter().any(|arg| is_help(arg)))
+    {
+        return Ok(Invocation::Help(Topic::Verb(page)));
+    }
 
     match verb.as_str() {
         "init" => Ok(Invocation::Init(common(rest, json, color, &["--dry-run"])?)),
@@ -567,7 +602,10 @@ mod tests {
 
     #[test]
     fn bare_armada_is_help_rather_than_an_error() {
-        assert_eq!(parse(&[]).unwrap().invocation, Invocation::Help);
+        assert_eq!(
+            parse(&[]).unwrap().invocation,
+            Invocation::Help(Topic::Bare)
+        );
     }
 
     #[test]
@@ -713,7 +751,7 @@ mod tests {
     fn a_module_with_no_verb_is_help() {
         assert_eq!(
             parse(&args(&["manifest"])).unwrap().invocation,
-            Invocation::Help
+            Invocation::Help(Topic::Manifest)
         );
     }
 
@@ -821,7 +859,7 @@ mod tests {
         );
         assert_eq!(
             parse(&args(&["--json", "--help"])).unwrap().invocation,
-            Invocation::Help
+            Invocation::Help(Topic::Root)
         );
     }
 }
