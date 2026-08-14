@@ -56,16 +56,17 @@ measured   decided           specified  sequenced   derived
 
 ## Rules that are easy to break by accident
 
-### 1. Two rules retire when the repo goes private — it has not, so satisfy them
+### 1. Two rules are scheduled to retire — they have not, so satisfy them
 
 **This repository is public right now.** The contamination grep and the clean-room rule both
 exist and both still run: `xtask/src/contamination.rs`, `xtask/src/privacy.rs` and
 `.claude/hooks/clean-room.sh` are all present, and `cargo xtask doclint` names `contamination,
 privacy` in its own output.
 
-They are deleted **at the moment the repository goes private** — not before, and M1 landing
-without that change is exactly why they are still here. Until `git remote -v` points at a
-private repository and `xtask/src/privacy.rs` is gone, treat them as in force:
+**The privacy gate is not one of them.** The repository stays public permanently
+(`ARCHITECTURE.md` §2.4), so `cargo xtask privacy` and `cargo xtask history` are standing
+checks with no retirement date. The grep and the clean-room hook do retire, each on its own
+commit and its own merits, and until those commits land treat all three as in force:
 
 - Never write the private source repository's name or the literal `$HOME` into a tracked file.
 - Never disable the hook with `CHARKIT_CLEAN_ROOM_PATH=""` — that silences the guard rather
@@ -121,8 +122,8 @@ Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
   directory and verdict aggregation, with what it settled and the gap it leaves open in
   `PHASES.md` §9.3. `check --detach` and `check --status` are refused by name as not built.
   `up`, `down`, `config` and `explain` are **not built**.
-- **M1 has landed**, less two rows: the repository is still public, and `skills:` was not
-  built. Both are tracked in `PHASES.md` §8.3.
+- **M1 has landed**, less one row: `skills:` was not built, because M1 adds no capability.
+  Tracked in `PHASES.md` §8.3.
 - **Guild, Fleet and Helm do not exist.** Their specification is `PLAN.md` §13–§15 and their
   usage is [`docs/commands/reference.md`](docs/commands/reference.md).
 

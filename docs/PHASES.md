@@ -13,7 +13,7 @@
 | § | | |
 |---|---|---|
 | **0.1** | Architecture principles — carried forward | |
-| **0.2** | SDLC principles — two retire with the repo going private, the rest carried forward | |
+| **0.2** | SDLC principles — one retired, one retiring, the rest carried forward | |
 | **8** | The milestones — M0 through M4 | 8.1 why this order · 8.2 M0 · 8.3 M1 · 8.4 M2 · 8.5 M3 · 8.6 M4 |
 | **9** | Source material | 9.1 **M0 spike findings** · 9.2 prior art · 9.3 **check-engine findings** |
 | **11** | Risks | |
@@ -28,18 +28,18 @@ charkit and **all eight apply unchanged to all four modules**. They were written
 subprocesses, clocks and networks, not about repositories, so nothing in the widening of scope
 touches them. [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9 adds one rule the four-module shape needs and changes none of the others.
 
-#### 0.2 SDLC principles — two retire with the repo, the rest carry forward
+#### 0.2 SDLC principles — two retire on their own merits, the rest carry forward
 
-Two SDLC principles exist only to protect a **public** repository, so they end when it goes
-private. **That has not happened, M1 notwithstanding — both are live and must be satisfied
-today** (§8.3). The retirement is keyed to the visibility change and not to the milestone that
-expected to carry it; a guard deleted before the thing it guards goes away is the exact
-failure it exists to prevent.
+**This is no longer keyed to the repository going private.** An earlier version of this plan
+took it private in M1 and that decision was reversed
+([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4): the repository stays public, permanently, so the **privacy gate is a standing check**
+rather than a transitional one. The two rules below still retire, but each because its own job
+is done — which is why M1 landing changed nothing about either.
 
 | Principle | Status |
 |---|---|
-| Contamination grep over `src/` and `tests/` | **Live. Retires when the repo goes private.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4 |
-| Clean-room rule for the harvester phase | **Live. Retires when the repo goes private.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7 |
+| Contamination grep over `src/` and `tests/` | **Live.** Retires because the fixtures replaced it, not because the repo changed. [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4 |
+| Clean-room rule for the harvester phase | **Live.** Retires because the harvest has landed. [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7 |
 
 Both retirements are recorded rather than deleted, because a rule that vanishes without a
 reason gets reinvented. What replaces them **once they go** is the fixture set: six config
@@ -84,7 +84,7 @@ adopted.
 **M1 was subtraction and it got more expensive every week.** Renaming crates, moving the state
 directory and deleting the privacy machinery touches every file and every golden snapshot.
 Doing it before Guild and Fleet added surface area was the cheapest it was ever going to be —
-and the two rows it did not carry (§8.3) are both rows that get no more expensive by waiting.
+and the one row it did not carry (§8.3) gets no more expensive by waiting.
 
 **M4 is still blocked, but on something narrower than before.** The `check` engine has landed
 and dogfoods (§9.3), so a verdict can now carry evidence an external command produced — the
@@ -121,7 +121,7 @@ label or a `<!-- char:begin -->` marker needs to find out here why it is still r
 
 | | | |
 |---|---|---|
-| **Repo** | Goes private. `charkit` → `armada`. | **not done** — visibility is not a build's to change, and everything below assumes it. The guards in the **Deletes** row stay live until it happens. |
+| **Repo** | Goes private. `charkit` → `armada`. | **half done, half reversed.** The rename landed. Going private did not, and no longer will: the decision was reversed and the repository stays public ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4), which is what unhooks the **Deletes** row below from this milestone. Renaming the GitHub repository itself is the operator's, not a build's. |
 | **Crates** | `core`, `manifest`, `guild`, `fleet`, `helm` — mirroring [`PLAN.md`](PLAN.md)'s module structure. Today's `charkit-core` + `charkit-adapters` become `manifest`; today's `charkit-cli` becomes `helm`. | **done** — `armada-core`, `armada-manifest`, `armada-helm`. No code moved between crates: `core` stays pure and `manifest` is the module's shell, which is what keeps [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5 mechanically enforced. `guild` and `fleet` get crates when they get code, and `boundaries.rs` already knows where they go. |
 | **Binary** | One: `armada`. No `char` shim — it was never published, so a clean break costs nothing. | **done** |
 | **Config** | `char.yml` → `armada.yml`, with the existing keys under a `manifest:` section. Also `crates/core/schema/char.schema.json`, and all six `tests/fixtures/*/char.yml`. | **done** |
@@ -129,7 +129,7 @@ label or a `<!-- char:begin -->` marker needs to find out here why it is still r
 | **Identifiers** | Error class `char_bug` → `armada_bug`. Docker label namespace `char.workspace` → `armada.workspace`, compose project prefix `char-<id>` → `armada-<id>`. **Both are stamped on live resources**, so M1 must reap the old namespace before it stops recognising it — see the warning below. | **done**, both namespaces read — see the warning below. The compose prefix had no code to change: the compose driver is not built ([`PLAN.md`](PLAN.md) §6.0). |
 | **Managed blocks** | The `<!-- char:begin -->` / `<!-- char:end -->` markers and the `char agents-md` verb ([`PLAN.md`](PLAN.md) §5.1). Existing markers in the wild must still be recognised for one release, or a re-run appends a second block instead of replacing the first. | **markers renamed; nothing to migrate yet.** `agents-md` is not built, so no block has ever been written. The dual-recognition rule is recorded in [`PLAN.md`](PLAN.md) §5.1 for whoever builds it. |
 | **Docs** | Convert [`PLAN.md`](PLAN.md) §1–§12, [`ARCHITECTURE.md`](ARCHITECTURE.md), [`AGENTS.md`](../AGENTS.md) and [`traps.md`](traps.md) from `char` spelling to `armada`. Part II of `PLAN.md` and everything under `docs/commands/` is already converted. Delete the transition notes on each shipped reference page once they are true. | **done** |
-| **Deletes** | `xtask/src/privacy.rs`, `xtask/src/contamination.rs`, the clean-room hook and its test, and the doc sections that explain them — **only after the repo is actually private**, not before ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4, §2.7). | **not done, deliberately.** The repo is still public, so all three guards run and pass. |
+| **Deletes** | `xtask/src/privacy.rs`, `xtask/src/contamination.rs`, the clean-room hook and its test, and the doc sections that explain them — **only after the repo is actually private**, not before ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4, §2.7). | **superseded.** `privacy.rs` is now permanent, because the repository is. The grep and the clean-room hook still retire, each on its own merits and on its own commit ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4, §2.7) — not as part of a rename. All three run and pass today. |
 | **Skills** | `skills:` schema, resolution, the four `config verify` cross-reference checks, `manifest skills` / `skills show`, and a fixture exercising it ([`PLAN.md`](PLAN.md) §4.8). Lands here because it changes `armada.yml`, and every fixture and golden snapshot is being rewritten in this milestone anyway — doing it twice is the avoidable cost. | **not done.** It is a feature, and the first line of this section is that M1 does not add one. Nothing about it got cheaper by being deferred except this diff, which is the point. |
 | **Ergonomics note** | M1 turns `char check` into `armada manifest check`. That is intended, but it is also when the most-used verbs get longer — [`PLAN.md`](PLAN.md) §3 records the root-alias resolution as reserved-not-built, and the rule that makes it safe. Nothing to build in M1; it is flagged so the regression is a known trade rather than a surprise. | — |
 | **Boundary check** | `xtask/src/boundaries.rs` generalises from "core depends on nothing concrete" to the module dependency rule in [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9. Today it enforces only the crate layering of [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5, because three of the four modules have no crates. | **done** — `boundaries.rs` reads the module each crate belongs to and enforces [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9's table, with [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5 falling out of it. |
@@ -148,11 +148,11 @@ references, and `armada manifest init` / `clean` / `status` / `check` behave exa
 `char init` / `clean` / `status` / `check` did. **A behaviour change in M1 is a defect**, not a
 bonus — with the single documented exception of dual-namespace reaping above.
 
-**What is left of M1, and who it is waiting on.** Making the repo private is the operator's
-decision and nothing else; the **Deletes** row follows it in the same commit, because a guard
-deleted before the thing it guards goes away is the whole failure it exists to prevent. The
-**Skills** row is ordinary work that can land in any milestone — it was scheduled here to
-share one rewrite of the fixtures, and that saving is now spent either way.
+**What is left of M1.** One row, and it is ordinary work rather than a blocker: `skills:`
+was scheduled here to share one rewrite of the fixtures, and that saving is spent either way
+now, so it can land in any milestone. The **Repo** and **Deletes** rows are not outstanding —
+they were overtaken by the decision to stay public
+([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4).
 
 ### 8.4 M2 — Guild
 

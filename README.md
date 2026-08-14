@@ -118,7 +118,7 @@ exactly the things that differ.
 | **module boundaries** | the dependency rule of [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.9 |
 | **docs** | `cargo xtask doclint` — cross-references resolve, code blocks parse, config keys appear in both an example and prose |
 
-Two further checks run today and **retire when the repository goes private**: the
+Two further checks run today and are **scheduled to retire**, each on its own merits: the
 contamination grep (`cargo xtask contamination`) and the privacy gate (`cargo xtask privacy`),
 alongside a clean-room hook. They exist because this repository is public, and they stay in
 force until it is not. Their reasoning is recorded in
