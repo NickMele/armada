@@ -41,7 +41,7 @@ pub mod term;
 
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
-    ResultRow, ScanData, StatusData, Unreclaimed,
+    ResultRow, ScanData, StatusData, Unreclaimed, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::id::WorkspaceId;
@@ -72,6 +72,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::CheckDryRun(envelope) => check_dry(envelope, style, width),
         Output::Dispatch(envelope) => dispatch(envelope, style),
         Output::Scan(envelope) => scan(envelope, style, width),
+        Output::Verify(envelope) => verify(envelope, style, width),
     }
 }
 
@@ -930,6 +931,119 @@ fn pairs() -> Table {
     Table::new(vec![Column::fixed(""), Column::flexible("")])
         .headerless()
         .indent(4)
+}
+
+// --------------------------------------------------------------- config verify
+
+/// `armada manifest config verify` — layer 3 of PLAN.md §5.
+///
+/// Two blocks, because there are two passes and the reader needs to know which
+/// one they are looking at: pass 1 is static and takes seconds, pass 2 is the
+/// check suite run for real and takes as long as the repository's checks take.
+///
+/// Three things the agreed layout settles:
+///
+/// 1. **`unchecked` has a row rather than a footnote.** It is the honest cost of
+///    `shell: true` — there is no `argv[0]` to resolve in a shell string, so
+///    verify counts those entries rather than guessing or silently passing them
+///    — and it is worth seeing.
+/// 2. **`pass 2 not attempted` rather than `skipped`.** Pass 1 short-circuits,
+///    and "skipped" would read as a choice somebody made about pass 2.
+/// 3. **A fix line under the summary for every finding.** A check that reports a
+///    problem without the command that fixes it sends the reader to the
+///    documentation, which is most of what this verb exists to save.
+fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = format!(
+        "{}{}{}{}{}\n\n",
+        style.paint(Role::SignalAmber, "pass 1"),
+        style.between(),
+        style.paint(Role::SteelGrey, "static"),
+        style.between(),
+        style.paint(Role::SteelGrey, "nothing is executed")
+    );
+
+    let mut table = Table::new(columns("check", "detail", true)).indent(2);
+    for row in &data.results {
+        let detail = row
+            .error
+            .as_ref()
+            .map(|e| e.message.clone())
+            .or_else(|| row.reason.clone());
+        table = table.row(vec![
+            verdict(row.status),
+            Cell::plain(row.id.clone()),
+            detail_cell(style, detail.as_deref()),
+            time_cell(style, row.duration_ms),
+        ]);
+    }
+    // **A render-only word, because the envelope has no status that means
+    // this.** `unchecked` is not a verdict — it is a count of what could not be
+    // established either way — so it is derived from `data.unchecked` and
+    // spelled lowercase, exactly as `claimed` and `owns` are.
+    table = table.row(vec![
+        token("unchecked", Role::FlareOrange),
+        Cell::plain("shell entries"),
+        Cell::muted(format!("{}, no argv[0] to resolve", data.unchecked)),
+        time_cell(style, None),
+    ]);
+    out.push_str(&table.render(style, width));
+    out.push('\n');
+
+    if let Some(run) = &data.pass_2 {
+        out.push_str(&format!(
+            "{}{}{}\n\n",
+            style.paint(Role::SignalAmber, "pass 2"),
+            style.between(),
+            style.paint(Role::SteelGrey, "the check suite, run for real")
+        ));
+        let mut suite = Table::new(columns("check", "detail", true)).indent(2);
+        for row in &run.results {
+            let detail = row
+                .error
+                .as_ref()
+                .map(|e| e.message.clone())
+                .or_else(|| row.reason.clone());
+            suite = suite.row(vec![
+                verdict(row.status),
+                Cell::plain(row.id.clone()),
+                detail_cell(style, detail.as_deref()),
+                time_cell(style, row.duration_ms),
+            ]);
+        }
+        out.push_str(&suite.render(style, width));
+        out.push('\n');
+    }
+
+    let facts = match (&data.pass_2, envelope.status) {
+        (None, Status::Pass) => vec![
+            "pass 2 not attempted".to_string(),
+            "nothing to run".to_string(),
+        ],
+        (None, _) => vec![
+            "pass 2 not attempted".to_string(),
+            "fix pass 1 first".to_string(),
+        ],
+        (Some(run), _) => vec![
+            "pass 1 and pass 2".to_string(),
+            format::count(run.results.len(), "check"),
+        ],
+    };
+    out.push_str(&summary(style, envelope.status, &facts));
+
+    // **Every finding's fix, not just the aggregate's.** The row carries one
+    // line of detail and `--json` carries them all; these are what a reader
+    // acts on, so a config with three problems gets three of them.
+    for row in &data.results {
+        if let Some(next) = row.error.as_ref().and_then(|e| e.next_action.as_deref()) {
+            out.push_str(&format!(
+                "  {} {}\n",
+                style.paint(Role::SteelGrey, style.arrow()),
+                style.paint(Role::SteelGrey, next)
+            ));
+        }
+    }
+    out
 }
 
 // ------------------------------------------------------------------- the parts

@@ -357,6 +357,41 @@ fn config_scan_matches_its_snapshot() {
     assert_golden("config-scan", &output.to_json());
 }
 
+/// `armada manifest config verify`, **both passes**, against a scratch repo.
+///
+/// The render fixture freezes the failing case, because that is the one the
+/// agreed layout draws. This freezes the other one, and it is the half that
+/// only a real run can produce: `data.pass_2` exists at all only when pass 1
+/// passed, so a snapshot of a failure would never carry the key.
+///
+/// **Pass 2 runs real commands**, which is why the check it runs is `true` and
+/// why it runs inside `Machine`'s own scratch repository and nowhere else.
+#[test]
+fn config_verify_matches_its_snapshot() {
+    let scenario = scenario(VERIFY_CONFIG);
+    let json = run_verb(&scenario, |app| {
+        verbs::config::verify(app, &mut armada_helm::render::progress::Silent)
+    });
+    assert_golden("config-verify", &json);
+}
+
+/// A config that passes pass 1 and whose one check passes pass 2.
+///
+/// `match:` names a file the scratch repo really has, because a glob that
+/// matches nothing is a pass-1 failure — which is the point of that check and
+/// would make this snapshot the failing case twice.
+const VERIFY_CONFIG: &str = "\
+manifest:
+  version: 1
+  components:
+    repo:
+      match: [\"*.yml\"]
+      checks:
+        ok:
+          cmd: \"true\"
+          scope: component
+";
+
 #[test]
 fn the_payloads_are_deterministic_across_runs() {
     let first = run_verb(&scenario(CONFIG), |app| verbs::init::run(app, false));

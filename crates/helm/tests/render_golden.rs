@@ -30,7 +30,7 @@
 
 use armada_core::envelope::{
     CheckData, CleanData, DispatchData, Envelope, InitData, PortReport, Released, ResultRow,
-    ScanData, StatusData, Unreclaimed,
+    ScanData, StatusData, Unreclaimed, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::id::WorkspaceId;
@@ -383,6 +383,56 @@ fn config_scan_matches_its_fixture() {
     assert_render("config-scan", &output);
 }
 
+/// `armada manifest config verify`, with pass 1 failing.
+///
+/// **Hand-built, unlike `config scan` beside it.** A verify payload carries
+/// durations, and a duration comes from the injected clock rather than from the
+/// filesystem — so a fixture rendered from a real run would either need a clock
+/// stubbed to hundredths or would carry whatever this machine took. The checks
+/// themselves are covered where they are decided, in `armada_core::verify`.
+///
+/// The failing case is the one the agreed layout draws, and it is the one worth
+/// freezing: it is the only one that shows `pass 2 not attempted`, the
+/// `unchecked` row and a fix line all at once.
+#[test]
+fn config_verify_matches_its_fixture() {
+    let mut schema = ResultRow::new("schema", Status::Pass);
+    schema.duration_ms = Some(100);
+
+    let mut references = ResultRow::new("references", Status::Pass);
+    references.duration_ms = Some(100);
+    references.reason = Some(armada_core::verify::REFERENCES_DETAIL.to_string());
+
+    let mut argv0 = ResultRow::new("argv[0]", Status::Failed);
+    argv0.duration_ms = Some(200);
+    argv0.error = Some(ArmadaError {
+        class: ErrClass::BadConfig,
+        r#where: "armada.yml:manifest.components.web.checks.test.cmd".to_string(),
+        message: "`vitest` not on PATH or in root".to_string(),
+        next_action: Some(
+            "web:test declares `vitest run`; did you mean `pnpm exec vitest run`?".to_string(),
+        ),
+    });
+
+    let results = vec![schema, references, argv0];
+    let output = Output::Verify(Box::new(Envelope {
+        schema_version: armada_core::envelope::SCHEMA_VERSION,
+        verb: "config verify".to_string(),
+        workspace: Some(workspace()),
+        status: Status::Failed,
+        error: armada_core::envelope::aggregate(&results, "checks"),
+        data: VerifyData {
+            results,
+            // **Three, so the fixture pins the count and not just the row.**
+            // The number is the honest cost of `shell: true`, and a row that
+            // said only `unchecked` would be the footnote it is not.
+            unchecked: 3,
+            pass_2: None,
+        },
+    }));
+    assert_render("config-verify", &output);
+}
+
 /// `armada --help`, which is the page the milestone was opened for.
 #[test]
 fn the_help_pages_match_their_fixtures() {
@@ -559,9 +609,23 @@ fn strip_ansi(text: &str) -> String {
 
 /// The typographic characters, folded to what the agent audience receives.
 ///
-/// Each replacement is one column for one column, so folding can never move a
+/// The dashes are one column for one column, so folding them can never move a
 /// column — which is what makes the comparison above a test of styling rather
 /// than of layout.
+///
+/// **Two replacements are not**, and both are confined to prose for exactly
+/// that reason. `·` and `, ` differ by a column, and `→` and `->` differ by a
+/// column; a summary line and a fix line are sentences rather than rows, so
+/// neither can shear a table. That confinement is the rule those two glyphs
+/// carry — [`Style::between`] says a summary line is prose and not a column,
+/// and [`Style::arrow`] says a fix line may only ever open a line. A cell
+/// holding either of them would make this test pass over two renders whose
+/// columns genuinely disagree, which is the one thing it exists to catch.
+///
+/// [`Style::between`]: armada_helm::render::style::Style::between
+/// [`Style::arrow`]: armada_helm::render::style::Style::arrow
 fn fold(text: &str) -> String {
-    text.replace(['—', '–'], "-").replace(" · ", ", ")
+    text.replace(['—', '–'], "-")
+        .replace('→', "->")
+        .replace(" · ", ", ")
 }

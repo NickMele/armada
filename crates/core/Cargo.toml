@@ -34,9 +34,14 @@ blake3 = { workspace = true }
 # that differ between two runs of the same bug. ARCHITECTURE.md §1.5 names it as
 # a pure data crate the core may take.
 regex = { workspace = true }
-
-[dev-dependencies]
-# The JSON Schema validator the tests use to hold the schema and the structs to
-# each other. Test-only on purpose: which validator `armada manifest config verify` embeds
-# is phase 5's decision, and taking it here would make it phase 1's by default.
+# **The JSON Schema validator, now shipped rather than test-only.** Phase 1 took
+# it as a dev-dependency and left a note: which validator `armada manifest config
+# verify` embeds "is phase 5's decision, and taking it here would make it phase
+# 1's by default." This is that decision, and it went this way because the
+# alternative was weaker than it looks — reporting the `schema` row from `parse`
+# plus `resolve` would miss every value-level rule the schema owns and the
+# structs do not: the name grammar, a port's range, `shell: true` beside
+# `${files}`. Those are exactly the shapes a hallucinated config has, which is
+# what layer 3 exists to catch (PLAN.md §5). It validates a `serde_json::Value`
+# and opens nothing, so the core stays pure.
 boon = "0.6"

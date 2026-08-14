@@ -16,7 +16,7 @@ use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
-    ScanData, StatusData,
+    ScanData, StatusData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -45,6 +45,8 @@ pub enum Output {
     Dispatch(Box<Envelope<DispatchData>>),
     /// `armada manifest config scan`.
     Scan(Box<Envelope<ScanData>>),
+    /// `armada manifest config verify`.
+    Verify(Box<Envelope<VerifyData>>),
 }
 
 impl Output {
@@ -60,6 +62,7 @@ impl Output {
             Output::CheckDryRun(e) => e.to_json(),
             Output::Dispatch(e) => e.to_json(),
             Output::Scan(e) => e.to_json(),
+            Output::Verify(e) => e.to_json(),
         }
     }
 
@@ -92,6 +95,7 @@ impl Output {
             Output::CheckDryRun(e) => e.exit_code(),
             Output::Dispatch(e) => e.exit_code(),
             Output::Scan(e) => e.exit_code(),
+            Output::Verify(e) => e.exit_code(),
         }
     }
 }

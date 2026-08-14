@@ -32,7 +32,7 @@ and the three status enums. These pages use them without re-explaining them.
 | [`manifest/up.md`](manifest/up.md) | `armada manifest up` | not built |
 | [`manifest/down.md`](manifest/down.md) | `armada manifest down` | not built |
 | [`manifest/check.md`](manifest/check.md) | `armada manifest check` | shipped, less `--detach` / `--status` |
-| [`manifest/config.md`](manifest/config.md) | `armada manifest config scan\|verify` | `scan` shipped · `verify` not built |
+| [`manifest/config.md`](manifest/config.md) | `armada manifest config scan\|verify` | shipped |
 | [`manifest/explain.md`](manifest/explain.md) | `armada manifest explain` | not built |
 
 ## Guild — your portable setup

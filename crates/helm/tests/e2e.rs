@@ -972,16 +972,80 @@ fn config_scan_answers_in_a_directory_with_no_workspace() {
     assert!(!text.contains('\x1b'), "a pipe gets no escapes: {text}");
 }
 
-/// The half that is not built yet says so, rather than dispatching to a
-/// `commands:` entry that happens to be called `verify`.
+/// **Pass 1 short-circuits, and pass 2 is not attempted.** That is the whole
+/// reason layer 3 has two passes: the hallucinated script name is caught in
+/// seconds, and the build nobody asked for does not run.
+///
+/// The scratch repo declares `cmd: ./serve`, which is not on `PATH` and is not
+/// an executable file under the component root — the exact shape an agent
+/// authoring a config produces, and the one this verb exists to catch.
 #[test]
-fn config_verify_is_claimed_and_answers_that_it_is_not_built() {
+fn config_verify_fails_pass_one_and_does_not_attempt_pass_two() {
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
-    let refused = machine.run(&repo, &["manifest", "config", "verify", "--json"]);
-    let payload: Value = serde_json::from_slice(&refused.stdout).unwrap();
-    assert_eq!(payload["error"]["class"], "bad_invocation");
-    assert_eq!(refused.status.code(), Some(2));
+
+    let output = machine.run(&repo, &["manifest", "config", "verify", "--json"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "bad_config", "{payload}");
+    assert_eq!(output.status.code(), Some(3), "bad_config is exit 3");
+    assert!(
+        payload["data"]["pass_2"].is_null(),
+        "pass 2 ran anyway: {payload}"
+    );
+
+    let rows: Vec<(&str, &str)> = payload["data"]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| (row["id"].as_str().unwrap(), row["status"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("schema", "PASS"),
+            ("references", "PASS"),
+            ("argv[0]", "FAILED")
+        ],
+        "{payload}"
+    );
+    // **`bad_config` requires a next_action**, and on this verb it is the whole
+    // point: a report naming a problem without the fix sends the reader to the
+    // documentation.
+    assert!(payload["error"]["next_action"].is_string(), "{payload}");
+
+    let human = machine.run(&repo, &["manifest", "config", "verify"]);
+    // A failure goes to stderr, so `armada manifest config verify | grep` is
+    // never quietly fed an error report.
+    let text = String::from_utf8_lossy(&human.stderr);
+    assert!(
+        text.starts_with("pass 1, static, nothing is executed"),
+        "{text}"
+    );
+    assert!(text.contains("unchecked  shell entries"), "{text}");
+    assert!(
+        text.contains("pass 2 not attempted, fix pass 1 first"),
+        "{text}"
+    );
+    assert!(text.contains("\n  -> "), "no fix line: {text}");
+}
+
+/// The other side of the short-circuit: pass 1 passes, so pass 2 runs the check
+/// suite **for real** — against a scratch repository and nowhere else.
+#[test]
+fn config_verify_runs_the_suite_for_real_when_pass_one_passes() {
+    let machine = Machine::new();
+    let repo = machine.repo(
+        "main",
+        "manifest:\n  version: 1\n  components:\n    repo:\n      match: [\"*.yml\"]\n      \
+         checks:\n        ok:\n          cmd: \"true\"\n          scope: component\n",
+    );
+
+    let output = machine.run(&repo, &["manifest", "config", "verify", "--json"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(output.status.code(), Some(0), "{payload}");
+    assert_eq!(payload["status"], "PASS");
+    assert_eq!(payload["data"]["pass_2"]["results"][0]["id"], "repo:ok");
+    assert_eq!(payload["data"]["pass_2"]["results"][0]["status"], "PASS");
 }
 
 fn namespace_of(db: &std::path::Path) -> String {

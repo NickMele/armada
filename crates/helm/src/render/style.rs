@@ -136,6 +136,26 @@ impl Style {
         }
     }
 
+    /// The marker on a line that says what to do about the line above it.
+    ///
+    /// **A fix line is the point of a report** — a check that names a problem
+    /// without the command that fixes it sends the reader to the documentation,
+    /// which is most of what reporting exists to save. So the glyph follows the
+    /// same decision every other one does: typographic for a person, ASCII for
+    /// the agent that might re-parse the line (`render_pending.rs`).
+    ///
+    /// **Not one column for one column**, unlike [`Style::nothing`] and
+    /// [`Style::span`], which is why it may only ever open a line and never sit
+    /// in a table cell: a two-column arrow inside a measured cell would shear
+    /// every column after it.
+    pub fn arrow(self) -> &'static str {
+        if self.color {
+            "→"
+        } else {
+            "->"
+        }
+    }
+
     /// A span, written the way the reader's audience writes one.
     ///
     /// An en dash between two numbers for a person; a hyphen for anyone who

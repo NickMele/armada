@@ -32,4 +32,5 @@ pub mod schedule;
 pub mod scope;
 pub mod select;
 pub mod template;
+pub mod verify;
 pub mod workspace;
