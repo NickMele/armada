@@ -209,6 +209,27 @@
       ]
     }
   },
+  "skills": {
+    "add-endpoint": {
+      "summary": "Add an API endpoint, OpenAPI first, then the generated client",
+      "doc": "docs/skills/add-endpoint.md",
+      "uses": [
+        "tickets"
+      ],
+      "verify": [
+        "api:types",
+        "web:lint"
+      ],
+      "touches": [
+        "backend/openapi.yaml",
+        "frontend/src/generated/**"
+      ]
+    },
+    "triage-flake": {
+      "summary": "Work out whether a failing test is flaky or genuinely broken",
+      "doc": "docs/skills/add-endpoint.md"
+    }
+  },
   "secrets": {
     "GITHUB_TOKEN": "op://Engineering/github/token"
   },

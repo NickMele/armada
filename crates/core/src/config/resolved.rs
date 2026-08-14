@@ -30,6 +30,9 @@ pub struct ResolvedConfig {
     /// Repo-local verbs, keyed by name.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub commands: BTreeMap<String, ResolvedCommand>,
+    /// Repo-local knowledge, keyed by name.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub skills: BTreeMap<String, ResolvedSkill>,
     /// Declared nested workspaces.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub workspaces: Vec<String>,
@@ -266,6 +269,47 @@ pub struct ResolvedCommand {
     /// Secret names granted to this entry.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub secrets: Vec<String>,
+}
+
+/// A resolved `skills:` entry (PLAN.md §4.8).
+///
+/// **A named grant plus a pointer to prose, and nothing executable.** There is
+/// no `cmd:` here because there is none in the schema: a skill with its own
+/// command is a `commands:` entry wearing a hat, and if that were the design
+/// the honest move would be to delete `skills:` entirely.
+///
+/// **The prose half never reaches this struct.** `doc` is a path, and nothing
+/// in core opens it — that is what keeps `skills:` inside `ARCHITECTURE.md`
+/// §1.9: the mechanical half is ordinary config a human, a script or CI can
+/// read, and the judgement stays in a markdown file Armada writes to and points
+/// at but never reads back as instruction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ResolvedSkill {
+    /// One line, for listings, routing and generated frontmatter.
+    pub summary: String,
+    /// Workspace-relative path to the prose. Its existence is `config verify`'s
+    /// question; its contents are nobody's.
+    pub doc: String,
+    /// `commands:` keys this skill may invoke.
+    ///
+    /// **Grants nothing.** Every name here must already be declared under
+    /// `commands:`, which `config verify` enforces — so a skill can never
+    /// smuggle an invocation past it, and a repo-authored skill can only ever
+    /// name capability the repository declared in a file a human reviewed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub uses: Vec<String>,
+    /// The check scope that proves the work landed, normalised to a list.
+    ///
+    /// Flattened from `verify: { check: [...] }` for the same reason
+    /// `owns.release:` is: nothing downstream should have to ask which spelling
+    /// was written. The nesting exists in the schema so a future second kind of
+    /// evidence has somewhere to go.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub verify: Vec<String>,
+    /// Advisory globs. **Not enforced** — they feed the scope lens and let a
+    /// review step notice edits far outside them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub touches: Vec<String>,
 }
 
 /// What a check runs over.
