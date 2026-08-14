@@ -3,11 +3,12 @@
 > **Status:** the eight principles in §1 were agreed for Armada and **all eight carry forward
 > unchanged** to Armada's four modules — they were written about subprocesses, clocks and
 > networks, not about repositories, so widening the scope did not touch them. §1.9 adds the one
-> rule the four-module shape needs. Two SDLC rules were **retired** when the repository went
-> private: the contamination grep (§2.4) and the clean-room rule (§2.7). Both are recorded
-> rather than deleted.
+> rule the four-module shape needs. Two SDLC rules are **retired**, each on its own
+> merits and not because the repository changed — it stays public: the contamination grep
+> (§2.4, superseded by the fixtures) and the clean-room rule (§2.7, its harvest landed). Both
+> are recorded rather than deleted. The privacy gate is permanent.
 >
-> The **Manifest** module — formerly Armada — has landed its config contract, six fixtures and
+> The **Manifest** module — formerly charkit — has landed its config contract, six fixtures and
 > the ownership layer behind `init`, `clean`, `status` and `commands:`. The three seams, the
 > reducer's shape for the claim loop and the `--json` envelope are code rather than sketches.
 > `up`, `down` and `check` are not built, and neither are Guild, Fleet or Helm.
@@ -25,7 +26,7 @@
 | § | | |
 |---|---|---|
 | **1** | Architecture principles | 1.1 seams · 1.2 pure core & the reducer · 1.3 no logic in commands · 1.4 no ambient state · 1.5 dependencies inward · 1.6 machine-readable output & exit codes · 1.7 typed failures · 1.8 secrets · **1.9 four modules, nothing points upward** |
-| **2** | SDLC principles | 2.1 TDD scope · 2.1.1 what a green test does not prove · 2.1.2 spec divergence · 2.2 branching · 2.3 commits · 2.4 the merge gate (contamination grep retired) · 2.5 versioning · 2.6 dogfooding · 2.7 clean-room rule retired · **2.8 document ownership & precedence** |
+| **2** | SDLC principles | 2.1 TDD scope · 2.1.1 what a green test does not prove · 2.1.2 spec divergence · 2.2 branching · 2.3 commits · 2.4 the merge gate (grep retired, privacy gate permanent) · 2.5 versioning · 2.6 dogfooding · 2.7 clean-room rule retired · **2.8 document ownership & precedence** |
 | **3** | Decisions recorded, and the test tiers | |
 | **4** | What was deliberately not decided | |
 
@@ -743,22 +744,30 @@ The gate is `.github/workflows/gate.yml`, and it is:
 
 #### Check 6 is scheduled for retirement, and what will replace it
 
-> **⚠️ This repository stays public, permanently.** An earlier decision took it private in M1
-> and was **reversed** — the reasoning is in the decision table at the end of this document, and
-> it is the same reasoning that chose public in the first place: release binaries ship via a
-> `curl` one-liner, so the package is public in effect regardless, and a public package with a
-> private source has no issue tracker and no source link.
+> **⚠️ The contamination grep is RETIRED. The privacy gate is PERMANENT.**
 >
-> **What follows from that: the privacy gate is permanent, not transitional.** `cargo xtask
-> privacy` and `cargo xtask history` are ordinary standing checks. The contamination grep and
-> the clean-room rule (§2.7) still retire, but on their own merits rather than because the
-> repository changed — see below and §2.7.
+> `xtask/src/contamination.rs` is deleted and `cargo xtask contamination` no longer exists.
+> `cargo xtask privacy` and `cargo xtask history` remain, and are ordinary standing checks —
+> **this repository stays public, permanently.** An earlier decision took it private in M1 and
+> was reversed; the reasoning is in the decision table at the end of this document, and it is
+> the same reasoning that chose public originally: release binaries ship via a `curl`
+> one-liner, so the package is public in effect regardless, and a public package with a private
+> source has no issue tracker and no source link.
+>
+> **The grep did not retire because the repository changed.** It retired on its own merits, and
+> the argument is §2.4's own, below: a green grep only ever proved the absence of *crude*
+> contamination, and the six fixtures carry the discipline that actually matters. The
+> clean-room rule (§2.7) retired separately, because the harvest it protected has landed.
 
-The contamination grep bans a set of strings under `src/` and `tests/`; the privacy gate bans a
-configured repository name and the literal `$HOME` across every tracked file. **Both exist
-because this repository is public.** Since it stays public, the gate stays — but the grep does
-not, because §2.4's own argument below is that the grep was a bad proxy and the fixtures replaced
-it.
+The grep banned a set of strings under `crates/` and `tests/`; the privacy gate bans a
+configured repository name and the literal `$HOME` across every tracked file. **Both existed
+because this repository is public**, and it still is — which is why one of them survives.
+
+**One config surface serves the survivor.** `.claude/contamination.local` and the
+`CHARKIT_CONTAMINATION_EXTRA` secret keep their names and now belong to `privacy.rs`, which
+moved the reader when the grep was deleted. They are gitignored and already present on every
+machine that has one; renaming them would disarm the gate on exactly those machines, silently
+— the failure the next section exists to make impossible.
 
 #### The gate fails loudly when it is switched off
 
@@ -1082,19 +1091,19 @@ fixtures and phase 8 are.
 
 ---
 
-### 2.7 The clean-room rule — scheduled for retirement, still in force
+### 2.7 The clean-room rule — retired
 
-> **⚠️ Still in force until its retirement commit lands. The hook is at
-> `.claude/hooks/clean-room.sh` and still fires.**
+> **⚠️ RETIRED. `.claude/hooks/clean-room.sh` is deleted, its test is gone, and
+> `.claude/settings.json` no longer registers a `PreToolUse` hook.**
 >
-> **It retires because its job is done, not because the repository changed.** The repository
-> stays public (§2.4). This rule split the check-engine work across two agents so the one
-> writing code never opened the source repository — and **the harvest has landed**:
-> `docs/harvest.md` and `tests/cases/` exist, and the implementer's work is merged. A hook that
-> now blocks reads nobody needs is friction with no remaining benefit.
+> **It retired because its job is done, not because the repository changed** — this repository
+> stays public (§2.4). The rule split the check-engine work across two agents so the one writing
+> code never opened the source repository, and **the harvest has landed**: `docs/harvest.md` and
+> `tests/cases/` exist and the implementer's work is merged. A hook that blocks reads nobody
+> needs any more is friction with no remaining benefit.
 >
-> **Until that commit lands, never disable it by setting `CHARKIT_CLEAN_ROOM_PATH=""`.** That
-> silences the guard rather than satisfying it, and the difference is the whole subject of §2.4.
+> `.claude/clean-room.local` is left on disk and gitignored. It is inert now, and deleting a
+> file that names the source repository's path is not this commit's business.
 >
 > **One part of its reasoning survives and is worth carrying forward:** the value in ported code
 > is not the code, it is the **empirically discovered bug fixes** — branches that exist because

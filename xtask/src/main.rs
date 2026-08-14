@@ -8,7 +8,6 @@
 
 mod blocks;
 mod boundaries;
-mod contamination;
 mod docs;
 mod keys;
 mod privacy;
@@ -24,7 +23,6 @@ cargo xtask <command>
   xref            resolve every §N.N against the heading index
   blocks          parse every fenced yaml / json / sh block
   keys            config keys in examples vs prose (-v lists one-sided keys)
-  contamination   the ARCHITECTURE.md §2.4 grep, over crates/ and tests/
   privacy         the ARCHITECTURE.md §2.4 leak rules, over every tracked file
   history         the same rules over every ref and commit — a report, not a gate
   boundaries      the ARCHITECTURE.md §1.5 and §1.9 layers contract, over the
@@ -83,16 +81,6 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             }
         },
-        Some("contamination") => match contamination::check(&root, &corpus) {
-            Ok(f) => {
-                findings.extend(f);
-                ran.push("contamination");
-            }
-            Err(e) => {
-                eprintln!("xtask: contamination: {e}");
-                return ExitCode::from(2);
-            }
-        },
         Some("privacy") => match privacy::check(&root) {
             Ok(f) => {
                 findings.extend(f);
@@ -118,16 +106,6 @@ fn main() -> ExitCode {
             findings.extend(blocks::check(&corpus));
             findings.extend(keys::check(&corpus, verbose));
             ran.extend(["xref", "blocks", "keys"]);
-            match contamination::check(&root, &corpus) {
-                Ok(f) => {
-                    findings.extend(f);
-                    ran.push("contamination");
-                }
-                Err(e) => {
-                    eprintln!("xtask: contamination: {e}");
-                    return ExitCode::from(2);
-                }
-            }
             match privacy::check(&root) {
                 Ok(f) => {
                     findings.extend(f);

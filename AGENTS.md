@@ -23,9 +23,9 @@ is `armada`, the config is `armada.yml`, the state is `~/.armada/`, and the crat
 - `docker.rs`'s `LEGACY_LABEL_*`, read so a container stamped before the rename is still
   reclaimable — for one release (`PHASES.md` §8.3).
 - The `<!-- char:begin -->` markers, recognised for the same reason (`PLAN.md` §5.1).
-- The privacy and clean-room guards, including `CHARKIT_CLEAN_ROOM_PATH`. Renaming that
-  variable silently disarms the hook. They are deleted, not renamed, once this repo is
-  private (`ARCHITECTURE.md` §2.4, §2.7).
+- The privacy gate's config: `.claude/contamination.local` and
+  `CHARKIT_CONTAMINATION_EXTRA`. They are gitignored and already on every machine that has
+  one, so renaming them would silently disarm the gate exactly there.
 
 ## Read these first, in order
 
@@ -56,34 +56,22 @@ measured   decided           specified  sequenced   derived
 
 ## Rules that are easy to break by accident
 
-### 1. Two rules are scheduled to retire — they have not, so satisfy them
+### 1. The privacy gate is permanent — and it fails loudly
 
-**This repository is public right now.** The contamination grep and the clean-room rule both
-exist and both still run: `xtask/src/contamination.rs`, `xtask/src/privacy.rs` and
-`.claude/hooks/clean-room.sh` are all present, and `cargo xtask doclint` names `contamination,
-privacy` in its own output.
-
-**The privacy gate is not one of them.** The repository stays public permanently
-(`ARCHITECTURE.md` §2.4), so `cargo xtask privacy` and `cargo xtask history` are standing
-checks with no retirement date. The grep and the clean-room hook do retire, each on its own
-commit and its own merits, and until those commits land treat all three as in force:
+**This repository is public and stays public** (`ARCHITECTURE.md` §2.4), so `cargo xtask
+privacy` and `cargo xtask history` are standing checks with no retirement date.
 
 - Never write the private source repository's name or the literal `$HOME` into a tracked file.
-- Never disable the hook with `CHARKIT_CLEAN_ROOM_PATH=""` — that silences the guard rather
-  than satisfying it.
-- If `cargo xtask privacy` or `cargo xtask history` reports `(name rule unconfigured)`, it is
-  **checking nothing**. That is the guard being off, not passing.
+- If either reports `(name rule unconfigured)` it is **checking nothing** — and it now exits
+  non-zero rather than passing quietly. Arm it via `.claude/contamination.local` or the
+  `CHARKIT_CONTAMINATION_EXTRA` secret. `CHARKIT_PRIVACY_UNCONFIGURED_OK=1` acknowledges an
+  unarmed run deliberately; reaching for it to make a failure go away is the failure.
 
-Their reasoning is kept in `ARCHITECTURE.md` §2.4 and `ARCHITECTURE.md` §2.7 rather than erased,
-because a rule that vanishes without a reason gets reinvented.
-
-**The harvest has landed, and there is no second one.** The behaviour spec of the source check
-engine and every trap found in it are in [`docs/harvest.md`](docs/harvest.md); the ported cases
-are data under `tests/cases/`, one file per subsystem, with the schema and the recorded
-exclusions in `tests/cases/README.md`. Build from those two and **never open the source
-repo** — anything they lack is a question for the harvest doc, not the original. The harvester
-that produced them is `.claude/agents/harvester.md`, and its `name:` is the `agent_type` the
-hook allows, so renaming one without the other closes the clean room entirely.
+**Two rules retired**, each on its own merits and not because the repository changed: the
+contamination grep, superseded by the six fixtures, and the clean-room rule, whose harvest has
+landed. `xtask/src/contamination.rs` and `.claude/hooks/clean-room.sh` are gone. Their
+reasoning is kept in `ARCHITECTURE.md` §2.4 and §2.7 rather than erased, because a rule that
+vanishes without a reason gets reinvented.
 
 **What did not go away is the risk the grep was a poor proxy for.** A green grep only proved the
 absence of *crude* contamination. The failure that matters is invisible to it: an abstraction

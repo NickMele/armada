@@ -40,12 +40,56 @@
 //! to what is checked out. See its own documentation for why that is a separate
 //! command and not part of the gate.
 
-use crate::contamination::{extra_alternatives, EXTRA_ENV};
 use crate::docs::Finding;
 use regex::{Regex, RegexBuilder};
 use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
+
+/// Extra alternatives, `|`-separated. Exported wins over the file, and
+/// exported-empty is a deliberate off switch.
+///
+/// Moved here from the contamination grep when that check retired: this is now
+/// the only guard that reads it, and a constant living in a deleted module is
+/// how a config surface quietly loses its owner.
+pub const EXTRA_ENV: &str = "CHARKIT_CONTAMINATION_EXTRA";
+
+/// The same alternatives, one per line, `#` comments and blanks skipped.
+/// Untracked (see `.gitignore`). Unlike the variable it survives a `cargo
+/// xtask` run from a shell that never exported anything, which is every run.
+///
+/// **The filename keeps the old spelling on purpose.** It is gitignored and
+/// already sitting on every machine that has one; renaming it would disarm the
+/// gate on exactly those machines, silently, which is the failure
+/// [`unconfigured_finding`] exists to make impossible.
+const EXTRA_FILE: &str = ".claude/contamination.local";
+
+/// The configured private names, from the variable if it is exported at all
+/// and from the file otherwise.
+///
+/// `from_env` is threaded in rather than read here so the tests can exercise
+/// both sources without mutating the process environment.
+pub fn extra_alternatives(root: &Path, from_env: Option<String>) -> Vec<String> {
+    let raw = match from_env {
+        // Exported-empty yields no alternatives, which is the off switch.
+        Some(v) => v.split('|').map(str::to_string).collect(),
+        None => match std::fs::read_to_string(root.join(EXTRA_FILE)) {
+            Ok(text) => text
+                .lines()
+                .filter(|l| !l.trim_start().starts_with('#'))
+                .map(str::to_string)
+                .collect(),
+            // Unreadable and absent are the same answer: nothing was named. The
+            // run is then reported as unconfigured and fails loudly rather than
+            // passing quietly — see `unconfigured_finding`.
+            Err(_) => Vec::new(),
+        },
+    };
+    raw.iter()
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+        .collect()
+}
 
 /// Exempt from rule 1 only, per `ARCHITECTURE.md` §2.4: the harvest doc's whole
 /// job is to describe the source repo, so a ban would forbid recording the

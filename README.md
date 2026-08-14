@@ -118,12 +118,16 @@ exactly the things that differ.
 | **module boundaries** | the dependency rule of [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.9 |
 | **docs** | `cargo xtask doclint` — cross-references resolve, code blocks parse, config keys appear in both an example and prose |
 
-Two further checks run today and are **scheduled to retire**, each on its own merits: the
-contamination grep (`cargo xtask contamination`) and the privacy gate (`cargo xtask privacy`),
-alongside a clean-room hook. They exist because this repository is public, and they stay in
-force until it is not. Their reasoning is recorded in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 and §2.7 so that the retirement does not
-read as an unexplained hole, because a rule that vanishes without a reason gets reinvented.
+One further check runs alongside the gate and is **permanent**: the privacy gate
+(`cargo xtask privacy`, plus `cargo xtask history` for refs). It exists because this repository
+is public, it stays because the repository does, and it **fails loudly when unconfigured** —
+a check that cannot match must never be mistaken for a clean repository.
+
+The contamination grep and the clean-room hook were **retired**, each on its own merits: the
+grep because six config fixtures carry that discipline better than a grep ever did, the
+clean-room rule because the harvest it protected has landed. Both retirements keep their
+reasoning in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 and §2.7, because a rule that
+vanishes without a reason gets reinvented.
 
 **What replaces them once they go is the fixture set.** Six config fixtures will then be the only
 thing standing between this design and being shaped around a single repository. A green grep
