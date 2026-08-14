@@ -1,8 +1,9 @@
 //! Values that are one thing in the envelope and another on a screen.
 //!
-//! **Only two of them, and both are agreed rather than invented**
-//! (`docs/reference-output/command-output.html`): a duration, and a count with
-//! its noun. Everything else a verb prints is the envelope's own spelling.
+//! **Three of them, and each is agreed rather than invented**
+//! (`docs/reference-output/command-output.html`): a duration, a count with its
+//! noun, and a file size. Everything else a verb prints is the envelope's own
+//! spelling.
 
 /// A duration, for a person and for the agent reading the same line.
 ///
@@ -46,6 +47,23 @@ pub fn count(n: usize, noun: &str) -> String {
     }
 }
 
+/// A file size, for the one verb that writes a file — `armada guild export`.
+///
+/// **`412 KB`, in the drawing's own spelling**, and powers of 1024 because that
+/// is what every other tool on the machine reports and a bundle a person is
+/// about to copy somewhere is a bundle they will compare against `ls -lh`.
+pub fn bytes(n: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * KB;
+    if n < KB {
+        return format!("{n} B");
+    }
+    if n < MB {
+        return format!("{} KB", n / KB);
+    }
+    format!("{:.1} MB", n as f64 / MB as f64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,5 +100,15 @@ mod tests {
         assert_eq!(count(1, "check"), "1 check");
         assert_eq!(count(0, "check"), "0 checks");
         assert_eq!(count(5, "check"), "5 checks");
+    }
+
+    /// `412 KB` is the drawing's own spelling, and the units are the ones
+    /// `ls -lh` uses — a bundle is a file a person is about to go and look at.
+    #[test]
+    fn a_bundle_is_sized_the_way_the_rest_of_the_machine_sizes_a_file() {
+        assert_eq!(bytes(0), "0 B");
+        assert_eq!(bytes(999), "999 B");
+        assert_eq!(bytes(421_888), "412 KB");
+        assert_eq!(bytes(4_194_304), "4.0 MB");
     }
 }

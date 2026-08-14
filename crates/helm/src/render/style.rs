@@ -136,6 +136,37 @@ impl Style {
         }
     }
 
+    /// The caret an interview prompt ends on.
+    ///
+    /// `armada init` is the one verb that asks questions, and this is the
+    /// character the cursor sits after. One column either way, like
+    /// [`Style::nothing`].
+    pub fn caret(self) -> &'static str {
+        if self.color {
+            "›"
+        } else {
+            ">"
+        }
+    }
+
+    /// What `armada doctor` puts in front of the command that fixes a problem.
+    ///
+    /// **The one decorative character whose two forms are different widths**, and
+    /// it is allowed to be: the fix lines are prose with nothing after them on
+    /// the line, so a column cannot shear. Everything in a *table* cell uses
+    /// one-for-one substitutions instead — see [`Style::nothing`].
+    ///
+    /// The fix lines themselves are settled and not optional: a check that
+    /// reports a problem without the command that fixes it sends the reader to
+    /// the documentation, which is most of what `doctor` exists to save.
+    pub fn fix_arrow(self) -> &'static str {
+        if self.color {
+            "→"
+        } else {
+            "->"
+        }
+    }
+
     /// A span, written the way the reader's audience writes one.
     ///
     /// An en dash between two numbers for a person; a hyphen for anyone who
@@ -231,6 +262,31 @@ mod tests {
         assert_eq!(
             person.span(5460, 5469).chars().count(),
             agent.span(5460, 5469).chars().count()
+        );
+    }
+
+    /// The prompt caret folds like every other glyph, and keeps its column.
+    #[test]
+    fn the_prompt_caret_is_one_column_in_both_audiences() {
+        assert_eq!(Style::painted().caret(), "›");
+        assert_eq!(Style::plain().caret(), ">");
+        assert_eq!(
+            Style::painted().caret().chars().count(),
+            Style::plain().caret().chars().count()
+        );
+    }
+
+    /// **The one decorative character whose forms differ in width**, and the one
+    /// place that is allowed: a fix line is prose with nothing after it, so
+    /// there is no column to shear.
+    #[test]
+    fn the_fix_arrow_folds_to_ascii_and_is_prose_rather_than_a_column() {
+        assert_eq!(Style::painted().fix_arrow(), "→");
+        assert_eq!(Style::plain().fix_arrow(), "->");
+        assert_ne!(
+            Style::painted().fix_arrow().chars().count(),
+            Style::plain().fix_arrow().chars().count(),
+            "if these ever match, say so here rather than leaving the note stale"
         );
     }
 

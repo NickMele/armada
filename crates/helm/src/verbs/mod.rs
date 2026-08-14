@@ -14,7 +14,8 @@ pub mod status;
 use armada_core::config::{self, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
-    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
+    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope,
+    GuildBundleData, GuildInitData, GuildSyncData, InitData, InitDryRun, MachineInitData,
     StatusData,
 };
 use armada_core::workspace::Workspace;
@@ -42,6 +43,16 @@ pub enum Output {
     CheckDryRun(Box<Envelope<CheckDryRun>>),
     /// A dispatched `commands:` entry.
     Dispatch(Box<Envelope<DispatchData>>),
+    /// `armada init` — the machine, not a workspace.
+    MachineInit(Box<Envelope<MachineInitData>>),
+    /// `armada doctor`.
+    Doctor(Box<Envelope<DoctorData>>),
+    /// `armada guild pull` and `armada guild push`.
+    GuildSync(Box<Envelope<GuildSyncData>>),
+    /// `armada guild init`.
+    GuildInit(Box<Envelope<GuildInitData>>),
+    /// `armada guild export` and `armada guild import`.
+    GuildBundle(Box<Envelope<GuildBundleData>>),
 }
 
 impl Output {
@@ -56,6 +67,11 @@ impl Output {
             Output::Check(e) => e.to_json(),
             Output::CheckDryRun(e) => e.to_json(),
             Output::Dispatch(e) => e.to_json(),
+            Output::MachineInit(e) => e.to_json(),
+            Output::Doctor(e) => e.to_json(),
+            Output::GuildSync(e) => e.to_json(),
+            Output::GuildInit(e) => e.to_json(),
+            Output::GuildBundle(e) => e.to_json(),
         }
     }
 
@@ -87,6 +103,11 @@ impl Output {
             Output::Check(e) => e.exit_code(),
             Output::CheckDryRun(e) => e.exit_code(),
             Output::Dispatch(e) => e.exit_code(),
+            Output::MachineInit(e) => e.exit_code(),
+            Output::Doctor(e) => e.exit_code(),
+            Output::GuildSync(e) => e.exit_code(),
+            Output::GuildInit(e) => e.exit_code(),
+            Output::GuildBundle(e) => e.exit_code(),
         }
     }
 }

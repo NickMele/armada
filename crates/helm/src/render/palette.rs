@@ -12,6 +12,7 @@
 //! than a broken one, because **the state word already carries the meaning**:
 //! `FAILED` is spelled out, never signalled by red alone.
 
+use armada_core::envelope::{Health, Sync};
 use armada_core::error::Status;
 use armada_core::ports::PortState;
 
@@ -123,6 +124,45 @@ impl Role {
         }
     }
 
+    /// The colour a machine-condition word is spoken in — `armada init`'s
+    /// preflight and every `armada doctor` check.
+    ///
+    /// **One word, one colour, across both verbs.** The reviewed drawing in
+    /// `docs/reference-output/command-output.html` paints `missing` amber under
+    /// `armada init` and red under `armada doctor`, and this does not follow it
+    /// there. The layout it froze is followed exactly — the `.plain` fixtures are
+    /// unchanged — but a word that means two things depending on which verb
+    /// printed it is the defect `glossary.md` opens by naming, and colour is not
+    /// exempt from it. `missing` is red in both, and the DETAIL cell carries the
+    /// severity: *"not required by every repo"* is what tells a reader the red
+    /// row under `init` is survivable.
+    pub const fn for_health(health: Health) -> Role {
+        match health {
+            // It is there. Whether Armada found it or made it is the word's job.
+            Health::Ok | Health::Found | Health::Created => Role::BeaconGreen,
+            Health::Missing => Role::DistressRed,
+            // The three "it is there and not right" answers, which is what
+            // flare orange means everywhere else in this palette.
+            Health::Stale | Health::Partial | Health::Offline => Role::FlareOrange,
+        }
+    }
+
+    /// The colour a sync outcome is spoken in.
+    ///
+    /// **`conflict` is red and nothing else is.** It is the one row on a `guild
+    /// pull` that stops the command and needs a person, and the whole design of
+    /// that verb is that it surfaces rather than resolves.
+    pub const fn for_sync(sync: Sync) -> Role {
+        match sync {
+            Sync::Added => Role::BeaconGreen,
+            Sync::Changed | Sync::Removed => Role::FlareOrange,
+            Sync::Conflict => Role::DistressRed,
+            // Nothing happened to it. Muted, for the same reason `SKIPPED` is:
+            // a green `unchanged` would read as an approval of something.
+            Sync::Unchanged => Role::SteelGrey,
+        }
+    }
+
     /// The colour a probed port state is spoken in.
     pub const fn for_port(state: PortState) -> Role {
         match state {
@@ -189,5 +229,31 @@ mod tests {
             Role::for_status(Status::Skipped),
             "a skipped check must not read as an approval"
         );
+    }
+
+    /// **One word, one colour, whichever verb printed it.** The drawing paints
+    /// `missing` amber under `armada init` and red under `armada doctor`; a word
+    /// that means two things depending on its caller is the defect the glossary
+    /// opens by naming, and this is the test that keeps it one.
+    #[test]
+    fn a_machine_condition_word_has_one_colour_across_both_verbs() {
+        assert_eq!(Role::for_health(Health::Missing), Role::DistressRed);
+        assert_eq!(Role::for_health(Health::Found), Role::BeaconGreen);
+        assert_eq!(Role::for_health(Health::Created), Role::BeaconGreen);
+        assert_eq!(Role::for_health(Health::Ok), Role::BeaconGreen);
+        for health in [Health::Stale, Health::Partial, Health::Offline] {
+            assert_eq!(Role::for_health(health), Role::FlareOrange, "{health:?}");
+        }
+    }
+
+    /// `conflict` is the one row on a `guild pull` that stops the command, so
+    /// it is the one that is red — and `unchanged` must not read as approval.
+    #[test]
+    fn a_conflict_is_the_only_red_row_on_a_sync() {
+        assert_eq!(Role::for_sync(Sync::Conflict), Role::DistressRed);
+        for sync in [Sync::Added, Sync::Changed, Sync::Removed, Sync::Unchanged] {
+            assert_ne!(Role::for_sync(sync), Role::DistressRed, "{sync:?}");
+        }
+        assert_eq!(Role::for_sync(Sync::Unchanged), Role::SteelGrey);
     }
 }

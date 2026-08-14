@@ -6,6 +6,6 @@
   partial  guild        voice.md still as imported     -
   ok       manifest.db  2 workspaces, 0 orphans        -
 
-NEEDS ATTENTION  4 ok, 1 missing, 2 warnings
+NEEDS ATTENTION  3 ok, 1 missing, 2 warnings
   -> install docker, or accept that compose repos will not start
   -> armada guild pull

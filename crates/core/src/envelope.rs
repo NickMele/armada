@@ -570,7 +570,10 @@ impl fmt::Display for Headline {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MachineInitData {
     /// One row per preflight check, plus one for the directories created.
-    pub results: Vec<ResultRow>,
+    ///
+    /// The same [`Finding`] rows `armada doctor` reports, because the two verbs
+    /// are asking one question about one machine.
+    pub results: Vec<Finding>,
     /// The one question that matters, and which of the three was chosen.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub guild: Option<GuildChoice>,
@@ -626,6 +629,59 @@ pub struct DoctorData {
     pub tally: Vec<String>,
 }
 
+impl DoctorData {
+    /// The summary line's counts, derived from the rows.
+    ///
+    /// **Derived rather than carried, so it cannot disagree with the table
+    /// above it.** The reviewed drawing counted seven rows in a table of six
+    /// (`crates/helm/tests/render_golden.rs` records the correction), which is
+    /// exactly what a hand-written tally does eventually.
+    ///
+    /// Three buckets, and `missing` is its own rather than folded into the
+    /// warnings: it is the one that fails the command, so it is the one a
+    /// reader has to be able to count without re-reading the table.
+    pub fn tally(results: &[Finding]) -> Vec<String> {
+        let count =
+            |predicate: fn(&Finding) -> bool| results.iter().filter(|r| predicate(r)).count();
+        let mut out = vec![format!("{} ok", count(|r| r.status == Health::Ok))];
+        let missing = count(|r| r.status.is_failure());
+        if missing > 0 {
+            out.push(format!("{missing} missing"));
+        }
+        let warnings = count(|r| r.status.is_warning());
+        if warnings > 0 {
+            out.push(format!(
+                "{warnings} warning{}",
+                if warnings == 1 { "" } else { "s" }
+            ));
+        }
+        out
+    }
+
+    /// The verdict the counts imply.
+    ///
+    /// **A warning alone does not fail** (`docs/commands/doctor.md`), so
+    /// `doctor` stays safe to run in a shell prompt — which it would not be if
+    /// a guild three commits behind exited non-zero every time.
+    pub fn verdict(results: &[Finding]) -> Status {
+        if results.iter().any(|r| r.status.is_failure()) {
+            Status::Failed
+        } else if results.iter().any(|r| r.status.is_warning()) {
+            Status::Partial
+        } else {
+            Status::Ok
+        }
+    }
+
+    /// `NEEDS ATTENTION`, or nothing at all when every check is `ok`.
+    pub fn headline(results: &[Finding]) -> Option<Headline> {
+        results
+            .iter()
+            .any(|r| r.status != Health::Ok)
+            .then_some(Headline::NeedsAttention)
+    }
+}
+
 /// One `doctor` check.
 ///
 /// **`remedy` is the point of the command.** `docs/commands/doctor.md`: a check
@@ -647,18 +703,32 @@ pub struct Finding {
     pub remedy: Option<String>,
 }
 
-/// How one `doctor` check stands.
+/// How one thing on this machine stands — for `armada init`'s preflight and
+/// for every `armada doctor` check.
 ///
 /// **Lowercase in the payload and lowercase on the screen**, which is the same
 /// rule [`Status`] follows in the other direction: one spelling, and it is the
 /// JSON spelling. These are not terminal states of a run — nothing here ends
-/// anything — so they are their own small enum rather than five more members of
-/// an enum whose exit-code mapping they would have no meaning in.
+/// anything — so they are their own small enum rather than seven more members
+/// of an enum whose exit-code mapping they would have no meaning in.
+///
+/// **One enum across the two verbs, because they are asking one question.**
+/// `armada init` and `armada doctor` both report the condition of this machine;
+/// `found` and `created` are the two answers only the setup pass can give, and
+/// `stale` and `partial` the two only the drift pass can. Splitting them would
+/// have meant deciding twice what `missing` looks like, and getting two
+/// answers — which is what the mockups did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Health {
-    /// Present and current.
+    /// Present and current — `doctor`'s word.
     Ok,
+    /// Present, with the version that was found — `armada init`'s word for the
+    /// same fact. Distinct from `ok` because a preflight is *looking* for
+    /// something and a check is *confirming* it.
+    Found,
+    /// Armada made it, just now.
+    Created,
     /// Not there at all.
     Missing,
     /// There, and behind what it should be.
@@ -676,6 +746,8 @@ impl Health {
     pub const fn word(self) -> &'static str {
         match self {
             Health::Ok => "ok",
+            Health::Found => "found",
+            Health::Created => "created",
             Health::Missing => "missing",
             Health::Stale => "stale",
             Health::Partial => "partial",
@@ -1113,6 +1185,8 @@ mod tests {
     fn a_doctor_finding_is_spelled_the_same_in_both_audiences() {
         for (health, word) in [
             (Health::Ok, "ok"),
+            (Health::Found, "found"),
+            (Health::Created, "created"),
             (Health::Missing, "missing"),
             (Health::Stale, "stale"),
             (Health::Partial, "partial"),
@@ -1136,8 +1210,10 @@ mod tests {
             assert!(!health.is_failure(), "{health:?} failed the command");
             assert!(health.is_warning());
         }
-        assert!(!Health::Ok.is_failure());
-        assert!(!Health::Ok.is_warning());
+        for health in [Health::Ok, Health::Found, Health::Created] {
+            assert!(!health.is_failure(), "{health:?}");
+            assert!(!health.is_warning(), "{health:?}");
+        }
     }
 
     /// The `remedy` is what earns `doctor` its existence, so a `Finding` that
@@ -1210,7 +1286,12 @@ mod tests {
     #[test]
     fn machine_init_carries_the_questions_it_asked() {
         let data = MachineInitData {
-            results: vec![ResultRow::new("git", Status::Ready)],
+            results: vec![Finding {
+                check: "git".to_string(),
+                status: Health::Found,
+                detail: "2.51.0".to_string(),
+                remedy: None,
+            }],
             guild: Some(GuildChoice {
                 question: "Do you already have a guild?".to_string(),
                 options: vec![
