@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./workflow.schema.json
 # Plan — turn a rough intent into a specification someone can execute.
 #
 # Always ends at you, and nothing builds until you approve. A plan workflow
@@ -7,7 +8,7 @@ description: Turn a rough intent into an executable plan.
 
 budget:
   max_iterations: 15
-  max_tokens: 500_000
+  max_tokens: 500000
   max_wall_clock: 90m
   on_exhausted: needs_human
 

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./workflow.schema.json
 # Bug — reproduce it first, then fix it.
 #
 # `failing_test_exists` is the gate that makes this workflow trustworthy: the
@@ -8,7 +9,7 @@ description: Reproduce a failure with a failing test, then fix it.
 
 budget:
   max_iterations: 20
-  max_tokens: 600_000
+  max_tokens: 600000
   max_wall_clock: 90m
   on_exhausted: needs_human
 

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./workflow.schema.json
 # Design — explore a problem and come back with something to react to.
 #
 # Always ends at you. Design has no automated pass condition: there is no
@@ -6,7 +7,7 @@ description: Explore a problem space and produce something to react to.
 
 budget:
   max_iterations: 15
-  max_tokens: 500_000
+  max_tokens: 500000
   max_wall_clock: 90m
   on_exhausted: needs_human
 

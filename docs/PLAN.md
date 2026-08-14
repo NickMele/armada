@@ -3145,7 +3145,7 @@ layer.
 ```yaml
 budget:
   max_iterations: 12
-  max_tokens: 400_000
+  max_tokens: 400000
   max_wall_clock: 45m
   on_exhausted: needs_human   # never: silent stop
 ```
@@ -3350,12 +3350,37 @@ and the verdict carries evidence (§14.3).
 | `review_clean` | A reviewer Job returns no blocking findings | the reviewer's verdict envelope |
 | `human_approves` | You answered in the affirmative | the inbox entry and your answer |
 | `branch_exists` | The work is on a local branch | `git rev-parse` |
+| `subjob_passed` | A sub-Job running another workflow returned `PASS` | that Job's verdict envelope |
 
 **`review_clean` is satisfied by Fleet, not by the Drone.** Fleet spawns a second Job with the
 diff and the original task, in its own context. The Drone under review never calls
 `fleet.spawn` — a worker able to spawn workers is a fork bomb with a budget (§15, and the
 worker toolbelt in [`commands/helm/mcp.md`](commands/helm/mcp.md)). An independent context is
 also the point: a reviewer that shares the implementer's context shares its blind spots.
+
+#### A step may run another workflow
+
+`workflow: plan` runs that workflow as a **sub-Job** — its own uuid, worktree, budget and
+record — and the step advances on its verdict (`must: subjob_passed`). `feature`'s first step is
+exactly this, so the plan you approved is a durable artifact you can point at later rather than
+a paragraph buried in a longer Job's transcript.
+
+A step names **exactly one** of `skill:` (a Drone does it), `workflow:` (a sub-Job does it), or
+neither (Fleet satisfies it, as `review` does). Two is ambiguous about who runs the step, and
+the schema rejects it.
+
+**The parent's ceilings are suspended while a sub-Job runs.** They have to be: a plan step ends
+at `human_approves`, approval can take hours, and a wall clock that kept ticking would kill a
+Job because you went to lunch. The sub-Job carries its own workflow's ceilings, which is the
+whole reason they are per workflow (below).
+
+**`guild verify` rejects cycles**, by the same argument that makes the check-id graph acyclic
+(§5): there is no correct behaviour for `feature → plan → feature`, so it is made
+unrepresentable rather than detected at run time.
+
+**Composition is not textual inclusion, and the difference matters.** `plan.yml` run on its own
+*terminates* at approval; `feature`'s plan step *continues* past it. Splicing the steps in would
+have made those two the same thing and quietly changed what `plan` means.
 
 **`human_approves` and `failing_test_exists` are the two that make the set trustworthy.**
 Without the first, a Drone builds the wrong thing efficiently. Without the second, a Drone

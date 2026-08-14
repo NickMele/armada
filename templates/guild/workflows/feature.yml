@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./workflow.schema.json
 # Feature — build something new, with your approval on the approach.
 #
 # The plan step STOPS. `human_approves` raises the plan to the inbox and waits;
@@ -7,14 +8,18 @@ description: Build a feature, pausing for approval on the approach before writin
 
 budget:
   max_iterations: 20
-  max_tokens: 600_000
+  max_tokens: 600000
   max_wall_clock: 90m
   on_exhausted: needs_human
 
 steps:
+  # A sub-Job running plan.yml: its own uuid, worktree, budget and record, so
+  # the plan you approved is a durable thing you can point at later. This
+  # parent's ceilings are suspended while it runs — approval can take hours,
+  # and a wall clock that keeps ticking would kill a Job for your lunch break.
   - id: plan
-    skill: write-plan
-    verify: { must: human_approves }
+    workflow: plan
+    verify: { must: subjob_passed }
 
   - id: implement
     skill: implement
