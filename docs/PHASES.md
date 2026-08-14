@@ -495,14 +495,39 @@ two implementers deciding these separately produce two incompatible engines.
 | 5 | **A `SKIPPED` prerequisite satisfies `needs:`.** | `PLAN.md` §4.1 says a check id in `needs:` "must have **passed** in this run". Read literally that cascades an `ABORTED` through every dependent of a check that had no matching files — turning a clean tree into a failing run, which is the mirror image of the hole `--all-files` exists to close. Nothing failed, so nothing is aborted. Recorded because it is an ambiguity in the spec rather than a free choice. |
 | 6 | **`--detach` and `--status` are refused by name, as not built.** | `PLAN.md` §3 gives both to `check` and neither ships in this phase. Refused by name rather than as an unknown flag, because the flag *is* known and the honest answer is that char cannot do it yet — "unknown flag" sends an agent looking for a typo. The gap is stated here rather than left to be discovered. |
 
-#### One defect phase 3 sends to phase 2.5
+#### One thing phase 3 fixed rather than sent back
 
-Recorded rather than fixed, because phase 2.5 is the only phase licensed to send
-changes back.
+Recorded because it was first written down as a defect in `PLAN.md` and turned
+out to be a defect in phase 2's code, which is a distinction worth keeping.
 
-| Defect | Where | What phase 3 did |
-|---|---|---|
-| **`PLAN.md` §3.1 and §4.1 disagree about whether a cascaded `ABORTED` may classify a run.** `PLAN.md` §3.1 says the top-level `error` is "the strict maximum over `results[]`", and `PLAN.md` §4.1 says "a cascaded `ABORTED` never sets `error.class`" — with the reason spelled out, that letting it would exit 5, the *retryable* class, for a deterministic test failure. Phase 2's `envelope::aggregate` implements `PLAN.md` §3.1 and maps a bare `ABORTED` row to `aborted`, which is the behaviour §4.1 forbids. | `PLAN.md` §3.1 vs §4.1 | Conformed to `PLAN.md` §4.1 by choosing which rows the aggregate is asked about, rather than by adding a second precedence rule. `aggregate` stays the only implementation of the ordering; what the engine decides is only its input set. Whether `PLAN.md` §3.1 should state the exception in its own text is phase 2.5's to answer. |
+**The finding as first stated was wrong.** It read: `PLAN.md` §3.1 says the
+top-level error is "the strict maximum over `results[]`", `PLAN.md` §4.1 says "a cascaded
+`ABORTED` never sets `error.class`", therefore the two sections disagree and
+phase 2.5 must choose. They do not disagree. `PLAN.md` §3.1's precedence chain runs over
+`error` **classes**, and a cascaded row carries no `error` object at all — so
+`PLAN.md` §3.1 is silent about what such a row contributes, and nothing anywhere in
+`PLAN.md` specifies it.
+
+What filled that silence was `envelope::implied_class`, a helper phase 2
+invented to give a class to a row that attached none. The inference is right for
+`FAILED` — the alternative is a verb reporting success while `results[]` shows a
+failure — and phase 2 extended it to `ABORTED` and `DEAD` by symmetry. That
+extension is the only thing that produced the forbidden outcome, and `PLAN.md` §4.1
+already ruled it out.
+
+So there was nothing to send back. Phase 3 narrowed the inference instead: a row
+whose state means *no verdict was reached* implies no class, while a row
+carrying a real `aborted` error — a claim that hit the acquisition ceiling —
+aggregates like any other. The blast radius was nil, because the check engine is
+the only thing in the codebase that emits an `ABORTED` row and `DEAD` is never
+emitted at all.
+
+**The correction cost less than the workaround it replaced.** Conforming to `PLAN.md` §4.1
+by filtering rows before aggregating had put the same rule in two places and made
+the aggregate's own count describe the slice rather than the run; narrowing the
+inference deleted the filter, a field on every verdict, and a restated message.
+The lesson worth carrying: *a rule stated in two documents is worth checking for
+a third possibility — that one of them never made the claim.*
 
 ### Phase 4 — Services: `up` / `down`
 

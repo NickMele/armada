@@ -330,18 +330,6 @@ pub struct Outcome {
     /// disagree with the run in the one dimension nothing would check. It is
     /// also the number that says whether a log hit the 10 MB cap.
     pub bytes: usize,
-    /// **Whether this row may set the run's `error.class`.**
-    ///
-    /// Named for what it decides rather than for what happened, because the two
-    /// are not the same question. A cascaded `ABORTED` never ran *and* must not
-    /// classify: PLAN.md §4.1 is explicit that letting it would exit 5 — the
-    /// *retryable* class — for a deterministic test failure, telling a merge
-    /// gate to try again on a bug that will fail identically forever. A check
-    /// blocked by a service that is not running also never ran, and *must*
-    /// classify: it is a `bad_invocation`, and the caller has to change what
-    /// they asked for before any other result means anything. See
-    /// [`State::run_error`].
-    pub classifies: bool,
 }
 
 /// One check, and where it has got to.
@@ -801,9 +789,6 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 bytes: bytes_so_far(&state, &check),
                 // A spawn that failed produced no output to write.
                 ran: false,
-                // It was attempted: char tried to run it and the machine or the
-                // config refused, which is a verdict about this check.
-                classifies: true,
             };
             conclude(&mut state, &check, outcome, &mut actions);
         }
@@ -859,7 +844,6 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
                 duration_ms: 0,
                 bytes: bytes_so_far(&state, &check),
                 ran: false,
-                classifies: true,
             };
             conclude(&mut state, &check, outcome, &mut actions);
         }
@@ -931,7 +915,6 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             duration_ms,
             bytes: running.bytes,
             ran: true,
-            classifies: true,
         },
         Some(Stopping::Ending) => Outcome {
             status: Status::Aborted,
@@ -940,7 +923,6 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             duration_ms,
             bytes: running.bytes,
             ran: true,
-            classifies: true,
         },
         None if code == 0 => Outcome {
             status: Status::Pass,
@@ -949,7 +931,6 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             duration_ms,
             bytes: running.bytes,
             ran: true,
-            classifies: true,
         },
         None => Outcome {
             status: Status::Failed,
@@ -963,7 +944,6 @@ fn exited(state: &State, check: &CheckId, code: i32) -> Option<Outcome> {
             duration_ms,
             bytes: running.bytes,
             ran: true,
-            classifies: true,
         },
     })
 }
@@ -1089,11 +1069,6 @@ fn resolve_pending(state: &mut State, actions: &mut Vec<Action>) {
                         duration_ms: 0,
                         bytes: 0,
                         ran: false,
-                        // It classifies: `bad_invocation` outranks a test
-                        // failure precisely because the caller has to fix the
-                        // invocation before any other result means anything
-                        // (PLAN.md §3.1).
-                        classifies: true,
                     },
                     actions,
                 );
@@ -1118,7 +1093,6 @@ fn resolve_pending(state: &mut State, actions: &mut Vec<Action>) {
                         duration_ms: 0,
                         bytes: 0,
                         ran: false,
-                        classifies: false,
                     },
                     actions,
                 );
@@ -1303,7 +1277,6 @@ fn end_run(state: &mut State, actions: &mut Vec<Action>) {
                         duration_ms: 0,
                         bytes: 0,
                         ran: false,
-                        classifies: false,
                     },
                     actions,
                 );
@@ -1377,41 +1350,20 @@ impl State {
     /// different action from "none passed" when the action is *fix the failing
     /// one*.
     ///
-    /// **Rows that were never attempted do not classify the run**, and this is
-    /// PLAN.md §4.1 stated as code rather than as prose: a cascaded `ABORTED`
-    /// never sets `error.class`, because letting it would exit 5 — the
-    /// retryable class — for a deterministic test failure, telling a merge gate
-    /// to try again on a bug that will fail identically forever. The precedence
-    /// itself is still [`crate::envelope::aggregate`]'s and nothing else's;
-    /// what is decided here is only which rows are asked about.
+    /// **Every row goes in, and PLAN.md §4.1's rule holds anyway.** A cascaded
+    /// `ABORTED` carries no `error` object and
+    /// [`crate::envelope::implied_class`](crate::envelope) infers none from it,
+    /// so it contributes nothing to the maximum without this function having to
+    /// know that. An earlier version filtered the rows here instead, which put
+    /// the same rule in two places and made the aggregate's own count describe
+    /// the slice rather than the run.
     fn run_error(&self) -> Option<CharError> {
         let rows: Vec<crate::envelope::ResultRow> = self
             .checks
             .values()
-            .filter(|entry| match &entry.phase {
-                Phase::Done(outcome) => outcome.classifies,
-                Phase::Pending | Phase::Waiting(_) | Phase::Running(_) | Phase::Skipped => true,
-            })
             .filter_map(|entry| result_of(entry).as_ref().map(Into::into))
             .collect();
-        let error = crate::envelope::aggregate(&rows, "checks")?;
-
-        // **The class is the aggregate's; the sentence is the run's.** Because
-        // the rows above are filtered, `aggregate`'s own count would read
-        // "1 of 1 checks did not succeed" beside a `results[]` holding two —
-        // truthful about what it was asked and confusing about the run.
-        // Restating the count is not a second precedence rule: the class, the
-        // `where` and the `next_action` are all still `aggregate`'s and are
-        // carried through untouched.
-        let all = self.results();
-        let failed = all
-            .iter()
-            .filter(|row| !matches!(row.status, Status::Pass | Status::Skipped))
-            .count();
-        Some(CharError {
-            message: format!("{failed} of {} checks did not succeed", all.len()),
-            ..error
-        })
+        crate::envelope::aggregate(&rows, "checks")
     }
 }
 
@@ -2208,11 +2160,18 @@ mod tests {
         assert!(ran.log.is_some(), "a check that ran lost its log");
     }
 
-    /// **The message describes the run, not the slice the aggregate was
-    /// handed.** Filtering the classifying rows made the count read
-    /// "1 of 1 checks did not succeed" beside a `results[]` holding two.
+    /// **The count describes the payload beside it.** An earlier version
+    /// filtered the rows before aggregating, so the message read
+    /// "1 of 1 checks did not succeed" next to a `results[]` holding two —
+    /// truthful about what the function was asked and confusing about the run.
+    /// Passing every row fixes the denominator by construction.
+    ///
+    /// The numerator counts rows that establish a failure, which is
+    /// `aggregate`'s own meaning and is shared by every verb: a `SKIPPED` row
+    /// is not counted either. That is a property of the shared sentence rather
+    /// than of this run, so it is not special-cased here.
     #[test]
-    fn the_runs_message_counts_every_row_and_not_only_the_ones_that_classify() {
+    fn the_runs_message_counts_against_the_payload_beside_it() {
         let mut types = plan("ui:types");
         types.needs = vec![id("core:build")];
         let (state, _) = step(run(vec![plan("core:build"), types]), Event::Started);
@@ -2233,8 +2192,11 @@ mod tests {
 
         let (_, error) = finish_of(&actions).expect("the run ends");
         let error = error.expect("it failed");
-        assert_eq!(error.message, "2 of 2 checks did not succeed");
-        assert_eq!(state.results().len(), 2, "the count matches the payload");
+        assert_eq!(
+            error.message,
+            format!("1 of {} checks did not succeed", state.results().len())
+        );
+        assert_eq!(state.results().len(), 2);
         // The class is still the aggregate's, and still the prerequisite's.
         assert_eq!(error.class, ErrClass::ToolFailed);
         assert_eq!(error.r#where, "core:build");
