@@ -28,11 +28,11 @@ and the three status enums. These pages use them without re-explaining them.
 | [`manifest/status.md`](manifest/status.md) | `armada manifest status` | shipped |
 | [`manifest/clean.md`](manifest/clean.md) | `armada manifest clean` | shipped |
 | [`manifest/commands.md`](manifest/commands.md) | `armada manifest <repo-command>` | shipped |
-| [`manifest/skills.md`](manifest/skills.md) | `armada manifest skills` · `render` | M1 / M2 |
+| [`manifest/skills.md`](manifest/skills.md) | `armada manifest skills` · `render` | `skills` shipped · `render` not built |
 | [`manifest/up.md`](manifest/up.md) | `armada manifest up` | not built |
 | [`manifest/down.md`](manifest/down.md) | `armada manifest down` | not built |
 | [`manifest/check.md`](manifest/check.md) | `armada manifest check` | shipped, less `--detach` / `--status` |
-| [`manifest/config.md`](manifest/config.md) | `armada manifest config scan\|verify` | not built |
+| [`manifest/config.md`](manifest/config.md) | `armada manifest config scan\|verify` | shipped |
 | [`manifest/explain.md`](manifest/explain.md) | `armada manifest explain` | not built |
 
 ## Guild — your portable setup

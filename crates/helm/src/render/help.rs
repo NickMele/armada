@@ -79,9 +79,23 @@ const LENS: [(&str, &str); 2] = [
 
 /// The verbs Manifest has built, in the order someone meets them.
 ///
-/// **Not alphabetical.** `init` comes first because nothing else works until it
-/// has run, and `clean` last because it undoes the rest.
-const MANIFEST: [Page; 4] = [
+/// **Not alphabetical.** `config` comes first because a repository has no
+/// `armada.yml` before it runs, `init` next because nothing else works until
+/// *it* has run, and `clean` last because it undoes the rest.
+const MANIFEST: [Page; 6] = [
+    Page {
+        name: "config",
+        summary: "report the evidence, then verify what was written",
+        usage: &[
+            "armada manifest config scan [--json]",
+            "armada manifest config verify [--json]",
+        ],
+        flags: &[],
+        notes: &[
+            "scan reports facts and decides nothing; an agent authors; verify checks.",
+            "scan is the one verb that runs in a repo with no armada.yml.",
+        ],
+    },
     Page {
         name: "init",
         summary: "claim this workspace: ports, .armada/, setup",
@@ -123,13 +137,26 @@ const MANIFEST: [Page; 4] = [
             ),
             ("--component <name>", "every check on one component"),
             (
-                "--jobs <n>",
+                "--concurrency <n>",
                 "this run's CPU budget, overriding the machine's",
             ),
         ],
         notes: &[
             "A selector is <component>:<check>, a component, or a check name.",
             "One selector, or several paths — never both (PLAN.md §3.2).",
+        ],
+    },
+    Page {
+        name: "skills",
+        summary: "what this repository knows about itself",
+        usage: &[
+            "armada manifest skills [--json]",
+            "armada manifest skills show <name> [--json]",
+        ],
+        flags: &[],
+        notes: &[
+            "A skill is a named grant plus a pointer to prose Armada never parses.",
+            "There is deliberately no way to run one (PLAN.md §4.8).",
         ],
     },
     Page {
@@ -328,7 +355,7 @@ fn manifest(style: Style, terminal: Terminal) -> String {
     out.push_str(&heading(style, "NOT BUILT YET"));
     out.push_str(
         &two_column(&[(
-            "up, down, config, agents-md, explain",
+            not_built_verbs().join(", ").as_str(),
             "reserved; see PHASES.md §8",
         )])
         .render(style, width),
@@ -395,17 +422,25 @@ fn two_column(rows: &[(&str, &str)]) -> Table {
     table
 }
 
+/// The claimed Manifest verbs that answer "not built yet".
+///
+/// Read off `args.rs`'s own table rather than retyped, so a verb that ships
+/// leaves this list by shipping.
+fn not_built_verbs() -> Vec<&'static str> {
+    BUILTIN_VERBS
+        .iter()
+        .copied()
+        .filter(|verb| !MANIFEST.iter().any(|page| page.name == *verb))
+        .collect()
+}
+
 /// Everything a caller can type that answers "not built yet".
 ///
 /// Generated from `args.rs`'s own tables, so a name claimed there cannot be
 /// missing here.
 fn not_built(style: Style, width: usize) -> String {
     let modules: Vec<&str> = RESERVED_TOP_LEVEL.iter().map(|(name, _)| *name).collect();
-    let manifest_verbs: Vec<&str> = BUILTIN_VERBS
-        .iter()
-        .copied()
-        .filter(|verb| !MANIFEST.iter().any(|page| page.name == *verb))
-        .collect();
+    let manifest_verbs = not_built_verbs();
 
     let mut out = Table::new(vec![Column::fixed(""), Column::flexible("")])
         .headerless()

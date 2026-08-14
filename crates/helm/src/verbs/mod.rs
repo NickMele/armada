@@ -7,20 +7,22 @@
 
 pub mod check;
 pub mod clean;
+pub mod config;
 pub mod dispatch;
 pub mod doctor;
 pub mod guild;
 pub mod init;
 pub mod machine;
 pub mod preflight;
+pub mod skills;
 pub mod status;
 
-use armada_core::config::{self, ResolvedConfig};
+use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope,
-    GuildBundleData, GuildInitData, GuildSyncData, InitData, InitDryRun, MachineInitData,
-    StatusData,
+    GuildBundleData, GuildInitData, GuildSyncData, InitData, InitDryRun, MachineInitData, ScanData,
+    SkillsData, StatusData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -47,6 +49,12 @@ pub enum Output {
     CheckDryRun(Box<Envelope<CheckDryRun>>),
     /// A dispatched `commands:` entry.
     Dispatch(Box<Envelope<DispatchData>>),
+    /// `armada manifest config scan`.
+    Scan(Box<Envelope<ScanData>>),
+    /// `armada manifest config verify`.
+    Verify(Box<Envelope<VerifyData>>),
+    /// `armada manifest skills`, or `skills show <name>`.
+    Skills(Box<Envelope<SkillsData>>),
     /// `armada init` — the machine, not a workspace.
     MachineInit(Box<Envelope<MachineInitData>>),
     /// `armada doctor`.
@@ -71,6 +79,9 @@ impl Output {
             Output::Check(e) => e.to_json(),
             Output::CheckDryRun(e) => e.to_json(),
             Output::Dispatch(e) => e.to_json(),
+            Output::Scan(e) => e.to_json(),
+            Output::Verify(e) => e.to_json(),
+            Output::Skills(e) => e.to_json(),
             Output::MachineInit(e) => e.to_json(),
             Output::Doctor(e) => e.to_json(),
             Output::GuildSync(e) => e.to_json(),
@@ -107,6 +118,9 @@ impl Output {
             Output::Check(e) => e.exit_code(),
             Output::CheckDryRun(e) => e.exit_code(),
             Output::Dispatch(e) => e.exit_code(),
+            Output::Scan(e) => e.exit_code(),
+            Output::Verify(e) => e.exit_code(),
+            Output::Skills(e) => e.exit_code(),
             Output::MachineInit(e) => e.exit_code(),
             Output::Doctor(e) => e.exit_code(),
             Output::GuildSync(e) => e.exit_code(),
@@ -127,8 +141,8 @@ pub fn load_config<R: Run, C: Clock, F: Fetch>(
 ) -> Result<(Workspace, ResolvedConfig), armada_core::error::ArmadaError> {
     let workspace = app.ctx.workspace()?.clone();
     let text = config_file::read(&workspace.config_path())?;
-    let parsed = config::parse(&text, &workspace.config_label)?;
-    let resolved = config::resolve(
+    let parsed = config_contract::parse(&text, &workspace.config_label)?;
+    let resolved = config_contract::resolve(
         parsed,
         &app.machine.config_defaults(),
         &workspace.config_label,
@@ -148,6 +162,6 @@ pub fn load_foreign_config(
     machine: &MachineConfig,
 ) -> Option<ResolvedConfig> {
     let text = std::fs::read_to_string(root.join("armada.yml")).ok()?;
-    let parsed = config::parse(&text, "armada.yml").ok()?;
-    config::resolve(parsed, &machine.config_defaults(), "armada.yml").ok()
+    let parsed = config_contract::parse(&text, "armada.yml").ok()?;
+    config_contract::resolve(parsed, &machine.config_defaults(), "armada.yml").ok()
 }

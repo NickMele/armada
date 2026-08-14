@@ -40,6 +40,12 @@ use verbs::Output;
 
 fn main() -> ExitCode {
     posix::restore_sigpipe();
+    // **Without this, Ctrl-C leaves the children running.** They are `setsid`'d
+    // into their own sessions, so a signal delivered to Armada never reaches
+    // them (`PHASES.md` §9.3). Trapping it lets the run loop end the run
+    // properly — kill each group, mark the rest ABORTED — instead of the
+    // process dying and orphaning a `cargo test`.
+    posix::catch_interrupts();
 
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -134,6 +140,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Clean { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
+        Invocation::Config { json, .. } | Invocation::Skills { json, .. } => *json,
         Invocation::MachineInit(init) => init.json,
         Invocation::Doctor { json, .. } => *json,
         Invocation::Guild(guild) => guild.json(),
@@ -303,6 +310,19 @@ fn dispatch(
         return verbs::clean::rebuild(&run, &SystemClock, home, common.dry_run);
     }
 
+    // **`config scan` is the one verb that runs in a repo with no `armada.yml`
+    // at all** (PLAN.md §2.1), and it is answered here for that reason: routing
+    // it through workspace resolution would fail on exactly the situation it
+    // exists for. It reads a directory, takes no lease and opens no database,
+    // so it needs none of what `app::build` assembles.
+    if let Invocation::Config {
+        sub: args::ConfigSub::Scan,
+        ..
+    } = &invocation
+    {
+        return verbs::config::scan(cwd);
+    }
+
     // Two invocations legitimately run outside any workspace: asking about
     // *this workspace* requires a `armada.yml`, asking about *the machine* does
     // not. `clean --orphaned` is most needed from a shell that happens to be
@@ -357,6 +377,11 @@ fn dispatch(
         Invocation::Dispatch { name, argv, json } => {
             verbs::dispatch::run(&mut app, &name, &argv, json)
         }
+        Invocation::Config { sub, .. } => match sub {
+            args::ConfigSub::Scan => unreachable!("answered before the workspace is resolved"),
+            args::ConfigSub::Verify => verbs::config::verify(&mut app, progress),
+        },
+        Invocation::Skills { show, .. } => verbs::skills::run(&mut app, show.as_deref()),
         Invocation::Version | Invocation::Help(_) => unreachable!("handled before dispatch"),
         Invocation::MachineInit(_) | Invocation::Doctor { .. } | Invocation::Guild(_) => {
             unreachable!("machine-scoped, and handled above")
@@ -435,6 +460,13 @@ fn emit(output: Output, json: bool, style: Style, terminal: render::term::Termin
         } else {
             write_err(&text);
         }
+    }
+    // **A signal has no error class, so it does not get the class's code**
+    // (`ARCHITECTURE.md` §1.6). The envelope above still says `aborted`,
+    // because that describes the run; the exit code describes the signal, and
+    // every shell reads 130 for Ctrl-C. Written first, then exited.
+    if posix::interrupted() {
+        posix::die_by_signal();
     }
     ExitCode::from(output.exit_code())
 }

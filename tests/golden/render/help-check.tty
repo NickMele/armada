@@ -11,7 +11,7 @@
   --wait              [38;2;107;114;128mqueue for the run lease instead of failing fast[0m
   --files <path>…     [38;2;107;114;128mrun only the checks these paths belong to[0m
   --component <name>  [38;2;107;114;128mevery check on one component[0m
-  --jobs <n>          [38;2;107;114;128mthis run's CPU budget, overriding the machine's[0m
+  --concurrency <n>   [38;2;107;114;128mthis run's CPU budget, overriding the machine's[0m
   --json              [38;2;107;114;128manswer in the envelope (PLAN.md §3.1), not as text[0m
   --color <when>      [38;2;107;114;128mauto (default), always, never; NO_COLOR wins[0m
 

@@ -5,9 +5,11 @@ USAGE
   armada                          enter Helm, the agent you talk to
 
 MANIFEST — what a workspace is and how to operate it
+  config  report the evidence, then verify what was written
   init    claim this workspace: ports, .armada/, setup
   status  what is running, what is mine, what is stale
   check   lint, format and test — the verb a gate calls
+  skills  what this repository knows about itself
   clean   release what this workspace owns
   <name>  a commands: entry from this repo's armada.yml
 
@@ -31,7 +33,7 @@ GLOBAL FLAGS
 NOT BUILT YET
   armada fleet, helm, bridge                            M3
   armada guild edit, verify                             M2
-  armada manifest up, down, config, agents-md, explain  reserved
+  armada manifest up, down, render, agents-md, explain  reserved
   armada manifest check --detach, --status              reserved
 
   Each answers `not built yet` and names its milestone, rather than

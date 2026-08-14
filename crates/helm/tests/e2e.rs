@@ -928,6 +928,187 @@ fn force_rebuild_refuses_every_flag_that_has_no_meaning_on_it() {
     }
 }
 
+/// **`config scan` in a directory that is not a workspace at all**, which is
+/// the only situation it ever runs in (PLAN.md §5): a repository has no
+/// `armada.yml` and this is how it gets one.
+///
+/// Every other verb resolves a workspace first and fails without one. Nothing
+/// but an end-to-end run establishes that this one does not — the unit tests
+/// call the verb directly, past the entrypoint where that decision is made.
+#[test]
+fn config_scan_answers_in_a_directory_with_no_workspace() {
+    let machine = Machine::new();
+    let loose = machine.root.path().join("not-a-workspace");
+    std::fs::create_dir_all(&loose).unwrap();
+    std::fs::write(
+        loose.join("package.json"),
+        r#"{"scripts":{"test":"vitest run","lint":"eslint ."}}"#,
+    )
+    .unwrap();
+    std::fs::write(loose.join("package-lock.json"), "{}").unwrap();
+
+    let output = machine.run(&loose, &["manifest", "config", "scan", "--json"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "scan reports rather than judges: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["workspace"], Value::Null, "nothing was claimed");
+    assert_eq!(payload["data"]["evidence"]["config_present"], false);
+    let scripts = &payload["data"]["evidence"]["scripts"][0]["scripts"];
+    assert_eq!(scripts[0]["name"], "test", "declaration order, not sorted");
+    assert_eq!(scripts[1]["name"], "lint");
+
+    // The human render is the one an authoring agent actually reads, and it
+    // ends by offering to hand over (PLAN.md §5, ARCHITECTURE.md §1.9 — the
+    // rule governs inputs, and printing a choice is an output).
+    let human = machine.run(&loose, &["manifest", "config", "scan"]);
+    let text = String::from_utf8_lossy(&human.stdout);
+    assert!(text.starts_with("no armada.yml here"), "{text}");
+    assert!(text.contains("Evidence only."), "{text}");
+    assert!(text.contains("1 let an agent write it with me"), "{text}");
+    assert!(!text.contains('\x1b'), "a pipe gets no escapes: {text}");
+}
+
+/// **Pass 1 short-circuits, and pass 2 is not attempted.** That is the whole
+/// reason layer 3 has two passes: the hallucinated script name is caught in
+/// seconds, and the build nobody asked for does not run.
+///
+/// The scratch repo declares `cmd: ./serve`, which is not on `PATH` and is not
+/// an executable file under the component root — the exact shape an agent
+/// authoring a config produces, and the one this verb exists to catch.
+#[test]
+fn config_verify_fails_pass_one_and_does_not_attempt_pass_two() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+
+    let output = machine.run(&repo, &["manifest", "config", "verify", "--json"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "bad_config", "{payload}");
+    assert_eq!(output.status.code(), Some(3), "bad_config is exit 3");
+    assert!(
+        payload["data"]["pass_2"].is_null(),
+        "pass 2 ran anyway: {payload}"
+    );
+
+    let rows: Vec<(&str, &str)> = payload["data"]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| (row["id"].as_str().unwrap(), row["status"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("schema", "PASS"),
+            ("references", "PASS"),
+            ("argv[0]", "FAILED")
+        ],
+        "{payload}"
+    );
+    // **`bad_config` requires a next_action**, and on this verb it is the whole
+    // point: a report naming a problem without the fix sends the reader to the
+    // documentation.
+    assert!(payload["error"]["next_action"].is_string(), "{payload}");
+
+    let human = machine.run(&repo, &["manifest", "config", "verify"]);
+    // A failure goes to stderr, so `armada manifest config verify | grep` is
+    // never quietly fed an error report.
+    let text = String::from_utf8_lossy(&human.stderr);
+    assert!(
+        text.starts_with("pass 1, static, nothing is executed"),
+        "{text}"
+    );
+    assert!(text.contains("unchecked  shell entries"), "{text}");
+    assert!(
+        text.contains("pass 2 not attempted, fix pass 1 first"),
+        "{text}"
+    );
+    assert!(text.contains("\n  -> "), "no fix line: {text}");
+}
+
+/// The other side of the short-circuit: pass 1 passes, so pass 2 runs the check
+/// suite **for real** — against a scratch repository and nowhere else.
+#[test]
+fn config_verify_runs_the_suite_for_real_when_pass_one_passes() {
+    let machine = Machine::new();
+    let repo = machine.repo(
+        "main",
+        "manifest:\n  version: 1\n  components:\n    repo:\n      match: [\"*.yml\"]\n      \
+         checks:\n        ok:\n          cmd: \"true\"\n          scope: component\n",
+    );
+
+    let output = machine.run(&repo, &["manifest", "config", "verify", "--json"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(output.status.code(), Some(0), "{payload}");
+    assert_eq!(payload["status"], "PASS");
+    assert_eq!(payload["data"]["pass_2"]["results"][0]["id"], "repo:ok");
+    assert_eq!(payload["data"]["pass_2"]["results"][0]["status"], "PASS");
+}
+
+/// **There is no way to run a skill, and its absence is the design**
+/// (PLAN.md §4.8). Only an end-to-end run establishes that: the parser is where
+/// a third subcommand would have to appear, and the unit tests call the verb
+/// past it.
+#[test]
+fn a_skill_can_be_listed_and_resolved_and_never_run() {
+    let machine = Machine::new();
+    let repo = machine.repo(
+        "main",
+        "manifest:\n  version: 1\n  commands:\n    tickets: { cmd: ./exiter.sh 0 }\n  \
+         skills:\n    add-endpoint:\n      summary: Add an API endpoint\n      \
+         doc: docs/skills/add-endpoint.md\n      uses: [tickets]\n",
+    );
+
+    let listed = machine.run(&repo, &["manifest", "skills", "--json"]);
+    let payload: Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert_eq!(listed.status.code(), Some(0), "{payload}");
+    assert_eq!(payload["data"]["skills"][0]["name"], "add-endpoint");
+    // `uses:` grants nothing new, so what it resolves to is the command the
+    // repository already declared.
+    assert_eq!(
+        payload["data"]["skills"][0]["uses"][0]["cmd"],
+        "./exiter.sh 0"
+    );
+
+    let shown = machine.run(&repo, &["manifest", "skills", "show", "add-endpoint"]);
+    let text = String::from_utf8_lossy(&shown.stdout);
+    // Words rather than column positions: the widths are the golden fixtures'
+    // to pin, and asserting them here would fail twice for one change.
+    let row = |words: &[&str]| {
+        text.lines()
+            .any(|line| line.split_whitespace().collect::<Vec<_>>() == words)
+    };
+    assert!(row(&["grants", "tickets", "./exiter.sh", "0"]), "{text}");
+    assert!(
+        row(&["reads", "doc", "docs/skills/add-endpoint.md"]),
+        "{text}"
+    );
+
+    // An unknown name is the *caller's* mistake, not the config's.
+    let unknown = machine.run(&repo, &["manifest", "skills", "show", "nope", "--json"]);
+    let payload: Value = serde_json::from_slice(&unknown.stdout).unwrap();
+    assert_eq!(payload["error"]["class"], "bad_invocation");
+    assert_eq!(unknown.status.code(), Some(2));
+
+    // And there is no runner, in any spelling.
+    for args in [
+        &["manifest", "skills", "run", "add-endpoint", "--json"][..],
+        &["manifest", "skills", "add-endpoint", "--json"][..],
+    ] {
+        let refused = machine.run(&repo, args);
+        let payload: Value = serde_json::from_slice(&refused.stdout).unwrap();
+        assert_eq!(
+            payload["error"]["class"],
+            "bad_invocation",
+            "`armada {}` was accepted: {payload}",
+            args.join(" ")
+        );
+    }
+}
+
 fn namespace_of(db: &std::path::Path) -> String {
     rusqlite::Connection::open(db)
         .ok()

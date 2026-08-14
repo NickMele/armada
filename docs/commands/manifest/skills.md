@@ -3,7 +3,7 @@
 What this repository knows about itself, declared once and readable by a human, a script or an
 agent.
 
-> **Status: not built — M1** (schema, `skills`, `skills show`) **and M2** (`render`).
+> **Status: `skills` and `skills show` are shipped. `render` is not built — M2.**
 > Specified in [`PLAN.md`](../../PLAN.md) §4.8.
 
 `commands:` ([`commands.md`](commands.md)) carries the invocation. A skill carries the judgement
@@ -90,17 +90,44 @@ worktree at the worst moment.
 ## Output
 
 ```
-NAME              USES                        VERIFY        DOC
-add-migration     migrate-new, migrate-apply  test, types   docs/skills/add-migration.md
-add-component     gen-types                   lint, test    docs/skills/add-component.md
+armada  3d9cc7ba
 
-2 skills · 0 unresolved references
+  STATUS    SKILL         DETAIL
+  declared  add-endpoint  Add an API endpoint, OpenAPI first, then the generate…
+  declared  triage-flake  Work out whether a failing test is flaky or genuinely…
+
+OK  2 skills, 0 unresolved references
 ```
 
-`--json` returns one result per skill with `name`, `summary`, `doc`, `uses`, `verify`,
-`touches`, and — for `show` — the resolved argv of each granted command. The CLI table, the MCP
-response and the generated frontmatter are three renderings of one resolved structure, so a
-skill cannot mean one thing to a shell caller and another to an agent.
+`declared` is a **render-only word**, lowercase for the reason
+[`render.md`](../render.md) gives: the envelope has no status that means it. Listing a skill
+says the repository declares it, not that anything about it passed — whether its `uses:` and
+`verify.check` resolve is `config verify`'s answer, on a different command, so a word here
+that read as a verdict would claim something this one never checked.
+
+`show` adds a second table, the same shape `status` draws its holdings with:
+
+```
+  STATUS    NAME     DETAIL
+  grants    tickets  uv run scripts/tickets.py
+  verifies  check    api:types
+  reads     doc      docs/skills/add-endpoint.md
+  touches   glob     backend/openapi.yaml
+```
+
+**The grants are only drawn for `show`**, and that is the whole reason the two views differ: at
+eighty columns a listing cannot carry four columns of them and stay readable, and a table that
+truncates the thing you asked for is worse than a second command.
+
+`--json` returns one result per skill with `name`, `summary`, `doc`, `uses`, `verify` and
+`touches` — with each `uses:` entry expanded to the command it names, because the one question
+a reader has about a grant is what it lets the skill do. The CLI table, the MCP response and the
+generated frontmatter are three renderings of one resolved structure, so a skill cannot mean one
+thing to a shell caller and another to an agent.
+
+**A grant that resolves to nothing keeps its row and is counted.** It is a `config verify`
+failure, and this is not that command — but a reader looking at a list of grants should not have
+to run a second one to discover that one of them names nothing.
 
 ## Dependencies
 

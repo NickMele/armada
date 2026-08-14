@@ -149,17 +149,19 @@ impl Style {
         }
     }
 
-    /// What `armada doctor` puts in front of the command that fixes a problem.
+    /// The marker on a line that says what to do about the line above it.
     ///
-    /// **The one decorative character whose two forms are different widths**, and
-    /// it is allowed to be: the fix lines are prose with nothing after them on
-    /// the line, so a column cannot shear. Everything in a *table* cell uses
-    /// one-for-one substitutions instead — see [`Style::nothing`].
+    /// **A fix line is the point of a report** — a check that names a problem
+    /// without the command that fixes it sends the reader to the documentation,
+    /// which is most of what reporting exists to save. So the glyph follows the
+    /// same decision every other one does: typographic for a person, ASCII for
+    /// the agent that might re-parse the line (`render_pending.rs`).
     ///
-    /// The fix lines themselves are settled and not optional: a check that
-    /// reports a problem without the command that fixes it sends the reader to
-    /// the documentation, which is most of what `doctor` exists to save.
-    pub fn fix_arrow(self) -> &'static str {
+    /// **Not one column for one column**, unlike [`Style::nothing`] and
+    /// [`Style::span`], which is why it may only ever open a line and never sit
+    /// in a table cell: a two-column arrow inside a measured cell would shear
+    /// every column after it.
+    pub fn arrow(self) -> &'static str {
         if self.color {
             "→"
         } else {
@@ -281,11 +283,11 @@ mod tests {
     /// there is no column to shear.
     #[test]
     fn the_fix_arrow_folds_to_ascii_and_is_prose_rather_than_a_column() {
-        assert_eq!(Style::painted().fix_arrow(), "→");
-        assert_eq!(Style::plain().fix_arrow(), "->");
+        assert_eq!(Style::painted().arrow(), "→");
+        assert_eq!(Style::plain().arrow(), "->");
         assert_ne!(
-            Style::painted().fix_arrow().chars().count(),
-            Style::plain().fix_arrow().chars().count(),
+            Style::painted().arrow().chars().count(),
+            Style::plain().arrow().chars().count(),
             "if these ever match, say so here rather than leaving the note stale"
         );
     }

@@ -212,7 +212,7 @@ pub struct Plan {
 /// scheduler does not put every check into a lease queue at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Budget {
-    /// `cpu_slots` from `~/.armada/machine.yml`, or `--jobs`.
+    /// `cpu_slots` from `~/.armada/machine.yml`, or `--concurrency`.
     pub slots: u32,
     /// Slots this run has committed to checks that are acquiring or running.
     pub in_use: u32,

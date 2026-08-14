@@ -1,0 +1,3 @@
+# A lockfile is evidence by existing. Its contents are never read — a scan
+# reports that pnpm writes here, not what pnpm resolved.
+lockfileVersion: '9.0'

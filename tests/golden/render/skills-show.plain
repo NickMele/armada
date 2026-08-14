@@ -1,0 +1,14 @@
+armada  3d9cc7ba
+
+  STATUS    SKILL         DETAIL
+  declared  add-endpoint  Add an API endpoint, OpenAPI first, then the generate…
+
+  STATUS    NAME     DETAIL
+  grants    tickets  uv run scripts/tickets.py
+  verifies  check    api:types
+  verifies  check    web:lint
+  reads     doc      docs/skills/add-endpoint.md
+  touches   glob     backend/openapi.yaml
+  touches   glob     frontend/src/generated/**
+
+OK  1 skill, 0 unresolved references

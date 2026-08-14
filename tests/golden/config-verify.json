@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "verb": "config verify",
+  "workspace": "<workspace>",
+  "status": "PASS",
+  "error": null,
+  "data": {
+    "results": [
+      {
+        "id": "schema",
+        "status": "PASS",
+        "duration_ms": 0
+      },
+      {
+        "id": "references",
+        "status": "PASS",
+        "reason": "needs:, match:, ports fit block",
+        "duration_ms": 0
+      },
+      {
+        "id": "argv[0]",
+        "status": "PASS",
+        "duration_ms": 0
+      }
+    ],
+    "unchecked": 0,
+    "pass_2": {
+      "run_id": "<run>",
+      "results": [
+        {
+          "id": "repo:ok",
+          "status": "PASS",
+          "log": ".armada/run/<run>/logs/repo.ok.log",
+          "duration_ms": 0
+        }
+      ]
+    }
+  }
+}

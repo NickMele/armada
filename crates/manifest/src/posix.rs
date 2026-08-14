@@ -1,9 +1,11 @@
 //! The POSIX calls that have no safe equivalent.
 //!
 //! `unsafe` is denied crate-wide (see `lib.rs`) and allowed here, in this
-//! module alone, for the four calls the design permits: `libc::signal` for
-//! SIGPIPE, `setsid` inside `pre_exec`, `libc::killpg`, and `clock_gettime`
-//! for the monotonic heartbeat column (`ARCHITECTURE.md` §3).
+//! module alone, for the calls the design permits: `libc::signal` for SIGPIPE
+//! **and for the interrupt handler below**, `setsid` inside `pre_exec`,
+//! `libc::killpg`, and `clock_gettime` for the monotonic heartbeat column
+//! (`ARCHITECTURE.md` §3). The interrupt handler reuses `libc::signal`; it is
+//! the same call, not a fifth one.
 //!
 //! Every one is measured rather than assumed, and the measurements disagree
 //! with the obvious reading in three places — see `docs/traps.md` and the
@@ -11,7 +13,62 @@
 
 use std::io;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::Duration;
+
+/// Set by the handler, read by the run loop. Nothing else may write it.
+static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+/// Which signal arrived, so the exit can be `128 + N` for the right N.
+static CAUGHT: AtomicI32 = AtomicI32::new(0);
+
+/// The whole handler. **Setting an atomic is the only thing done here** —
+/// everything else, including killing children and writing the envelope,
+/// happens on the run loop where it is allowed to block, allocate and fail.
+///
+/// A second signal is not swallowed. Once the flag is set, the disposition is
+/// restored to the default and the signal re-raised, so a second Ctrl-C kills
+/// the process outright. A tool that traps SIGINT and then wedges is worse
+/// than one that never trapped it, and the operator's second press is an
+/// instruction rather than a repeat.
+extern "C" fn on_interrupt(signal: libc::c_int) {
+    CAUGHT.store(signal, Ordering::SeqCst);
+    if INTERRUPTED.swap(true, Ordering::SeqCst) {
+        // SAFETY: both calls are async-signal-safe and this is the escape
+        // hatch — restore the default and let the signal do what it would
+        // have done had it never been trapped.
+        #[allow(unsafe_code)]
+        unsafe {
+            libc::signal(signal, libc::SIG_DFL);
+            libc::raise(signal);
+        }
+    }
+}
+
+/// Trap `SIGINT` and `SIGTERM` so a run ends rather than dies.
+///
+/// **Without this the children survive.** They are `setsid`'d into their own
+/// sessions ([`spawn`]), so a signal delivered to Armada's process group never
+/// reaches them: Ctrl-C during `check` returns the shell and leaves `cargo
+/// test` running. Measured, and recorded in `PHASES.md` §9.3.
+///
+/// Call it once, at the top of `main`, before any thread exists.
+pub fn catch_interrupts() {
+    // SAFETY: `signal` with a real signal number and an `extern "C"` handler is
+    // defined. The handler touches one atomic and, on the second delivery,
+    // two async-signal-safe libc calls. This runs before any thread is spawned.
+    #[allow(unsafe_code)]
+    unsafe {
+        let handler = on_interrupt as *const () as libc::sighandler_t;
+        libc::signal(libc::SIGINT, handler);
+        libc::signal(libc::SIGTERM, handler);
+    }
+}
+
+/// Whether an interrupt has been seen. Polled by the run loop.
+pub fn interrupted() -> bool {
+    INTERRUPTED.load(Ordering::SeqCst)
+}
 
 /// Restore the default disposition for `SIGPIPE`.
 ///
@@ -214,6 +271,35 @@ pub fn mono_ms() -> u64 {
 /// This process's id, for the `pid` column on a lease.
 pub fn pid() -> i32 {
     std::process::id() as i32
+}
+
+/// Exit the way the signal would have, once the run has been ended cleanly.
+///
+/// **`ARCHITECTURE.md` §1.6 names this mistake by name.** A signal *"exits
+/// `128+N` and has no error class at all — an implementer following [the exit
+/// rule] literally would map them into a class"*. Catching SIGINT to end the
+/// run properly is exactly the thing that tempts you to return `aborted`'s
+/// exit `5`, and every shell and CI system in the world reads `130` for
+/// Ctrl-C. The envelope still says `aborted`, because that describes the run;
+/// the exit code describes the signal.
+///
+/// Restoring the default and re-raising rather than calling `exit(130)` is
+/// deliberate: it leaves the parent shell seeing a real `WIFSIGNALED`, so
+/// job control and `^C` reporting behave as they would have.
+///
+/// Call it after the envelope has been written, and only then.
+pub fn die_by_signal() -> ! {
+    let signal = CAUGHT.load(Ordering::SeqCst);
+    // SAFETY: both calls are async-signal-safe, the signal number came from a
+    // handler this module installed, and nothing runs after `raise`.
+    #[allow(unsafe_code)]
+    unsafe {
+        libc::signal(signal, libc::SIG_DFL);
+        libc::raise(signal);
+    }
+    // Unreachable in practice: the default disposition for SIGINT and SIGTERM
+    // terminates. Kept because the compiler cannot know that.
+    std::process::exit(128 + signal);
 }
 
 #[cfg(test)]

@@ -259,7 +259,7 @@ manifest:
 #[test]
 fn the_cpu_budget_is_the_machines_and_not_each_runs() {
     let machine = Machine::new();
-    // `cpu_slots` is the machine's, and `--jobs` bounds a run within it. One
+    // `cpu_slots` is the machine's, and `--concurrency` bounds a run within it. One
     // slot on the machine makes the arithmetic unambiguous.
     std::fs::create_dir_all(machine.home.path().join(".armada")).unwrap();
     std::fs::write(

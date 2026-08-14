@@ -42,7 +42,7 @@ pub mod term;
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope, Finding,
     GuildBundleData, GuildInitData, GuildSyncData, Headline, InitData, InitDryRun, MachineInitData,
-    ResultRow, StatusData, Unreclaimed,
+    ResultRow, ScanData, SkillsData, StatusData, Unreclaimed, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::id::WorkspaceId;
@@ -72,12 +72,410 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Check(envelope) => check(envelope, style, width),
         Output::CheckDryRun(envelope) => check_dry(envelope, style, width),
         Output::Dispatch(envelope) => dispatch(envelope, style),
+        Output::Scan(envelope) => scan(envelope, style, width),
+        Output::Verify(envelope) => verify(envelope, style, width),
+        Output::Skills(envelope) => skills(envelope, style, width),
         Output::MachineInit(envelope) => machine_init(envelope, style, width),
         Output::Doctor(envelope) => doctor(envelope, style, width),
         Output::GuildSync(envelope) => guild_sync(envelope, style, width),
         Output::GuildInit(envelope) => guild_init(envelope, style, width),
         Output::GuildBundle(envelope) => guild_bundle(envelope, style, width),
     }
+}
+
+// ------------------------------------------------------------- M2: the machine
+// and the guild
+
+/// The `STATUS · CHECK · DETAIL · TIME` table both machine verbs draw.
+///
+/// **`armada init` and `armada doctor` share it because they are asking one
+/// question** — what is the state of this machine — and a reader who has met
+/// one has met the other. The `TIME` column is present and empty on every row:
+/// nothing here is timed, and the column stays so the four columns of the
+/// agreed layout are the same four columns everywhere (`render.rs`'s header).
+fn machine_table(rows: &[Finding], style: Style, width: usize) -> Table {
+    let mut table = Table::new(columns("check", "detail", true)).indent(2);
+    for row in rows {
+        table = table.row(vec![
+            token(row.status.word(), Role::for_health(row.status)),
+            Cell::plain(row.check.clone()),
+            detail_cell(style, Some(row.detail.as_str())),
+            time_cell(style, None),
+        ]);
+    }
+    let _ = width;
+    table
+}
+
+/// The `→` lines. **The point of `armada doctor`**: a check that reports a
+/// problem without the command that fixes it sends the reader to the
+/// documentation, which is most of what the verb exists to save.
+fn fix_lines(rows: &[Finding], style: Style) -> String {
+    let mut out = String::new();
+    for remedy in rows.iter().filter_map(|row| row.remedy.as_deref()) {
+        out.push_str(&format!(
+            "  {}\n",
+            style.paint(Role::SteelGrey, &format!("{} {remedy}", style.arrow()))
+        ));
+    }
+    out
+}
+
+/// *Do you already have a guild?* — **live**, as it is put to a person.
+///
+/// Ends at the caret with a space and no newline, because that is where the
+/// cursor sits and the terminal's own echo completes the line. The record in
+/// [`machine_init`] is this string with the answer put back, which is what
+/// makes the two identical rather than merely similar.
+pub fn guild_question(question: &str, options: &[&str], style: Style) -> String {
+    let mut out = format!("{}\n", style.paint(Role::SignalAmber, question));
+    // **The three answers on one line**, because a menu of three is a list you
+    // scan rather than read.
+    out.push_str("  ");
+    for (index, option) in options.iter().enumerate() {
+        out.push_str(&style.paint(Role::NavalBlue, &(index + 1).to_string()));
+        out.push(' ');
+        out.push_str(option);
+        out.push_str("  ");
+    }
+    out.push_str(&style.paint(Role::SteelGrey, style.caret()));
+    out.push(' ');
+    out
+}
+
+/// One interview question — **live**, as it is put to a person.
+///
+/// The hint is indented to line up under the prompt rather than under the
+/// number: it belongs to the question, not to the count.
+pub fn interview_prompt(asked: &armada_core::envelope::Asked, style: Style) -> String {
+    format!(
+        "{}  {}\n     {} {} ",
+        style.paint(Role::SignalAmber, &format!("{}/{}", asked.number, asked.of)),
+        style.paint(Role::SteelGrey, &asked.prompt),
+        style.paint(Role::SteelGrey, &asked.hint),
+        style.paint(Role::RadarCyan, style.caret())
+    )
+}
+
+/// `armada init` — set up **this machine**.
+///
+/// **The one verb whose render is a transcript**, because it is the one verb
+/// that holds a conversation. The preflight table, the one question and what
+/// was typed, what import adopted, each interview prompt as it was put, and the
+/// verdict. `tests/golden/render/init-machine.plain` is the specification and
+/// this follows it.
+///
+/// **The wordmark is not drawn here**, though `armada init` is one of its two
+/// sites (`docs/commands/render.md`). It is drawn at the call site in `main`,
+/// for a reason that is about the fixtures rather than about taste: the pair of
+/// golden files is rendered at one width for both audiences, and a decoration
+/// that appears in only one of them is not a *styling* difference the pair test
+/// can express. Every suppression rule still lives in `render::banner`, so the
+/// second call site cannot draw it under conditions the first refuses.
+fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = machine_table(&data.results, style, width).render(style, width);
+
+    if let Some(choice) = &data.guild {
+        let options: Vec<&str> = choice.options.iter().map(String::as_str).collect();
+        out.push('\n');
+        out.push_str(&guild_question(&choice.question, &options, style));
+        // **The answer is the terminal's own echo when it is live**, and this
+        // is the same line replayed with what was typed put back.
+        out.push_str(&format!(
+            "{}\n",
+            style.paint(Role::RadarCyan, &choice.chosen.to_string())
+        ));
+    }
+
+    if !data.imported.is_empty() {
+        out.push('\n');
+        out.push_str(&format!(
+            "  {}\n",
+            style.paint(Role::SteelGrey, &data.imported.join(style.between()))
+        ));
+    }
+
+    for asked in &data.asked {
+        out.push('\n');
+        // **The trailing space goes.** Live, it is where the cursor sits; in
+        // the record it would be trailing whitespace, which is what makes a
+        // diff of two captured outputs unreadable (`render/table.rs`).
+        out.push_str(interview_prompt(asked, style).trim_end());
+        out.push('\n');
+    }
+
+    out.push('\n');
+    // **The question counts appear only when there was an interview.** Pulling
+    // a guild from a remote asks nothing, and `5 questions, 0 skipped` under a
+    // clone would be describing something that did not happen.
+    let mut facts = vec![format!("guild at {}", data.guild_path)];
+    if data.questions > 0 {
+        facts.push(format::count(data.questions, "question"));
+        facts.push(format!("{} skipped", data.skipped));
+    }
+    out.push_str(&summary(style, envelope.status, &facts));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// `armada doctor` — what this machine is missing.
+fn doctor(envelope: &Envelope<DoctorData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = machine_table(&data.results, style, width).render(style, width);
+    out.push('\n');
+    out.push_str(&match data.headline {
+        Some(word) => headline(style, word, &data.tally),
+        None => summary(style, envelope.status, &data.tally),
+    });
+    out.push_str(&fix_lines(&data.results, style));
+    out
+}
+
+/// `armada guild pull` and `armada guild push`.
+///
+/// **The rows describe the change set, and `applied` says whether any of it
+/// landed.** On a divergence nothing is written — `guild/pull.md` states that
+/// as an exit code — so the rows are what is *waiting*, and the summary line is
+/// where a reader is told which of the two they are looking at. Reading the
+/// rows as "what happened" when nothing happened is the one misreading this
+/// layout can produce, and it is why `applied` exists in the envelope at all.
+fn guild_sync(envelope: &Envelope<GuildSyncData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("item", "detail", true)).indent(2);
+    for row in &data.results {
+        table = table.row(vec![
+            token(row.status.word(), Role::for_sync(row.status)),
+            Cell::plain(row.item.clone()),
+            detail_cell(style, Some(row.detail.as_str())),
+            time_cell(style, None),
+        ]);
+    }
+    let mut out = table.render(style, width);
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    let conflicts = data
+        .results
+        .iter()
+        .filter(|row| row.status == armada_core::envelope::Sync::Conflict)
+        .count();
+
+    out.push_str(&match data.headline {
+        Some(word) => {
+            // **The remedy is on the summary line rather than under it**, which
+            // is the one place this differs from `doctor`: there is exactly one
+            // thing to do about a conflicted guild, and a `→` line under a
+            // one-item summary is a second line saying the same thing.
+            let mut facts = vec![format::count(conflicts, "conflict")];
+            if !data.applied {
+                facts.push("resolve in ~/.armada/guild".to_string());
+                facts.push("then armada guild push".to_string());
+            }
+            headline(style, word, &facts)
+        }
+        None => summary(style, envelope.status, &sync_facts(data)),
+    });
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// What a sync that worked has to report: how far it moved, and where to.
+fn sync_facts(data: &GuildSyncData) -> Vec<String> {
+    let mut facts = Vec::new();
+    if data.behind > 0 {
+        facts.push(format!("pulled {}", format::count(data.behind, "commit")));
+    }
+    if data.ahead > 0 {
+        facts.push(format!("pushed {}", format::count(data.ahead, "commit")));
+    }
+    if facts.is_empty() {
+        facts.push("already in step".to_string());
+    }
+    match &data.remote {
+        Some(remote) => facts.push(remote.clone()),
+        // Sync off is the documented default and not a broken state, so it is
+        // stated rather than left as an absence a reader has to notice.
+        None => facts.push("no remote, export still works".to_string()),
+    }
+    facts
+}
+
+/// `armada guild init`.
+fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("step", "detail", true)).indent(2);
+    table = table.row(vec![
+        token("imported", Role::BeaconGreen),
+        Cell::plain("~/.claude/"),
+        detail_cell(style, Some(&data.imported.join(", "))),
+        time_cell(style, None),
+    ]);
+    // **Always a row, even when nothing was withheld.** "Armada looked and
+    // found no credentials" and "nobody looked" read identically otherwise, and
+    // only one of them is a guarantee — the same reasoning `clean` keeps its
+    // table for.
+    table = table.row(vec![
+        token(
+            "withheld",
+            if data.withheld.is_empty() {
+                Role::SteelGrey
+            } else {
+                Role::FlareOrange
+            },
+        ),
+        Cell::plain(format::count(data.withheld.len(), "value")),
+        detail_cell(
+            style,
+            Some(&if data.withheld.is_empty() {
+                "no credential-shaped values found".to_string()
+            } else {
+                format!("{} -> machine.yml", ids(&data.withheld, KEEP))
+            }),
+        ),
+        time_cell(style, None),
+    ]);
+    table = table.row(vec![
+        token("wrote", Role::BeaconGreen),
+        Cell::plain(format::count(data.wrote.len(), "file")),
+        detail_cell(style, Some(&ids(&data.wrote, KEEP))),
+        time_cell(style, None),
+    ]);
+    table = table.row(vec![
+        token("guild", Role::BeaconGreen),
+        Cell::plain("initialised"),
+        detail_cell(
+            style,
+            Some(match &data.remote {
+                Some(remote) => remote.as_str(),
+                None => "no remote: sync off, export still works",
+            }),
+        ),
+        time_cell(style, None),
+    ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            format!("guild at {}", data.guild_path),
+            format::count(data.questions, "question"),
+            format!("{} skipped", data.skipped),
+        ],
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// `armada guild export` and `armada guild import`.
+fn guild_bundle(envelope: &Envelope<GuildBundleData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    // **The bundle's column is flexible and every other verb's name column is
+    // fixed**, because this one holds a *path* rather than an id. Measured: an
+    // absolute path in a fixed column pushes DETAIL past eighty and the flexible
+    // column truncates the one fact the row exists to carry. A path's tail is
+    // the least valuable part of it, which is exactly what `Column::flexible`
+    // is for.
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::flexible("bundle"),
+        Column::flexible("detail"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
+    table = table.row(vec![
+        token(
+            if data.bytes.is_some() {
+                "exported"
+            } else {
+                "imported"
+            },
+            Role::BeaconGreen,
+        ),
+        Cell::plain(data.path.clone()),
+        detail_cell(style, Some(&data.contents.join(", "))),
+        time_cell(style, None),
+    ]);
+    // **Reported either way.** "The file that never syncs did not sync" is the
+    // fact `--include-secrets` exists to make checkable, and a line that only
+    // appears when it went wrong is a line nobody learns to look for.
+    table = table.row(vec![
+        token(
+            "secrets",
+            if data.secrets {
+                Role::FlareOrange
+            } else {
+                Role::BeaconGreen
+            },
+        ),
+        Cell::plain(if data.secrets { "included" } else { "excluded" }),
+        // **No em dash in a cell.** A typographic character in a table is one
+        // the agent audience would also receive, since `Cell` text is not
+        // styled — decoration that differs by audience goes through `Style`, and
+        // there is no `Style` form of an aside. A colon says the same thing in
+        // both renders.
+        detail_cell(
+            style,
+            Some(if data.secrets {
+                "machine.yml travelled: this machine, not you"
+            } else {
+                "machine.yml stays here"
+            }),
+        ),
+        time_cell(style, None),
+    ]);
+    for skipped in &data.skipped {
+        table = table.row(vec![
+            token("skipped", Role::SteelGrey),
+            Cell::plain(skipped.clone()),
+            detail_cell(style, Some("this machine has its own")),
+            time_cell(style, None),
+        ]);
+    }
+    for conflict in &data.conflicts {
+        table = table.row(vec![
+            token("conflict", Role::DistressRed),
+            Cell::plain(conflict.clone()),
+            detail_cell(style, Some("edited here, left alone")),
+            time_cell(style, None),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(
+        &match (data.conflicts.is_empty(), envelope.error.is_some()) {
+            (false, _) => headline(
+                style,
+                Headline::NeedsAttention,
+                &[
+                    format::count(data.conflicts.len(), "conflict"),
+                    "left as they were".to_string(),
+                ],
+            ),
+            _ => summary(
+                style,
+                envelope.status,
+                &match data.bytes {
+                    Some(bytes) => vec![format::bytes(bytes)],
+                    None => Vec::new(),
+                },
+            ),
+        },
+    );
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
 }
 
 // ------------------------------------------------------------------- the parts
@@ -157,6 +555,7 @@ fn headlined(style: Style, lead: &str, facts: &[String]) -> String {
     )
 }
 
+/// A terminal state, spelled as the envelope spells it and coloured to agree.
 /// A terminal state, spelled as the envelope spells it and coloured to agree.
 ///
 /// **Never padded here.** An escape sequence is characters a terminal does not
@@ -748,398 +1147,462 @@ fn clean_dry(envelope: &Envelope<CleanDryRun>, style: Style, width: usize) -> St
     out
 }
 
-// ------------------------------------------------------------- M2: the machine
-// and the guild
+// ----------------------------------------------------------------- config scan
 
-/// The `STATUS · CHECK · DETAIL · TIME` table both machine verbs draw.
+/// `armada manifest config scan` — layer 1 of PLAN.md §5.
 ///
-/// **`armada init` and `armada doctor` share it because they are asking one
-/// question** — what is the state of this machine — and a reader who has met
-/// one has met the other. The `TIME` column is present and empty on every row:
-/// nothing here is timed, and the column stays so the four columns of the
-/// agreed layout are the same four columns everywhere (`render.rs`'s header).
-fn machine_table(rows: &[Finding], style: Style, width: usize) -> Table {
-    let mut table = Table::new(columns("check", "detail", true)).indent(2);
-    for row in rows {
-        table = table.row(vec![
-            token(row.status.word(), Role::for_health(row.status)),
-            Cell::plain(row.check.clone()),
-            detail_cell(style, Some(row.detail.as_str())),
-            time_cell(style, None),
-        ]);
-    }
-    let _ = width;
-    table
-}
+/// Three things the agreed layout settles here, each because of what it costs
+/// the reader — who is, on this verb more than any other, the agent about to
+/// author the config:
+///
+/// 1. **A row for every kind, present or not.** `absent  makefile  —` says
+///    Armada looked; a missing row says nothing at all, and the author cannot
+///    tell those apart.
+/// 2. **No truncation in the sections.** All fourteen scripts print. Evidence
+///    with a `…9 more` on it is evidence somebody has to fetch separately,
+///    which is how the one script that mattered gets missed.
+/// 3. **It ends by offering to hand over.** It has produced evidence and
+///    evidence is not a config, so the last thing it prints is the choice.
+///    `ARCHITECTURE.md` §1.9 permits that: the rule governs *inputs*, and
+///    printing a choice is an output. Reading the answer is not Armada's —
+///    nothing here consumes one.
+fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
 
-/// The `→` lines. **The point of `armada doctor`**: a check that reports a
-/// problem without the command that fixes it sends the reader to the
-/// documentation, which is most of what the verb exists to save.
-fn fix_lines(rows: &[Finding], style: Style) -> String {
-    let mut out = String::new();
-    for remedy in rows.iter().filter_map(|row| row.remedy.as_deref()) {
-        out.push_str(&format!(
-            "  {}\n",
-            style.paint(Role::SteelGrey, &format!("{} {remedy}", style.fix_arrow()))
+    let here = if data.evidence.config_present {
+        "armada.yml is here already"
+    } else {
+        "no armada.yml here"
+    };
+    let mut out = format!(
+        "{}{}{}\n\n",
+        style.paint(Role::FlareOrange, here),
+        style.between(),
+        style.paint(Role::SteelGrey, "this is evidence and not a config")
+    );
+
+    // **The kind list is the renderer's and the values are the envelope's.**
+    // Which six kinds are drawn is layout, frozen by the fixture; whether each
+    // one found anything is read from `results[]` and decided nowhere here.
+    let mut kinds = Table::new(columns("kind", "detail", false)).indent(2);
+    for kind in armada_core::scan::KINDS {
+        let mut found = data.results.iter().filter(|row| row.id == kind).peekable();
+        if found.peek().is_none() {
+            kinds = kinds.row(vec![
+                token("absent", Role::SteelGrey),
+                Cell::plain(kind),
+                detail_cell(style, None),
+            ]);
+            continue;
+        }
+        for row in found {
+            kinds = kinds.row(vec![
+                token("found", Role::BeaconGreen),
+                Cell::plain(kind),
+                detail_cell(style, row.reason.as_deref()),
+            ]);
+        }
+    }
+    out.push_str(&kinds.render(style, width));
+
+    let evidence = &data.evidence;
+    for source in &evidence.scripts {
+        let mut table = pairs();
+        for script in &source.scripts {
+            table = table.row(vec![
+                Cell::painted(script.name.clone(), Role::RadarCyan),
+                Cell::muted(script.cmd.clone()),
+            ]);
+        }
+        out.push_str(&section(
+            style,
+            width,
+            &format!("{} scripts", source.file),
+            Some("verbatim and not interpreted"),
+            &table,
         ));
     }
-    out
-}
 
-/// *Do you already have a guild?* — **live**, as it is put to a person.
-///
-/// Ends at the caret with a space and no newline, because that is where the
-/// cursor sits and the terminal's own echo completes the line. The record in
-/// [`machine_init`] is this string with the answer put back, which is what
-/// makes the two identical rather than merely similar.
-pub fn guild_question(question: &str, options: &[&str], style: Style) -> String {
-    let mut out = format!("{}\n", style.paint(Role::SignalAmber, question));
-    // **The three answers on one line**, because a menu of three is a list you
-    // scan rather than read.
-    out.push_str("  ");
-    for (index, option) in options.iter().enumerate() {
-        out.push_str(&style.paint(Role::NavalBlue, &(index + 1).to_string()));
-        out.push(' ');
-        out.push_str(option);
-        out.push_str("  ");
+    let mut tools = pairs();
+    for pyproject in &evidence.pyproject {
+        tools = tools.row(vec![
+            Cell::painted(pyproject.file.clone(), Role::RadarCyan),
+            Cell::muted(pyproject.tools.join(", ")),
+        ]);
     }
-    out.push_str(&style.paint(Role::SteelGrey, style.caret()));
-    out.push(' ');
+    out.push_str(&section(
+        style,
+        width,
+        "pyproject tool sections",
+        None,
+        &tools,
+    ));
+
+    let mut targets = pairs();
+    for makefile in &evidence.makefiles {
+        targets = targets.row(vec![
+            Cell::painted(makefile.file.clone(), Role::RadarCyan),
+            Cell::muted(makefile.targets.join(", ")),
+        ]);
+    }
+    out.push_str(&section(style, width, "makefile targets", None, &targets));
+
+    // **One section over every compose file**, because a service is a service
+    // whichever file declared it and a reader scanning for `postgres` should
+    // not have to know which one.
+    let mut services = pairs();
+    for compose in &evidence.compose {
+        for service in &compose.services {
+            services = services.row(vec![
+                Cell::painted(service.name.clone(), Role::RadarCyan),
+                Cell::muted(service.ports.join(", ")),
+            ]);
+        }
+    }
+    out.push_str(&section(style, width, "compose services", None, &services));
+
+    let runs: Vec<String> = evidence
+        .ci
+        .iter()
+        .flat_map(|workflow| workflow.runs.clone())
+        .collect();
+    if !runs.is_empty() {
+        out.push('\n');
+        out.push_str(&heading(
+            style,
+            "ci steps",
+            Some("the best existing evidence of what you actually run"),
+        ));
+        // **Not a table cell, because a flexible column truncates** and the one
+        // rule this verb has is that evidence is never cut.
+        out.push_str(&wrapped(style, &runs, width));
+    }
+
+    let mut globs = pairs();
+    for workspace in &evidence.workspace_globs {
+        globs = globs.row(vec![
+            Cell::painted(workspace.file.clone(), Role::RadarCyan),
+            Cell::muted(workspace.globs.join(", ")),
+        ]);
+    }
+    out.push_str(&section(style, width, "workspace globs", None, &globs));
+
+    out.push_str(&format!(
+        "\n{} {}\n\n",
+        style.strong(Role::SignalAmber, "Evidence only."),
+        style.paint(
+            Role::SteelGrey,
+            "Armada does not guess which of these you actually run."
+        )
+    ));
+    out.push_str(&handover(style, width));
     out
 }
 
-/// One interview question — **live**, as it is put to a person.
+/// The choice `scan` ends on.
 ///
-/// The hint is indented to line up under the prompt rather than under the
-/// number: it belongs to the question, not to the count.
-pub fn interview_prompt(asked: &armada_core::envelope::Asked, style: Style) -> String {
+/// **Printed and never read.** Manifest may emit anything an agent will read
+/// and may accept nothing an agent produced (`ARCHITECTURE.md` §1.9), so this
+/// is two lines of output and no prompt: whatever runs the first option is a
+/// caller above Manifest, not Manifest.
+fn handover(style: Style, width: usize) -> String {
+    Table::new(vec![Column::fixed(""), Column::flexible("")])
+        .headerless()
+        .indent(2)
+        .row(vec![
+            Cell::plain("1 let an agent write it with me"),
+            Cell::muted("opens claude here"),
+        ])
+        .row(vec![
+            Cell::plain("2 print the evidence and stop"),
+            Cell::muted("I will write armada.yml myself"),
+        ])
+        .render(style, width)
+}
+
+/// A titled block of evidence, or nothing at all when there is none of it.
+fn section(style: Style, width: usize, title: &str, aside: Option<&str>, table: &Table) -> String {
+    if table.is_empty() {
+        return String::new();
+    }
     format!(
-        "{}  {}\n     {} {} ",
-        style.paint(Role::SignalAmber, &format!("{}/{}", asked.number, asked.of)),
-        style.paint(Role::SteelGrey, &asked.prompt),
-        style.paint(Role::SteelGrey, &asked.hint),
-        style.paint(Role::RadarCyan, style.caret())
+        "\n{}{}",
+        heading(style, title, aside),
+        table.render(style, width)
     )
 }
 
-/// `armada init` — set up **this machine**.
+/// A run of items, separated and **wrapped rather than cut**.
 ///
-/// **The one verb whose render is a transcript**, because it is the one verb
-/// that holds a conversation. The preflight table, the one question and what
-/// was typed, what import adopted, each interview prompt as it was put, and the
-/// verdict. `tests/golden/render/init-machine.plain` is the specification and
-/// this follows it.
+/// The only place in the renderer that wraps, and it exists because this is the
+/// only place that may not truncate: a repository whose CI runs twelve commands
+/// has twelve pieces of evidence, and both of the usual answers are wrong here
+/// — a flexible column would drop the tail, and one line would run to seven
+/// hundred columns.
 ///
-/// **The wordmark is not drawn here**, though `armada init` is one of its two
-/// sites (`docs/commands/render.md`). It is drawn at the call site in `main`,
-/// for a reason that is about the fixtures rather than about taste: the pair of
-/// golden files is rendered at one width for both audiences, and a decoration
-/// that appears in only one of them is not a *styling* difference the pair test
-/// can express. Every suppression rule still lives in `render::banner`, so the
-/// second call site cannot draw it under conditions the first refuses.
-fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize) -> String {
-    let data = &envelope.data;
-    let mut out = machine_table(&data.results, style, width).render(style, width);
+/// **The break points are computed from the wider separator, not from the one
+/// this audience gets.** `·` and `, ` differ by a column, so a greedy fit
+/// measured per audience would break at different items and the two renders
+/// would stop being one render twice — which is the property
+/// `render_golden.rs` asserts. Measuring both against the wider form costs a
+/// column of slack in the plain render and keeps the two identical.
+fn wrapped(style: Style, items: &[String], width: usize) -> String {
+    const INDENT: usize = 4;
+    /// The wider of the two separators, in columns.
+    const SEPARATOR: usize = 3;
 
-    if let Some(choice) = &data.guild {
-        let options: Vec<&str> = choice.options.iter().map(String::as_str).collect();
-        out.push('\n');
-        out.push_str(&guild_question(&choice.question, &options, style));
-        // **The answer is the terminal's own echo when it is live**, and this
-        // is the same line replayed with what was typed put back.
-        out.push_str(&format!(
-            "{}\n",
-            style.paint(Role::RadarCyan, &choice.chosen.to_string())
-        ));
-    }
-
-    if !data.imported.is_empty() {
-        out.push('\n');
-        out.push_str(&format!(
-            "  {}\n",
-            style.paint(Role::SteelGrey, &data.imported.join(style.between()))
-        ));
-    }
-
-    for asked in &data.asked {
-        out.push('\n');
-        // **The trailing space goes.** Live, it is where the cursor sits; in
-        // the record it would be trailing whitespace, which is what makes a
-        // diff of two captured outputs unreadable (`render/table.rs`).
-        out.push_str(interview_prompt(asked, style).trim_end());
-        out.push('\n');
+    let budget = width.saturating_sub(INDENT);
+    let mut lines: Vec<Vec<&str>> = Vec::new();
+    let mut used = 0;
+    for item in items {
+        let cost = term::display_width(item);
+        match lines.last_mut() {
+            // A single item wider than the line still gets a line of its own
+            // and overhangs, which is honest: it is evidence, and cutting it is
+            // the one thing this section may not do.
+            Some(line) if used + SEPARATOR + cost <= budget => {
+                line.push(item);
+                used += SEPARATOR + cost;
+            }
+            _ => {
+                lines.push(vec![item]);
+                used = cost;
+            }
+        }
     }
 
-    out.push('\n');
-    // **The question counts appear only when there was an interview.** Pulling
-    // a guild from a remote asks nothing, and `5 questions, 0 skipped` under a
-    // clone would be describing something that did not happen.
-    let mut facts = vec![format!("guild at {}", data.guild_path)];
-    if data.questions > 0 {
-        facts.push(format::count(data.questions, "question"));
-        facts.push(format!("{} skipped", data.skipped));
-    }
-    out.push_str(&summary(style, envelope.status, &facts));
-    if let Some(error) = &envelope.error {
-        out.push_str(&error_lines(error, style));
-    }
-    out
+    lines
+        .into_iter()
+        .map(|line| {
+            format!(
+                "{}{}\n",
+                " ".repeat(INDENT),
+                style.paint(Role::SteelGrey, &line.join(style.between()))
+            )
+        })
+        .collect()
 }
 
-/// `armada doctor` — what this machine is missing.
-fn doctor(envelope: &Envelope<DoctorData>, style: Style, width: usize) -> String {
-    let data = &envelope.data;
-    let mut out = machine_table(&data.results, style, width).render(style, width);
-    out.push('\n');
-    out.push_str(&match data.headline {
-        Some(word) => headline(style, word, &data.tally),
-        None => summary(style, envelope.status, &data.tally),
-    });
-    out.push_str(&fix_lines(&data.results, style));
-    out
+/// A section title, and the half-sentence that says what the section is for.
+fn heading(style: Style, title: &str, aside: Option<&str>) -> String {
+    let mut line = format!("  {}", style.paint(Role::SignalAmber, title));
+    if let Some(aside) = aside {
+        line.push_str(style.between());
+        line.push_str(&style.paint(Role::SteelGrey, aside));
+    }
+    line.push('\n');
+    line
 }
 
-/// `armada guild pull` and `armada guild push`.
+/// A name and its value, aligned — the one shape every evidence section takes.
+fn pairs() -> Table {
+    Table::new(vec![Column::fixed(""), Column::flexible("")])
+        .headerless()
+        .indent(4)
+}
+
+// --------------------------------------------------------------- config verify
+
+/// `armada manifest config verify` — layer 3 of PLAN.md §5.
 ///
-/// **The rows describe the change set, and `applied` says whether any of it
-/// landed.** On a divergence nothing is written — `guild/pull.md` states that
-/// as an exit code — so the rows are what is *waiting*, and the summary line is
-/// where a reader is told which of the two they are looking at. Reading the
-/// rows as "what happened" when nothing happened is the one misreading this
-/// layout can produce, and it is why `applied` exists in the envelope at all.
-fn guild_sync(envelope: &Envelope<GuildSyncData>, style: Style, width: usize) -> String {
+/// Two blocks, because there are two passes and the reader needs to know which
+/// one they are looking at: pass 1 is static and takes seconds, pass 2 is the
+/// check suite run for real and takes as long as the repository's checks take.
+///
+/// Three things the agreed layout settles:
+///
+/// 1. **`unchecked` has a row rather than a footnote.** It is the honest cost of
+///    `shell: true` — there is no `argv[0]` to resolve in a shell string, so
+///    verify counts those entries rather than guessing or silently passing them
+///    — and it is worth seeing.
+/// 2. **`pass 2 not attempted` rather than `skipped`.** Pass 1 short-circuits,
+///    and "skipped" would read as a choice somebody made about pass 2.
+/// 3. **A fix line under the summary for every finding.** A check that reports a
+///    problem without the command that fixes it sends the reader to the
+///    documentation, which is most of what this verb exists to save.
+fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut table = Table::new(columns("item", "detail", true)).indent(2);
+    let mut out = format!(
+        "{}{}{}{}{}\n\n",
+        style.paint(Role::SignalAmber, "pass 1"),
+        style.between(),
+        style.paint(Role::SteelGrey, "static"),
+        style.between(),
+        style.paint(Role::SteelGrey, "nothing is executed")
+    );
+
+    let mut table = Table::new(columns("check", "detail", true)).indent(2);
     for row in &data.results {
+        let detail = row
+            .error
+            .as_ref()
+            .map(|e| e.message.clone())
+            .or_else(|| row.reason.clone());
         table = table.row(vec![
-            token(row.status.word(), Role::for_sync(row.status)),
-            Cell::plain(row.item.clone()),
-            detail_cell(style, Some(row.detail.as_str())),
-            time_cell(style, None),
+            verdict(row.status),
+            Cell::plain(row.id.clone()),
+            detail_cell(style, detail.as_deref()),
+            time_cell(style, row.duration_ms),
         ]);
     }
-    let mut out = table.render(style, width);
+    // **A render-only word, because the envelope has no status that means
+    // this.** `unchecked` is not a verdict — it is a count of what could not be
+    // established either way — so it is derived from `data.unchecked` and
+    // spelled lowercase, exactly as `claimed` and `owns` are.
+    table = table.row(vec![
+        token("unchecked", Role::FlareOrange),
+        Cell::plain("shell entries"),
+        Cell::muted(format!("{}, no argv[0] to resolve", data.unchecked)),
+        time_cell(style, None),
+    ]);
+    out.push_str(&table.render(style, width));
+    out.push('\n');
+
+    if let Some(run) = &data.pass_2 {
+        out.push_str(&format!(
+            "{}{}{}\n\n",
+            style.paint(Role::SignalAmber, "pass 2"),
+            style.between(),
+            style.paint(Role::SteelGrey, "the check suite, run for real")
+        ));
+        let mut suite = Table::new(columns("check", "detail", true)).indent(2);
+        for row in &run.results {
+            let detail = row
+                .error
+                .as_ref()
+                .map(|e| e.message.clone())
+                .or_else(|| row.reason.clone());
+            suite = suite.row(vec![
+                verdict(row.status),
+                Cell::plain(row.id.clone()),
+                detail_cell(style, detail.as_deref()),
+                time_cell(style, row.duration_ms),
+            ]);
+        }
+        out.push_str(&suite.render(style, width));
+        out.push('\n');
+    }
+
+    let facts = match (&data.pass_2, envelope.status) {
+        (None, Status::Pass) => vec![
+            "pass 2 not attempted".to_string(),
+            "nothing to run".to_string(),
+        ],
+        (None, _) => vec![
+            "pass 2 not attempted".to_string(),
+            "fix pass 1 first".to_string(),
+        ],
+        (Some(run), _) => vec![
+            "pass 1 and pass 2".to_string(),
+            format::count(run.results.len(), "check"),
+        ],
+    };
+    out.push_str(&summary(style, envelope.status, &facts));
+
+    // **Every finding's fix, not just the aggregate's.** The row carries one
+    // line of detail and `--json` carries them all; these are what a reader
+    // acts on, so a config with three problems gets three of them.
+    for row in &data.results {
+        if let Some(next) = row.error.as_ref().and_then(|e| e.next_action.as_deref()) {
+            out.push_str(&format!(
+                "  {} {}\n",
+                style.paint(Role::SteelGrey, style.arrow()),
+                style.paint(Role::SteelGrey, next)
+            ));
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------- skills
+
+/// `armada manifest skills`, and `skills show <name>`.
+///
+/// **`declared` is a render-only word**, lowercase for the reason this module's
+/// header gives: the envelope has no status that means it. Listing a skill says
+/// the repository declares it, not that anything about it passed — whether its
+/// `uses:` and `verify.check` resolve is `armada manifest config verify`'s
+/// answer, on a different verb, so a word here that read as a verdict would be
+/// claiming something this verb never checked.
+///
+/// **The grant table is drawn only for `show`**, and it is the same shape
+/// `status` draws its holdings with: a lowercase word, the thing, and the
+/// reference. `uses:` is expanded to what each command actually runs, because
+/// the one question a reader has about a grant is what it lets the skill do.
+fn skills(envelope: &Envelope<SkillsData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = header(style, envelope.workspace.as_ref(), None, None, width);
+
+    let mut table = Table::new(columns("skill", "detail", false)).indent(2);
+    for row in &data.results {
+        table = table.row(vec![
+            token("declared", Role::BeaconGreen),
+            Cell::plain(row.id.clone()),
+            detail_cell(style, row.reason.as_deref()),
+        ]);
+    }
+    out.push_str(&table.render(style, width));
     if !table.is_empty() {
         out.push('\n');
     }
 
-    let conflicts = data
-        .results
-        .iter()
-        .filter(|row| row.status == armada_core::envelope::Sync::Conflict)
-        .count();
-
-    out.push_str(&match data.headline {
-        Some(word) => {
-            // **The remedy is on the summary line rather than under it**, which
-            // is the one place this differs from `doctor`: there is exactly one
-            // thing to do about a conflicted guild, and a `→` line under a
-            // one-item summary is a second line saying the same thing.
-            let mut facts = vec![format::count(conflicts, "conflict")];
-            if !data.applied {
-                facts.push("resolve in ~/.armada/guild".to_string());
-                facts.push("then armada guild push".to_string());
-            }
-            headline(style, word, &facts)
+    // **One skill means `show`**, which is the only shape that has room for the
+    // grants: on a listing they would be four columns nobody can read at eighty.
+    if let [skill] = data.skills.as_slice() {
+        let mut grants = Table::new(columns("name", "detail", false)).indent(2);
+        for granted in &skill.uses {
+            grants = grants.row(vec![
+                token("grants", Role::RadarCyan),
+                Cell::plain(granted.name.clone()),
+                detail_cell(style, Some(granted.cmd.as_str())),
+            ]);
         }
-        None => summary(style, envelope.status, &sync_facts(data)),
-    });
-    if let Some(error) = &envelope.error {
-        out.push_str(&error_lines(error, style));
+        for scope in &skill.verify {
+            grants = grants.row(vec![
+                token("verifies", Role::BeaconGreen),
+                Cell::plain("check"),
+                Cell::muted(scope.clone()),
+            ]);
+        }
+        grants = grants.row(vec![
+            // **`reads` and never `holds`.** Armada holds the path and reads
+            // nothing; the row says what the *skill's* reader will open.
+            token("reads", Role::SteelGrey),
+            Cell::plain("doc"),
+            Cell::muted(skill.doc.clone()),
+        ]);
+        for glob in &skill.touches {
+            grants = grants.row(vec![
+                // Advisory, and the word says so: `touches:` feeds the scope
+                // lens and lets a review step notice edits far outside it. It
+                // is not enforced anywhere.
+                token("touches", Role::FlareOrange),
+                Cell::plain("glob"),
+                Cell::muted(glob.clone()),
+            ]);
+        }
+        out.push_str(&grants.render(style, width));
+        out.push('\n');
     }
-    out
-}
 
-/// What a sync that worked has to report: how far it moved, and where to.
-fn sync_facts(data: &GuildSyncData) -> Vec<String> {
-    let mut facts = Vec::new();
-    if data.behind > 0 {
-        facts.push(format!("pulled {}", format::count(data.behind, "commit")));
-    }
-    if data.ahead > 0 {
-        facts.push(format!("pushed {}", format::count(data.ahead, "commit")));
-    }
-    if facts.is_empty() {
-        facts.push("already in step".to_string());
-    }
-    match &data.remote {
-        Some(remote) => facts.push(remote.clone()),
-        // Sync off is the documented default and not a broken state, so it is
-        // stated rather than left as an absence a reader has to notice.
-        None => facts.push("no remote, export still works".to_string()),
-    }
-    facts
-}
-
-/// `armada guild init`.
-fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) -> String {
-    let data = &envelope.data;
-    let mut table = Table::new(columns("step", "detail", true)).indent(2);
-    table = table.row(vec![
-        token("imported", Role::BeaconGreen),
-        Cell::plain("~/.claude/"),
-        detail_cell(style, Some(&data.imported.join(", "))),
-        time_cell(style, None),
-    ]);
-    // **Always a row, even when nothing was withheld.** "Armada looked and
-    // found no credentials" and "nobody looked" read identically otherwise, and
-    // only one of them is a guarantee — the same reasoning `clean` keeps its
-    // table for.
-    table = table.row(vec![
-        token(
-            "withheld",
-            if data.withheld.is_empty() {
-                Role::SteelGrey
-            } else {
-                Role::FlareOrange
-            },
-        ),
-        Cell::plain(format::count(data.withheld.len(), "value")),
-        detail_cell(
-            style,
-            Some(&if data.withheld.is_empty() {
-                "no credential-shaped values found".to_string()
-            } else {
-                format!("{} -> machine.yml", ids(&data.withheld, KEEP))
-            }),
-        ),
-        time_cell(style, None),
-    ]);
-    table = table.row(vec![
-        token("wrote", Role::BeaconGreen),
-        Cell::plain(format::count(data.wrote.len(), "file")),
-        detail_cell(style, Some(&ids(&data.wrote, KEEP))),
-        time_cell(style, None),
-    ]);
-    table = table.row(vec![
-        token("guild", Role::BeaconGreen),
-        Cell::plain("initialised"),
-        detail_cell(
-            style,
-            Some(match &data.remote {
-                Some(remote) => remote.as_str(),
-                None => "no remote: sync off, export still works",
-            }),
-        ),
-        time_cell(style, None),
-    ]);
-
-    let mut out = table.render(style, width);
-    out.push('\n');
+    // **A grant that resolved to nothing is counted, not hidden.** It is a
+    // `config verify` failure, and this verb is not that one — but a reader
+    // looking at a list of grants should not have to run a second command to
+    // find out that one of them names nothing.
+    let unresolved = data
+        .skills
+        .iter()
+        .flat_map(|skill| skill.uses.iter())
+        .filter(|granted| granted.cmd.is_empty())
+        .count();
     out.push_str(&summary(
         style,
         envelope.status,
         &[
-            format!("guild at {}", data.guild_path),
-            format::count(data.questions, "question"),
-            format!("{} skipped", data.skipped),
+            format::count(data.skills.len(), "skill"),
+            format::count(unresolved, "unresolved reference"),
         ],
     ));
-    if let Some(error) = &envelope.error {
-        out.push_str(&error_lines(error, style));
-    }
-    out
-}
-
-/// `armada guild export` and `armada guild import`.
-fn guild_bundle(envelope: &Envelope<GuildBundleData>, style: Style, width: usize) -> String {
-    let data = &envelope.data;
-    // **The bundle's column is flexible and every other verb's name column is
-    // fixed**, because this one holds a *path* rather than an id. Measured: an
-    // absolute path in a fixed column pushes DETAIL past eighty and the flexible
-    // column truncates the one fact the row exists to carry. A path's tail is
-    // the least valuable part of it, which is exactly what `Column::flexible`
-    // is for.
-    let mut table = Table::new(vec![
-        Column::fixed("status"),
-        Column::flexible("bundle"),
-        Column::flexible("detail"),
-        Column::fixed("time").right(),
-    ])
-    .indent(2);
-    table = table.row(vec![
-        token(
-            if data.bytes.is_some() {
-                "exported"
-            } else {
-                "imported"
-            },
-            Role::BeaconGreen,
-        ),
-        Cell::plain(data.path.clone()),
-        detail_cell(style, Some(&data.contents.join(", "))),
-        time_cell(style, None),
-    ]);
-    // **Reported either way.** "The file that never syncs did not sync" is the
-    // fact `--include-secrets` exists to make checkable, and a line that only
-    // appears when it went wrong is a line nobody learns to look for.
-    table = table.row(vec![
-        token(
-            "secrets",
-            if data.secrets {
-                Role::FlareOrange
-            } else {
-                Role::BeaconGreen
-            },
-        ),
-        Cell::plain(if data.secrets { "included" } else { "excluded" }),
-        // **No em dash in a cell.** A typographic character in a table is one
-        // the agent audience would also receive, since `Cell` text is not
-        // styled — decoration that differs by audience goes through `Style`, and
-        // there is no `Style` form of an aside. A colon says the same thing in
-        // both renders.
-        detail_cell(
-            style,
-            Some(if data.secrets {
-                "machine.yml travelled: this machine, not you"
-            } else {
-                "machine.yml stays here"
-            }),
-        ),
-        time_cell(style, None),
-    ]);
-    for skipped in &data.skipped {
-        table = table.row(vec![
-            token("skipped", Role::SteelGrey),
-            Cell::plain(skipped.clone()),
-            detail_cell(style, Some("this machine has its own")),
-            time_cell(style, None),
-        ]);
-    }
-    for conflict in &data.conflicts {
-        table = table.row(vec![
-            token("conflict", Role::DistressRed),
-            Cell::plain(conflict.clone()),
-            detail_cell(style, Some("edited here, left alone")),
-            time_cell(style, None),
-        ]);
-    }
-
-    let mut out = table.render(style, width);
-    out.push('\n');
-    out.push_str(
-        &match (data.conflicts.is_empty(), envelope.error.is_some()) {
-            (false, _) => headline(
-                style,
-                Headline::NeedsAttention,
-                &[
-                    format::count(data.conflicts.len(), "conflict"),
-                    "left as they were".to_string(),
-                ],
-            ),
-            _ => summary(
-                style,
-                envelope.status,
-                &match data.bytes {
-                    Some(bytes) => vec![format::bytes(bytes)],
-                    None => Vec::new(),
-                },
-            ),
-        },
-    );
-    if let Some(error) = &envelope.error {
-        out.push_str(&error_lines(error, style));
-    }
     out
 }
 
@@ -1555,6 +2018,49 @@ mod tests {
         let text = rendered(&Output::Status(Box::new(envelope)), Style::plain());
         assert!(text.contains("UP      api        5460"), "{text}");
         assert!(text.contains("DOWN    web        5461"), "{text}");
+    }
+
+    /// **Wrapped and never cut**, which is the one rule `config scan` has: a
+    /// repository whose CI runs twelve commands has twelve pieces of evidence,
+    /// and the author reading them is the one who has to find the one that
+    /// mattered.
+    #[test]
+    fn evidence_too_wide_for_a_line_wraps_and_loses_nothing() {
+        let items: Vec<String> = (0..8)
+            .map(|n| format!("pnpm run task-number-{n}"))
+            .collect();
+        let text = wrapped(Style::plain(), &items, 80);
+        assert!(text.lines().count() > 1, "one line: {text}");
+        for line in text.lines() {
+            assert!(line.len() <= 80, "{line:?}");
+        }
+        for item in &items {
+            assert!(text.contains(item.as_str()), "{item} was cut: {text}");
+        }
+        assert!(!text.contains('…'), "evidence was truncated: {text}");
+    }
+
+    /// **The two audiences break at the same items**, because the break points
+    /// are measured against the wider separator rather than against the one
+    /// this audience gets. Without that, `·` and `, ` would wrap differently
+    /// and the two renders would stop being one render twice.
+    #[test]
+    fn wrapping_breaks_at_the_same_places_for_both_audiences() {
+        let items: Vec<String> = (0..9)
+            .map(|n| format!("command-{n} --with-a-flag"))
+            .collect();
+        let plain = wrapped(Style::plain(), &items, 80);
+        let painted = wrapped(Style::painted(), &items, 80);
+        assert_eq!(fold(&strip_ansi(&painted)), plain);
+    }
+
+    /// A single item wider than the line gets a line of its own and overhangs.
+    /// Cutting it is the one thing this section may not do.
+    #[test]
+    fn one_item_too_wide_for_any_line_overhangs_rather_than_being_cut() {
+        let long = "x".repeat(120);
+        let text = wrapped(Style::plain(), std::slice::from_ref(&long), 80);
+        assert_eq!(text, format!("    {long}\n"));
     }
 
     /// A long list is cut with a count rather than an ellipsis: the count is

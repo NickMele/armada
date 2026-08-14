@@ -18,11 +18,11 @@
 
 use super::model::{
     Check, CommandEntry, Component, Config, Document, OneOrMany, OwnsCommand, OwnsComponent,
-    OwnsRun, Ready, Run, SetupStep,
+    OwnsRun, Ready, Run, SetupStep, SkillEntry,
 };
 use super::resolved::{
     Need, ReadyKind, ResolvedCheck, ResolvedCommand, ResolvedComponent, ResolvedConfig,
-    ResolvedReady, ResolvedRun, ResolvedService, ResolvedSetupStep, Scope, Stdio,
+    ResolvedReady, ResolvedRun, ResolvedService, ResolvedSetupStep, ResolvedSkill, Scope, Stdio,
 };
 use crate::error::{ArmadaError, ConfigWhere};
 use std::collections::BTreeMap;
@@ -161,6 +161,17 @@ pub fn resolve(
         commands.insert(name, resolved);
     }
 
+    // **Resolution is total here, unlike `commands` and `components`.** A
+    // skill has no key whose value decides which other keys are legal — no
+    // `driver:`, no `stdio:` — so there is nothing it could fail on that the
+    // schema has not already rejected. Everything left is a cross-reference,
+    // and cross-references are `config verify`'s (PLAN.md §5).
+    let skills = config
+        .skills
+        .into_iter()
+        .map(|(name, entry)| (name, resolve_skill(entry)))
+        .collect();
+
     let secret_providers = config
         .secret_providers
         .into_iter()
@@ -171,10 +182,23 @@ pub fn resolve(
         version: config.version,
         components,
         commands,
+        skills,
         workspaces: config.workspaces,
         secrets: config.secrets,
         secret_providers,
     })
+}
+
+fn resolve_skill(entry: SkillEntry) -> ResolvedSkill {
+    ResolvedSkill {
+        summary: entry.summary,
+        doc: entry.doc,
+        uses: entry.uses,
+        // Flattened to a list, so nothing downstream asks which spelling was
+        // written — the same normalisation `setup:` and `owns.release:` get.
+        verify: entry.verify.map(|verify| verify.check).unwrap_or_default(),
+        touches: entry.touches,
+    }
 }
 
 fn resolve_component(
@@ -654,6 +678,58 @@ mod tests {
         assert_eq!(cfg.commands["a"].stdio, Stdio::Inherit);
         assert_eq!(cfg.commands["b"].stdio, Stdio::Pipe);
         assert_eq!(cfg.commands["c"].stdio, Stdio::Inherit);
+    }
+
+    /// **The whole of a skill reaches the resolved config**, because until it
+    /// did nothing could read one: the schema and the structs both knew
+    /// `skills:` and resolution dropped it on the floor, so `armada manifest
+    /// skills` had nothing to list and `config verify` had nothing to
+    /// cross-reference.
+    #[test]
+    fn a_skill_resolves_whole_with_its_verify_scope_flattened() {
+        let cfg = resolved(
+            "manifest:\n  version: 1\n  commands:\n    migrate-new: { cmd: ./m }\n  skills:\n    \
+             add-migration:\n      summary: Add a migration\n      doc: docs/skills/add.md\n      \
+             uses: [migrate-new]\n      verify:\n        check: [test, types]\n      \
+             touches:\n        - \"prisma/**\"\n",
+        );
+        let skill = &cfg.skills["add-migration"];
+        assert_eq!(skill.summary, "Add a migration");
+        assert_eq!(skill.doc, "docs/skills/add.md");
+        assert_eq!(skill.uses, ["migrate-new"]);
+        // `verify: { check: [...] }` flattens, so nothing downstream re-reads
+        // the nesting and reaches a different answer.
+        assert_eq!(skill.verify, ["test", "types"]);
+        assert_eq!(skill.touches, ["prisma/**"]);
+    }
+
+    /// The minimal legal skill: a name, a line and a document. A skill that
+    /// grants nothing and verifies nothing is still a real thing — it is prose
+    /// the repository wants read, with a name.
+    #[test]
+    fn a_skill_with_only_a_summary_and_a_doc_resolves_to_empty_lists() {
+        let cfg = resolved(
+            "manifest:\n  version: 1\n  skills:\n    triage:\n      summary: Work out why\n      \
+             doc: docs/skills/triage.md\n",
+        );
+        let skill = &cfg.skills["triage"];
+        assert!(skill.uses.is_empty());
+        assert!(skill.verify.is_empty());
+        assert!(skill.touches.is_empty());
+    }
+
+    /// **There is no `cmd:` on a skill, and its absence is the design**
+    /// (PLAN.md §4.8). A skill with its own command is a `commands:` entry
+    /// wearing a hat; execution stays with the thing that already executes.
+    #[test]
+    fn a_skill_may_not_carry_a_command_of_its_own() {
+        let err = parse(
+            "manifest:\n  version: 1\n  skills:\n    x:\n      summary: s\n      doc: d.md\n      \
+             cmd: ./run-it\n",
+            "armada.yml",
+        )
+        .unwrap_err();
+        assert!(err.message.contains("unknown field"), "{}", err.message);
     }
 
     #[test]

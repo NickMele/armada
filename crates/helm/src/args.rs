@@ -71,6 +71,20 @@ pub enum Invocation {
     Status(Common),
     /// `armada manifest check`.
     Check(Box<Check>),
+    /// `armada manifest skills`, or `armada manifest skills show <name>`.
+    Skills {
+        /// The skill to resolve, or `None` to list them all.
+        show: Option<String>,
+        /// Emit the envelope rather than human output.
+        json: bool,
+    },
+    /// `armada manifest config <scan|verify>`.
+    Config {
+        /// Which half of the sandwich (PLAN.md §5).
+        sub: ConfigSub,
+        /// Emit the envelope rather than human output.
+        json: bool,
+    },
     /// A `commands:` entry, with everything after its name.
     Dispatch {
         /// The entry's name.
@@ -181,6 +195,20 @@ impl GuildInvocation {
     }
 }
 
+/// Which layer of the bootstrap sandwich `config` was asked for (PLAN.md §5).
+///
+/// **Two subcommands with one purpose between them**: let an agent produce a
+/// working config for a repository it has never seen, with no human in the
+/// loop. Layer 2 — the authoring — is deliberately not a subcommand, because it
+/// is not Armada's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigSub {
+    /// Layer 1: report facts, decide nothing.
+    Scan,
+    /// Layer 3: pass 1 static, then pass 2 for real.
+    Verify,
+}
+
 /// A parse failure, carrying the `--json` the parser had **already seen** when
 /// it failed.
 ///
@@ -223,7 +251,7 @@ pub struct Check {
     pub all_files: bool,
     /// `--fix`: run `fix:` instead of `cmd:`.
     pub fix: bool,
-    /// `--jobs N`: this run's CPU budget, overriding the machine's.
+    /// `--concurrency N`: this run's CPU budget, overriding the machine's.
     pub jobs: Option<u32>,
     /// `--wait`: queue for the run lease instead of failing fast.
     pub wait: bool,
@@ -243,7 +271,7 @@ pub struct Common {
 /// The verbs Manifest owns. A `commands:` entry may not shadow one — the schema
 /// rejects that, because without the rule a repo can silently break the one
 /// guarantee the project exists to provide.
-pub const BUILTIN_VERBS: [&str; 9] = [
+pub const BUILTIN_VERBS: [&str; 11] = [
     "init",
     "up",
     "down",
@@ -251,6 +279,8 @@ pub const BUILTIN_VERBS: [&str; 9] = [
     "clean",
     "status",
     "config",
+    "skills",
+    "render",
     "agents-md",
     "explain",
 ];
@@ -300,12 +330,12 @@ pub const GUILD_VERBS: [(&str, &str); 7] = [
 /// The Guild verbs this milestone built. The rest answer "not built yet".
 const GUILD_BUILT: [&str; 5] = ["init", "pull", "push", "export", "import"];
 
-/// The verbs with a help page of their own — the four Manifest has built.
+/// The verbs with a help page of their own — the ones Manifest has built.
 ///
 /// A separate list from [`BUILTIN_VERBS`], because that one claims names,
 /// several of which answer "not built yet": giving `armada manifest up --help` a
 /// page would promise a verb that does not exist.
-const BUILT_PAGES: [&str; 4] = ["init", "status", "check", "clean"];
+const BUILT_PAGES: [&str; 6] = ["init", "status", "check", "clean", "config", "skills"];
 
 /// `--help` in either spelling.
 fn is_help(arg: &str) -> bool {
@@ -435,6 +465,8 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             Ok(Invocation::Status(common))
         }
         "check" => Ok(Invocation::Check(Box::new(check(rest, json, color)?))),
+        "config" => config(rest, json, color),
+        "skills" => skills(rest, json, color),
         "clean" => {
             let common = common(
                 rest,
@@ -534,12 +566,12 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
                 }
                 _ => return Err(failure(needs_a_value("--component"), parsed.json)),
             },
-            "--jobs" => match rest.get(index).and_then(|n| n.parse::<u32>().ok()) {
+            "--concurrency" => match rest.get(index).and_then(|n| n.parse::<u32>().ok()) {
                 Some(jobs) if jobs > 0 => {
                     parsed.jobs = Some(jobs);
                     index += 1;
                 }
-                _ => return Err(failure(needs_a_value("--jobs"), parsed.json)),
+                _ => return Err(failure(needs_a_value("--concurrency"), parsed.json)),
             },
             // Reserved by PLAN.md §3 and not built in this phase. Refused by
             // name rather than falling through to "unknown flag", because the
@@ -835,6 +867,133 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
     Ok(Invocation::Guild(Box::new(invocation)))
 }
 
+/// `armada manifest config <scan|verify>`.
+///
+/// **The subcommand is required and is not defaulted.** `scan` reports and
+/// `verify` runs the check suite for real; guessing which one a bare `config`
+/// meant would, on the wrong guess, be a full build nobody asked for.
+fn config(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    let json = json || rest.iter().any(|a| a == "--json");
+    *color = color_in(rest, *color).map_err(|e| failure(e, json))?;
+
+    let sub = match positional(rest).first().map(String::as_str) {
+        Some("scan") => ConfigSub::Scan,
+        Some("verify") => ConfigSub::Verify,
+        other => {
+            return Err(failure(
+                ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: other.unwrap_or("config").to_string(),
+                    message: match other {
+                        Some(word) => {
+                            format!("`armada manifest config {word}` is not a subcommand")
+                        }
+                        None => "`armada manifest config` needs a subcommand".to_string(),
+                    },
+                    next_action: Some(
+                        "`armada manifest config scan` reports evidence; \
+                         `armada manifest config verify` validates a written one"
+                            .to_string(),
+                    ),
+                },
+                json,
+            ))
+        }
+    };
+    only_flags(rest, json, &[])?;
+    Ok(Invocation::Config { sub, json })
+}
+
+/// `armada manifest skills`, and `armada manifest skills show <name>`.
+///
+/// **There is no `run`, and its absence is the design** (PLAN.md §4.8). "Add a
+/// migration" has no deterministic expansion, and a runner would mean Armada
+/// choosing arguments on the user's behalf.
+fn skills(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    let json = json || rest.iter().any(|a| a == "--json");
+    *color = color_in(rest, *color).map_err(|e| failure(e, json))?;
+    let words = positional(rest);
+
+    let show = match words
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
+        [] => None,
+        ["show", name] => Some((*name).to_string()),
+        ["show"] => {
+            return Err(failure(
+                ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: "show".to_string(),
+                    message: "`armada manifest skills show` needs a skill name".to_string(),
+                    next_action: Some(
+                        "`armada manifest skills` lists the names this repo declares".to_string(),
+                    ),
+                },
+                json,
+            ))
+        }
+        _ => {
+            return Err(failure(
+                ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: words.join(" "),
+                    message: "`armada manifest skills` takes nothing, or `show <name>`".to_string(),
+                    next_action: Some(
+                        "there is deliberately no way to run a skill (PLAN.md §4.8)".to_string(),
+                    ),
+                },
+                json,
+            ))
+        }
+    };
+    only_flags(rest, json, &[])?;
+    Ok(Invocation::Skills { show, json })
+}
+
+/// The bare words of a verb's own argv, with the flags Armada owns removed.
+fn positional(rest: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut index = 0;
+    while index < rest.len() {
+        let arg = rest[index].as_str();
+        index += 1;
+        match arg {
+            "--color" => index += 1,
+            flag if flag.starts_with('-') => {}
+            word => out.push(word.to_string()),
+        }
+    }
+    out
+}
+
+/// Refuse any flag beyond the shared ones and `allowed`.
+fn only_flags(rest: &[String], json: bool, allowed: &[&str]) -> Result<(), ParseFailure> {
+    for arg in rest {
+        let arg = arg.as_str();
+        if !arg.starts_with('-')
+            || arg == "--json"
+            || arg == "--color"
+            || arg.starts_with("--color=")
+            || allowed.contains(&arg)
+        {
+            continue;
+        }
+        return Err(failure(unknown_flag(arg), json));
+    }
+    Ok(())
+}
+
 fn needs_a_value(flag: &str) -> ArmadaError {
     ArmadaError {
         class: ErrClass::BadInvocation,
@@ -1117,6 +1276,100 @@ mod tests {
     #[test]
     fn status_refuses_a_dry_run_because_it_changes_nothing() {
         assert!(parse(&args(&["manifest", "status", "--dry-run"])).is_err());
+    }
+
+    #[test]
+    fn config_takes_one_of_its_two_subcommands() {
+        for (word, expected) in [("scan", ConfigSub::Scan), ("verify", ConfigSub::Verify)] {
+            let Invocation::Config { sub, json } = parse(&args(&["manifest", "config", word]))
+                .unwrap()
+                .invocation
+            else {
+                panic!("`config {word}` did not parse")
+            };
+            assert_eq!(sub, expected);
+            assert!(!json);
+        }
+        assert!(
+            parse(&args(&["manifest", "config", "scan", "--json"]))
+                .unwrap()
+                .invocation
+                == Invocation::Config {
+                    sub: ConfigSub::Scan,
+                    json: true
+                }
+        );
+    }
+
+    /// **The subcommand is required and is not defaulted.** `verify` runs the
+    /// check suite for real, so guessing which one a bare `config` meant would,
+    /// on the wrong guess, be a full build nobody asked for.
+    #[test]
+    fn a_bare_config_is_refused_rather_than_defaulted() {
+        for words in [
+            &["manifest", "config"][..],
+            &["manifest", "config", "validate"][..],
+        ] {
+            let err = parse(&args(words)).unwrap_err().error;
+            assert_eq!(err.class, ErrClass::BadInvocation);
+            assert!(err.next_action.unwrap().contains("config scan"));
+        }
+    }
+
+    #[test]
+    fn config_refuses_a_flag_it_does_not_take() {
+        let failure = parse(&args(&["manifest", "config", "scan", "--all", "--json"])).unwrap_err();
+        assert_eq!(failure.error.class, ErrClass::BadInvocation);
+        assert!(failure.json, "the envelope is still owed an answer");
+    }
+
+    #[test]
+    fn skills_lists_by_default_and_resolves_one_with_show() {
+        assert_eq!(
+            parse(&args(&["manifest", "skills"])).unwrap().invocation,
+            Invocation::Skills {
+                show: None,
+                json: false
+            }
+        );
+        assert_eq!(
+            parse(&args(&[
+                "manifest",
+                "skills",
+                "show",
+                "add-migration",
+                "--json"
+            ]))
+            .unwrap()
+            .invocation,
+            Invocation::Skills {
+                show: Some("add-migration".to_string()),
+                json: true
+            }
+        );
+    }
+
+    /// **There is deliberately no way to run a skill** (PLAN.md §4.8). "Add a
+    /// migration" has no deterministic expansion, and a runner would mean
+    /// Armada choosing arguments on the user's behalf. The parser is where a
+    /// third subcommand would have to appear, so this is where its absence is
+    /// asserted.
+    #[test]
+    fn there_is_no_third_subcommand_that_runs_a_skill() {
+        for words in [
+            &["manifest", "skills", "run", "add-migration"][..],
+            &["manifest", "skills", "add-migration"][..],
+            &["manifest", "skills", "show"][..],
+        ] {
+            let err = parse(&args(words)).unwrap_err().error;
+            assert_eq!(
+                err.class,
+                ErrClass::BadInvocation,
+                "`armada {}` was accepted",
+                words.join(" ")
+            );
+            assert!(err.next_action.is_some());
+        }
     }
 
     /// The module name is a grammar level, so a bare module is as incomplete as

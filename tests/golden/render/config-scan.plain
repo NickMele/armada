@@ -36,6 +36,3 @@ Evidence only. Armada does not guess which of these you actually run.
 
   1 let an agent write it with me  opens claude here
   2 print the evidence and stop    I will write armada.yml myself
-
-> 1
-launching claude with the onboard-repo skill

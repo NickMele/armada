@@ -29,9 +29,10 @@
 //! than a flag you reach for without reading.
 
 use armada_core::envelope::{
-    Asked, CheckData, CleanData, DispatchData, DoctorData, Envelope, Finding, GuildChoice,
-    GuildSyncData, Headline, Health, InitData, MachineInitData, PortReport, Released, ResultRow,
-    StatusData, Sync, SyncItem, Unreclaimed,
+    Asked, CheckData, CleanData, DispatchData, DoctorData, Envelope, Finding, GrantedCommand,
+    GuildChoice, GuildSyncData, Headline, Health, InitData, MachineInitData, PortReport, Released,
+    ResolvedSkillView, ResultRow, ScanData, SkillsData, StatusData, Sync, SyncItem, Unreclaimed,
+    VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::id::WorkspaceId;
@@ -357,6 +358,148 @@ fn a_refused_dispatch_matches_its_fixture() {
         },
     )));
     assert_render("dispatch-refused", &output);
+}
+
+/// `armada manifest config scan`, over the one fixture with no `armada.yml`.
+///
+/// **Rendered from the real directory, not from a hand-built envelope.** Every
+/// other case here constructs its payload, because the world it describes —
+/// leases, pids, port claims — has no on-disk form. A scan's world is exactly a
+/// directory, so building the envelope by hand would test the renderer against
+/// a scan nobody performed, and the two parsers between the files and the table
+/// are where this verb's mistakes live.
+#[test]
+fn config_scan_matches_its_fixture() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/next-prisma");
+    let files = armada_manifest::scan::read(&root);
+    let evidence = armada_core::scan::scan(&files);
+    let output = Output::Scan(Box::new(Envelope::ok(
+        "config scan",
+        None,
+        Status::Ok,
+        ScanData {
+            results: armada_core::scan::findings(&evidence),
+            evidence,
+        },
+    )));
+    assert_render("config-scan", &output);
+}
+
+/// `armada manifest config verify`, with pass 1 failing.
+///
+/// **Hand-built, unlike `config scan` beside it.** A verify payload carries
+/// durations, and a duration comes from the injected clock rather than from the
+/// filesystem — so a fixture rendered from a real run would either need a clock
+/// stubbed to hundredths or would carry whatever this machine took. The checks
+/// themselves are covered where they are decided, in `armada_core::verify`.
+///
+/// The failing case is the one the agreed layout draws, and it is the one worth
+/// freezing: it is the only one that shows `pass 2 not attempted`, the
+/// `unchecked` row and a fix line all at once.
+#[test]
+fn config_verify_matches_its_fixture() {
+    let mut schema = ResultRow::new("schema", Status::Pass);
+    schema.duration_ms = Some(100);
+
+    let mut references = ResultRow::new("references", Status::Pass);
+    references.duration_ms = Some(100);
+    references.reason = Some(armada_core::verify::REFERENCES_DETAIL.to_string());
+
+    let mut argv0 = ResultRow::new("argv[0]", Status::Failed);
+    argv0.duration_ms = Some(200);
+    argv0.error = Some(ArmadaError {
+        class: ErrClass::BadConfig,
+        r#where: "armada.yml:manifest.components.web.checks.test.cmd".to_string(),
+        message: "`vitest` not on PATH or in root".to_string(),
+        next_action: Some(
+            "web:test declares `vitest run`; did you mean `pnpm exec vitest run`?".to_string(),
+        ),
+    });
+
+    let results = vec![schema, references, argv0];
+    let output = Output::Verify(Box::new(Envelope {
+        schema_version: armada_core::envelope::SCHEMA_VERSION,
+        verb: "config verify".to_string(),
+        workspace: Some(workspace()),
+        status: Status::Failed,
+        error: armada_core::envelope::aggregate(&results, "checks"),
+        data: VerifyData {
+            results,
+            // **Three, so the fixture pins the count and not just the row.**
+            // The number is the honest cost of `shell: true`, and a row that
+            // said only `unchecked` would be the footnote it is not.
+            unchecked: 3,
+            pass_2: None,
+        },
+    }));
+    assert_render("config-verify", &output);
+}
+
+/// The two skills the `polyglot-web` fixture declares, which is the fixture
+/// that owns the `skills:` axis: one with the full shape and one minimal.
+fn declared_skills() -> Vec<ResolvedSkillView> {
+    vec![
+        ResolvedSkillView {
+            name: "add-endpoint".to_string(),
+            summary: "Add an API endpoint, OpenAPI first, then the generated client".to_string(),
+            doc: "docs/skills/add-endpoint.md".to_string(),
+            uses: vec![GrantedCommand {
+                name: "tickets".to_string(),
+                cmd: "uv run scripts/tickets.py".to_string(),
+            }],
+            verify: vec!["api:types".to_string(), "web:lint".to_string()],
+            touches: vec![
+                "backend/openapi.yaml".to_string(),
+                "frontend/src/generated/**".to_string(),
+            ],
+        },
+        // **A skill that grants nothing and verifies nothing is still a real
+        // thing** — prose the repository wants read, with a name. The listing
+        // has to draw it exactly as it draws the other.
+        ResolvedSkillView {
+            name: "triage-flake".to_string(),
+            summary: "Work out whether a failing test is flaky or genuinely broken".to_string(),
+            doc: "docs/skills/triage-flake.md".to_string(),
+            uses: Vec::new(),
+            verify: Vec::new(),
+            touches: Vec::new(),
+        },
+    ]
+}
+
+fn skills_envelope(skills: Vec<ResolvedSkillView>) -> Output {
+    let results = skills
+        .iter()
+        .map(|skill| {
+            let mut row = ResultRow::new(skill.name.clone(), Status::Ok);
+            row.reason = Some(skill.summary.clone());
+            row
+        })
+        .collect();
+    Output::Skills(Box::new(Envelope::ok(
+        "skills",
+        Some(workspace()),
+        Status::Ok,
+        SkillsData { results, skills },
+    )))
+}
+
+/// `armada manifest skills` — the listing.
+#[test]
+fn skills_matches_its_fixture() {
+    assert_render("skills", &skills_envelope(declared_skills()));
+}
+
+/// `armada manifest skills show <name>` — one skill, grants expanded.
+///
+/// **The grant table is what `show` adds**, and it is the same shape `status`
+/// draws its holdings with. It is drawn only here because at eighty columns a
+/// listing cannot carry four columns of it, which is the whole reason the two
+/// views differ at all.
+#[test]
+fn skills_show_matches_its_fixture() {
+    let one = declared_skills().into_iter().take(1).collect();
+    assert_render("skills-show", &skills_envelope(one));
 }
 
 // ------------------------------------------------------------------- M2: the
@@ -688,16 +831,21 @@ fn strip_ansi(text: &str) -> String {
 
 /// The typographic characters, folded to what the agent audience receives.
 ///
-/// **The em dash, the en dash and the prompt caret are one column for one
-/// column**, so folding those can never move a column — which is what makes the
-/// comparison above a test of styling rather than of layout.
+/// The dashes are one column for one column, so folding them can never move a
+/// column — which is what makes the comparison above a test of styling rather
+/// than of layout.
 ///
-/// **Two are not, and both are prose rather than columns.** The middle dot
-/// separates facts on a summary line, and `→` opens `doctor`'s fix lines; in
-/// both cases nothing follows on the line, so there is no column to shear.
-/// `render/style.rs` states the same division from the other side, and
-/// `render_pending.rs`'s header records that `doctor`'s arrows fold like every
-/// other glyph.
+/// **Two replacements are not**, and both are confined to prose for exactly
+/// that reason. `·` and `, ` differ by a column, and `→` and `->` differ by a
+/// column; a summary line and a fix line are sentences rather than rows, so
+/// neither can shear a table. That confinement is the rule those two glyphs
+/// carry — [`Style::between`] says a summary line is prose and not a column,
+/// and [`Style::arrow`] says a fix line may only ever open a line. A cell
+/// holding either of them would make this test pass over two renders whose
+/// columns genuinely disagree, which is the one thing it exists to catch.
+///
+/// [`Style::between`]: armada_helm::render::style::Style::between
+/// [`Style::arrow`]: armada_helm::render::style::Style::arrow
 fn fold(text: &str) -> String {
     text.replace(['—', '–'], "-")
         .replace('›', ">")
