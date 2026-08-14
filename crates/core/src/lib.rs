@@ -15,6 +15,7 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod compose;
 pub mod config;
 pub mod ctx;
 pub mod dispatch;
@@ -31,6 +32,7 @@ pub mod scan;
 pub mod schedule;
 pub mod scope;
 pub mod select;
+pub mod service;
 pub mod template;
 pub mod verify;
 pub mod workspace;
