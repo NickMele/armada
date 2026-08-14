@@ -121,9 +121,16 @@ impl Cell {
 #[derive(Debug, Clone)]
 pub struct Table {
     columns: Vec<Column>,
-    rows: Vec<Vec<Cell>>,
+    rows: Vec<Row>,
     indent: usize,
     headers: bool,
+}
+
+/// A row, and the continuation line that belongs to it.
+#[derive(Debug, Clone)]
+struct Row {
+    cells: Vec<Cell>,
+    note: Option<String>,
 }
 
 impl Table {
@@ -153,8 +160,21 @@ impl Table {
     /// Add a row. A row with fewer cells than there are columns is padded with
     /// empties rather than refused: a missing value is a normal fact about an
     /// envelope, and a renderer is not the place to discover it.
-    pub fn row(mut self, cells: Vec<Cell>) -> Table {
-        self.rows.push(cells);
+    pub fn row(self, cells: Vec<Cell>) -> Table {
+        self.row_with_note(cells, None)
+    }
+
+    /// A row, plus one continuation line printed under it.
+    ///
+    /// **For the fact that belongs to a row but not to a column** — a failed
+    /// check's log path is the case that earned it. Putting it in `DETAIL` would
+    /// widen every row by the length of the longest path; giving it a column of
+    /// its own would leave that column empty on every passing check.
+    ///
+    /// It is indented to the start of the **second** column, so it reads as
+    /// hanging off the row's name rather than as a row of its own.
+    pub fn row_with_note(mut self, cells: Vec<Cell>, note: Option<String>) -> Table {
+        self.rows.push(Row { cells, note });
         self
     }
 
@@ -185,7 +205,17 @@ impl Table {
             out.push_str(&self.line(&header, &widths, style, true));
         }
         for row in &self.rows {
-            out.push_str(&self.line(row, &widths, style, false));
+            out.push_str(&self.line(&row.cells, &widths, style, false));
+            if let Some(note) = &row.note {
+                // Under the second column: hanging off the row's name, not a
+                // row of its own. With one column there is no second, so it
+                // lines up under the first.
+                let hang = self.indent + widths.first().map_or(0, |w| w + GAP);
+                let room = width.saturating_sub(hang);
+                out.push_str(&" ".repeat(hang));
+                out.push_str(&style.paint(Role::SteelGrey, &truncate(note, room)));
+                out.push('\n');
+            }
         }
         out
     }
@@ -260,7 +290,7 @@ impl Table {
                 };
                 self.rows
                     .iter()
-                    .map(|row| row.get(index).map_or(0, |c| display_width(&c.text)))
+                    .map(|row| row.cells.get(index).map_or(0, |c| display_width(&c.text)))
                     .chain(std::iter::once(header))
                     .max()
                     .unwrap_or(0)

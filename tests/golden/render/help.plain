@@ -1,0 +1,31 @@
+armada — one vocabulary for a repo's stack, and the agents working in it
+
+USAGE
+  armada <module> <verb> [flags]  the verbs Armada owns
+  armada                          enter Helm, the agent you talk to
+
+MANIFEST — what a workspace is and how to operate it
+  init    claim this workspace: ports, .armada/, setup
+  status  what is running, what is mine, what is stale
+  check   lint, format and test — the verb a gate calls
+  clean   release what this workspace owns
+  <name>  a commands: entry from this repo's armada.yml
+
+GLOBAL FLAGS
+  --json          answer in the envelope (PLAN.md §3.1), not as text
+  --color <when>  auto (default), always, never; NO_COLOR wins
+  -h, --help      this page, or a verb's own flags
+  -V, --version   the version
+
+NOT BUILT YET
+  armada init, doctor, guild, fleet, helm, bridge       M2 and M3
+  armada manifest up, down, config, agents-md, explain  reserved
+  armada manifest check --detach, --status              reserved
+
+  Each answers `not built yet` and names its milestone, rather than
+  meaning something else for a release first (PHASES.md §8).
+
+Run `armada <module> <verb> --help` for a verb's own flags.
+
+Global flags come before the module. Everything after a commands: name is the
+child's, including flags Armada itself defines.

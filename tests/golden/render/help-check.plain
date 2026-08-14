@@ -1,0 +1,19 @@
+armada manifest check — lint, format and test — the verb a gate calls
+
+USAGE
+  armada manifest check [flags] [<selector>]
+  armada manifest check --files <path>…
+
+FLAGS
+  --dry-run           report what would run; run nothing
+  --all-files         scope from each component's match: globs, not the diff
+  --fix               run fix: instead of cmd:; skips checks with no fix:
+  --wait              queue for the run lease instead of failing fast
+  --files <path>…     run only the checks these paths belong to
+  --component <name>  every check on one component
+  --jobs <n>          this run's CPU budget, overriding the machine's
+  --json              answer in the envelope (PLAN.md §3.1), not as text
+  --color <when>      auto (default), always, never; NO_COLOR wins
+
+A selector is <component>:<check>, a component, or a check name.
+One selector, or several paths — never both (PLAN.md §3.2).

@@ -1,0 +1,8 @@
+armada  3d9cc7ba
+
+  STATUS    WORKSPACE  DETAIL
+  CLEAN     3d9cc7ba   1 process, 2 containers, 1 volume, ports released
+  skipped   b7c20d11   holds a live lease
+  reported  3d9cc7ba   psql -c 'DROP DATABASE app_3d9cc7ba'
+
+CLEAN  1 workspace, 1 skipped

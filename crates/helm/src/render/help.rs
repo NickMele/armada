@@ -187,7 +187,7 @@ fn root(style: Style, terminal: Terminal) -> String {
         "{}\n\n",
         style.strong(
             Role::SignalAmber,
-            "armada — one consistent vocabulary for managing a repo's tech stack"
+            "armada — one vocabulary for a repo's stack, and the agents working in it"
         )
     );
 
@@ -195,25 +195,22 @@ fn root(style: Style, terminal: Terminal) -> String {
     out.push_str(
         &two_column(&[
             ("armada <module> <verb> [flags]", "the verbs Armada owns"),
-            (
-                "armada manifest <name> [args…]",
-                "a commands: entry from this repo's armada.yml",
-            ),
+            ("armada", "enter Helm, the agent you talk to"),
         ])
         .render(style, width),
     );
 
     out.push('\n');
-    out.push_str(&heading(style, "MANIFEST — one repository's stack"));
-    out.push_str(
-        &two_column(
-            &MANIFEST
-                .iter()
-                .map(|page| (page.name, page.summary))
-                .collect::<Vec<_>>(),
-        )
-        .render(style, width),
-    );
+    out.push_str(&heading(
+        style,
+        "MANIFEST — what a workspace is and how to operate it",
+    ));
+    let mut verbs: Vec<(&str, &str)> = MANIFEST
+        .iter()
+        .map(|page| (page.name, page.summary))
+        .collect();
+    verbs.push(("<name>", "a commands: entry from this repo's armada.yml"));
+    out.push_str(&two_column(&verbs).render(style, width));
 
     out.push('\n');
     out.push_str(&heading(style, "GLOBAL FLAGS"));
@@ -221,7 +218,7 @@ fn root(style: Style, terminal: Terminal) -> String {
         &two_column(&[
             EVERYWHERE[0],
             EVERYWHERE[1],
-            ("-h, --help", "this page, or `<verb> --help` for one verb"),
+            ("-h, --help", "this page, or a verb's own flags"),
             ("-V, --version", "the version"),
         ])
         .render(style, width),
@@ -232,6 +229,7 @@ fn root(style: Style, terminal: Terminal) -> String {
     out.push_str(&not_built(style, width));
 
     out.push('\n');
+    out.push_str("Run `armada <module> <verb> --help` for a verb's own flags.\n\n");
     out.push_str(
         "Global flags come before the module. Everything after a commands: name is the\n\
          child's, including flags Armada itself defines.\n",

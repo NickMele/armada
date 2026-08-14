@@ -1,0 +1,4 @@
+error: `git-worktree-helper` is not on PATH
+  where: armada.yml:commands.worktrees.cmd
+  class: bad_config
+  next:  install it, or point cmd: at a path in the repo

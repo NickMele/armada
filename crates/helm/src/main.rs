@@ -88,7 +88,7 @@ fn main() -> ExitCode {
                 terminal,
             );
             match dispatch(other, &cwd, home.as_deref(), inherited, progress.as_mut()) {
-                Ok(output) => emit(output, json, style),
+                Ok(output) => emit(output, json, style, terminal),
                 Err(error) => fail(error, json, style),
             }
         }
@@ -274,11 +274,11 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<Armad
     None
 }
 
-fn emit(output: Output, json: bool, style: Style) -> ExitCode {
+fn emit(output: Output, json: bool, style: Style, terminal: render::term::Terminal) -> ExitCode {
     if json {
         write_out(&output.to_json());
     } else {
-        let text = render::human(&output, style);
+        let text = render::human(&output, style, terminal);
         if output.exit_code() == 0 {
             write_out(&text);
         } else {

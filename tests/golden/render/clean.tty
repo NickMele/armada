@@ -1,0 +1,8 @@
+[1m[38;2;255;169;64marmada[0m  [38;2;107;114;128m3d9cc7ba[0m
+
+  [1m[38;2;107;114;128mSTATUS[0m    [1m[38;2;107;114;128mWORKSPACE[0m  [1m[38;2;107;114;128mDETAIL[0m
+  [38;2;61;220;132mCLEAN[0m     3d9cc7ba   [38;2;107;114;128m1 process, 2 containers, 1 volume, ports released[0m
+  [38;2;255;180;84mskipped[0m   b7c20d11   [38;2;107;114;128mholds a live lease[0m
+  [38;2;255;180;84mreported[0m  3d9cc7ba   [38;2;107;114;128mpsql -c 'DROP DATABASE app_3d9cc7ba'[0m
+
+[1m[38;2;61;220;132mCLEAN[0m  [38;2;107;114;128m1 workspace · 1 skipped[0m

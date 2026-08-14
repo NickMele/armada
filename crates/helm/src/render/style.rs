@@ -116,6 +116,50 @@ impl Style {
             text.to_string()
         }
     }
+
+    /// What stands in a cell that has nothing in it.
+    ///
+    /// **Typography follows the same decision colour does, and for the same
+    /// reason.** Both answer "is a person looking at this": an em dash is
+    /// prettier and an ASCII hyphen is what survives a caller who splits the
+    /// line and compares the field. The agent audience gets the ASCII form of
+    /// every decorative character, which is why this is one method rather than
+    /// a literal at forty call sites.
+    ///
+    /// **Both are one column wide**, so the two renders align identically — the
+    /// property `render.rs`'s tests assert.
+    pub fn nothing(self) -> &'static str {
+        if self.color {
+            "—"
+        } else {
+            "-"
+        }
+    }
+
+    /// A span, written the way the reader's audience writes one.
+    ///
+    /// An en dash between two numbers for a person; a hyphen for anyone who
+    /// might feed `5460-5469` back into something.
+    pub fn span(self, from: impl std::fmt::Display, to: impl std::fmt::Display) -> String {
+        if self.color {
+            format!("{from}–{to}")
+        } else {
+            format!("{from}-{to}")
+        }
+    }
+
+    /// The separator between two facts on a summary line, spaces included.
+    ///
+    /// **A summary line is prose, not a column**, so this is the one place the
+    /// two renders may differ in width — a middle dot reads better than a comma
+    /// and a comma is what an agent's `split(", ")` expects.
+    pub fn between(self) -> &'static str {
+        if self.color {
+            " · "
+        } else {
+            ", "
+        }
+    }
 }
 
 #[cfg(test)]
@@ -165,6 +209,29 @@ mod tests {
         assert!(painted.starts_with(Role::BeaconGreen.fg()));
         assert!(painted.ends_with(RESET));
         assert!(painted.contains("PASS"));
+    }
+
+    /// **Decoration is ASCII for the audience that might re-parse it**, and the
+    /// two forms occupy the same number of columns so a table drawn either way
+    /// aligns identically.
+    #[test]
+    fn a_placeholder_and_a_span_are_typographic_for_a_person_and_ascii_otherwise() {
+        let person = Style::painted();
+        let agent = Style::plain();
+
+        assert_eq!(person.nothing(), "—");
+        assert_eq!(agent.nothing(), "-");
+        assert_eq!(
+            person.nothing().chars().count(),
+            agent.nothing().chars().count()
+        );
+
+        assert_eq!(person.span(5460, 5469), "5460–5469");
+        assert_eq!(agent.span(5460, 5469), "5460-5469");
+        assert_eq!(
+            person.span(5460, 5469).chars().count(),
+            agent.span(5460, 5469).chars().count()
+        );
     }
 
     #[test]

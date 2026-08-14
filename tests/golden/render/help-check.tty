@@ -1,0 +1,19 @@
+[1m[38;2;255;169;64marmada manifest check — lint, format and test — the verb a gate calls[0m
+
+[1m[38;2;255;169;64mUSAGE[0m
+  armada manifest check [flags] [<selector>]
+  armada manifest check --files <path>…
+
+[1m[38;2;255;169;64mFLAGS[0m
+  --dry-run           [38;2;107;114;128mreport what would run; run nothing[0m
+  --all-files         [38;2;107;114;128mscope from each component's match: globs, not the diff[0m
+  --fix               [38;2;107;114;128mrun fix: instead of cmd:; skips checks with no fix:[0m
+  --wait              [38;2;107;114;128mqueue for the run lease instead of failing fast[0m
+  --files <path>…     [38;2;107;114;128mrun only the checks these paths belong to[0m
+  --component <name>  [38;2;107;114;128mevery check on one component[0m
+  --jobs <n>          [38;2;107;114;128mthis run's CPU budget, overriding the machine's[0m
+  --json              [38;2;107;114;128manswer in the envelope (PLAN.md §3.1), not as text[0m
+  --color <when>      [38;2;107;114;128mauto (default), always, never; NO_COLOR wins[0m
+
+A selector is <component>:<check>, a component, or a check name.
+One selector, or several paths — never both (PLAN.md §3.2).

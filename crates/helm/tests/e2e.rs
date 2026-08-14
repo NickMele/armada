@@ -348,7 +348,8 @@ fn version_and_help_answer_from_outside_a_workspace() {
     let help = machine.run(&outside, &["--help"]);
     assert!(help.status.success());
     let text = String::from_utf8_lossy(&help.stdout);
-    assert!(text.contains("armada manifest <name>"), "{text}");
+    assert!(text.contains("MANIFEST"), "{text}");
+    assert!(text.contains("a commands: entry"), "{text}");
     // The limits are stated on the page rather than discovered by running one.
     assert!(text.contains("NOT BUILT YET"), "{text}");
 }
@@ -439,9 +440,12 @@ fn init_dry_run_previews_the_claim_and_claims_nothing() {
         "a preview must leave the store empty: {all}"
     );
 
-    // And the human rendering says, first, that nothing happened.
+    // And the human rendering says that nothing happened, in the status column
+    // of the same table a real run draws (docs/reference-output).
     let human = machine.run(&repo, &["manifest", "init", "--dry-run"]);
-    assert!(String::from_utf8_lossy(&human.stdout).starts_with("dry run"));
+    let text = String::from_utf8_lossy(&human.stdout);
+    assert!(text.contains("would"), "{text}");
+    assert!(text.contains("nothing was changed"), "{text}");
 }
 
 /// A `setup:` step that runs and fails is the **tool's** failure: Armada started
@@ -601,11 +605,15 @@ fn status_renders_for_a_terminal_on_stdout() {
     let output = machine.run(&repo, &["manifest", "status"]);
     assert!(output.status.success());
     let text = String::from_utf8_lossy(&output.stdout);
-    assert!(text.starts_with("scope workspace\n"), "{text}");
-    assert!(text.contains("  ports 54"), "{text}");
+    assert!(text.starts_with("armada  "), "{text}");
+    assert!(text.contains("ports 54"), "{text}");
+    assert!(text.contains("scope workspace"), "{text}");
     assert!(
-        text.contains("RESERVED") || text.contains("CONFLICT"),
-        "a port's probed state is spelled as the envelope spells it: {text}"
+        // `status` speaks a probed port as the state of the component behind it,
+        // which is the question the reader is asking. The envelope keeps
+        // RESERVED / LISTENING / CONFLICT, unchanged.
+        text.contains("DOWN") || text.contains("CONFLICT") || text.contains("UP"),
+        "a component's state is a word in the first column: {text}"
     );
 }
 

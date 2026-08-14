@@ -1,0 +1,12 @@
+armada  3d9cc7ba  /scratch/repo                                  ports 5460-5469
+
+  STATUS    COMPONENT  PORT
+  UP        api        5460
+  CONFLICT  postgres   5462
+  DOWN      web        5461
+
+  STATUS    RESOURCE  DETAIL
+  held      lease     run:3d9cc7ba
+  reported  release   psql -c 'DROP DATABASE app_3d9cc7ba'
+
+OK  1 workspace, scope workspace
