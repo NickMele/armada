@@ -1,31 +1,36 @@
-# yaml-language-server: $schema=./workflow.schema.json
-# Design — explore a problem and come back with something to react to.
+# design — explore, articulate, hand over.
 #
-# Always ends at you. Design has no automated pass condition: there is no
-# command that can tell you an approach is the right one.
-description: Explore a problem space and produce something to react to.
+# Ends at you. Design has no automated pass condition: no command can tell you
+# an approach is right, so this workflow deliberately has no step that closes
+# itself (PLAN.md §14.6).
+#
+# This file is a starter. `guild init` copied it once and Armada does not touch
+# it again — `armada guild edit workflows/design.yml` is how it changes.
+name: design
+description: Explore a problem space and write down an approach, for you to judge.
+ends_at: human
 
 budget:
-  max_iterations: 15
-  max_tokens: 500000
-  max_wall_clock: 90m
+  iterations: 15
+  tokens: 500000
+  wall_clock: 90m
+  # Exhaustion is an outcome, never a silent stop (PLAN.md §14.3).
   on_exhausted: needs_human
 
 steps:
+  # `always` advances; it does not pass. This step's output is the next step's
+  # input, and there is nothing to verify about having read the code.
   - id: explore
-    skill: explore-problem
+    skill: explore-codebase
     verify: { must: always }
 
-  # The Drone picks the medium from the task, and says which it picked and why
-  # in its report. Visual or comparative work becomes a Lavish artifact; a
-  # decision that reads as prose becomes markdown. Getting this wrong is cheap
-  # and obvious, which is why it is the Drone's call rather than a branch here.
+  # The artifact is the point of the workflow, so its existence is the one
+  # mechanical thing worth checking before you are asked to read it.
   - id: articulate
-    skill: design-artifact
-    verify: { must: artifact_exists }
+    skill: write-design
+    verify:
+      must: artifact_exists
+      artifact: docs/design/*.md
 
-  - id: hand_over
-    skill: summarise-for-human
+  - id: hand-over
     verify: { must: human_approves }
-
-on_blocked: needs_human

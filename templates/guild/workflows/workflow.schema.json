@@ -1,208 +1,104 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/NickMele/armada/main/templates/guild/workflows/workflow.schema.json",
+  "$id": "https://armada.dev/schemas/workflow.json",
   "title": "Armada workflow",
-  "description": "An ordered set of steps, which skill runs each one, and what verdict advances it. PLAN.md \u00a714.4 and \u00a714.6. This file is the authoritative statement of the workflow contract; anything mirroring it is a mirror.",
+  "description": "An ordered set of steps, naming which skill runs each and what verdict advances it (PLAN.md §14.6). This schema is authoritative for the predicate enum, the step shape and the budget keys. What it cannot check — that a skill: resolves, that a scope: names real checks, that the workflow: graph is acyclic — is `armada guild verify`'s, the same schema-vs-verify split armada.yml has (PLAN.md §5).",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "description",
-    "budget",
-    "steps",
-    "on_blocked"
-  ],
+  "required": ["name", "steps"],
   "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "How the workflow is named on the command line and in a `workflow:` step."
+    },
     "description": {
       "type": "string",
-      "minLength": 1,
-      "description": "One line. Shown by `armada guild edit` and used when classification explains its choice."
+      "description": "One line. What this workflow is for and where it ends."
     },
-    "budget": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "max_iterations",
-        "max_tokens",
-        "max_wall_clock",
-        "on_exhausted"
-      ],
-      "description": "Ceilings for a Job running this workflow. Every field is required: a ceiling that can be omitted is a ceiling that is missing on the run where it mattered.",
-      "properties": {
-        "max_iterations": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "max_tokens": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "max_wall_clock": {
-          "type": "string",
-          "pattern": "^[1-9][0-9]*(s|m|h)$",
-          "description": "A duration such as `90m`. No bare numbers \u2014 a unitless ceiling is read wrong exactly once."
-        },
-        "on_exhausted": {
-          "description": "What happens when a ceiling is reached. Exhaustion is a first-class outcome, never a silent stop (PLAN.md \u00a714.3), which is why there is no `stop` option.",
-          "enum": [
-            "needs_human",
-            "blocked"
-          ]
-        }
-      }
+    "ends_at": {
+      "enum": ["human", "branch"],
+      "description": "Where a completed run leaves the work. `human` means the workflow has no automated pass condition and always comes back to you; `branch` means it can close on its own."
     },
+    "budget": { "$ref": "#/$defs/budget" },
     "steps": {
       "type": "array",
       "minItems": 1,
-      "items": {
-        "$ref": "#/$defs/step"
-      }
-    },
-    "on_blocked": {
-      "enum": [
-        "needs_human"
-      ],
-      "description": "One value today. It exists as a key rather than a constant because a future workflow may want to route a block somewhere other than the human, and a key that was never there cannot be added compatibly."
+      "items": { "$ref": "#/$defs/step" }
     }
   },
   "$defs": {
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["iterations", "tokens", "wall_clock", "on_exhausted"],
+      "description": "Ceilings are per workflow, because a step that ends at a human can take hours and one that closes autonomously bounds real spend (PLAN.md §14.6).",
+      "properties": {
+        "iterations": { "type": "integer", "minimum": 1 },
+        "tokens": { "type": "integer", "minimum": 1 },
+        "wall_clock": {
+          "type": "string",
+          "pattern": "^[0-9]+[smh]$",
+          "description": "A duration: `90m`, `2h`, `600s`."
+        },
+        "on_exhausted": {
+          "enum": ["needs_human"],
+          "description": "Exhaustion is an outcome, never a silent stop (PLAN.md §14.3). One value today, and an enum rather than a boolean so a second outcome can be added without changing the key."
+        }
+      }
+    },
     "step": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "verify"
-      ],
+      "required": ["id", "verify"],
+      "description": "A step names at most one of `skill:` (a Drone does it) or `workflow:` (a sub-Job does it). Neither means Fleet satisfies it, as `review` does. Two is ambiguous about who runs the step and is rejected here rather than at run time.",
+      "not": { "required": ["skill", "workflow"] },
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*$",
-          "description": "Unique within the workflow. Appears in the verdict envelope as `step`."
+          "pattern": "^[a-z][a-z0-9-]*$"
         },
         "skill": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]*$",
-          "description": "Which skill runs this step. Resolved against the guild's skills and the repo's (PLAN.md \u00a714.5) \u2014 `guild verify` checks it exists, the schema cannot. Omitted when the step is satisfied by Fleet rather than by a Drone, as `review` is."
-        },
-        "verify": {
-          "$ref": "#/$defs/verify"
+          "description": "A skill in your guild or in the repository. `armada guild verify` checks it resolves."
         },
         "workflow": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]*$",
-          "description": "Run another workflow as a sub-Job: its own uuid, worktree, budget and record. The step advances on the sub-Job's verdict. Mutually exclusive with `skill`. `guild verify` resolves the name and rejects cycles."
-        }
-      },
-      "oneOf": [
-        {
-          "required": [
-            "skill"
-          ],
-          "not": {
-            "required": [
-              "workflow"
-            ]
-          }
-        },
-        {
-          "required": [
-            "workflow"
-          ],
-          "not": {
-            "required": [
-              "skill"
-            ]
-          }
-        },
-        {
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "skill"
-                ]
-              },
-              {
-                "required": [
-                  "workflow"
-                ]
-              }
-            ]
-          }
-        }
-      ],
-      "description": "Exactly one of `skill` (a Drone does it), `workflow` (a sub-Job does it), or neither (Fleet satisfies it, as `review` does). Two of them is ambiguous about who runs the step."
-    },
-    "verify": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "must"
-      ],
-      "properties": {
-        "must": {
-          "description": "The predicate that advances this step. A verdict is only PASS if it carries evidence an external command produced (PLAN.md \u00a714.3), so every predicate below except `always` names something that produces evidence.",
-          "enum": [
-            "always",
-            "check_passes",
-            "failing_test_exists",
-            "artifact_exists",
-            "review_clean",
-            "human_approves",
-            "branch_exists",
-            "subjob_passed"
-          ]
+          "description": "Another workflow, run as a sub-Job with its own uuid, worktree, budget and record. The graph must be acyclic; `armada guild verify` rejects a cycle."
         },
         "scope": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9:_-]*$"
-          },
-          "description": "Check ids or component:check selectors, passed to `armada manifest check --scope`. Only meaningful with `check_passes`; `guild verify` resolves each against the workspace's config."
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "must": {
-                "const": "check_passes"
-              }
-            },
-            "required": [
-              "must"
-            ]
-          },
-          "then": {
-            "required": [
-              "scope"
-            ],
-            "description": "An unscoped `check_passes` would run every check in the repo, which is both slow and not what any step means."
-          }
+          "type": "string",
+          "description": "What `check_passes` runs against, in armada.yml's selector grammar."
         },
-        {
-          "if": {
-            "properties": {
-              "must": {
-                "not": {
-                  "const": "check_passes"
-                }
-              }
+        "verify": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["must"],
+          "properties": {
+            "must": { "$ref": "#/$defs/predicate" },
+            "test": {
+              "type": "string",
+              "description": "The test `failing_test_exists` names. Required by that predicate and meaningless to every other."
             },
-            "required": [
-              "must"
-            ]
-          },
-          "then": {
-            "not": {
-              "required": [
-                "scope"
-              ]
-            },
-            "description": "`scope` on any other predicate is silently ignored at run time, which is how a workflow ends up gating on nothing."
+            "artifact": {
+              "type": "string",
+              "description": "The path `artifact_exists` names."
+            }
           }
         }
+      }
+    },
+    "predicate": {
+      "description": "The whole grammar (PLAN.md §14.6). A step advances when its predicate holds and the verdict carries evidence — an agent asserting `tests pass` is not evidence and an exit code is.",
+      "enum": [
+        "always",
+        "check_passes",
+        "failing_test_exists",
+        "artifact_exists",
+        "review_clean",
+        "human_approves",
+        "branch_exists",
+        "subjob_passed"
       ]
     }
   }

@@ -1,0 +1,26 @@
+[package]
+name = "armada-guild"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The Guild module: your voice, skills, hooks, subagents and workflows, synced between machines."
+
+# Guild and Manifest are **siblings** and neither may name the other
+# (ARCHITECTURE.md §1.9): Manifest describes a repository, Guild describes a
+# person, and a dependency in either direction would mean one of those
+# descriptions had leaked into the other. So the two facts Guild would
+# otherwise borrow from `armada-manifest` — where `~/.armada` is, and how to
+# read `machine.yml` — are passed in as paths by the caller instead.
+#
+# `cargo xtask boundaries` enforces that; if it fails, the design is wrong.
+[dependencies]
+armada-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml_ng = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
