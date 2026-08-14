@@ -11,6 +11,7 @@
 pub mod banner;
 pub mod help;
 pub mod palette;
+pub mod progress;
 pub mod style;
 pub mod table;
 pub mod term;

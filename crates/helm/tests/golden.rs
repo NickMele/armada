@@ -306,6 +306,9 @@ fn check_matches_its_snapshot() {
                 json: true,
                 ..Default::default()
             },
+            // A snapshot has no terminal watching it, and progress that reached
+            // this payload would be the exact bug `Silent` exists to prevent.
+            &mut armada_helm::render::progress::Silent,
         )
     });
     assert_golden("check", &json);

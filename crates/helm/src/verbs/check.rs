@@ -40,6 +40,7 @@ use std::path::PathBuf;
 
 use crate::app::{self, App};
 use crate::args::Check;
+use crate::render::progress::Progress;
 use crate::verbs::{load_config, Output};
 
 /// How long the loop sleeps between turns when it has nothing else to do.
@@ -52,9 +53,16 @@ use crate::verbs::{load_config, Output};
 const TURN_MS: u64 = 20;
 
 /// Run it.
+///
+/// `progress` is told what is happening as it happens. **It writes to stderr or
+/// to nothing at all** (`render::progress`) — stdout carries the result, and a
+/// spinner on it would reach `| jq`. It is a parameter rather than something
+/// this module reaches for, because whether there is a person watching is a fact
+/// about the invocation, not about the run.
 pub fn run<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     args: &Check,
+    progress: &mut dyn Progress,
 ) -> Result<Output, ArmadaError> {
     let (workspace, config) = load_config(app)?;
     let selection = select_checks(&config, args)?;
@@ -78,10 +86,14 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     };
     let lease = LeaseId::run(workspace.id.clone());
     let envelope = app::with_lease(app, lease, policy, None, |app| {
-        execute(app, &workspace, plans, args)
-    })?;
+        execute(app, &workspace, plans, args, progress)
+    });
+    // **The line is erased whichever way the run ended**, including the lease
+    // acquisition failing before anything was drawn. A failure report printed
+    // over half a spinner frame is the one moment it would matter most.
+    progress.finish();
 
-    Ok(Output::Check(Box::new(envelope)))
+    Ok(Output::Check(Box::new(envelope?)))
 }
 
 // ------------------------------------------------------------------ selection
@@ -375,6 +387,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     workspace: &Workspace,
     plans: Vec<Plan>,
     args: &Check,
+    progress: &mut dyn Progress,
 ) -> Result<Envelope<CheckData>, ArmadaError> {
     let run_id = RunId::mint(app.ctx.now.wall_ms(), entropy(app));
     app.run = Some(run_id.clone());
@@ -386,15 +399,17 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     runs::prepare(&workspace.root, &run_id)?;
 
     let slots = args.jobs.unwrap_or(app.machine.cpu_slots);
-    let plans = plans
+    let plans: Vec<Plan> = plans
         .into_iter()
         .map(|mut plan| {
             plan.log = Some(runs::log_reference(&run_id, &plan.id));
             plan
         })
         .collect();
+    progress.begin(plans.len());
 
     let mut loop_state = Loop {
+        progress,
         state: State::new(workspace.root.clone(), slots, plans),
         journal: Journal::default(),
         children: BTreeMap::new(),
@@ -443,7 +458,11 @@ fn execute<R: Run, C: Clock, F: Fetch>(
 }
 
 /// Everything the loop carries that is not the scheduler's.
-struct Loop {
+struct Loop<'a> {
+    /// Told what is happening as it happens, and writes to stderr or nowhere.
+    /// Borrowed rather than owned so the caller can erase the line after the
+    /// loop has ended — including when it ended by failing.
+    progress: &'a mut dyn Progress,
     state: State,
     journal: Journal,
     children: BTreeMap<CheckId, ProcessGroup>,
@@ -467,7 +486,7 @@ struct Loop {
 fn drive<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
-    it: &mut Loop,
+    it: &mut Loop<'_>,
 ) -> Result<(), ArmadaError> {
     // **The clock before the run, and that ordering is not cosmetic.** A pure
     // reducer cannot read a clock, so `Tick` is where it learns one — and a
@@ -503,6 +522,9 @@ fn drive<R: Run, C: Clock, F: Fetch>(
         // finished is more informative than a deadline that has not.
         collect_children(workspace, it, &mut queue);
         collect_deadlines(app, it, &mut queue);
+        // One turn of the loop went by, which is the only clock a spinner needs
+        // — and the only one it may have, since the real one is injected.
+        it.progress.tick();
         queue.push(Event::Tick {
             now_mono: app.ctx.now.mono(),
         });
@@ -520,7 +542,7 @@ fn empty() -> State {
 fn perform<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
-    it: &mut Loop,
+    it: &mut Loop<'_>,
     action: Action,
     queue: &mut Vec<Event>,
 ) -> Result<(), ArmadaError> {
@@ -564,6 +586,11 @@ fn perform<R: Run, C: Clock, F: Fetch>(
         // what keeps "every spawned child is waited on" true by construction.
         Action::Reap => Ok(()),
         Action::Emit { result } => {
+            // **Reported here rather than at the spawn's exit**, because this is
+            // the point the scheduler considers the check answered — and a
+            // `WAITING` row emitted before a verdict is progress the watcher
+            // wants to see change.
+            it.progress.finished(result.id.as_str(), result.status);
             it.rows.insert(result.id.clone(), result);
             Ok(())
         }
@@ -581,7 +608,7 @@ fn perform<R: Run, C: Clock, F: Fetch>(
 /// rather than sorting here is what stops a second implementation of the
 /// property. Its CPU-slot entries are deliberately not used for *identity* —
 /// see [`Loop::held`].
-fn exclusives_of(workspace: &Workspace, it: &Loop, check: &CheckId) -> Vec<LeaseId> {
+fn exclusives_of(workspace: &Workspace, it: &Loop<'_>, check: &CheckId) -> Vec<LeaseId> {
     let Some(entry) = it.state.checks.get(check) else {
         return Vec::new();
     };
@@ -601,7 +628,7 @@ fn exclusives_of(workspace: &Workspace, it: &Loop, check: &CheckId) -> Vec<Lease
 fn acquire<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
-    it: &mut Loop,
+    it: &mut Loop<'_>,
     check: &CheckId,
     kind: LeaseKind,
     queue: &mut Vec<Event>,
@@ -699,7 +726,7 @@ fn acquire<R: Run, C: Clock, F: Fetch>(
 fn spawn<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
-    it: &mut Loop,
+    it: &mut Loop<'_>,
     check: &CheckId,
     argv: Vec<String>,
     env: EnvDelta,
@@ -744,6 +771,10 @@ fn spawn<R: Run, C: Clock, F: Fetch>(
                 });
             }
             it.children.insert(check.clone(), group);
+            // Reported once the child actually exists. A check named the moment
+            // it was *proposed* would appear in the running list and then
+            // vanish when the spawn failed.
+            it.progress.started(check.as_str());
         }
         // **The class is decided here and not in the core**, because the same
         // failure is a different class depending on who asked: `docker` missing
@@ -760,7 +791,7 @@ fn spawn<R: Run, C: Clock, F: Fetch>(
     Ok(())
 }
 
-fn collect_children(workspace: &Workspace, it: &mut Loop, queue: &mut Vec<Event>) {
+fn collect_children(workspace: &Workspace, it: &mut Loop<'_>, queue: &mut Vec<Event>) {
     // Two passes on purpose: polling needs the child map mutably and recording
     // needs the journal, and taking both at once is the borrow the compiler is
     // right to refuse.
@@ -805,7 +836,7 @@ fn collect_children(workspace: &Workspace, it: &mut Loop, queue: &mut Vec<Event>
 /// from disagreeing about when a check is late.
 fn collect_deadlines<R: Run, C: Clock, F: Fetch>(
     app: &App<R, C, F>,
-    it: &Loop,
+    it: &Loop<'_>,
     queue: &mut Vec<Event>,
 ) {
     let now = app.ctx.now.mono();

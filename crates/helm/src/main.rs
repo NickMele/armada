@@ -77,12 +77,47 @@ fn main() -> ExitCode {
         }
         other => {
             let json = json_wanted(&other);
-            match dispatch(other, &cwd, home.as_deref(), inherited) {
+            // **The colour decision, taken a second time for the second
+            // stream.** Not a second decision: the same function, asked about
+            // stderr. `armada manifest check | jq` is a piped stdout and a
+            // terminal stderr, and it wants an unstyled payload *and* a live
+            // spinner — one answer could not express that.
+            let mut progress = reporter(
+                json,
+                Style::decide(parsed.color, terminal.stderr_is_tty, no_color),
+                terminal,
+            );
+            match dispatch(other, &cwd, home.as_deref(), inherited, progress.as_mut()) {
                 Ok(output) => emit(output, json, style),
                 Err(error) => fail(error, json, style),
             }
         }
     }
+}
+
+/// Who, if anyone, is watching this run go by.
+///
+/// **Three conditions, and all three must hold**: stderr is a terminal, so there
+/// is a person rather than a log file; colour is on, since a caller who turned
+/// it off did not ask for an animation either; and the caller did not ask for
+/// `--json`, which is a parser waiting for one payload and nothing else.
+///
+/// A spinner is drawn on **stderr and never stdout** (PLAN.md §3.1.1): stdout
+/// carries the result, and a frame of animation in it is what breaks the one
+/// consumer the envelope exists for.
+fn reporter(
+    json: bool,
+    style: Style,
+    terminal: render::term::Terminal,
+) -> Box<dyn render::progress::Progress> {
+    if json || !terminal.stderr_is_tty || !style.enabled() {
+        return Box::new(render::progress::Silent);
+    }
+    Box::new(render::progress::Spinner::new(
+        std::io::stderr(),
+        style,
+        terminal,
+    ))
 }
 
 fn json_wanted(invocation: &Invocation) -> bool {
@@ -100,6 +135,7 @@ fn dispatch(
     cwd: &std::path::Path,
     home: Option<&std::path::Path>,
     inherited: BTreeMap<String, String>,
+    progress: &mut dyn render::progress::Progress,
 ) -> Result<Output, ArmadaError> {
     let home = home.ok_or_else(|| ArmadaError {
         class: ErrClass::Environment,
@@ -179,7 +215,7 @@ fn dispatch(
                 force_rebuild,
             },
         ),
-        Invocation::Check(check) => verbs::check::run(&mut app, &check),
+        Invocation::Check(check) => verbs::check::run(&mut app, &check, progress),
         Invocation::Dispatch { name, argv, json } => {
             verbs::dispatch::run(&mut app, &name, &argv, json)
         }
