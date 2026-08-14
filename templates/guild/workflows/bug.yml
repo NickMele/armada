@@ -1,0 +1,31 @@
+# Bug — reproduce it first, then fix it.
+#
+# `failing_test_exists` is the gate that makes this workflow trustworthy: the
+# test must FAIL before any fix is written. Without it a Drone can "fix" a bug
+# it never reproduced and close green, which is the failure mode that makes
+# autonomous bug-fixing worthless.
+description: Reproduce a failure with a failing test, then fix it.
+
+budget:
+  max_iterations: 20
+  max_tokens: 600_000
+  max_wall_clock: 90m
+  on_exhausted: needs_human
+
+steps:
+  - id: reproduce
+    skill: reproduce-bug
+    verify: { must: failing_test_exists }
+
+  - id: fix
+    skill: implement
+    verify: { must: check_passes, scope: [test, lint] }
+
+  - id: review
+    verify: { must: review_clean }
+
+  - id: land
+    skill: commit-local
+    verify: { must: branch_exists }
+
+on_blocked: needs_human

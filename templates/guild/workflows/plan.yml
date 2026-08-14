@@ -1,0 +1,27 @@
+# Plan — turn a rough intent into a specification someone can execute.
+#
+# Always ends at you, and nothing builds until you approve. A plan workflow
+# that spawned its own implementation would be a feature workflow with extra
+# steps and no approval gate.
+description: Turn a rough intent into an executable plan.
+
+budget:
+  max_iterations: 15
+  max_tokens: 500_000
+  max_wall_clock: 90m
+  on_exhausted: needs_human
+
+steps:
+  - id: research
+    skill: research-codebase
+    verify: { must: always }
+
+  - id: write_plan
+    skill: write-plan
+    verify: { must: artifact_exists }
+
+  - id: hand_over
+    skill: summarise-for-human
+    verify: { must: human_approves }
+
+on_blocked: needs_human

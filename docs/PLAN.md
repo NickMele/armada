@@ -3316,3 +3316,58 @@ does not.
 **The persona also carries how you want to be spoken to** — bottom line first, brief, tables
 over prose, and every item labelled with who acts. That is voice, it belongs to the guild, and
 it is the half of Guild that plugins cannot carry (§13.3).
+
+### 14.6 The four workflows, and the predicates they gate on
+
+The starter set ships at [`templates/guild/workflows/`](../templates/guild/workflows/) and is
+copied into `~/.armada/guild/workflows/` by `guild init` (§13.4). From that moment they are
+yours — a workflow is data precisely so "run review before the check instead of after" is a
+one-line edit rather than a release.
+
+| Workflow | Shape | Ends at |
+|---|---|---|
+| **design** | explore → articulate → hand over | You. Design has no automated pass condition — no command can tell you an approach is right. |
+| **plan** | research → write plan → hand over | You, **before anything builds.** |
+| **feature** | plan → **approval** → implement → review → land | A local branch, but only after you approved the approach. |
+| **bug** | reproduce → fix → review → land | A local branch. The test must **fail first**. |
+
+**`feature` stops for approval and `plan` does not spawn a build.** Both follow from the same
+observation: the expensive failure is not bad code, it is correct code solving the wrong
+problem. A `check` suite cannot detect that and neither can a reviewer; only you can, and the
+cheapest moment is before the work exists.
+
+#### The verify predicates
+
+`verify: { must: <predicate> }` is the whole grammar. A step advances when its predicate holds
+and the verdict carries evidence (§14.3).
+
+| Predicate | Holds when | Evidence |
+|---|---|---|
+| `always` | Immediately. For steps whose output is the input to the next one. | none — it advances, it does not pass |
+| `check_passes` | `armada manifest check --scope …` exits `0` | the envelope, with per-check exit codes |
+| `failing_test_exists` | A named test exists **and fails** | the check run that reports it failing |
+| `artifact_exists` | The named artifact is on disk | its path and size |
+| `review_clean` | A reviewer Job returns no blocking findings | the reviewer's verdict envelope |
+| `human_approves` | You answered in the affirmative | the inbox entry and your answer |
+| `branch_exists` | The work is on a local branch | `git rev-parse` |
+
+**`review_clean` is satisfied by Fleet, not by the Drone.** Fleet spawns a second Job with the
+diff and the original task, in its own context. The Drone under review never calls
+`fleet.spawn` — a worker able to spawn workers is a fork bomb with a budget (§15, and the
+worker toolbelt in [`commands/helm/mcp.md`](commands/helm/mcp.md)). An independent context is
+also the point: a reviewer that shares the implementer's context shares its blind spots.
+
+**`human_approves` and `failing_test_exists` are the two that make the set trustworthy.**
+Without the first, a Drone builds the wrong thing efficiently. Without the second, a Drone
+"fixes" a bug it never reproduced and closes green.
+
+#### Ceilings are per workflow
+
+| | iterations | tokens | wall clock |
+|---|---:|---:|---:|
+| design · plan | 15 | 500k | 90m |
+| feature · bug | 20 | 600k | 90m |
+
+Design and plan end at you regardless, so their ceiling is a runaway guard rather than a
+budget. Feature and bug can close autonomously, so theirs bounds real spend. All four use
+`on_exhausted: needs_human` — **exhaustion is an outcome, never a silent stop** (§14.3).

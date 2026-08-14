@@ -1,0 +1,33 @@
+# Feature — build something new, with your approval on the approach.
+#
+# The plan step STOPS. `human_approves` raises the plan to the inbox and waits;
+# nothing is written until you answer. That is the whole difference between
+# this and letting a Drone loose on a one-line prompt.
+description: Build a feature, pausing for approval on the approach before writing code.
+
+budget:
+  max_iterations: 20
+  max_tokens: 600_000
+  max_wall_clock: 90m
+  on_exhausted: needs_human
+
+steps:
+  - id: plan
+    skill: write-plan
+    verify: { must: human_approves }
+
+  - id: implement
+    skill: implement
+    verify: { must: check_passes, scope: [test, lint, types] }
+
+  # Fleet spawns the reviewer, not this Drone. A Drone that can spawn Drones is
+  # a fork bomb with a budget, so `review_clean` is satisfied by Fleet starting
+  # a second Job with the diff and the original task, in its own context.
+  - id: review
+    verify: { must: review_clean }
+
+  - id: land
+    skill: commit-local
+    verify: { must: branch_exists }
+
+on_blocked: needs_human

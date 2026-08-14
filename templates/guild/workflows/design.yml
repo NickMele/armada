@@ -1,0 +1,30 @@
+# Design — explore a problem and come back with something to react to.
+#
+# Always ends at you. Design has no automated pass condition: there is no
+# command that can tell you an approach is the right one.
+description: Explore a problem space and produce something to react to.
+
+budget:
+  max_iterations: 15
+  max_tokens: 500_000
+  max_wall_clock: 90m
+  on_exhausted: needs_human
+
+steps:
+  - id: explore
+    skill: explore-problem
+    verify: { must: always }
+
+  # The Drone picks the medium from the task, and says which it picked and why
+  # in its report. Visual or comparative work becomes a Lavish artifact; a
+  # decision that reads as prose becomes markdown. Getting this wrong is cheap
+  # and obvious, which is why it is the Drone's call rather than a branch here.
+  - id: articulate
+    skill: design-artifact
+    verify: { must: artifact_exists }
+
+  - id: hand_over
+    skill: summarise-for-human
+    verify: { must: human_approves }
+
+on_blocked: needs_human
