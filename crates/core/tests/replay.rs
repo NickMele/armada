@@ -18,12 +18,12 @@
 //! back off disk by a later process, so "replays in memory" is not the claim
 //! being made — the claim is that what is written down is enough.
 
-use charkit_core::dispatch::Journal;
-use charkit_core::error::ErrClass;
-use charkit_core::id::WorkspaceId;
-use charkit_core::lease::LeaseKind;
-use charkit_core::run::{RunId, RunRecord};
-use charkit_core::schedule::{replay, step, Action, CheckId, EnvDelta, Event, Phase, Plan, State};
+use armada_core::dispatch::Journal;
+use armada_core::error::ErrClass;
+use armada_core::id::WorkspaceId;
+use armada_core::lease::LeaseKind;
+use armada_core::run::{RunId, RunRecord};
+use armada_core::schedule::{replay, step, Action, CheckId, EnvDelta, Event, Phase, Plan, State};
 use std::path::PathBuf;
 
 /// A deterministic generator, so a failure is reproducible from its seed.
@@ -115,7 +115,7 @@ fn drive(seed: u64, plans: Vec<Plan>, slots: u32) -> (State, Vec<Event>) {
                 }
                 Action::Spawn { check, .. } => {
                     if let Some(pgid) =
-                        charkit_core::schedule::Pgid::new(4_000 + random.below(50) as i32)
+                        armada_core::schedule::Pgid::new(4_000 + random.below(50) as i32)
                     {
                         answers.push(Event::ChildSpawned {
                             check: check.clone(),

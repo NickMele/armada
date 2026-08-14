@@ -1,7 +1,7 @@
-//! charkit's pure core.
+//! Armada's pure core.
 //!
 //! Decisions are functions over data (`ARCHITECTURE.md` §1.2). Nothing here
-//! spawns, writes, kills or labels — those live in `adapters`, and the three
+//! spawns, writes, kills or labels — those live in `manifest`, and the three
 //! injected seams reach them. Parsing a string is a pure function; reading the
 //! file it came from is not, and is somebody else's job.
 //!

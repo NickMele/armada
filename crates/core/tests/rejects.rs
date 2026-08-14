@@ -11,7 +11,7 @@
 //! (`docs/traps.md`), and PLAN.md §4.1 says it must be unrepresentable rather
 //! than warned about.
 
-use charkit_core::config::{parse, resolve, Defaults, SCHEMA};
+use armada_core::config::{parse, resolve, Defaults, SCHEMA};
 
 fn rejected_by_schema(doc: &str) -> bool {
     let mut schemas = boon::Schemas::new();
@@ -301,7 +301,7 @@ fn every_config_error_carries_a_where_and_a_next_action() {
                 resolve(config, &Defaults::built_in(), "char.yml").expect_err("should not resolve")
             }
         };
-        assert_eq!(err.class, charkit_core::error::ErrClass::BadConfig);
+        assert_eq!(err.class, armada_core::error::ErrClass::BadConfig);
         assert!(
             err.r#where.starts_with("char.yml"),
             "where was {}",

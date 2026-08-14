@@ -5,13 +5,13 @@
 //! second copy of the compile step is how one of them ends up validating
 //! against a schema the other does not.
 
-/// Compile [`charkit_core::config::SCHEMA`] into something documents can be
+/// Compile [`armada_core::config::SCHEMA`] into something documents can be
 /// validated against.
 pub fn compile_schema() -> (boon::Schemas, boon::SchemaIndex) {
     let mut schemas = boon::Schemas::new();
     let mut compiler = boon::Compiler::new();
     let value: serde_json::Value =
-        serde_json::from_str(charkit_core::config::SCHEMA).expect("schema is JSON");
+        serde_json::from_str(armada_core::config::SCHEMA).expect("schema is JSON");
     compiler
         .add_resource("char.schema.json", value)
         .expect("schema is a usable resource");

@@ -22,7 +22,7 @@
 
 mod support;
 
-use charkit_core::config::{parse, resolve, Defaults, ResolvedCheck, Scope};
+use armada_core::config::{parse, resolve, Defaults, ResolvedCheck, Scope};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use support::compile_schema;

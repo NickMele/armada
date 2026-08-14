@@ -1,15 +1,15 @@
 //! The layers contract, checked mechanically.
 //!
 //! `ARCHITECTURE.md` §1.5 states it: **dependencies point inward.** `core` is
-//! pure and imports nothing of charkit's; `adapters` depends on core traits
-//! only; `cli` is the only crate that depends on both and wires them together.
+//! pure and imports nothing of Armada's; `manifest` depends on core traits
+//! only; `helm` is the only crate that depends on both and wires them together.
 //! §2.4 lists "crate boundaries" as one of the six things the merge gate runs,
 //! and §1.5 says it should be there "from phase 1 — before there is anything to
 //! untangle."
 //!
 //! **Why a check at all, when the crate graph already enforces it.** It
 //! enforces the direction — a cycle will not compile — but nothing stops
-//! someone adding `charkit-adapters` to `core`'s manifest, which compiles fine
+//! someone adding `armada-manifest` to `core`'s manifest, which compiles fine
 //! and quietly inverts the design. The failure is a one-line diff in a file
 //! nobody reads twice, and the consequence is that the pure core acquires I/O.
 //!
@@ -18,7 +18,7 @@
 //! and the workspace-inherited form), and a regex that misses one reports a
 //! clean repository. `cargo metadata` has already resolved all three, and it
 //! reports dev- and build-dependencies too — which matter here: a *test* in
-//! core that reaches for adapters is the same leak arriving through a door
+//! core that reaches for `manifest` is the same leak arriving through a door
 //! marked `[dev-dependencies]`.
 
 use crate::docs::Finding;
@@ -27,17 +27,17 @@ use std::path::Path;
 use std::process::Command;
 
 /// Who may depend on whom. Anything not listed here may depend on nothing of
-/// charkit's, and any charkit crate not listed at all is a finding: a new crate
+/// Armada's, and any Armada crate not listed at all is a finding: a new crate
 /// has to state its place in the layering deliberately.
 const ALLOWED: &[(&str, &[&str])] = &[
-    ("charkit-core", &[]),
-    ("charkit-adapters", &["charkit-core"]),
-    ("charkit", &["charkit-core", "charkit-adapters"]),
+    ("armada-core", &[]),
+    ("armada-manifest", &["armada-core"]),
+    ("armada-helm", &["armada-core", "armada-manifest"]),
     ("xtask", &[]),
 ];
 
 /// The prefix that marks a package as one of ours.
-const OURS: &str = "charkit";
+const OURS: &str = "armada";
 
 #[derive(Deserialize)]
 struct Metadata {
@@ -111,7 +111,7 @@ fn findings(metadata: &Metadata) -> Vec<Finding> {
                     dependency.name,
                     package.name,
                     if allowed.is_empty() {
-                        "nothing of charkit's".to_string()
+                        "nothing of Armada's".to_string()
                     } else {
                         allowed.join(", ")
                     }
@@ -152,11 +152,11 @@ mod tests {
     #[test]
     fn the_layering_this_repo_has_is_accepted() {
         let m = metadata(vec![
-            package("charkit-core", &[("serde", "normal"), ("boon", "dev")]),
-            package("charkit-adapters", &[("charkit-core", "normal")]),
+            package("armada-core", &[("serde", "normal"), ("boon", "dev")]),
+            package("armada-manifest", &[("armada-core", "normal")]),
             package(
-                "charkit",
-                &[("charkit-core", "normal"), ("charkit-adapters", "normal")],
+                "armada-helm",
+                &[("armada-core", "normal"), ("armada-manifest", "normal")],
             ),
             package("xtask", &[("regex", "normal")]),
         ]);
@@ -166,8 +166,8 @@ mod tests {
     #[test]
     fn the_core_may_not_reach_outward() {
         let m = metadata(vec![package(
-            "charkit-core",
-            &[("charkit-adapters", "normal")],
+            "armada-core",
+            &[("armada-manifest", "normal")],
         )]);
         let found = findings(&m);
         assert_eq!(found.len(), 1);
@@ -177,18 +177,18 @@ mod tests {
     /// The same leak, arriving through a door marked `[dev-dependencies]`.
     #[test]
     fn a_dev_dependency_is_the_same_leak() {
-        let m = metadata(vec![package(
-            "charkit-core",
-            &[("charkit-adapters", "dev")],
-        )]);
+        let m = metadata(vec![package("armada-core", &[("armada-manifest", "dev")])]);
         let found = findings(&m);
         assert_eq!(found.len(), 1);
         assert!(found[0].message.contains("(dev)"), "{}", found[0].message);
     }
 
     #[test]
-    fn adapters_may_not_depend_on_the_cli() {
-        let m = metadata(vec![package("charkit-adapters", &[("charkit", "normal")])]);
+    fn the_shell_may_not_depend_on_the_wiring() {
+        let m = metadata(vec![package(
+            "armada-manifest",
+            &[("armada-helm", "normal")],
+        )]);
         assert_eq!(findings(&m).len(), 1);
     }
 
@@ -196,7 +196,7 @@ mod tests {
     /// one by being unlisted.
     #[test]
     fn a_workspace_member_nobody_placed_is_a_finding() {
-        let m = metadata(vec![package("charkit-mcp", &[])]);
+        let m = metadata(vec![package("armada-mcp", &[])]);
         let found = findings(&m);
         assert_eq!(found.len(), 1);
         assert!(found[0].message.contains("layers contract"));

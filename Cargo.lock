@@ -31,6 +31,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e149dc73cd30538307e7ffa2acd3d2221148eaeed4871f246657b1c3eaa1cbd2"
 
 [[package]]
+name = "armada-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "boon",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha1_smol",
+]
+
+[[package]]
+name = "armada-helm"
+version = "0.1.0"
+dependencies = [
+ "armada-core",
+ "armada-manifest",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "armada-manifest"
+version = "0.1.0"
+dependencies = [
+ "armada-core",
+ "libc",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -115,43 +152,6 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
-
-[[package]]
-name = "charkit"
-version = "0.1.0"
-dependencies = [
- "charkit-adapters",
- "charkit-core",
- "rusqlite",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "charkit-adapters"
-version = "0.1.0"
-dependencies = [
- "charkit-core",
- "libc",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "charkit-core"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "boon",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "sha1_smol",
-]
 
 [[package]]
 name = "constant_time_eq"

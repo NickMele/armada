@@ -1,16 +1,16 @@
 [package]
-name = "charkit-core"
+name = "armada-core"
 version = "0.1.0"
 publish = false
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "charkit's pure core: decisions as functions over data. No I/O, ever."
+description = "Armada's pure core: decisions as functions over data. No I/O, ever."
 
 # ARCHITECTURE.md §1.5: pure data crates only. Nothing here may open a file, a
 # socket or a process — parsing a string is not I/O, reading the file is, and
-# reading it lives in `adapters`.
+# reading it lives in `manifest`.
 [dependencies]
 serde = { workspace = true }
 # The `--json` envelope is serialized here, from structs. Measured: a

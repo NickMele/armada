@@ -20,7 +20,7 @@
 
 mod support;
 
-use charkit_core::config::{parse, resolve, Defaults, SCHEMA};
+use armada_core::config::{parse, resolve, Defaults, SCHEMA};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use support::compile_schema;
