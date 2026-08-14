@@ -5,6 +5,7 @@
 //! — the shell attempting what the core proposed — and nothing that decides
 //! anything on its own.
 
+pub mod check;
 pub mod clean;
 pub mod dispatch;
 pub mod init;
@@ -15,7 +16,8 @@ use charkit_adapters::machine::MachineConfig;
 use charkit_core::config::{self, ResolvedConfig};
 use charkit_core::ctx::{Clock, Fetch, Run};
 use charkit_core::envelope::{
-    CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun, StatusData,
+    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
+    StatusData,
 };
 use charkit_core::workspace::Workspace;
 
@@ -34,6 +36,10 @@ pub enum Output {
     CleanDryRun(Box<Envelope<CleanDryRun>>),
     /// `char status`.
     Status(Box<Envelope<StatusData>>),
+    /// `char check`.
+    Check(Box<Envelope<CheckData>>),
+    /// `char check --dry-run`.
+    CheckDryRun(Box<Envelope<CheckDryRun>>),
     /// A dispatched `commands:` entry.
     Dispatch(Box<Envelope<DispatchData>>),
 }
@@ -47,6 +53,8 @@ impl Output {
             Output::Clean(e) => e.to_json(),
             Output::CleanDryRun(e) => e.to_json(),
             Output::Status(e) => e.to_json(),
+            Output::Check(e) => e.to_json(),
+            Output::CheckDryRun(e) => e.to_json(),
             Output::Dispatch(e) => e.to_json(),
         }
     }
@@ -76,6 +84,8 @@ impl Output {
             Output::Clean(e) => e.exit_code(),
             Output::CleanDryRun(e) => e.exit_code(),
             Output::Status(e) => e.exit_code(),
+            Output::Check(e) => e.exit_code(),
+            Output::CheckDryRun(e) => e.exit_code(),
             Output::Dispatch(e) => e.exit_code(),
         }
     }

@@ -15,7 +15,7 @@
 | **0.1** | Architecture principles — carried forward | |
 | **0.2** | SDLC principles — two retire in M1, the rest carried forward | |
 | **8** | The milestones — M0 through M4 | 8.1 why this order · 8.2 M0 · 8.3 M1 · 8.4 M2 · 8.5 M3 · 8.6 M4 |
-| **9** | Source material | 9.1 **M0 spike findings** · 9.2 prior art |
+| **9** | Source material | 9.1 **M0 spike findings** · 9.2 prior art · 9.3 **check-engine findings** |
 | **11** | Risks | |
 | **12** | Notes for the implementing agent | |
 
@@ -60,7 +60,7 @@ that matters when the whole thing is built in evenings.
 | **M1** | all | One tree: rename, four crates, one binary, private repo, subtraction | next |
 | **M2** | Guild | `armada init`, the interview, import from `~/.claude/`, sync | |
 | **M3** | Fleet + Helm | Jobs and Drones, budgets, inbox — **and Helm and the Bridge on top** | the product |
-| **M4** | Fleet | Workflow loops with real verification | blocked on `manifest check` |
+| **M4** | Fleet | Workflow loops with real verification | check engine landed — §9.3 |
 
 ### 8.1 Why this order, and the one thing that reordered it
 
@@ -218,11 +218,14 @@ that is yours — without you naming a workflow, a worktree or a port.
 The loop that runs until a task is complete, terminating on a verdict or a ceiling.
 [`PLAN.md`](PLAN.md) §14.3 has the envelope and the four verdicts.
 
-**Blocked on `armada manifest check`.** A verdict is only `PASS` if it carries evidence an
-external command produced; an agent asserting "tests pass" is not evidence and an exit code is.
-Manifest's remaining verbs — `up`, `down`, `check`, `config`, `agents-md`, `explain` — are
-therefore first-class Armada work and not background work. `check` is the one that unblocks
-this milestone.
+**`check` has landed; two of its flags have not.** A verdict is only `PASS` if it carries
+evidence an external command produced; an agent asserting "tests pass" is not evidence and an
+exit code is. The engine that produces that exit code is built and dogfooded — scope
+resolution, the scheduler, the run directory and verdict aggregation, with what it settled and
+the one gap it leaves open in §9.3. What it still refuses by name is `--detach` and `--status`,
+so a loop can run a check to completion but cannot yet start one and poll it. Manifest's
+remaining verbs — `up`, `down`, `config`, `agents-md`, `explain` — are first-class Armada work
+and not background work.
 
 **Done when:** a bug workflow reproduces a failure, writes a test that fails first, fixes it,
 gets `check` green, and lands on a local branch, with no human turn in the middle and a hard
@@ -331,13 +334,90 @@ portable personal guild. Adopting OpenCode is not the shortcut it appears to be 
 harness switch, and the entire guild is Claude Code shaped. Its session verb set is worth
 reading as a design reference for [`PLAN.md`](PLAN.md) §14 all the same.
 
+### 9.3 Check-engine findings
+
+Manifest's check engine — scope resolution, the scheduler, the run directory and verdict
+aggregation — is built and dogfooded ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.6). It is recorded
+here for the same reason §9.1 is: these are things that ran, and later work codes against them.
+
+#### What the check engine settled
+
+Six things [`PLAN.md`](PLAN.md) specified without deciding, and the answers everything after
+this codes against. Written down for the same reason the ownership layer's were: two
+implementers deciding these separately produce two incompatible engines.
+
+| # | Decision | Why it landed there |
+|---|---|---|
+| 1 | **A run id is 16 Crockford base32 characters: 10 of wall-clock milliseconds, then 6 of per-process entropy.** | `PLAN.md` writes `01J8X2` in `data.run_id`, in `.char/run/01J8X2/logs/` and in `char explain --run 01J8X2` — and those six characters are exactly the leading edge of a time-ordered base32 id, so this is the illustration made real. Time-ordered is load-bearing: retention keeps "the most recent N", and an id that did not sort would need every run's mtime read off a filesystem that may have been restored from a backup. |
+| 2 | **A CPU slot's identity is the store's, chosen all-or-nothing inside one transaction.** | `lease::acquisition_order` numbers a check's slots `0..cost`, which is right for *ordering* and wrong for *naming*: two checks each asking for slot `0` deadlock the moment the second blocks on the first — measured, and it hung `char check` on its first real run. All-or-nothing matters as much: taking three of four and waiting for the fourth lets two runs hold half the machine each, and no acquisition order fixes that, because resources within the class are interchangeable. `acquisition_order` keeps its job — how many, and exclusives before slots. |
+| 3 | **`Event::Tick` is the one variant added to [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.2's floor, and the shell ticks before it starts.** | `ARCHITECTURE.md` §1.2 records the cost of a pure reducer as "`now` is carried on every event"; spelling that as a variant is the escape hatch the floor names, and it changes none of the ten variants it writes out. The ordering is not cosmetic: a `Started` that arrives first computes every deadline from a `now_mono` of zero, and the first real tick then jumps past it. Measured — every check timed out immediately and reported a duration of eleven days. |
+| 4 | **A check's verdict row carries `classifies`, not `attempted`.** | The two turned out not to be the same question. A cascaded `ABORTED` never ran *and* must not set the run's class; a check blocked on a service that is not running also never ran and *must*, because `bad_invocation` outranks a test failure precisely so the caller fixes the invocation first. Naming the field for what happened would have marked a blocked check `attempted: true` while it was never attempted. |
+| 5 | **A `SKIPPED` prerequisite satisfies `needs:`.** | `PLAN.md` §4.1 says a check id in `needs:` "must have **passed** in this run". Read literally that cascades an `ABORTED` through every dependent of a check that had no matching files — turning a clean tree into a failing run, which is the mirror image of the hole `--all-files` exists to close. Nothing failed, so nothing is aborted. Recorded because it is an ambiguity in the spec rather than a free choice. |
+| 6 | **`--detach` and `--status` are refused by name, as not built.** | `PLAN.md` §3 gives both to `check` and neither ships yet. Refused by name rather than as an unknown flag, because the flag *is* known and the honest answer is that char cannot do it yet — "unknown flag" sends an agent looking for a typo. The gap is stated here rather than left to be discovered. |
+
+#### One finding the check engine fixed rather than sent back
+
+Recorded because it was first written down as a defect in [`PLAN.md`](PLAN.md) and turned out to
+be a defect in the ownership layer's code, which is a distinction worth keeping.
+
+**The finding as first stated was wrong.** It read: `PLAN.md` §3.1 says the top-level error is
+"the strict maximum over `results[]`", `PLAN.md` §4.1 says "a cascaded `ABORTED` never sets
+`error.class`", therefore the two sections disagree and something downstream has to choose
+between them. They do not disagree. `PLAN.md` §3.1's precedence chain runs over `error`
+**classes**, and a cascaded row carries no `error` object at all — so `PLAN.md` §3.1 is silent
+about what such a row contributes, and nothing anywhere in `PLAN.md` specifies it.
+
+What filled that silence was `envelope::implied_class`, a helper the ownership layer invented to
+give a class to a row that attached none. The inference is right for `FAILED` — the alternative
+is a verb reporting success while `results[]` shows a failure — and it was extended to `ABORTED`
+and `DEAD` by symmetry. That extension is the only thing that produced the forbidden outcome,
+and `PLAN.md` §4.1 already ruled it out.
+
+So there was nothing to send back. The inference was narrowed instead: a row whose state means
+*no verdict was reached* implies no class, while a row carrying a real `aborted` error — a claim
+that hit the acquisition ceiling — aggregates like any other. The blast radius was nil, because
+the check engine is the only thing in the codebase that emits an `ABORTED` row and `DEAD` is
+never emitted at all.
+
+**The correction cost less than the workaround it replaced.** Conforming to `PLAN.md` §4.1 by
+filtering rows before aggregating had put the same rule in two places and made the aggregate's
+own count describe the slice rather than the run; narrowing the inference deleted the filter, a
+field on every verdict, and a restated message. The lesson worth carrying: *a rule stated in two
+documents is worth checking for a third possibility — that one of them never made the claim.*
+
+#### One gap the check engine leaves open
+
+**`Event::Interrupted` has no producer.** Both reducers handle it and both are unit-tested on
+it, but nothing in the shell delivers it: there is no SIGINT handler anywhere in `crates/`, only
+the SIGPIPE restore at the entrypoint. So a `char check` that is interrupted dies on the default
+disposition instead of ending its run.
+
+Measured, by sending SIGINT to a real run:
+
+| | What happens today |
+|---|---|
+| exit code | **130**, which is correct — [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.6 makes signals the one carve-out from `exit = f(error.class)` |
+| run lease | left in `~/.char/char.db` until the heartbeat goes cold, so a retry inside the minute fails fast with "a run is already in flight" |
+| **children** | **keep running.** They are `setsid`'d into their own sessions, so the signal never reaches them |
+
+The third row is the one that matters: [`PLAN.md`](PLAN.md) §2.3's premise is that no process
+outlives its workspace, and an interrupted run currently leaves its test suites running. It is
+the check engine's gap rather than the ownership layer's — the check engine is what spawns them,
+and `char clean` reclaims them only when somebody runs it.
+
+The shape of the fix, so it is not rediscovered: a handler sets a flag, the scheduler loop feeds
+`Event::Interrupted` on the next turn, and the path that already exists takes over — it kills
+each running group, marks the rest `ABORTED`, and ends the run `aborted`. The loop must not
+block, so the handler sets an atomic and the loop polls it rather than doing any work in the
+handler itself.
+
 ---
 
 ## 11. Risks
 
 | Risk | Why it bites | Mitigation |
 |---|---|---|
-| **Manifest stalls** | Fleet and Helm are more interesting. Manifest stops at three verbs and M4 never unblocks, because `check` never lands. | Manifest's remaining verbs are milestones, not background work. M4's blocker is named in §8.6 for this reason. |
+| **Manifest stalls** | Fleet and Helm are more interesting. Manifest stops where `check` left it — no `up`, no `down`, no `explain` — and M4's loop never gets the detached run it needs. | Manifest's remaining verbs are milestones, not background work. What `check` still does not do is named in §8.6 for this reason. |
 | **Rebuilding what exists** | Three designs in this plan were withdrawn after finding the job already done — a multiplexer, a terminal emulator, a session journal. Fleet is where this keeps happening, because "orchestrate parallel agents" sounds like infrastructure. | Standing rule for Fleet: before building a mechanism, check whether Claude Code, git, or something already installed does it. Armada's own code should be policy and glue. |
 | **Guild drift between machines** | A hook edited on one machine and a skill on another, neither pulled, and the two setups silently diverge. | Auto-commit on change; warn on start when the guild is behind its remote; `armada doctor` shows the delta. Conflicts surface as conflicts, never as a silent overwrite. |
 | **Guild carries a secret** | An imported settings file or MCP config holds a token and it reaches a remote — private, but still a remote. | The import guard in §8.4. Built in M2, not retrofitted. |

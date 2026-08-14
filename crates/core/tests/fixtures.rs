@@ -18,9 +18,12 @@
 //! turns this suite into "regenerate, commit, don't read", which is exactly
 //! the thing golden tests exist to prevent.
 
+mod support;
+
 use charkit_core::config::{parse, resolve, Defaults, SCHEMA};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use support::compile_schema;
 
 /// The six from `PHASES.md` §8.1. Named rather than discovered, so deleting
 /// one is a failing test rather than a quietly smaller suite.
@@ -162,19 +165,6 @@ fn the_schema_and_the_structs_agree_about_an_unknown_key() {
         schemas.validate(&instance, index).is_err(),
         "the schema accepted an unknown key"
     );
-}
-
-pub(crate) fn compile_schema() -> (boon::Schemas, boon::SchemaIndex) {
-    let mut schemas = boon::Schemas::new();
-    let mut compiler = boon::Compiler::new();
-    let value: serde_json::Value = serde_json::from_str(SCHEMA).expect("schema is JSON");
-    compiler
-        .add_resource("char.schema.json", value)
-        .expect("schema is a usable resource");
-    let index = compiler
-        .compile("char.schema.json", &mut schemas)
-        .expect("schema compiles");
-    (schemas, index)
 }
 
 /// Every key under any `properties` object — the schema's own vocabulary.

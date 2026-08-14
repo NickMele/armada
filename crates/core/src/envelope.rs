@@ -143,6 +143,18 @@ pub struct ResultRow {
     /// Why this row is not executing.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub waiting_on: Option<WaitingOn>,
+    /// Prose for the states where the status alone does not say enough.
+    ///
+    /// PLAN.md §4.1 requires it on a skipped check —
+    /// `{"status": "SKIPPED", "reason": "no matching files"}` — so an agent that
+    /// expected a check to run can tell *no files matched* from *never
+    /// selected*. `check` also uses it for the check a cascaded `ABORTED` names,
+    /// which cannot go in `error` because a cascade may not set `error.class`.
+    ///
+    /// Additive, so `schema_version` does not bump, and omitted when absent, so
+    /// no existing golden snapshot changes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
     /// Where this row's output went.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log: Option<String>,
@@ -171,6 +183,7 @@ impl ResultRow {
             leases: Vec::new(),
             released: None,
             waiting_on: None,
+            reason: None,
             log: None,
             duration_ms: None,
             error: None,
@@ -243,24 +256,43 @@ pub fn aggregate(results: &[ResultRow], subject: &str) -> Option<CharError> {
 }
 
 /// The class a terminal state implies for a row that attached no error of its
-/// own, and `None` for a state that is not a failure at all.
+/// own, and `None` for a state that does not establish a failure.
 ///
 /// **The match is exhaustive rather than a catch-all, so a new terminal state
 /// is a compile error here.** Defaulting every failure state to `tool_failed`
 /// is not a neutral choice: a run of nothing but `TIMEOUT` rows would aggregate
 /// to exit 1, which is the exact "a gate reading 1 goes looking for a broken
-/// test" failure the precedence rule exists to prevent. PLAN.md §3.1's own
-/// example payload carries `{"id": "api:test", "status": "ABORTED"}` with no
-/// `error` object, so a row in this shape is specified rather than malformed.
+/// test" failure the precedence rule exists to prevent.
 ///
-/// `DEAD` maps to `aborted` with `ABORTED`: the run's holder dying and a
-/// cancellation are the same answer to the caller — nothing about the work was
-/// established, and the response is to retry rather than to read output.
+/// **This inference is char's, not the specification's, and it is narrower than
+/// it first shipped.** PLAN.md §3.1's precedence chain runs over `error`
+/// *classes*, and a row with no `error` object has none — so §3.1 is silent
+/// about what such a row contributes, and everything below is char filling that
+/// silence. The first version filled it for every failure state alike. That is
+/// right for `FAILED`, where the alternative is a verb reporting success while
+/// `results[]` shows a failure, and wrong for the two states that mean *no
+/// verdict was reached*:
+///
+/// - **`ABORTED` implies nothing.** PLAN.md §4.1 is explicit that a check
+///   abandoned because its prerequisite failed "never sets `error.class`", and
+///   spells out why: `aborted` is the *retryable* class, so a run whose only
+///   real failure is a deterministic test failure would tell a merge gate to
+///   try again on a bug that will fail identically forever. `aborted` is
+///   reserved for a run stopped from **outside** it — SIGINT, or the
+///   acquisition ceiling — and both of those set the run's error directly
+///   rather than inferring it from a row.
+/// - **`DEAD` implies nothing**, for the same reason: the run's holder dying is
+///   a fact about the run, and the verb reporting it knows that without asking
+///   a row.
+///
+/// A row that genuinely carries `aborted` — a claim that hit the ceiling — still
+/// aggregates like any other, because it attaches a real `error` object. What
+/// changed is only what is inferred in the absence of one.
 const fn implied_class(status: Status) -> Option<ErrClass> {
     match status {
         Status::Failed => Some(ErrClass::ToolFailed),
         Status::Timeout => Some(ErrClass::Timeout),
-        Status::Aborted | Status::Dead => Some(ErrClass::Aborted),
+        Status::Aborted | Status::Dead => None,
         // `PARTIAL` is an envelope-level state describing a mixed set; a row
         // carrying it has not said that it failed.
         Status::Ready
@@ -318,6 +350,37 @@ pub struct InitData {
     pub reaped: ReapPlan,
     /// One row per component.
     pub results: Vec<ResultRow>,
+}
+
+/// `char check` (PLAN.md §3.1).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CheckData {
+    /// The run these results belong to, and the directory its logs are in.
+    pub run_id: String,
+    /// One row per selected check, in id order.
+    pub results: Vec<ResultRow>,
+    /// Run directories reaped at the start of this run. **Reported, never
+    /// silent** — a tool that removes things without saying so is worse than
+    /// one that does not remove them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub reaped_runs: Vec<String>,
+}
+
+/// `--dry-run` on `char check`: what would run, and nothing changed.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct CheckDryRun {
+    /// The exact argv each selected check would be given, post-substitution.
+    /// Not a re-derivation: it is the same value the dispatch record would have
+    /// carried, produced by the same code path.
+    pub would_run: Vec<String>,
+    /// Checks that would be skipped, and why — "no matching files" being the
+    /// one that matters, since a preview that hid it would report work that is
+    /// not going to happen.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub would_skip: Vec<String>,
+    /// Run directories that would be reaped.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub would_reap: Vec<String>,
 }
 
 /// `char clean`.
@@ -530,8 +593,6 @@ mod tests {
         for (status, class) in [
             (Status::Failed, ErrClass::ToolFailed),
             (Status::Timeout, ErrClass::Timeout),
-            (Status::Aborted, ErrClass::Aborted),
-            (Status::Dead, ErrClass::Aborted),
         ] {
             let rows = [ResultRow::new("api:test", status)];
             let error = aggregate(&rows, "checks").expect("a terminal failure is a failure");
@@ -539,19 +600,55 @@ mod tests {
         }
     }
 
-    /// PLAN.md §3.1's own example payload contains a row that is nothing but an
-    /// id and `ABORTED`, so the shape is specified — and mixed with an ordinary
-    /// failure the stricter one still wins.
+    /// **The two states that mean *no verdict was reached* imply nothing**, and
+    /// `implied_class`'s own doc says why. The inference exists to stop a verb
+    /// reporting success over a `FAILED` row; a row that was never attempted is
+    /// the opposite case.
     #[test]
-    fn an_aborted_row_with_no_error_beats_a_tool_failure() {
+    fn a_row_that_reached_no_verdict_of_its_own_scores_no_class() {
+        for status in [Status::Aborted, Status::Dead] {
+            let rows = [ResultRow::new("api:test", status)];
+            assert!(
+                aggregate(&rows, "checks").is_none(),
+                "{status:?} inferred a class it does not establish"
+            );
+        }
+    }
+
+    /// **The outcome PLAN.md §4.1 requires, and the assertion this replaces.**
+    ///
+    /// Phase 2 asserted the opposite here — exit 5, with `"not 1"` written into
+    /// it — on the reasoning that §3.1's own example payload contains a bare
+    /// `ABORTED` row, so the shape is specified. The shape is; the *inference*
+    /// was char's own, and §4.1 forbids its result: a run whose only real
+    /// failure is a deterministic test failure must not hand a merge gate the
+    /// retryable class.
+    #[test]
+    fn a_bare_aborted_row_does_not_outrank_the_failure_that_caused_it() {
+        let rows = [
+            failed("core:build", ErrClass::ToolFailed),
+            ResultRow::new("ui:types", Status::Aborted),
+        ];
+        let error = aggregate(&rows, "checks").unwrap();
+        assert_eq!(error.class, ErrClass::ToolFailed);
+        assert_eq!(error.class.exit_code(), 1, "not 5 — this is deterministic");
+        assert_eq!(error.r#where, "core:build", "the check that actually broke");
+    }
+
+    /// **The precedence claim underneath it is untouched.** A row that genuinely
+    /// carries `aborted` — a claim that hit the acquisition ceiling — still
+    /// outranks a tool failure, because it attaches a real `error` object.
+    /// What narrowed is only what is inferred in the absence of one.
+    #[test]
+    fn an_explicit_aborted_error_still_outranks_a_tool_failure() {
         let rows = [
             failed("api:lint", ErrClass::ToolFailed),
-            ResultRow::new("api:test", Status::Aborted),
+            failed("web:e2e", ErrClass::Aborted),
         ];
         let error = aggregate(&rows, "checks").unwrap();
         assert_eq!(error.class, ErrClass::Aborted);
-        assert_eq!(error.class.exit_code(), 5, "not 1");
-        assert_eq!(error.r#where, "api:test");
+        assert_eq!(error.class.exit_code(), 5);
+        assert_eq!(error.r#where, "web:e2e");
     }
 
     #[test]

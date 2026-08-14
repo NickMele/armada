@@ -1098,6 +1098,13 @@ carrying the most rework.
 building greenfield, applied one level deeper. Structural contamination becomes very hard
 when the agent typing the code has never seen the structure.
 
+**Who runs the read-only parallel comparison, because the implementer cannot.** §2.4 has the
+plan running `char check` against the source checkout to compare verdicts. That points char at
+the source repo's checkout, and reading that path is exactly what the hook below denies to
+every agent but the harvester. The implementer being unable to start it is the guard working
+rather than a gap in it: the run is the operator's, or the harvester's. What the implementer
+owes is a `char check` that can be pointed somewhere.
+
 #### Making it structural rather than aspirational
 
 "The implementer never opens the source repo" is a sentence in a prompt, and a sentence in a

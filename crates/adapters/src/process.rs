@@ -77,6 +77,14 @@ pub struct ProcessGroup {
     pgid: i32,
     stdout: Option<std::process::ChildStdout>,
     stderr: Option<std::process::ChildStderr>,
+    readers: Option<Readers>,
+    timed_out: bool,
+}
+
+/// The two draining threads, once started.
+struct Readers {
+    stdout: Option<std::thread::JoinHandle<String>>,
+    stderr: Option<std::thread::JoinHandle<String>>,
 }
 
 impl ProcessGroup {
@@ -137,7 +145,94 @@ impl ProcessGroup {
             stderr: child.stderr.take(),
             child,
             pgid,
+            readers: None,
+            timed_out: false,
         })
+    }
+
+    /// Has this child finished? **Never blocks.**
+    ///
+    /// This is what lets `char check` run several checks at once. The scheduler
+    /// is a reducer over one run (`ARCHITECTURE.md` §1.2) and the shell executes
+    /// what it proposes, so the shell holds N children and asks each of them
+    /// this question on every turn of its loop.
+    ///
+    /// **The event loop never blocking is an invariant rather than a
+    /// preference** (PLAN.md §4.3): the lease heartbeat is renewed from that
+    /// loop and from no background timer, precisely so that a wedged loop is a
+    /// loop that stopped renewing and the existing cold-heartbeat path reclaims
+    /// it. Every blocking call added to it weakens the reclaim guarantee, which
+    /// is why the blocking [`ProcessGroup::wait`] stays for the one-shot callers
+    /// — git, docker, a `setup:` step — and this exists for the run.
+    ///
+    /// **The one residual, stated rather than papered over.** Once the child has
+    /// exited this joins the reader threads, and a reader reaches EOF when the
+    /// last holder of the pipe closes it. A *grandchild* that outlived the group
+    /// still holds it — which for char's own children means one that called
+    /// `setsid` for itself and left the tracked group, the case `docs/traps.md`
+    /// records as detected rather than prevented. The kill path closes it for
+    /// every other shape, because `killpg` reaches grandchildren.
+    pub fn poll(&mut self) -> Option<RunOutput> {
+        self.start_readers();
+        let status = match self.child.try_wait() {
+            Ok(Some(status)) => Some(status),
+            Ok(None) => return None,
+            // The only way `try_wait` errors is a handle char no longer owns,
+            // which it cannot recover from and must not spin on.
+            Err(_) => None,
+        };
+        Some(self.finish(status))
+    }
+
+    /// Signal the group: SIGTERM, or SIGKILL when `escalate`.
+    ///
+    /// **An unconditional escalation, not a retry** (`docs/traps.md`): measured,
+    /// a leader running `trap '' TERM` leaves 3 of 3 alive after
+    /// `killpg(SIGTERM)`, because children inherit an *ignored* disposition
+    /// across `fork` and `exec` — so one uncooperative leader immunises its
+    /// whole group, and a second SIGTERM is ignored exactly like the first.
+    ///
+    /// Unlike [`ProcessGroup::stop`] this does not wait out a grace period. The
+    /// grace belongs to the caller's own loop, which has other children to
+    /// attend to.
+    pub fn signal(&mut self, escalate: bool) {
+        let signal = if escalate {
+            libc::SIGKILL
+        } else {
+            libc::SIGTERM
+        };
+        if self.pgid != 0 {
+            let _ = posix::killpg(self.pgid, signal);
+        } else if escalate {
+            let _ = self.child.kill();
+        }
+        self.timed_out = true;
+    }
+
+    fn start_readers(&mut self) {
+        if self.readers.is_none() {
+            self.readers = Some(Readers {
+                stdout: self.stdout.take().map(spawn_reader),
+                stderr: self.stderr.take().map(spawn_reader),
+            });
+        }
+    }
+
+    fn finish(&mut self, status: Option<std::process::ExitStatus>) -> RunOutput {
+        let (stdout, stderr) = match self.readers.take() {
+            Some(readers) => (
+                readers.stdout.map(join).unwrap_or_default(),
+                readers.stderr.map(join).unwrap_or_default(),
+            ),
+            None => (String::new(), String::new()),
+        };
+        RunOutput {
+            code: status.as_ref().and_then(std::process::ExitStatus::code),
+            signal: status.as_ref().and_then(signal_of),
+            stdout,
+            stderr,
+            timed_out: self.timed_out,
+        }
     }
 
     /// The group to kill. `0` when the child was not detached.
@@ -158,11 +253,9 @@ impl ProcessGroup {
     /// draining them only after `wait` deadlocks the moment a child fills a
     /// pipe buffer.
     pub fn wait(&mut self, timeout: Option<Duration>, tick: &mut dyn FnMut()) -> RunOutput {
-        let out_reader = self.stdout.take().map(spawn_reader);
-        let err_reader = self.stderr.take().map(spawn_reader);
+        self.start_readers();
 
         let deadline = timeout.map(|t| Instant::now() + t);
-        let mut timed_out = false;
         let mut next_tick = Instant::now() + TICK;
 
         let status = loop {
@@ -175,7 +268,7 @@ impl ProcessGroup {
             }
             if let Some(deadline) = deadline {
                 if Instant::now() >= deadline {
-                    timed_out = true;
+                    self.timed_out = true;
                     if self.pgid != 0 {
                         posix::stop_group(self.pgid, GRACE);
                     } else {
@@ -193,16 +286,7 @@ impl ProcessGroup {
             std::thread::sleep(POLL);
         };
 
-        let stdout = out_reader.map(join).unwrap_or_default();
-        let stderr = err_reader.map(join).unwrap_or_default();
-
-        RunOutput {
-            code: status.as_ref().and_then(std::process::ExitStatus::code),
-            signal: status.as_ref().and_then(signal_of),
-            stdout,
-            stderr,
-            timed_out,
-        }
+        self.finish(status)
     }
 
     /// Stop the whole tree: TERM, grace, KILL — then reap.
@@ -295,6 +379,97 @@ mod tests {
             argv.iter().map(|s| s.to_string()).collect(),
             PathBuf::from("/"),
         )
+    }
+
+    /// Poll until the child is done, or give up. Bounded, because a hang here
+    /// must fail the test rather than the suite.
+    fn poll_until_done(group: &mut ProcessGroup, within: Duration) -> Option<RunOutput> {
+        let deadline = Instant::now() + within;
+        loop {
+            if let Some(output) = group.poll() {
+                return Some(output);
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// **The invariant the whole run depends on**: the shell's event loop never
+    /// blocks, so that a wedged loop is a loop that stopped renewing and the
+    /// cold-heartbeat path reclaims it (PLAN.md §4.3).
+    #[test]
+    fn polling_a_running_child_answers_at_once_rather_than_waiting_for_it() {
+        let mut group = ProcessGroup::spawn(&request(&["sleep", "30"])).unwrap();
+
+        let before = Instant::now();
+        let answer = group.poll();
+        let elapsed = before.elapsed();
+
+        assert!(answer.is_none(), "a running child reported a verdict");
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "poll blocked for {elapsed:?}"
+        );
+
+        group.signal(true);
+        assert!(poll_until_done(&mut group, Duration::from_secs(10)).is_some());
+    }
+
+    #[test]
+    fn polling_a_finished_child_answers_with_its_code_and_its_output() {
+        let mut group =
+            ProcessGroup::spawn(&request(&["sh", "-c", "echo out; echo err >&2; exit 3"])).unwrap();
+        let output = poll_until_done(&mut group, Duration::from_secs(10)).expect("it finished");
+        assert_eq!(output.code, Some(3));
+        assert_eq!(output.stdout.trim(), "out");
+        assert_eq!(output.stderr.trim(), "err");
+    }
+
+    /// **An unconditional escalation, not a retry.** Measured in `traps.md`: a
+    /// leader running `trap '' TERM` leaves its whole group alive, because
+    /// children inherit an *ignored* disposition across `fork` and `exec` — so
+    /// a second SIGTERM is ignored exactly like the first, and only SIGKILL
+    /// ends it.
+    ///
+    /// A cooperative `sleep` passes the first half of this while proving
+    /// nothing, which is why the uncooperative case is the one asserted on.
+    #[test]
+    fn a_group_that_ignores_sigterm_survives_it_and_dies_on_the_escalation() {
+        let mut group =
+            ProcessGroup::spawn(&request(&["sh", "-c", "trap '' TERM; sleep 30"])).unwrap();
+        // Let the trap be installed before signalling it.
+        std::thread::sleep(Duration::from_millis(200));
+
+        group.signal(false);
+        assert!(
+            poll_until_done(&mut group, Duration::from_millis(500)).is_none(),
+            "SIGTERM ended a group that ignores SIGTERM"
+        );
+
+        group.signal(true);
+        assert!(
+            poll_until_done(&mut group, Duration::from_secs(10)).is_some(),
+            "SIGKILL did not end the group"
+        );
+    }
+
+    /// A polled child is reaped like any other. Measured: Rust's `Child` does
+    /// not reap on drop, so a fifteen-minute run polling N children would
+    /// accumulate a `<defunct>` entry for each one.
+    #[test]
+    fn a_polled_child_leaves_no_zombie() {
+        let mut group = ProcessGroup::spawn(&request(&["true"])).unwrap();
+        let pid = group.pid();
+        assert!(poll_until_done(&mut group, Duration::from_secs(10)).is_some());
+
+        let stat = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        assert!(!stat.starts_with('Z'), "left a zombie: {stat:?}");
     }
 
     #[test]

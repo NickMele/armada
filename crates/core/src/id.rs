@@ -13,7 +13,7 @@
 //! `git rev-parse --path-format=absolute --git-common-dir` — see
 //! [`ProjectId::derive`].
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::Path;
 
@@ -32,7 +32,7 @@ fn short_sha1(bytes: &[u8]) -> String {
 
 /// Identifies one checkout. Owns ports, containers, networks, volumes, images
 /// and processes.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct WorkspaceId(String);
 
@@ -69,7 +69,7 @@ impl fmt::Display for WorkspaceId {
 
 /// Groups every workspace sharing one `--git-common-dir`: a checkout and its
 /// worktrees. **Owns nothing.**
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ProjectId(String);
 

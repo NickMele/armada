@@ -38,6 +38,11 @@ impl Clock for FrozenClock {
     fn wall_rfc3339(&self) -> String {
         "2026-08-09T14:02:11Z".to_string()
     }
+    /// The same instant as the string above, so a run id minted here is a
+    /// constant too — a snapshot containing one must not need redacting.
+    fn wall_ms(&self) -> u64 {
+        1_786_284_131_000
+    }
     fn mono(&self) -> u64 {
         1_000
     }
@@ -124,8 +129,61 @@ impl Redactions {
         if let Some(project) = &self.project {
             out = out.replace(project, "<project>");
         }
+        // **The run id, and only the run id.** It carries a wall reading —
+        // frozen here — mixed with this process's entropy, which is not, so it
+        // differs between two correct runs. A `duration_ms` does *not*: every
+        // reading in a payload comes from the injected clock, so a frozen one
+        // makes durations a constant, and redacting them would throw away a
+        // real assertion. Measured by trying: the first version of this
+        // redaction rewrote `init`'s stable `0` and broke its snapshot.
+        out = redact_field(&out, "\"run_id\": \"", "\"", "<run>");
+        out = redact_run_paths(&out);
         out
     }
+}
+
+/// Replace what sits between a prefix and the next terminator.
+fn redact_field(json: &str, prefix: &str, terminator: &str, with: &str) -> String {
+    let mut out = String::with_capacity(json.len());
+    let mut rest = json;
+    while let Some(at) = rest.find(prefix) {
+        let (before, after) = rest.split_at(at + prefix.len());
+        out.push_str(before);
+        match after.find(terminator) {
+            Some(end) => {
+                out.push_str(with);
+                rest = &after[end..];
+            }
+            None => {
+                rest = after;
+                break;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A log path carries the run id in the middle of it.
+fn redact_run_paths(json: &str) -> String {
+    let mut out = String::with_capacity(json.len());
+    let mut rest = json;
+    while let Some(at) = rest.find(".char/run/") {
+        let (before, after) = rest.split_at(at + ".char/run/".len());
+        out.push_str(before);
+        match after.find('/') {
+            Some(end) => {
+                out.push_str("<run>");
+                rest = &after[end..];
+            }
+            None => {
+                rest = after;
+                break;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 struct Scenario {
@@ -234,6 +292,25 @@ fn a_dispatched_command_matches_its_snapshot() {
     assert_golden("commands", &json);
 }
 
+/// `char check`, which is the verb agents call most and therefore the snapshot
+/// most worth having: a rename in this payload surfaces here rather than in
+/// somebody else's repository.
+#[test]
+fn check_matches_its_snapshot() {
+    let scenario = scenario(CHECK_CONFIG);
+    run_verb(&scenario, |app| verbs::init::run(app, false));
+    let json = run_verb(&scenario, |app| {
+        verbs::check::run(
+            app,
+            &charkit::args::Check {
+                json: true,
+                ..Default::default()
+            },
+        )
+    });
+    assert_golden("check", &json);
+}
+
 /// The clock is injected and the path is passed in, so two runs of the same
 /// verb on two machines produce the same bytes. If this ever fails, the
 /// snapshots are about to start rotting.
@@ -243,6 +320,19 @@ fn the_payloads_are_deterministic_across_runs() {
     let second = run_verb(&scenario(CONFIG), |app| verbs::init::run(app, false));
     assert_eq!(first, second);
 }
+
+/// One check that passes, one that fails, one skipped for having no files —
+/// the three row shapes `results[]` has.
+const CHECK_CONFIG: &str = "\
+version: 1
+components:
+  api:
+    root: services/api
+    checks:
+      lint: { cmd: \"./exiter.sh 0\" }
+      types: { cmd: \"./exiter.sh 0\", scope: component }
+      test: { cmd: \"./exiter.sh 2\", scope: component }
+";
 
 const CONFIG: &str = "\
 version: 1

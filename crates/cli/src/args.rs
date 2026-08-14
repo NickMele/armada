@@ -43,6 +43,8 @@ pub enum Invocation {
     },
     /// `char status`.
     Status(Common),
+    /// `char check`.
+    Check(Box<Check>),
     /// A `commands:` entry, with everything after its name.
     Dispatch {
         /// The entry's name.
@@ -69,6 +71,34 @@ pub struct ParseFailure {
     pub error: CharError,
     /// How to report it.
     pub json: bool,
+}
+
+/// `char check`, with the flags PLAN.md §3.2 gives it.
+///
+/// A struct rather than eight variant fields, because `check` takes more flags
+/// than every other verb put together and a variant that wide makes every match
+/// on `Invocation` unreadable.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Check {
+    /// Emit the envelope rather than human output.
+    pub json: bool,
+    /// Change nothing; report what would run.
+    pub dry_run: bool,
+    /// The bare positional, if there was one.
+    pub selector: Option<String>,
+    /// `--component NAME`.
+    pub component: Option<String>,
+    /// `--files a.py b.py`.
+    pub files: Vec<String>,
+    /// `--all-files`: scope from each component's `match:` globs rather than
+    /// from the diff.
+    pub all_files: bool,
+    /// `--fix`: run `fix:` instead of `cmd:`.
+    pub fix: bool,
+    /// `--jobs N`: this run's CPU budget, overriding the machine's.
+    pub jobs: Option<u32>,
+    /// `--wait`: queue for the run lease instead of failing fast.
+    pub wait: bool,
 }
 
 /// The flags more than one verb takes.
@@ -141,6 +171,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
             }
             Ok(Invocation::Status(common))
         }
+        "check" => Ok(Invocation::Check(Box::new(check(rest, json)?))),
         "clean" => {
             let common = common(
                 rest,
@@ -186,6 +217,119 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
             argv: rest.to_vec(),
             json,
         }),
+    }
+}
+
+/// `check`'s own parser.
+///
+/// **Not routed through [`common`]**, because `check` takes no scope lens: a run
+/// is this workspace's by definition, and accepting `--project` silently would
+/// let a caller believe they had asked for something char never does.
+fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
+    let mut parsed = Check {
+        // Settled before the loop, so that how a failure is *reported* does not
+        // depend on where in the line the offending flag sits: `char check
+        // --detach --json` and `char check --json --detach` are the same
+        // failure. `common` does the same, for the same reason.
+        json: json || rest.iter().any(|a| a == "--json"),
+        ..Default::default()
+    };
+    let mut positionals: Vec<String> = Vec::new();
+    let mut index = 0;
+
+    while index < rest.len() {
+        let arg = rest[index].as_str();
+        index += 1;
+        match arg {
+            "--json" => parsed.json = true,
+            "--dry-run" => parsed.dry_run = true,
+            "--all-files" => parsed.all_files = true,
+            "--fix" => parsed.fix = true,
+            "--wait" => parsed.wait = true,
+            // A list, so it consumes until the next flag. `--files` exists
+            // precisely for names a shell would mangle as positionals.
+            "--files" => {
+                while index < rest.len() && !rest[index].starts_with("--") {
+                    parsed.files.push(rest[index].clone());
+                    index += 1;
+                }
+                if parsed.files.is_empty() {
+                    return Err(failure(needs_a_value("--files"), parsed.json));
+                }
+            }
+            "--component" => match rest.get(index) {
+                Some(name) if !name.starts_with("--") => {
+                    parsed.component = Some(name.clone());
+                    index += 1;
+                }
+                _ => return Err(failure(needs_a_value("--component"), parsed.json)),
+            },
+            "--jobs" => match rest.get(index).and_then(|n| n.parse::<u32>().ok()) {
+                Some(jobs) if jobs > 0 => {
+                    parsed.jobs = Some(jobs);
+                    index += 1;
+                }
+                _ => return Err(failure(needs_a_value("--jobs"), parsed.json)),
+            },
+            // Reserved by PLAN.md §3 and not built in this phase. Refused by
+            // name rather than falling through to "unknown flag", because the
+            // flag *is* known and the honest answer is that char cannot do it
+            // yet — an agent told "unknown flag" would go looking for a typo.
+            "--detach" | "--status" => {
+                return Err(failure(
+                    CharError {
+                        class: ErrClass::BadInvocation,
+                        r#where: arg.to_string(),
+                        message: format!("`{arg}` is not built yet"),
+                        next_action: Some(
+                            "run `char check` in the foreground; `--wait` queues behind another run"
+                                .to_string(),
+                        ),
+                    },
+                    parsed.json,
+                ));
+            }
+            flag if flag.starts_with('-') => return Err(failure(unknown_flag(flag), parsed.json)),
+            word => positionals.push(word.to_string()),
+        }
+    }
+
+    // **One selector, or several paths.** Two bare words that are not paths are
+    // two different questions — `char check api lint` might mean the component
+    // or the check — and guessing is the thing §3.2's grammar exists to avoid.
+    match positionals.len() {
+        0 => {}
+        1 => parsed.selector = positionals.pop(),
+        _ if positionals
+            .iter()
+            .all(|word| word.contains('/') || word.contains('.')) =>
+        {
+            parsed.files.extend(positionals);
+        }
+        _ => {
+            return Err(failure(
+                CharError {
+                    class: ErrClass::BadInvocation,
+                    r#where: positionals.join(" "),
+                    message: "`char check` takes one selector, or several paths".to_string(),
+                    next_action: Some(
+                        "`char check <component>:<check>`, or `--files a.py b.py`".to_string(),
+                    ),
+                },
+                parsed.json,
+            ))
+        }
+    }
+
+    Ok(parsed)
+}
+
+fn needs_a_value(flag: &str) -> CharError {
+    CharError {
+        class: ErrClass::BadInvocation,
+        r#where: flag.to_string(),
+        message: format!("`{flag}` needs a value"),
+        next_action: Some("`char --help` lists what each verb takes".to_string()),
     }
 }
 
@@ -319,7 +463,7 @@ mod tests {
 
     #[test]
     fn a_verb_that_is_not_built_yet_says_so_rather_than_dispatching_it() {
-        let err = parse(&args(&["check"])).unwrap_err().error;
+        let err = parse(&args(&["up"])).unwrap_err().error;
         assert_eq!(err.class, ErrClass::BadInvocation);
         assert!(err.message.contains("not built yet"));
     }
@@ -330,8 +474,8 @@ mod tests {
     #[test]
     fn a_parse_failure_carries_out_the_json_it_had_already_seen() {
         for words in [
-            &["--json", "check"][..],
-            &["check", "--json"][..],
+            &["--json", "up"][..],
+            &["up", "--json"][..],
             &["--json", "init", "--turbo"][..],
             &["init", "--turbo", "--json"][..],
         ] {
@@ -339,7 +483,7 @@ mod tests {
             assert!(failure.json, "`char {}` lost --json", words.join(" "));
             assert_eq!(failure.error.class, ErrClass::BadInvocation);
         }
-        assert!(!parse(&args(&["check"])).unwrap_err().json);
+        assert!(!parse(&args(&["up"])).unwrap_err().json);
     }
 
     /// Every built-in name is claimed, including the ones phase 2 does not
