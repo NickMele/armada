@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/nickmele/charkit/main/crates/core/schema/armada.schema.json",
+  "$id": "https://raw.githubusercontent.com/NickMele/armada/main/crates/core/schema/armada.schema.json",
   "title": "armada.yml",
   "description": "The committed configuration for one Armada workspace. Specified in docs/PLAN.md \u00a74. This schema is authoritative: the serde structs in crates/core mirror it, and the fixtures under tests/fixtures are what keep the two honest. Rules that can be decided from the value in front of you live here; rules needing a second part of the document, or the filesystem, live in `armada manifest config verify` (PLAN.md \u00a75). Every pattern below is lookaround-free, because Armada validates with a Rust regex engine that has no lookahead.",
   "type": "object",

@@ -15,7 +15,7 @@ edition = "2021"
 # tests the lower version — the same deliberateness raising it takes.
 rust-version = "1.97"
 license = "Apache-2.0"
-repository = "https://github.com/nickmele/charkit"
+repository = "https://github.com/NickMele/armada"
 
 # One version of the YAML parser for the whole repo, and it is deliberately the
 # same crate the binary reads `armada.yml` with (PLAN.md §4.1.1, decision 5).

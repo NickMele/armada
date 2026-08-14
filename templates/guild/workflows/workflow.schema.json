@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://armada.dev/schema/workflow.schema.json",
+  "$id": "https://raw.githubusercontent.com/NickMele/armada/main/templates/guild/workflows/workflow.schema.json",
   "title": "Armada workflow",
   "description": "An ordered set of steps, which skill runs each one, and what verdict advances it. PLAN.md \u00a714.4 and \u00a714.6. This file is the authoritative statement of the workflow contract; anything mirroring it is a mirror.",
   "type": "object",
