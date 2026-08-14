@@ -137,6 +137,33 @@ pub struct ResultRow {
     /// What this row is holding.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub leases: Vec<String>,
+    /// **What Armada owns for this row, by id** — `container:armada-a3f91c02-api`,
+    /// `volume:pgdata`, `pgid:4212`.
+    ///
+    /// **Ids, never counts.** A count answers neither of the two questions
+    /// anyone asks of this field: what will `armada manifest clean` remove, and
+    /// what do I go and look at by hand. "3 containers" sends the reader to
+    /// `docker ps` to find out which three, which is the work the field exists to
+    /// save.
+    ///
+    /// **`<kind>:<reference>`, with no exceptions**, so one grammar covers every
+    /// kind and a caller splits on the first colon. It is the grammar [`leases`]
+    /// already uses in this same struct, which is why it needs no second
+    /// explanation.
+    ///
+    /// **A resolved `owns.release:` command is deliberately not here.** It is a
+    /// command rather than a resource, Armada never executes it, and
+    /// [`StatusData::unreclaimed`] already carries it with the one fact that
+    /// matters — whether the workspace that declared it still exists. Listing it
+    /// twice would make a reader wonder which one was authoritative.
+    ///
+    /// **Additive: `schema_version` stays 1** (PLAN.md §3.1 — adding a field does
+    /// not bump; removing one or changing its type does). Omitted when empty, so
+    /// no verb that owns nothing gains a key.
+    ///
+    /// [`leases`]: ResultRow::leases
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub owns: Vec<String>,
     /// What was reclaimed for this row.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub released: Option<Released>,
@@ -181,6 +208,7 @@ impl ResultRow {
             port_block: None,
             ports: BTreeMap::new(),
             leases: Vec::new(),
+            owns: Vec::new(),
             released: None,
             waiting_on: None,
             reason: None,

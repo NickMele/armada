@@ -20,6 +20,7 @@ mod support;
 
 use armada_core::ctx::{Clock, Ctx, Run, RunOutput, RunRequest, SpawnError};
 use armada_core::error::ArmadaError;
+use armada_core::registry::{OwnedKind, OwnedRow};
 use armada_core::scope::Lens;
 use armada_helm::verbs::Output;
 use armada_helm::{app, verbs};
@@ -237,11 +238,37 @@ fn init_matches_its_snapshot() {
     assert_golden("init", &json);
 }
 
+/// **The owned resources are recorded by hand, and they have to be.**
+///
+/// `results[].owns[]` is populated from the machine store, and the only thing
+/// that writes to it today is `init`, which records a declared `owns.release:`
+/// and nothing else — containers, volumes and process groups arrive with `up`,
+/// which is not built (PLAN.md §6.0). So no reachable invocation produces a
+/// non-empty `owns[]`, and a snapshot that waited for one would carry the field
+/// only after the milestone that could have renamed it.
+///
+/// That is exactly the failure this suite exists to catch: **key renames**,
+/// which every other test misses because they assert on value objects. Writing
+/// the rows directly puts the store in the state `up` will put it in, which is
+/// the state the payload has to be right for.
 #[test]
 fn status_matches_its_snapshot() {
     let scenario = scenario(CONFIG);
     run_verb(&scenario, |app| verbs::init::run(app, false));
     let json = run_verb(&scenario, |app| {
+        let id = app.ctx.workspace.as_ref().expect("a workspace").id.clone();
+        for (kind, reference) in [
+            (OwnedKind::Container, format!("armada-{id}-api")),
+            (OwnedKind::Volume, "pgdata".to_string()),
+        ] {
+            app.db.record_owned(&OwnedRow {
+                workspace: id.clone(),
+                kind,
+                reference,
+                boot_id: None,
+                pid_started_at: None,
+            })?;
+        }
         verbs::status::run(
             app,
             armada_helm::args::Common {

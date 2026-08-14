@@ -678,6 +678,29 @@ The first is this run's own budget and will clear on its own. The second names *
 workspace** as the reason, which is the thing an agent cannot work out for itself and the only
 useful answer to "why has this taken fifteen minutes."''
 
+**`results[].owns[]` names what Armada holds for a row, as ids and never as counts.**
+
+<!-- doclint: skip — a fragment, deliberately, to show one field rather than the envelope -->
+```json
+"owns": ["container:armada-a3f91c02-api", "volume:pgdata", "pgid:4212"]
+```
+
+A count answers neither question anyone asks of this field — *what will `armada manifest clean`
+remove*, and *what do I go and look at by hand*. "3 containers" sends the reader to `docker ps`
+to find out which three, which is the work the field exists to save.
+
+**`<kind>:<reference>`, with no exceptions**, so one grammar covers every kind and a caller
+splits on the first colon. It is the grammar `leases` already uses in the same row, which is
+why it needs no second explanation. A resolved `owns.release:` command is deliberately **not**
+here: it is a command rather than a resource, Armada never executes it (§6.1), and
+`data.unreclaimed` already carries it with the fact that matters — whether the workspace that
+declared it still exists.
+
+**Additive, so `schema_version` stays 1**, per the rule at the top of this section: adding a
+field does not bump, removing one or changing its type does. It is omitted when empty, so no
+verb that owns nothing gains a key. The human render of the same fact names the first three and
+counts the rest ([`commands/render.md`](commands/render.md)); `--json` always carries them all.
+
 #### Ports: `port_block` is the workspace's; assignments are the component's
 
 <!-- doclint: skip — a fragment, deliberately, to show data without the envelope -->

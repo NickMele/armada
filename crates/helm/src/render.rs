@@ -182,6 +182,14 @@ fn detail_cell(style: Style, text: Option<&str>) -> Cell {
     }
 }
 
+/// How many ids a cell names before it starts counting instead.
+///
+/// **A fixed cap, not a width calculation.** Three ids is enough to recognise
+/// what a workspace is holding; more is a list you read from `--json`. Fixing it
+/// also keeps the render identical at every terminal width, which is what lets a
+/// golden fixture pin it.
+const KEEP: usize = 3;
+
 /// A list of ids, cut to `keep` with the remainder counted rather than dropped.
 ///
 /// **`+2` rather than `…`** (the agreed layout): an ellipsis says something was
@@ -368,6 +376,43 @@ fn workspace_block(
     }
 
     let mut holds = Table::new(columns("resource", "detail", false)).indent(2);
+
+    // **One row per resource, and the id is the whole point** (PLAN.md §3.1):
+    // what `armada manifest clean` will remove, and what to go and look at by
+    // hand. A count in a single cell would answer neither.
+    //
+    // **A row each rather than a list in one cell**, which the first attempt did
+    // and which was wrong for a measurable reason: five ids do not fit an
+    // eighty-column DETAIL cell, so the flexible column truncated — and the part
+    // it cut was the trailing `+2`. The one fact that tells a reader whether they
+    // need `--json` was the first thing to go. A row cannot lose its tail.
+    for id in row.owns.iter().take(KEEP) {
+        // The envelope's `<kind>:<reference>` grammar, split back into the two
+        // columns it was always two of.
+        let (kind, reference) = id.split_once(':').unwrap_or(("resource", id));
+        holds = holds.row(vec![
+            token("owns", Role::BeaconGreen),
+            Cell::plain(kind),
+            Cell::muted(reference),
+        ]);
+    }
+    // **Always a row, even when there is nothing.** `owns  resources  -` says
+    // Armada looked and found nothing; no row at all says nothing whatsoever,
+    // and a reader cannot tell those apart. Same reasoning as `clean` keeping its
+    // table when it had nothing to release.
+    if row.owns.len() > KEEP || row.owns.is_empty() {
+        holds = holds.row(vec![
+            token("owns", Role::BeaconGreen),
+            Cell::plain("resources"),
+            detail_cell(
+                style,
+                (row.owns.len() > KEEP)
+                    .then(|| format!("+{} more", row.owns.len() - KEEP))
+                    .as_deref(),
+            ),
+        ]);
+    }
+
     for lease in &row.leases {
         let cold = lease.ends_with("(cold)");
         holds = holds.row(vec![
@@ -491,7 +536,7 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
             .row(vec![
                 token("reaped", Role::SteelGrey),
                 Cell::plain(format::count(data.reaped_runs.len(), "run")),
-                Cell::muted(ids(&data.reaped_runs, 3)),
+                Cell::muted(ids(&data.reaped_runs, KEEP)),
             ]);
         out.push_str(&reaped.render(style, width));
         out.push('\n');
@@ -973,6 +1018,91 @@ mod tests {
         assert_eq!(fold(&strip_ansi(&painted)), plain);
     }
 
+    /// A `status` envelope carrying `owns`, and nothing else.
+    fn owning(owns: &[&str]) -> Envelope<StatusData> {
+        let mut row = ResultRow::new("a3f91c02", Status::Ok);
+        row.owns = owns.iter().map(|s| s.to_string()).collect();
+        Envelope::ok(
+            "status",
+            Some(workspace()),
+            Status::Ok,
+            StatusData {
+                scope: "workspace".to_string(),
+                results: vec![row],
+                unreclaimed: Vec::new(),
+            },
+        )
+    }
+
+    /// **Real ids, never a count.** "3 containers" sends the reader to `docker
+    /// ps` to find out which three, which is the work the column exists to save.
+    #[test]
+    fn owns_names_the_resources_rather_than_counting_them() {
+        let text = rendered(
+            &Output::Status(Box::new(owning(&[
+                "container:armada-a3f91c02-api",
+                "volume:pgdata",
+            ]))),
+            Style::plain(),
+        );
+        assert!(
+            has_row(&text, &["owns", "container", "armada-a3f91c02-api"]),
+            "{text}"
+        );
+        assert!(has_row(&text, &["owns", "volume", "pgdata"]), "{text}");
+        assert!(
+            !text.contains("2 resources"),
+            "a count is not an id: {text}"
+        );
+    }
+
+    /// **Owning nothing is stated, not implied by an absence.** A missing row
+    /// and an empty one read identically to a reader, and only one of them means
+    /// "Armada looked". Same reasoning as `clean` keeping its table.
+    #[test]
+    fn a_workspace_that_owns_nothing_says_so_rather_than_leaving_a_gap() {
+        let text = rendered(&Output::Status(Box::new(owning(&[]))), Style::plain());
+        assert!(
+            has_row(&text, &["owns", "resources", "-"]),
+            "the placeholder row is absent, so a reader cannot tell \
+             `nothing is owned` from `nobody looked`:\n{text}"
+        );
+        assert!(
+            !text.contains("FAILED"),
+            "owning nothing is not a failure: {text}"
+        );
+    }
+
+    /// **The overflow count survives, because it is the part that decides
+    /// whether the reader needs `--json`.** It gets a row of its own for exactly
+    /// that reason: the first attempt put the whole list in one cell, and at
+    /// eighty columns the flexible column truncated the trailing `+2` away.
+    #[test]
+    fn a_long_owns_list_is_capped_and_says_how_many_it_did_not_name() {
+        let text = rendered(
+            &Output::Status(Box::new(owning(&[
+                "container:one",
+                "container:two",
+                "container:three",
+                "container:four",
+                "volume:five",
+            ]))),
+            Style::plain(),
+        );
+        assert!(
+            has_row(&text, &["owns", "resources", "+2", "more"]),
+            "{text}"
+        );
+        assert!(has_row(&text, &["owns", "container", "one"]), "{text}");
+        assert!(
+            !text.contains("four"),
+            "past the cap, only the count: {text}"
+        );
+        for line in text.lines() {
+            assert!(!line.contains('…'), "the count was truncated away: {line}");
+        }
+    }
+
     /// A port's probed state is spoken as the question the reader is asking.
     #[test]
     fn status_speaks_a_port_state_as_the_component_it_belongs_to() {
@@ -1072,6 +1202,14 @@ mod tests {
             rendered(&Output::Dispatch(Box::new(refused)), Style::plain()),
             "error: `npm ci` exited 1\n  where: api\n  class: tool_failed\n  next:  run it by hand\n"
         );
+    }
+
+    /// Whether some line is exactly these words, whatever the padding between
+    /// them. Column widths belong to the golden fixtures; a unit test asserting
+    /// them too would fail twice for one change and say nothing new.
+    fn has_row(text: &str, words: &[&str]) -> bool {
+        text.lines()
+            .any(|line| line.split_whitespace().collect::<Vec<_>>() == words)
     }
 
     /// Everything a terminal would not display, removed.

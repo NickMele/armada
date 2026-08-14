@@ -21,7 +21,11 @@
             "port": 5460,
             "state": "RESERVED"
           }
-        }
+        },
+        "owns": [
+          "container:armada-<workspace>-api",
+          "volume:pgdata"
+        ]
       }
     ],
     "unreclaimed": [

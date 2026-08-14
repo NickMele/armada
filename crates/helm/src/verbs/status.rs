@@ -76,6 +76,21 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
             .collect();
 
         let owned = app.db.owned(Some(&row.id))?;
+
+        // **The ids, not a count** (PLAN.md §3.1): what `clean` will remove, and
+        // what to go and look at by hand. Sorted, because the store returns
+        // insertion order and an envelope that differs between two identical
+        // runs is one the golden snapshots cannot hold still.
+        //
+        // A `Release` row is left out: it is a command rather than a resource,
+        // Armada never executes it, and `unreclaimed` below already carries it
+        // with the fact that matters — whether its workspace still exists.
+        result.owns = owned
+            .iter()
+            .filter(|owned| owned.kind != OwnedKind::Release)
+            .map(|owned| format!("{}:{}", owned.kind, owned.reference))
+            .collect();
+        result.owns.sort();
         // Whether Armada started anything here is what tells `LISTENING` from
         // `CONFLICT`. A bound port with nothing owned is bound by a process
         // Armada did not start — which is the only way that reaches a caller

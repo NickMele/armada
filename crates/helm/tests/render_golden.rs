@@ -217,6 +217,15 @@ fn status_matches_its_fixture() {
         ),
     ]);
     row.leases = vec!["run:3d9cc7ba".to_string()];
+    // **Five, so the fixture pins the truncation and not just the list.** The
+    // human render names three and counts the rest; `--json` carries all five.
+    row.owns = vec![
+        "container:armada-3d9cc7ba-api".to_string(),
+        "container:armada-3d9cc7ba-db".to_string(),
+        "network:armada-3d9cc7ba".to_string(),
+        "pgid:4212".to_string(),
+        "volume:pgdata".to_string(),
+    ];
     let output = Output::Status(Box::new(Envelope::ok(
         "status",
         Some(workspace()),
