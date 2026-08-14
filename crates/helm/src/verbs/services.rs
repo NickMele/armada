@@ -35,6 +35,21 @@
 //! The compose ids are still recorded, immediately after `up -d` returns, both
 //! because `results[].owns[]` is specified to name them and because a row costs
 //! nothing next to a leak.
+//!
+//! # A compose component is a project, not a service
+//!
+//! **Stated because it is a limit rather than a choice.** `run:` has a `file:`
+//! and no `service:` key, so nothing in the model maps a component name to a
+//! compose service name — and `docker compose up -d` brings the whole project
+//! up regardless. So `armada manifest up postgres` on a compose component
+//! starts every service in that file, and `down postgres` stops every one of
+//! them. Two components declaring the same `file:` are two rows over one
+//! project: the second `up -d` is a no-op compose performs quickly, and each
+//! gets its own ready-check, which is the part that differs between them.
+//!
+//! Inventing a `service:` key to narrow this is a config change and belongs to
+//! whoever decides the schema, not here. `driver: command` is the granular
+//! driver today, and its selector is honoured exactly.
 
 use armada_core::compose;
 use armada_core::config::{ReadyKind, ResolvedConfig, ResolvedRun, ResolvedService};

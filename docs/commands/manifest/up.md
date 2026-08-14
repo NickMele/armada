@@ -52,6 +52,12 @@ and a second concurrent scheduler is a second place a deadlock can hide.
 **A service whose dependency did not come up is `SKIPPED`**, naming the one that stopped it,
 rather than started into a failure two levels from its own logs.
 
+**A compose component is a project, not a service.** `run:` has a `file:` and no `service:`
+key, so nothing maps a component name to a compose service name — and `docker compose up -d`
+brings the whole project up regardless. `armada manifest up postgres` on a compose component
+therefore starts every service in that file. `driver: command` is the granular driver today,
+and its selector is honoured exactly.
+
 ## Dependencies
 
 | On | Why |

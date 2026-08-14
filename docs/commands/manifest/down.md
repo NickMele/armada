@@ -49,6 +49,9 @@ group and ignores the second one too. A group that survives SIGKILL fails the ro
 **A named volume survives `down`.** It is the workspace's data, and `clean` is what releases
 it.
 
+**A compose component is a project, not a service** ([`up.md`](up.md)), so `down` on one stops
+every service in that file. `driver: command` is the granular driver today.
+
 ## Dependencies
 
 The ownership store, and a container runtime for container-backed components.
