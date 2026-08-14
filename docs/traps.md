@@ -1,9 +1,9 @@
 # Measured behaviour
 
-Things that are true about the environment charkit runs in, which a reasonable person would
+Things that are true about the environment Armada runs in, which a reasonable person would
 have assumed otherwise. **Every entry here was measured, not read.**
 
-This file exists because charkit is being built greenfield, deliberately without continuous
+This file exists because Armada is being built greenfield, deliberately without continuous
 validation against a real repository until phase 6. That trade buys isolation and costs
 empirical feedback — so the feedback that *is* obtained has to be written down or it is lost
 between phases.
@@ -17,7 +17,7 @@ between phases.
 - An entry earns its place if believing the opposite would produce a plausible design that
   silently does not work. Entries that merely record how something works belong in the
   design documents instead.
-- **Name the platform, or measure on both.** charkit supports darwin and Linux, and phase 2
+- **Name the platform, or measure on both.** Armada supports darwin and Linux, and phase 2
   put a darwin-only result in this file as though it were general — it was wrong on Linux,
   and CI found it. An unqualified entry here reads as "true everywhere", so an entry measured
   in one place says where.
@@ -35,7 +35,7 @@ shows it, and what breaks if you assume otherwise.
 ## SQLite — the lease mechanism depends on these
 
 Run on darwin 2026-08-09. **Language-neutral, and deliberately not platform-qualified beyond
-that:** every one of these applies whatever charkit is written in, and locking, `BEGIN
+that:** every one of these applies whatever Armada is written in, and locking, `BEGIN
 IMMEDIATE` and `busy_timeout` are properties of SQLite rather than of an operating system.
 This is the machinery `PLAN.md` §4.3 rests on.
 
@@ -114,7 +114,7 @@ one in PLAN.md §9.
 
 *"Asynchronous execution of long-running operations, with polling, mid-flight input, and
 durable handles."* This is the standard shape for exposing something like a ten-minute
-`char check` over MCP — worth using rather than inventing a bespoke polling protocol.
+`armada manifest check` over MCP — worth using rather than inventing a bespoke polling protocol.
 
 ## Ports — what a bind probe can and cannot see
 
@@ -152,15 +152,15 @@ thread B: bind 127.0.0.1:5460 -> EADDRINUSE
 
 **If you assume otherwise:** a golden snapshot that records a port's state
 becomes flaky in exactly the way that looks like a real conflict, and
-`char status --all` run twice at once can report a `CONFLICT` that does not
+`armada manifest status --all` run twice at once can report a `CONFLICT` that does not
 exist. It is inherent to bind-probing rather than a bug to fix — `connect()`
 answers a different question — so the rule is that a probe's answer is a
-point-in-time reading and nothing may be serialised against it. char's own
+point-in-time reading and nothing may be serialised against it. Armada's own
 suite serialises the runs that snapshot a port state, for this reason.
 
 So a probe must bind **both** `127.0.0.1` and `[::1]` and treat either `EADDRINUSE` as taken,
-and `char status` must connect on both families before reporting `RESERVED`. `SO_REUSEPORT` on
-both sides remains undetectable; nothing char does prevents that, so it is a known limit rather
+and `armada manifest status` must connect on both families before reporting `RESERVED`. `SO_REUSEPORT` on
+both sides remains undetectable; nothing Armada does prevents that, so it is a known limit rather
 than a bug to fix.
 
 ## Rust — the POSIX primitives, and the rules each one forces
@@ -171,7 +171,7 @@ and unverified on Linux unless it names a platform.** This is the section where 
 that *was* re-run on Linux — the zombie-only group, below — came back different, so the
 absence of a Linux column here is a gap rather than a claim of agreement.
 
-### `SIGPIPE` is set to `SIG_IGN` at startup — `char status | head` panics until you fix it
+### `SIGPIPE` is set to `SIG_IGN` at startup — `armada manifest status | head` panics until you fix it
 
 Rust's runtime ignores `SIGPIPE`, so a write to a closed pipe returns `EPIPE`, `println!`
 unwraps it, and the process **panics with exit 101 and a backtrace on stderr** — worse than
@@ -189,7 +189,7 @@ blocks the design permits.
 ### `setsid` is not in `std`, and it is mutually exclusive with `process_group(0)`
 
 `Command::process_group(0)` gives a new process *group* in the **same session**. Detaching
-from the controlling terminal — what `char up` requires — needs `setsid` via `libc` inside
+from the controlling terminal — what `armada manifest up` requires — needs `setsid` via `libc` inside
 `pre_exec`. That is the second of four permitted `unsafe` blocks.
 
 **Measured: setting both fails.** `process_group(0)` *and* `pre_exec(setsid)` on the same
@@ -234,11 +234,11 @@ child exits, Child dropped without wait() -> ps stat "Z"
 ```
 
 Rust's `Child` does **not** reap on drop, and the docs say so, but the consequence is easy to
-miss: char spawns services, checks, ready-probes, docker calls and secret providers. Every one
-whose handle is dropped without `wait()` leaves a `<defunct>` entry until char itself exits.
+miss: Armada spawns services, checks, ready-probes, docker calls and secret providers. Every one
+whose handle is dropped without `wait()` leaves a `<defunct>` entry until Armada itself exits.
 
 **Rule: every spawned `Child` is waited on, or explicitly reaped.** A long-lived
-`char check --detach` accumulating zombies across a fifteen-minute run is the case that bites.
+`armada manifest check --detach` accumulating zombies across a fifteen-minute run is the case that bites.
 
 ### A group holding only a zombie: `killpg` fails on darwin and **succeeds** on Linux
 
@@ -262,7 +262,7 @@ question while the corpse is unreaped. And the errno on darwin is **`EPERM`, not
 `ESRCH`** — code that branches on `ESRCH` specifically sees neither the darwin
 answer nor the Linux one.
 
-**If you assume otherwise:** char confirms a kill with the signal-0 probe, and
+**If you assume otherwise:** Armada confirms a kill with the signal-0 probe, and
 for a caller that *parented* the group and has not reaped it the two platforms
 then fail in opposite directions. On darwin the zombie-only group answers
 `EPERM`, so `group_alive` is false and `stop_group` takes its first grace poll
@@ -273,7 +273,7 @@ escalates to SIGKILL, and *still* reads the group as alive, returning
 `gone: false`. A group that died on the first SIGTERM therefore reports `CLEAN`
 on darwin and `FAILED` on Linux, and only one of those is even accidentally
 right. This is a test-shaped hazard rather than a production one, because the
-case char actually reclaims is an **orphan**: its parent is gone, so init reaps
+case Armada actually reclaims is an **orphan**: its parent is gone, so init reaps
 it the moment it dies and both platforms answer `ESRCH`. **Reap before reading
 the probe as "empty", and reap before counting `ps` output.**
 
@@ -359,7 +359,7 @@ variant.
 
 **If you assume otherwise:** the parser is quietly more permissive than the JSON Schema, which
 says an env value is a string. A config with `DEBUG: null` loads cleanly, fails
-`char config verify`, and in between puts the literal text `null` into a spawned process's
+`armada manifest config verify`, and in between puts the literal text `null` into a spawned process's
 environment. `crates/core` rejects it at the `env:` block for exactly this reason —
 see PLAN.md §4.1.1.
 
@@ -368,7 +368,7 @@ needs to check: a **duplicate mapping key is an error**, not last-wins, so two c
 one name cannot reach the core; and `Error::location()` is populated for both syntax and typed
 errors, which is what makes PLAN.md §4.1.1's decision 4 free.
 
-## Typer / Click exit codes *(historical — charkit is Rust)*
+## Typer / Click exit codes *(historical — Armada is Rust)*
 
 Measured on darwin against **Typer 0.27.1**, phase 0, and not re-run on Linux — the exit codes
 are Click's own, but the broken-pipe entry below turns on a signal disposition and is a
@@ -385,12 +385,12 @@ python app.py --bogus       # unknown flag              -> 2
 python app.py clickerr      # typer.BadParameter        -> 2
 ```
 
-Both are free — char does not need to catch and re-exit for them.
+Both are free — Armada does not need to catch and re-exit for them.
 
 **This entry exists because it was reported as false.** A claim that Click collapses
 `KeyboardInterrupt` into `Abort` and exits `1` was checked and does not hold for this version.
 Re-measure after any framework upgrade: if it ever became true, it would be silent, and
-`char check` interrupted by an agent would report a code meaning "the tool failed" instead of
+`armada manifest check` interrupted by an agent would report a code meaning "the tool failed" instead of
 "you interrupted me."
 
 ### Broken pipe — measured, and both options are wrong by default
@@ -410,18 +410,18 @@ Two things to note, and neither is what was predicted:
 
 - Click **catches `BrokenPipeError` silently** — no traceback, no "Exception ignored" at
   shutdown. The predicted mechanism does not occur.
-- **Exit 1 is `tool_failed`** under char's own map, so `char status | head` currently reads as
+- **Exit 1 is `tool_failed`** under Armada's own map, so `armada manifest status | head` currently reads as
   "the tool failed" to anything checking exit codes.
 - `SIGPIPE=SIG_DFL` gives the correct Unix behaviour and code **141**, which `ARCHITECTURE.md`
   `ARCHITECTURE.md` §1.6 now carries in its exit table alongside the signal carve-out. Note the stdlib explicitly warns against this setting; the
-  warning is about libraries that need to observe the error, which char does not.
+  warning is about libraries that need to observe the error, which Armada does not.
 
 Whichever is chosen, the "exit code = `f(error.class)`" rule needs an explicit carve-out for
 signal-derived codes, covering `130` and `141` together.
 
 ## Docker CLI — reading labels back off a resource
 
-Measured on darwin against **Docker 29.6.2**, 2026-08-10. char stamps three
+Measured on darwin against **Docker 29.6.2**, 2026-08-10. Armada stamps three
 labels on everything it creates and reaps by them, so reading them back is the
 other half of the mechanism. `ls --format` and `inspect --format` are rendered
 client-side by the CLI's own templater, so these are properties of the docker
@@ -457,9 +457,9 @@ A label that is not set renders as the literal `<no value>` for containers,
 images and networks, and as an empty string for volumes — so an absent label and
 an empty one are indistinguishable in the text.
 
-**Consequence char acts on:** labels are read as `{{json …}}` and parsed, not as
+**Consequence Armada acts on:** labels are read as `{{json …}}` and parsed, not as
 a delimited line. A workspace path may legally contain a tab or a newline, and
-`char.workspace_path` is a real path — a delimiter a value can contain is one
+`armada.workspace_path` is a real path — a delimiter a value can contain is one
 that eventually attributes a resource to the wrong workspace, which is the
 failure the label exists to prevent.
 
@@ -486,10 +486,10 @@ docker compose -f docker-compose.yml -f override.yml config
 
 **If you assume otherwise:** you write an override to remap ports into a per-workspace block,
 every workspace still binds the base port, and concurrent workspaces collide — the exact
-failure charkit exists to prevent. It looks like it worked, because the new port is also
+failure Armada exists to prevent. It looks like it worked, because the new port is also
 published.
 
-### The `!override` tag is version-dependent — and that is why char does not rely on it
+### The `!override` tag is version-dependent — and that is why Armada does not rely on it
 
 ```sh
 # override.yml:  ports: !override ["5460:5432"]
@@ -504,7 +504,7 @@ re-trust.** First it recorded base-values-only, from a `grep` that showed one ma
 asserted the tag is ignored full stop, from a version that is no longer installed.
 
 **What survives is the design conclusion, and it survives on the *plain* override behaviour
-above, not on this tag.** char generates a whole document precisely so it never depends on a
+above, not on this tag.** Armada generates a whole document precisely so it never depends on a
 merge feature whose behaviour changes between versions and fails silently in the older
 direction. If a repo's developers are split across Compose versions — which is normal — an
 override-based design is correct on some machines and collides on others.
@@ -523,7 +523,7 @@ docker compose -f docker-compose.yml config | grep -A1 '^networks:'
 # → name: <directory>_default
 ```
 
-**If you assume otherwise:** you pass `-p char-<id>` only on the run step, and the networks
+**If you assume otherwise:** you pass `-p armada-<id>` only on the run step, and the networks
 are named for whatever directory the resolve happened to run in — so ownership by project
 label does not group the way you expect.
 
@@ -549,8 +549,8 @@ docker compose -f st.yml --project-directory . config
 ```
 
 **If you assume otherwise:** you persist the resolved document as a debugging aid and create a
-cleartext credentials file, for every repo, including ones that never adopt char's secrets
-mechanism. Those values never passed through char, so no scrubber can redact them. This is why
+cleartext credentials file, for every repo, including ones that never adopt Armada's secrets
+mechanism. Those values never passed through Armada, so no scrubber can redact them. This is why
 `PLAN.md` §6.0 pipes the document to `docker compose -f -` instead of writing it.
 
 `docker compose -f -` accepts a document on stdin and produces identical resolved output —
@@ -569,7 +569,7 @@ sh -c "eslint $FILES"
 ```
 
 Measured. **`${files}` is the only substitution whose values come from outside the trust
-boundary** — filenames are written by whoever pushed the branch, and `char check` on a pull
+boundary** — filenames are written by whoever pushed the branch, and `armada manifest check` on a pull
 request is the ordinary case.
 
 **If you assume otherwise:** you offer `shell: true` as a convenience, someone uses it in a
@@ -581,14 +581,14 @@ Also non-malicious and silent: a filename containing a space is word-split into 
 
 **Not compose, and not platform-neutral.** This entry is `sh -c` word-splitting and command
 substitution with no compose involved, measured on darwin. `/bin/sh` is `bash` on darwin and
-`dash` on Debian and Ubuntu, and char hardcodes it in **two** places: `template::shell_argv`
+`dash` on Debian and Ubuntu, and Armada hardcodes it in **two** places: `template::shell_argv`
 for a `setup:` step, and `verbs::dispatch` inline for a `commands:` entry, which builds the
 same `["/bin/sh", "-c", …]` itself because it has to append shell-quoted passthrough after
 substitution. Grepping for the helper finds one of them. Both inherit whatever `/bin/sh` is on
-the machine, so the shell char actually invokes differs by platform.
+the machine, so the shell Armada actually invokes differs by platform.
 **The dash side is unverified.** Nothing here rests on it, because the schema makes
 `shell: true` beside `${files}` unrepresentable on every platform; what has not been measured
-is whether any *other* `shell: true` command char runs behaves differently under dash.
+is whether any *other* `shell: true` command Armada runs behaves differently under dash.
 
 ### `docker compose up` has no `--label` flag
 
@@ -606,10 +606,10 @@ command line.
 `config` renders, so the section's client-side note does not cover it. Measured on darwin.
 
 ```sh
-# a document with labels: {char.workspace: deadbeef} on the service only
-docker ps      -q --filter label=char.workspace=deadbeef   # 1
-docker network ls -q --filter label=char.workspace=deadbeef  # 0  <- char-deadbeef_default EXISTS
-docker volume  ls -q --filter label=char.workspace=deadbeef  # 0  <- char-deadbeef_pgdata  EXISTS
+# a document with labels: {armada.workspace: deadbeef} on the service only
+docker ps      -q --filter label=armada.workspace=deadbeef   # 1
+docker network ls -q --filter label=armada.workspace=deadbeef  # 0  <- armada-deadbeef_default EXISTS
+docker volume  ls -q --filter label=armada.workspace=deadbeef  # 0  <- armada-deadbeef_pgdata  EXISTS
 ```
 
 **This is the founding bug of the project, reintroduced.** §1 of `PLAN.md` cites 29 leftover
@@ -622,14 +622,14 @@ The fix is in the same document, and it works:
 
 ```yaml
 volumes:
-  pgdata:  { labels: { char.workspace: cafe1234 } }
+  pgdata:  { labels: { armada.workspace: cafe1234 } }
 networks:
-  default: { labels: { char.workspace: cafe1234 } }
+  default: { labels: { armada.workspace: cafe1234 } }
 ```
 
 ```sh
-docker network ls -q --filter label=char.workspace=cafe1234   # 1
-docker volume  ls -q --filter label=char.workspace=cafe1234   # 1
+docker network ls -q --filter label=armada.workspace=cafe1234   # 1
+docker volume  ls -q --filter label=armada.workspace=cafe1234   # 1
 ```
 
 Top-level `networks:` and `volumes:` must be **stamped separately** in the transform step.
@@ -643,7 +643,7 @@ DOCKER_HOST=unix:///nonexistent.sock docker ps               # rc 1
 ```
 
 `config` is client-side. So `PLAN.md` §6.0's steps 1–3 all pass against a dead daemon and only step 4
-fails — char does its whole resolve-and-transform and discovers the daemon is gone at the end.
+fails — Armada does its whole resolve-and-transform and discovers the daemon is gone at the end.
 Probe the daemon before starting work, and report it as an environment failure rather than as
 the stack failing to start.
 
@@ -651,7 +651,7 @@ the stack failing to start.
 
 Measured against a socket that accepts the connection and never replies: `docker ps` and
 `docker compose up -d` were both still running at 30 seconds with no output. There is no flag
-for this. **Every docker invocation needs char's own timeout**, and the one that matters most
+for this. **Every docker invocation needs Armada's own timeout**, and the one that matters most
 is the `docker ps` in `init`'s reap pass — without a timeout, a hung daemon wedges every new
 workspace on the machine, including the verb whose job is recovery.
 

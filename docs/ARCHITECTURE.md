@@ -1,13 +1,13 @@
 # Armada — architecture
 
-> **Status:** the eight principles in §1 were agreed for charkit and **all eight carry forward
+> **Status:** the eight principles in §1 were agreed for Armada and **all eight carry forward
 > unchanged** to Armada's four modules — they were written about subprocesses, clocks and
 > networks, not about repositories, so widening the scope did not touch them. §1.9 adds the one
 > rule the four-module shape needs. Two SDLC rules were **retired** when the repository went
 > private: the contamination grep (§2.4) and the clean-room rule (§2.7). Both are recorded
 > rather than deleted.
 >
-> The **Manifest** module — formerly charkit — has landed its config contract, six fixtures and
+> The **Manifest** module — formerly Armada — has landed its config contract, six fixtures and
 > the ownership layer behind `init`, `clean`, `status` and `commands:`. The three seams, the
 > reducer's shape for the claim loop and the `--json` envelope are code rather than sketches.
 > `up`, `down` and `check` are not built, and neither are Guild, Fleet or Helm.
@@ -40,7 +40,7 @@ reached through a function passed in, never imported. There are exactly three:
 
 | Seam | Covers |
 |---|---|
-| `run` | every subprocess — and therefore docker, git, and every `cmd:` from `char.yml` |
+| `run` | every subprocess — and therefore docker, git, and every `cmd:` from `armada.yml` |
 | `now` | timeouts, heartbeat staleness (monotonic), `claimed_at` (wall) |
 | `fetch` | `http` and `tcp` ready-checks |
 
@@ -70,25 +70,25 @@ git). Three, because:
 - **Docker and git are subprocess calls.** Giving them their own ports means three different
   ways to fake a shell command, and tests that disagree about which one ran.
 - **Faking at the `run` level keeps argv assertable, and argv is where the bugs are.**
-  charkit's central correctness claim is *"`clean` releases exactly what this workspace
+  Armada's central correctness claim is *"`clean` releases exactly what this workspace
   owns."* When that breaks it looks like a label filter written `--filter
-  label=char.workspace` instead of `label=char.workspace=<id>`, or a compose project name at
+  label=armada.workspace` instead of `label=armada.workspace=<id>`, or a compose project name at
   `up` that doesn't match the one at `down`. Those are argv bugs. A test that fakes `run`
   asserts the exact command and catches them. A test that fakes a `DockerPort` catches none
   of them — the fake returns whatever you told it to, and the argv-building code has no test
   at all. Mocking at the higher layer would hide precisely the bug class the tool exists to
   prevent.
 - **The filesystem must not be faked, and neither must SQLite.** Machine-global state lives
-  in `~/.char/char.db` (PLAN.md §4.3), so char depends on real transaction semantics for
-  port claims and lease acquisition, and on real files for logs and `.char/`. A fake gives
+  in `~/.armada/manifest.db` (PLAN.md §4.3), so Armada depends on real transaction semantics for
+  port claims and lease acquisition, and on real files for logs and `.armada/`. A fake gives
   you a green test over your own fake's concurrency model and proves nothing about the real
   one — in the one area where [`PHASES.md`](PHASES.md) §11 names corruption under concurrent claims as a live risk.
   Two threads against a real database in a `tempfile::TempDir` is both more faithful and less code.
 
 **Where stack diversity actually lands.** It does not land here. A Rails repo and a Go repo
-differ in *what string char runs*, not in *how char runs a string*. Most of what charkit
+differ in *what string Armada runs*, not in *how Armada runs a string*. Most of what Armada
 shells out to it has never heard of — `bundle exec`, `turbo run`, `go test`,
-`./scripts/kind-up.sh` — because those arrive as free text from `char.yml`. `owns:` does the
+`./scripts/kind-up.sh` — because those arrive as free text from `armada.yml`. `owns:` does the
 same for cleanup, with a label selector as a string. No typed port can model any of it.
 Config absorbs diversity; the I/O layer never sees it.
 
@@ -233,9 +233,9 @@ the same data."* Same two callers, same conclusion, reached before this document
 
 **The public contract is the CLI surface and the `--json` payloads. Internal modules are
 internal.** The plan originally called this "a thin wrapper over an importable library," and
-the word *library* was dropped deliberately: it invites `from charkit import ...`, which
+the word *library* was dropped deliberately: it invites `from Armada import ...`, which
 creates a stability obligation to a consumer that does not exist. External consumers get the
-CLI. Note this interacts with versioning (§2.5) — charkit stays 0.x, so no stability is
+CLI. Note this interacts with versioning (§2.5) — Armada stays 0.x, so no stability is
 promised on any surface, but the CLI and `--json` are the ones intended to be depended on.
 
 ---
@@ -253,7 +253,7 @@ on `Ctx`, §1.1).
 **Why.** `--project` and `--all` mean operating on workspaces that are *not* the current
 directory. If any function can re-derive "the workspace" from cwd, then scoping to a
 different one requires lying about cwd — and you are one `os.chdir` away from a race between
-two concurrent runs on the same machine, which is the exact scenario charkit exists to make
+two concurrent runs on the same machine, which is the exact scenario Armada exists to make
 safe.
 
 The abstract phrasing ("no ambient state") was rejected because everyone agrees with it and
@@ -268,24 +268,33 @@ travel together rather than as seven separate arguments.
 ### 1.5 Dependencies point inward
 
 ```
-charkit/
-  core/       pure. std, its own traits, and pure data crates (serde,
-              serde_yaml, serde_json, regex). NO I/O crate, ever.
-  adapters/   docker, git, filesystem, process. import core protocols only.
-  cli/        the ONLY module that imports both, and wires them together.
+crates/
+  core/       armada-core.     pure. std, its own traits, and pure data crates
+                               (serde, serde_yaml, serde_json, regex).
+                               NO I/O crate, ever.
+  manifest/   armada-manifest. docker, git, filesystem, process — the Manifest
+                               module's shell. Imports core protocols only.
+  helm/       armada-helm.     the ONLY crate that imports both, and wires them
+                               together. Carries the one binary, `armada`.
 ```
+
+**A module may hold more than one crate, and the split above is the shape the others will
+take.** Guild and Fleet get `armada-guild` and `armada-fleet` when they get code; the check in
+§1.9 already knows where they belong, so the commit that creates them is the commit the rule
+applies to.
 
 Enforced mechanically by the crate graph itself, plus `cargo xtask boundaries` in the merge
 gate — before there is anything to untangle.
 
 **Why a check at all, when the graph already enforces it.** The graph enforces the *direction*:
-a cycle does not compile. Nothing stops someone adding `charkit-adapters` to `core`'s manifest,
+a cycle does not compile. Nothing stops someone adding `armada-manifest` to `core`'s manifest,
 which compiles fine and quietly inverts the design — a one-line diff in a file nobody reads
 twice, whose consequence is that the pure core acquires I/O. The check reads `cargo metadata`,
 so it sees all three spellings of a dependency and both kinds: a core *test* reaching for
-adapters is the same leak arriving through a door marked `[dev-dependencies]`. A workspace
-member with no entry in the contract is itself a finding, so a new crate states its place in the
-layering deliberately.
+`armada-manifest` is the same leak arriving through a door marked `[dev-dependencies]`. A
+workspace member with no entry in the contract is itself a finding, and so is depending on an
+Armada crate that has no entry — an unplaced crate must not be permitted by silence, in either
+direction.
 
 An earlier draft of this line named `cargo-deny`/`clippy` as the mechanism. Neither expresses
 "who may depend on whom" — `cargo-deny` is for licences and advisories — so the check is a dozen
@@ -319,35 +328,35 @@ caught it: golden snapshots capture stdout, not exit status.
 | Code | Error class | Meaning |
 |---:|---|---|
 | `0` | *(none)* | success |
-| `1` | `tool_failed` | the thing char ran failed on its own terms — a real result, not char's fault |
+| `1` | `tool_failed` | the thing Armada ran failed on its own terms — a real result, not Armada's fault |
 | `2` | `bad_invocation` | unknown verb or flag |
-| `3` | `bad_config` | `char.yml` is wrong |
-| `4` | `timeout` | char's own deadline elapsed |
+| `3` | `bad_config` | `armada.yml` is wrong |
+| `4` | `timeout` | Armada's own deadline elapsed |
 | `5` | `aborted` | cancelled, or the run's holder died |
-| `6` | `environment` | the machine char runs on is broken — nothing is wrong with the repo |
-| `70` | `char_bug` | internal error; retrying will not help |
+| `6` | `environment` | the machine Armada runs on is broken — nothing is wrong with the repo |
+| `70` | `armada_bug` | internal error; retrying will not help |
 | `130` | *(signal)* | SIGINT |
-| `141` | *(signal)* | SIGPIPE — `char status \| head` and friends |
+| `141` | *(signal)* | SIGPIPE — `armada manifest status \| head` and friends |
 
 **Terminal state describes *what happened*; error class states *why*; the code follows the
 class.** They are not the same axis, which is why one cannot be derived from the other:
 
 | Case | State | Class | Code |
 |---|---|---|---:|
-| `char up`, `char.yml` names a compose file that does not exist | `FAILED` | `bad_config` | 3 |
-| `char check`, the tests genuinely fail | `FAILED` | `tool_failed` | 1 |
+| `armada manifest up`, `armada.yml` names a compose file that does not exist | `FAILED` | `bad_config` | 3 |
+| `armada manifest check`, the tests genuinely fail | `FAILED` | `tool_failed` | 1 |
 
 Same state, different codes, and that is correct — an agent must fix the config in one case
 and read the test output in the other. `DEAD` (the run's holder died) maps to `aborted`,
 because the useful next action is the same as for a cancellation: try again.
 
-**Verified rather than assumed** — though against Typer 0.27.1, *before* the language decision, so this is now evidence about conventions rather than about charkit's own stack (`traps.md` marks it historical): `KeyboardInterrupt`
+**Verified rather than assumed** — though against Typer 0.27.1, *before* the language decision, so this is now evidence about conventions rather than about Armada's own stack (`traps.md` marks it historical): `KeyboardInterrupt`
 already exits **130**, and usage errors already exit **2**. Those two are genuinely free. A
 report that Click collapses them to `1` was checked and is false for this version — but check
 again if the framework is upgraded, because it would be silent.
 
-`70` is not a claim to implement BSD `sysexits`. It is chosen because it sits far from char's
-own low codes *and* from the codes a child process is likely to return, so "char itself broke"
+`70` is not a claim to implement BSD `sysexits`. It is chosen because it sits far from Armada's
+own low codes *and* from the codes a child process is likely to return, so "Armada itself broke"
 stays distinguishable from everything else.
 
 **Signals are the one carve-out from `exit code = f(error.class)`.** A process killed by a
@@ -355,7 +364,7 @@ signal exits `128+N` and has no error class at all — `130` for SIGINT, `141` f
 State that explicitly, because the rule as written has no room for them and an implementer
 following it literally would map them into a class.
 
-**Broken pipe is now resolved: `141`.** `char status | head` must not read as a failure, and
+**Broken pipe is now resolved: `141`.** `armada manifest status | head` must not read as a failure, and
 Rust's runtime sets `SIGPIPE` to `SIG_IGN` at startup, so without intervention the process
 *panics* with exit 101 — worse than nothing. Restoring the default disposition in `main` gives
 the ordinary Unix behaviour: silent death, exit 141. That is one of exactly four `unsafe` blocks
@@ -387,7 +396,7 @@ Worth being honest: the field has no consumer today. The MCP server is in-proces
 the same version, and agents read JSON adaptively rather than branching on a version number.
 It is included because it **cannot be retrofitted** — adding it in v0.4 does not help anyone
 who wrote a script against v0.2, since their payloads never carried it. Every other decision
-here is reversible; this one has a one-way door. It matters more than usual given charkit
+here is reversible; this one has a one-way door. It matters more than usual given Armada
 stays 0.x indefinitely (§2.5), which means the package version communicates nothing about
 compatibility, so `schema_version` is the only compatibility signal that exists.
 
@@ -429,7 +438,7 @@ Every error carries **which class of failure it is, where, and what to do next.*
   "verb": "config verify",
   "error": {
     "class": "bad_config",
-    "where": "char.yml:components.api.checks.lint.cmd",
+    "where": "armada.yml:components.api.checks.lint.cmd",
     "message": "`ruff` not found on PATH",
     "next_action": "add ruff to the api component's setup:, or correct the cmd"
   }
@@ -439,12 +448,12 @@ Every error carries **which class of failure it is, where, and what to do next.*
 | Class | Meaning | Agent's correct response | Exit |
 |---|---|---|---:|
 | `bad_invocation` | the command itself was wrong | fix the command | `2` |
-| `bad_config` | `char.yml` is wrong | fix the config | `3` |
+| `bad_config` | `armada.yml` is wrong | fix the config | `3` |
 | `tool_failed` | the underlying tool failed | that is a real result — report it | `1` |
-| `timeout` | char's own deadline elapsed | raise the timeout, or investigate why it is slow | `4` |
+| `timeout` | Armada's own deadline elapsed | raise the timeout, or investigate why it is slow | `4` |
 | `aborted` | cancelled, or the run's holder died | try again | `5` |
-| `environment` | Docker is down, the disk is full, `char.db` is unreadable | **fix the machine, then retry unchanged** | `6` |
-| `char_bug` | charkit broke | stop; retrying will not help | `70` |
+| `environment` | Docker is down, the disk is full, `manifest.db` is unreadable | **fix the machine, then retry unchanged** | `6` |
+| `armada_bug` | Armada broke | stop; retrying will not help | `70` |
 
 **`environment` exists because §1.6's own argument demands it.** That argument is *"the
 difference between 'your config is wrong' and 'your tests failed' is the difference between
@@ -454,10 +463,10 @@ wrong with your repo, the machine is." Without the class, a dead Docker daemon i
 it."* An agent then reports that the tests failed when Docker Desktop is not running, and a
 human goes looking in the wrong repository. Measured members: daemon unreachable, `docker`
 absent from `PATH`, `SQLITE_FULL` (13), `SQLITE_CANTOPEN` (14), `SQLITE_CORRUPT` (11), and
-char's own timeout on a docker call.
+Armada's own timeout on a docker call.
 
 It is the one class where the correct retry is **the identical command, after a human fixes
-something char cannot** — which is why it must not share an exit code with `tool_failed`
+something Armada cannot** — which is why it must not share an exit code with `tool_failed`
 (don't retry) or `aborted` (retry immediately).
 
 `timeout` and `aborted` are classes rather than only terminal states so that the class enum
@@ -465,7 +474,7 @@ covers every non-zero exit. Without them the mapping in §1.6 would have holes, 
 where a second, competing mapping grows back.
 
 `next_action` is **required for `bad_config`** and optional elsewhere. That is the one class
-where char genuinely knows the fix, because it has just validated the file and knows what it
+where Armada genuinely knows the fix, because it has just validated the file and knows what it
 expected. Elsewhere a remediation string would usually be generic, and a field that is often
 empty teaches agents to ignore it.
 
@@ -476,25 +485,25 @@ say nothing about whose fault a failure is.
 
 ---
 
-### 1.8 A resolved secret never appears in anything char writes
+### 1.8 A resolved secret never appears in anything Armada writes
 
-`char.yml` declares a *reference*; char resolves it at spawn time and injects it into the
+`armada.yml` declares a *reference*; Armada resolves it at spawn time and injects it into the
 child's environment (PLAN.md §4.7). From the architecture's point of view that creates one
 invariant, and it cuts across the renderer, the log writer and every error path:
 
-> A resolved secret value is never written to **anything char writes** — stdout, stderr,
-> `--json`, `.char/`, **`~/.char/char.db`**, or argv.
+> A resolved secret value is never written to **anything Armada writes** — stdout, stderr,
+> `--json`, `.armada/`, **`~/.armada/manifest.db`**, or argv.
 
-**The scope is deliberate, and the boundary is "what char writes."** char cannot make a
+**The scope is deliberate, and the boundary is "what Armada writes."** Armada cannot make a
 secret unreadable to something it hands the secret to. A value injected into a container is
 in Docker's store, and anyone who can reach the daemon can `docker exec ... env` or read any
-file inside — daemon access is root-equivalent. No mechanism char could build changes that,
-so promising it would be false assurance. What char *can* guarantee is that its own outputs,
+file inside — daemon access is root-equivalent. No mechanism Armada could build changes that,
+so promising it would be false assurance. What Armada *can* guarantee is that its own outputs,
 files and database never contain one.
 
-`~/.char/char.db` is named explicitly because it is machine-global and survives `clean` by
+`~/.armada/manifest.db` is named explicitly because it is machine-global and survives `clean` by
 design, so anything written there is written for good. It holds no secret and no secret
-reference: `PLAN.md` §6.1's `owns.release:` is recorded and *reported*, never executed, so char
+reference: `PLAN.md` §6.1's `owns.release:` is recorded and *reported*, never executed, so Armada
 never resolves anything on that path.
 
 Four consequences for the code:
@@ -506,13 +515,13 @@ Four consequences for the code:
   `ps`.
 - **The renderer and log writer scrub known resolved values** before writing. This is the
   one place the value is deliberately held, so it is the one place that needs the filter.
-  **char reads raw and writes scrubbed** — ready-check regexes, `parse:` keys and exit-code
+  **Armada reads raw and writes scrubbed** — ready-check regexes, `parse:` keys and exit-code
   interpretation all see real bytes; logs, `--json` and the terminal see redacted ones.
   Scrubbing the stream instead would break a ready-check whose regex spans a redacted value.
-  char can only scrub what it can see, which is why `stdio:` (PLAN.md §4.5) is declarable
+  Armada can only scrub what it can see, which is why `stdio:` (PLAN.md §4.5) is declarable
   per entry rather than inferred.
-- **No verb returns a secret.** There is deliberately no `char secret get`. An agent can
-  *use* a secret by running `char up`; it cannot *obtain* one. That asymmetry is the point,
+- **No verb returns a secret.** There is deliberately no `armada secret get`. An agent can
+  *use* a secret by running `armada manifest up`; it cannot *obtain* one. That asymmetry is the point,
   and it is a property of the verb surface rather than of any implementation.
 
 **Stated as an architecture principle rather than a feature detail** because it is an
@@ -520,7 +529,7 @@ invariant about *output*, and §1.6 already made output a contract. Every verb a
 machine-readable shape — this says what that shape may never contain.
 
 **Honest limit:** scrubbing is defense-in-depth, not a proof. It cannot defeat an encoded
-value, and char does not control commands invoked outside it. What it guarantees is that the
+value, and Armada does not control commands invoked outside it. What it guarantees is that the
 default path is safe.
 
 ### 1.9 Four modules, and nothing points upward
@@ -552,11 +561,12 @@ This is mechanically enforced by the same check that already enforces §1.5 —
 rule with a half-life. §1.5 is the general principle; this is its concrete shape for the four
 modules, and the two are the same rule stated at different altitudes.
 
-> **Today the check enforces the crate layering of §1.5 and nothing more**, because Guild, Fleet
-> and Helm have no crates yet. The module rule above is therefore documented but not yet
-> mechanically enforced. Extending `boundaries.rs` is part of the milestone that first creates a
-> second module crate, not a later cleanup — a rule that spends a milestone unenforced is a rule
-> that gets broken in that milestone.
+> **The check enforces this table, and has since M1** ([`PHASES.md`](PHASES.md) §8.3). It reads
+> the module each workspace crate belongs to and rejects any dependency the table does not
+> permit; `core` sits below every module and is always permissible, which is how
+> [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5 falls out of the same pass. `armada-guild` and
+> `armada-fleet` are placed in it before they exist, because a rule that spends a milestone
+> unenforced is a rule that gets broken in that milestone.
 
 **The names are fixed in one place.** [`glossary.md`](glossary.md) is the single definition of
 Module, Job, Drone, Helm, Bridge and Board, and of the three status enums. A term that starts
@@ -573,8 +583,8 @@ forbids something Manifest has done correctly since phase 1.
 depends on one.
 
 Emitting is safe because the output is derived from repository facts and a non-agent caller can
-simply ignore it. `char agents-md` ([`PLAN.md`](PLAN.md) §5.1) writes a managed block into
-`AGENTS.md` and nobody has ever considered that a violation; `char render`
+simply ignore it. `armada manifest agents-md` ([`PLAN.md`](PLAN.md) §5.1) writes a managed block into
+`AGENTS.md` and nobody has ever considered that a violation; `armada manifest render`
 ([`PLAN.md`](PLAN.md) §4.8) writes skill files on the same terms. Accepting is what does the
 damage, because it drags the agent framework into every other caller's lap — which is the
 failure the negative rule above exists to prevent.
@@ -880,11 +890,11 @@ missed them entirely.
 *What it catches:* phase 3 is the only phase permitted to read the source repo, and this is
 its acceptance test made permanent. The configured alternative — the repo's own name — is a
 leftover import or path; `tilt` means a vendor assumption got into code rather than staying in
-config; `NEXT_PUBLIC` means Next.js knowledge was baked in; `.claude` means char assumed where
+config; `NEXT_PUBLIC` means Next.js knowledge was baked in; `.claude` means Armada assumed where
 worktrees live instead of asking git; `backend/` and `web/` are the source repo's package
 directories, so a hardcoded one means the `components:` abstraction did not take.
 
-*Why permanent:* from phase 3 onward the plan runs charkit **against** the source checkout
+*Why permanent:* from phase 3 onward the plan runs Armada **against** the source checkout
 in read-only parallel to compare verdicts, and phase 6 is a PR against that repo. Pasting one
 of its real paths into `src/` to reproduce a mismatch is an entirely ordinary thing to do, and
 this is what catches it.
@@ -949,8 +959,8 @@ The path costs one extra match per file to cover. Findings against a path are re
 it.
 
 **Why the running machine's home, rather than the shape of a home path.** `/Users/<name>/` and
-`/home/<name>/` are ordinary things for a test to construct — `crates/adapters` builds
-`/home/agent/.char` to assert a path join, and that is the test doing its job. Banning the
+`/home/<name>/` are ordinary things for a test to construct — `crates/manifest` builds
+`/home/agent/.Armada` to assert a path join, and that is the test doing its job. Banning the
 shape needs an allowlist of blessed pretend usernames, which grows every time someone writes a
 test and is exactly the weakening mechanism this section rejects for the grep. Matching only
 `$HOME` has nothing to allowlist, because a path that is not yours cannot identify you. It
@@ -1024,7 +1034,7 @@ request can still change, which is the tree, and this reports on request.
 
 ### 2.5 Versioning: 0.x indefinitely
 
-charkit publishes at `0.x` and does not commit to a `1.0`. A changelog is maintained from the
+Armada publishes at `0.x` and does not commit to a `1.0`. A changelog is maintained from the
 first publish.
 
 No stability is promised, which is honest for a tool with one or two consumers. The
@@ -1035,12 +1045,12 @@ consequence is recorded in §1.6: since the package version carries no compatibi
 
 ### 2.6 Dogfooding: a test through phase 6, the gate after it
 
-This is staged deliberately. The end state is charkit gating itself with itself; the interim
-arrangement exists only while charkit is still being built.
+This is staged deliberately. The end state is Armada gating itself with itself; the interim
+arrangement exists only while Armada is still being built.
 
-**Phases 3–6 — dogfooding is a test.** charkit has its own `char.yml` from phase 3. The gate
+**Phases 3–6 — dogfooding is a test.** Armada has its own `armada.yml` from phase 3. The gate
 runs the **raw tools** — `cargo clippy`, `cargo fmt --check`, `cargo test`. A single test,
-runs `char check --json` and asserts it reaches the same verdict and that every check id
+runs `armada manifest check --json` and asserts it reaches the same verdict and that every check id
 resolves.
 
 **Phase 2.5 is the first real repo, and it is not this one.** The source repo adopts
@@ -1048,26 +1058,26 @@ resolves.
 dogfooding arrangement below concerns `check` specifically: the ownership half has had a real
 consumer since well before phase 6.
 
-**Once phase 6 lands — `char check` becomes the gate.** Phase 6 is the source repo adopting
-charkit: `scripts/char/check.py` deleted, the dependency taken, `char check --all-files`
-green. That is the point at which a real repository is already trusting `char check` as its
+**Once phase 6 lands — `armada manifest check` becomes the gate.** Phase 6 is the source repo adopting
+Armada: `scripts/Armada/check.py` deleted, the dependency taken, `armada manifest check --all-files`
+green. That is the point at which a real repository is already trusting `armada manifest check` as its
 own merge gate — so it is trustworthy enough for this one. The dogfood test is then replaced
 by the real thing, and the raw commands stay documented in the README as the fallback.
 
-**Why not gate on `char check` from phase 3.** If `char check` is the gate and `char check`
+**Why not gate on `armada manifest check` from phase 3.** If `armada manifest check` is the gate and `armada manifest check`
 breaks, every PR fails — including the PR that fixes it. The alternative is a written
 break-glass procedure, and break-glass procedures have three problems: they are rarely
 exercised so they rot, they demand careful judgment at the moment of least judgment, and a
 `--skip=lint,test` in your shell history does not stay confined to emergencies.
 
-Deferring the flip is not giving up the forcing function — break `char check` during phases
+Deferring the flip is not giving up the forcing function — break `armada manifest check` during phases
 3–6 and the dogfood test fails, so you still cannot merge until you fix it. What it buys is
 that a bug in a tool still under construction cannot lock its own repository, during exactly
 the period when such bugs are most likely.
 
-**A caveat worth writing down:** charkit's own `char.yml` is one component, pure Rust, no
+**A caveat worth writing down:** Armada's own `armada.yml` is one component, pure Rust, no
 services — structurally the *simplest* fixture shape. Dogfooding therefore pulls the design
-toward that shape. "It works on charkit" is not evidence the abstraction generalises. The six
+toward that shape. "It works on Armada" is not evidence the abstraction generalises. The six
 fixtures and phase 8 are.
 
 ---
@@ -1115,7 +1125,7 @@ production once. Two are named in the plan ("load-bearing comments about two Pla
 traps"); the harvest found three, and `docs/harvest.md` has them. The ones that are *not*
 commented are the danger: a bug fix looks like an unremarkable three-line conditional, and
 nobody reviewing a rewrite notices it is missing.
-This matters more here than in a normal rewrite, because charkit gives up continuous
+This matters more here than in a normal rewrite, because Armada gives up continuous
 real-repo validation for the check engine until phase 6 — so knowledge lost cannot be re-derived by running the
 thing. You would rediscover those bugs in phase 6, the one PR the plan already flags as
 carrying the most rework.
@@ -1125,11 +1135,11 @@ building greenfield, applied one level deeper. Structural contamination becomes 
 when the agent typing the code has never seen the structure.
 
 **Who runs the read-only parallel comparison, because the implementer cannot.** §2.4 has the
-plan running `char check` against the source checkout to compare verdicts. That points char at
+plan running `armada manifest check` against the source checkout to compare verdicts. That points Armada at
 the source repo's checkout, and reading that path is exactly what the hook below denies to
 every agent but the harvester. The implementer being unable to start it is the guard working
 rather than a gap in it: the run is the operator's, or the harvester's. What the implementer
-owes is a `char check` that can be pointed somewhere.
+owes is a `armada manifest check` that can be pointed somewhere.
 
 #### Making it structural rather than aspirational
 
@@ -1143,7 +1153,7 @@ mechanisms, in descending order of how much weight they carry:
    path for **every** agent, and allow it for the harvester alone — an allowlist, so a new
    agent added later is denied by default rather than silently permitted.
 
-   **The path it guards is configuration, not a constant.** charkit is public and the repo it
+   **The path it guards is configuration, not a constant.** Armada is public and the repo it
    is built away from is not, so a committed path would publish the thing the guard exists to
    keep out, and would be nobody else's path in every clone. The hook takes a path fragment
    from `CHARKIT_CLEAN_ROOM_PATH`, or from an untracked `.claude/clean-room.local` when no
@@ -1181,7 +1191,7 @@ not the vector. Reading is.
 **The test cases are ported, not rewritten.** The source suite asserts on behaviour rather
 than implementation, and the plan calls it the single most valuable asset. Rewriting it from
 scratch discards the valuable part and keeps the cheap part. One honest
-caveat: it is built around `run_fn` injection and charkit uses three seams behind a `Ctx`, so
+caveat: it is built around `run_fn` injection and Armada uses three seams behind a `Ctx`, so
 it is **port the cases, rewrite the harness** — the assertions survive, the setup does not,
 and the scheduler tests change shape because the scheduler did. They land as data under
 `tests/cases/`, one file per subsystem, with the schema and the recorded exclusions in
@@ -1227,7 +1237,7 @@ which one was wrong.
 | Shipped behaviour disagreeing with the spec is a divergence | `ARCHITECTURE.md` §2.1.2 |
 | `--json` envelope and `data.results[]` | `PLAN.md` §3.1 |
 | Terminal-state enum | `PLAN.md` §3 |
-| The `char.yml` contract, key by key | `crates/core/schema/char.schema.json` |
+| The `armada.yml` contract, key by key | `crates/core/schema/armada.schema.json` |
 | Why the contract is shaped that way | `PLAN.md` §4 (prose) and §4.1.1 (what phase 1 settled) |
 | Measured environment behaviour | `traps.md` |
 
@@ -1258,8 +1268,8 @@ when the copy and the owner disagree, the owner wins and the copy is the bug.
 | License | **Apache-2.0** | Explicit patent grant, clears corporate legal review, no adoption cost. |
 | CI | **Both** — `no-mistakes` primary, minimal Actions matrix alongside | Actions supplies the one thing a local gate cannot: a machine that is not yours, and Linux as well as macOS. Process groups, signals and file locks are load-bearing; verifying real process-group kill only on macOS leaves the platform most users are on untested. Free on a public repo. `no-mistakes` keeps the agent review step, which is the only actual review in a solo repo. |
 | Typing | **The compiler** | The decision that produced "mypy strict from commit one" is satisfied for free and more strongly: there is no gradual-typing escape hatch and no `Any` leaking in from untyped dependencies. `unsafe` is denied crate-wide **except in `adapters`' POSIX process module**, which carries a documented `allow` covering exactly four calls — `libc::signal` (SIGPIPE), `setsid` inside `pre_exec`, `libc::killpg`, and `clock_gettime` for the monotonic heartbeat column. All four live in that module; `main` restores SIGPIPE by calling `adapters::posix::restore_sigpipe()`, so `cli` contains no `unsafe` of its own. An earlier draft said "exactly two" and denied `unsafe` everywhere, which rejects `killpg` — the project's central cleanup primitive, and an unsafe extern fn. |
-| Rust edition / MSRV | **2021 edition, MSRV 1.97** | MSRV pinned in `[workspace.package]` and inherited by every crate. The pin states the toolchain the workspace is actually verified against, not an aspirational floor — so lowering it is as deliberate an act as raising it, and requires something that genuinely builds and tests the lower version rather than a manifest edit asserting it. A high floor costs almost nothing here: users receive a static binary and need no toolchain to run `char`, so only source builders are affected. |
-| Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real concurrent claim races or real docker labels — the exact failures char exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
+| Rust edition / MSRV | **2021 edition, MSRV 1.97** | MSRV pinned in `[workspace.package]` and inherited by every crate. The pin states the toolchain the workspace is actually verified against, not an aspirational floor — so lowering it is as deliberate an act as raising it, and requires something that genuinely builds and tests the lower version rather than a manifest edit asserting it. A high floor costs almost nothing here: users receive a static binary and need no toolchain to run `armada`, so only source builders are affected. |
+| Test layers | **Unit + integration + e2e** | Hermetic unit tests mean nothing exercises real process-group kill, real concurrent claim races or real docker labels — the exact failures Armada exists to prevent. The e2e tier turns phase 4's done-when scenario from a manual check into a test. |
 | Coverage | **Gated, ratchet floor** | Floor is set by the first real measurement and may only rise; a PR that lowers coverage fails. Chosen over a fixed percentage because no project data exists to ground a number — 80 and 90 are convention, not evidence. `#[coverage(off)]`, or a documented exclusion, with a reason comment, is the escape for genuinely untestable lines. |
 
 ### Test tiers
@@ -1268,7 +1278,7 @@ when the copy and the owner disagree, the owner wins and the copy is the bug.
 |---|---|---|---|
 | unit | `#[cfg(test)]` modules beside the code they test, in `crates/*/src/` | Pure core. Scheduler reducer, scope resolution, verdict aggregation, config resolution, port selection. No I/O of any kind. | fast |
 | integration | `crates/*/tests/`, everything but the e2e file | Real subprocesses and real files. Process-group spawn and kill with no orphans surviving; two directories claiming ports concurrently; compose up/down with labels verified gone. | slow |
-| e2e | `crates/cli/tests/e2e.rs` | The real CLI against scratch repos, end to end. | slowest |
+| e2e | `crates/helm/tests/e2e.rs` | The real CLI against scratch repos, end to end. | slowest |
 
 The tiers are a rule about what a test may touch, not three directories: Rust puts unit tests
 in-module, so a `tests/unit/` would mean the pure core testing itself from outside its own
@@ -1287,6 +1297,6 @@ Integration and e2e run on both `ubuntu-latest` and `macos-latest` in the Action
   relitigate them.
 - **Module layout below the three-package split.** `core`/`adapters`/`cli` is fixed; what
   lives inside them is a phase-1 and phase-2 concern.
-- **The `char.yml` schema.** That was phase 1's entire output, and the plan was explicit that
+- **The `armada.yml` schema.** That was phase 1's entire output, and the plan was explicit that
   it should change while the six fixtures were being written. It did — what phase 1 settled,
   and which fixture forced which change, is recorded in `PLAN.md` §4.1.1.

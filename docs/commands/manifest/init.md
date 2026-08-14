@@ -2,7 +2,7 @@
 
 Make a workspace ready to work in. Idempotent.
 
-> **Status: shipped** — as `char init` today; renames in M1 ([`PHASES.md`](../../PHASES.md) §8.3).
+> **Status: shipped.**
 
 ## Synopsis
 

@@ -2,8 +2,9 @@
 
 Lint, format, test. Scoped, scheduled and locked.
 
-> **Status: not built.** Answers `bad_invocation` today. **This is the blocker for M4** —
-> the workflow loop cannot close without it ([`PHASES.md`](../../PHASES.md) §8.6).
+> **Status: shipped, except `--detach` and `--status`,** which answer `bad_invocation` and
+> are **the blocker for M4** — the workflow loop cannot close without them
+> ([`PHASES.md`](../../PHASES.md) §8.6).
 
 This is the objective gate the whole system leans on. A Fleet verdict is only `PASS` if it
 carries evidence an external command produced, and this is that command

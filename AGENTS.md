@@ -8,17 +8,24 @@ portable setup), **Fleet** (the agents you don't talk to), **Helm** (the one you
 (2021 edition), POSIX only.
 
 **Nothing points upward** — Manifest may not reference Fleet, Guild may not reference Helm.
-`ARCHITECTURE.md` §1.9. The crate layering of §1.5 is enforced by `cargo xtask boundaries`; the
-module rule is not yet, because three of the four modules have no crates.
+`ARCHITECTURE.md` §1.9. That rule and the crate layering of `ARCHITECTURE.md` §1.5 are both
+enforced by `cargo xtask boundaries`, which reads the crate graph and the module each crate
+belongs to.
 
 **The vocabulary is fixed in `docs/glossary.md`** — Job, Drone, Helm, Bridge, Board, and the
 three status enums. Use those words and no synonyms.
 
-**⚠️ The code still spells the tool `char`.** The binary is `char`, the config is `armada.yml`, the
-state dir is `~/.armada/`, and the crates are `charkit-*`. The rename to `armada` is M1 and has not
-happened. Docs written after the rename decision (this file's header, `docs/reference.md`,
-`docs/glossary.md`, `PLAN.md` §13–§15, everything under `docs/manifest|guild|fleet|helm/`) say
-`armada`; the rest say `char`. **Match the code, not the docs, when writing code.**
+**One spelling everywhere: `armada`.** M1 renamed the tool (`PHASES.md` §8.3), so the binary
+is `armada`, the config is `armada.yml`, the state is `~/.armada/`, and the crates are
+`armada-core`, `armada-manifest` and `armada-helm`. Three things deliberately keep the old
+`char` spelling and are not typos to fix:
+
+- `docker.rs`'s `LEGACY_LABEL_*`, read so a container stamped before the rename is still
+  reclaimable — for one release (`PHASES.md` §8.3).
+- The `<!-- char:begin -->` markers, recognised for the same reason (`PLAN.md` §5.1).
+- The privacy and clean-room guards, including `CHARKIT_CLEAN_ROOM_PATH`. Renaming that
+  variable silently disarms the hook. They are deleted, not renamed, once this repo is
+  private (`ARCHITECTURE.md` §2.4, §2.7).
 
 ## Read these first, in order
 
@@ -49,16 +56,16 @@ measured   decided           specified  sequenced   derived
 
 ## Rules that are easy to break by accident
 
-### 1. Two rules retire in M1 — but they are LIVE today, so satisfy them
+### 1. Two rules retire when the repo goes private — it has not, so satisfy them
 
 **This repository is public right now.** The contamination grep and the clean-room rule both
 exist and both still run: `xtask/src/contamination.rs`, `xtask/src/privacy.rs` and
 `.claude/hooks/clean-room.sh` are all present, and `cargo xtask doclint` names `contamination,
 privacy` in its own output.
 
-They are deleted **in M1**, at the moment the repository goes private — not before. Until
-`git remote -v` points at a private repository and `xtask/src/privacy.rs` is gone, treat them
-as in force:
+They are deleted **at the moment the repository goes private** — not before, and M1 landing
+without that change is exactly why they are still here. Until `git remote -v` points at a
+private repository and `xtask/src/privacy.rs` is gone, treat them as in force:
 
 - Never write the private source repository's name or the literal `$HOME` into a tracked file.
 - Never disable the hook with `CHARKIT_CLEAN_ROOM_PATH=""` — that silences the guard rather
@@ -114,7 +121,8 @@ Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
   directory and verdict aggregation, with what it settled and the gap it leaves open in
   `PHASES.md` §9.3. `check --detach` and `check --status` are refused by name as not built.
   `up`, `down`, `config` and `explain` are **not built**.
-- **M1 is next** and is restructure plus subtraction. A behaviour change in M1 is a defect.
+- **M1 has landed**, less two rows: the repository is still public, and `skills:` was not
+  built. Both are tracked in `PHASES.md` §8.3.
 - **Guild, Fleet and Helm do not exist.** Their specification is `PLAN.md` §13–§15 and their
   usage is [`docs/commands/reference.md`](docs/commands/reference.md).
 
@@ -136,10 +144,10 @@ Rationale for every one of these is in `docs/ARCHITECTURE.md` §1.
 | **No ambient state** | No `static mut`, no global `OnceCell` holding mutable state. No `std::env::current_dir()` or `std::env::var()` below the entrypoint. The workspace rides on `Ctx`. |
 | **Dependencies point inward** | `core` imports nothing concrete. `adapters` depend on core traits only. `cli` is the only crate depending on both. Enforced by the crate graph. |
 | **Read verbs never mutate** | `status`, `check --status`, `explain` take no lease, may report a progress state, and their exit code describes the **query**, not the thing queried. A gate uses `--wait`, never `--status`. |
-| **No model inside char** | char never calls an agent CLI to diagnose, repair or explain. `char explain` emits deterministic evidence; the caller — already an agent — does the diagnosing. Reserved shape in `PLAN.md` §7. |
+| **No model inside Armada** | Armada never calls an agent CLI to diagnose, repair or explain. `armada manifest explain` emits deterministic evidence; the caller — already an agent — does the diagnosing. Reserved shape in `PLAN.md` §7. |
 | **Every verb takes `--json`** | Fixed envelope: `schema_version`, `verb`, `workspace`, `status`, `error`, `data`. Per-verb fields go **inside `data`**, never at the top level, and every plural verb uses `data.results[]` (PLAN.md §3.1). One golden snapshot per verb. |
 | **One spelling for failure** | `FAILED`, never `FAIL`. Terminal: `READY` `UP` `DOWN` `CLEAN` `PASS` `OK` `SKIPPED` / `PARTIAL` / `FAILED` / `ABORTED` `DEAD` `TIMEOUT`. Progress, never terminal and never mapped to an exit code: `RUNNING` `WAITING` (with `waiting_on`). |
-| **Errors are typed** | `class` ∈ {`bad_invocation`, `bad_config`, `tool_failed`, `timeout`, `aborted`, `environment`, `char_bug`}, plus `where`. `next_action` is required for `bad_config`. The enum covers **every** non-zero exit — a hole is where a second, competing mapping grows back. |
+| **Errors are typed** | `class` ∈ {`bad_invocation`, `bad_config`, `tool_failed`, `timeout`, `aborted`, `environment`, `armada_bug`}, plus `where`. `next_action` is required for `bad_config`. The enum covers **every** non-zero exit — a hole is where a second, competing mapping grows back. |
 | **Secrets never leave the shell** | Resolved values are injected into a child's env at spawn and never reach the core, argv, `--json`, logs or `.armada/`. There is no verb that returns a secret. See `ARCHITECTURE.md` §1.8. |
 
 ### Exit codes
@@ -152,12 +160,12 @@ tests were.
 |---:|---|---:|---|
 | `0` | *(no error)* | `4` | `timeout` |
 | `1` | `tool_failed` | `5` | `aborted` |
-| `2` | `bad_invocation` | `70` | `char_bug` |
+| `2` | `bad_invocation` | `70` | `armada_bug` |
 | `3` | `bad_config` | `6` | `environment` — fix the machine, retry unchanged |
 | | | `130` | SIGINT |
 | | | `141` | SIGPIPE |
 
-A `commands:` child's exit code passes through **verbatim** and is not remapped. char's own
+A `commands:` child's exit code passes through **verbatim** and is not remapped. Armada's own
 codes can only occur when the child never ran; `data.dispatched` says which.
 
 ---
@@ -222,9 +230,9 @@ no-mistakes axi run --intent "<what the user set out to accomplish>"
 This repository has its own `armada.yml`.
 
 **Until `check` ships, the gate runs the raw tools** — `cargo clippy`, `cargo fmt --check`,
-`cargo test`. A dogfood integration test runs `char check --json` and asserts it agrees, so a
+`cargo test`. A dogfood integration test runs `armada manifest check --json` and asserts it agrees, so a
 broken `check` is one failing test rather than an unmergeable repository. **Do not wire
-`char check` into the gate itself yet.**
+`armada manifest check` into the gate itself yet.**
 
 **When `check` lands, it becomes the gate.** That is the end state; the interim arrangement
 exists only because a bug in a half-built tool must not be able to lock its own repository.
@@ -243,7 +251,7 @@ Bump rule: adding a field does not bump. Removing a field or changing its type d
 
 ---
 
-<!-- char:begin -->
-<!-- This block is generated by `char agents-md --write` from the resolved config.
+<!-- armada:begin -->
+<!-- This block is generated by `armada manifest agents-md --write` from the resolved config.
      It is populated when `agents-md` ships. Anything outside these markers is never touched. -->
-<!-- char:end -->
+<!-- armada:end -->

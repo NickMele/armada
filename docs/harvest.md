@@ -1,6 +1,6 @@
 # Harvest — the check engine, as behaviour
 
-**What this is.** The behaviour of the source repo's check engine, written down so charkit can be
+**What this is.** The behaviour of the source repo's check engine, written down so Armada can be
 rebuilt from it without anyone reading the original. It is a specification of *what the code does*
 and, more importantly, a written list of **every trap and bug-shaped branch found** — the branches
 that exist because something broke in production once, and that a rewrite loses silently because a
@@ -40,7 +40,7 @@ file from the configured-private-names rule and **not** from the machine-path ru
 relies on the exemption: no private name is written here, so the file would pass without it.
 
 Product and application names from the source repo are genericised throughout as `app-a`…`app-d`
-and `pkg-ui`, with their structural role stated. Directory names that sit on charkit's own
+and `pkg-ui`, with their structural role stated. Directory names that sit on Armada's own
 contamination list — `backend/`, `web/`, `scripts/`, `.claude/`, `tilt`, `NEXT_PUBLIC` — **are**
 named, because naming the assumption is how the implementer knows to strip it.
 
@@ -99,13 +99,13 @@ Stated plainly, because the implementer cannot make these calls afterwards.
 | Stripped | Replaced by |
 |---|---|
 | **`CHECK_CATALOG`** — a static, compiled-in list of 12 check specifications | The config loader. §4.2 renders what the catalogue *expressed* as a table of behaviour, so the schema can be checked against it; the list itself does not survive. |
-| **`domain`** — a three-valued enum (`backend`, `frontend`, `tooling`) hardcoded throughout | `component`. Everywhere the original branches on a domain, charkit reads a component from config. The count of three, and the fact that each mapped to exactly one directory and one toolchain, is source-repo topology. |
-| **Every repo-specific path** — `backend/`, `web/`, `scripts/`, `docs/`, `web/apps/*`, `web/packages/*`, `web/e2e/`, `web/visual/`, `.claude/check-runs/`, `backend/.env`, the container mount root | Component `root:` and `match:` globs; charkit's own state directory; declared mount points. |
-| **Every turbo filter** — the monorepo task runner's git-aware `...[<ref>...HEAD]` package selector, its `--filter=` argument shape, and the branch that drops it inside a container | Free-text `cmd:`. charkit must not know that tool exists. The *rule* underneath survives as a trap (§5.4, CMD-1). |
+| **`domain`** — a three-valued enum (`backend`, `frontend`, `tooling`) hardcoded throughout | `component`. Everywhere the original branches on a domain, Armada reads a component from config. The count of three, and the fact that each mapped to exactly one directory and one toolchain, is source-repo topology. |
+| **Every repo-specific path** — `backend/`, `web/`, `scripts/`, `docs/`, `web/apps/*`, `web/packages/*`, `web/e2e/`, `web/visual/`, `.claude/check-runs/`, `backend/.env`, the container mount root | Component `root:` and `match:` globs; Armada's own state directory; declared mount points. |
+| **Every turbo filter** — the monorepo task runner's git-aware `...[<ref>...HEAD]` package selector, its `--filter=` argument shape, and the branch that drops it inside a container | Free-text `cmd:`. Armada must not know that tool exists. The *rule* underneath survives as a trap (§5.4, CMD-1). |
 | **Every interpreter-directory assumption** — a `--directory`-style flag that changes directory before invoking a tool, and the path re-basing it forces | Per-check working directory at the component root, with paths emitted relative to it by construction. This makes the re-basing trap (§5.4, CMD-8) unnecessary rather than load-bearing. |
 | Hardcoded default-branch and remote names (`main`, `origin/main`) | Config. |
-| App names, compose service names, compose profile names, per-worktree port variable names | Config; charkit's own port model. |
-| Behaviour keyed on a **check id** — remediation hints, image freshening, parser selection | Config. **No behaviour in charkit may key on a check's id.** This is the single most repeated source-repo assumption and it appears in four separate subsystems. |
+| App names, compose service names, compose profile names, per-worktree port variable names | Config; Armada's own port model. |
+| Behaviour keyed on a **check id** — remediation hints, image freshening, parser selection | Config. **No behaviour in Armada may key on a check's id.** This is the single most repeated source-repo assumption and it appears in four separate subsystems. |
 
 ---
 
@@ -167,7 +167,7 @@ every scoped file is provably under another owned tree or under an inert one.
 | all-flag, or an empty file list | everything |
 
 The empty-list case sharing a short-circuit with the all-flag is load-bearing: a branch with no diff
-must not report `PASS` having run nothing. charkit expresses the same rule differently and more
+must not report `PASS` having run nothing. Armada expresses the same rule differently and more
 strictly — `PLAN.md` §4.1's empty-`${files}` rule skips the check, and `--all-files` is the
 documented way to ask for the whole tree — so the *conclusion* transfers and the mechanism does not.
 
@@ -183,7 +183,7 @@ fallback is a separate proof-obligation failure and each is a trap (§5.1).
 ### 4.2 The catalogue, as configuration
 
 `CHECK_CATALOG` is a static list of 12 specifications. It is stripped; what it *expressed* is the
-schema charkit's config must be able to state. Rendered as behaviour, with source names genericised:
+schema Armada's config must be able to state. Rendered as behaviour, with source names genericised:
 
 | Check | Category | Workers | Footprint | Exclusive | Fixable | All-only | Runner | Timeout |
 |---|---|---:|---:|---|---|---|---|---:|
@@ -203,7 +203,7 @@ schema charkit's config must be able to state. Rendered as behaviour, with sourc
 Four things the table cannot carry, all of which are decisions rather than data:
 
 - **Typecheck is categorised `lint` despite being a compile step.** Category is a user-facing run
-  selector, not a taxonomy. charkit's equivalent is the conventional-name set in `PLAN.md` §3.2.
+  selector, not a taxonomy. Armada's equivalent is the conventional-name set in `PLAN.md` §3.2.
 - **Workers and footprint are two different numbers** and merging them is a documented outage
   (§5.3, SCH-1). The first is handed to the tool's own parallelism flag; the second is what the
   scheduler reserves.
@@ -211,7 +211,7 @@ Four things the table cannot carry, all of which are decisions rather than data:
   machinery, so running them through it lets a break in that seam take down the tests that detect
   it. Generalised: *a check engine's own suite must not run inside the containers it drives.*
 - **Timeouts are per-check with a generous default.** The default's job is to turn "hung forever"
-  into "failed loudly", not to police slow tools. charkit's default is 900 s (`PLAN.md` §4.1).
+  into "failed loudly", not to police slow tools. Armada's default is 900 s (`PLAN.md` §4.1).
 
 ### 4.3 Admission control
 
@@ -239,7 +239,7 @@ figure — not the declared cost — is what sizes the tool.
 left waiting. "Needs more than everything" is honestly read as "runs by itself".
 
 There is **no fairness guarantee**; heaviest-first ordering is the only mitigation. Recorded as a
-known limitation, not a required fix — charkit's `waiting_on` field (`PLAN.md` §3.1) surfaces the
+known limitation, not a required fix — Armada's `waiting_on` field (`PLAN.md` §3.1) surfaces the
 symptom to the caller, which the original had no equivalent of.
 
 ### 4.4 Command construction and the runner seam
@@ -262,19 +262,19 @@ and the service name — after which the original command is passed through byte
 directory is always the workspace root, because that is where the compose document lives and because
 the project name is derived from it.
 
-**charkit's shape is different, and only the last three of those transfer.** `PLAN.md` §4.1's `in:`
+**Armada's shape is different, and only the last three of those transfer.** `PLAN.md` §4.1's `in:`
 execs into a service that is *already running*, brought up by `needs:` / `char up`, so the
-invocation charkit builds is an `exec -T` — no ephemeral-run verb, no remove-on-exit, no build flag.
+invocation Armada builds is an `exec -T` — no ephemeral-run verb, no remove-on-exit, no build flag.
 What survives verbatim is: the environment signals are passed, the service is named, the original
 command is passed through byte-identical after it, and `-T` is mandatory (`PLAN.md` §4.1 —
 omitting it allocates a TTY and hangs). Image freshness does not disappear; it moves to whatever
 brings the service up (§3, and §5.4 CMD-2).
 
-**One logical check becoming several tool invocations** is a source-repo workaround that charkit
+**One logical check becoming several tool invocations** is a source-repo workaround that Armada
 should not reproduce. That repo needed one check id to cover N workspace packages whose task runner
 interleaved unparseable output, so it generated a shell script that ran the tool once per package,
 redirected each report to its own file, latched the exit status, and concatenated the reports to
-stdout. charkit expresses the same thing as configuration: N components each with their own check,
+stdout. Armada expresses the same thing as configuration: N components each with their own check,
 or one command that fans out itself. `PLAN.md` §4.1 argv-splits every `cmd:` by default and confines
 `shell: true` to a per-entry opt-in, so a generated multi-command script is the shape the config
 contract already rejects.
@@ -284,7 +284,7 @@ unrepresentable if you don't.
 
 ### 4.5 The process seam
 
-The original injects one callable; charkit has three seams behind a `Ctx`. The deadline,
+The original injects one callable; Armada has three seams behind a `Ctx`. The deadline,
 process-group and abort behaviour has to survive that change of shape, and it is the most directly
 portable area in the harvest.
 
@@ -308,7 +308,7 @@ distinct from `128+N`, which is the property that made it a good choice.
 
 **The result states its reason in text, not only in its code.** The consumer is usually an agent
 that sees only a parsed summary, and "timed out" versus "the tool failed" call for opposite next
-moves. charkit has a typed home for this — class `timeout`, exit 4 ([`ARCHITECTURE.md`](ARCHITECTURE.md)
+moves. Armada has a typed home for this — class `timeout`, exit 4 ([`ARCHITECTURE.md`](ARCHITECTURE.md)
 §1.7) — so the *requirement* transfers and the in-band text does not.
 
 **Partial output survives a timeout**, and this is a design requirement rather than a side effect:
@@ -342,7 +342,7 @@ failure list is empty, *and* the summary is one of the benign "nothing wrong" st
 replaced with the first meaningful error line from stderr-then-stdout. It is the **first** line, not
 the last: for a crash the opening line is the error and the tail is stack frames.
 
-**Per-tool field paths are trivia and are dropped.** charkit names arbitrary commands, so parser
+**Per-tool field paths are trivia and are dropped.** Armada names arbitrary commands, so parser
 selection must be declared in config and default to a generic fallback. What survives is the guard,
 the budget, the scanner, the two-rules-for-two-questions split (first line for a crash, last line
 for a normal summary), and the requirement that failures carry identifier and message as **separate
@@ -419,7 +419,7 @@ reintroduces a documented outage — a dead run poisoning the workspace permanen
 holding a lease forever. The heartbeat is refreshed on every check transition from the same
 timestamp as the transition, so a legitimately long check never looks hung.
 
-charkit's store is machine-global SQLite with lease rows (`PLAN.md` §4.3), not a lock directory. Most
+Armada's store is machine-global SQLite with lease rows (`PLAN.md` §4.3), not a lock directory. Most
 of the above is **a requirement expressed in the wrong medium**: the requirement survives, the
 directory does not. §5.8 marks which is which.
 
@@ -447,7 +447,7 @@ this run and still `starting`.
 back correlates with nothing.
 
 **Read verbs never take the lease.** Status and wait must not block on the run they exist to report
-on. Status always exits 0 — it is a query, not a verdict. charkit already states this rule
+on. Status always exits 0 — it is a query, not a verdict. Armada already states this rule
 (`PLAN.md` §3.1, and the read-verb row in [`AGENTS.md`](../AGENTS.md)); the original arrived at it
 independently.
 
@@ -477,7 +477,7 @@ nothing to notice their absence by.
 | SC-8 | A file directly at a tree root forces the whole-tree scope, returning immediately | C | Shared infrastructure affects every sub-directory; per-directory scoping runs a fraction of the suite and passes |
 | SC-9 | An empty sub-directory set also returns the whole tree | **S** | Reachable when a domain is in scope only because something *else* was ambiguous. Without it the tool gets an empty path list and lints the process working directory, or nothing |
 | SC-10 | Rename lines take the path **after** the separator | C | The old path enters scope, no longer exists, and the tool hard-errors — while the new path is never checked |
-| SC-11 | Status paths are extracted at a fixed offset and **not unquoted** | **S** | Correct for every status code, but a path with a space or non-ASCII byte arrives quoted and escaped. Known gap, not a fix — charkit reads NUL-delimited output (`PLAN.md` §4.1) and avoids it entirely |
+| SC-11 | Status paths are extracted at a fixed offset and **not unquoted** | **S** | Correct for every status code, but a path with a space or non-ASCII byte arrives quoted and escaped. Known gap, not a fix — Armada reads NUL-delimited output (`PLAN.md` §4.1) and avoids it entirely |
 | SC-12 | Empty scope means *everything in scope* in all five classifiers | **S** | A branch with no diff must not report `PASS` having run nothing |
 | SC-13 | `.`, `""` and `./` short-circuit to the current directory | C | `.` contains no separator, falls through to branch resolution, and is rejected with *"is not a branch checked out in any worktree"* — for the most natural programmatic argument. Confirmed live against the MCP caller |
 | SC-14 | Path comparison canonicalises **both** sides but returns git's recorded spelling | **S** | Without canonicalisation, symlinked temp roots never match. Returning the canonical form instead makes every downstream comparison against git's own output diverge |
@@ -508,11 +508,11 @@ nothing to notice their absence by.
 | SCH-4 | Admission orders by footprint, not by cost | C | A check with a small cost and a large footprint is admitted last, then blocks waiting for a contiguous block everything else has already filled |
 | SCH-5 | Deterministic tie-break on id | C | Two runs of one set schedule differently and a flaky run cannot be reproduced |
 | SCH-6 | Over-budget requests are **clamped**, not queued | C | A check declaring more than the machine has waits forever for capacity that cannot exist. Deadlock, not a slow run |
-| SCH-7 | The clamped grant is returned and sizes the tool | C | Without it a check admitted against a clamped budget still launches its full declared parallelism, oversubscribing the machine the clamp protects. **Only the first half is portable — see §10.** charkit's contract has no way to carry the grant into a command, so no case pins the sizing and the clamp is decorative as specified |
+| SCH-7 | The clamped grant is returned and sizes the tool | C | Without it a check admitted against a clamped budget still launches its full declared parallelism, oversubscribing the machine the clamp protects. **Only the first half is portable — see §10.** Armada's contract has no way to carry the grant into a command, so no case pins the sizing and the clamp is decorative as specified |
 | SCH-8 | Slots and exclusive names are taken in **one atomic step under a single guard**, released in a finally, waking all | partial | The source states no acquisition order because it has none to state — the whole reservation is one step, and its comment argues for *eliminating* the ordering question rather than answering it. The transferable rule is that **no part of a reservation is ever held while waiting for the rest**. Releasing outside a finally leaks slots and locks on a panic. Waking one leaves a waiter blocked on a *name* never re-evaluated after a *slot* release |
 | SCH-9 | The wait predicate is re-checked in a loop after every wake | **S** | A single conditional admits two checks past the budget on a spurious or multi-waiter wake |
 | SCH-10 | Cores are reserved rather than fully budgeted | D | The machine sits at 100 %+ while its owner is trying to work. Reported twice |
-| SCH-11 | Explicit worker flags override each tool's own auto-sizing | C | Every parallel tool defaults to one worker per core; the budget means nothing if the tools ignore it. **No ported case pins this, and that is not an oversight — see §10.** In charkit the flag is entirely the config author's literal, so the engine can neither require it nor correct it |
+| SCH-11 | Explicit worker flags override each tool's own auto-sizing | C | Every parallel tool defaults to one worker per core; the budget means nothing if the tools ignore it. **No ported case pins this, and that is not an oversight — see §10.** In Armada the flag is entirely the config author's literal, so the engine can neither require it nor correct it |
 | SCH-12 | An exclusive lock deleted when containerisation removed the sharing was **re-added under a new name** when a different sharing edge appeared | D | Containerising removed one shared resource but the stack still depended on a singleton service on a fixed port; two concurrent runs raced and the loser failed with *port already allocated*. **General rule: a lock is a sign two checks share something. Prefer removing the sharing — but confirm it is gone, not merely moved to a different dependency edge** |
 | SCH-13 | A different retired lock is documented as **must not be re-added** | C | Its cause has already moved; re-adding it treats a symptom whose source is gone |
 | SCH-14 | Moving a check back to the host must **re-declare** its exclusive resource | C | The locks were safe to remove *only because* those checks run in containers. Flipping one back without restoring its lock silently reinstates the original corruption, and the symptom is unrelated tests failing in the gate while passing in isolation |
@@ -535,7 +535,7 @@ Four things the implementer should have:
   from the very system SCH-8 is harvested from.
 - **Multi-name acquisition is unexercised in the source.** No test passes more than one exclusive
   name and no catalogue entry declares more than one, so the source's clean record on ordering is
-  not evidence of safety for charkit, where `exclusive:` is a machine-wide list.
+  not evidence of safety for Armada, where `exclusive:` is a machine-wide list.
 
 **Build `PLAN.md` §4.3's order.** SCH-8's contribution is the invariant it shares with it — nothing
 is held while the rest of the reservation is pending — reached there by atomicity and here by a
@@ -546,13 +546,13 @@ total order across both lease classes.
 | # | Branch | Marked | What breaks if absent |
 |---|---|---|---|
 | CMD-1 | The git-aware package filter is **dropped inside a container** and kept on the host | D | A worktree's git directory is a *file* pointing outside the bind mount, so the container has no usable git and the check fails with *not part of a git repository*. The asymmetry is what makes the fix safe: dropping it is merely less selective, keeping it is always fatal |
-| CMD-2 | Every container run **forces a build** | C | A stale image silently tests the wrong code the moment a build input moves. Green on stale code is indistinguishable from real green. **Phase 4, not phase 3.** The source *runs* an ephemeral container per check, so the build flag rides on the check's own invocation; charkit **execs into an already-running service** (`PLAN.md` §4.1's `in:`, a `docker compose … exec -T`), and an exec has no build flag and no image of its own to freshen. The rule survives unchanged — a stale image must never silently pass — but it lands on whatever brings the service up (`needs:` / `char up`) beside CMD-3, not on the check engine. Nothing in a check invocation asserts it |
+| CMD-2 | Every container run **forces a build** | C | A stale image silently tests the wrong code the moment a build input moves. Green on stale code is indistinguishable from real green. **Phase 4, not phase 3.** The source *runs* an ephemeral container per check, so the build flag rides on the check's own invocation; Armada **execs into an already-running service** (`PLAN.md` §4.1's `in:`, a `docker compose … exec -T`), and an exec has no build flag and no image of its own to freshen. The rule survives unchanged — a stale image must never silently pass — but it lands on whatever brings the service up (`needs:` / `char up`) beside CMD-3, not on the check engine. Nothing in a check invocation asserts it |
 | CMD-3 | A **dependency** image whose code is baked in is force-built **separately** | D | A rebuild flag on the run covers the run target only; compose's default for a dependency is build-only-if-missing. An image built before a fix commit was reused for the rest of the day, so the browser check kept failing the exact assertion the fix targeted while the server suite passed against the same commit. 77 minutes lost across two review rounds |
 | CMD-4 | The no-host-topology case both **refuses** and **skips** | C in test | With only the refusal, the error escapes the executor and **discards every other check's results for the run**. With only the skip, a direct caller gets a silent nonsense command. Both are needed |
 | CMD-5 | Path translation keys on whether the check *runs* in a container, not on what it *declares* | **S** | A forced-host run writes reports into a host directory named after the container mount point — a stray absolute top-level directory — and reads nothing back |
-| CMD-6 | The per-item exit status is latched **before** the report is concatenated to stdout | **S** | Concatenating an existing file always succeeds, so reversing two lines makes every aggregated check exit **zero** — every violation and every test failure reported as a pass. **The highest-severity silent branch in the harvest.** charkit avoids it by not having the mechanism (§4.4) |
+| CMD-6 | The per-item exit status is latched **before** the report is concatenated to stdout | **S** | Concatenating an existing file always succeeds, so reversing two lines makes every aggregated check exit **zero** — every violation and every test failure reported as a pass. **The highest-severity silent branch in the harvest.** Armada avoids it by not having the mechanism (§4.4) |
 | CMD-7 | The artefact directory is created on the host **before** the command is built | C | A containerised check writes its report through the bind mount into a directory that does not exist; the report lands nowhere and the check fails with nothing parseable |
-| CMD-8 | Positional paths are re-based when the invocation changes directory first, with a whole-tree sentinel | C | The tool is handed a path relative to the wrong root, finds nothing, and reports a clean pass over zero files. Silent false green. charkit's per-check working directory makes this unnecessary rather than load-bearing |
+| CMD-8 | Positional paths are re-based when the invocation changes directory first, with a whole-tree sentinel | C | The tool is handed a path relative to the wrong root, finds nothing, and reports a clean pass over zero files. Silent false green. Armada's per-check working directory makes this unnecessary rather than load-bearing |
 | CMD-9 | A domain-scoped database signal is passed, and only to that domain | C | The consumer branches on it and never probes, so it must be *passed*. Without it the containerised check boots throwaway database containers *inside* the check container. Passing it to other containers is a lie about what they do |
 | CMD-10 | A generic "inside a check container" signal is passed to every container | C | Host-only code shells out to git against a path that does not exist in the container and prints a fatal-looking line **once per worker** inside an otherwise-green run |
 | CMD-11 | An unparseable package manifest is skipped during discovery | **S** | Listed as a *defect*, not a fix — see §7 |
@@ -631,7 +631,7 @@ Recorded in full because there is no second harvest. Do not build these now.
 
 ### 5.8 Run state, lease, detach
 
-Marked **R** where the behaviour is a *requirement charkit's SQLite lease store must still satisfy*,
+Marked **R** where the behaviour is a *requirement Armada's SQLite lease store must still satisfy*,
 and **M** where it is an artefact of the old mechanism that the store makes unnecessary.
 
 | # | Branch | Marked | R/M | What breaks if absent |
@@ -658,7 +658,7 @@ and **M** where it is an artefact of the old mechanism that the store makes unne
 | ST-20 | Reap the dead holder's group — **only** when it is a true group leader | C | R | Orphans hold the ports the next run needs. But a foreground run shares its shell's group, and reaping that kills the user's shell. **The highest-consequence conditional in the harvest** |
 | ST-21 | The waiter checks terminality **before** the deadline each iteration | **S** | R | A run finishing exactly at the deadline is reported as a timeout despite having a verdict |
 | ST-22 | The waiter returns promptly on a dead run | C | R | It burns its full ceiling — up to thirty minutes — on a run that died in the first second |
-| ST-23 | Status always exits 0; wait exits on the verdict | **S** | R | A query's exit code is about the query. charkit states this rule already |
+| ST-23 | Status always exits 0; wait exits on the verdict | **S** | R | A query's exit code is about the query. Armada states this rule already |
 | ST-24 | Status and wait never take the lease | C | R | They block on the very run they report on |
 | ST-25 | `--again` includes **timed-out** checks | C | R | A killed check is never retried and silently inherits its stale timeout while the rerun reports clean |
 | ST-26 | The merge preserves non-rerun entries byte-identical | **S** | R | The record stops being a faithful union |
@@ -714,7 +714,7 @@ only place they are recorded.
 **17 of 29 specs failing** with workers unbounded, and the same specs passed in isolation; bounded to
 the check's declared cost the run went to 28/29 and from 1.9 minutes to 24 seconds. It manufactures
 failures indistinguishable from real visual regressions — there is no signal separating them. In
-charkit this is fixture configuration (`cost:` plus an explicit worker flag in `cmd:`), not engine
+Armada this is fixture configuration (`cost:` plus an explicit worker flag in `cmd:`), not engine
 code, exactly as the plan says the Playwright traps should translate.
 
 **Corollary, also live:** a worker flag passed unconditionally to every package is only safe while
@@ -739,7 +739,7 @@ different failures.
 is the **empty string** must be transmitted as *set to empty*, not pruned as *unset*. A config layer
 that drops empty values reintroduces the bug exactly.
 
-*Verified against charkit as it stands:* `crates/core/schema/char.schema.json` places no `minLength`
+*Verified against Armada as it stands:* `crates/core/schema/char.schema.json` places no `minLength`
 and no `pattern` on an env value, so `env: { CI: "" }` validates today. **No schema change is
 needed.** The residual risk is downstream — resolution, and the spawn adapter — so it becomes a test
 the implementer writes rather than a config gap.
@@ -781,9 +781,9 @@ pointed at the directory, collection failed on a dependency that *was* declared,
 fell back to ambient discovery: **415 enabled rules**, none selected by the repo, none reproducible
 from anything committed.
 
-charkit's exposure to the same two shapes:
+Armada's exposure to the same two shapes:
 
-| charkit risk | Engine behaviour it argues for |
+| Armada risk | Engine behaviour it argues for |
 |---|---|
 | A selector matching zero checks and exiting 0 | Already handled by `PLAN.md` §3.2's conventional-name rule — but the count that *was* selected should always be reported |
 | A `match:` glob matching nothing | Distinct, loud verdict; never silence. `PLAN.md` §4.1's empty-`${files}` rule is the same instinct |
@@ -803,7 +803,7 @@ defect.
 | X-1 | **An exclusive lock that does not actually hold.** A dated open TODO records that two checks sharing it both logged container creation followed by a port-already-allocated failure, reproduced twice, with the reservation logic reading correct on inspection | Suspected cause: container creation escapes the reservation window. **Action: make the reservation provably enclose the entire lifecycle, and write a test that fails if any resource-creating step escapes it** |
 | X-2 | **The fix phase bypasses admission entirely** — no reservation, no exclusives, no budget | Fixers are cheap today, so it has not bitten. A fixable check with a real footprint would bypass the scheduler completely. Route both phases through one admission path |
 | X-3 | **`--again` publishes no live state**, and its finish write is then silently discarded by the ownership guard because the document still belongs to the earlier run | A rerun is invisible to status and wait for its entire duration, reading as the previous run's terminal verdict. An omission wearing the shape of a design |
-| X-4 | **The ownership guard has an opt-out**: a caller supplying no run id is allowed through unconditionally | It exists to make tests convenient and it disables the only protection on that surface for any call site that forgets to thread the id. In charkit the holder id is always known — make it non-optional and give tests a constructor |
+| X-4 | **The ownership guard has an opt-out**: a caller supplying no run id is allowed through unconditionally | It exists to make tests convenient and it disables the only protection on that surface for any call site that forgets to thread the id. In Armada the holder id is always known — make it non-optional and give tests a constructor |
 | X-5 | **Group leadership is asserted, not observed** — the group id is recorded as the pid whenever the pid is not the writer's own | It makes ST-20's interlock, the one guard protecting the user's shell, satisfiable by unverified data. Record leadership only when the writer created the session |
 | X-6 | **The heartbeat is written outside the state critical section, non-atomically** | Two concurrent transitions can tear the owner record; a third party reads it as malformed, treats it as no owner (ST-15), and **reclaims a live lease**. Low probability, catastrophic outcome. SQLite removes it — do not reintroduce an out-of-transaction heartbeat |
 | X-7 | **An unparseable package manifest is silently skipped** during discovery | A broken manifest is a real error someone wants to hear about; skipping it removes that package's entire check with no trace |
@@ -843,7 +843,7 @@ terms that branching on one specifically sees neither platform's answer. On the 
 escapes a signal handler, where nothing catches it.
 
 > **These are not proposed as [`traps.md`](traps.md) entries.** That file's standard is measurement
-> in the environment charkit actually runs in, and these were measured against a Python module.
+> in the environment Armada actually runs in, and these were measured against a Python module.
 > The underlying POSIX facts extend its existing zombie-group entry and are worth re-measuring in
 > Rust — at which point they would earn a row. **Owner: whoever builds the process adapter.**
 
@@ -854,10 +854,10 @@ escapes a signal handler, where nothing catches it.
 **Keep — every one earned by an incident.** SC-1 to SC-8, SC-10, SC-12 to SC-20 (scope
 conservatism and every fallback); CAT-2, CAT-3 (positive time budgets, engine suite on the host);
 SCH-1 to SCH-11, SCH-14 (footprint separate from workers, clamp-don't-wait, **no part of a
-reservation held while waiting for the rest** — SCH-8's transferable invariant, which charkit
+reservation held while waiting for the rest** — SCH-8's transferable invariant, which Armada
 reaches by `PLAN.md` §4.3's order rather than by the source's single atomic step, see §5.3 —
 reserved cores, re-declare the lock on moving back to the host; **SCH-7 and SCH-11 are kept but
-have no ported case, because charkit's contract cannot express the worker half of either — §10**);
+have no ported case, because Armada's contract cannot express the worker half of either — §10**);
 CMD-1 to CMD-4, CMD-7, CMD-9,
 CMD-10, CMD-12, CMD-14 (drop the git filter in a container, refuse *and* skip, create
 the artefact directory first, never synthesise a faster command — **CMD-2's forced build is kept but
@@ -958,7 +958,7 @@ under `tests/cases/` resolves to a row in §5**, or — for the `"§6.1"` form t
 The cases live in `tests/cases/`, as data, one file per subsystem, in the same YAML the config
 contract already uses (`PLAN.md` §4.1.1 decision 5 pins the parser). `tests/cases/README.md` states
 the schema. They are **cases, not translated test functions**: the original is `run_fn`-injected and
-charkit has three seams behind a `Ctx`, so the assertions survive and the harness does not.
+Armada has three seams behind a `Ctx`, so the assertions survive and the harness does not.
 
 Assertions listed in §9 are **excluded** in their original form and present in their rewritten form
 where a rewrite was possible; each exclusion is recorded in the case file so the omission is visible

@@ -13,7 +13,7 @@
 | § | | |
 |---|---|---|
 | **0.1** | Architecture principles — carried forward | |
-| **0.2** | SDLC principles — two retire in M1, the rest carried forward | |
+| **0.2** | SDLC principles — two retire with the repo going private, the rest carried forward | |
 | **8** | The milestones — M0 through M4 | 8.1 why this order · 8.2 M0 · 8.3 M1 · 8.4 M2 · 8.5 M3 · 8.6 M4 |
 | **9** | Source material | 9.1 **M0 spike findings** · 9.2 prior art · 9.3 **check-engine findings** |
 | **11** | Risks | |
@@ -28,15 +28,18 @@ charkit and **all eight apply unchanged to all four modules**. They were written
 subprocesses, clocks and networks, not about repositories, so nothing in the widening of scope
 touches them. [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9 adds one rule the four-module shape needs and changes none of the others.
 
-#### 0.2 SDLC principles — two retire in M1, the rest carry forward
+#### 0.2 SDLC principles — two retire with the repo, the rest carry forward
 
 Two SDLC principles exist only to protect a **public** repository, so they end when it goes
-private. **That has not happened yet — both are live and must be satisfied today** (§8.3).
+private. **That has not happened, M1 notwithstanding — both are live and must be satisfied
+today** (§8.3). The retirement is keyed to the visibility change and not to the milestone that
+expected to carry it; a guard deleted before the thing it guards goes away is the exact
+failure it exists to prevent.
 
 | Principle | Status |
 |---|---|
-| Contamination grep over `src/` and `tests/` | **Live. Retires in M1.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4 |
-| Clean-room rule for the harvester phase | **Live. Retires in M1.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7 |
+| Contamination grep over `src/` and `tests/` | **Live. Retires when the repo goes private.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4 |
+| Clean-room rule for the harvester phase | **Live. Retires when the repo goes private.** [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.7 |
 
 Both retirements are recorded rather than deleted, because a rule that vanishes without a
 reason gets reinvented. What replaces them **once they go** is the fixture set: six config
@@ -57,7 +60,7 @@ that matters when the whole thing is built in evenings.
 | M | Modules | Delivers | State |
 |---|---|---|---|
 | **M0** | — | Research spike: four questions, throwaway prototypes, findings | **done** — §9.1 |
-| **M1** | all | One tree: rename, four crates, one binary, private repo, subtraction | next |
+| **M1** | all | One tree: rename, four crates, one binary, private repo, subtraction | **done, less two rows** — §8.3 |
 | **M2** | Guild | `armada init`, the interview, import from `~/.claude/`, sync | |
 | **M3** | Fleet + Helm | Jobs and Drones, budgets, inbox — **and Helm and the Bridge on top** | the product |
 | **M4** | Fleet | Workflow loops with real verification | blocked on `check --detach` / `--status` |
@@ -78,9 +81,10 @@ Guild is also the only milestone that pays off entirely on its own — one comma
 working setup on a new machine — and its content already exists in `~/.claude/` waiting to be
 adopted.
 
-**M1 is subtraction and it gets more expensive every week.** Renaming crates, moving the state
-directory and deleting the privacy machinery touches every file and every golden
-snapshot. Doing it before Guild and Fleet add surface area is the cheapest this will ever be.
+**M1 was subtraction and it got more expensive every week.** Renaming crates, moving the state
+directory and deleting the privacy machinery touches every file and every golden snapshot.
+Doing it before Guild and Fleet added surface area was the cheapest it was ever going to be —
+and the two rows it did not carry (§8.3) are both rows that get no more expensive by waiting.
 
 **M4 is still blocked, but on something narrower than before.** The `check` engine has landed
 and dogfoods (§9.3), so a verdict can now carry evidence an external command produced — the
@@ -108,23 +112,27 @@ the findings are recorded here.
 
 ### 8.3 M1 — one tree
 
-Restructure and subtraction. No new capability, and it should stay that way — a milestone that
+Restructure and subtraction. No new capability, and it stayed that way — a milestone that
 renames everything *and* adds a feature has an unreviewable diff.
 
-| | |
-|---|---|
-| **Repo** | Goes private. `charkit` → `armada`. |
-| **Crates** | `core`, `manifest`, `guild`, `fleet`, `helm` — mirroring [`PLAN.md`](PLAN.md)'s module structure. Today's `charkit-core` + `charkit-adapters` become `manifest`; today's `charkit-cli` becomes `helm`. |
-| **Binary** | One: `armada`. No `char` shim — it was never published, so a clean break costs nothing. |
-| **Config** | `char.yml` → `armada.yml`, with the existing keys under a `manifest:` section. Also `crates/core/schema/char.schema.json`, and all six `tests/fixtures/*/char.yml`. |
-| **State** | `~/.char/char.db` → `~/.armada/manifest.db`; `~/.char/config.toml` → `~/.armada/machine.yml`; the workspace-local `.char/` → `.armada/`. |
-| **Identifiers** | Error class `char_bug` → `armada_bug`. Docker label namespace `char.workspace` → `armada.workspace`, compose project prefix `char-<id>` → `armada-<id>`. **Both are stamped on live resources**, so M1 must reap the old namespace before it stops recognising it — see the warning below. |
-| **Managed blocks** | The `<!-- char:begin -->` / `<!-- char:end -->` markers and the `char agents-md` verb ([`PLAN.md`](PLAN.md) §5.1). Existing markers in the wild must still be recognised for one release, or a re-run appends a second block instead of replacing the first. |
-| **Docs** | Convert [`PLAN.md`](PLAN.md) §1–§12, [`ARCHITECTURE.md`](ARCHITECTURE.md), [`AGENTS.md`](../AGENTS.md) and [`traps.md`](traps.md) from `char` spelling to `armada`. Part II of `PLAN.md` and everything under `docs/manifest/`, `docs/guild/`, `docs/fleet/`, `docs/helm/` is already converted. Delete the transition notes on each shipped reference page once they are true. |
-| **Deletes** | `xtask/src/privacy.rs`, `xtask/src/contamination.rs`, the clean-room hook and its test, and the doc sections that explain them — **only after the repo is actually private**, not before ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4, §2.7). |
-| **Skills** | `skills:` schema, resolution, the four `config verify` cross-reference checks, `manifest skills` / `skills show`, and a fixture exercising it ([`PLAN.md`](PLAN.md) §4.8). Lands here because it changes `armada.yml`, and every fixture and golden snapshot is being rewritten in this milestone anyway — doing it twice is the avoidable cost. |
-| **Ergonomics note** | M1 turns `char check` into `armada manifest check`. That is intended, but it is also when the most-used verbs get longer — [`PLAN.md`](PLAN.md) §3 records the root-alias resolution as reserved-not-built, and the rule that makes it safe. Nothing to build in M1; it is flagged so the regression is a known trade rather than a surprise. |
-| **Boundary check** | `xtask/src/boundaries.rs` generalises from "core depends on nothing concrete" to the module dependency rule in [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9. Today it enforces only the crate layering of [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5, because three of the four modules have no crates. |
+**Landed, except the two rows marked below.** The state column says what each row's answer
+is now; the arrows are kept because they are the migration, and a reader meeting a `char.*`
+label or a `<!-- char:begin -->` marker needs to find out here why it is still recognised.
+
+| | | |
+|---|---|---|
+| **Repo** | Goes private. `charkit` → `armada`. | **not done** — visibility is not a build's to change, and everything below assumes it. The guards in the **Deletes** row stay live until it happens. |
+| **Crates** | `core`, `manifest`, `guild`, `fleet`, `helm` — mirroring [`PLAN.md`](PLAN.md)'s module structure. Today's `charkit-core` + `charkit-adapters` become `manifest`; today's `charkit-cli` becomes `helm`. | **done** — `armada-core`, `armada-manifest`, `armada-helm`. No code moved between crates: `core` stays pure and `manifest` is the module's shell, which is what keeps [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5 mechanically enforced. `guild` and `fleet` get crates when they get code, and `boundaries.rs` already knows where they go. |
+| **Binary** | One: `armada`. No `char` shim — it was never published, so a clean break costs nothing. | **done** |
+| **Config** | `char.yml` → `armada.yml`, with the existing keys under a `manifest:` section. Also `crates/core/schema/char.schema.json`, and all six `tests/fixtures/*/char.yml`. | **done** |
+| **State** | `~/.char/char.db` → `~/.armada/manifest.db`; `~/.char/config.toml` → `~/.armada/machine.yml`; the workspace-local `.char/` → `.armada/`. | **done**, and `machine.yml` is YAML rather than renamed TOML — one document language, one parser. |
+| **Identifiers** | Error class `char_bug` → `armada_bug`. Docker label namespace `char.workspace` → `armada.workspace`, compose project prefix `char-<id>` → `armada-<id>`. **Both are stamped on live resources**, so M1 must reap the old namespace before it stops recognising it — see the warning below. | **done**, both namespaces read — see the warning below. The compose prefix had no code to change: the compose driver is not built ([`PLAN.md`](PLAN.md) §6.0). |
+| **Managed blocks** | The `<!-- char:begin -->` / `<!-- char:end -->` markers and the `char agents-md` verb ([`PLAN.md`](PLAN.md) §5.1). Existing markers in the wild must still be recognised for one release, or a re-run appends a second block instead of replacing the first. | **markers renamed; nothing to migrate yet.** `agents-md` is not built, so no block has ever been written. The dual-recognition rule is recorded in [`PLAN.md`](PLAN.md) §5.1 for whoever builds it. |
+| **Docs** | Convert [`PLAN.md`](PLAN.md) §1–§12, [`ARCHITECTURE.md`](ARCHITECTURE.md), [`AGENTS.md`](../AGENTS.md) and [`traps.md`](traps.md) from `char` spelling to `armada`. Part II of `PLAN.md` and everything under `docs/commands/` is already converted. Delete the transition notes on each shipped reference page once they are true. | **done** |
+| **Deletes** | `xtask/src/privacy.rs`, `xtask/src/contamination.rs`, the clean-room hook and its test, and the doc sections that explain them — **only after the repo is actually private**, not before ([`ARCHITECTURE.md`](ARCHITECTURE.md) §2.4, §2.7). | **not done, deliberately.** The repo is still public, so all three guards run and pass. |
+| **Skills** | `skills:` schema, resolution, the four `config verify` cross-reference checks, `manifest skills` / `skills show`, and a fixture exercising it ([`PLAN.md`](PLAN.md) §4.8). Lands here because it changes `armada.yml`, and every fixture and golden snapshot is being rewritten in this milestone anyway — doing it twice is the avoidable cost. | **not done.** It is a feature, and the first line of this section is that M1 does not add one. Nothing about it got cheaper by being deferred except this diff, which is the point. |
+| **Ergonomics note** | M1 turns `char check` into `armada manifest check`. That is intended, but it is also when the most-used verbs get longer — [`PLAN.md`](PLAN.md) §3 records the root-alias resolution as reserved-not-built, and the rule that makes it safe. Nothing to build in M1; it is flagged so the regression is a known trade rather than a surprise. | — |
+| **Boundary check** | `xtask/src/boundaries.rs` generalises from "core depends on nothing concrete" to the module dependency rule in [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9. Today it enforces only the crate layering of [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5, because three of the four modules have no crates. | **done** — `boundaries.rs` reads the module each crate belongs to and enforces [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9's table, with [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.5 falling out of it. |
 
 > **The rename touches live resources, which is the one part that is not a search-and-replace.**
 > Docker labels and the compose project prefix identify containers, networks and volumes that
@@ -134,11 +142,17 @@ renames everything *and* adds a feature has an unreviewable diff.
 > release.** This is the only behaviour M1 is allowed to add, and it is a migration rather than
 > a feature.
 
-**Done when:** `cargo test` and `cargo xtask doclint` pass, the six golden snapshots are
+**Done when:** `cargo test` and `cargo xtask doclint` pass, the golden snapshots are
 regenerated by hand, `rg -i 'char(kit)?' --glob '!target'` returns only deliberate historical
-references, and `armada manifest init` / `clean` / `status` behave exactly as `char init` /
-`clean` / `status` did. **A behaviour change in M1 is a defect**, not a bonus — with the single
-documented exception of dual-namespace reaping above.
+references, and `armada manifest init` / `clean` / `status` / `check` behave exactly as
+`char init` / `clean` / `status` / `check` did. **A behaviour change in M1 is a defect**, not a
+bonus — with the single documented exception of dual-namespace reaping above.
+
+**What is left of M1, and who it is waiting on.** Making the repo private is the operator's
+decision and nothing else; the **Deletes** row follows it in the same commit, because a guard
+deleted before the thing it guards goes away is the whole failure it exists to prevent. The
+**Skills** row is ordinary work that can land in any milestone — it was scheduled here to
+share one rewrite of the fixtures, and that saving is now spent either way.
 
 ### 8.4 M2 — Guild
 
@@ -357,12 +371,12 @@ implementers deciding these separately produce two incompatible engines.
 
 | # | Decision | Why it landed there |
 |---|---|---|
-| 1 | **A run id is 16 Crockford base32 characters: 10 of wall-clock milliseconds, then 6 of per-process entropy.** | `PLAN.md` writes `01J8X2` in `data.run_id`, in `.char/run/01J8X2/logs/` and in `char explain --run 01J8X2` — and those six characters are exactly the leading edge of a time-ordered base32 id, so this is the illustration made real. Time-ordered is load-bearing: retention keeps "the most recent N", and an id that did not sort would need every run's mtime read off a filesystem that may have been restored from a backup. |
-| 2 | **A CPU slot's identity is the store's, chosen all-or-nothing inside one transaction.** | `lease::acquisition_order` numbers a check's slots `0..cost`, which is right for *ordering* and wrong for *naming*: two checks each asking for slot `0` deadlock the moment the second blocks on the first — measured, and it hung `char check` on its first real run. All-or-nothing matters as much: taking three of four and waiting for the fourth lets two runs hold half the machine each, and no acquisition order fixes that, because resources within the class are interchangeable. `acquisition_order` keeps its job — how many, and exclusives before slots. |
+| 1 | **A run id is 16 Crockford base32 characters: 10 of wall-clock milliseconds, then 6 of per-process entropy.** | `PLAN.md` writes `01J8X2` in `data.run_id`, in `.armada/run/01J8X2/logs/` and in `armada manifest explain --run 01J8X2` — and those six characters are exactly the leading edge of a time-ordered base32 id, so this is the illustration made real. Time-ordered is load-bearing: retention keeps "the most recent N", and an id that did not sort would need every run's mtime read off a filesystem that may have been restored from a backup. |
+| 2 | **A CPU slot's identity is the store's, chosen all-or-nothing inside one transaction.** | `lease::acquisition_order` numbers a check's slots `0..cost`, which is right for *ordering* and wrong for *naming*: two checks each asking for slot `0` deadlock the moment the second blocks on the first — measured, and it hung `armada manifest check` on its first real run. All-or-nothing matters as much: taking three of four and waiting for the fourth lets two runs hold half the machine each, and no acquisition order fixes that, because resources within the class are interchangeable. `acquisition_order` keeps its job — how many, and exclusives before slots. |
 | 3 | **`Event::Tick` is the one variant added to [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.2's floor, and the shell ticks before it starts.** | `ARCHITECTURE.md` §1.2 records the cost of a pure reducer as "`now` is carried on every event"; spelling that as a variant is the escape hatch the floor names, and it changes none of the ten variants it writes out. The ordering is not cosmetic: a `Started` that arrives first computes every deadline from a `now_mono` of zero, and the first real tick then jumps past it. Measured — every check timed out immediately and reported a duration of eleven days. |
 | 4 | **A check's verdict row carries `classifies`, not `attempted`.** | The two turned out not to be the same question. A cascaded `ABORTED` never ran *and* must not set the run's class; a check blocked on a service that is not running also never ran and *must*, because `bad_invocation` outranks a test failure precisely so the caller fixes the invocation first. Naming the field for what happened would have marked a blocked check `attempted: true` while it was never attempted. |
 | 5 | **A `SKIPPED` prerequisite satisfies `needs:`.** | `PLAN.md` §4.1 says a check id in `needs:` "must have **passed** in this run". Read literally that cascades an `ABORTED` through every dependent of a check that had no matching files — turning a clean tree into a failing run, which is the mirror image of the hole `--all-files` exists to close. Nothing failed, so nothing is aborted. Recorded because it is an ambiguity in the spec rather than a free choice. |
-| 6 | **`--detach` and `--status` are refused by name, as not built.** | `PLAN.md` §3 gives both to `check` and neither ships yet. Refused by name rather than as an unknown flag, because the flag *is* known and the honest answer is that char cannot do it yet — "unknown flag" sends an agent looking for a typo. The gap is stated here rather than left to be discovered. |
+| 6 | **`--detach` and `--status` are refused by name, as not built.** | `PLAN.md` §3 gives both to `check` and neither ships yet. Refused by name rather than as an unknown flag, because the flag *is* known and the honest answer is that Armada cannot do it yet — "unknown flag" sends an agent looking for a typo. The gap is stated here rather than left to be discovered. |
 
 #### One finding the check engine fixed rather than sent back
 
@@ -398,7 +412,7 @@ documents is worth checking for a third possibility — that one of them never m
 
 **`Event::Interrupted` has no producer.** Both reducers handle it and both are unit-tested on
 it, but nothing in the shell delivers it: there is no SIGINT handler anywhere in `crates/`, only
-the SIGPIPE restore at the entrypoint. So a `char check` that is interrupted dies on the default
+the SIGPIPE restore at the entrypoint. So a `armada manifest check` that is interrupted dies on the default
 disposition instead of ending its run.
 
 Measured, by sending SIGINT to a real run:
@@ -406,13 +420,13 @@ Measured, by sending SIGINT to a real run:
 | | What happens today |
 |---|---|
 | exit code | **130**, which is correct — [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.6 makes signals the one carve-out from `exit = f(error.class)` |
-| run lease | left in `~/.char/char.db` until the heartbeat goes cold, so a retry inside the minute fails fast with "a run is already in flight" |
+| run lease | left in `~/.armada/manifest.db` until the heartbeat goes cold, so a retry inside the minute fails fast with "a run is already in flight" |
 | **children** | **keep running.** They are `setsid`'d into their own sessions, so the signal never reaches them |
 
 The third row is the one that matters: [`PLAN.md`](PLAN.md) §2.3's premise is that no process
 outlives its workspace, and an interrupted run currently leaves its test suites running. It is
 the check engine's gap rather than the ownership layer's — the check engine is what spawns them,
-and `char clean` reclaims them only when somebody runs it.
+and `armada manifest clean` reclaims them only when somebody runs it.
 
 The shape of the fix, so it is not rediscovered: a handler sets a flag, the scheduler loop feeds
 `Event::Interrupted` on the next turn, and the path that already exists takes over — it kills

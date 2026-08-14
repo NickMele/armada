@@ -30,7 +30,7 @@ and the three status enums. These pages use them without re-explaining them.
 | [`manifest/skills.md`](manifest/skills.md) | `armada manifest skills` · `render` | M1 / M2 |
 | [`manifest/up.md`](manifest/up.md) | `armada manifest up` | not built |
 | [`manifest/down.md`](manifest/down.md) | `armada manifest down` | not built |
-| [`manifest/check.md`](manifest/check.md) | `armada manifest check` | not built |
+| [`manifest/check.md`](manifest/check.md) | `armada manifest check` | shipped, less `--detach` / `--status` |
 | [`manifest/config.md`](manifest/config.md) | `armada manifest config scan\|verify` | not built |
 | [`manifest/explain.md`](manifest/explain.md) | `armada manifest explain` | not built |
 
@@ -88,7 +88,7 @@ when the config was wrong and exit `1` when the tests were.
 | `4` | `timeout` | |
 | `5` | `aborted` | |
 | `6` | `environment` | Fix the machine and retry unchanged. |
-| `70` | `armada_bug` | Emitted as `char_bug` today; renames in M1 ([`PHASES.md`](../PHASES.md) §8.3). |
+| `70` | `armada_bug` | Internal error; retrying will not help. |
 | `130` / `141` | — | SIGINT / SIGPIPE. |
 
 A `commands:` child's exit code passes through **verbatim** and is not remapped
