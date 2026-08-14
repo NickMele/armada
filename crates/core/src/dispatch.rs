@@ -664,7 +664,7 @@ mod tests {
     /// caller's, and `armada_bug` is the class that says "stop; retrying will not
     /// help".
     #[test]
-    fn a_signature_for_a_check_that_never_ran_is_a_char_bug() {
+    fn a_signature_for_a_check_that_never_ran_is_an_armada_bug() {
         let mut journal = Journal::default();
         let error = journal
             .failed(&CheckId::new("ghost:test"), 1, "", &scrub())

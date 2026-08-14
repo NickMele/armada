@@ -1085,7 +1085,7 @@ mod tests {
     }
 
     #[test]
-    fn a_database_from_a_newer_char_is_an_environment_failure_naming_the_version() {
+    fn a_database_from_a_newer_armada_is_an_environment_failure_naming_the_version() {
         let home = tempfile::tempdir().unwrap();
         {
             let db = Db::open(home.path()).unwrap();

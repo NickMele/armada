@@ -417,7 +417,7 @@ mod tests {
     }
 
     #[test]
-    fn char_still_substitutes_its_own_names_under_a_shell() {
+    fn armada_still_substitutes_its_own_names_under_a_shell() {
         let ports = ports();
         let env = env();
         let vars = Vars::new("a3f91c02", &ports, &env);

@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn the_char_dir_is_created_with_its_two_subdirectories_and_removed_whole() {
+    fn the_armada_dir_is_created_with_its_two_subdirectories_and_removed_whole() {
         let dir = tempfile::tempdir().unwrap();
         let armada_dir = create_armada_dir(dir.path()).unwrap();
         assert!(armada_dir.join("logs").is_dir());
@@ -183,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn creating_the_char_dir_twice_is_not_an_error() {
+    fn creating_the_armada_dir_twice_is_not_an_error() {
         let dir = tempfile::tempdir().unwrap();
         create_armada_dir(dir.path()).unwrap();
         create_armada_dir(dir.path()).unwrap();

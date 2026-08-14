@@ -155,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn exactly_one_char_yml_is_the_workspace_root() {
+    fn exactly_one_armada_yml_is_the_workspace_root() {
         let found = [candidate("/srv/repo", &[])];
         assert_eq!(
             choose_root(&found, &[]).unwrap(),
