@@ -26,6 +26,22 @@
 use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::scope::Lens;
 
+use crate::render::style::ColorChoice;
+
+/// What the whole line asked for: one verb, and the one global rendering
+/// decision that outlives it.
+///
+/// **`color` sits here rather than on each variant** because it is decided once
+/// for the process (PLAN.md §3.1.1) and applies to output no verb produces —
+/// `--version`, `--help`, and the error from a line that never named a verb.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Parsed {
+    /// The verb, and its own flags.
+    pub invocation: Invocation,
+    /// `--color auto|always|never`.
+    pub color: ColorChoice,
+}
+
 /// A parsed invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Invocation {
@@ -78,6 +94,9 @@ pub struct ParseFailure {
     pub error: ArmadaError,
     /// How to report it.
     pub json: bool,
+    /// And, when it is reported as text, whether to paint it. Carried out for
+    /// the same reason `json` is: re-scanning argv would be a second grammar.
+    pub color: ColorChoice,
 }
 
 /// `armada manifest check`, with the flags PLAN.md §3.2 gives it.
@@ -153,7 +172,22 @@ const RESERVED_TOP_LEVEL: [(&str, &str); 6] = [
 ];
 
 /// Parse an argument vector, excluding `argv[0]`.
-pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
+///
+/// **`--color` is settled even on the failure path.** A line that Armada refuses
+/// still has its refusal rendered, and rendering it in a colour the caller
+/// turned off is the same bug as ignoring `--json` on a parse error.
+pub fn parse(args: &[String]) -> Result<Parsed, ParseFailure> {
+    let mut color = ColorChoice::default();
+    match parse_into(args, &mut color) {
+        Ok(invocation) => Ok(Parsed { invocation, color }),
+        Err(mut failure) => {
+            failure.color = color;
+            Err(failure)
+        }
+    }
+}
+
+fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, ParseFailure> {
     let mut json = false;
     let mut index = 0;
 
@@ -168,6 +202,11 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
             "--json" => {
                 json = true;
                 index += 1;
+            }
+            flag if flag == "--color" || flag.starts_with("--color=") => {
+                let (choice, consumed) = color_value(args, index).map_err(|e| failure(e, json))?;
+                *color = choice;
+                index += consumed;
             }
             flag if flag.starts_with('-') => return Err(failure(unknown_flag(flag), json)),
             _ => break,
@@ -208,9 +247,9 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
     let rest = &args[index + 2..];
 
     match verb.as_str() {
-        "init" => Ok(Invocation::Init(common(rest, json, &["--dry-run"])?)),
+        "init" => Ok(Invocation::Init(common(rest, json, color, &["--dry-run"])?)),
         "status" => {
-            let common = common(rest, json, &[])?;
+            let common = common(rest, json, color, &[])?;
             if common.dry_run {
                 return Err(failure(
                     ArmadaError {
@@ -225,11 +264,12 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
             }
             Ok(Invocation::Status(common))
         }
-        "check" => Ok(Invocation::Check(Box::new(check(rest, json)?))),
+        "check" => Ok(Invocation::Check(Box::new(check(rest, json, color)?))),
         "clean" => {
             let common = common(
                 rest,
                 json,
+                color,
                 &[
                     "--dry-run",
                     "--artifacts",
@@ -279,7 +319,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, ParseFailure> {
 /// **Not routed through [`common`]**, because `check` takes no scope lens: a run
 /// is this workspace's by definition, and accepting `--project` silently would
 /// let a caller believe they had asked for something Armada never does.
-fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
+fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, ParseFailure> {
     let mut parsed = Check {
         // Settled before the loop, so that how a failure is *reported* does not
         // depend on where in the line the offending flag sits: `armada manifest check
@@ -288,6 +328,8 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
         json: json || rest.iter().any(|a| a == "--json"),
         ..Default::default()
     };
+    // The same rule, for the same reason, on the other rendering flag.
+    *color = color_in(rest, *color).map_err(|e| failure(e, parsed.json))?;
     let mut positionals: Vec<String> = Vec::new();
     let mut index = 0;
 
@@ -296,6 +338,10 @@ fn check(rest: &[String], json: bool) -> Result<Check, ParseFailure> {
         index += 1;
         match arg {
             "--json" => parsed.json = true,
+            // Already read by `color_in` above; here only to consume its value
+            // so it is not mistaken for a positional.
+            "--color" => index += 1,
+            flag if flag.starts_with("--color=") => {}
             "--dry-run" => parsed.dry_run = true,
             "--all-files" => parsed.all_files = true,
             "--fix" => parsed.fix = true,
@@ -389,7 +435,12 @@ fn needs_a_value(flag: &str) -> ArmadaError {
     }
 }
 
-fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, ParseFailure> {
+fn common(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+    allowed: &[&str],
+) -> Result<Common, ParseFailure> {
     let mut common = Common {
         // Settled before the loop, so that how a failure is *reported* does not
         // depend on where in the line the offending flag sits: `armada manifest init
@@ -397,12 +448,20 @@ fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, Parse
         json: json || rest.iter().any(|a| a == "--json"),
         ..Default::default()
     };
+    // The same rule, for the same reason, on the other rendering flag.
+    *color = color_in(rest, *color).map_err(|e| failure(e, common.json))?;
     let mut project = false;
     let mut all = false;
+    let mut index = 0;
 
-    for arg in rest {
-        match arg.as_str() {
+    while index < rest.len() {
+        let arg = rest[index].as_str();
+        index += 1;
+        match arg {
             "--json" => {}
+            // Already read by `color_in` above; here only to consume its value.
+            "--color" => index += 1,
+            flag if flag.starts_with("--color=") => {}
             "--project" => project = true,
             "--all" => all = true,
             "--dry-run" if allowed.contains(&"--dry-run") => common.dry_run = true,
@@ -426,7 +485,67 @@ fn common(rest: &[String], json: bool, allowed: &[&str]) -> Result<Common, Parse
 }
 
 fn failure(error: ArmadaError, json: bool) -> ParseFailure {
-    ParseFailure { error, json }
+    // The colour is stamped on by [`parse`] once the whole line has been read,
+    // so that a `--color` sitting after the offending flag still counts.
+    ParseFailure {
+        error,
+        json,
+        color: ColorChoice::default(),
+    }
+}
+
+/// The last `--color` in a verb's own flags, or `current` if it names none.
+///
+/// **Scanned before the flag loop**, for the same reason `--json` is: how a
+/// failure is *rendered* must not depend on where in the line the offending flag
+/// sits.
+fn color_in(rest: &[String], current: ColorChoice) -> Result<ColorChoice, ArmadaError> {
+    let mut found = current;
+    let mut index = 0;
+    while index < rest.len() {
+        let arg = rest[index].as_str();
+        if arg == "--color" || arg.starts_with("--color=") {
+            let (choice, consumed) = color_value(rest, index)?;
+            found = choice;
+            index += consumed;
+        } else {
+            index += 1;
+        }
+    }
+    Ok(found)
+}
+
+/// `--color never` and `--color=never` are one flag with two spellings.
+///
+/// Returns the choice and how many argv slots it used, so a caller stepping
+/// through a line does not have to know which spelling it just saw.
+fn color_value(args: &[String], index: usize) -> Result<(ColorChoice, usize), ArmadaError> {
+    let (word, consumed) = match args[index].split_once('=') {
+        Some((_, value)) => (value, 1),
+        None => match args.get(index + 1) {
+            Some(value) if !value.starts_with('-') => (value.as_str(), 2),
+            _ => return Err(bad_color(None)),
+        },
+    };
+    match ColorChoice::parse(word) {
+        Some(choice) => Ok((choice, consumed)),
+        None => Err(bad_color(Some(word))),
+    }
+}
+
+fn bad_color(given: Option<&str>) -> ArmadaError {
+    let values = ColorChoice::VALUES.join(", ");
+    ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: "--color".to_string(),
+        message: match given {
+            Some(word) => format!("`--color {word}` is not one of: {values}"),
+            None => format!("`--color` needs one of: {values}"),
+        },
+        next_action: Some(
+            "`--color auto` is the default: colour at a terminal, none through a pipe".to_string(),
+        ),
+    }
 }
 
 fn unknown_flag(flag: &str) -> ArmadaError {
@@ -448,13 +567,14 @@ mod tests {
 
     #[test]
     fn bare_armada_is_help_rather_than_an_error() {
-        assert_eq!(parse(&[]).unwrap(), Invocation::Help);
+        assert_eq!(parse(&[]).unwrap().invocation, Invocation::Help);
     }
 
     #[test]
     fn init_takes_json_and_dry_run() {
-        let Invocation::Init(common) =
-            parse(&args(&["manifest", "init", "--json", "--dry-run"])).unwrap()
+        let Invocation::Init(common) = parse(&args(&["manifest", "init", "--json", "--dry-run"]))
+            .unwrap()
+            .invocation
         else {
             panic!()
         };
@@ -463,13 +583,15 @@ mod tests {
 
     #[test]
     fn the_scope_lens_is_the_same_flag_on_status_and_clean() {
-        let Invocation::Status(status) =
-            parse(&args(&["manifest", "status", "--project"])).unwrap()
+        let Invocation::Status(status) = parse(&args(&["manifest", "status", "--project"]))
+            .unwrap()
+            .invocation
         else {
             panic!()
         };
-        let Invocation::Clean { common, .. } =
-            parse(&args(&["manifest", "clean", "--project"])).unwrap()
+        let Invocation::Clean { common, .. } = parse(&args(&["manifest", "clean", "--project"]))
+            .unwrap()
+            .invocation
         else {
             panic!()
         };
@@ -508,7 +630,8 @@ mod tests {
             "--",
             "-x",
         ]))
-        .unwrap();
+        .unwrap()
+        .invocation;
         assert_eq!(
             parsed,
             Invocation::Dispatch {
@@ -522,7 +645,9 @@ mod tests {
     #[test]
     fn a_global_json_before_the_command_name_is_armadas() {
         let Invocation::Dispatch { name, argv, json } =
-            parse(&args(&["--json", "manifest", "worktrees", "--json"])).unwrap()
+            parse(&args(&["--json", "manifest", "worktrees", "--json"]))
+                .unwrap()
+                .invocation
         else {
             panic!()
         };
@@ -565,7 +690,13 @@ mod tests {
         for verb in BUILTIN_VERBS {
             let parsed = parse(&args(&["manifest", verb]));
             assert!(
-                !matches!(parsed, Ok(Invocation::Dispatch { .. })),
+                !matches!(
+                    parsed,
+                    Ok(Parsed {
+                        invocation: Invocation::Dispatch { .. },
+                        ..
+                    })
+                ),
                 "`{verb}` dispatched"
             );
         }
@@ -580,7 +711,10 @@ mod tests {
     /// a bare `armada` and gets the same answer rather than an error.
     #[test]
     fn a_module_with_no_verb_is_help() {
-        assert_eq!(parse(&args(&["manifest"])).unwrap(), Invocation::Help);
+        assert_eq!(
+            parse(&args(&["manifest"])).unwrap().invocation,
+            Invocation::Help
+        );
     }
 
     /// A module that does not exist yet says which milestone builds it, rather
@@ -595,6 +729,81 @@ mod tests {
         }
     }
 
+    /// `--color` is Armada's wherever Armada's own flags are read: before the
+    /// module, and among a built-in verb's flags. Both spellings, both places.
+    #[test]
+    fn color_is_read_before_the_module_and_among_a_verbs_own_flags() {
+        for words in [
+            &["--color", "never", "manifest", "status"][..],
+            &["--color=never", "manifest", "status"][..],
+            &["manifest", "status", "--color", "never"][..],
+            &["manifest", "status", "--color=never"][..],
+        ] {
+            assert_eq!(
+                parse(&args(words)).unwrap().color,
+                ColorChoice::Never,
+                "`armada {}` lost --color",
+                words.join(" ")
+            );
+        }
+        assert_eq!(
+            parse(&args(&["manifest", "status"])).unwrap().color,
+            ColorChoice::Auto,
+            "auto is the default"
+        );
+    }
+
+    /// A `commands:` child's `--color` is the child's, exactly as its `--json`
+    /// is. Nothing after the entry's name is Armada's.
+    #[test]
+    fn a_color_after_a_commands_name_belongs_to_the_child() {
+        let parsed = parse(&args(&["manifest", "worktrees", "--color", "always"])).unwrap();
+        assert_eq!(parsed.color, ColorChoice::Auto, "Armada's own is untouched");
+        let Invocation::Dispatch { argv, .. } = parsed.invocation else {
+            panic!()
+        };
+        assert_eq!(argv, args(&["--color", "always"]));
+    }
+
+    /// A refusal is still rendered, so the flag that decides how rides out with
+    /// it — including when it sits *after* the flag that caused the refusal.
+    #[test]
+    fn a_parse_failure_carries_out_the_color_it_had_already_seen() {
+        for words in [
+            &["--color", "never", "manifest", "up"][..],
+            &["manifest", "init", "--turbo", "--color", "never"][..],
+            &["manifest", "check", "--detach", "--color", "never"][..],
+        ] {
+            assert_eq!(
+                parse(&args(words)).unwrap_err().color,
+                ColorChoice::Never,
+                "`armada {}` lost --color",
+                words.join(" ")
+            );
+        }
+    }
+
+    /// A value that is not one of the three is a bad invocation rather than a
+    /// silent fallback to `auto` — a caller who typed `--color yes` asked a
+    /// question, and answering it with the default is how they never find out.
+    #[test]
+    fn an_unrecognised_color_is_refused_and_lists_the_three() {
+        for words in [
+            &["--color", "yes", "manifest", "status"][..],
+            &["manifest", "status", "--color=yes"][..],
+            &["manifest", "status", "--color"][..],
+        ] {
+            let err = parse(&args(words)).unwrap_err().error;
+            assert_eq!(err.class, ErrClass::BadInvocation);
+            assert_eq!(err.r#where, "--color");
+            assert!(
+                err.message.contains("auto, always, never"),
+                "{}",
+                err.message
+            );
+        }
+    }
+
     /// Only Manifest dispatches to a repo's `commands:`. A bare word at the top
     /// level is a module name, and an unknown one is an unknown command.
     #[test]
@@ -606,9 +815,12 @@ mod tests {
 
     #[test]
     fn version_and_help_win_wherever_they_appear_among_the_global_flags() {
-        assert_eq!(parse(&args(&["--version"])).unwrap(), Invocation::Version);
         assert_eq!(
-            parse(&args(&["--json", "--help"])).unwrap(),
+            parse(&args(&["--version"])).unwrap().invocation,
+            Invocation::Version
+        );
+        assert_eq!(
+            parse(&args(&["--json", "--help"])).unwrap().invocation,
             Invocation::Help
         );
     }

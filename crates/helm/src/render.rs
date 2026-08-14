@@ -8,30 +8,50 @@
 //! failure, which resources were skipped and why — it was decided upstream and
 //! this file is reading a field.
 
+pub mod palette;
+pub mod style;
+
 use armada_core::envelope::{
     CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, Envelope, InitData, InitDryRun,
     StatusData,
 };
-use armada_core::error::ArmadaError;
+use armada_core::error::{ArmadaError, Status};
 use armada_core::reap::ReapPlan;
 
 use crate::verbs::Output;
+use palette::Role;
+use style::Style;
 
 /// Render for a terminal.
-pub fn human(output: &Output) -> String {
+///
+/// **`style` is the only thing that differs between the two human audiences**
+/// (PLAN.md §3.1.1). A person at a terminal and an agent reading stdout get the
+/// same columns, the same order and the same words; one of them also gets
+/// colour. Every line below is written once, for both.
+pub fn human(output: &Output, style: Style) -> String {
     match output {
-        Output::Init(envelope) => init(envelope),
+        Output::Init(envelope) => init(envelope, style),
         Output::InitDryRun(envelope) => init_dry(envelope),
-        Output::Clean(envelope) => clean(envelope),
+        Output::Clean(envelope) => clean(envelope, style),
         Output::CleanDryRun(envelope) => clean_dry(envelope),
-        Output::Status(envelope) => status(envelope),
-        Output::Check(envelope) => check(envelope),
+        Output::Status(envelope) => status(envelope, style),
+        Output::Check(envelope) => check(envelope, style),
         Output::CheckDryRun(envelope) => check_dry(envelope),
-        Output::Dispatch(envelope) => dispatch(envelope),
+        Output::Dispatch(envelope) => dispatch(envelope, style),
     }
 }
 
-fn init(envelope: &Envelope<InitData>) -> String {
+/// A terminal state, spelled as the envelope spells it and coloured to agree.
+///
+/// **Never padded here.** An escape sequence is characters a terminal does not
+/// show, so `{:<8}` over a painted token pads to the wrong width — the reason
+/// every caller below paints the token last in its line, and the reason the
+/// table renderer measures a cell before it paints it.
+fn verdict(style: Style, status: Status) -> String {
+    style.paint(Role::for_status(status), &status.to_string())
+}
+
+fn init(envelope: &Envelope<InitData>, style: Style) -> String {
     let data = &envelope.data;
     let mut out = String::new();
     out.push_str(&format!(
@@ -48,14 +68,18 @@ fn init(envelope: &Envelope<InitData>) -> String {
         out.push_str(&format!("  {name:<16} {port}\n"));
     }
     for row in &data.results {
-        out.push_str(&format!("  {:<16} {}\n", row.id, row.status));
+        out.push_str(&format!(
+            "  {:<16} {}\n",
+            row.id,
+            verdict(style, row.status)
+        ));
         if let Some(error) = &row.error {
             out.push_str(&format!("    {}\n", error.message));
         }
     }
     out.push_str(&reaped(&data.reaped));
     if let Some(error) = &envelope.error {
-        out.push_str(&error_lines(error));
+        out.push_str(&error_lines(error, style));
     }
     out
 }
@@ -66,11 +90,11 @@ fn init(envelope: &Envelope<InitData>) -> String {
 /// reads: the id, the verdict, how long, and where the output went. The
 /// **`waiting_on`** line is the one worth having — it names the workspace that
 /// is in the way, which is the thing the caller cannot work out for itself.
-fn check(envelope: &Envelope<CheckData>) -> String {
+fn check(envelope: &Envelope<CheckData>, style: Style) -> String {
     let data = &envelope.data;
     let mut out = format!("run {}\n", data.run_id);
     for row in &data.results {
-        out.push_str(&format!("  {:<24} {}", row.id, row.status));
+        out.push_str(&format!("  {:<24} {}", row.id, verdict(style, row.status)));
         if let Some(ms) = row.duration_ms {
             out.push_str(&format!("  {ms}ms"));
         }
@@ -95,7 +119,7 @@ fn check(envelope: &Envelope<CheckData>) -> String {
         out.push_str(&format!("  reaped run {reaped}\n"));
     }
     if let Some(error) = &envelope.error {
-        out.push_str(&error_lines(error));
+        out.push_str(&error_lines(error, style));
     }
     out
 }
@@ -131,7 +155,7 @@ fn init_dry(envelope: &Envelope<InitDryRun>) -> String {
     out
 }
 
-fn clean(envelope: &Envelope<CleanData>) -> String {
+fn clean(envelope: &Envelope<CleanData>, style: Style) -> String {
     let data = &envelope.data;
     let mut out = String::new();
     for row in &data.results {
@@ -139,7 +163,7 @@ fn clean(envelope: &Envelope<CleanData>) -> String {
         out.push_str(&format!(
             "  {:<10} {}{}\n",
             row.id,
-            row.status,
+            verdict(style, row.status),
             released
                 .map(|r| format!(
                     "  {} processes, {} containers, {} networks, {} volumes, {} images",
@@ -161,7 +185,7 @@ fn clean(envelope: &Envelope<CleanData>) -> String {
     }
     out.push_str(&reaped(&data.reaped));
     if let Some(error) = &envelope.error {
-        out.push_str(&error_lines(error));
+        out.push_str(&error_lines(error, style));
     }
     out
 }
@@ -184,7 +208,7 @@ fn clean_dry(envelope: &Envelope<CleanDryRun>) -> String {
     out
 }
 
-fn status(envelope: &Envelope<StatusData>) -> String {
+fn status(envelope: &Envelope<StatusData>, style: Style) -> String {
     let data = &envelope.data;
     let mut out = format!("scope {}\n", data.scope);
     for row in &data.results {
@@ -200,9 +224,7 @@ fn status(envelope: &Envelope<StatusData>) -> String {
             out.push_str(&format!(
                 "      {name:<12} {} {}\n",
                 report.port,
-                serde_json::to_string(&report.state)
-                    .unwrap_or_default()
-                    .trim_matches('"')
+                style.paint(Role::for_port(report.state), &port_state(report.state))
             ));
         }
         for lease in &row.leases {
@@ -224,9 +246,21 @@ fn status(envelope: &Envelope<StatusData>) -> String {
     out
 }
 
-fn dispatch(envelope: &Envelope<DispatchData>) -> String {
+/// A port state, spelled exactly as the envelope spells it.
+///
+/// **The human spelling is the JSON spelling** (`ARCHITECTURE.md` §1.6): a
+/// reader who learned one knows the other, so this goes through the same
+/// serialiser rather than a second table of words.
+fn port_state(state: armada_core::ports::PortState) -> String {
+    serde_json::to_string(&state)
+        .unwrap_or_default()
+        .trim_matches('"')
+        .to_string()
+}
+
+fn dispatch(envelope: &Envelope<DispatchData>, style: Style) -> String {
     match &envelope.error {
-        Some(error) => error_lines(error),
+        Some(error) => error_lines(error, style),
         // The child wrote its own output; Armada adds nothing. Saying "exited 0"
         // after a command that already printed its result is noise, and saying
         // it on stdout would corrupt a pipeline the repo owns.
@@ -266,8 +300,16 @@ fn reaped(plan: &ReapPlan) -> String {
 }
 
 /// The error, in the shape PLAN.md §3.2.1 prints it.
-pub fn error_lines(error: &ArmadaError) -> String {
-    let mut out = format!("error: {}\n", error.message);
+///
+/// **Only the word `error:` is painted, not the message.** A failure goes to
+/// stderr, which is frequently a log file even when stdout is a terminal, and a
+/// message wrapped in escapes is the part a reader most needs to copy.
+pub fn error_lines(error: &ArmadaError, style: Style) -> String {
+    let mut out = format!(
+        "{} {}\n",
+        style.strong(Role::DistressRed, "error:"),
+        error.message
+    );
     out.push_str(&format!("  where: {}\n", error.r#where));
     out.push_str(&format!("  class: {}\n", error.class));
     if let Some(next) = &error.next_action {
@@ -345,7 +387,7 @@ mod tests {
             },
         );
 
-        let text = human(&Output::Init(Box::new(envelope)));
+        let text = human(&Output::Init(Box::new(envelope)), Style::plain());
         assert!(text.starts_with("workspace a3f91c02  ports 5460-5469\n"));
         assert!(text.contains("  web              5460\n"));
         assert!(text.contains("  api              FAILED\n"));
@@ -372,7 +414,7 @@ mod tests {
             },
         );
 
-        let text = human(&Output::Init(Box::new(envelope)));
+        let text = human(&Output::Init(Box::new(envelope)), Style::plain());
         assert!(text.contains("error: `npm ci` exited 1\n"));
         assert!(text.contains("  reaped     workspace deadbeef (directory gone)\n"));
         assert!(text.contains("  reaped     container Armada-api-1 (deadbeef)\n"));
@@ -394,7 +436,7 @@ mod tests {
             },
         );
 
-        let text = human(&Output::InitDryRun(Box::new(envelope)));
+        let text = human(&Output::InitDryRun(Box::new(envelope)), Style::plain());
         assert!(text.starts_with("dry run — nothing was changed\n"));
         assert!(text.contains("  would_claim     ports 5460-5469\n"));
         assert!(text.contains("  would_run       api: npm ci\n"));
@@ -428,7 +470,7 @@ mod tests {
             },
         );
 
-        let text = human(&Output::Clean(Box::new(envelope)));
+        let text = human(&Output::Clean(Box::new(envelope)), Style::plain());
         assert!(text.contains(
             "  a3f91c02   CLEAN  1 processes, 2 containers, 3 networks, 4 volumes, 5 images\n"
         ));
@@ -454,7 +496,7 @@ mod tests {
             },
         );
 
-        let text = human(&Output::Clean(Box::new(envelope)));
+        let text = human(&Output::Clean(Box::new(envelope)), Style::plain());
         assert!(text.contains("  a3f91c02   FAILED\n"));
         assert!(!text.contains("processes"));
         assert!(text.contains("error: `npm ci` exited 1\n"));
@@ -474,7 +516,7 @@ mod tests {
             },
         );
 
-        let text = human(&Output::CleanDryRun(Box::new(envelope)));
+        let text = human(&Output::CleanDryRun(Box::new(envelope)), Style::plain());
         assert!(text.starts_with("dry run — nothing was changed\n"));
         assert!(text.contains("  would_release   ports 5460-5469 (a3f91c02)\n"));
         assert!(text.contains("  would_remove    container Armada-api-1\n"));
@@ -513,7 +555,7 @@ mod tests {
             },
         );
 
-        let text = human(&Output::Status(Box::new(envelope)));
+        let text = human(&Output::Status(Box::new(envelope)), Style::plain());
         assert!(text.starts_with("scope workspace\n"));
         assert!(text.contains("  a3f91c02  /scratch/repo  ports 5460-5469\n"));
         assert!(
@@ -543,7 +585,7 @@ mod tests {
                 argv: vec!["echo".to_string()],
             },
         );
-        assert_eq!(human(&Output::Dispatch(Box::new(ran))), "");
+        assert_eq!(human(&Output::Dispatch(Box::new(ran)), Style::plain()), "");
 
         // A command that never ran is Armada's failure, and Armada says so.
         let refused = Envelope::failed(
@@ -558,7 +600,7 @@ mod tests {
             },
         );
         assert_eq!(
-            human(&Output::Dispatch(Box::new(refused))),
+            human(&Output::Dispatch(Box::new(refused)), Style::plain()),
             "error: `npm ci` exited 1\n  where: api\n  class: tool_failed\n  next:  run it by hand\n"
         );
     }
@@ -567,15 +609,69 @@ mod tests {
     /// remedy line is omitted rather than printed empty when there is none.
     #[test]
     fn an_error_without_a_remedy_prints_three_lines_and_not_four() {
-        let text = error_lines(&ArmadaError {
-            class: ErrClass::BadInvocation,
-            r#where: "--force-rebuild".to_string(),
-            message: "not built yet".to_string(),
-            next_action: None,
-        });
+        let text = error_lines(
+            &ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: "--force-rebuild".to_string(),
+                message: "not built yet".to_string(),
+                next_action: None,
+            },
+            Style::plain(),
+        );
         assert_eq!(
             text,
             "error: not built yet\n  where: --force-rebuild\n  class: bad_invocation\n"
         );
+    }
+
+    /// **The two human audiences differ in styling and in nothing else**
+    /// (PLAN.md §3.1.1). Painted output must contain the unpainted output's
+    /// words in the same order — so an agent reading stdout and a person
+    /// reading a terminal are looking at one render, not two.
+    #[test]
+    fn painted_and_plain_carry_the_same_words_in_the_same_order() {
+        let envelope = || {
+            let mut row = ResultRow::new("api", Status::Failed);
+            row.error = Some(failure());
+            Envelope::ok(
+                "init",
+                Some(workspace()),
+                Status::Ready,
+                InitData {
+                    port_block: block(),
+                    claimed_at: "2026-08-09T14:02:11Z".to_string(),
+                    ports: BTreeMap::from([("web".to_string(), 5460)]),
+                    reaped: plan(),
+                    results: vec![row],
+                },
+            )
+        };
+
+        let plain = human(&Output::Init(Box::new(envelope())), Style::plain());
+        let painted = human(&Output::Init(Box::new(envelope())), Style::painted());
+
+        assert!(!plain.contains('\x1b'), "plain output carries no escapes");
+        assert!(painted.contains('\x1b'), "painted output carries escapes");
+        assert_eq!(strip_ansi(&painted), plain);
+    }
+
+    /// Everything a terminal would not display, removed — so a test can compare
+    /// the two audiences' output character for character.
+    fn strip_ansi(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut chars = text.chars();
+        while let Some(c) = chars.next() {
+            if c != '\x1b' {
+                out.push(c);
+                continue;
+            }
+            // Every sequence this renderer emits is a CSI ending in `m`.
+            for c in chars.by_ref() {
+                if c == 'm' {
+                    break;
+                }
+            }
+        }
+        out
     }
 }

@@ -30,8 +30,9 @@ use armada_manifest::clock::SystemClock;
 use armada_manifest::net::RealFetch;
 use armada_manifest::process::RealRun;
 use armada_manifest::{discovery, posix};
+use render::style::Style;
 use std::collections::BTreeMap;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -73,15 +74,26 @@ fn main() -> ExitCode {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let inherited: BTreeMap<String, String> = std::env::vars().collect();
 
-    let invocation = match args::parse(&argv) {
-        Ok(invocation) => invocation,
+    // **The terminal is ambient state, so it is read here and passed down**
+    // (`ARCHITECTURE.md` §1.4). `NO_COLOR` comes out of the environment map this
+    // function already built, rather than from a second `std::env` call in the
+    // renderer — one read, one answer, and a test can set it.
+    let no_color = inherited.contains_key("NO_COLOR");
+    let stdout_is_tty = std::io::stdout().is_terminal();
+
+    let parsed = match args::parse(&argv) {
+        Ok(parsed) => parsed,
         // `--json` is answered even when the failure is the parse itself: the
         // parser carries out the flag it had already seen, so a machine caller
         // probing a verb that does not exist yet still reads an envelope.
-        Err(failure) => return fail(failure.error, failure.json),
+        Err(failure) => {
+            let style = Style::decide(failure.color, stdout_is_tty, no_color);
+            return fail(failure.error, failure.json, style);
+        }
     };
+    let style = Style::decide(parsed.color, stdout_is_tty, no_color);
 
-    match invocation {
+    match parsed.invocation {
         Invocation::Version => {
             write_out(&format!("armada {}\n", env!("CARGO_PKG_VERSION")));
             ExitCode::SUCCESS
@@ -93,8 +105,8 @@ fn main() -> ExitCode {
         other => {
             let json = json_wanted(&other);
             match dispatch(other, &cwd, home.as_deref(), inherited) {
-                Ok(output) => emit(output, json),
-                Err(error) => fail(error, json),
+                Ok(output) => emit(output, json, style),
+                Err(error) => fail(error, json, style),
             }
         }
     }
@@ -253,11 +265,11 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<Armad
     None
 }
 
-fn emit(output: Output, json: bool) -> ExitCode {
+fn emit(output: Output, json: bool, style: Style) -> ExitCode {
     if json {
         write_out(&output.to_json());
     } else {
-        let text = render::human(&output);
+        let text = render::human(&output, style);
         if output.exit_code() == 0 {
             write_out(&text);
         } else {
@@ -267,7 +279,7 @@ fn emit(output: Output, json: bool) -> ExitCode {
     ExitCode::from(output.exit_code())
 }
 
-fn fail(error: ArmadaError, json: bool) -> ExitCode {
+fn fail(error: ArmadaError, json: bool, style: Style) -> ExitCode {
     let code = error.class.exit_code();
     if json {
         // The envelope shape never varies. `workspace` is `null` when
@@ -283,7 +295,7 @@ fn fail(error: ArmadaError, json: bool) -> ExitCode {
         };
         write_out(&envelope.to_json());
     } else {
-        write_err(&render::error_lines(&error));
+        write_err(&render::error_lines(&error, style));
     }
     ExitCode::from(code)
 }
