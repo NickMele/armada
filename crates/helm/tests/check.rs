@@ -18,14 +18,15 @@ use support::Machine;
 /// One component, three checks: one that passes, one that fails, one that is
 /// file-scoped and therefore skipped on a clean tree.
 const CONFIG: &str = "\
-version: 1
-components:
-  app:
-    root: src
-    checks:
-      lint: { cmd: \"./exiter.sh 0\" }
-      pass: { cmd: \"./exiter.sh 0\", scope: component }
-      fail: { cmd: \"./exiter.sh 3\", scope: component }
+manifest:
+  version: 1
+  components:
+    app:
+      root: src
+      checks:
+        lint: { cmd: \"./exiter.sh 0\" }
+        pass: { cmd: \"./exiter.sh 0\", scope: component }
+        fail: { cmd: \"./exiter.sh 3\", scope: component }
 ";
 
 fn envelope(output: &std::process::Output) -> serde_json::Value {
@@ -286,20 +287,21 @@ fn a_check_that_needs_nothing_still_runs_beside_a_blocked_one() {
 }
 
 const NEEDS_A_SERVICE: &str = "\
-version: 1
-components:
-  postgres:
-    run:
-      driver: compose
-      file: [docker-compose.yml]
-  app:
-    checks:
-      test:
-        cmd: \"./exiter.sh 0\"
-        scope: component
-        needs: [postgres]
-      fail: { cmd: \"./exiter.sh 3\", scope: component }
-      free: { cmd: \"./exiter.sh 0\", scope: component }
+manifest:
+  version: 1
+  components:
+    postgres:
+      run:
+        driver: compose
+        file: [docker-compose.yml]
+    app:
+      checks:
+        test:
+          cmd: \"./exiter.sh 0\"
+          scope: component
+          needs: [postgres]
+        fail: { cmd: \"./exiter.sh 3\", scope: component }
+        free: { cmd: \"./exiter.sh 0\", scope: component }
 ";
 
 // -------------------------------------------------------------- the run lease
@@ -359,11 +361,12 @@ fn two_worktrees_run_at_the_same_time_without_contending() {
 }
 
 const SLOW: &str = "\
-version: 1
-components:
-  app:
-    checks:
-      slow: { cmd: \"sleep 3\", scope: component }
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        slow: { cmd: \"sleep 3\", scope: component }
 ";
 
 fn lease_held(db: &Path, kind: &str) -> bool {
@@ -407,7 +410,7 @@ fn a_conventional_selector_matching_nothing_exits_zero() {
     let machine = Machine::new();
     let repo = machine.repo(
         "main",
-        "version: 1\ncomponents:\n  app:\n    checks:\n      audit: { cmd: \"./exiter.sh 0\" }\n",
+        "manifest:\n  version: 1\n  components:\n    app:\n      checks:\n        audit: { cmd: \"./exiter.sh 0\" }\n",
     );
     machine.run(&repo, &["manifest", "init"]);
 

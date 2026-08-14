@@ -197,11 +197,12 @@ fn owned_rows(home: &Path) -> Vec<String> {
 }
 
 const CONFIG: &str = "\
-version: 1
-components:
-  app:
-    run:
-      driver: command
-      cmd: ./serve
-      ports: { web: 3000 }
+manifest:
+  version: 1
+  components:
+    app:
+      run:
+        driver: command
+        cmd: ./serve
+        ports: { web: 3000 }
 ";

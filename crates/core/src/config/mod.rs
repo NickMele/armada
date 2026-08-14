@@ -25,10 +25,10 @@ mod resolved;
 mod schema;
 
 pub use model::{
-    Check, CommandEntry, Component, Config, OneOrMany, OwnsCommand, OwnsComponent, OwnsRun, Ready,
-    Run, SecretProvider, SetupObject, SetupStep,
+    Check, CommandEntry, Component, Config, Document, OneOrMany, OwnsCommand, OwnsComponent,
+    OwnsRun, Ready, Run, SecretProvider, SetupObject, SetupStep,
 };
-pub use resolve::{declared_workspaces, parse, resolve, Defaults};
+pub use resolve::{declared_workspaces, parse, resolve, Defaults, SECTION};
 pub use resolved::{
     Need, ReadyKind, ResolvedCheck, ResolvedCommand, ResolvedComponent, ResolvedConfig,
     ResolvedReady, ResolvedRun, ResolvedService, ResolvedSetupStep, Scope, Stdio,

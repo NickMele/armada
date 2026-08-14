@@ -17,8 +17,8 @@
 //! test suite runs both over every fixture, so a gap between them is visible.
 
 use super::model::{
-    Check, CommandEntry, Component, Config, OneOrMany, OwnsCommand, OwnsComponent, OwnsRun, Ready,
-    Run, SetupStep,
+    Check, CommandEntry, Component, Config, Document, OneOrMany, OwnsCommand, OwnsComponent,
+    OwnsRun, Ready, Run, SetupStep,
 };
 use super::resolved::{
     Need, ReadyKind, ResolvedCheck, ResolvedCommand, ResolvedComponent, ResolvedConfig,
@@ -60,42 +60,52 @@ impl Default for Defaults {
 
 /// The schema's advice, attached to every parse failure. Pointing at the one
 /// authoritative statement of the contract beats restating a fragment of it.
-const SEE_SCHEMA: &str = "every key char accepts is in the armada.yml JSON Schema";
+const SEE_SCHEMA: &str = "every key Armada accepts is in the armada.yml JSON Schema";
+
+/// The one section of `armada.yml` that exists, and the prefix every key path
+/// into it carries.
+///
+/// Stated once so the locator and the document cannot drift: a `where` of
+/// `armada.yml:components.api.checks.lint.cmd` would name a key that is not
+/// there, which is worse than no locator (PLAN.md §4.1.1 decision 4).
+pub const SECTION: &str = "manifest";
 
 /// Parse `armada.yml`.
 ///
 /// `file` is the workspace-relative path the error should cite, which is
 /// `armada.yml` for an ordinary workspace and `<path>/armada.yml` for a nested one.
 pub fn parse(text: &str, file: &str) -> Result<Config, CharError> {
-    let config: Config = serde_yaml_ng::from_str(text).map_err(|e| {
-        // Decision 4 (PLAN.md §4.1.1): `where` keeps the `bad_config` grammar —
-        // `armada.yml:` and then a locator. A parser cannot give a key path, so
-        // the locator is `line:column`; serde's own message still carries the
-        // path when it has one, so nothing is lost.
-        let location = match e.location() {
-            Some(loc) => ConfigWhere::Location {
-                file: file.to_string(),
-                line: loc.line(),
-                column: loc.column(),
-            },
-            None => ConfigWhere::File {
-                file: file.to_string(),
-            },
-        };
-        CharError::bad_config(location, e.to_string(), SEE_SCHEMA)
-    })?;
+    let config: Config = serde_yaml_ng::from_str::<Document>(text)
+        .map(|document| document.manifest)
+        .map_err(|e| {
+            // Decision 4 (PLAN.md §4.1.1): `where` keeps the `bad_config`
+            // grammar — `armada.yml:` and then a locator. A parser cannot give
+            // a key path, so the locator is `line:column`; serde's own message
+            // still carries the path when it has one, so nothing is lost.
+            let location = match e.location() {
+                Some(loc) => ConfigWhere::Location {
+                    file: file.to_string(),
+                    line: loc.line(),
+                    column: loc.column(),
+                },
+                None => ConfigWhere::File {
+                    file: file.to_string(),
+                },
+            };
+            CharError::bad_config(location, e.to_string(), SEE_SCHEMA)
+        })?;
 
     if config.version != 1 {
         return Err(CharError::bad_config(
             ConfigWhere::Path {
                 file: file.to_string(),
-                path: "version".to_string(),
+                path: format!("{SECTION}.version"),
             },
             format!(
-                "unsupported config version {} — this char understands version 1",
+                "unsupported config version {} — this Armada understands version 1",
                 config.version
             ),
-            "set `version: 1`, or upgrade char",
+            "set `version: 1`, or upgrade Armada",
         ));
     }
 
@@ -108,20 +118,27 @@ pub fn parse(text: &str, file: &str) -> Result<Config, CharError> {
 /// declares the one below it (PLAN.md §2.1), and it has to ask **before** it
 /// knows which config is this workspace's. A full parse there would make an
 /// unrelated error in an outer config — a key phase 5 adds, a typo in a
-/// component char is not going to run — fail the inner workspace it has no
+/// component Armada is not going to run — fail the inner workspace it has no
 /// authority over. So this reads one key and forms no opinion about the rest.
 ///
 /// A document that does not parse at all yields an empty list, which makes the
 /// nesting undeclared and the situation `bad_config` — reported against the
-/// nesting rather than against a parse char did not need.
+/// nesting rather than against a parse Armada did not need.
 pub fn declared_workspaces(text: &str) -> Vec<String> {
     #[derive(serde::Deserialize)]
     struct JustWorkspaces {
         #[serde(default)]
         workspaces: Vec<String>,
     }
-    serde_yaml_ng::from_str::<JustWorkspaces>(text)
-        .map(|parsed| parsed.workspaces)
+    #[derive(serde::Deserialize)]
+    struct JustManifest {
+        #[serde(default)]
+        manifest: Option<JustWorkspaces>,
+    }
+    serde_yaml_ng::from_str::<JustManifest>(text)
+        .ok()
+        .and_then(|parsed| parsed.manifest)
+        .map(|section| section.workspaces)
         .unwrap_or_default()
 }
 
@@ -254,7 +271,7 @@ fn resolve_check(
             return Err(CharError::bad_config(
                 ConfigWhere::Path {
                     file: file.to_string(),
-                    path: format!("components.{component}.checks.{name}.scope"),
+                    path: format!("{SECTION}.components.{component}.checks.{name}.scope"),
                 },
                 format!("unknown scope `{other}`"),
                 "use `file` (the default) or `component`",
@@ -294,7 +311,7 @@ fn resolve_run(
 ) -> Result<ResolvedRun, CharError> {
     let at = |suffix: &str| ConfigWhere::Path {
         file: file.to_string(),
-        path: format!("components.{component}.run{suffix}"),
+        path: format!("{SECTION}.components.{component}.run{suffix}"),
     };
 
     let OwnsRun {
@@ -418,7 +435,7 @@ fn resolve_ready(
 
     let at = ConfigWhere::Path {
         file: file.to_string(),
-        path: format!("components.{component}.run.ready"),
+        path: format!("{SECTION}.components.{component}.run.ready"),
     };
 
     // Exactly one kind key. Two is bad_config rather than a precedence rule
@@ -463,7 +480,7 @@ fn resolve_command(
             return Err(CharError::bad_config(
                 ConfigWhere::Path {
                     file: file.to_string(),
-                    path: format!("commands.{name}.stdio"),
+                    path: format!("{SECTION}.commands.{name}.stdio"),
                 },
                 format!("unknown stdio `{other}`"),
                 "use `inherit` or `pipe`",
@@ -519,13 +536,13 @@ mod tests {
 
     #[test]
     fn check_ids_are_derived_not_written() {
-        let cfg = resolved("version: 1\ncomponents:\n  api:\n    checks:\n      lint:\n        cmd: ruff check ${files}\n");
+        let cfg = resolved("manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint:\n          cmd: ruff check ${files}\n");
         assert_eq!(cfg.components["api"].checks["lint"].id, "api:lint");
     }
 
     #[test]
     fn defaults_are_materialised_from_the_machine_values_passed_in() {
-        let cfg = resolved("version: 1\ncomponents:\n  api:\n    checks:\n      lint:\n        cmd: ruff check ${files}\n");
+        let cfg = resolved("manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint:\n          cmd: ruff check ${files}\n");
         let check = &cfg.components["api"].checks["lint"];
         assert_eq!(check.timeout, 900);
         assert_eq!(check.cost, 1);
@@ -536,7 +553,7 @@ mod tests {
     #[test]
     fn a_machine_with_a_different_check_timeout_resolves_differently() {
         let config = parse(
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint:\n        cmd: ruff check ${files}\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint:\n          cmd: ruff check ${files}\n",
             "armada.yml",
         )
         .unwrap();
@@ -551,7 +568,7 @@ mod tests {
     #[test]
     fn match_defaults_to_the_component_root_or_the_whole_workspace() {
         let cfg = resolved(
-            "version: 1\ncomponents:\n  api:\n    root: services/api\n    checks:\n      lint: { cmd: lint }\n  whole:\n    checks:\n      lint: { cmd: lint }\n  service:\n    run: { driver: command, cmd: serve }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      root: services/api\n      checks:\n        lint: { cmd: lint }\n    whole:\n      checks:\n        lint: { cmd: lint }\n    service:\n      run: { driver: command, cmd: serve }\n",
         );
         assert_eq!(cfg.components["api"].match_globs, ["services/api/**"]);
         assert_eq!(cfg.components["whole"].match_globs, ["**"]);
@@ -567,7 +584,7 @@ mod tests {
         // not the config declares one, and a checked component still needs no
         // scoping keys.
         let cfg = resolved(
-            "version: 1\nworkspaces: [apps/site]\ncomponents:\n  app:\n    checks:\n      lint: { cmd: eslint }\n  core:\n    root: packages/core\n    checks:\n      lint: { cmd: eslint }\n  svc:\n    run: { driver: command, cmd: serve }\n  docs:\n    match: [\"*.md\"]\n    checks:\n      lint: { cmd: markdownlint }\n",
+            "manifest:\n  version: 1\n  workspaces: [apps/site]\n  components:\n    app:\n      checks:\n        lint: { cmd: eslint }\n    core:\n      root: packages/core\n      checks:\n        lint: { cmd: eslint }\n    svc:\n      run: { driver: command, cmd: serve }\n    docs:\n      match: [\"*.md\"]\n      checks:\n        lint: { cmd: markdownlint }\n",
         );
         assert_eq!(cfg.components["app"].match_globs, ["**"]);
         assert_eq!(cfg.components["core"].match_globs, ["packages/core/**"]);
@@ -577,12 +594,13 @@ mod tests {
 
     #[test]
     fn setup_normalises_both_spellings_to_one_list() {
-        let one = resolved("version: 1\ncomponents:\n  api:\n    setup: uv sync\n");
+        let one =
+            resolved("manifest:\n  version: 1\n  components:\n    api:\n      setup: uv sync\n");
         assert_eq!(one.components["api"].setup.len(), 1);
         assert!(!one.components["api"].setup[0].shell);
 
         let many = resolved(
-            "version: 1\ncomponents:\n  api:\n    setup:\n      - uv sync\n      - { cmd: \"createdb x || true\", shell: true }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      setup:\n        - uv sync\n        - { cmd: \"createdb x || true\", shell: true }\n",
         );
         let steps = &many.components["api"].setup;
         assert_eq!(steps.len(), 2);
@@ -593,7 +611,7 @@ mod tests {
     #[test]
     fn needs_are_classified_by_the_colon() {
         let cfg = resolved(
-            "version: 1\ncomponents:\n  ui:\n    checks:\n      types:\n        cmd: tsc\n        needs: [postgres, core:build]\n",
+            "manifest:\n  version: 1\n  components:\n    ui:\n      checks:\n        types:\n          cmd: tsc\n          needs: [postgres, core:build]\n",
         );
         assert_eq!(
             cfg.components["ui"].checks["types"].needs,
@@ -607,7 +625,7 @@ mod tests {
     #[test]
     fn exclusives_are_sorted_because_acquisition_order_is_the_deadlock_proof() {
         let cfg = resolved(
-            "version: 1\ncomponents:\n  web:\n    checks:\n      e2e:\n        cmd: e2e\n        scope: component\n        exclusive: [gpu, browser]\n",
+            "manifest:\n  version: 1\n  components:\n    web:\n      checks:\n        e2e:\n          cmd: e2e\n          scope: component\n          exclusive: [gpu, browser]\n",
         );
         assert_eq!(
             cfg.components["web"].checks["e2e"].exclusive,
@@ -618,7 +636,7 @@ mod tests {
     #[test]
     fn an_omitted_ready_is_none_with_the_default_timeout() {
         let cfg = resolved(
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve\n",
         );
         let ResolvedRun::Command { common, .. } = &cfg.components["api"].run.as_ref().unwrap()
         else {
@@ -631,7 +649,7 @@ mod tests {
     #[test]
     fn stdio_is_inferred_from_the_grant_and_overridden_when_stated() {
         let cfg = resolved(
-            "version: 1\nsecrets:\n  T: op://a/b\nsecret_providers:\n  op: { cmd: \"op read ${ref}\" }\ncommands:\n  a: { cmd: ./a }\n  b: { cmd: ./b, secrets: [T] }\n  c: { cmd: ./c, secrets: [T], stdio: inherit }\n",
+            "manifest:\n  version: 1\n  secrets:\n    T: op://a/b\n  secret_providers:\n    op: { cmd: \"op read ${ref}\" }\n  commands:\n    a: { cmd: ./a }\n    b: { cmd: ./b, secrets: [T] }\n    c: { cmd: ./c, secrets: [T], stdio: inherit }\n",
         );
         assert_eq!(cfg.commands["a"].stdio, Stdio::Inherit);
         assert_eq!(cfg.commands["b"].stdio, Stdio::Pipe);
@@ -640,14 +658,14 @@ mod tests {
 
     #[test]
     fn a_version_other_than_one_is_bad_config_at_the_version_key() {
-        let err = parse("version: 2\n", "armada.yml").unwrap_err();
-        assert_eq!(err.r#where, "armada.yml:version");
+        let err = parse("manifest:\n  version: 2\n", "armada.yml").unwrap_err();
+        assert_eq!(err.r#where, "armada.yml:manifest.version");
         assert!(err.next_action.is_some());
     }
 
     #[test]
     fn a_syntax_error_reports_line_and_column_in_the_same_grammar() {
-        let err = parse("version: 1\ncomponents: {\n", "armada.yml").unwrap_err();
+        let err = parse("manifest:\n  version: 1\n  components: {\n", "armada.yml").unwrap_err();
         assert!(
             err.r#where.starts_with("armada.yml:"),
             "where was {}",
@@ -663,28 +681,28 @@ mod tests {
     #[test]
     fn a_driver_with_the_wrong_keys_beside_it_names_the_key() {
         let err = parse(
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: compose\n      file: [docker-compose.yml]\n      cmd: serve\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: compose\n        file: [docker-compose.yml]\n        cmd: serve\n",
             "armada.yml",
         )
         .and_then(|c| resolve(c, &Defaults::built_in(), "armada.yml"))
         .unwrap_err();
-        assert_eq!(err.r#where, "armada.yml:components.api.run.cmd");
+        assert_eq!(err.r#where, "armada.yml:manifest.components.api.run.cmd");
     }
 
     #[test]
     fn two_ready_kinds_is_bad_config_rather_than_a_precedence_rule() {
         let err = parse(
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n      ready: { http: \"http://127.0.0.1/health\", none: true }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve\n        ready: { http: \"http://127.0.0.1/health\", none: true }\n",
             "armada.yml",
         )
         .and_then(|c| resolve(c, &Defaults::built_in(), "armada.yml"))
         .unwrap_err();
-        assert_eq!(err.r#where, "armada.yml:components.api.run.ready");
+        assert_eq!(err.r#where, "armada.yml:manifest.components.api.run.ready");
     }
 
     #[test]
     fn an_unknown_key_is_a_parse_error_not_a_silently_ignored_line() {
-        let err = parse("version: 1\ncomponentz: {}\n", "armada.yml").unwrap_err();
+        let err = parse("manifest:\n  version: 1\n  componentz: {}\n", "armada.yml").unwrap_err();
         assert!(err.message.contains("unknown field"), "{}", err.message);
     }
 }

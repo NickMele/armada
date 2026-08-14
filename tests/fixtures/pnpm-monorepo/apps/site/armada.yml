@@ -10,28 +10,29 @@
 # here finds two `armada.yml` files, and the innermost wins *because* the outer
 # one declares it — an undeclared one is bad_config (PLAN.md §2.1).
 
-version: 1
+manifest:
+  version: 1
 
-components:
+  components:
 
-  # No `root:` and no `match:` — the component is the whole workspace, so both
-  # take their defaults. `.` is not a spelling of "the workspace root": the
-  # schema rejects it, because two spellings for one idea is how a selector
-  # starts matching in one config and not in another.
-  site:
-    setup: pnpm install --frozen-lockfile
-    owns:
-      files: [node_modules, .next]
-    checks:
-      lint:
-        cmd: pnpm exec eslint ${files}
-        fix: pnpm exec eslint --fix ${files}
-      types:
-        cmd: pnpm exec tsc --noEmit
-        scope: component
-        timeout: 300
-      build:
-        cmd: pnpm run build
-        scope: component
-        timeout: 600
-        cost: 2
+    # No `root:` and no `match:` — the component is the whole workspace, so both
+    # take their defaults. `.` is not a spelling of "the workspace root": the
+    # schema rejects it, because two spellings for one idea is how a selector
+    # starts matching in one config and not in another.
+    site:
+      setup: pnpm install --frozen-lockfile
+      owns:
+        files: [node_modules, .next]
+      checks:
+        lint:
+          cmd: pnpm exec eslint ${files}
+          fix: pnpm exec eslint --fix ${files}
+        types:
+          cmd: pnpm exec tsc --noEmit
+          scope: component
+          timeout: 300
+        build:
+          cmd: pnpm run build
+          scope: component
+          timeout: 600
+          cost: 2

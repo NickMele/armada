@@ -120,7 +120,7 @@ pub fn assign_ports(
             class: ErrClass::BadConfig,
             r#where: ConfigWhere::Path {
                 file: file.to_string(),
-                path: "components.*.run.ports".to_string(),
+                path: format!("{}.components.*.run.ports", crate::config::SECTION),
             }
             .to_string(),
             message: format!(
@@ -268,12 +268,13 @@ mod tests {
     fn port_names_are_workspace_global_and_assigned_in_sorted_order() {
         let config = config_with_ports(
             r#"
-version: 1
-components:
-  api:
-    run: { driver: command, cmd: "./api", ports: { api: 3000 } }
-  db:
-    run: { driver: command, cmd: "./db", ports: { pg: 5432 } }
+manifest:
+  version: 1
+  components:
+    api:
+      run: { driver: command, cmd: "./api", ports: { api: 3000 } }
+    db:
+      run: { driver: command, cmd: "./db", ports: { pg: 5432 } }
 "#,
         );
         let assigned = assign_ports(
@@ -293,12 +294,13 @@ components:
     fn one_name_declared_twice_is_one_port() {
         let config = config_with_ports(
             r#"
-version: 1
-components:
-  a:
-    run: { driver: command, cmd: "./a", ports: { web: 3000 } }
-  b:
-    run: { driver: command, cmd: "./b", ports: { web: 3000 } }
+manifest:
+  version: 1
+  components:
+    a:
+      run: { driver: command, cmd: "./a", ports: { web: 3000 } }
+    b:
+      run: { driver: command, cmd: "./b", ports: { web: 3000 } }
 "#,
         );
         let assigned = assign_ports(
@@ -317,13 +319,14 @@ components:
     fn more_ports_than_the_block_holds_is_bad_config_with_a_fix() {
         let config = config_with_ports(
             r#"
-version: 1
-components:
-  a:
-    run:
-      driver: command
-      cmd: "./a"
-      ports: { one: 1, two: 2, three: 3 }
+manifest:
+  version: 1
+  components:
+    a:
+      run:
+        driver: command
+        cmd: "./a"
+        ports: { one: 1, two: 2, three: 3 }
 "#,
         );
         let err = assign_ports(

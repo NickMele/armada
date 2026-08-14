@@ -377,22 +377,23 @@ mod tests {
     use crate::config::{parse, resolve as resolve_config, Defaults};
 
     const CONFIG: &str = r#"
-version: 1
-components:
-  core:
-    root: packages/core
-    checks:
-      build: { cmd: "make core", scope: component }
-      lint: { cmd: "eslint ${files}" }
-  ui:
-    root: packages/ui
-    checks:
-      types: { cmd: "tsc", scope: component, needs: [core:build] }
-      lint: { cmd: "eslint ${files}" }
-  postgres:
-    run:
-      driver: compose
-      file: [docker-compose.yml]
+manifest:
+  version: 1
+  components:
+    core:
+      root: packages/core
+      checks:
+        build: { cmd: "make core", scope: component }
+        lint: { cmd: "eslint ${files}" }
+    ui:
+      root: packages/ui
+      checks:
+        types: { cmd: "tsc", scope: component, needs: [core:build] }
+        lint: { cmd: "eslint ${files}" }
+    postgres:
+      run:
+        driver: compose
+        file: [docker-compose.yml]
 "#;
 
     fn config() -> ResolvedConfig {
@@ -513,16 +514,17 @@ components:
     #[test]
     fn a_word_that_is_both_a_component_and_a_check_name_is_bad_invocation() {
         let doc = r#"
-version: 1
-components:
-  lint:
-    root: tools/lint
-    checks:
-      test: { cmd: "go test ./..." }
-  api:
-    root: services/api
-    checks:
-      lint: { cmd: "ruff check ${files}" }
+manifest:
+  version: 1
+  components:
+    lint:
+      root: tools/lint
+      checks:
+        test: { cmd: "go test ./..." }
+    api:
+      root: services/api
+      checks:
+        lint: { cmd: "ruff check ${files}" }
 "#;
         let parsed = parse(doc, "armada.yml").unwrap();
         let config = resolve_config(parsed, &Defaults::built_in(), "armada.yml").unwrap();
@@ -540,7 +542,7 @@ components:
     /// it.
     #[test]
     fn a_conventional_name_matching_nothing_is_an_empty_selection_and_not_an_error() {
-        let doc = "version: 1\ncomponents:\n  api:\n    checks:\n      audit: { cmd: \"true\" }\n";
+        let doc = "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        audit: { cmd: \"true\" }\n";
         let parsed = parse(doc, "armada.yml").unwrap();
         let config = resolve_config(parsed, &Defaults::built_in(), "armada.yml").unwrap();
 
@@ -669,12 +671,13 @@ components:
     #[test]
     fn a_prerequisite_cycle_terminates_rather_than_hanging() {
         let doc = r#"
-version: 1
-components:
-  a:
-    checks:
-      one: { cmd: "true", needs: [a:two] }
-      two: { cmd: "true", needs: [a:one] }
+manifest:
+  version: 1
+  components:
+    a:
+      checks:
+        one: { cmd: "true", needs: [a:two] }
+        two: { cmd: "true", needs: [a:one] }
 "#;
         let parsed = parse(doc, "armada.yml").unwrap();
         let config = resolve_config(parsed, &Defaults::built_in(), "armada.yml").unwrap();
@@ -688,13 +691,14 @@ components:
     #[test]
     fn a_component_prerequisite_is_not_pulled_into_the_check_set() {
         let doc = r#"
-version: 1
-components:
-  postgres:
-    run: { driver: compose, file: [docker-compose.yml] }
-  api:
-    checks:
-      test: { cmd: "pytest", needs: [postgres] }
+manifest:
+  version: 1
+  components:
+    postgres:
+      run: { driver: compose, file: [docker-compose.yml] }
+    api:
+      checks:
+        test: { cmd: "pytest", needs: [postgres] }
 "#;
         let parsed = parse(doc, "armada.yml").unwrap();
         let config = resolve_config(parsed, &Defaults::built_in(), "armada.yml").unwrap();

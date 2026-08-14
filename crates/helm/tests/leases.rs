@@ -145,8 +145,9 @@ fn unsafe_kill9(pid: i32) {
 }
 
 const CONFIG: &str = "\
-version: 1
-commands:
-  sleeper:
-    cmd: sleep 60
+manifest:
+  version: 1
+  commands:
+    sleeper:
+      cmd: sleep 60
 ";

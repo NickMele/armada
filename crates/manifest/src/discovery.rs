@@ -135,7 +135,7 @@ mod tests {
     fn the_answer_is_identical_from_any_depth() {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&root.join("armada.yml"), "version: 1\n");
+        write(&root.join("armada.yml"), "manifest:\n  version: 1\n");
         std::fs::create_dir_all(root.join("a/b/c")).unwrap();
 
         let git = FakeGit {
@@ -156,9 +156,12 @@ mod tests {
         let root = std::fs::canonicalize(scratch.path()).unwrap();
         write(
             &root.join("armada.yml"),
-            "version: 1\nworkspaces: [apps/site]\n",
+            "manifest:\n  version: 1\n  workspaces: [apps/site]\n",
         );
-        write(&root.join("apps/site/armada.yml"), "version: 1\n");
+        write(
+            &root.join("apps/site/armada.yml"),
+            "manifest:\n  version: 1\n",
+        );
 
         let git = FakeGit {
             toplevel: root.clone(),
@@ -173,8 +176,11 @@ mod tests {
     fn an_undeclared_nested_config_is_bad_config() {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&root.join("armada.yml"), "version: 1\n");
-        write(&root.join("apps/site/armada.yml"), "version: 1\n");
+        write(&root.join("armada.yml"), "manifest:\n  version: 1\n");
+        write(
+            &root.join("apps/site/armada.yml"),
+            "manifest:\n  version: 1\n",
+        );
 
         let git = FakeGit {
             toplevel: root.clone(),
@@ -203,7 +209,7 @@ mod tests {
     fn a_config_above_the_git_root_is_never_collected() {
         let scratch = scratch();
         let outer = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&outer.join("armada.yml"), "version: 1\n");
+        write(&outer.join("armada.yml"), "manifest:\n  version: 1\n");
         let repo = outer.join("repo");
         std::fs::create_dir_all(&repo).unwrap();
 
@@ -225,7 +231,7 @@ mod tests {
     fn an_underivable_project_is_null_and_not_an_error() {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
-        write(&root.join("armada.yml"), "version: 1\n");
+        write(&root.join("armada.yml"), "manifest:\n  version: 1\n");
 
         let git = FakeGit {
             toplevel: root.clone(),
@@ -244,7 +250,10 @@ mod tests {
         let scratch = scratch();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
         write(&root.join("armada.yml"), "this: [is: not: yaml\n");
-        write(&root.join("apps/site/armada.yml"), "version: 1\n");
+        write(
+            &root.join("apps/site/armada.yml"),
+            "manifest:\n  version: 1\n",
+        );
 
         let git = FakeGit {
             toplevel: root.clone(),

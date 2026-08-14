@@ -158,7 +158,7 @@ fn every_schema_property_is_used_by_at_least_one_fixture() {
 /// on a document neither should take.
 #[test]
 fn the_schema_and_the_structs_agree_about_an_unknown_key() {
-    let doc = "version: 1\ncomponents:\n  api:\n    rooot: services/api\n";
+    let doc = "manifest:\n  version: 1\n  components:\n    api:\n      rooot: services/api\n";
 
     let parsed = parse(doc, "armada.yml");
     assert!(parsed.is_err(), "the structs accepted an unknown key");

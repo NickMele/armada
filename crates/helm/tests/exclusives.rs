@@ -29,25 +29,27 @@ use support::Machine;
 /// `gpu` and wants `browser`, and neither ever releases, because release
 /// happens when work finishes and neither can start.
 const ONE_ORDER: &str = "\
-version: 1
-components:
-  app:
-    checks:
-      both:
-        cmd: \"sleep 2\"
-        scope: component
-        exclusive: [browser, gpu]
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        both:
+          cmd: \"sleep 2\"
+          scope: component
+          exclusive: [browser, gpu]
 ";
 
 const OTHER_ORDER: &str = "\
-version: 1
-components:
-  app:
-    checks:
-      both:
-        cmd: \"sleep 2\"
-        scope: component
-        exclusive: [gpu, browser]
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        both:
+          cmd: \"sleep 2\"
+          scope: component
+          exclusive: [gpu, browser]
 ";
 
 fn envelope(output: &Output) -> serde_json::Value {
@@ -241,11 +243,12 @@ fn two_runs_each_wanting_the_whole_budget_take_turns_rather_than_splitting_it() 
 }
 
 const EXPENSIVE: &str = "\
-version: 1
-components:
-  app:
-    checks:
-      heavy: { cmd: \"sleep 2\", scope: component, cost: 2 }
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        heavy: { cmd: \"sleep 2\", scope: component, cost: 2 }
 ";
 
 /// **Slots are machine-wide too**, which is the half an earlier draft left out:
@@ -283,9 +286,10 @@ fn the_cpu_budget_is_the_machines_and_not_each_runs() {
 }
 
 const SLEEPER: &str = "\
-version: 1
-components:
-  app:
-    checks:
-      slow: { cmd: \"sleep 2\", scope: component }
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        slow: { cmd: \"sleep 2\", scope: component }
 ";

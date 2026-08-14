@@ -454,20 +454,22 @@ fn a_force_rebuild_dry_run_names_the_orphan_and_removes_nothing() {
 }
 
 const OWNS_CONFIG: &str = "\
-version: 1
-commands:
-  worktrees:
-    cmd: ./make-net.sh
-    owns:
-      networks: label=com.example.wt=${workspace.id}
+manifest:
+  version: 1
+  commands:
+    worktrees:
+      cmd: ./make-net.sh
+      owns:
+        networks: label=com.example.wt=${workspace.id}
 ";
 
 const CONFIG: &str = "\
-version: 1
-components:
-  app:
-    run:
-      driver: command
-      cmd: ./serve
-      ports: { web: 3000 }
+manifest:
+  version: 1
+  components:
+    app:
+      run:
+        driver: command
+        cmd: ./serve
+        ports: { web: 3000 }
 ";

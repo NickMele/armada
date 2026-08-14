@@ -9,76 +9,77 @@
 # — `needs: [core:build]` is ordering char owns, and `turbo run build` is a
 # graph char never learns anything about (PLAN.md §7).
 
-version: 1
+manifest:
+  version: 1
 
-# apps/site is a separate product that happens to share this repo. It has its
-# own armada.yml, its own id, its own port block and its own lifecycle, and it
-# inherits nothing from here (PLAN.md §4.6). Declaring it is also what makes
-# the overlap illegal: no component `root:` and no `match:` glob below may
-# reach into it.
-workspaces: [apps/site]
+  # apps/site is a separate product that happens to share this repo. It has its
+  # own armada.yml, its own id, its own port block and its own lifecycle, and it
+  # inherits nothing from here (PLAN.md §4.6). Declaring it is also what makes
+  # the overlap illegal: no component `root:` and no `match:` glob below may
+  # reach into it.
+  workspaces: [apps/site]
 
-components:
+  components:
 
-  core:
-    root: packages/core
-    match: ["packages/core/**"]
-    setup: pnpm install --frozen-lockfile
-    owns:
-      files: [node_modules, packages/core/node_modules]
-    checks:
-      build:
-        cmd: pnpm turbo run build --filter @acme/core
-        scope: component
-        timeout: 600
-        cost: 2
-      lint:
-        cmd: pnpm exec eslint ${files}
-        fix: pnpm exec eslint --fix ${files}
-      test:
-        cmd: pnpm exec vitest run --dir packages/core ${files}
-        cost: 2
+    core:
+      root: packages/core
+      match: ["packages/core/**"]
+      setup: pnpm install --frozen-lockfile
+      owns:
+        files: [node_modules, packages/core/node_modules]
+      checks:
+        build:
+          cmd: pnpm turbo run build --filter @acme/core
+          scope: component
+          timeout: 600
+          cost: 2
+        lint:
+          cmd: pnpm exec eslint ${files}
+          fix: pnpm exec eslint --fix ${files}
+        test:
+          cmd: pnpm exec vitest run --dir packages/core ${files}
+          cost: 2
 
-  ui:
-    root: packages/ui
-    match: ["packages/ui/**"]
-    owns:
-      files: [packages/ui/node_modules]
-    checks:
-      # A check id, not a component: `core:build` must have PASSED in this run.
-      # Selecting `ui:types` pulls it in even when the selector did not name it.
-      types:
-        cmd: pnpm turbo run typecheck --filter @acme/ui
-        scope: component
-        needs: [core:build]
-        timeout: 300
-      lint:
-        cmd: pnpm exec eslint ${files}
-        fix: pnpm exec eslint --fix ${files}
-      test:
-        cmd: pnpm exec vitest run --dir packages/ui ${files}
-        needs: [core:build]
-        cost: 2
+    ui:
+      root: packages/ui
+      match: ["packages/ui/**"]
+      owns:
+        files: [packages/ui/node_modules]
+      checks:
+        # A check id, not a component: `core:build` must have PASSED in this run.
+        # Selecting `ui:types` pulls it in even when the selector did not name it.
+        types:
+          cmd: pnpm turbo run typecheck --filter @acme/ui
+          scope: component
+          needs: [core:build]
+          timeout: 300
+        lint:
+          cmd: pnpm exec eslint ${files}
+          fix: pnpm exec eslint --fix ${files}
+        test:
+          cmd: pnpm exec vitest run --dir packages/ui ${files}
+          needs: [core:build]
+          cost: 2
 
-  cli:
-    root: packages/cli
-    match: ["packages/cli/**"]
-    owns:
-      files: [packages/cli/node_modules]
-    checks:
-      types:
-        cmd: pnpm turbo run typecheck --filter @acme/cli
-        scope: component
-        needs: [core:build]
-        timeout: 300
-      lint:
-        cmd: pnpm exec eslint ${files}
-        fix: pnpm exec eslint --fix ${files}
+    cli:
+      root: packages/cli
+      match: ["packages/cli/**"]
+      owns:
+        files: [packages/cli/node_modules]
+      checks:
+        types:
+          cmd: pnpm turbo run typecheck --filter @acme/cli
+          scope: component
+          needs: [core:build]
+          timeout: 300
+        lint:
+          cmd: pnpm exec eslint ${files}
+          fix: pnpm exec eslint --fix ${files}
 
-  docs:
-    root: packages/docs
-    match: ["packages/docs/**", "*.md"]
-    checks:
-      lint:
-        cmd: pnpm exec markdownlint ${files}
-        fix: pnpm exec markdownlint --fix ${files}
+    docs:
+      root: packages/docs
+      match: ["packages/docs/**", "*.md"]
+      checks:
+        lint:
+          cmd: pnpm exec markdownlint ${files}
+          fix: pnpm exec markdownlint --fix ${files}

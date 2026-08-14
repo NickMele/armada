@@ -324,31 +324,33 @@ fn the_payloads_are_deterministic_across_runs() {
 /// One check that passes, one that fails, one skipped for having no files —
 /// the three row shapes `results[]` has.
 const CHECK_CONFIG: &str = "\
-version: 1
-components:
-  api:
-    root: services/api
-    checks:
-      lint: { cmd: \"./exiter.sh 0\" }
-      types: { cmd: \"./exiter.sh 0\", scope: component }
-      test: { cmd: \"./exiter.sh 2\", scope: component }
+manifest:
+  version: 1
+  components:
+    api:
+      root: services/api
+      checks:
+        lint: { cmd: \"./exiter.sh 0\" }
+        types: { cmd: \"./exiter.sh 0\", scope: component }
+        test: { cmd: \"./exiter.sh 2\", scope: component }
 ";
 
 const CONFIG: &str = "\
-version: 1
-components:
-  api:
-    root: services/api
-    setup: [\"true\"]
-    run:
-      driver: command
-      cmd: ./serve
-      ports: { api: 3000 }
-    owns:
-      files: [node_modules]
-      release: \"psql -c 'DROP DATABASE app_${workspace.id}'\"
-commands:
-  echoer:
-    cmd: echo
-    help: Echo whatever it is given
+manifest:
+  version: 1
+  components:
+    api:
+      root: services/api
+      setup: [\"true\"]
+      run:
+        driver: command
+        cmd: ./serve
+        ports: { api: 3000 }
+      owns:
+        files: [node_modules]
+        release: \"psql -c 'DROP DATABASE app_${workspace.id}'\"
+  commands:
+    echoer:
+      cmd: echo
+      help: Echo whatever it is given
 ";

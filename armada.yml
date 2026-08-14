@@ -19,45 +19,46 @@
 # would declare a `${files}` none of them could receive. `${files}` is
 # exercised by the fixtures, which model repos whose tools do take one.
 
-version: 1
+manifest:
+  version: 1
 
-components:
+  components:
 
-  charkit:
-    # No `root:` and no `match:`: the component *is* the repo, so the default
-    # (`**`, PLAN.md §4.1.1) is the correct glob rather than an omission.
-    setup: cargo fetch
+    charkit:
+      # No `root:` and no `match:`: the component *is* the repo, so the default
+      # (`**`, PLAN.md §4.1.1) is the correct glob rather than an omission.
+      setup: cargo fetch
 
-    owns:
-      # Removed only by `clean --artifacts` (PLAN.md §3.3.1). It costs disk and
-      # leaks nothing machine-global, and deleting it makes the next `init` pay
-      # a full rebuild.
-      files: [target]
+      owns:
+        # Removed only by `clean --artifacts` (PLAN.md §3.3.1). It costs disk and
+        # leaks nothing machine-global, and deleting it makes the next `init` pay
+        # a full rebuild.
+        files: [target]
 
-    checks:
-      fmt:
-        cmd: cargo fmt --all --check
-        fix: cargo fmt --all
-        scope: component
+      checks:
+        fmt:
+          cmd: cargo fmt --all --check
+          fix: cargo fmt --all
+          scope: component
 
-      lint:
-        cmd: cargo clippy --all-targets -- -D warnings
-        scope: component
-        cost: 2
+        lint:
+          cmd: cargo clippy --all-targets -- -D warnings
+          scope: component
+          cost: 2
 
-      test:
-        cmd: cargo test --workspace
-        scope: component
-        cost: 2
+        test:
+          cmd: cargo test --workspace
+          scope: component
+          cost: 2
 
-      # `cargo xtask doclint` is item 6 of the gate's six: the ARCHITECTURE.md
-      # §2.4 contamination grep and the privacy gate, plus the § cross-reference
-      # and fenced-block checks over the corpus.
-      docs:
-        cmd: cargo xtask doclint
-        scope: component
+        # `cargo xtask doclint` is item 6 of the gate's six: the ARCHITECTURE.md
+        # §2.4 contamination grep and the privacy gate, plus the § cross-reference
+        # and fenced-block checks over the corpus.
+        docs:
+          cmd: cargo xtask doclint
+          scope: component
 
-      # The ARCHITECTURE.md §1.5 layers contract, read off the crate graph.
-      boundaries:
-        cmd: cargo xtask boundaries
-        scope: component
+        # The ARCHITECTURE.md §1.5 layers contract, read off the crate graph.
+        boundaries:
+          cmd: cargo xtask boundaries
+          scope: component

@@ -9,127 +9,128 @@
 # a fixture config describes a hypothetical repo, so naming that repo's
 # directories is the fixture working.
 
-version: 1
+manifest:
+  version: 1
 
-secret_providers:
-  op: { cmd: "op read ${ref}" }
+  secret_providers:
+    op: { cmd: "op read ${ref}" }
 
-secrets:
-  GITHUB_TOKEN: op://Engineering/github/token
+  secrets:
+    GITHUB_TOKEN: op://Engineering/github/token
 
-components:
+  components:
 
-  # Runs only — not our source, so no checks and no match:.
-  postgres:
-    run:
-      driver: compose
-      file: [docker-compose.yml]
-      ports: { pg: 5432 }
-      ready: { tcp: pg, timeout: 90 }
+    # Runs only — not our source, so no checks and no match:.
+    postgres:
+      run:
+        driver: compose
+        file: [docker-compose.yml]
+        ports: { pg: 5432 }
+        ready: { tcp: pg, timeout: 90 }
 
-  # Both axes.
-  api:
-    root: backend
-    match: ["backend/**"]
-    setup: uv sync --frozen
-    owns:
-      files: [backend/.venv]
-    run:
-      driver: compose
-      file: [docker-compose.yml, docker-compose.dev.yml]
-      ports: { api: 8000 }
-      ready: { http: "http://127.0.0.1:${port.api}/healthz" }
-      needs: [postgres]
-      env:
-        DJANGO_SETTINGS_MODULE: app.settings.dev
-    checks:
-      # ~3 seconds on a handful of files. The cheap end of the spread.
-      lint:
-        cmd: uv run --project backend ruff check ${files}
-        fix: uv run --project backend ruff check --fix ${files}
-        timeout: 120
-      types:
-        cmd: uv run --project backend mypy backend
-        scope: component
-        timeout: 300
-      # Runs inside the `api` compose service. char builds the `exec -T`
-      # invocation from the file list and project name it already owns, so the
-      # config never hardcodes either.
-      test:
-        in: api
-        cmd: pytest ${files}
-        env:
-          DJANGO_SETTINGS_MODULE: app.settings.test
-        timeout: 600
-        cost: 4
+    # Both axes.
+    api:
+      root: backend
+      match: ["backend/**"]
+      setup: uv sync --frozen
+      owns:
+        files: [backend/.venv]
+      run:
+        driver: compose
+        file: [docker-compose.yml, docker-compose.dev.yml]
+        ports: { api: 8000 }
+        ready: { http: "http://127.0.0.1:${port.api}/healthz" }
         needs: [postgres]
+        env:
+          DJANGO_SETTINGS_MODULE: app.settings.dev
+      checks:
+        # ~3 seconds on a handful of files. The cheap end of the spread.
+        lint:
+          cmd: uv run --project backend ruff check ${files}
+          fix: uv run --project backend ruff check --fix ${files}
+          timeout: 120
+        types:
+          cmd: uv run --project backend mypy backend
+          scope: component
+          timeout: 300
+        # Runs inside the `api` compose service. char builds the `exec -T`
+        # invocation from the file list and project name it already owns, so the
+        # config never hardcodes either.
+        test:
+          in: api
+          cmd: pytest ${files}
+          env:
+            DJANGO_SETTINGS_MODULE: app.settings.test
+          timeout: 600
+          cost: 4
+          needs: [postgres]
 
-  web:
-    root: web
-    match: ["web/**"]
-    setup: pnpm install --frozen-lockfile
-    owns:
-      files: [web/node_modules]
-    run:
-      driver: command
-      cmd: pnpm exec next dev --port ${port.web} --dir web
-      ports: { web: 3000 }
-      ready: { log: "ready started server on" }
-      needs: [api]
+    web:
+      root: web
+      match: ["web/**"]
+      setup: pnpm install --frozen-lockfile
+      owns:
+        files: [web/node_modules]
+      run:
+        driver: command
+        cmd: pnpm exec next dev --port ${port.web} --dir web
+        ports: { web: 3000 }
+        ready: { log: "ready started server on" }
+        needs: [api]
+        env:
+          NODE_ENV: development
+      checks:
+        # File-scoped checks are invoked from the workspace root with no
+        # directory flag: `${files}` is workspace-relative, so a tool run with a
+        # changed cwd would receive paths that do not resolve. Component-scoped
+        # checks below are free to use --filter, because they pass no paths.
+        lint:
+          cmd: pnpm exec eslint ${files}
+          fix: pnpm exec eslint --fix ${files}
+          timeout: 120
+        types:
+          cmd: pnpm --filter web run typecheck
+          scope: component
+          timeout: 300
+        test:
+          cmd: pnpm exec vitest run --dir web ${files}
+          cost: 2
+        # ~15 minutes, and the expensive end of the spread. A machine-wide mutex,
+        # so two workspaces never drive a browser at once.
+        e2e:
+          cmd: pnpm --filter web run e2e
+          scope: component
+          timeout: 900
+          cost: 4
+          exclusive: [browser]
+          needs: [api, web]
+
+  commands:
+
+    # A grant *and* `stdio: inherit`: this script prompts for confirmation, so it
+    # needs the child's TTY, and the repo accepts that scrubbing is off for it
+    # (PLAN.md §4.5).
+    worktrees:
+      cmd: uv run scripts/worktrees.py
+      help: Create and tear down git worktrees
+      stdio: inherit
       env:
-        NODE_ENV: development
-    checks:
-      # File-scoped checks are invoked from the workspace root with no
-      # directory flag: `${files}` is workspace-relative, so a tool run with a
-      # changed cwd would receive paths that do not resolve. Component-scoped
-      # checks below are free to use --filter, because they pass no paths.
-      lint:
-        cmd: pnpm exec eslint ${files}
-        fix: pnpm exec eslint --fix ${files}
-        timeout: 120
-      types:
-        cmd: pnpm --filter web run typecheck
-        scope: component
-        timeout: 300
-      test:
-        cmd: pnpm exec vitest run --dir web ${files}
-        cost: 2
-      # ~15 minutes, and the expensive end of the spread. A machine-wide mutex,
-      # so two workspaces never drive a browser at once.
-      e2e:
-        cmd: pnpm --filter web run e2e
-        scope: component
-        timeout: 900
-        cost: 4
-        exclusive: [browser]
-        needs: [api, web]
+        WORKSPACE: ${workspace.id}
+        REGISTRY: ${env.COMPANY_REGISTRY}
+      secrets: [GITHUB_TOKEN]
+      owns:
+        containers: "label=com.example.worktree=${workspace.id}"
+        networks: "label=com.example.worktree=${workspace.id}"
+        files: [".worktrees/${workspace.id}"]
 
-commands:
+    # No grant, but it fetches its own token internally and is chatty about it,
+    # so the repo asks for `pipe` and char scrubs what it can see.
+    design:
+      cmd: uv run scripts/design.py
+      help: Sync design tokens
+      stdio: pipe
 
-  # A grant *and* `stdio: inherit`: this script prompts for confirmation, so it
-  # needs the child's TTY, and the repo accepts that scrubbing is off for it
-  # (PLAN.md §4.5).
-  worktrees:
-    cmd: uv run scripts/worktrees.py
-    help: Create and tear down git worktrees
-    stdio: inherit
-    env:
-      WORKSPACE: ${workspace.id}
-      REGISTRY: ${env.COMPANY_REGISTRY}
-    secrets: [GITHUB_TOKEN]
-    owns:
-      containers: "label=com.example.worktree=${workspace.id}"
-      networks: "label=com.example.worktree=${workspace.id}"
-      files: [".worktrees/${workspace.id}"]
-
-  # No grant, but it fetches its own token internally and is chatty about it,
-  # so the repo asks for `pipe` and char scrubs what it can see.
-  design:
-    cmd: uv run scripts/design.py
-    help: Sync design tokens
-    stdio: pipe
-
-  # Neither key: the inferred default applies — no grant, so `inherit`.
-  tickets:
-    cmd: uv run scripts/tickets.py
-    help: Report stale tickets
+    # Neither key: the inferred default applies — no grant, so `inherit`.
+    tickets:
+      cmd: uv run scripts/tickets.py
+      help: Report stale tickets

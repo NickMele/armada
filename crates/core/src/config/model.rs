@@ -57,7 +57,23 @@ fn yaml_kind(value: &serde_yaml_ng::Value) -> &'static str {
     }
 }
 
-/// A parsed `armada.yml`, before defaults and derivation.
+/// A parsed `armada.yml` — one section per module.
+///
+/// **Only `manifest:` exists, and the nesting is there anyway.** Guild is
+/// machine-global and never repository content (`ARCHITECTURE.md` §1.9), so it
+/// will never appear here; Fleet's repo-level defaults might. The file is
+/// nested from the start because the alternative is moving every key in every
+/// config in the world the first time a second section is needed, which is the
+/// migration this milestone exists to do once rather than twice
+/// (`PHASES.md` §8.3).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Document {
+    /// What a workspace is and how to operate it.
+    pub manifest: Config,
+}
+
+/// The `manifest:` section of an `armada.yml`, before defaults and derivation.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -67,7 +83,7 @@ pub struct Config {
     /// Named things that may have source to check, a process to run, or both.
     #[serde(default)]
     pub components: BTreeMap<String, Component>,
-    /// Repo-local verbs char dispatches but does not define.
+    /// Repo-local verbs Armada dispatches but does not define.
     #[serde(default)]
     pub commands: BTreeMap<String, CommandEntry>,
     /// Paths that are separate workspaces, excluded from this one.

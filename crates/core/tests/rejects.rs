@@ -45,159 +45,163 @@ fn the_schema_rejects_what_the_contract_forbids() {
     let cases: &[(&str, &str)] = &[
         (
             "shell: true beside ${files} — arbitrary code execution (PLAN.md §4.1)",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint:\n        cmd: eslint ${files}\n        shell: true\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint:\n          cmd: eslint ${files}\n          shell: true\n",
         ),
         (
             "the same, via fix: rather than cmd:",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint:\n        cmd: eslint .\n        fix: eslint --fix ${files}\n        shell: true\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint:\n          cmd: eslint .\n          fix: eslint --fix ${files}\n          shell: true\n",
         ),
         (
             "${files} pasted inside another token — it expands to n arguments (PLAN.md §4.1)",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint:\n        cmd: ruff check --stdin-filename=${files}\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint:\n          cmd: ruff check --stdin-filename=${files}\n",
         ),
         (
             "scope: component with ${files} — the two say opposite things (PLAN.md §4.1)",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      e2e:\n        cmd: pytest ${files}\n        scope: component\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        e2e:\n          cmd: pytest ${files}\n          scope: component\n",
         ),
         (
             "a check with in: and a secrets grant — exec puts the value in argv (PLAN.md §4.1)",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      test:\n        cmd: pytest\n        in: api\n        secrets: [TOKEN]\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        test:\n          cmd: pytest\n          in: api\n          secrets: [TOKEN]\n",
         ),
         (
             "a commands: entry shadowing a built-in verb (PLAN.md §4.5)",
-            "version: 1\ncommands:\n  check:\n    cmd: ./scripts/check.sh\n",
+            "manifest:\n  version: 1\n  commands:\n    check:\n      cmd: ./scripts/check.sh\n",
         ),
         (
             "the same for a verb PLAN.md §4.5's own list omitted",
-            "version: 1\ncommands:\n  explain:\n    cmd: ./scripts/explain.sh\n",
+            "manifest:\n  version: 1\n  commands:\n    explain:\n      cmd: ./scripts/explain.sh\n",
         ),
         (
             "${files} in a commands: entry — there is no scope to compute (PLAN.md §4.5)",
-            "version: 1\ncommands:\n  fmt:\n    cmd: ./scripts/fmt.sh ${files}\n",
+            "manifest:\n  version: 1\n  commands:\n    fmt:\n      cmd: ./scripts/fmt.sh ${files}\n",
         ),
         (
             "${env.NAME} outside an env: block (PLAN.md §4.4)",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint:\n        cmd: ruff check --config ${env.RUFF_CONFIG}\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint:\n          cmd: ruff check --config ${env.RUFF_CONFIG}\n",
         ),
         (
             "a default operator — the stopping point is the error (PLAN.md §4.4)",
-            "version: 1\ncommands:\n  build:\n    cmd: ./build.sh\n    env:\n      CI: ${env.CI ?? \"0\"}\n",
+            "manifest:\n  version: 1\n  commands:\n    build:\n      cmd: ./build.sh\n      env:\n        CI: ${env.CI ?? \"0\"}\n",
         ),
         (
             "${ref} outside a provider cmd (PLAN.md §4.4)",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve --token ${ref}\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve --token ${ref}\n",
         ),
         (
             "a provider cmd with no ${ref} — it could never resolve anything (PLAN.md §4.4)",
-            "version: 1\nsecret_providers:\n  op: { cmd: \"op read\" }\n",
+            "manifest:\n  version: 1\n  secret_providers:\n    op: { cmd: \"op read\" }\n",
         ),
         (
             "${env.NAME} in a provider cmd — argv-split, so nothing would expand it (PLAN.md §4.4)",
-            "version: 1\nsecret_providers:\n  op: { cmd: \"op read ${env.VAULT}/${ref}\" }\n",
+            "manifest:\n  version: 1\n  secret_providers:\n    op: { cmd: \"op read ${env.VAULT}/${ref}\" }\n",
         ),
         (
             "a provider with shell: true — rule 1 exists to keep ${ref} out of a shell (PLAN.md §4.7)",
-            "version: 1\nsecret_providers:\n  op: { cmd: \"op read ${ref}\", shell: true }\n",
+            "manifest:\n  version: 1\n  secret_providers:\n    op: { cmd: \"op read ${ref}\", shell: true }\n",
         ),
         (
             "two ready kinds in one mapping (PLAN.md §6.0)",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n      ready: { tcp: api, none: true }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve\n        ready: { tcp: api, none: true }\n",
         ),
         (
             "a ready mapping with a timeout and no kind (PLAN.md §6.0)",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n      ready: { timeout: 30 }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve\n        ready: { timeout: 30 }\n",
         ),
         (
             "ready.tcp as a number — a number is the pre-claim port (PLAN.md §6.0)",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n      ready: { tcp: 5432 }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve\n        ready: { tcp: 5432 }\n",
         ),
         (
             "driver: compose with a cmd: beside it (PLAN.md §6)",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: compose\n      file: [docker-compose.yml]\n      cmd: serve\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: compose\n        file: [docker-compose.yml]\n        cmd: serve\n",
         ),
         (
             "driver: command with a file: beside it (PLAN.md §6)",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n      file: [docker-compose.yml]\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve\n        file: [docker-compose.yml]\n",
         ),
         (
             "a vendor-named driver (PLAN.md §6)",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: procfile\n      cmd: serve\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: procfile\n        cmd: serve\n",
         ),
         (
             "a component root escaping the workspace (PLAN.md §5)",
-            "version: 1\ncomponents:\n  api:\n    root: ../other-repo/api\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      root: ../other-repo/api\n",
         ),
         (
             "an absolute component root (PLAN.md §5)",
-            "version: 1\ncomponents:\n  api:\n    root: /srv/api\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      root: /srv/api\n",
         ),
         (
             "`.` as a spelling of the workspace root — one idea, one spelling",
-            "version: 1\ncomponents:\n  api:\n    root: .\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      root: .\n",
         ),
         (
             "an owns.files path escaping the workspace (PLAN.md §5)",
-            "version: 1\ncomponents:\n  api:\n    owns:\n      files: [\"../elsewhere/cache\"]\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      owns:\n        files: [\"../elsewhere/cache\"]\n",
         ),
         (
             "a component name containing the reserved colon (PLAN.md §4.1)",
-            "version: 1\ncomponents:\n  api:lint:\n    checks:\n      lint: { cmd: ruff check }\n",
+            "manifest:\n  version: 1\n  components:\n    api:lint:\n      checks:\n        lint: { cmd: ruff check }\n",
         ),
         (
             "an uppercase component name — the grammar is lowercase (PLAN.md §4.1)",
-            "version: 1\ncomponents:\n  API:\n    checks:\n      lint: { cmd: ruff check }\n",
+            "manifest:\n  version: 1\n  components:\n    API:\n      checks:\n        lint: { cmd: ruff check }\n",
         ),
         (
             "a provider name that is legal as a component name and illegal as a URI scheme (PLAN.md §4.7)",
-            "version: 1\nsecret_providers:\n  aws_sm: { cmd: \"aws get ${ref}\" }\n",
+            "manifest:\n  version: 1\n  secret_providers:\n    aws_sm: { cmd: \"aws get ${ref}\" }\n",
         ),
         (
             "a secret reference with no scheme (PLAN.md §4.7)",
-            "version: 1\nsecrets:\n  TOKEN: Engineering/github/token\n",
+            "manifest:\n  version: 1\n  secrets:\n    TOKEN: Engineering/github/token\n",
         ),
         (
             "ports: under a commands: entry — the block is already claimed (PLAN.md §4.5)",
-            "version: 1\ncommands:\n  wt:\n    cmd: ./wt.sh\n    owns:\n      ports: [api]\n",
+            "manifest:\n  version: 1\n  commands:\n    wt:\n      cmd: ./wt.sh\n      owns:\n        ports: [api]\n",
         ),
         (
             "containers: under a component-level owns: — setup has no runtime handles (PLAN.md §6.0)",
-            "version: 1\ncomponents:\n  api:\n    owns:\n      containers: \"label=x=1\"\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      owns:\n        containers: \"label=x=1\"\n",
+        ),
+        (
+            "no manifest: section at all (PLAN.md §4.1)",
+            "version: 1\ncomponents: {}\n",
         ),
         (
             "no version at all (PLAN.md §4.1)",
-            "components:\n  api:\n    checks:\n      lint: { cmd: ruff check }\n",
+            "manifest:\n  components:\n    api:\n      checks:\n        lint: { cmd: ruff check }\n",
         ),
         (
-            "a version this char does not understand",
-            "version: 2\ncomponents: {}\n",
+            "a version this Armada does not understand",
+            "manifest:\n  version: 2\n  components: {}\n",
         ),
         (
             "an unknown top-level key",
-            "version: 1\nservices:\n  api: {}\n",
+            "manifest:\n  version: 1\n  services:\n    api: {}\n",
         ),
         (
             "an unknown key inside a check",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint: { cmd: ruff check, retries: 3 }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint: { cmd: ruff check, retries: 3 }\n",
         ),
         (
             "an unknown key inside a setup step object",
-            "version: 1\ncomponents:\n  api:\n    setup:\n      - { cmd: bundle install, once: true }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      setup:\n        - { cmd: bundle install, once: true }\n",
         ),
         (
             "a check with no cmd:",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint: { timeout: 60 }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint: { timeout: 60 }\n",
         ),
         (
             "cost: 0 — a check costs at least one slot",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint: { cmd: ruff check, cost: 0 }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint: { cmd: ruff check, cost: 0 }\n",
         ),
         (
             "a port outside the port range",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n      ports: { api: 70000 }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve\n        ports: { api: 70000 }\n",
         ),
         (
             "an env value that is not a string — YAML would make it a number",
-            "version: 1\ncommands:\n  build:\n    cmd: ./build.sh\n    env:\n      PORT: 3000\n",
+            "manifest:\n  version: 1\n  commands:\n    build:\n      cmd: ./build.sh\n      env:\n        PORT: 3000\n",
         ),
     ];
 
@@ -221,52 +225,56 @@ fn the_schema_rejects_what_the_contract_forbids() {
 fn the_core_rejects_what_it_cannot_turn_into_a_typed_value() {
     let cases: &[(&str, &str)] = &[
         (
-            "no version",
-            "components: {}\n",
+            "no manifest: section",
+            "version: 1\n",
         ),
         (
-            "a version this char does not understand",
-            "version: 2\n",
+            "no version",
+            "manifest:\n  components: {}\n",
+        ),
+        (
+            "a version this Armada does not understand",
+            "manifest:\n  version: 2\n",
         ),
         (
             "an unknown top-level key",
-            "version: 1\nservices: {}\n",
+            "manifest:\n  version: 1\n  services: {}\n",
         ),
         (
             "an unknown key inside a check",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint: { cmd: ruff check, retries: 3 }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint: { cmd: ruff check, retries: 3 }\n",
         ),
         (
             "a check with no cmd:",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint: { timeout: 60 }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint: { timeout: 60 }\n",
         ),
         (
             "a vendor-named driver",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: procfile\n      cmd: serve\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: procfile\n        cmd: serve\n",
         ),
         (
             "driver: compose with no file:",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: compose\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: compose\n",
         ),
         (
             "driver: command with no cmd:",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n",
         ),
         (
             "two ready kinds",
-            "version: 1\ncomponents:\n  api:\n    run:\n      driver: command\n      cmd: serve\n      ready: { tcp: api, none: true }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: command\n        cmd: serve\n        ready: { tcp: api, none: true }\n",
         ),
         (
             "an unknown scope",
-            "version: 1\ncomponents:\n  api:\n    checks:\n      lint: { cmd: ruff check, scope: repo }\n",
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint: { cmd: ruff check, scope: repo }\n",
         ),
         (
             "an unknown stdio",
-            "version: 1\ncommands:\n  wt: { cmd: ./wt.sh, stdio: tty }\n",
+            "manifest:\n  version: 1\n  commands:\n    wt: { cmd: ./wt.sh, stdio: tty }\n",
         ),
         (
             "an env value that is not a string",
-            "version: 1\ncommands:\n  build:\n    cmd: ./build.sh\n    env:\n      PORT: 3000\n",
+            "manifest:\n  version: 1\n  commands:\n    build:\n      cmd: ./build.sh\n      env:\n        PORT: 3000\n",
         ),
     ];
 
@@ -292,9 +300,9 @@ fn the_core_rejects_what_it_cannot_turn_into_a_typed_value() {
 fn every_config_error_carries_a_where_and_a_next_action() {
     let docs = [
         "version: 2\n",
-        "version: 1\ncomponents:\n  api:\n    run:\n      driver: procfile\n      cmd: serve\n",
-        "version: 1\ncomponents:\n  api:\n    checks:\n      lint: { cmd: ruff, scope: repo }\n",
-        "version: 1\ncomponents: {\n",
+        "manifest:\n  version: 1\n  components:\n    api:\n      run:\n        driver: procfile\n        cmd: serve\n",
+        "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint: { cmd: ruff, scope: repo }\n",
+        "manifest:\n  version: 1\n  components: {\n",
     ];
     for doc in docs {
         let err = match parse(doc, "armada.yml") {

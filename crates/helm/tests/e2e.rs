@@ -559,41 +559,45 @@ fn status_renders_for_a_terminal_on_stdout() {
 }
 
 const SETUP_CONFIG: &str = "\
-version: 1
-components:
-  api:
-    setup: [\"true\"]
-    run:
-      driver: command
-      cmd: ./serve
-      ports: { web: 3000 }
+manifest:
+  version: 1
+  components:
+    api:
+      setup: [\"true\"]
+      run:
+        driver: command
+        cmd: ./serve
+        ports: { web: 3000 }
 ";
 
 const FAILING_SETUP_CONFIG: &str = "\
-version: 1
-components:
-  api:
-    setup: [\"false\"]
+manifest:
+  version: 1
+  components:
+    api:
+      setup: [\"false\"]
 ";
 
 const UNSTARTABLE_SETUP_CONFIG: &str = "\
-version: 1
-components:
-  api:
-    setup: [\"./definitely-not-here\"]
+manifest:
+  version: 1
+  components:
+    api:
+      setup: [\"./definitely-not-here\"]
 ";
 
 const OWNS_CONFIG: &str = "\
-version: 1
-components:
-  api:
-    run:
-      driver: command
-      cmd: ./serve
-      ports: { web: 3000 }
-    owns:
-      files: [node_modules]
-      release: \"psql -c 'DROP DATABASE app_${workspace.id}'\"
+manifest:
+  version: 1
+  components:
+    api:
+      run:
+        driver: command
+        cmd: ./serve
+        ports: { web: 3000 }
+      owns:
+        files: [node_modules]
+        release: \"psql -c 'DROP DATABASE app_${workspace.id}'\"
 ";
 
 fn lease_count(db: &std::path::Path) -> i64 {
@@ -621,30 +625,32 @@ fn workspace_id(output: &std::process::Output) -> String {
 }
 
 const CONFIG: &str = "\
-version: 1
-components:
-  app:
-    run:
-      driver: command
-      cmd: ./serve
-      ports: { web: 3000 }
+manifest:
+  version: 1
+  components:
+    app:
+      run:
+        driver: command
+        cmd: ./serve
+        ports: { web: 3000 }
 ";
 
 const DISPATCH_CONFIG: &str = "\
-version: 1
-commands:
-  echoer:
-    cmd: echo
-  exiter:
-    cmd: ./exiter.sh
-  enver:
-    cmd: ./enver.sh
-    env:
-      DECLARED: ${workspace.id}
-  sleeper:
-    cmd: sleep 60
-  missing:
-    cmd: ./definitely-not-here
+manifest:
+  version: 1
+  commands:
+    echoer:
+      cmd: echo
+    exiter:
+      cmd: ./exiter.sh
+    enver:
+      cmd: ./enver.sh
+      env:
+        DECLARED: ${workspace.id}
+    sleeper:
+      cmd: sleep 60
+    missing:
+      cmd: ./definitely-not-here
 ";
 
 #[test]
