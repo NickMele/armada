@@ -1,12 +1,12 @@
 # The inbox
 
-How a worker that needs you actually reaches you.
+How a Drone that needs you actually reaches you.
 
 > **Status: not built — M3.** Both mechanisms below were **verified in the M0 spike**
 > ([`PHASES.md`](../PHASES.md) §9.1 F3).
 
 If the orchestrator is the only thing you talk to, the system's success rests on this one
-question. Get it wrong and a session sits blocked for an hour while you talk about something
+question. Get it wrong and a Job sits blocked for an hour while you talk about something
 else — the exact failure the design exists to prevent.
 
 ## The file
@@ -14,7 +14,7 @@ else — the exact failure the design exists to prevent.
 `~/.armada/inbox.jsonl`. Append-only, one JSON object per line.
 
 ```json
-{"session":"nightly-flake","uuid":"…","kind":"needs_human","raised_at":"…",
+{"job":"nightly-flake","uuid":"…","kind":"needs_human","raised_at":"…",
  "body":"Reproduced 3/5 runs. Wants to raise CI timeout 30s → 90s.","answered":false}
 ```
 
@@ -26,9 +26,9 @@ reasoning that put the ownership store on disk rather than in a process
 
 | Writer | When | Reliability |
 |---|---|---|
-| A worker's `fleet.ask_human` MCP call | It has a question only you can answer | Requires the agent to choose to |
-| A `Stop` hook | The worker's turn ended | **Fires regardless** |
-| A `Notification` hook | The worker is asking for permission | **Fires regardless** |
+| A Drone's `fleet.ask_human` MCP call | It has a question only you can answer | Requires the agent to choose to |
+| A `Stop` hook | The Drone's turn ended | **Fires regardless** |
+| A `Notification` hook | The Drone is asking for permission | **Fires regardless** |
 
 **Hooks are the spine.** An agent can forget to report progress; it cannot forget to stop. That
 distinction is what makes "needs my attention" reliable rather than best-effort, and it is why
@@ -40,7 +40,7 @@ Two mechanisms, both configuration rather than code, and deliberately overlappin
 
 ### Live push — a plugin monitor
 
-A monitor's every stdout line is delivered to Claude as a notification **during** the session,
+A monitor's every stdout line is delivered to Claude as a notification **during** the Job,
 so events arrive mid-turn.
 
 ```json
@@ -50,8 +50,8 @@ so events arrive mid-turn.
 ```
 
 **Constraint:** monitors run in *interactive CLI sessions only*. That fits exactly — the
-orchestrator is interactive and workers are headless — but it means a monitor can never be a
-worker-side mechanism.
+Helm is interactive and Drones are headless — but it means a monitor can never be a
+Drone-side mechanism.
 
 ### Backstop — a `Stop` hook on the orchestrator
 
@@ -75,4 +75,4 @@ The guild plugin (for the monitor), the orchestrator's hook configuration, and a
 
 ## See also
 
-[`../fleet/inbox.md`](../fleet/inbox.md) · [`orchestrator.md`](orchestrator.md) · [`../fleet/answer.md`](../fleet/answer.md)
+[`../fleet/inbox.md`](../fleet/inbox.md) · [`helm.md`](helm.md) · [`../fleet/answer.md`](../fleet/answer.md)

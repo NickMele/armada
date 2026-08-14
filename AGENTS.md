@@ -4,11 +4,15 @@ Instructions for coding agents working in this repository.
 
 **Armada** is a CLI (`armada`) — a suite for working with coding agents across every repo and
 machine. Four modules under one binary: **Manifest** (what a workspace is), **Guild** (your
-portable setup), **Fleet** (the agents you don't talk to), **Surface** (the one you do). Rust
+portable setup), **Fleet** (the agents you don't talk to), **Helm** (the one you do). Rust
 (2021 edition), POSIX only.
 
-**Nothing points upward** — Manifest may not reference Fleet, Guild may not reference Surface.
-`ARCHITECTURE.md` §1.9, enforced by `cargo xtask boundaries`.
+**Nothing points upward** — Manifest may not reference Fleet, Guild may not reference Helm.
+`ARCHITECTURE.md` §1.9. The crate layering of §1.5 is enforced by `cargo xtask boundaries`; the
+module rule is not yet, because three of the four modules have no crates.
+
+**The vocabulary is fixed in `docs/glossary.md`** — Job, Drone, Helm, Bridge, Board, and the
+three status enums. Use those words and no synonyms.
 
 ## Read these first, in order
 
@@ -80,7 +84,7 @@ Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
   adding a config key. The ownership layer exists behind `init` / `clean` / `status` and the
   `commands:` dispatcher. `up`, `down`, `check`, `config` and `explain` are **not built**.
 - **M1 is next** and is restructure plus subtraction. A behaviour change in M1 is a defect.
-- **Guild, Fleet and Surface do not exist.** Their specification is `PLAN.md` §13–§15 and their
+- **Guild, Fleet and Helm do not exist.** Their specification is `PLAN.md` §13–§15 and their
   usage is [`docs/reference.md`](docs/reference.md).
 
 **`manifest check` blocks M4.** The workflow loop cannot close without it, because a verdict is

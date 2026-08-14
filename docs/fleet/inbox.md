@@ -5,19 +5,19 @@ What the fleet needs from you.
 > **Status: not built — M3.**
 
 The CLI view of the same file the orchestrator watches
-([`../surface/inbox.md`](../surface/inbox.md)).
+([`../helm/inbox.md`](../helm/inbox.md)).
 
 ## Synopsis
 
 ```sh
-armada fleet inbox [--session <name>] [--all] [--json]
+armada fleet inbox [--job <name>] [--all] [--json]
 ```
 
 ## Arguments
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `--session <name>` | session name | all | Only this session's entries. |
+| `--job <name>` | Job name | all | Only this Job's entries. |
 | `--all` | flag | off | Include entries already answered. |
 
 ## How it works
@@ -26,7 +26,7 @@ Reads `~/.armada/inbox.jsonl`, an append-only file written from two directions:
 
 | Writer | When |
 |---|---|
-| A worker's MCP call | It has a question only you can answer. |
+| A Drone's MCP call | It has a question only you can answer. |
 | `Stop` / `Notification` hooks | It went idle, got stuck, or is asking for permission. |
 
 **Hooks are the spine.** An agent can forget to report progress, but it cannot forget to stop —
@@ -43,7 +43,7 @@ nightly-flake  9m ago  needs_human
   Reproduced 3/5 runs. Wants to raise the CI timeout 30s → 90s.
 ```
 
-`--json` returns one result per entry with `session`, `uuid`, `kind`, `raised_at`, `body` and
+`--json` returns one result per entry with `Job`, `uuid`, `kind`, `raised_at`, `body` and
 `answered`.
 
 ## Dependencies
@@ -58,4 +58,4 @@ Full table and the one rule behind it: [`reference.md`](../reference.md).
 
 ## See also
 
-[`answer.md`](answer.md) · [`ls.md`](ls.md) · [`../surface/inbox.md`](../surface/inbox.md)
+[`answer.md`](answer.md) · [`ls.md`](ls.md) · [`../helm/inbox.md`](../helm/inbox.md)

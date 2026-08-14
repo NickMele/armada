@@ -7,7 +7,7 @@ signals and file locks are load-bearing here rather than incidental.
 > **Status: one module built, three to go.** **Manifest** — the workspace layer, formerly
 > charkit — has `init`, `clean`, `status` and repo `commands:` working over a machine-global
 > store. `up`, `down`, `check`, `config` and `explain` are not built. **Guild**, **Fleet** and
-> **Surface** do not exist yet. The M0 research spike is **done** and its findings are recorded
+> **Helm** do not exist yet. The M0 research spike is **done** and its findings are recorded
 > in [`docs/PHASES.md`](docs/PHASES.md) §9.1. See [`docs/reference.md`](docs/reference.md) for
 > what each command does and whether it exists.
 
@@ -22,14 +22,15 @@ Armada is four modules that stack, each depending only on the ones below it
 
 | Module | Answers | State |
 |---|---|---|
-| **[Surface](docs/surface/orchestrator.md)** | The one agent you talk to. It delegates, aggregates, and brings you decisions. | M3 |
-| **[Fleet](docs/fleet/spawn.md)** | The agents you don't. Isolated worktrees, port blocks, budgets, verdicts. | M3 |
+| **[Helm](docs/helm/helm.md)** | The one agent you talk to. It delegates, aggregates, and brings you decisions. The [Bridge](docs/helm/bridge.md) is the screen you watch while it works. | M3 |
+| **[Fleet](docs/fleet/spawn.md)** | The agents you don't. Jobs and Drones in isolated worktrees, with port blocks, budgets and verdicts. | M3 |
 | **[Guild](docs/guild/init.md)** | You — voice, skills, hooks, subagents, workflows. Global, interviewed once, synced between machines. | M2 |
 | **[Manifest](docs/manifest/init.md)** | What a repo is and how to operate it. Knows nothing about agents, deliberately. | partly built |
 
-**Nothing points upward.** Manifest may not reference Fleet; Guild may not reference Surface.
-That rule is mechanically enforced, and it is what keeps Manifest usable by hand, by a script,
-by CI and by four parallel agents at once.
+**Nothing points upward.** Manifest may not reference Fleet; Guild may not reference Helm.
+That rule is what keeps Manifest usable by hand, by a script, by CI and by four parallel agents
+at once. **Terms are defined once, in [`docs/glossary.md`](docs/glossary.md)** — Job, Drone,
+Helm, Bridge, Board, and the three status enums.
 
 ### Why Manifest is the foundation and not a detail
 
@@ -66,6 +67,7 @@ ordinary resumable Claude Code sessions, so anything that opens one already work
 | | |
 |---|---|
 | [`docs/reference.md`](docs/reference.md) | **Start here for usage.** One page per command: arguments, how it works, output, dependencies. |
+| [`docs/glossary.md`](docs/glossary.md) | The vocabulary, defined once. Read it before arguing about a name. |
 | [`docs/PLAN.md`](docs/PLAN.md) | The contract — concepts, verbs, config schema, drivers, and the three new modules. |
 | [`docs/PHASES.md`](docs/PHASES.md) | Milestones M0–M4, the spike findings, risks. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The principles **and why each one exists**. |
@@ -96,7 +98,7 @@ interpreter and no virtualenv — that is why the doc lint is Rust and not a scr
 
 Never commit to `main`. Work on a feature branch.
 
-- **Commits are conventional**, scoped by module — `manifest`, `guild`, `fleet`, `surface`,
+- **Commits are conventional**, scoped by module — `manifest`, `guild`, `fleet`, `helm`,
   `core`, `schema`, `fixtures`, `docs`.
 - **PRs are sized for review, not per milestone.** Review is the binding constraint, so a
   milestone lands as several small PRs. `main` sitting part-way through one is expected.

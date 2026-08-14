@@ -6,7 +6,7 @@
 > **This document is in two parts.** §1–§12 specify **Manifest**, the workspace module formerly
 > called charkit; that specification is unchanged by the widening of scope, because Manifest is
 > agent-agnostic by design ([`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9). §13–§15 specify the
-> three modules stacked on it: **Guild**, **Fleet** and **Surface**. Part II is deliberately
+> three modules stacked on it: **Guild**, **Fleet** and **Helm**. Part II is deliberately
 > thinner, because the M0 spike found that most of the machinery it appeared to need already
 > exists ([`PHASES.md`](PHASES.md) §9.1).
 >
@@ -447,7 +447,7 @@ everything else is config. **Every verb takes `--json`.**
 | `char init` | Workspace ready: run each component's setup, claim a port block, write `.char/`. Idempotent **in char's own state** — see §4.1. | `READY` `FAILED` |
 | `char up` | Services running and ready-checked. Records what it started as `owned` rows in `~/.char/char.db` (§4.3). | `UP` `PARTIAL` `SKIPPED` `FAILED` `TIMEOUT` |
 | `char down` | Services stopped. Port block **kept** — still your workspace. | `DOWN` `PARTIAL` `FAILED` |
-| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix` / `--files` / `--all-files` / `--jobs`. | `PASS` `SKIPPED` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
+| `char check` | Lint / format / test. Scoped, scheduled, leased, ceilinged. `--detach` / `--status` / `--wait` / `--fix` / `--files` / `--all-files` / `--concurrency`. | `PASS` `SKIPPED` `FAILED` `ABORTED` `DEAD` `TIMEOUT` |
 | `char clean` | Release everything this workspace owns — ports, containers, networks, images, leases — and remove `.char/`. Declared `release:` commands are **reported, never run** (§6.1). Build artifacts only with `--artifacts`; `--force` overrides the liveness guard; `--orphaned --force-rebuild` recovers an unreadable `char.db` (§4.3). | `CLEAN` `PARTIAL` `SKIPPED` `FAILED` |
 | `char status` | What's running, what's mine, what's stale, what a run is doing now. | `OK` `FAILED` |
 
@@ -1830,7 +1830,7 @@ editor, the agent processes and char itself all need something. Two agents runni
 concurrently then contend for **one** pool rather than each assuming a whole machine — which is
 the machine-wide lease (§4.3) doing its job, and is impossible until this number exists.
 
-`char check --jobs N` overrides it for a single run.
+`char check --concurrency N` overrides it for a single run.
 
 ### 4.4 Templating: four substitutions plus two scoped placeholders, hard cap
 
@@ -2812,7 +2812,7 @@ between your machines. **No part of it ever enters this repository.**
 │   ├── plugins.yml        # marketplaces + enabled plugins
 │   └── mcp.yml            # servers you want everywhere
 ├── manifest.db            # NEVER SYNCS — ports, containers, leases on THIS machine
-├── sessions/              # NEVER SYNCS — session index
+├── jobs/                  # NEVER SYNCS — the Job index
 ├── workspaces/            # NEVER SYNCS — the git worktrees themselves
 └── machine.yml            # NEVER SYNCS — paths, secrets, capacity
 ```
@@ -2873,28 +2873,54 @@ that has already reached a remote cannot be un-pushed.
 
 ## 14. Fleet — the agents you do not talk to
 
-### 14.1 What a session is
+### 14.1 A Job and a Drone are not the same thing
 
-**A UUID, a git worktree, a port block, and a transcript.** The process is temporary; the
-session is not. This is the single most important correction in the plan's history: three
-successive designs — a hidden multiplexer, an Armada-owned pty, a bespoke session journal — all
-descended from the assumption that a session must be a live terminal somebody owns. It does not,
-because Claude Code already persists sessions itself ([`PHASES.md`](PHASES.md) §9.1 F1).
+**The Job is durable. The Drone is not.** A Job is a UUID, a git worktree, a port block, a
+transcript, a budget and — when it finishes — a verdict. A Drone is the process executing it.
+One Job has at most one live Drone, and over its life it may have several: a Drone that exits,
+crashes or is killed does not end the Job, because everything the Job *is* survives on disk.
 
-Fleet mints the UUID **before anything runs**, so the durable handle exists before the process
-does, ownership is recorded up front, and cleanup can find the session afterwards even when the
-directory is gone. Worktrees live under `~/.armada/workspaces/`, outside the repository, so a
-stray delete in the parent cannot take out live sessions.
+This is the single most important correction in the plan's history, and it is why the two words
+exist. Three successive designs — a hidden multiplexer, an Armada-owned pty, a bespoke session
+journal — all descended from the assumption that the unit of work must be a live terminal
+somebody owns. It need not be, because Claude Code already persists the conversation itself
+([`PHASES.md`](PHASES.md) §9.1 F1).
+
+| | Job | Drone |
+|---|---|---|
+| Lives in | `~/.armada/jobs/`, plus a worktree and a Claude transcript | a process table |
+| Created by | `armada fleet spawn` | starting or resuming a Job |
+| Survives a crash | **yes** | no |
+| Carries | uuid, worktree, port block, budget, workflow, verdict | a pid and a process group |
+| Ends when | it reaches a verdict or a ceiling (§14.3) | the process exits |
+
+Fleet mints the Job's UUID **before anything runs**, so the durable handle exists before the
+process does, ownership is recorded up front, and cleanup can find the Job afterwards even when
+the directory is gone. Worktrees live under `~/.armada/workspaces/`, outside the repository, so
+a stray delete in the parent cannot take out live work.
+
+**A Job with no live Drone is the ordinary resting state, not an error.** It is what you have
+after a Drone finishes a turn, after a crash, and after a reboot; `armada fleet board` is how
+you enter it and Claude Code's `--resume` is what actually reattaches the conversation. An
+earlier draft of the vocabulary reached for an idle *pool* of pre-warmed workers to explain
+this state and was dropped: a pool means processes alive with nothing to do, which is a daemon
+under another name (§4.3), and it is unnecessary once the Job is the thing that persists.
 
 Fleet invents no worktree concept. `git worktree` is the only primitive; Fleet adds **policy
 only** — where it lives, what it is named, that it gets a port block from Manifest, and that it
 is recorded.
 
-### 14.2 Classification belongs here, not to Surface
+> **Underneath, a Job's conversation is an ordinary Claude Code session** — `--session-id` to
+> mint it, `--resume` to re-enter it, a transcript at
+> `~/.claude/projects/<slug>/<uuid>.jsonl`. Job and Drone are Armada's names for the two halves
+> Claude Code leaves undistinguished; they are not a second session mechanism, and nothing in
+> [`PHASES.md`](PHASES.md) §9.1 F1 changes.
+
+### 14.2 Classification belongs here, not to Helm
 
 One cheap model call turns task text into a workflow name, with an explicit override and the
 confidence surfaced so a guess is visible as a guess. It lives in Fleet because it is needed the
-moment a session can be spawned — long before Surface exists. Putting it in the orchestrator
+moment a Job can be spawned — long before Helm exists. Putting it in the orchestrator
 would make every other caller worse for no gain ([`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9).
 
 ### 14.3 Verdicts and ceilings — the two ways a loop ends
@@ -2910,7 +2936,7 @@ exactly one machine-readable output shape:
   "schema_version": 1,
   "module": "fleet",
   "step": "implement",
-  "verdict": "pass",
+  "verdict": "PASS",
   "evidence": [
     { "kind": "check", "scope": "test", "exit": 0 },
     { "kind": "check", "scope": "lint", "exit": 0 }
@@ -2922,12 +2948,39 @@ exactly one machine-readable output shape:
 
 | Verdict | Meaning |
 |---|---|
-| `pass` | Advance to `next`. |
-| `fail` | Retry the same step with the evidence attached, until a ceiling stops it. |
-| `blocked` | Cannot proceed without an external change. Stop, record why, raise to the inbox. |
-| `needs_human` | A judgement call is yours — or a ceiling was reached. |
+| `PASS` | Advance to `next`. |
+| `FAILED` | Retry the same step with the evidence attached, until a ceiling stops it. |
+| `BLOCKED` | Cannot proceed without an external change. Stop, record why, raise to the inbox. |
+| `NEEDS_HUMAN` | A judgement call is yours — or a ceiling was reached. |
 
-**The rule that keeps this honest: a verdict is only `pass` if it carries evidence an external
+#### Three enums, and the one rule they share
+
+A verdict answers *how did the step end*. It is not the same question as *what is this Job
+doing right now*, and conflating them is what produced four competing status vocabularies in
+earlier drafts. There are exactly three, each owned by one module:
+
+| Enum | Owner | Values |
+|---|---|---|
+| **Status** | Manifest | `READY` `UP` `DOWN` `CLEAN` `PASS` `OK` `SKIPPED` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` `RUNNING` `WAITING` (§3.1) |
+| **Job state** | Fleet | `QUEUED` `RUNNING` `PAUSED` `STALLED` `BLOCKED` `ABORTED` `DONE` |
+| **Verdict** | Fleet | `PASS` `FAILED` `BLOCKED` `NEEDS_HUMAN` |
+
+**The shared rule: one spelling, everywhere, and it is the JSON spelling.** `FAILED`, never
+`FAIL`; SCREAMING in both the payload and the human render. `crates/core/src/error.rs` already
+enforces this for Status with a test, and Fleet inherits it rather than reinventing the
+`FAIL`/`FAILED` split an earlier draft had to remove (§3).
+
+**Why Manifest's Status is not extended to cover Jobs.** `BLOCKED` is a legal Job state and a
+legal verdict, but it is deliberately *not* a Manifest terminal state: exit codes are
+`f(error.class)`, a blocked run carries no class, and a merge gate would therefore read exit
+`0` as success (§3.1). The two enums stay separate because that constraint applies to one of
+them and not the other.
+
+**`STALLED` is Fleet's, and it is an observation rather than a state the Drone reports.** A Job
+is stalled when its Drone has produced no transcript activity inside a window — the one
+condition a busy Drone cannot self-report, which is why it belongs to the observer.
+
+**The rule that keeps this honest: a verdict is only `PASS` if it carries evidence an external
 command produced.** An agent asserting that tests pass is not evidence; an `armada manifest
 check` exit code is. This is why the loop genuinely depends on Manifest's `check` verb and
 cannot be faked earlier.
@@ -2949,7 +3002,7 @@ budget:
 spawn when a reset is close. That is strictly better than a fixed concurrency cap, which was
 only ever a proxy for the same thing.
 
-**Exhaustion is a first-class outcome, not a crash.** The session stops, records what it spent
+**Exhaustion is a first-class outcome, not a crash.** The Drone stops, the Job records what it spent
 and where it reached, and raises it to the inbox.
 
 ### 14.4 Workflows are data, not code
@@ -2985,36 +3038,52 @@ because `check` gives them something objective to close against.
 
 ---
 
-## 15. Surface — the one agent you do talk to
+## 15. Helm — the one agent you do talk to
 
-### 15.1 The orchestrator is a session, not a UI
+### 15.1 Helm is a conversation; the Bridge is a screen
 
-Typing `armada` launches a Claude Code session running an orchestrator persona from your guild,
-with Armada's MCP server as its toolbelt, resuming the same conversation each day. It requires
-no interface work, which is why it ships with Fleet rather than after everything else.
+**Helm** is a Claude Code session running an orchestrator persona from your guild, with Armada's
+MCP server as its toolbelt, resuming the same conversation each day. Typing `armada` with no
+arguments enters it; `armada helm` is the explicit spelling.
 
 Its toolbelt is `fleet.*` and `manifest.*` — spawn, status, probe, answer, kill, and the
 workspace verbs. Its job is **decompose, delegate, aggregate, report**. Classification is not
 its job (§14.2).
 
-**Because the orchestrator is a session, a terminal UI or an app that hosts it later is a
-rendering choice and not an architecture change.** Nothing in Manifest, Guild or Fleet moves
-when one is built. That is the property that makes the ambient-view question safe to defer:
-what you see when you are *not* talking is additive, and it is the only decision in this plan
-that gets cheaper and better-informed by waiting.
+> **No `helm` binary is ever installed.** Helm is a subcommand and the bare-`armada` default,
+> never a program on `PATH`. Kubernetes' Helm already owns that name, and Armada is expected to
+> run on machines that have it — the `python-ml` fixture shells out to `kind` and `kubectl`
+> (§6.1). Shipping a second `helm` would shadow a tool the user depends on to do their actual
+> work, which no naming preference justifies.
+
+**The Bridge** is the other half: a full-screen live view of every Job and its state, redrawn in
+place like `htop` or `k9s`. It is reached as `armada bridge`, or `/bridge` from inside Helm.
+Helm is where you *talk*; the Bridge is what you *watch*. They share the Fleet data and neither
+owns the other.
+
+> **This reverses an earlier deferral, deliberately.** Previous drafts held the ambient view
+> back as "the only decision that gets cheaper and better-informed by waiting", on the argument
+> that cmux and the Claude app already list sessions. The counter-argument that won: a session
+> list is not the thing being deferred. What the Bridge shows is Job state, budget spend against
+> a ceiling, and who needs an answer — none of which any other tool can know, because none of
+> them mint the Jobs. Deferring it meant deferring the only view of data Armada alone holds.
+
+**Nothing in Manifest, Guild or Fleet moves when the Bridge is built**, and that property is
+retained rather than spent. The Bridge is a renderer over `fleet.*`; it holds no state, and Helm
+works fully without it.
 
 ### 15.2 Two structural rules
 
-**The orchestrator reads summaries, never raw transcripts.** If it reads worker transcripts it
-fills its window in three sessions and starts forgetting the fleet. This is a design constraint,
+**The orchestrator reads summaries, never raw transcripts.** If it reads Drone transcripts it
+fills its window in three days of work and starts forgetting the fleet. This is a design constraint,
 not a tuning knob.
 
-**Probe never interrupts a worker.** It summarises the worker's transcript with a cheap model.
+**Probe never interrupts a Drone.** It summarises the Drone's transcript with a cheap model.
 Messaging a busy agent to ask how it is going costs you the thing you were measuring.
 
 ### 15.3 The inbox — how it stays aware without polling
 
-Workers append to `~/.armada/inbox.jsonl`: by MCP call when they have a question, and by `Stop`
+Drones append to `~/.armada/inbox.jsonl`: by MCP call when they have a question, and by `Stop`
 and `Notification` hooks when they go idle or get stuck. **Hooks are the spine** — an agent can
 forget to report progress, but it cannot forget to stop, which is what makes "needs my
 attention" reliable rather than best-effort.
@@ -3030,5 +3099,5 @@ Both are configuration rather than code. **No daemon**, and no polling: the file
 append-only, so it survives every kind of crash, which is the same reasoning that put Manifest's
 ownership store on disk rather than in a process (§4.3).
 
-A monitor runs in interactive sessions only. That fits — the orchestrator is interactive and the
-workers are headless — but it means a monitor can never be a worker-side mechanism.
+A monitor runs in interactive sessions only. That fits — Helm is interactive and Drones are
+headless — but it means a monitor can never be a Drone-side mechanism.

@@ -29,7 +29,7 @@ armada init [--guild <remote>] [--bundle <path>] [--no-interview] [--json]
 1. **Preflight.** Checks for `git`, `claude`, and a container runtime. Reports each as present
    or missing with the version found. Missing `claude` is fatal; a missing container runtime is
    a warning, because not every repo needs one.
-2. **Creates `~/.armada/`** — `guild/`, `sessions/`, `workspaces/`, `manifest.db`,
+2. **Creates `~/.armada/`** — `guild/`, `jobs/`, `workspaces/`, `manifest.db`,
    `machine.yml`.
 3. **Asks the one question that matters:** *do you already have a guild?*
    - **Pull from a remote** — clones it into `~/.armada/guild/`. Done in seconds; this is the
@@ -57,7 +57,7 @@ carrying `status` and the version or path found.
 | On | Why |
 |---|---|
 | `git` | The guild is a git repository. |
-| `claude` | Everything Fleet and Surface do runs through it. |
+| `claude` | Everything Fleet and Helm do runs through it. |
 | Network | Only when `--guild` is used. |
 | A container runtime | Optional. Warned, not enforced. |
 

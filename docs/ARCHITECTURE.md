@@ -10,7 +10,7 @@
 > The **Manifest** module — formerly charkit — has landed its config contract, six fixtures and
 > the ownership layer behind `init`, `clean`, `status` and `commands:`. The three seams, the
 > reducer's shape for the claim loop and the `--json` envelope are code rather than sketches.
-> `up`, `down` and `check` are not built, and neither are Guild, Fleet or Surface.
+> `up`, `down` and `check` are not built, and neither are Guild, Fleet or Helm.
 >
 > This document records **principles and the reasoning behind them**. The reasoning is the
 > load-bearing part: a rule without its reason gets discarded the first time it is
@@ -530,8 +530,8 @@ modules below it**:
 
 | Module | Owns | May depend on |
 |---|---|---|
-| **Surface** | The orchestrator you talk to, its MCP toolbelt, the inbox | Fleet, Guild, Manifest |
-| **Fleet** | Sessions, worktrees, classification, budgets, workflows | Guild, Manifest |
+| **Helm** | The orchestrator you talk to, the Bridge you watch, the MCP toolbelt, the inbox | Fleet, Guild, Manifest |
+| **Fleet** | Jobs, Drones, worktrees, classification, budgets, workflows | Guild, Manifest |
 | **Guild** | Your voice, skills, hooks, subagents, workflows — synced between machines | *nothing* |
 | **Manifest** | What a workspace is and how to operate it | *nothing* |
 
@@ -540,10 +540,10 @@ repository, Guild describes a person, and a dependency in either direction would
 those descriptions had leaked into the other.
 
 **The rule that matters is the negative one.** Manifest may not name Fleet. Guild may not name
-Surface. The reason is not tidiness — it is that **Manifest must keep knowing nothing about
+Helm. The reason is not tidiness — it is that **Manifest must keep knowing nothing about
 agents**. It is the bottom of the stack precisely because it is agent-agnostic, and that is
 what makes it usable by hand, by a script, by CI, and by four parallel agents at once. The
-first time a session id is threaded into Manifest "just for this one call", Manifest stops
+first time a Job id is threaded into Manifest "just for this one call", Manifest stops
 being a tool about repositories and becomes part of an agent framework, and every one of those
 other callers is now carrying an agent framework they did not want.
 
@@ -552,9 +552,20 @@ This is mechanically enforced by the same check that already enforces §1.5 —
 rule with a half-life. §1.5 is the general principle; this is its concrete shape for the four
 modules, and the two are the same rule stated at different altitudes.
 
+> **Today the check enforces the crate layering of §1.5 and nothing more**, because Guild, Fleet
+> and Helm have no crates yet. The module rule above is therefore documented but not yet
+> mechanically enforced. Extending `boundaries.rs` is part of the milestone that first creates a
+> second module crate, not a later cleanup — a rule that spends a milestone unenforced is a rule
+> that gets broken in that milestone.
+
+**The names are fixed in one place.** [`glossary.md`](glossary.md) is the single definition of
+Module, Job, Drone, Helm, Bridge and Board, and of the three status enums. A term that starts
+meaning two things is a defect; the glossary exists so that is detectable rather than a matter
+of taste.
+
 **Corollary for new work:** when a feature seems to need an upward dependency, the feature is
 in the wrong module. Classification looked like the orchestrator's job and belongs to Fleet,
-because a session must be classifiable before Surface exists. Ask which is the lowest module
+because a Job must be classifiable before Helm exists. Ask which is the lowest module
 that could own a thing, and put it there.
 
 ---

@@ -7,12 +7,17 @@ One page per command. Every page has the same five sections: **Arguments**, **Ho
 > that does not exist yet says so at the top and names the milestone
 > ([`PHASES.md`](PHASES.md) §8).
 
+**Terms are defined once, in [`glossary.md`](glossary.md)** — Job, Drone, Helm, Bridge, Board,
+and the three status enums. These pages use them without re-explaining them.
+
 ## Top level
 
 | Page | Command | Status |
 |---|---|---|
 | [`init.md`](init.md) | `armada init` — set up **this machine** | M2 |
 | [`doctor.md`](doctor.md) | `armada doctor` — what this machine is missing | M2 |
+| [`helm/helm.md`](helm/helm.md) | `armada` — enter Helm | M3 |
+| [`helm/bridge.md`](helm/bridge.md) | `armada bridge` — the live screen | M3 |
 
 ## Manifest — what a workspace is and how to operate it
 
@@ -47,16 +52,17 @@ One page per command. Every page has the same five sections: **Arguments**, **Ho
 | [`fleet/ls.md`](fleet/ls.md) | `armada fleet ls` | M3 |
 | [`fleet/inbox.md`](fleet/inbox.md) | `armada fleet inbox` | M3 |
 | [`fleet/answer.md`](fleet/answer.md) | `armada fleet answer` | M3 |
-| [`fleet/open.md`](fleet/open.md) | `armada fleet open` | M3 |
+| [`fleet/board.md`](fleet/board.md) | `armada fleet board` | M3 |
 | [`fleet/kill.md`](fleet/kill.md) | `armada fleet kill` | M3 |
 
-## Surface — the one agent you do talk to
+## Helm — the one agent you do talk to
 
 | Page | Topic | Status |
 |---|---|---|
-| [`surface/orchestrator.md`](surface/orchestrator.md) | What `armada` with no arguments launches | M3 |
-| [`surface/mcp.md`](surface/mcp.md) | The MCP toolbelt the orchestrator drives | M3 |
-| [`surface/inbox.md`](surface/inbox.md) | How fleet events reach you | M3 |
+| [`helm/helm.md`](helm/helm.md) | `armada helm` — the conversation | M3 |
+| [`helm/bridge.md`](helm/bridge.md) | `armada bridge` — the live screen, and the palette | M3 |
+| [`helm/mcp.md`](helm/mcp.md) | The MCP toolbelt Helm drives | M3 |
+| [`helm/inbox.md`](helm/inbox.md) | How Fleet events reach you | M3 |
 
 ## Conventions used on every page
 
