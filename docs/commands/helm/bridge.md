@@ -3,7 +3,7 @@
 The live screen. Every Job, its state, what it has spent, and who needs you.
 
 > **Status: not built — M3.** Scheduled alongside Helm and Fleet. An earlier draft deferred the
-> ambient view indefinitely; [`PLAN.md`](../PLAN.md) §15.1 records why that was reversed.
+> ambient view indefinitely; [`PLAN.md`](../../PLAN.md) §15.1 records why that was reversed.
 
 Helm is where you talk. The Bridge is what you watch. It redraws in place like `htop` or `k9s`
 — no scrollback, no history, just the current state of the fleet.
@@ -30,11 +30,11 @@ armada bridge [--filter <expr>] [--interval <s>] [--once] [--json]
 Reads the Job index in `~/.armada/jobs/` and, per Job, the tail of its transcript at
 `~/.claude/projects/<slug>/<uuid>.jsonl`. **Every column comes from data Claude Code already
 emits** — the turn's `result` event carries `total_cost_usd`, `usage`, `num_turns` and
-`duration_api_ms` ([`PHASES.md`](../PHASES.md) §9.1 F2). The Bridge builds no accounting layer
+`duration_api_ms` ([`PHASES.md`](../../PHASES.md) §9.1 F2). The Bridge builds no accounting layer
 and estimates nothing.
 
 **Read-only, always.** It never resumes, interrupts, or probes a Drone. Watching something must
-not change it — the same rule that governs probe ([`PLAN.md`](../PLAN.md) §15.2).
+not change it — the same rule that governs probe ([`PLAN.md`](../../PLAN.md) §15.2).
 
 **It holds no state.** The Bridge is a renderer over Fleet; closing it loses nothing, and
 everything it shows is available from [`../fleet/ls.md`](../fleet/ls.md) as a table.
@@ -44,10 +44,10 @@ everything it shows is available from [`../fleet/ls.md`](../fleet/ls.md) as a ta
 | Column | Source | Notes |
 |---|---|---|
 | `JOB` | the Job index | The name, not the uuid — names are assigned at spawn and are what you type. |
-| `STATE` | Fleet Job state | `QUEUED` `RUNNING` `PAUSED` `STALLED` `BLOCKED` `ABORTED` `DONE` ([`../glossary.md`](../glossary.md)). |
+| `STATE` | Fleet Job state | `QUEUED` `RUNNING` `PAUSED` `STALLED` `BLOCKED` `ABORTED` `DONE` ([`../glossary.md`](../../glossary.md)). |
 | `TASK` | the spawn prompt | Truncated. The Bridge is a status view, not a reader. |
 | `RUN` | wall clock since spawn | — |
-| `SPENT` | `total_cost_usd`, summed over turns | Against the Job's ceiling, so exhaustion is visible before it happens ([`PLAN.md`](../PLAN.md) §14.3). |
+| `SPENT` | `total_cost_usd`, summed over turns | Against the Job's ceiling, so exhaustion is visible before it happens ([`PLAN.md`](../../PLAN.md) §14.3). |
 | `NEEDS YOU` | the inbox | The only column that is ever a call to action. |
 
 > **There is no progress column, deliberately.** Nothing emits percent-complete: F2 gives cost,
@@ -130,4 +130,4 @@ Full table and the one rule behind it: [`../reference.md`](../reference.md).
 ## See also
 
 [`helm.md`](helm.md) · [`../fleet/ls.md`](../fleet/ls.md) · [`inbox.md`](inbox.md) ·
-[`../glossary.md`](../glossary.md)
+[`../glossary.md`](../../glossary.md)

@@ -16,7 +16,7 @@
 > **`PHASES.md` §0.1 and §0.2 are superseded by [`ARCHITECTURE.md`](ARCHITECTURE.md)**, which records what
 > was actually decided. Everything else here stands.
 >
-> **For usage rather than specification, see [`reference.md`](reference.md)** — one page per
+> **For usage rather than specification, see [`reference.md`](commands/reference.md)** — one page per
 > command with arguments, behaviour, output and dependencies.
 >
 > **Precedence: where this document and `ARCHITECTURE.md` disagree, `ARCHITECTURE.md` wins.**

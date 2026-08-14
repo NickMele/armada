@@ -2,7 +2,7 @@
 
 Make a workspace ready to work in. Idempotent.
 
-> **Status: shipped** — as `char init` today; renames in M1 ([`PHASES.md`](../PHASES.md) §8.3).
+> **Status: shipped** — as `char init` today; renames in M1 ([`PHASES.md`](../../PHASES.md) §8.3).
 
 ## Synopsis
 
@@ -22,18 +22,18 @@ Takes no selector: init is whole-workspace by definition.
 ## How it works
 
 1. **Resolves the workspace** — walks up for `armada.yml`, then derives the two identities in
-   [`PLAN.md`](../PLAN.md) §2.2. A workspace's identity is stable across renames and moves, which
+   [`PLAN.md`](../../PLAN.md) §2.2. A workspace's identity is stable across renames and moves, which
    is what lets ownership survive them.
 2. **Reaps first.** Before claiming anything, releases resources whose owning workspace no
-   longer exists ([`PLAN.md`](../PLAN.md) §2.3.1). This is why a machine does not accumulate
+   longer exists ([`PLAN.md`](../../PLAN.md) §2.3.1). This is why a machine does not accumulate
    orphans: cleanup happens on the way in, not only on the way out.
 3. **Claims a port block** — a contiguous range recorded against this workspace in
    `~/.armada/manifest.db`. Parallel workspaces cannot collide because the claim is
    machine-global, not per-directory.
 4. **Runs `setup:`** for each component, in dependency order. `setup:` must be idempotent —
-   `init` is expected to be re-run and re-running it must be free ([`PLAN.md`](../PLAN.md) §4.1).
+   `init` is expected to be re-run and re-running it must be free ([`PLAN.md`](../../PLAN.md) §4.1).
 5. **Writes `.armada/`** into the workspace: resolved config and the port assignments. It holds
-   **nothing reclaimable** ([`PLAN.md`](../PLAN.md) §4.2) — delete it and nothing leaks, because
+   **nothing reclaimable** ([`PLAN.md`](../../PLAN.md) §4.2) — delete it and nothing leaks, because
    ownership lives in the machine-global store.
 
 ## Output

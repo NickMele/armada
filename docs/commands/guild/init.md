@@ -2,7 +2,7 @@
 
 Build your guild by interviewing you.
 
-> **Status: not built — M2.** ([`PHASES.md`](../PHASES.md) §8.4)
+> **Status: not built — M2.** ([`PHASES.md`](../../PHASES.md) §8.4)
 
 Usually reached through [`../init.md`](../init.md) rather than run directly. Run it directly to
 rebuild a guild from scratch.

@@ -3,7 +3,7 @@
 How a Drone that needs you actually reaches you.
 
 > **Status: not built — M3.** Both mechanisms below were **verified in the M0 spike**
-> ([`PHASES.md`](../PHASES.md) §9.1 F3).
+> ([`PHASES.md`](../../PHASES.md) §9.1 F3).
 
 If the orchestrator is the only thing you talk to, the system's success rests on this one
 question. Get it wrong and a Job sits blocked for an hour while you talk about something
@@ -20,7 +20,7 @@ else — the exact failure the design exists to prevent.
 
 Append-only means it survives every kind of crash, and **no daemon is involved** — the same
 reasoning that put the ownership store on disk rather than in a process
-([`PLAN.md`](../PLAN.md) §4.3).
+([`PLAN.md`](../../PLAN.md) §4.3).
 
 ## Who writes to it
 

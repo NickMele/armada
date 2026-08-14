@@ -2,7 +2,7 @@
 
 What is running, what is mine, what is stale.
 
-> **Status: shipped** — as `char status` today; renames in M1 ([`PHASES.md`](../PHASES.md) §8.3).
+> **Status: shipped** — as `char status` today; renames in M1 ([`PHASES.md`](../../PHASES.md) §8.3).
 
 ## Synopsis
 

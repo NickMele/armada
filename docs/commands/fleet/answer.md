@@ -21,7 +21,7 @@ armada fleet answer <job> "<answer>" [--json]
 
 1. Marks the Job's open inbox entry answered.
 2. **Resumes the Job** with `--resume <uuid>` and your answer as the next turn, in its own
-   worktree with its context intact ([`PHASES.md`](../PHASES.md) §9.1 F1).
+   worktree with its context intact ([`PHASES.md`](../../PHASES.md) §9.1 F1).
 3. The Job continues its workflow from where it stopped. **Its budget is not reset** — an
    answer is a continuation, not a new run, and resetting the ceiling here would make budgets
    unenforceable for any Job that asks a question.

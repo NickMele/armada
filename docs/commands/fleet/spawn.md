@@ -2,7 +2,7 @@
 
 Start an isolated agent Job on a task.
 
-> **Status: not built — M3.** ([`PHASES.md`](../PHASES.md) §8.5)
+> **Status: not built — M3.** ([`PHASES.md`](../../PHASES.md) §8.5)
 
 ## Synopsis
 
@@ -27,7 +27,7 @@ armada fleet spawn "<task>" [--workflow <name>] [--name <name>] [--budget <k=v>.
 1. **Classify.** One cheap model call turns the task text into a workflow name, with the
    confidence surfaced so a guess is visible as a guess. Classification lives in Fleet, not the
    orchestrator, because it is needed the moment a Job can be spawned
-   ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §1.9).
+   ([`ARCHITECTURE.md`](../../ARCHITECTURE.md) §1.9).
 2. **Mint the UUID** — before anything runs. The durable handle exists before the process does,
    which is what makes ownership recordable up front and cleanup possible afterwards.
 3. **Create the worktree** at `~/.armada/workspaces/<repo>/<name>` on a new branch. Plain

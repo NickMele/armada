@@ -3,7 +3,7 @@
 The one agent you talk to. Typing `armada` with no arguments enters it; `armada helm` is the
 explicit spelling.
 
-> **Status: not built — M3.** ([`PHASES.md`](../PHASES.md) §8.5)
+> **Status: not built — M3.** ([`PHASES.md`](../../PHASES.md) §8.5)
 
 **Helm is a conversation, not a screen.** It is a Claude Code session, which is the whole design:
 it needs no interface work, so it ships with Fleet instead of after everything else. The screen
@@ -12,7 +12,7 @@ Helm moves either way.
 
 > **There is no `helm` binary.** Kubernetes owns that name and Armada runs on machines that have
 > it. Helm is a subcommand and the bare-`armada` default, never a program on `PATH`
-> ([`../glossary.md`](../glossary.md)).
+> ([`../glossary.md`](../../glossary.md)).
 
 ## Synopsis
 

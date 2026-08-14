@@ -2,7 +2,7 @@
 
 Bring this workspace's services up and ready-checked.
 
-> **Status: not built.** Answers `bad_invocation` today. ([`PHASES.md`](../PHASES.md) §8.6 depends
+> **Status: not built.** Answers `bad_invocation` today. ([`PHASES.md`](../../PHASES.md) §8.6 depends
 > on `check`, not on this; `up` has no milestone blocker other than being unwritten.)
 
 ## Synopsis
@@ -15,7 +15,7 @@ armada manifest up [<selector>] [-C <path>] [--dry-run] [--json]
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `<selector>` | component names | all | Which components to start. Selector grammar in [`PLAN.md`](../PLAN.md) §3.2. |
+| `<selector>` | component names | all | Which components to start. Selector grammar in [`PLAN.md`](../../PLAN.md) §3.2. |
 | `-C <path>` | directory | cwd | Operate on this workspace. |
 | `--dry-run` | flag | off | Report the argv that would run and the ready-checks that would be waited on. |
 
@@ -23,7 +23,7 @@ armada manifest up [<selector>] [-C <path>] [--dry-run] [--json]
 
 1. **Resolves the dependency order** from `needs:` and starts components in it.
 2. **Starts each component** through its driver — compose, or a raw process
-   ([`PLAN.md`](../PLAN.md) §6).
+   ([`PLAN.md`](../../PLAN.md) §6).
 3. **Records ownership immediately**, before waiting. A container that starts and then fails
    its ready-check is still owned, and therefore still reclaimable by [`clean.md`](clean.md).
    Recording after the wait would leak exactly the resources most likely to be broken.

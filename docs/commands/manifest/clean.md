@@ -2,7 +2,7 @@
 
 Release everything this workspace owns.
 
-> **Status: shipped** — as `char clean` today; renames in M1 ([`PHASES.md`](../PHASES.md) §8.3).
+> **Status: shipped** — as `char clean` today; renames in M1 ([`PHASES.md`](../../PHASES.md) §8.3).
 
 **The property no other tool has:** clean works **after the directory is gone**. Ownership is
 recorded machine-globally, so reclaiming is a query rather than a memory. `docker compose down`

@@ -2,7 +2,7 @@
 
 Set up **this machine**. Run once per box.
 
-> **Status: not built — M2.** ([`PHASES.md`](PHASES.md) §8.4)
+> **Status: not built — M2.** ([`PHASES.md`](../PHASES.md) §8.4)
 
 Not to be confused with [`manifest/init.md`](manifest/init.md), which sets up a *workspace*.
 This sets up *you, here*.
@@ -37,7 +37,7 @@ armada init [--guild <remote>] [--bundle <path>] [--no-interview] [--json]
    - **Import a bundle** — unpacks a file. For a machine that will never hold your credentials.
    - **Build one now** — hands off to [`guild/init.md`](guild/init.md).
 4. **Writes `machine.yml`** — paths, capacity, and anything machine-specific. This file
-   **never syncs** ([`PLAN.md`](PLAN.md) §13.1).
+   **never syncs** ([`PLAN.md`](../PLAN.md) §13.1).
 
 ## Output
 

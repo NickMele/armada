@@ -23,7 +23,7 @@ Reads the Job index in `~/.armada/jobs/`, and for each Job reads the tail of its
 transcript at `~/.claude/projects/<slug>/<uuid>.jsonl`.
 
 **Every column comes from data Claude Code already emits** — the turn's `result` event carries
-`total_cost_usd`, `usage`, `num_turns` and `duration_api_ms` ([`PHASES.md`](../PHASES.md) §9.1 F2).
+`total_cost_usd`, `usage`, `num_turns` and `duration_api_ms` ([`PHASES.md`](../../PHASES.md) §9.1 F2).
 Fleet builds no accounting layer and estimates nothing.
 
 Read-only. Never resumes or interrupts a Job.

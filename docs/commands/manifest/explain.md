@@ -6,7 +6,7 @@ Hand back the evidence a stack trace does not carry.
 
 Armada runs no model. Its caller is already an agent, and the useful thing Armada can do is
 give that agent **what it cannot see**: the exact argv, what a check waited on and who held it,
-and whether this failure has happened before ([`PLAN.md`](../PLAN.md) §3.4).
+and whether this failure has happened before ([`PLAN.md`](../../PLAN.md) §3.4).
 
 ## Synopsis
 

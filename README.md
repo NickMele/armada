@@ -8,7 +8,7 @@ signals and file locks are load-bearing here rather than incidental.
 > charkit — has `init`, `clean`, `status` and repo `commands:` working over a machine-global
 > store. `up`, `down`, `check`, `config` and `explain` are not built. **Guild**, **Fleet** and
 > **Helm** do not exist yet. The M0 research spike is **done** and its findings are recorded
-> in [`docs/PHASES.md`](docs/PHASES.md) §9.1. See [`docs/reference.md`](docs/reference.md) for
+> in [`docs/PHASES.md`](docs/PHASES.md) §9.1. See [`docs/commands/reference.md`](docs/commands/reference.md) for
 > what each command does and whether it exists.
 
 ## The idea
@@ -22,10 +22,10 @@ Armada is four modules that stack, each depending only on the ones below it
 
 | Module | Answers | State |
 |---|---|---|
-| **[Helm](docs/helm/helm.md)** | The one agent you talk to. It delegates, aggregates, and brings you decisions. The [Bridge](docs/helm/bridge.md) is the screen you watch while it works. | M3 |
-| **[Fleet](docs/fleet/spawn.md)** | The agents you don't. Jobs and Drones in isolated worktrees, with port blocks, budgets and verdicts. | M3 |
-| **[Guild](docs/guild/init.md)** | You — voice, skills, hooks, subagents, workflows. Global, interviewed once, synced between machines. | M2 |
-| **[Manifest](docs/manifest/init.md)** | What a repo is and how to operate it. Knows nothing about agents, deliberately. | partly built |
+| **[Helm](docs/commands/helm/helm.md)** | The one agent you talk to. It delegates, aggregates, and brings you decisions. The [Bridge](docs/commands/helm/bridge.md) is the screen you watch while it works. | M3 |
+| **[Fleet](docs/commands/fleet/spawn.md)** | The agents you don't. Jobs and Drones in isolated worktrees, with port blocks, budgets and verdicts. | M3 |
+| **[Guild](docs/commands/guild/init.md)** | You — voice, skills, hooks, subagents, workflows. Global, interviewed once, synced between machines. | M2 |
+| **[Manifest](docs/commands/manifest/init.md)** | What a repo is and how to operate it. Knows nothing about agents, deliberately. | partly built |
 
 **Nothing points upward.** Manifest may not reference Fleet; Guild may not reference Helm.
 That rule is what keeps Manifest usable by hand, by a script, by CI and by four parallel agents
@@ -47,12 +47,12 @@ is also the part that is already built.
 
 | Verb | Contract |
 |---|---|
-| [`init`](docs/manifest/init.md) | Workspace ready. Runs setup, claims a port block. Idempotent. |
-| [`up`](docs/manifest/up.md) | Services running and ready-checked. |
-| [`down`](docs/manifest/down.md) | Services stopped. Port block kept. |
-| [`check`](docs/manifest/check.md) | Lint, format, test. Scoped, scheduled, locked. |
-| [`clean`](docs/manifest/clean.md) | Releases everything this workspace owns. |
-| [`status`](docs/manifest/status.md) | What's running, what's mine, what's stale. |
+| [`init`](docs/commands/manifest/init.md) | Workspace ready. Runs setup, claims a port block. Idempotent. |
+| [`up`](docs/commands/manifest/up.md) | Services running and ready-checked. |
+| [`down`](docs/commands/manifest/down.md) | Services stopped. Port block kept. |
+| [`check`](docs/commands/manifest/check.md) | Lint, format, test. Scoped, scheduled, locked. |
+| [`clean`](docs/commands/manifest/clean.md) | Releases everything this workspace owns. |
+| [`status`](docs/commands/manifest/status.md) | What's running, what's mine, what's stale. |
 
 Every verb takes `--json`.
 
@@ -66,7 +66,7 @@ ordinary resumable Claude Code sessions, so anything that opens one already work
 
 | | |
 |---|---|
-| [`docs/reference.md`](docs/reference.md) | **Start here for usage.** One page per command: arguments, how it works, output, dependencies. |
+| [`docs/commands/reference.md`](docs/commands/reference.md) | **Start here for usage.** One page per command: arguments, how it works, output, dependencies. |
 | [`docs/glossary.md`](docs/glossary.md) | The vocabulary, defined once. Read it before arguing about a name. |
 | [`docs/PLAN.md`](docs/PLAN.md) | The contract — concepts, verbs, config schema, drivers, and the three new modules. |
 | [`docs/PHASES.md`](docs/PHASES.md) | Milestones M0–M4, the spike findings, risks. |
@@ -125,9 +125,9 @@ force until it is not. Their reasoning is recorded in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.4 and §2.7 so that the retirement does not
 read as an unexplained hole, because a rule that vanishes without a reason gets reinvented.
 
-**What replaced them is the fixture set.** Six config fixtures are now the only thing standing
-between this design and being shaped around a single repository. A green grep never caught the
-real failure anyway — an abstraction shaped around one repo because that is the only repo anyone
+**What replaces them once they go is the fixture set.** Six config fixtures will then be the only
+thing standing between this design and being shaped around a single repository. A green grep
+never caught the real failure anyway — an abstraction shaped around one repo because that is the only repo anyone
 saw is invisible to a grep, and it is exactly what the fixtures exist to catch. Add one whenever
 a new repository shape turns up.
 

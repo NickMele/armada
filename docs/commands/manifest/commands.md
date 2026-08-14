@@ -3,8 +3,8 @@
 Run a command the repository declared. The escape hatch that stops Armada needing to know
 everything.
 
-> **Status: shipped** — as `char <name>` today; renames in M1 ([`PHASES.md`](../PHASES.md) §8.3).
-> The dispatcher itself works ([`PLAN.md`](../PLAN.md) §4.5).
+> **Status: shipped** — as `char <name>` today; renames in M1 ([`PHASES.md`](../../PHASES.md) §8.3).
+> The dispatcher itself works ([`PLAN.md`](../../PLAN.md) §4.5).
 
 Every repo has scripts Armada has no opinion about: seeding a database, generating types,
 deploying to staging. Declaring them in `armada.yml` means **an agent working in an unfamiliar
@@ -34,10 +34,10 @@ time, not at run time, so the failure lands where it can be fixed.
 1. Resolves the workspace and its config.
 2. Looks up `<name>` under `commands:`.
 3. Applies templating — the four substitutions and two scoped placeholders of
-   [`PLAN.md`](../PLAN.md) §4.4, which is how a declared command receives its port assignments.
+   [`PLAN.md`](../../PLAN.md) §4.4, which is how a declared command receives its port assignments.
 4. Executes it in a new process group with the inherited environment of
-   [`PLAN.md`](../PLAN.md) §2.4. Secrets are resolved into the process and never into anything
-   Armada writes ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §1.8).
+   [`PLAN.md`](../../PLAN.md) §2.4. Secrets are resolved into the process and never into anything
+   Armada writes ([`ARCHITECTURE.md`](../../ARCHITECTURE.md) §1.8).
 
 ```yaml
 commands:

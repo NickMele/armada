@@ -27,7 +27,7 @@ snapshot, and a machine restoring from one starts a fresh history. Use a remote 
 history to travel.
 
 Everything under `~/.armada/` that is not `guild/` is excluded by construction, because it
-describes this machine ([`PLAN.md`](../PLAN.md) §13.1).
+describes this machine ([`PLAN.md`](../../PLAN.md) §13.1).
 
 ## Output
 

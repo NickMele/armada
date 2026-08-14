@@ -105,7 +105,7 @@ Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
   `commands:` dispatcher. `up`, `down`, `check`, `config` and `explain` are **not built**.
 - **M1 is next** and is restructure plus subtraction. A behaviour change in M1 is a defect.
 - **Guild, Fleet and Helm do not exist.** Their specification is `PLAN.md` §13–§15 and their
-  usage is [`docs/reference.md`](docs/reference.md).
+  usage is [`docs/commands/reference.md`](docs/commands/reference.md).
 
 **`manifest check` blocks M4.** The workflow loop cannot close without it, because a verdict is
 only `PASS` if it carries evidence an external command produced. Manifest's remaining verbs are

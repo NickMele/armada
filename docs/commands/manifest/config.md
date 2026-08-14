@@ -22,7 +22,7 @@ armada manifest config verify [-C <path>] [--json]
 | `verify` | `-C <path>` | Workspace whose `armada.yml` to validate. |
 
 **`scan` is the one command that runs in a repo with no `armada.yml`** and is exempt from
-workspace resolution for exactly that reason ([`PLAN.md`](../PLAN.md) §2.1).
+workspace resolution for exactly that reason ([`PLAN.md`](../../PLAN.md) §2.1).
 
 ## How it works
 

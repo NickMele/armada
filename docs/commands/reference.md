@@ -5,9 +5,9 @@ One page per command. Every page has the same five sections: **Arguments**, **Ho
 
 > **Read the status line on each page.** Armada is partly built. A page describing something
 > that does not exist yet says so at the top and names the milestone
-> ([`PHASES.md`](PHASES.md) §8).
+> ([`PHASES.md`](../PHASES.md) §8).
 
-**Terms are defined once, in [`glossary.md`](glossary.md)** — Job, Drone, Helm, Bridge, Board,
+**Terms are defined once, in [`glossary.md`](../glossary.md)** — Job, Drone, Helm, Bridge, Board,
 and the three status enums. These pages use them without re-explaining them.
 
 ## Top level
@@ -68,7 +68,7 @@ and the three status enums. These pages use them without re-explaining them.
 
 | | |
 |---|---|
-| `--json` | Every command accepts it and answers in the envelope of [`PLAN.md`](PLAN.md) §3.1. Arguments tables omit it. |
+| `--json` | Every command accepts it and answers in the envelope of [`PLAN.md`](../PLAN.md) §3.1. Arguments tables omit it. |
 | `-C <path>` | Run against another workspace instead of the current directory. Manifest commands only. |
 | Paths | Written relative to the repo or as `~/`. Never absolute. |
 
@@ -87,7 +87,7 @@ when the config was wrong and exit `1` when the tests were.
 | `4` | `timeout` | |
 | `5` | `aborted` | |
 | `6` | `environment` | Fix the machine and retry unchanged. |
-| `70` | `armada_bug` | Emitted as `char_bug` today; renames in M1 ([`PHASES.md`](PHASES.md) §8.3). |
+| `70` | `armada_bug` | Emitted as `char_bug` today; renames in M1 ([`PHASES.md`](../PHASES.md) §8.3). |
 | `130` / `141` | — | SIGINT / SIGPIPE. |
 
 A `commands:` child's exit code passes through **verbatim** and is not remapped

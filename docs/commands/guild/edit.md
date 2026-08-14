@@ -25,7 +25,7 @@ armada guild edit [<file>] [--no-commit] [--json]
 3. Commits with a generated message describing what changed.
 
 The commit is why this exists rather than telling you to open the directory yourself: an
-uncommitted guild edit is the first half of the drift failure in [`PHASES.md`](../PHASES.md) §11.
+uncommitted guild edit is the first half of the drift failure in [`PHASES.md`](../../PHASES.md) §11.
 Committing automatically means the only remaining step is a push.
 
 ## Output

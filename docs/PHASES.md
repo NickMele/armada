@@ -188,7 +188,7 @@ binary is installed** — Kubernetes owns that name ([`glossary.md`](glossary.md
 
 **The Bridge — the screen you watch.** `armada bridge` renders every Job, its state, its spend
 against its ceiling, and who needs an answer. It holds no state and adds no capability: every
-key maps to a Fleet verb that already works from a shell ([`helm/bridge.md`](helm/bridge.md)).
+key maps to a Fleet verb that already works from a shell ([`helm/bridge.md`](commands/helm/bridge.md)).
 
 An earlier draft deferred the Bridge indefinitely, on the argument that cmux and the Claude app
 already list sessions. That was answered rather than overruled: a session list is not what the

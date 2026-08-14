@@ -86,12 +86,12 @@ concept keeps its name; the namespace stays clean.
 ## Palette
 
 The Bridge and every other coloured surface use one palette, defined once in
-[`helm/bridge.md`](helm/bridge.md). **Armada targets truecolor and degrades gracefully; it does
+[`commands/helm/bridge.md`](commands/helm/bridge.md). **Armada targets truecolor and degrades gracefully; it does
 not promise the palette survives at 16 colours** — signal amber and flare orange are one ANSI
 step apart and both collapse to bright yellow, taking the `RUNNING` / `STALLED` distinction with
 them. Terminals that matter here (Ghostty, cmux, every modern emulator) are truecolor.
 
 ## See also
 
-[`reference.md`](reference.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9 ·
+[`commands/reference.md`](commands/reference.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) §1.9 ·
 [`PLAN.md`](PLAN.md) §13–§15

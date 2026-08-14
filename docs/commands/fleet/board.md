@@ -7,7 +7,7 @@ Board a Job — take it over yourself.
 **Armada does not own a terminal.** A Job's conversation is an ordinary resumable Claude Code
 session in a git worktree, so cmux, the Claude app, or a plain shell enters it. This command
 tells you how; it does not build a multiplexer, and deliberately so
-([`PHASES.md`](../PHASES.md) §9.1 F1).
+([`PHASES.md`](../../PHASES.md) §9.1 F1).
 
 > **Board does not mean "attach".** The nautical sense is *step aboard and take the wheel*, not
 > *watch over someone's shoulder*. Boarding a Job whose Drone is mid-turn does not stream that
@@ -38,7 +38,7 @@ it runs is a conflict — check [`ls.md`](ls.md) for `PAUSED` or `BLOCKED` befor
 [`answer.md`](answer.md) if all you have is a decision.
 
 **Boarding a Job with no live Drone is the ordinary case**, not a recovery path. A Job persists
-without a process ([`PLAN.md`](../PLAN.md) §14.1), so most boarding happens after a Drone has
+without a process ([`PLAN.md`](../../PLAN.md) §14.1), so most boarding happens after a Drone has
 finished its turn and exited.
 
 ## Output

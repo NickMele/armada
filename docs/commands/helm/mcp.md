@@ -1,10 +1,10 @@
 # The MCP toolbelt
 
 One MCP server. Tools namespaced by module, so the tool list has the same shape as the system
-([`ARCHITECTURE.md`](../ARCHITECTURE.md) §1.9).
+([`ARCHITECTURE.md`](../../ARCHITECTURE.md) §1.9).
 
 > **Status: not built — M3.** Targets `rmcp` v3.x; **re-check the API before starting**, it has
-> moved fast ([`traps.md`](../traps.md)).
+> moved fast ([`traps.md`](../../traps.md)).
 
 ## Synopsis
 
@@ -41,14 +41,14 @@ Drones is a fork bomb with a budget.
 |---|---|
 | `fleet.report` | Append progress to its own Job record. |
 | `fleet.ask_human` | Raise an entry to the inbox and wait. |
-| `fleet.verdict` | Emit a step verdict ([`PLAN.md`](../PLAN.md) §14.3). |
+| `fleet.verdict` | Emit a step verdict ([`PLAN.md`](../../PLAN.md) §14.3). |
 
 ## How it works
 
 Stateless: each request is self-contained, with per-request capability negotiation and no
 session to hold. That happens to match how the CLI is already built — a command is parse → call
 core → render, and a stateless server is the same shape with a different renderer
-([`ARCHITECTURE.md`](../ARCHITECTURE.md) §1.3).
+([`ARCHITECTURE.md`](../../ARCHITECTURE.md) §1.3).
 
 Long operations use the **Tasks extension** rather than a bespoke polling protocol. A real
 `manifest check` runs well past ten minutes, and the extension exists for exactly that:
@@ -56,7 +56,7 @@ asynchronous work with polling, mid-flight input and durable handles.
 
 ## Output
 
-Each tool answers in the `--json` envelope of [`PLAN.md`](../PLAN.md) §3.1, so an MCP caller and
+Each tool answers in the `--json` envelope of [`PLAN.md`](../../PLAN.md) §3.1, so an MCP caller and
 a shell caller parse identically.
 
 ## Dependencies

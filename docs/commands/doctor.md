@@ -2,7 +2,7 @@
 
 Report what this machine is missing or has drifted on. Read-only.
 
-> **Status: not built — M2.** ([`PHASES.md`](PHASES.md) §8.4)
+> **Status: not built — M2.** ([`PHASES.md`](../PHASES.md) §8.4)
 
 ## Synopsis
 
@@ -25,7 +25,7 @@ rest.
 2. **Layout** — `~/.armada/` exists with its four subdirectories and `machine.yml`.
 3. **Guild drift** — is `~/.armada/guild/` behind, ahead of, or diverged from its remote, and by
    how many commits. This is the check that earns the command: two machines silently diverging
-   is the guild's main failure mode ([`PHASES.md`](PHASES.md) §11).
+   is the guild's main failure mode ([`PHASES.md`](../PHASES.md) §11).
 4. **Projection** — for the current workspace, whether the guild content Claude Code is
    actually reading matches what the guild says it should be.
 
