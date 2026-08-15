@@ -3797,7 +3797,7 @@ machine-readable: when the task system in
 [`002-tasks.md`](reserved/002-tasks.md) is built, these become its first rows.
 
 
-### 15.4 The persona, and the four things it decides
+### 15.4 The persona, and the five things it decides
 
 Helm *is* a persona plus a toolbelt. The persona is guild content — yours, editable, synced
 (§13.1) — but Armada ships a starter, because a guild built by `armada guild init` has to
@@ -3805,7 +3805,7 @@ contain something on the first run. It lives at
 [`templates/guild/subagents/helm.md`](../templates/guild/subagents/helm.md) and is copied into
 `~/.armada/guild/subagents/helm.md`, after which it is yours and Armada does not touch it again.
 
-Four behaviours were decided rather than left to the model, because each one has a failure mode
+Five behaviours were decided rather than left to the model, because each one has a failure mode
 that only shows up after weeks of use:
 
 | Decision | Why it is not a preference |
@@ -3814,6 +3814,12 @@ that only shows up after weeks of use:
 | **Spawn without asking when classification is confident.** Confirm when confidence is low, or when the workflow is `design` or `plan`. | You asked for work; making you approve each spawn hands the scheduling back. The two exceptions are where an unconfirmed spawn wastes a budget: a misclassification, and a workflow that always ends at you anyway (§14.4). |
 | **Never do the work.** A one-line fix still gets a Job. | §15.2's argument applied to actions rather than reading. A Helm that edits files fills its own context, and a full-context Helm forgets the fleet — the one thing nothing else can do for you. |
 | **Report failure with evidence; never re-spawn.** | The workflow's ceiling already governs retries (§14.3). By the time it reaches Helm the rope has run out, and an automatic retry doubles the bill for the same wrong approach before you have seen the first failure. |
+| **Choose a model tier per Job, deliberately.** No global default. | Every capability at the top tier works, but costs more than an alternative that also works. Fixing the tier once for the whole fleet is what turns an orchestrator into overhead instead of leverage — the choice belongs at the point work is decomposed. |
+
+**The tier policy itself is guild content, not spec.** Which work goes to which tier, and the
+rule for a Job that is already running over-provisioned, are exactly the kind of thing a guild
+edits as it learns — written into the persona at
+[`templates/guild/subagents/helm.md`](../templates/guild/subagents/helm.md), not fixed here.
 
 **"Never do the work" is enforced structurally, not asked for.** The persona's `tools:` list
 contains Armada's MCP tools and nothing else — no `Read`, no `Edit`, no `Bash`. A rule the

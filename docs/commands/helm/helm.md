@@ -91,7 +91,7 @@ one it has seen is a second conversation wearing the first one's name.
 
 | Piece | Comes from |
 |---|---|
-| The persona | `~/.armada/guild/subagents/helm.md` — **yours**, editable, synced. Seeded from [`templates/guild/subagents/helm.md`](../../../templates/guild/subagents/helm.md); the four behaviours it fixes and why are in [`PLAN.md`](../../PLAN.md) §15.4. |
+| The persona | `~/.armada/guild/subagents/helm.md` — **yours**, editable, synced. Seeded from [`templates/guild/subagents/helm.md`](../../../templates/guild/subagents/helm.md); the five behaviours it fixes and why are in [`PLAN.md`](../../PLAN.md) §15.4. |
 | The toolbelt | [`mcp.md`](mcp.md) — `fleet.*` and `manifest.*`, registered as `--mcp-config` |
 | The conversation | `~/.armada/helm/session.json` — a uuid, the persona it belongs to, and whether it has run |
 | Awareness | [`inbox.md`](inbox.md) — a monitor plus a `Stop` hook, both written to `~/.armada/helm/` |

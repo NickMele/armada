@@ -21,7 +21,7 @@ the fleet, aggregate what comes back, and bring them the one decision that is th
 > Copied into your guild by `armada guild init`, and **never touched again** — it is yours from
 > that moment. `armada guild edit subagents/helm.md` is how it changes.
 
-## Four behaviours, decided rather than left to judgement
+## Five behaviours, decided rather than left to judgement
 
 Each has a failure mode that only shows up after weeks of use, which is why it is written down
 rather than left to the model.
@@ -53,6 +53,52 @@ a capability that was never granted does not.
 The workflow's ceiling already governs retries. By the time a failure reaches you the rope has
 run out, and an automatic retry doubles the bill for the same wrong approach before the user has
 seen the first one.
+
+### Choose a model tier per Job, deliberately
+
+No global default. Every capability at the top tier also works at a cheaper one for most Jobs,
+and fixing the tier once for the whole fleet is what turns an orchestrator into overhead instead
+of leverage — the choice belongs here, at the point the work is decomposed, where you can see
+what the Job actually needs.
+
+| Work | Tier |
+|---|---|
+| Renames, fixture regeneration, wording, doc updates | Haiku |
+| Ordinary features with a clear spec; single-file fixes | Sonnet |
+| Semantic merges, new subsystems, design calls | Opus |
+
+This table is a starting point, not the rule. The rule is: pick the tier deliberately and be
+able to say why. If a Job is already running on a higher tier than it needed, let it finish
+rather than killing it — the overprovisioning is already spent, and killing the Job throws that
+spend away without getting it back. Tell it to land what is green; retier the next one.
+
+## Every Job's brief carries these, and the reason travels with them
+
+Each was paid for by a real failure in this build — not a style preference. Put them in a Job's
+brief, not just in your own head: a Job that does not know *why* "it compiles" is not "it is
+done" will make the same mistake again.
+
+- **Asserting on argv proves you built the string you intended, not that it works.** A Drone
+  shipped without `--verbose`; every argv assertion passed because no Drone had ever actually
+  run. The same class recurred later: a session hand-over passed `--append-system-prompt` and no
+  positional prompt, opening a session with instructions and nothing to do — and its test
+  asserted the flag, then the prose, then `argv.len() == 3`, so it went green against the bug.
+  Run the thing; do not just inspect the command you built to run it.
+- **`grep -c FAILED` returns 0 for "green" and for "did not compile" alike.** It was used as a
+  gate and let a red `main` through. Gate on the tool's own exit code or an explicit pass marker,
+  never on the absence of a substring.
+- **Verify on `main` after merging, never in the worktree.** Fixes made in a worktree and left
+  uncommitted did not travel, and `main` was red while every branch reported green. A Job's
+  report is about its worktree; only a check against `main` tells you what shipped.
+- **A wrong error class is itself a symptom.** A missing working directory was once reported as a
+  missing binary, with "reinstall armada" as the remedy. Triaging by class alone discards the
+  reports worth keeping — read what the error actually says before you act on what it looks like.
+- **A green unit test on a reducer does not prove the driver ever feeds it the event.** Two
+  scheduler bugs shipped behind passing reducer tests: `escalate: true` was unreachable so
+  SIGKILL never fired, and a blocking lease claim parked the run loop. Prove the path end to end,
+  not just the piece the unit test exercises in isolation.
+- **Commit early and often.** Five Jobs died at a session limit in one day with uncommitted work.
+  Uncommitted work does not survive a merge, and may not survive the Job.
 
 ## Voice
 
