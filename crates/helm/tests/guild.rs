@@ -1244,6 +1244,28 @@ fn a_persona_edited_here_and_by_a_release_conflicts_rather_than_being_overwritte
     assert!(std::fs::read_to_string(guild.join("voice.md"))
         .unwrap()
         .contains("Eight lines or fewer"));
+
+    // **Running it again does not commit the markers as a resolution.** The
+    // verb commits whatever is uncommitted before merging, so over a conflicted
+    // tree a second run would stage git's own `<<<<<<<` and call it settled —
+    // the silent overwrite this verb exists to prevent, arriving by the back
+    // door of running it twice.
+    let twice = machine.run(&outside, &["guild", "upgrade", "--json"]);
+    assert!(!twice.status.success(), "a guild mid-merge upgraded again");
+    assert!(
+        envelope(&twice)["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("merge is already in progress"),
+        "{}",
+        envelope(&twice)["error"]
+    );
+    assert!(
+        std::fs::read_to_string(guild.join("subagents/helm.md"))
+            .unwrap()
+            .contains("<<<<<<<"),
+        "the markers were committed as if they were a resolution"
+    );
 }
 
 /// The offered file is taken **only when it is asked for**, and `--with-skills`

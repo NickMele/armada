@@ -500,6 +500,23 @@ pub fn upgrade(
         }
     }
 
+    // **A merge already in progress is refused, and this one is not defensive
+    // padding.** The next line commits whatever is uncommitted — which over a
+    // conflicted tree would stage git's own `<<<<<<<` markers and commit them
+    // as if they were a resolution. That is the silent overwrite this verb
+    // exists to make impossible, arriving by the back door of running the verb
+    // twice.
+    if guild.root().join(".git/MERGE_HEAD").exists() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: shown(guild.root()),
+            message: "a merge is already in progress in this guild".to_string(),
+            next_action: Some(
+                "resolve it in ~/.armada/guild and `git commit` there, then retry".to_string(),
+            ),
+        });
+    }
+
     // **Whatever is uncommitted is committed first**, exactly as `guild push`
     // does it and for the same reason: git refuses to merge over a dirty tree,
     // and an edit made outside `armada guild edit` is not the upgrade's to
