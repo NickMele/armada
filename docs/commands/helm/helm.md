@@ -2,9 +2,9 @@
 
 The one agent you talk to.
 
-> **Status: built — M3, except entering.** The launch is assembled and verified, the inbox is
-> wired and the conversation is remembered. **`--exec` is refused for now**, and no path in this
-> binary opens a Claude Code session. Run the printed command yourself to enter.
+> **Status: shipped.** The launch is assembled and verified, the inbox is wired and the
+> conversation is remembered. **`--exec` enters it — once this machine has said yes.** It is off
+> by default; [`enable.md`](enable.md) is the switch, and a fresh install has not flipped it.
 
 **Helm is a conversation, not a screen.** It is a Claude Code session, which is the whole
 design: it needs no interface work, so it ships with Fleet instead of after everything else. The
@@ -27,11 +27,11 @@ armada helm [--agent <name>] [--new] [--json]
 |---|---|---|---|
 | `--new` | flag | off | Start a fresh Helm conversation instead of resuming. |
 | `--agent <name>` | subagent name | `helm` | Use a different persona from `~/.armada/guild/subagents/`. |
-| `--exec` | flag | — | Become the session. **Refused for now**; see below. |
+| `--exec` | flag | — | Become the session. **Gated by a machine switch**; see below. |
 
 ## Assembling is free; entering is not
 
-`armada helm` writes the configuration, reports the command, and **starts nothing**.
+`armada helm` writes the configuration, reports the command, and **starts nothing by itself**.
 
 | | Costs |
 |---|---|
@@ -41,26 +41,29 @@ armada helm [--agent <name>] [--new] [--json]
 A verb that opened a Claude Code session as a side effect of being run can be reached by a
 script, by a shell alias, by a test harness and by a mistyped line, and each of those spends.
 
-**So there is no path in the shipped binary that starts one.** `--exec` is known to the parser
-and refused:
+**So `--exec` is refused unless this machine has said otherwise.** Whether it may become a
+session is `helm.enter` in `~/.armada/machine.yml` — off on a fresh install, flipped by
+[`armada helm enable`](enable.md) and put back by `armada helm disable`. Off, it is refused by
+name:
 
 ```
 armada helm --exec
 -> exit 2
-   bad_invocation  `armada helm --exec` is switched off until the Bridge is fixed:
-                   entering opens a Claude Code session, and no path in this binary
-                   starts one
-   next: `armada helm` assembles and prints the command; run it yourself to enter
+   bad_invocation  `armada helm --exec` is off on this machine: entering opens a Claude
+                   Code session, and this machine has not said yes to that yet
+   next: `armada helm enable` turns it on here; `armada helm` alone still only assembles
+         and prints the command
 ```
 
 **Refused by name, never as an unknown flag.** A caller told *unknown flag* concludes Armada is
 broken or that they typed it wrong, and goes looking for the spelling that works. Told that it
-is switched off and why, they either wait or paste the command themselves — which is the honest
-option, and is what `next:` offers.
+is off and how to turn it on, they either run `enable` or paste the printed command themselves —
+which is the honest option, and is what `next:` offers.
 
-**This is a gate on entering, not a rollback.** The argv, the four documents and the
-conversation's record are built and verified exactly as they will be when it comes back on.
-Turning it on is deleting a refusal and calling two functions that already exist.
+**On, the process is replaced.** The argv, the four documents and the conversation's record are
+built and verified exactly the same way whether the switch is on or off; `--exec` on a machine
+that has enabled it records that the conversation has started and then execs `claude`, and this
+process does not come back.
 
 The flag word and the reason live in one place each — `verbs::helm::ENTER` and
 `ENTER_IS_OFF` — which the parser, this page, the render's summary line and the refusal all
@@ -142,11 +145,13 @@ Four rows and the command.
 
   enter with claude --agent helm --mcp-config …
 
-OK  helm · conversation new · nothing started; --exec is switched off until the Bridge is fixed
+OK  helm · conversation new · nothing started; --exec is off on this machine
 ```
 
-The last line is load-bearing. Four `WRITTEN` rows and a launch command, without it, read
-exactly like a Helm that is now running.
+The last line is load-bearing — and it names the actual state. On a machine that has run
+`armada helm enable` it reads `--exec is on — it will become the session` instead; either way,
+four `WRITTEN` rows and a launch command, without it, read exactly like a Helm that is now
+running.
 
 `--json` carries the same facts plus `argv` as a vector — a `$HOME` with a space in it is
 ordinary on macOS, and a consumer that had to split the printed line back into words would break
@@ -164,10 +169,12 @@ on exactly those machines.
 
 ## Exit codes
 
-The process is always Armada's and exits normally — nothing here replaces it.
+`0` assembled — on a machine that has not enabled `--exec`, or on a launch that never passed it.
+On a machine that has, and passed `--exec`, this process is replaced by `claude` and the exit
+code is whatever the session exits with — there is no envelope from that launch, because nothing
+that could print one is still running.
 
-`2` `bad_invocation` — `--exec`, which is refused. When it comes back on, that path will replace
-the process with `claude` and the exit code will be whatever the session exits with.
+`2` `bad_invocation` — `--exec`, on a machine that has not run `armada helm enable`.
 
 `3` `bad_config` — no guild, no such persona, or a persona that is not on Claude Code's load
 path. The three are reported separately, because three different commands fix them.
@@ -176,4 +183,4 @@ Full table and the one rule behind it: [`reference.md`](../reference.md).
 
 ## See also
 
-[`bridge.md`](bridge.md) · [`mcp.md`](mcp.md) · [`inbox.md`](inbox.md) · [`../fleet/spawn.md`](../fleet/spawn.md)
+[`enable.md`](enable.md) · [`bridge.md`](bridge.md) · [`mcp.md`](mcp.md) · [`inbox.md`](inbox.md) · [`../fleet/spawn.md`](../fleet/spawn.md)

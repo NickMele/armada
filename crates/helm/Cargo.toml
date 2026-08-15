@@ -116,6 +116,11 @@ rmcp = { version = "3.1.2", default-features = false, features = [
 # against a second one.
 schemars = "1"
 serde = { workspace = true }
+# **Helm's own section of `~/.armada/machine.yml`** (`src/machine.rs`) — the
+# `helm.enter` switch that gates `--exec`. The same parser `armada.yml` and
+# every other reader of `machine.yml` uses (`PLAN.md` §4.1.1, decision 5), so
+# this crate is not carrying a second YAML implementation for one boolean.
+serde_yaml_ng = { workspace = true }
 # **The runtime `rmcp` is written against, and nothing more.** `rt` for the
 # single-threaded executor `mcp serve` builds, `io-std` for the stdio transport,
 # `sync`/`time` for what the Tasks extension's manager already uses. No

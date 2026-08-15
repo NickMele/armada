@@ -1894,10 +1894,34 @@ pub struct HelmData {
     pub argv: Vec<String>,
     /// What was wired, one row each.
     pub results: Vec<Wired>,
-    /// Whether this invocation entered the session. **Always false**: the
-    /// `--exec` path replaces the process, so an envelope that said `true` is
-    /// one nothing could ever have written.
+    /// Whether this invocation entered the session. **Always false**: a
+    /// successful `--exec` replaces the process before an envelope is ever
+    /// printed, so `true` is a value nothing could ever have written —
+    /// entering shows up as this process no longer existing, not as a field.
     pub launched: bool,
+    /// Whether `--exec` may become this session, **on this machine, right
+    /// now** — `helm.enter` in `~/.armada/machine.yml`
+    /// (`docs/commands/helm/enable.md`). Off on a fresh install.
+    pub entering: bool,
+}
+
+/// `armada helm enable` and `armada helm disable` — the machine switch that
+/// gates `--exec`, flipped and reported.
+///
+/// **A fact about this machine, not about you.** It lives in
+/// `~/.armada/machine.yml`, which never syncs (`PLAN.md` §13.1): the guild
+/// travels between machines and this does not, because "may a Claude Code
+/// session start here, spending against a real account, without me watching
+/// it type the command" is a question with a different answer on a laptop you
+/// are sitting at and a box you are not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct HelmSwitchData {
+    /// The value after this run.
+    pub entering: bool,
+    /// Whether this run actually changed it — `false` when it already held
+    /// this value, so `armada helm enable` twice in a row does not claim to
+    /// have done something the second time.
+    pub changed: bool,
 }
 
 /// Whether entering Helm continues yesterday's conversation or starts one.

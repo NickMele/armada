@@ -143,6 +143,25 @@ pub enum Invocation {
     Bridge(Box<Bridge>),
     /// `armada helm` — assemble the orchestrator's launch.
     Helm(Box<Helm>),
+    /// `armada helm enable` — let `--exec` become a session on this machine.
+    ///
+    /// **Not a field on [`Helm`], and not nested under [`GuildInvocation`]'s
+    /// shape.** `enable`/`disable` do not take the launch's own flags — no
+    /// `--agent`, no `--new` — and folding them into [`Helm`] would make every
+    /// reader of that struct account for a mode the launch itself never uses.
+    /// Two small top-level variants, exactly as [`Invocation::Doctor`] and
+    /// [`Invocation::Report`] are, cost less than a shared shape neither
+    /// verb quite fits.
+    HelmEnable {
+        /// Emit the envelope.
+        json: bool,
+    },
+    /// `armada helm disable` — the opposite, and the default on a fresh
+    /// install.
+    HelmDisable {
+        /// Emit the envelope.
+        json: bool,
+    },
     /// `armada guild <verb>`.
     Guild(Box<GuildInvocation>),
     /// `armada fleet <verb>`.
@@ -782,7 +801,16 @@ pub const FLEET_VERBS: [&str; 11] = [
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 6] = ["init", "doctor", "bridge", "helm", "failures", "report"];
+pub const TOP_LEVEL_VERBS: [&str; 8] = [
+    "init",
+    "doctor",
+    "bridge",
+    "helm",
+    "helm enable",
+    "helm disable",
+    "failures",
+    "report",
+];
 
 /// `armada failures`' sub-verbs.
 ///
@@ -1490,6 +1518,33 @@ fn bridge(
 /// **There is still no `helm` binary**, and there never will be. Kubernetes owns
 /// that name and Armada runs on machines that have it (PLAN.md §15.1).
 fn helm(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocation, ParseFailure> {
+    // **`enable`/`disable` are read before the launch's own flags are**,
+    // because `armada helm enable --help` has to draw *that* verb's page and
+    // not the launch's — and because neither takes `--new` or `--agent`, so
+    // they are answered here rather than folded into [`Helm`]'s own shape.
+    if let Some(first) = rest.first() {
+        if !first.starts_with('-') {
+            let tail = &rest[1..];
+            let mut switch = |verb: &str| -> Result<Invocation, ParseFailure> {
+                if wants_help(tail) {
+                    if let Some(topic) = help_page("helm", verb) {
+                        return Ok(Invocation::Help(topic));
+                    }
+                }
+                let parsed = flags(tail, json, color, &format!("helm {verb}"), &[], &[])?;
+                Ok(match verb {
+                    "enable" => Invocation::HelmEnable { json: parsed.json },
+                    _ => Invocation::HelmDisable { json: parsed.json },
+                })
+            };
+            match first.as_str() {
+                "enable" => return switch("enable"),
+                "disable" => return switch("disable"),
+                _ => {}
+            }
+        }
+    }
+
     if wants_help(rest) {
         if let Some(topic) = help_page("", "helm") {
             return Ok(Invocation::Help(topic));

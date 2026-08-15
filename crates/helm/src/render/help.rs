@@ -120,7 +120,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 38] = [
+const PAGES: [Page; 40] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -924,13 +924,13 @@ const PAGES: [Page; 38] = [
         synopsis: "helm",
         summary: "the one agent you talk to: wire the toolbelt, report the launch",
         usage: &["armada helm [--agent <name>] [--new]", "armada helm --json"],
-        // **The flag is listed, and listed as refused.** Leaving it off the page
+        // **The flag is listed, and listed as gated.** Leaving it off the page
         // would make `armada helm --exec` read as a typo worth retrying, which
         // is the reading the refusal itself is written against.
         flags: &[
             (
                 crate::verbs::helm::ENTER,
-                "become the session — refused for now; see NOTES",
+                "become the session — off until `armada helm enable`; see NOTES",
             ),
             ("--new", "start a fresh conversation instead of resuming"),
             (
@@ -953,12 +953,54 @@ const PAGES: [Page; 38] = [
             ),
         ],
         notes: &[
-            "It starts nothing. The launch is assembled and verified, and entering",
-            "is switched off until the Bridge is fixed: --exec is refused and no",
-            "path in this binary opens a session. Run the printed command to enter.",
+            "It starts nothing by itself. The launch is assembled and verified;",
+            "--exec is what would enter it, and it is gated by a machine switch —",
+            "off on a fresh install. `armada helm enable` turns it on here;",
+            "`armada helm disable` puts it back. See their own --help.",
             "It is the same conversation each day; the id lives in ~/.armada/helm/.",
             "Its toolbelt is fleet.* and manifest.*; classification is Fleet's job.",
             "There is no `helm` binary. Kubernetes owns that name on PATH.",
+        ],
+    },
+    Page {
+        path: "helm enable",
+        synopsis: "enable",
+        summary: "let --exec become a session, on this machine",
+        usage: &["armada helm enable [--json]"],
+        flags: &[],
+        examples: &[
+            (
+                "armada helm enable",
+                "then armada helm --exec becomes claude, on this machine",
+            ),
+            (
+                "armada helm enable && armada helm --exec",
+                "the whole sequence a script would run",
+            ),
+        ],
+        notes: &[
+            "Writes one boolean to ~/.armada/machine.yml, under helm: — the file",
+            "that never syncs, because whether a session may open here is a fact",
+            "about this machine and not a preference that travels with your",
+            "guild to every machine it has ever been pulled onto.",
+            "Off is the default; a fresh install cannot exec until this runs.",
+            "It does not touch the guild, the persona, or wire the inbox — that",
+            "is still armada helm. armada helm disable puts the switch back.",
+        ],
+    },
+    Page {
+        path: "helm disable",
+        synopsis: "disable",
+        summary: "the opposite of enable — the default on a fresh install",
+        usage: &["armada helm disable [--json]"],
+        flags: &[],
+        examples: &[(
+            "armada helm disable",
+            "armada helm --exec goes back to being refused, on this machine",
+        )],
+        notes: &[
+            "Writes the same boolean armada helm enable does, false. A machine",
+            "that has never run enable is already in this state.",
         ],
     },
 ];
@@ -1012,8 +1054,13 @@ fn verbs_of(module: &str) -> Vec<(&'static str, &'static str)> {
     // beside two verbs they have nothing in common with. They share a heading,
     // so the one page a reader meets Armada on says what each is for — and says
     // it in the pair the design keeps insisting on: Helm is where you talk, the
-    // Bridge is what you watch (PLAN.md §15.1).
-    const ORCHESTRATION: [&str; 2] = ["helm", "bridge"];
+    // Bridge is what you watch.
+    //
+    // **`enable`/`disable` sit beside `helm` rather than under a `THIS
+    // MACHINE` entry of their own**, because the switch they flip has no
+    // meaning apart from the verb it gates — a reader who has never seen
+    // `armada helm` has no reason to be looking for `armada helm enable`.
+    const ORCHESTRATION: [&str; 4] = ["helm", "helm enable", "helm disable", "bridge"];
     if module == "orchestration" {
         return ORCHESTRATION
             .iter()

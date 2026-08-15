@@ -54,10 +54,10 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, FailureData,
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
-    GuildItemData, GuildListData, GuildSyncData, Headline, HelmData, InboxData, InitData,
-    InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData,
-    ReportData, ResultRow, ResumeData, ScanData, ServicesData, ShowData, SkillsData, SpawnData,
-    StatusData, TickData, Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
+    GuildItemData, GuildListData, GuildSyncData, Headline, HelmData, HelmSwitchData, InboxData,
+    InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData, Projection,
+    ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData, ShowData, SkillsData,
+    SpawnData, StatusData, TickData, Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, State as FailureState};
@@ -114,6 +114,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
         Output::Bridge(envelope) => bridge(envelope, style, width),
         Output::Helm(envelope) => helm(envelope, style, width),
+        Output::HelmSwitch(envelope) => helm_switch(envelope, style),
         Output::Show(envelope) => show(envelope, style, width),
         Output::Board(envelope) => board(envelope, style, width),
         Output::Kill(envelope) => kill(envelope, style, width),
@@ -1026,18 +1027,47 @@ fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
             format!("conversation {}", data.conversation.word().to_lowercase()),
             // **Said out loud, because the absence of a session is the point.**
             // A reader who assumed `armada helm` had opened one would sit
-            // waiting for a prompt that is never coming — and one who assumed
-            // `--exec` would open it would find out by typing it. The reason is
-            // read from the one constant every surface reads it from, so this
-            // line cannot drift from the refusal it describes.
-            format!(
-                "nothing started; {} is {}",
-                crate::verbs::helm::ENTER,
-                crate::verbs::helm::ENTER_IS_OFF
-            ),
+            // waiting for a prompt that is never coming. Off reads from the one
+            // constant the refusal itself reads, so this line cannot drift from
+            // what typing `--exec` would actually get; on says so plainly,
+            // because a reader about to type `--exec` on this machine deserves
+            // to know it will not stop at printing the command.
+            match data.entering {
+                false => format!(
+                    "nothing started; {} is {}",
+                    crate::verbs::helm::ENTER,
+                    crate::verbs::helm::ENTER_IS_OFF
+                ),
+                true => format!(
+                    "nothing started; {} is on — it will become the session",
+                    crate::verbs::helm::ENTER
+                ),
+            },
         ],
     ));
     out
+}
+
+/// `armada helm enable` and `armada helm disable` — one line, because the
+/// whole answer is one boolean.
+fn helm_switch(envelope: &Envelope<HelmSwitchData>, style: Style) -> String {
+    let data = &envelope.data;
+    let state = match data.entering {
+        true => "on",
+        false => "off",
+    };
+    let changed = match data.changed {
+        true => "",
+        false => " — already there",
+    };
+    summary(
+        style,
+        envelope.status,
+        &[format!(
+            "helm {} is {state} on this machine{changed}",
+            crate::verbs::helm::ENTER,
+        )],
+    )
 }
 
 // ------------------------------------------------------------------- fleet show

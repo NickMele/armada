@@ -192,6 +192,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Doctor { json, .. } => *json,
         Invocation::Bridge(bridge) => bridge.json,
         Invocation::Helm(helm) => helm.json,
+        Invocation::HelmEnable { json } | Invocation::HelmDisable { json } => *json,
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Failures(failures) => failures.json(),
@@ -393,6 +394,19 @@ fn dispatch(
                 new: options.new,
             },
         );
+    }
+
+    // **`enable`/`disable` are machine-scoped for the same reason `helm`
+    // itself is, and need less of `Where` than it does.** Both write one
+    // boolean to `~/.armada/machine.yml` and read nothing about the guild, the
+    // persona or the fleet — so unlike the block above, neither needs a boot
+    // id, and a machine that cannot answer `sysctl kern.bootsessionuuid`
+    // (`no_boot_id`) must still be able to flip this switch.
+    if let Invocation::HelmEnable { .. } = &invocation {
+        return verbs::helm::enable(&armada_manifest::machine::armada_home(home));
+    }
+    if let Invocation::HelmDisable { .. } = &invocation {
+        return verbs::helm::disable(&armada_manifest::machine::armada_home(home));
     }
 
     // **Fleet is machine-scoped too, and for its own reason.** A Job's worktree
@@ -706,6 +720,8 @@ fn dispatch(
         | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),
         Invocation::Bridge(_)
         | Invocation::Helm(_)
+        | Invocation::HelmEnable { .. }
+        | Invocation::HelmDisable { .. }
         | Invocation::Failures(_)
         | Invocation::Report { .. } => {
             unreachable!("machine-scoped, and handled above")
@@ -713,31 +729,77 @@ fn dispatch(
     }
 }
 
-/// `armada helm` — assemble the launch, and refuse to enter it.
+/// `armada helm` — assemble the launch, and enter it only if this machine has
+/// said yes.
 ///
-/// **There is no exec here, and that is the point.** The verb writes the
-/// configuration, reports the command and returns; `--exec` is recognised and
-/// refused by [`verbs::helm::entering_is_off`]. No path in this binary starts a
-/// Claude Code session.
+/// **Whether `--exec` runs at all is decided before the verb runs, not
+/// after.** A refusal that had already written four configuration files would
+/// have changed the machine in order to say no — the same rule `armada doctor
+/// --fix` follows, and the rule the no-guild refusal inside the verb follows
+/// one level down. So [`verbs::helm::entering_allowed`] is read first, and
+/// [`verbs::helm::entering_is_off`] is returned before [`verbs::helm::run`]
+/// ever touches disk.
 ///
-/// **Refused before the verb runs, not after.** A refusal that had already
-/// written four configuration files would have changed the machine in order to
-/// say no — the same rule `armada doctor --fix` follows, and the rule the
-/// no-guild refusal inside the verb follows one level down.
-///
-/// **This is a gate on entering, not a rollback.** Everything the exec path
-/// needs is built, tested and one call away: the argv is in the envelope, and
-/// `verbs::helm::mark_started` is the record-writer it has to call first —
-/// first, because the process is replaced and there is no after.
+/// **Off it stops there; on, it becomes [`helm_exec`].** The switch decides
+/// whether the process is ever replaced — it does not change what
+/// `armada helm` writes or reports either way, which is what keeps `--json`
+/// honest about a launch that was merely assembled.
 fn helm(
     place: &verbs::helm::Where,
     options: &args::Helm,
     wanted: &verbs::helm::Options,
 ) -> Result<Output, ArmadaError> {
-    if options.exec {
+    if options.exec && !verbs::helm::entering_allowed(&place.armada_home) {
         return Err(verbs::helm::entering_is_off());
     }
-    verbs::helm::run(&SystemClock, place, wanted)
+    let output = verbs::helm::run(&SystemClock, place, wanted)?;
+    if options.exec {
+        // **The process is replaced.** This returns only if the exec itself
+        // failed — a successful one never comes back.
+        helm_exec(place, &output)?;
+    }
+    Ok(output)
+}
+
+/// `armada helm --exec`, once the switch says yes: record that the
+/// conversation has started, then become `claude`.
+///
+/// **`mark_started` runs before the exec, never after — there is no after.**
+/// A process that has just been replaced cannot come back to write a file, so
+/// the record has to already be true the moment it might become permanent.
+///
+/// It returns only if the exec **failed**, exactly as `armada fleet board
+/// --exec`'s [`board_exec`] does not return on success — the same shape,
+/// arriving at the other process this binary can become.
+fn helm_exec(place: &verbs::helm::Where, output: &Output) -> Result<(), ArmadaError> {
+    use std::os::unix::process::CommandExt;
+
+    let Output::Helm(envelope) = output else {
+        return Ok(());
+    };
+    let data = &envelope.data;
+    verbs::helm::mark_started(
+        place,
+        &armada_core::helm::Session {
+            uuid: data.uuid.clone(),
+            agent: data.agent.clone(),
+            // Overwritten to `true` by `mark_started` regardless of what is
+            // passed here; kept `false` because that is what a launch this
+            // verb just assembled actually knows.
+            started: false,
+        },
+    )?;
+
+    let error = std::process::Command::new(&data.argv[0])
+        .args(&data.argv[1..])
+        .exec();
+
+    Err(ArmadaError {
+        class: ErrClass::Environment,
+        r#where: data.argv.join(" "),
+        message: format!("could not enter Helm: {error}"),
+        next_action: Some(format!("run it yourself: {}", data.argv.join(" "))),
+    })
 }
 
 /// `armada fleet reap` — the preview, the answer to it, and then the reap.
@@ -1113,16 +1175,21 @@ fn on_screen(
             }
         }
 
-        // **`c` is honest about what is off, and it says so on the screen
-        // rather than by ending it.** `armada helm` is built — it assembles a
-        // launch and prints the command — but *entering* one opens a Claude
-        // Code session and no path in this binary starts one
-        // (`verbs::helm::entering_is_off`). A key that dropped into a session
-        // would be that path, so `c` names the verb to run instead.
-        Action::Chat => Done::said(
-            "entering is off — run `armada helm` yourself; enter boards the selected Job"
-                .to_string(),
-        ),
+        // **`c` reports the actual switch rather than a fixed sentence, and it
+        // says so on the screen rather than by ending it.** The Bridge does
+        // not exec on this key — dropping into a session from inside another
+        // full-screen view is its own piece of work and not this one's — so
+        // `c` names the verb to run instead, and names it correctly whichever
+        // way `armada helm enable`/`disable` last left it.
+        Action::Chat => Done::said(match verbs::helm::entering_allowed(&place.armada_home) {
+            true => {
+                "`armada helm --exec` is on for this machine — run it yourself to enter".to_string()
+            }
+            false => format!(
+                "`armada helm --exec` is off — `{}` turns it on; enter boards the selected Job",
+                verbs::helm::ENABLE
+            ),
+        }),
     }
 }
 

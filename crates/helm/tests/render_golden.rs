@@ -1932,6 +1932,7 @@ fn helm_matches_its_fixture() {
                 },
             ],
             launched: false,
+            entering: false,
         },
     )));
     assert_render("helm", &output);

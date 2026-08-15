@@ -6,7 +6,7 @@
 //! adapter calls go in, and the one refusal — no guild, no persona — that has to
 //! happen before any of them (`ARCHITECTURE.md` §1.3).
 //!
-//! # Entering is a separate act, and right now it is switched off
+//! # Entering is a separate act, gated by a switch you control
 //!
 //! `armada helm` writes the configuration, reports the command, and **starts
 //! nothing**. Entering the session is [`ENTER`], and the split is not caution
@@ -21,16 +21,26 @@
 //! reached by a script, by a shell alias, by a test harness and by a mistyped
 //! line — and each of those spends.
 //!
-//! **So there is no path in the shipped binary that starts one.** [`ENTER`] is
-//! known to the parser and refused by [`entering_is_off`] — refused by name and
-//! with a reason, never as an unknown flag, because "unknown flag" reads as a
-//! bug and invites somebody to go looking for the spelling that works.
+//! **So [`ENTER`] is refused unless this machine has said otherwise.** Whether
+//! it may become a session lives in [`crate::machine`] — `helm.enter` in
+//! `~/.armada/machine.yml`, off on a fresh install, flipped by `armada helm
+//! enable` and put back by `armada helm disable`. Refused, it is refused by
+//! name and with a reason, via [`entering_is_off`], never as an unknown flag:
+//! "unknown flag" reads as a bug and invites somebody to go looking for the
+//! spelling that works.
 //!
-//! **This is a gate on entering, not a rollback.** The argv, the four documents
-//! and the conversation's record are built and verified exactly as they will be
-//! when it comes back on; [`mark_started`] is the writer the exec path needs and
-//! is kept and tested for that reason. Turning it on is deleting a refusal and
-//! calling two functions that already exist.
+//! **This used to be an unconditional refusal, pending the Bridge.** The Bridge
+//! is now built, which is what made a real decision possible here instead of a
+//! blanket no. What replaced the blanket refusal is a switch rather than an
+//! unconditional yes, because assembling costs nothing and entering spends a
+//! real budget for as long as it is open — a decision that deserves an
+//! explicit yes on each machine, not a default that changed out from under
+//! whoever had not been reading release notes.
+//!
+//! **The argv, the four documents and the conversation's record are built and
+//! verified the same way whether the switch is on or off.** [`mark_started`] is
+//! the writer the exec path calls — first, because the process is replaced and
+//! there is no after.
 //!
 //! **The same reasoning is why bare `armada` is not wired to it.** PLAN.md §15.1
 //! says typing `armada` with no arguments enters Helm; that is the intended end
@@ -45,7 +55,7 @@
 //! start the orchestrator from any directory that is not a workspace — which is
 //! most directories, including the one a person opens a terminal in.
 
-use armada_core::envelope::{Conversation, Envelope, HelmData, Wired, Wiring};
+use armada_core::envelope::{Conversation, Envelope, HelmData, HelmSwitchData, Wired, Wiring};
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::helm::{self, Launch, Session};
 use armada_guild::layout::Guild;
@@ -67,9 +77,17 @@ pub const ENTER: &str = "--exec";
 /// the one somebody works around. The parser, [`entering_is_off`], the help page
 /// and the render all read this string, so the decision moves in one place or
 /// not at all.
-pub const ENTER_IS_OFF: &str = "switched off until the Bridge is fixed";
+pub const ENTER_IS_OFF: &str = "off on this machine";
 
-/// The refusal [`ENTER`] gets, and the only answer it has.
+/// The verb that turns [`ENTER`] on, read by [`entering_is_off`], the help
+/// page and `armada doctor`'s row — so the three cannot drift into naming
+/// three different commands for the same switch.
+pub const ENABLE: &str = "armada helm enable";
+
+/// The verb that puts it back — the state a fresh install is already in.
+pub const DISABLE: &str = "armada helm disable";
+
+/// The refusal [`ENTER`] gets when [`entering_allowed`] says no.
 ///
 /// **`bad_invocation`, which is the class this CLI already uses for a flag it
 /// knows and has not built** — `armada doctor --fix` and `armada manifest check
@@ -78,24 +96,72 @@ pub const ENTER_IS_OFF: &str = "switched off until the Bridge is fixed";
 ///
 /// **Refused by name, never as an unknown flag.** A caller told "unknown flag"
 /// concludes Armada is broken or that they typed it wrong, and goes looking for
-/// the spelling that works. Told that it is switched off and why, they either
-/// wait or paste the command themselves — which is the honest option and is what
-/// `next_action` offers, because `armada helm` has already printed it.
-///
-/// **It says it is temporary.** A refusal that reads as permanent is one nobody
-/// asks about again, and this one is meant to be lifted.
+/// the spelling that works. Told that it is off and how to turn it on, they
+/// either run [`ENABLE`] or paste the printed command themselves — both of
+/// which `next_action` offers, because `armada helm` has already printed the
+/// command.
 pub fn entering_is_off() -> ArmadaError {
     ArmadaError {
         class: ErrClass::BadInvocation,
         r#where: format!("helm {ENTER}"),
         message: format!(
             "`armada helm {ENTER}` is {ENTER_IS_OFF}: entering opens a Claude Code \
-             session, and no path in this binary starts one"
+             session, and this machine has not said yes to that yet"
         ),
-        next_action: Some(
-            "`armada helm` assembles and prints the command; run it yourself to enter".to_string(),
-        ),
+        next_action: Some(format!(
+            "`{ENABLE}` turns it on here; `armada helm` alone still only assembles and \
+             prints the command"
+        )),
     }
+}
+
+/// Whether [`ENTER`] would become a session **on this machine, right now**.
+///
+/// Reads `helm.enter` from [`crate::machine`] — off on a fresh install, so a
+/// machine nobody has said yes to cannot open one.
+pub fn entering_allowed(armada_home: &Path) -> bool {
+    crate::machine::read(armada_home).enter
+}
+
+/// `armada helm enable` — let [`ENTER`] become a session on this machine.
+///
+/// **Writes one boolean, and nothing else.** It does not touch the guild, the
+/// persona or any of the four documents `armada helm` wires — whether a
+/// machine is *allowed* to open a session and whether it is currently *able*
+/// to (a guild, a persona, a projection) are different questions, answered by
+/// different commands. `armada helm --exec` still needs both.
+pub fn enable(armada_home: &Path) -> Result<Output, ArmadaError> {
+    switch(armada_home, true, "helm enable")
+}
+
+/// `armada helm disable` — put the switch back where a fresh install leaves
+/// it.
+pub fn disable(armada_home: &Path) -> Result<Output, ArmadaError> {
+    switch(armada_home, false, "helm disable")
+}
+
+/// The one write path [`enable`] and [`disable`] share: read, compare, write
+/// only on a change, report the result either way.
+fn switch(armada_home: &Path, enter: bool, verb: &str) -> Result<Output, ArmadaError> {
+    let before = entering_allowed(armada_home);
+    crate::machine::set_enter(armada_home, enter).map_err(|error| ArmadaError {
+        class: ErrClass::Environment,
+        r#where: armada_home.join("machine.yml").display().to_string(),
+        message: format!(
+            "cannot write {}: {error}",
+            armada_home.join("machine.yml").display()
+        ),
+        next_action: Some("check the permissions on ~/.armada/".to_string()),
+    })?;
+    Ok(Output::HelmSwitch(Box::new(Envelope::ok(
+        verb,
+        None,
+        Status::Ok,
+        HelmSwitchData {
+            entering: enter,
+            changed: before != enter,
+        },
+    ))))
 }
 
 /// Everything `armada helm` needs from the machine, gathered at the entrypoint.
@@ -184,6 +250,7 @@ pub fn run<C: armada_core::ctx::Clock>(
             argv: helm::launch_argv(&launch),
             results: wiring,
             launched: false,
+            entering: entering_allowed(&place.armada_home),
         },
     ))))
 }
