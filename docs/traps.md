@@ -214,6 +214,18 @@ so `port_is_taken` asks both and takes either yes.
 > itself down. **An entry that says "X does not happen" needs the same evidence as one that
 > says it does.**
 
+**The test for this fails when run *inside* a container, and only there.**
+`net::tests::a_wildcard_holder_is_seen_even_though_the_bind_probe_cannot_see_it` needs a
+wildcard bind to be visible to a second socket in the same network namespace; a container's
+netns does not reproduce the host's `SO_REUSEADDR` behaviour, so the test's premise does not
+hold there. Measured 2026-08-15 in `rust:1-bookworm`: it fails on every run in the container
+and passes on both CI runners and on a developer's machine.
+
+**Ignore that one failure when verifying a change in a Linux container, and do not "fix" it.**
+Every other test in the workspace is a real signal there — the platform difference chased in
+`reading_a_frame…` below was found this way and was not a container artefact. Deciding which
+of the two a Linux-only failure is, before concluding anything, is the whole skill.
+
 **`PLAN.md` §3.1's stated reason for rejecting `connect()` is also wrong**, and is corrected
 with it: it says a connect *"reports a listening-but-idle socket as free"*. Measured, a
 `connect()` to a listening socket completes whether or not the listener ever calls `accept` —
@@ -1204,6 +1216,43 @@ tests in `crates/helm/tests/guild.rs` — every verb that commits — failed on 
 **If you assume otherwise:** you will conclude that pointing `$HOME` somewhere empty is enough
 to isolate git. It isolates the *config*; the identity then comes from the host's passwd file
 and hostname, which is a machine input by another route.
+
+## Reading a process's start time spawns `ps` on darwin and spawns nothing on Linux
+
+Measured 2026-08-15 against darwin 27.0 and `rust:1-bookworm`.
+
+`machine::process_start_at` is one function with two bodies:
+
+```
+#[cfg(target_os = "linux")]      read /proc/<pid>/stat, field 22   -> no subprocess
+#[cfg(not(target_os = "linux"))] run.call(["ps", "-o", "lstart=", "-p", pid]) -> one subprocess
+```
+
+Both answer the same question. Only Linux answers it without a fork, so **a `Run` harness that
+records what was spawned sees one call per liveness check on darwin and zero on Linux** — and
+the platform doing less work is the one that looks like it did nothing.
+
+**What it cost.** `reading_a_frame_resumes_nothing_and_writes_nothing` guarded against a
+vacuous pass by requiring at least one recorded call per redraw, and failed on Linux with *"a
+frame asked the machine nothing at all"*. It reads as a regression in
+`posix::stop_group`'s reaping — the change that had just merged — and is unrelated to it:
+`stop_group` is on `drone::stop`, which `fleet kill` calls, and liveness goes through
+`drone::alive` instead. Nothing was broken; the assertion was written in darwin's spelling.
+
+**It was not a container artefact**, unlike `net::tests::a_wildcard_holder…` in the ports
+section above — which was the first thing to rule out, and the two look identical until you
+do. The branch here is `cfg(target_os = "linux")`, so it applies to any Linux rather than to a
+namespace, and it failed 3 times out of 3. Every ubuntu job would have hit it the moment CI got
+that far, which it never had.
+
+**The general rule this earned:** a test that proves something happened by counting spawned
+processes is asserting an implementation's spelling. Where the answer is visible in the output,
+assert the answer — `job::observe_state` reads a live Drone with no finished turn as `RUNNING`
+and a dead one as `STALLED`, which is the same assertion on both platforms. Where it is not
+visible, say which platform you are counting for.
+
+**If you assume otherwise:** you will read a call log as a portable record of what a function
+did, and conclude a platform is broken when it is merely cheaper.
 
 ## An assertion built from `stderr` alone reports nothing when Armada refuses
 
