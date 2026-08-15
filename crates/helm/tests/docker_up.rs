@@ -333,13 +333,27 @@ manifest:
     // are right; the envelope describes the run, so a `kept` row for a container
     // that is gone by the time anyone reads it is a statement the run has
     // already falsified.
+    // **Only this workspace's rows can falsify that**, and filtering to them is
+    // not a loosening — it is the assertion the paragraph above actually makes.
+    // A `foreign_namespace` row is another installation's resource that the
+    // reaper correctly refused to touch, and refusing is a safety property with
+    // its own tests. Asserting the machine holds none of them makes this test a
+    // statement about every other Armada on the box: it fails whenever a
+    // concurrent run, or a developer's own stack, happens to exist. That is not
+    // this test's subject, and a test that fails for reasons outside its subject
+    // is a test people learn to re-run rather than read.
     let kept: Vec<&Value> = cleaned["data"]["reaped"]["reported"]
         .as_array()
-        .map(|rows| rows.iter().collect())
+        .map(|rows| {
+            rows.iter()
+                .filter(|row| row["workspace"].as_str() == Some(id.as_str()))
+                .collect()
+        })
         .unwrap_or_default();
     assert!(
         kept.is_empty(),
-        "`clean` reported {} resource(s) as kept and then removed them: {:#}",
+        "`clean` reported {} of this workspace's resource(s) as kept and then \
+         removed them: {:#}",
         kept.len(),
         cleaned["data"]["reaped"]
     );
