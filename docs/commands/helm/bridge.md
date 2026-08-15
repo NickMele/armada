@@ -81,7 +81,7 @@ indistinguishable from an idle fleet.
 |---|---|---|
 | `↵` | Board the selected Job | [`../fleet/board.md`](../fleet/board.md) |
 | `d` | **Why does it need me** — the selected Job in full, over the table | [`../fleet/show.md`](../fleet/show.md) |
-| `n` | New Job | [`../fleet/spawn.md`](../fleet/spawn.md) |
+| `n` | New Job — **write the task here, then `ctrl-d`**; the screen comes back | [`../fleet/spawn.md`](../fleet/spawn.md) |
 | `p` | Pause a running Job, **resume a paused one** | [`../fleet/pause.md`](../fleet/pause.md) · [`../fleet/resume.md`](../fleet/resume.md) |
 | `x` | Abort — **then `y`** | [`../fleet/kill.md`](../fleet/kill.md) |
 | `a` | Answer the selected Job's question | [`../fleet/answer.md`](../fleet/answer.md) |
@@ -109,12 +109,41 @@ So `x`, `p`, `r` and `c` **run where they were pressed**, and their answer — s
 — is the line under the table. The frame is re-read immediately afterwards, so what changed is
 on the screen by the time the notice is.
 
-**Four keys still end it, and each has a reason the others do not**: `q` is the deliberate exit;
+**Two keys end it, and each has a reason the others do not**: `q` is the deliberate exit, and
 `↵` *replaces this process* with `claude`, so the tty, the signals and the exit code become the
-session's; and `n` and `a` need words the screen does not have, so the Bridge gives the terminal
-back and opens the same inline box the interview uses ([`../render.md`](../render.md)). An empty
-answer starts nothing. A `↵` that could not board is a notice like any other failure — only a
+session's. `a` still needs words the screen does not have, so it gives the terminal back and
+opens the same inline box the interview uses ([`../render.md`](../render.md)); an empty answer
+starts nothing. A `↵` that could not board is a notice like any other failure — only a
 successful board ends the frame.
+
+### `n` — the new Job is written here, and the screen comes back
+
+**Three things were wrong with this key and they were one flow.** It ended the screen to ask for
+the task, so the fleet was gone while you typed — *"it took me to a screen that felt like it took
+me out of the bridge"*. The box it opened advertised no keys, so the only way out of it was a
+chord you had to already know — *"there is no help text … I guessed with control-d"*. And having
+created the Job it stopped, in a shell, with the one screen that watches Jobs no longer on.
+
+So the task is written **in the Bridge**, in a box drawn under the table with the fleet still
+above it, and the box names its keys: `enter` for a new line, `ctrl-d` to start it, `esc` to
+start nothing. They are the interview's three, quoted from the same list
+([`../render.md`](../render.md)) — a box that meant `ctrl-d` in one place and something else in
+another would be worse than either.
+
+**The screen is given back for the spawn itself and taken again afterwards**, which is the one
+part `Pressed::Act` could not do. `armada fleet spawn` wants the terminal twice: for its live
+progress table, because classification is one call to a model and is the whole of the wait; and
+for the workflow question, when the guess is not confident enough to settle on its own. Both are
+stderr widgets ([`PLAN.md`](../../PLAN.md) §3.1.1) and neither can be drawn under an alternate
+screen. So the Bridge stands down for those few seconds and comes back with the new Job on the
+table, the cursor and the filter exactly where they were, and one line saying what was started.
+
+**A spawn that failed comes back too.** Its report is on stderr with everything else the spawn
+said, and the sentence is the notice under the table — the rule every other key already follows.
+
+> **A new Job goes `RUNNING` and stays there.** A Drone does one exchange and exits, which is
+> `--print` working correctly; nothing yet advances a workflow to its next step. The Bridge shows
+> what is on disk and does not pretend otherwise.
 
 ### `d` — the detail view
 
@@ -237,9 +266,10 @@ a positive number of seconds · `6` `environment` — there is no terminal to ta
 standing in rather than after it has been blanked.
 
 **A key that acts does not change the exit code**, because it does not end the screen: its
-answer is a line under the table, and the Bridge still exits `0` when you leave it. The one key
-that ends in another verb's code is `↵`, which becomes `claude`'s — Armada is not in the middle
-of it from the `exec` on.
+answer is a line under the table, and the Bridge still exits `0` when you leave it. That now
+includes `n`, which runs a whole verb and comes back — a spawn that failed is a notice and the
+Bridge still exits `0` when you leave it afterwards. The one key that ends in another verb's code
+is `↵`, which becomes `claude`'s — Armada is not in the middle of it from the `exec` on.
 
 Full table and the one rule behind it: [`../reference.md`](../reference.md).
 

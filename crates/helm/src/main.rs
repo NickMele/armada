@@ -453,7 +453,9 @@ fn dispatch(
             boot_id: armada_manifest::machine::boot_id(&run, cwd).ok_or_else(no_boot_id)?,
         };
         let fleet = match invocation {
-            Invocation::Bridge(options) => return bridge(&run, &place, &options, style, terminal),
+            Invocation::Bridge(options) => {
+                return bridge(&run, &place, &options, progress, style, terminal)
+            }
             Invocation::Failures(failures) => {
                 return match *failures {
                     // **A terminal is the flag.** At one, the listing is
@@ -836,10 +838,20 @@ fn reap(
 /// rendering choice rather than an architectural one: there is no code path
 /// below here that a person at a prompt could not reach by typing the verb
 /// (`commands/helm/bridge.md`).
+///
+/// **Spawning comes back, which is why this is a loop.** Two of the four
+/// departures end the session — `q` and a successful board — and one of them
+/// never did anything worth ending it for: having created a Job, the screen you
+/// want is the one that watches Jobs, with the new one on it. So `n` gives the
+/// terminal back for exactly as long as `armada fleet spawn` needs it — a live
+/// progress table and, when the guess is not confident, the workflow question,
+/// both of which want the terminal Armada draws every other prompt in
+/// (PLAN.md §3.1.1) — and then takes the screen again.
 fn bridge(
     run: &RealRun,
     place: &verbs::fleet::Where,
     options: &args::Bridge,
+    progress: &mut dyn render::progress::Progress,
     style: Style,
     terminal: render::term::Terminal,
 ) -> Result<Output, ArmadaError> {
@@ -863,67 +875,131 @@ fn bridge(
         once: options.once,
         json: options.json,
     };
-    let (frame, departure) = armada_helm::bridge::watch(
-        run,
-        &SystemClock,
-        place,
-        &watching,
-        filter.as_ref(),
-        style,
-        terminal,
-        &mut |action| on_screen(run, place, action),
-    )?;
+    // **Held across every re-entry**, so a spawn does not cost the cursor
+    // position and the filter the reader set before pressing `n`. A screen that
+    // came back to row one under no filter is a screen that came back as a
+    // different screen.
+    let mut screen = armada_core::fleet::bridge::Screen {
+        filter: filter.clone(),
+        ..Default::default()
+    };
 
     use armada_core::fleet::bridge::Departure;
-    match departure {
-        // **Quitting leaves the last frame in the scrollback.** The screen is
-        // gone and what it was showing is not, which is the difference between
-        // closing a view and losing what you were looking at.
-        Departure::Quit => Ok(verbs::bridge::envelope(frame)),
+    loop {
+        let (frame, departure) = armada_helm::bridge::watch(
+            run,
+            &SystemClock,
+            place,
+            &watching,
+            &mut screen,
+            style,
+            terminal,
+            &mut |action| on_screen(run, place, action),
+        )?;
 
-        // `armada fleet board <job> --exec`, exactly.
-        //
-        // **Boarding is the one action that has to end the screen**, because it
-        // *replaces this process*: from the `exec` on, the tty, the signals and
-        // the exit code all belong to `claude`. Failing to board does not end
-        // it — the failure comes back as a notice, and the reader is still
-        // looking at the fleet.
-        Departure::Board(target) => {
-            let output = verbs::fleet::board(place, &target.uuid)?;
-            board_exec(place, &output)?;
-            Ok(output)
+        match departure {
+            // **Quitting leaves the last frame in the scrollback.** The screen
+            // is gone and what it was showing is not, which is the difference
+            // between closing a view and losing what you were looking at.
+            Departure::Quit => return Ok(verbs::bridge::envelope(frame)),
+
+            // `armada fleet board <job> --exec`, exactly.
+            //
+            // **Boarding is the one action that has to end the screen**,
+            // because it *replaces this process*: from the `exec` on, the tty,
+            // the signals and the exit code all belong to `claude`. Failing to
+            // board does not end it — the failure comes back as a notice, and
+            // the reader is still looking at the fleet.
+            Departure::Board(target) => {
+                let output = verbs::fleet::board(place, &target.uuid)?;
+                board_exec(place, &output)?;
+                return Ok(output);
+            }
+
+            // `armada fleet spawn "<task>"` — the verb, with the task the
+            // compose box already holds, and then back to the Bridge.
+            //
+            // **Not silent, which was the third defect.** Classification is one
+            // call to a model and it is the whole of the wait — 8.8 seconds in
+            // the run that reported this — and the Bridge used to spend it
+            // showing nothing at all, because the reporter it passed was
+            // `Silent`. The terminal is its own again by the time this runs, so
+            // it gets the same live table `armada fleet spawn` draws in a shell:
+            // one table, on stderr, for every audience (PLAN.md §3.1.1).
+            Departure::Spawn(task) => {
+                screen.notice = Some(spawned(
+                    verbs::fleet::spawn(
+                        run,
+                        &SystemClock,
+                        place,
+                        &args::Spawn {
+                            task,
+                            ..args::Spawn::default()
+                        },
+                        Some(&mut at_the_terminal(style, terminal).interactive()),
+                        progress,
+                    ),
+                    style,
+                    terminal,
+                ));
+                // The table and the question are done with the terminal; give
+                // the progress viewport back before the alt screen takes it.
+                progress.finish();
+            }
+
+            // `armada fleet answer <job> "<answer>"`.
+            Departure::Answer(target) => {
+                let Some(said) = ask_text(
+                    style,
+                    terminal,
+                    &format!("Your answer to `{}`:", target.job),
+                ) else {
+                    return Ok(verbs::bridge::envelope(frame));
+                };
+                return verbs::fleet::answer(run, &SystemClock, place, &target.uuid, &said);
+            }
         }
+    }
+}
 
-        // `armada fleet spawn "<task>"`. The task is the one thing the screen
-        // cannot know, so it is asked for in the box every other prose question
-        // in Armada uses.
-        Departure::Spawn => {
-            let Some(task) = ask_text(style, "What should the new Job do?") else {
-                return Ok(verbs::bridge::envelope(frame));
+/// What a spawn started from the Bridge leaves behind: a report in the
+/// scrollback and one line to carry back onto the screen.
+///
+/// **The report goes to stderr and the notice goes to the frame.** stdout is
+/// still the Bridge's — it carries the last frame, once, when the reader
+/// leaves — so a second envelope on it would be two payloads for one
+/// invocation. Everything a spawn has to say is already the interactive half of
+/// the conversation, which is the stream the progress table and every prompt
+/// already use.
+///
+/// **A spawn that failed is a notice, not the end of the screen** — the rule
+/// every on-screen action already follows.
+fn spawned(
+    outcome: Result<Output, ArmadaError>,
+    style: Style,
+    terminal: render::term::Terminal,
+) -> String {
+    match outcome {
+        Ok(output) => {
+            let said = match &output {
+                Output::Spawn(envelope) => format!(
+                    "`{}` spawned — {} · {}",
+                    envelope.data.name,
+                    envelope.data.workflow,
+                    envelope.data.state.word()
+                ),
+                _ => "spawned".to_string(),
             };
-            verbs::fleet::spawn(
-                run,
-                &SystemClock,
-                place,
-                &args::Spawn {
-                    task,
-                    ..args::Spawn::default()
-                },
-                Some(&mut at_the_terminal(style, terminal).interactive()),
-                // **Silent: the Bridge owns the screen.** A live table drawn
-                // under the alt screen would fight the frame for the same
-                // cells. The new Job appears in the next frame instead, which
-                // is the Bridge's own answer to "what is happening".
-                &mut render::progress::Silent,
-            )
+            write_err(&render::human(&output, style, terminal));
+            said
         }
-
-        // `armada fleet answer <job> "<answer>"`.
-        Departure::Answer(target) => {
-            let Some(said) = ask_text(style, &format!("Your answer to `{}`:", target.job)) else {
-                return Ok(verbs::bridge::envelope(frame));
+        Err(error) => {
+            let said = match &error.next_action {
+                Some(next) => format!("{} — {next}", error.message),
+                None => error.message.clone(),
             };
-            verbs::fleet::answer(run, &SystemClock, place, &target.uuid, &said)
+            write_err(&render::error_lines(&error, style));
+            said
         }
     }
 }
@@ -1081,11 +1157,15 @@ fn killed_cleanly(output: &Output) -> Option<ArmadaError> {
 /// **Off the alternate screen, never on it.** The Bridge has given the terminal
 /// back by the time this runs, so the question and the answer land in the
 /// scrollback where the reader can see what they typed.
-fn ask_text(style: Style, question: &str) -> Option<String> {
-    write_err(&format!(
-        "{}\n",
-        style.strong(render::palette::Role::SignalAmber, question)
-    ));
+///
+/// **With the keys named, which is what it was missing.** The question used to
+/// be printed on its own and the box opened under it advertising nothing, so the
+/// only way out of it was a chord you had to already know — and the first person
+/// to meet it guessed. [`render::editing`] is the header `armada guild edit`
+/// already puts above the same widget, with the same three keys, so there is one
+/// convention rather than two.
+fn ask_text(style: Style, terminal: render::term::Terminal, question: &str) -> Option<String> {
+    write_err(&render::editing(question, style, terminal.usable_width()));
     match armada_helm::ask::editor::read(style, "") {
         armada_helm::ask::editor::Answer::Given(text) if !text.trim().is_empty() => Some(text),
         // Nothing typed, `esc`, or a terminal that would not open a box: the

@@ -25,7 +25,7 @@ use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::ShowData;
 use armada_core::error::ArmadaError;
 use armada_core::fleet::bridge::{
-    self, Action, Departure, Done, Filter, Frame, Key, Mode, Pressed, Screen,
+    self, Action, Departure, Done, Frame, Key, Mode, Pressed, Screen,
 };
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::execute;
@@ -75,10 +75,16 @@ impl Drop for Alt {
 /// rather than a person at a keyboard.
 pub fn key_of(code: KeyCode, modifiers: KeyModifiers) -> Option<Key> {
     if modifiers.contains(KeyModifiers::CONTROL) {
-        // **`ctrl-c` leaves, and no other control chord is a Bridge key.** A
-        // `ctrl-d` swallowed here would be a key the reader pressed and nothing
-        // answered.
-        return matches!(code, KeyCode::Char('c')).then_some(Key::Interrupt);
+        // **Two chords, and no others.** `ctrl-c` leaves. `ctrl-d` is the
+        // text area's *done* everywhere else in Armada (`ask/editor.rs`), so it
+        // is carried through here for the compose box and ignored by every
+        // other mode — a key the reader pressed and nothing answered is what
+        // this used to be, on the one screen that now has a box to answer it.
+        return match code {
+            KeyCode::Char('c') => Some(Key::Interrupt),
+            KeyCode::Char('d') => Some(Key::Save),
+            _ => None,
+        };
     }
     match code {
         KeyCode::Up => Some(Key::Up),
@@ -197,6 +203,17 @@ pub fn paint(
     });
 
     lines.push(Vec::new());
+    // **The compose box takes the key line's place and leaves the table
+    // standing.** That is the whole of the second fix: `n` used to end the
+    // screen to ask for a task, and what a first reader reported was *"it took
+    // me to a screen that felt like it took me out of the bridge"*. The detail
+    // pane and the reap preview cover the table because they are questions
+    // *about* a row; writing a task is a thing you do while watching, so the
+    // fleet stays where it was.
+    if let Mode::Composing(typed) = &screen.mode {
+        lines.extend(compose_box(typed, style, width));
+        return lines;
+    }
     // **The key line reads the row the cursor is on**, so `p` over a paused Job
     // says `resume`. A line that always said `pause` advertised the one thing
     // that key would not do and left no way at all to start a held Job again.
@@ -207,6 +224,60 @@ pub fn paint(
                 screen.cursor.selected(&frame.rows).map(|row| row.state),
                 width,
             ),
+            Role::SteelGrey,
+        ),
+    ]);
+    lines
+}
+
+/// The new-Job box: what is being asked, what has been typed, and the keys.
+///
+/// **The keys are named, and they are the interview's** — [`render::prose_keys`]
+/// is the one place all three are spelled, so the box in the Bridge and the box
+/// in `armada init` cannot come to mean different chords. This surface had none
+/// at all, and the person who met it first guessed `ctrl-d` from having used the
+/// interview: a guess that happened to be right is still a guess.
+fn compose_box(typed: &str, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut lines = vec![vec![
+        plain("  "),
+        bold("NEW JOB", Role::SignalAmber),
+        plain("   "),
+        piece("what should it do?", Role::SteelGrey),
+    ]];
+
+    // **Hard-wrapped, not word-wrapped, so the caret lands where the next
+    // character will.** `ask/editor.rs` measures its own cursor the same way,
+    // and a task half-typed has no spaces to break on yet.
+    let room = width.saturating_sub(4).max(1);
+    let mut rows: Vec<String> = Vec::new();
+    for line in typed.split('\n') {
+        let mut chars = line.chars().peekable();
+        loop {
+            let row: String = chars.by_ref().take(room).collect();
+            let last = chars.peek().is_none();
+            rows.push(row);
+            if last {
+                break;
+            }
+        }
+    }
+    // The caret goes on the last row, which is where typing continues.
+    if let Some(last) = rows.last_mut() {
+        last.push_str(style.caret());
+    }
+    for row in rows {
+        lines.push(vec![plain("  "), piece(row, Role::RadarCyan)]);
+    }
+
+    lines.push(Vec::new());
+    lines.push(vec![
+        plain("  "),
+        // **Two spaces between pairs, like every other key line on this
+        // screen**, rather than the interview's middle dot: the dot costs a
+        // column per gap and is one character for a terminal and two for a
+        // pipe, and the Bridge's lines are measured (`render.rs`).
+        piece(
+            render::prose_keys("starts it", "starts nothing", "  "),
             Role::SteelGrey,
         ),
     ]);
@@ -359,7 +430,7 @@ pub fn watch<R: Run, C: Clock>(
     now: &C,
     place: &Where,
     options: &Options,
-    filter: Option<&Filter>,
+    screen: &mut Screen,
     style: Style,
     terminal: Terminal,
     act: &mut dyn FnMut(&Action) -> Done,
@@ -370,10 +441,6 @@ pub fn watch<R: Run, C: Clock>(
     let mut view: ratatui::Terminal<ratatui::backend::CrosstermBackend<Stdout>> =
         ratatui::Terminal::new(backend).map_err(|_| crate::verbs::bridge::no_screen())?;
 
-    let mut screen = Screen {
-        filter: filter.cloned(),
-        ..Screen::default()
-    };
     let interval = Duration::from_secs(options.interval_s);
     let outcome = loop {
         let frame = crate::verbs::bridge::read(run, now, place, screen.filter.as_ref())?;
@@ -381,11 +448,11 @@ pub fn watch<R: Run, C: Clock>(
         // **Re-read on the same cadence as the frame.** An open detail pane is
         // the Bridge, and a Bridge that froze one Job while the rest kept moving
         // would be the one screen in Armada that lies about being live.
-        let mut detail = detail_of(run, now, place, &screen);
+        let mut detail = detail_of(run, now, place, screen);
         draw(
             &mut view,
             &frame,
-            &screen,
+            screen,
             detail.as_deref(),
             style,
             terminal,
@@ -414,18 +481,18 @@ pub fn watch<R: Run, C: Clock>(
                 continue;
             };
             let showing = screen.filter.clone();
-            match bridge::press(&mut screen, &frame.rows, pressed) {
+            match bridge::press(screen, &frame.rows, pressed) {
                 Pressed::Leave(departure) => break Some(departure),
                 Pressed::Stay => {
                     // The key may have just opened the pane, or moved it to
                     // another row; either way what it shows is read now rather
                     // than at the next tick, for the reason a committed filter
                     // re-reads now.
-                    detail = detail_of(run, now, place, &screen);
+                    detail = detail_of(run, now, place, screen);
                     draw(
                         &mut view,
                         &frame,
-                        &screen,
+                        screen,
                         detail.as_deref(),
                         style,
                         terminal,
@@ -612,15 +679,21 @@ mod tests {
         }
     }
 
-    /// **`ctrl-c` leaves and no other chord is a key.** A `ctrl-d` answered here
-    /// would be a keypress the reader made and nothing responded to.
+    /// **Two chords and no others.** `ctrl-c` leaves; `ctrl-d` is the text
+    /// area's *done*, carried through for the compose box and ignored by every
+    /// mode that has no box open. Any other chord is a keypress the reader made
+    /// and nothing responded to, so it is not a key at all.
     #[test]
-    fn only_ctrl_c_is_a_control_chord() {
+    fn ctrl_c_leaves_ctrl_d_saves_and_no_other_chord_is_a_key() {
         assert_eq!(
             key_of(KeyCode::Char('c'), KeyModifiers::CONTROL),
             Some(Key::Interrupt)
         );
-        assert_eq!(key_of(KeyCode::Char('d'), KeyModifiers::CONTROL), None);
+        assert_eq!(
+            key_of(KeyCode::Char('d'), KeyModifiers::CONTROL),
+            Some(Key::Save)
+        );
+        assert_eq!(key_of(KeyCode::Char('a'), KeyModifiers::CONTROL), None);
         // A bare `c` is the chat key, not an interrupt.
         assert_eq!(
             key_of(KeyCode::Char('c'), KeyModifiers::NONE),
@@ -1015,6 +1088,75 @@ mod tests {
         );
         assert!(all.contains("space toggle"), "{all}");
         assert!(all.contains("esc cancel"), "{all}");
+    }
+
+    /// **The compose box names its keys, and the fleet is still on the
+    /// screen.** Both halves are the defect: the box that `n` used to open had
+    /// no help text at all — *"I guessed with control-d"* — and it opened on a
+    /// screen with no Jobs on it, which is what made it feel like leaving.
+    #[test]
+    fn the_compose_box_names_the_interviews_keys_over_a_table_that_is_still_there() {
+        let screen = Screen {
+            mode: Mode::Composing("raise the nightly CI timeout".to_string()),
+            ..Screen::default()
+        };
+        let drawn = drawn(&screen);
+        let all = drawn.join("\n");
+
+        assert!(all.contains("NEW JOB"), "{all}");
+        assert!(all.contains("raise the nightly CI timeout"), "{all}");
+        // The keys, and they are the interview's — one convention, one source.
+        assert!(all.contains("enter for a new line"), "{all}");
+        assert!(all.contains("ctrl-d starts it"), "{all}");
+        assert!(all.contains("esc starts nothing"), "{all}");
+        assert_eq!(
+            all.contains("ctrl-d"),
+            render::prose_keys("starts it", "starts nothing", "  ").contains("ctrl-d"),
+            "the box and the one list of keys have drifted"
+        );
+        // **The table is underneath, not replaced.** This is the difference
+        // between the compose box and the two panes that cover the table.
+        assert!(all.contains("rate-limit"), "the fleet went away:\n{all}");
+        assert!(all.contains("2 jobs"), "{all}");
+        // And the Bridge's own key line is not also drawn: `n` is not `q` here.
+        assert!(!all.contains("q quit"), "two key lines:\n{all}");
+    }
+
+    /// **A box with nothing in it still draws a caret**, so there is somewhere
+    /// visible to type — and it wraps rather than running off the edge.
+    #[test]
+    fn the_compose_box_shows_a_caret_when_empty_and_wraps_when_long() {
+        let empty = drawn(&Screen {
+            mode: Mode::Composing(String::new()),
+            ..Screen::default()
+        });
+        assert!(
+            empty.iter().any(|line| line.trim() == ">"),
+            "no caret to type at:\n{empty:#?}"
+        );
+
+        let long = text(&paint(
+            &frame(),
+            &Screen {
+                mode: Mode::Composing("x".repeat(200)),
+                ..Screen::default()
+            },
+            None,
+            Status::Running,
+            Style::plain(),
+            80,
+        ));
+        for line in &long {
+            assert!(
+                line.chars().count() <= 80,
+                "the box overhangs at 80: {} wide",
+                line.chars().count()
+            );
+        }
+        assert!(
+            long.iter().filter(|line| line.contains("xxxx")).count() >= 3,
+            "200 characters did not wrap:\n{long:#?}"
+        );
     }
 
     /// An empty fleet says so rather than drawing nothing, and says which of the

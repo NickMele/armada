@@ -2425,12 +2425,7 @@ pub fn editing(title: &str, style: Style, width: usize) -> String {
         "{pad}{}\n\n",
         style.paint(
             Role::SteelGrey,
-            &[
-                "enter for a new line",
-                "ctrl-d saves",
-                "esc leaves it as it was",
-            ]
-            .join(style.between()),
+            &prose_keys("saves", "leaves it as it was", style.between()),
         )
     ));
     out
@@ -2507,15 +2502,43 @@ fn guild_item(envelope: &Envelope<GuildItemData>, style: Style, width: usize) ->
 /// the preview this widget was pre-filled to remove.
 fn keys(asked: &armada_core::envelope::Asked, style: Style) -> String {
     if asked.prose {
-        [
-            "enter for a new line",
-            "ctrl-d saves",
-            "esc keeps it as it was",
-        ]
-        .join(style.between())
+        prose_keys("saves", "keeps it as it was", style.between())
     } else {
         format!("enter keeps {}", asked.keeps)
     }
+}
+
+/// The three keys **every** text area in Armada accepts, and the one place they
+/// are named.
+///
+/// ```text
+/// enter for a new line · ctrl-d saves · esc keeps it as it was
+/// ```
+///
+/// **Three surfaces put a box in front of somebody and all three must name the
+/// same chords.** The interview's prose questions, `armada guild edit`, and the
+/// Bridge's compose box — and the Bridge's was the one that named none of them,
+/// which is exactly what a first reader reported: *"there is no help text, so I
+/// didn't really know what to do … I guessed with control-d."* A second
+/// convention would have been worse than either, so there is one, quoted from
+/// here.
+///
+/// **What the two ways out *mean* is the caller's, and only that.** `ctrl-d` in
+/// the interview saves a fragment and in the Bridge starts a Job; `esc` there
+/// keeps a file as it was and here starts nothing. The keys never differ, which
+/// is the half a reader learns once.
+///
+/// `between` is the caller's spacing rather than [`Style::between`] taken here:
+/// a prompt block separates with a middle dot, and the Bridge's on-screen key
+/// lines use two spaces so that both audiences read one width
+/// (`commands/helm/bridge.md`).
+pub fn prose_keys(saves: &str, leaves: &str, between: &str) -> String {
+    [
+        "enter for a new line".to_string(),
+        format!("ctrl-d {saves}"),
+        format!("esc {leaves}"),
+    ]
+    .join(between)
 }
 
 /// Greedy word wrap. **Not [`wrapped`]**, which spaces a run of items with a
@@ -5527,6 +5550,49 @@ mod tests {
         assert!(head.contains("ctrl-d saves"), "{head}");
         assert!(head.contains("esc leaves it as it was"), "{head}");
         assert!(head.ends_with("\n\n"), "the block does not close: {head:?}");
+    }
+
+    /// **Every box in Armada names the same three chords.** The Bridge's
+    /// compose box had none at all, and the person who met it first guessed
+    /// `ctrl-d` from having used the interview — a guess that happened to be
+    /// right is still a guess, and a second convention would have been worse
+    /// than either. So all three surfaces quote [`prose_keys`], and this holds
+    /// them against each other rather than against a string typed twice.
+    #[test]
+    fn every_text_area_names_the_same_three_keys_however_it_spaces_them() {
+        let interview = interview_prompt(
+            &armada_core::envelope::Asked {
+                number: 1,
+                of: 7,
+                prompt: "What is this repository for?".to_string(),
+                purpose: "one paragraph".to_string(),
+                writes: "project.md".to_string(),
+                keeps: "what import found".to_string(),
+                standing: None,
+                prose: true,
+            },
+            Style::plain(),
+            80,
+        );
+        let file = editing("workflows/bug.yml", Style::plain(), 80);
+        // The Bridge spaces its key lines with two spaces rather than a
+        // separator whose width differs between the two audiences.
+        let bridge = prose_keys("starts it", "starts nothing", "  ");
+
+        for surface in [&interview, &file, &bridge] {
+            for chord in ["enter", "ctrl-d", "esc"] {
+                assert!(surface.contains(chord), "`{chord}` unnamed in:\n{surface}");
+            }
+            assert!(surface.contains("enter for a new line"), "{surface}");
+        }
+        // The order never varies either: what you press to finish is always the
+        // middle one, between the two that do not.
+        for surface in [&interview, &file, &bridge] {
+            let enter = surface.find("enter for a new line").unwrap();
+            let save = surface.find("ctrl-d").unwrap();
+            let leave = surface.find("esc ").unwrap();
+            assert!(enter < save && save < leave, "out of order:\n{surface}");
+        }
     }
 
     /// **`guild show` shows the file, not a rendering of it.** A reader is here

@@ -291,6 +291,17 @@ pub enum Key {
     Char(char),
     /// `ctrl-c`.
     Interrupt,
+    /// `ctrl-d` — **the text area's submit, and only a text area's**.
+    ///
+    /// **The same chord the interview uses, because a second convention would
+    /// be worse than either** (`docs/commands/render.md`). Every prose answer in
+    /// Armada is finished with `ctrl-d`: `enter` has to stay a newline in a box
+    /// that holds paragraphs, so something else has to mean *done*, and this is
+    /// the one that already does everywhere else.
+    ///
+    /// Outside [`Mode::Composing`] it means nothing and is ignored, which is
+    /// what it meant before this key existed.
+    Save,
 }
 
 /// Which Job a key acted on.
@@ -384,6 +395,22 @@ pub enum Mode {
     Watching,
     /// `/` is open and this is what has been typed into it.
     Filtering(String),
+    /// `n` was pressed and this is the task being written for the new Job.
+    ///
+    /// **A mode rather than a [`Departure`], for the reason [`Mode::Detail`] is
+    /// one.** `n` used to end the screen and ask for the task in the shell it
+    /// had just given back, and what that produced was *"it took me to a screen
+    /// that felt like it took me out of the bridge"* — the fleet gone, a bare
+    /// question, and no way back that anybody could see. The box is drawn
+    /// **under the table rather than over it**, which is where it differs from
+    /// the detail pane and the reap preview: those two answer a question *about*
+    /// a row, so they take the whole screen; this one is a thing you do while
+    /// watching, and watching is what the rows are for.
+    ///
+    /// **The keys are the interview's** — `enter` for a newline, `ctrl-d` to
+    /// start it, `esc` to throw it away — and they are named on the screen, so
+    /// nobody has to guess `ctrl-d` the way the first reader did.
+    Composing(String),
     /// `d` was pressed and this Job's detail view is open, covering the table.
     ///
     /// **A mode rather than a [`Departure`], because the Bridge is live.** Every
@@ -440,8 +467,17 @@ pub enum Departure {
     Quit,
     /// `↵` — `armada fleet board <job>`.
     Board(Target),
-    /// `n` — `armada fleet spawn`.
-    Spawn,
+    /// `ctrl-d` in the compose box — `armada fleet spawn "<task>"`.
+    ///
+    /// **The task is already in hand, which is the whole of the change.** The
+    /// Bridge used to leave on `n` and ask for the task in a shell it had just
+    /// handed back, so the one keystroke that starts work began by taking the
+    /// fleet off the screen. Now it is typed over the table
+    /// ([`Mode::Composing`]) and the screen is given back only for the spawn
+    /// itself — which needs the terminal for its progress table and for the
+    /// workflow question a low-confidence guess puts (PLAN.md §3.1.1) — and
+    /// taken again the moment that is over.
+    Spawn(String),
     /// `a` — `armada fleet answer <job>`.
     Answer(Target),
 }
@@ -535,6 +571,7 @@ pub fn press(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
 
     match std::mem::take(&mut screen.mode) {
         Mode::Filtering(typed) => filtering(screen, typed, key),
+        Mode::Composing(typed) => composing(screen, typed, key),
         Mode::Confirming(target) => confirming(screen, target, key),
         Mode::Detail(job) => detail(screen, job, rows, key),
         Mode::Reaping(reap) => reaping(screen, reap, key),
@@ -575,7 +612,10 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
             Some(target) => return Pressed::Leave(Departure::Board(target)),
             None => screen.notice = Some(nothing_selected("board")),
         },
-        Key::Char('n') => return Pressed::Leave(Departure::Spawn),
+        // **`n` opens the box here rather than ending the screen.** The task is
+        // the one thing the frame cannot know, and asking for it used to cost
+        // the whole view of the fleet.
+        Key::Char('n') => screen.mode = Mode::Composing(String::new()),
         // **`c` answers on the screen rather than by ending it.** `armada helm`
         // is not built, and tearing the frame down to say so took away the view
         // of a whole fleet in order to report one unimplemented key.
@@ -639,8 +679,52 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         // the frame's height; this is where the ones it dropped are.
         Key::Char('?') => screen.mode = Mode::Keys,
 
-        Key::Backspace | Key::Char(_) => {}
+        // `ctrl-d` belongs to the box and there is no box open.
+        Key::Save | Key::Backspace | Key::Char(_) => {}
     }
+    Pressed::Stay
+}
+
+/// The compose box is open. **The interview's keys, in the Bridge's own
+/// screen.**
+///
+/// `enter` is a newline because a task is prose and a box that submitted on
+/// `enter` could not hold a second paragraph; `ctrl-d` is therefore what means
+/// *done*, which is what it means in every other text area Armada draws
+/// (`ask/editor.rs`); `esc` throws the draft away.
+fn composing(screen: &mut Screen, mut typed: String, key: Key) -> Pressed {
+    match key {
+        Key::Char(c) => typed.push(c),
+        Key::Enter => typed.push('\n'),
+        Key::Backspace => {
+            typed.pop();
+        }
+
+        // **An empty box is a keypress that meant something else, not a Job
+        // with no task.** Saying so keeps the box open rather than starting a
+        // Drone on nothing or closing on a `ctrl-d` that looked ignored.
+        Key::Save => {
+            if typed.trim().is_empty() {
+                screen.notice = Some("nothing typed — esc closes the box".to_string());
+                screen.mode = Mode::Composing(typed);
+                return Pressed::Stay;
+            }
+            return Pressed::Leave(Departure::Spawn(typed.trim().to_string()));
+        }
+
+        // **`esc` closes it and says the draft went**, because a box that
+        // vanished silently is one a reader assumes started something.
+        Key::Esc | Key::Interrupt => {
+            screen.notice = Some("no Job was started".to_string());
+            return Pressed::Stay;
+        }
+
+        // The cursor belongs to the table underneath, and the table is still on
+        // the screen — but moving it while typing would put the caret in two
+        // places, so the arrows do nothing here.
+        Key::Up | Key::Down => {}
+    }
+    screen.mode = Mode::Composing(typed);
     Pressed::Stay
 }
 
@@ -673,6 +757,9 @@ fn reaping(screen: &mut Screen, mut reap: Reap, key: Key) -> Pressed {
             }
             return Pressed::Act(Action::Reap(taken));
         }
+
+        // `ctrl-d` belongs to the compose box, which cannot be open from here.
+        Key::Save => {}
 
         // **`esc` leaves everything untouched**, which is what makes the
         // preview safe to open — and being safe to open is what makes it read.
@@ -714,7 +801,9 @@ fn filtering(screen: &mut Screen, mut typed: String, key: Key) -> Pressed {
                 screen.mode = Mode::Filtering(typed);
             }
         },
-        Key::Up | Key::Down => screen.mode = Mode::Filtering(typed),
+        // `ctrl-d` belongs to the compose box; the filter is one line and
+        // `enter` already commits it.
+        Key::Save | Key::Up | Key::Down => screen.mode = Mode::Filtering(typed),
     }
     Pressed::Stay
 }
@@ -997,7 +1086,6 @@ mod tests {
         let (_, rows) = watching_at(3);
         for (key, expected) in [
             (Key::Enter, Departure::Board(target("rate-limit"))),
-            (Key::Char('n'), Departure::Spawn),
             (Key::Char('q'), Departure::Quit),
             (Key::Interrupt, Departure::Quit),
             (Key::Esc, Departure::Quit),
@@ -1009,6 +1097,86 @@ mod tests {
                 "{key:?}"
             );
         }
+    }
+
+    /// **`n` opens the box instead of ending the screen**, which is the second
+    /// fix: asking for a task used to cost the whole view of the fleet, and what
+    /// the first reader reported was a screen that *"felt like it took me out of
+    /// the bridge"*.
+    #[test]
+    fn n_opens_the_compose_box_and_leaves_the_fleet_on_the_screen() {
+        let (mut screen, rows) = watching_at(3);
+        assert_eq!(press(&mut screen, &rows, Key::Char('n')), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Composing(String::new()));
+    }
+
+    /// **The box takes the interview's keys, and `ctrl-d` is the one that
+    /// starts it.** `enter` has to stay a newline in a box that holds a
+    /// paragraph, so something else means *done* — and it is the chord every
+    /// other text area in Armada already uses.
+    #[test]
+    fn the_compose_box_types_newlines_on_enter_and_spawns_on_ctrl_d() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('n'));
+        for key in [
+            Key::Char('f'),
+            Key::Char('i'),
+            Key::Char('x'),
+            Key::Char('!'),
+            Key::Backspace,
+            Key::Enter,
+            Key::Char('i'),
+            Key::Char('t'),
+        ] {
+            assert_eq!(press(&mut screen, &rows, key), Pressed::Stay, "{key:?}");
+        }
+        assert_eq!(screen.mode, Mode::Composing("fix\nit".to_string()));
+        assert_eq!(
+            press(&mut screen, &rows, Key::Save),
+            Pressed::Leave(Departure::Spawn("fix\nit".to_string()))
+        );
+    }
+
+    /// **An empty box is a keypress that meant something else.** Starting a
+    /// Drone on nothing is worse than saying so, and closing on a `ctrl-d` that
+    /// looked ignored is worse than both.
+    #[test]
+    fn ctrl_d_on_an_empty_box_says_so_and_keeps_it_open() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('n'));
+        press(&mut screen, &rows, Key::Char(' '));
+        assert_eq!(press(&mut screen, &rows, Key::Save), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Composing(" ".to_string()));
+        assert_eq!(
+            screen.notice.as_deref(),
+            Some("nothing typed — esc closes the box")
+        );
+    }
+
+    /// **`esc` throws the draft away and says it did**, because a box that
+    /// vanished silently is one a reader assumes started something.
+    #[test]
+    fn esc_closes_the_compose_box_without_starting_anything() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('n'));
+        press(&mut screen, &rows, Key::Char('x'));
+        assert_eq!(press(&mut screen, &rows, Key::Esc), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Watching);
+        assert_eq!(screen.notice.as_deref(), Some("no Job was started"));
+    }
+
+    /// **`ctrl-d` means nothing where there is no box.** It is the text area's
+    /// key, carried through the terminal layer for the one mode that answers it.
+    #[test]
+    fn ctrl_d_is_ignored_by_every_mode_but_the_box() {
+        let (mut screen, rows) = watching_at(3);
+        assert_eq!(press(&mut screen, &rows, Key::Save), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Watching);
+        assert_eq!(screen.notice, None);
+
+        screen.mode = Mode::Filtering("state=run".to_string());
+        assert_eq!(press(&mut screen, &rows, Key::Save), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Filtering("state=run".to_string()));
     }
 
     /// **A key carries the uuid as well as the name.** A name is a handle rather
