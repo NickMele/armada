@@ -2165,7 +2165,7 @@ pub struct FailuresData {
     pub open: usize,
 }
 
-/// `armada coverage` — every verb Armada owns, and what this machine has done
+/// `armada untried` — every verb Armada owns, and what this machine has done
 /// with it.
 ///
 /// **`untried` is the number the verb exists for**, so it is a field rather than
@@ -2173,9 +2173,9 @@ pub struct FailuresData {
 /// test"* is a question about the rows with no runs behind them, and a caller
 /// deriving that from `results[]` would be re-deciding what "tried" means.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
-pub struct CoverageData {
+pub struct UntriedData {
     /// One row per verb on the roster — never run first, then stalest.
-    pub results: Vec<crate::coverage::Row>,
+    pub results: Vec<crate::untried::Row>,
     /// How many have been run here at least once.
     pub tried: usize,
     /// How many never have.

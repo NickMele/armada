@@ -199,10 +199,15 @@ pub enum Invocation {
     },
     /// `armada tasks [<verb>]` — what you wrote down, and how to start one.
     Tasks(Box<TasksInvocation>),
-    /// `armada coverage` — **which of Armada's verbs this machine has never
+    /// `armada untried` — **which of Armada's verbs this machine has never
     /// run.** No sub-verbs: it is a counter with one question, and the only
     /// action it offers is writing a task, which is `armada task`'s.
-    Coverage {
+    ///
+    /// **Not `coverage`.** `docs/glossary.md`: this repository already spends
+    /// that word on code coverage — the CI job is named `coverage` and
+    /// `AGENTS.md` gates on its ratchet — so a second meaning under the same
+    /// name would be exactly the defect the glossary exists to prevent.
+    Untried {
         /// Emit the envelope.
         json: bool,
         /// Every verb, not only the ones never run.
@@ -899,7 +904,7 @@ pub const TOP_LEVEL_VERBS: [&str; 11] = [
     "report",
     "task",
     "tasks",
-    "coverage",
+    "untried",
 ];
 
 /// `armada failures`' sub-verbs.
@@ -1089,7 +1094,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "report" => return report(rest, json, color),
             "task" => return task(rest, json, color),
             "tasks" => return tasks(rest, json, color),
-            "coverage" => return coverage(rest, json, color),
+            "untried" => return untried(rest, json, color),
             "mcp" => return mcp(rest, json, color),
             // **The bare word, spelled the way `git`, `cargo`, `npm` and
             // `docker` all spell it.** `--help`/`-h` already reach every page
@@ -1877,23 +1882,23 @@ fn one_task_id(parsed: &Flags, r#where: &str) -> Result<String, ParseFailure> {
     }
 }
 
-/// `armada coverage [--all]`.
+/// `armada untried [--all]`.
 ///
 /// **No sub-verbs and one flag.** The listing is the whole verb: without
 /// `--all` it answers *what have I never run*, which is the question it exists
 /// for, and with it the whole roster.
-fn coverage(
+fn untried(
     rest: &[String],
     json: bool,
     color: &mut ColorChoice,
 ) -> Result<Invocation, ParseFailure> {
     if wants_help(rest) {
-        if let Some(topic) = help_page("", "coverage") {
+        if let Some(topic) = help_page("", "untried") {
             return Ok(Invocation::Help(topic));
         }
     }
-    let parsed = flags(rest, json, color, "coverage", &["--all"], &[])?;
-    Ok(Invocation::Coverage {
+    let parsed = flags(rest, json, color, "untried", &["--all"], &[])?;
+    Ok(Invocation::Untried {
         json: parsed.json,
         all: parsed.on("--all"),
     })

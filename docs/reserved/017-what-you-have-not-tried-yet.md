@@ -8,7 +8,9 @@ raised: in use, the day fifteen features landed
 
 # 017 — What you have not tried yet
 
-> **BUILT** — `armada coverage`, counted on every run in `~/.armada/coverage.jsonl`.
+> **BUILT** — `armada untried`, counted on every run in `~/.armada/untried.jsonl`.
+> Not `coverage`: this repository already spends that word on code coverage
+> (`AGENTS.md`, [`docs/glossary.md`](../glossary.md)).
 
 **The complaint this exists to fix.** *"I need a task list of what CLI needs me
 to test. (I wish we could observe this as I use it.)"* Fifteen features landed in
@@ -29,7 +31,7 @@ the run answered.
 | [`010`](010-armada-records-its-own-failures.md) `armada failures` | what Armada noticed went wrong | Armada's |
 | [`014`](014-report-what-you-know-went-wrong.md) `armada report` | what you noticed went wrong | yours |
 | [`002`](002-tasks.md) `armada task` | what you intend to do | yours |
-| **this** `armada coverage` | what you have not got to yet | the machine's |
+| **this** `armada untried` | what you have not got to yet | the machine's |
 
 #### Why it is a counter and not a fourth list of raised items
 
@@ -67,11 +69,11 @@ item 5 records — two lists, one of them the one nobody edits.
 **Sub-verbs count against their parent.** `armada tasks start` is not a page
 `--help` reaches, so it counts as `tasks`; a row that could never be satisfied is
 a row that lies. That is the one thing this deliberately cannot see: it reports
-coverage of the pages, not of every flag on them.
+the pages tried, not every flag on them.
 
 #### Not telemetry
 
-`~/.armada/coverage.jsonl` never leaves the machine and never syncs — only
+`~/.armada/untried.jsonl` never leaves the machine and never syncs — only
 `guild/` does. It holds a verb name **off Armada's own roster** and three
 numbers, so nothing a person typed can reach it: a repository's declared command
 and a typo alike are counted as nothing at all, which is why it needs no

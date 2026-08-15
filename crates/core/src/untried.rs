@@ -26,7 +26,7 @@
 //!
 //! ## The roster is passed in, never held here
 //!
-//! Coverage is a **diff against the list of verbs Armada owns**, and that list is
+//! This is a **diff against the list of verbs Armada owns**, and that list is
 //! `armada_helm::args::every_verb()` — derived from the same constants the help
 //! pages and the parser read. Retyping it here would be the mistake
 //! `docs/reserved/009` item 5 records: two lists, one of them the one nobody
@@ -35,7 +35,7 @@
 //!
 //! ## Nothing here is telemetry
 //!
-//! `~/.armada/coverage.jsonl` is machine state and machine state does not sync —
+//! `~/.armada/untried.jsonl` is machine state and machine state does not sync —
 //! `PLAN.md` §13.1's line, that what describes *you* syncs and what describes
 //! *this machine* does not, puts it on the same side as `recent.jsonl` and
 //! `failures.jsonl` and the opposite side from `guild/`. It is never sent
@@ -65,7 +65,7 @@ pub struct Seen {
     pub ok: bool,
 }
 
-/// One row of `armada coverage` — a roster verb, tried or not.
+/// One row of `armada untried` — a roster verb, tried or not.
 ///
 /// **Every verb on the roster gets a row, including the ones with no `Seen`
 /// behind them.** That is the entire feature: *what have I never run* is
@@ -92,7 +92,7 @@ pub struct Row {
 /// exactly the shape of every entry on the roster — so the two-word label is
 /// tried first and the leading word second. **`armada tasks start a1b2` counts
 /// as `tasks`**, because `tasks start` is not a page `--help` reaches and a
-/// coverage row that could never be satisfied is a row that lies.
+/// row that could never be satisfied is a row that lies.
 ///
 /// **`None` for anything off the roster**, which is what keeps a person's own
 /// words out of this file: a `commands:` child declared by a repository is not

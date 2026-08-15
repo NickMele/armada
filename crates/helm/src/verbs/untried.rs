@@ -1,4 +1,4 @@
-//! `armada coverage` — **which of Armada's verbs you have never run.**
+//! `armada untried` — **which of Armada's verbs you have never run.**
 //!
 //! ## The complaint this exists to fix
 //!
@@ -36,19 +36,19 @@
 //!
 //! **Sub-verbs count against their parent.** `armada tasks start` is not a page
 //! `--help` reaches, so it counts as `tasks`; see
-//! [`armada_core::coverage::matched`]. The alternative is a row that can never
+//! [`armada_core::untried::matched`]. The alternative is a row that can never
 //! be satisfied, which is a row that lies.
 //!
 //! ## Not telemetry
 //!
-//! `~/.armada/coverage.jsonl` never leaves this machine and never syncs — only
+//! `~/.armada/untried.jsonl` never leaves this machine and never syncs — only
 //! `guild/` does (`PLAN.md` §13.1). It holds a verb name off Armada's own roster
 //! and three numbers; nothing a person typed can reach it.
 
-use armada_core::coverage::Row;
 use armada_core::ctx::Clock;
-use armada_core::envelope::{CoverageData, Envelope};
+use armada_core::envelope::{Envelope, UntriedData};
 use armada_core::error::{ArmadaError, Status};
+use armada_core::untried::Row;
 
 use crate::ask::{Ask, Choice};
 use crate::verbs::Output;
@@ -59,7 +59,7 @@ pub use crate::verbs::guild::Look;
 /// What the last option says, and what it says about itself.
 const DONE: (&str, &str) = ("done", "stop looking");
 
-/// `armada coverage` — the roster, and what this machine has done with each.
+/// `armada untried` — the roster, and what this machine has done with each.
 ///
 /// **`untried` leads the listing**, because the question is *what have I not got
 /// to yet*. `--all` is what asks for the whole roster including the verbs you
@@ -85,9 +85,8 @@ pub fn ls<C: Clock>(
 
 /// Every row this lens shows.
 fn rows<C: Clock>(now: &C, place: &Where, all: bool) -> Vec<Row> {
-    let seen =
-        armada_manifest::coverage::read(&armada_manifest::coverage::path(&place.armada_home));
-    armada_core::coverage::against(&crate::args::every_verb(), &seen, now.wall_ms())
+    let seen = armada_manifest::untried::read(&armada_manifest::untried::path(&place.armada_home));
+    armada_core::untried::against(&crate::args::every_verb(), &seen, now.wall_ms())
         .into_iter()
         .filter(|row| all || row.count == 0)
         .collect()
@@ -171,11 +170,11 @@ pub(crate) fn when(row: &Row) -> String {
 /// The envelope the verb answers in.
 fn listing(results: Vec<Row>) -> Output {
     let untried = results.iter().filter(|row| row.count == 0).count();
-    Output::Coverage(Box::new(Envelope::ok(
-        "coverage",
+    Output::Untried(Box::new(Envelope::ok(
+        "untried",
         None,
         Status::Ok,
-        CoverageData {
+        UntriedData {
             tried: results.len() - untried,
             untried,
             results,
@@ -209,7 +208,7 @@ mod tests {
     /// envelope rather than left to a caller to derive.
     #[test]
     fn the_summary_counts_what_was_never_run() {
-        let Output::Coverage(envelope) = listing(vec![
+        let Output::Untried(envelope) = listing(vec![
             row("doctor", None, false),
             row("failures", Some(1), true),
         ]) else {

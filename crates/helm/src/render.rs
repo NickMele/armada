@@ -110,7 +110,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::GuildChange(envelope) => guild_change(envelope, style, width),
         Output::Failures(envelope) => failures(envelope, style, width),
         Output::Failure(envelope) => failure(envelope, style, width),
-        Output::Coverage(envelope) => coverage(envelope, style, width),
+        Output::Untried(envelope) => untried(envelope, style, width),
         Output::Spawn(envelope) => spawn(envelope, style, width),
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
         Output::Bridge(envelope) => bridge(envelope, style, width),
@@ -2088,7 +2088,7 @@ fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> St
     out
 }
 
-/// `armada coverage` — every verb Armada owns, and what this machine has done
+/// `armada untried` — every verb Armada owns, and what this machine has done
 /// with each.
 ///
 /// **No status word, and that is deliberate.** `docs/glossary.md` fixes the
@@ -2097,8 +2097,8 @@ fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> St
 /// readers have learned to read one way. The two facts are the count and the
 /// last time, so those are the cells — and `never` is spelled out, because an
 /// empty cell in the one column this listing exists for reads as a bug.
-fn coverage(
-    envelope: &Envelope<armada_core::envelope::CoverageData>,
+fn untried(
+    envelope: &Envelope<armada_core::envelope::UntriedData>,
     style: Style,
     width: usize,
 ) -> String {
@@ -2119,14 +2119,14 @@ fn coverage(
                     n => format::count(n as usize, "run"),
                 }),
             ),
-            Cell::muted(crate::verbs::coverage::when(row)),
+            Cell::muted(crate::verbs::untried::when(row)),
         ]);
     }
 
     let mut out = table.render(style, width);
     if table.is_empty() {
         // **Reached by having run everything**, which is the one outcome worth
-        // saying in words: a blank table under `armada coverage` would read as
+        // saying in words: a blank table under `armada untried` would read as
         // the counter being broken.
         out.push_str("  every verb has been run at least once\n");
     }
@@ -2361,15 +2361,25 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
     }
     out.push('\n');
 
+    // **The vocabulary follows the origin, not the render function.** A task
+    // is not a failure — `armada tasks start` / `armada tasks clear`, the
+    // words `docs/glossary.md` and `Lens::promote` already settled — and this
+    // is the one screen `armada task`, `armada tasks show` and `armada
+    // failures show` all draw through, so the branch has to live here rather
+    // than being assumed away.
+    let (promote_verb, clear_verb) = match entry.origin.is_fault() {
+        true => ("failures fix", "failures clear"),
+        false => ("tasks start", "tasks clear"),
+    };
     out.push_str(&summary(
         style,
         envelope.status,
         &[
             match &entry.job {
                 Some(job) => format!("armada fleet show {job}"),
-                None => format!("armada failures fix {}", entry.id),
+                None => format!("armada {promote_verb} {}", entry.id),
             },
-            format!("armada failures clear {}", entry.id),
+            format!("armada {clear_verb} {}", entry.id),
         ],
     ));
     out
@@ -6266,22 +6276,22 @@ mod tests {
     /// vocabulary describes what Armada did; this column describes what you
     /// did, and a tenth word in that column would be read as the former.
     #[test]
-    fn the_coverage_table_says_never_and_borrows_no_status_word() {
+    fn the_untried_table_says_never_and_borrows_no_status_word() {
         let envelope = Envelope {
             schema_version: armada_core::envelope::SCHEMA_VERSION,
-            verb: "coverage".to_string(),
+            verb: "untried".to_string(),
             workspace: None,
             status: Status::Ok,
             error: None,
-            data: armada_core::envelope::CoverageData {
+            data: armada_core::envelope::UntriedData {
                 results: vec![
-                    armada_core::coverage::Row {
+                    armada_core::untried::Row {
                         verb: "guild export".to_string(),
                         count: 0,
                         ok: false,
                         age_s: None,
                     },
-                    armada_core::coverage::Row {
+                    armada_core::untried::Row {
                         verb: "doctor".to_string(),
                         count: 3,
                         ok: false,
@@ -6292,7 +6302,7 @@ mod tests {
                 untried: 1,
             },
         };
-        let drawn = strip_ansi(&coverage(&envelope, Style::plain(), 100));
+        let drawn = strip_ansi(&untried(&envelope, Style::plain(), 100));
         assert!(drawn.contains("armada guild export"), "{drawn}");
         assert!(drawn.contains("never"), "{drawn}");
         assert!(drawn.contains("not once"), "{drawn}");

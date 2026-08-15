@@ -197,7 +197,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Failures(failures) => failures.json(),
         Invocation::Tasks(tasks) => tasks.json(),
-        Invocation::Coverage { json, .. } => *json,
+        Invocation::Untried { json, .. } => *json,
         Invocation::Report { json, .. } | Invocation::Task { json, .. } => *json,
         Invocation::Mcp { json } => *json,
         Invocation::Version | Invocation::Help(_) => false,
@@ -460,11 +460,11 @@ fn dispatch(
         };
     }
 
-    // **`armada coverage` has fewer preconditions than any other verb**, and it
+    // **`armada untried` has fewer preconditions than any other verb**, and it
     // has to: it is the verb you reach for when you do not know what works yet.
     // No workspace, no boot id, no guild — it reads one file and diffs it
     // against Armada's own roster.
-    if let Invocation::Coverage { all, json } = invocation {
+    if let Invocation::Untried { all, json } = invocation {
         let place = verbs::fleet::Where {
             home: home.to_path_buf(),
             armada_home: armada_manifest::machine::armada_home(home),
@@ -476,7 +476,7 @@ fn dispatch(
         // (`ARCHITECTURE.md` §1.4).
         let interactive = terminal.can_ask() && !json;
         let mut asking = at_the_terminal(style, terminal);
-        return verbs::coverage::ls(
+        return verbs::untried::ls(
             &SystemClock,
             &place,
             all,
@@ -536,6 +536,7 @@ fn dispatch(
                             look(style, terminal),
                             progress,
                             verbs::failures::Lens::Failures,
+                            None,
                         )
                     }
                     args::FailuresInvocation::Show { id, .. } => {
@@ -830,7 +831,7 @@ fn dispatch(
         | Invocation::HelmDisable { .. }
         | Invocation::Failures(_)
         | Invocation::Tasks(_)
-        | Invocation::Coverage { .. }
+        | Invocation::Untried { .. }
         | Invocation::Report { .. }
         | Invocation::Task { .. } => {
             unreachable!("machine-scoped, and handled above")
@@ -1767,7 +1768,7 @@ fn remember(
     let armada_home = armada_manifest::machine::armada_home(home);
     let _ = armada_manifest::recent::record(&armada_manifest::recent::path(&armada_home), latest);
 
-    // **The same run, counted against Armada's own roster** — `armada coverage`,
+    // **The same run, counted against Armada's own roster** — `armada untried`,
     // whose whole subject is the verbs this machine has *never* run. It lives
     // here rather than in a recorder of its own because the two answer the same
     // question at different lengths: the buffer keeps ten runs and can say what
@@ -1778,12 +1779,12 @@ fn remember(
     // name that was already on the roster, so a repository's declared command
     // and a typo alike are counted as nothing at all — which is why this needs
     // no redaction of its own.
-    if let Some(verb) = armada_core::coverage::matched(
+    if let Some(verb) = armada_core::untried::matched(
         &armada_core::recent::verb_of(argv),
         &armada_helm::args::every_verb(),
     ) {
-        let _ = armada_manifest::coverage::record(
-            &armada_manifest::coverage::path(&armada_home),
+        let _ = armada_manifest::untried::record(
+            &armada_manifest::untried::path(&armada_home),
             &verb,
             now.wall_ms(),
             exit == 0,

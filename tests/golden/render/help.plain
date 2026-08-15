@@ -43,10 +43,10 @@ FLEET — the agents you do not talk to: Jobs, worktrees, budgets
   kill [<job>]           end a Job and release everything it owns
 
 HELM AND THE BRIDGE — where you talk, and what you watch
-  helm     the one agent you talk to: wire the toolbelt, report the launch
-  enable   let --exec become a session, on this machine
-  disable  the opposite of enable — the default on a fresh install
-  bridge   the live screen: every Job, its state, its spend, who needs you
+  helm          the one agent you talk to: wire the toolbelt, report the launch
+  helm enable   let --exec become a session, on this machine
+  helm disable  the opposite of enable — the default on a fresh install
+  bridge        the live screen: every Job, its state, its spend, who needs you
 
 THIS MACHINE
   init      set up this machine: checks, ~/.armada/, and your guild
@@ -55,7 +55,7 @@ THIS MACHINE
   report    tell Armada something went wrong that it did not notice
   task      write down a thing to do, and spend nothing on it
   tasks     what you wrote down, and how to put a Job on one
-  coverage  which of Armada's verbs you have never run here
+  untried   which of Armada's verbs you have never run here
 
 GLOBAL FLAGS
   --json          answer as one JSON object, for a script or an agent
