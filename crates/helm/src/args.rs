@@ -139,6 +139,14 @@ pub enum Invocation {
         /// Repair what is safely repairable.
         fix: bool,
     },
+    /// `armada settings` — every setting Armada knows about, read-only
+    /// (`PLAN.md` §13.1). Two small top-level variants, exactly as
+    /// [`Invocation::Doctor`] is: this reports on the machine and the guild
+    /// both, so it sits beside them rather than under either.
+    Settings {
+        /// Emit the envelope.
+        json: bool,
+    },
     /// `armada bridge` — the live screen.
     Bridge(Box<Bridge>),
     /// `armada helm` — assemble the orchestrator's launch.
@@ -893,9 +901,10 @@ pub const FLEET_VERBS: [&str; 11] = [
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 11] = [
+pub const TOP_LEVEL_VERBS: [&str; 12] = [
     "init",
     "doctor",
+    "settings",
     "bridge",
     "helm",
     "helm enable",
@@ -1086,6 +1095,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         match name {
             "init" => return machine_init(rest, json, color),
             "doctor" => return doctor(rest, json, color),
+            "settings" => return settings(rest, json, color),
             "bridge" => return bridge(rest, json, color),
             "helm" => return helm(rest, json, color),
             "guild" => return guild(rest, json, color),
@@ -1687,6 +1697,22 @@ fn doctor(
         json: parsed.json,
         fix: parsed.on("--fix"),
     })
+}
+
+/// `armada settings` — no flags of its own, read-only by construction: there
+/// is nothing here that would take a value to write.
+fn settings(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "settings") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+    let parsed = flags(rest, json, color, "settings", &[], &[])?;
+    Ok(Invocation::Settings { json: parsed.json })
 }
 
 /// `armada report "<what happened>"`.

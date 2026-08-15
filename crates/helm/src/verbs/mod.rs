@@ -22,6 +22,7 @@ pub mod machine;
 pub mod preflight;
 pub mod report;
 pub mod services;
+pub mod settings;
 pub mod skills;
 pub mod status;
 pub mod tasks;
@@ -35,8 +36,8 @@ use armada_core::envelope::{
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
     GuildSyncData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun, KillData,
     MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
-    ResumeData, ScanData, ServicesData, ShowData, SkillsData, SpawnData, StatusData, TickData,
-    UntriedData, UpDryRun, VerdictData, VerifyData,
+    ResumeData, ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData,
+    TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -84,6 +85,8 @@ pub enum Output {
     MachineInit(Box<Envelope<MachineInitData>>),
     /// `armada doctor`.
     Doctor(Box<Envelope<DoctorData>>),
+    /// `armada settings` — every setting Armada knows about, read-only.
+    Settings(Box<Envelope<SettingsData>>),
     /// `armada guild pull` and `armada guild push`.
     GuildSync(Box<Envelope<GuildSyncData>>),
     /// `armada guild init`.
@@ -171,6 +174,7 @@ impl Output {
             Output::Commands(e) => e.to_json(),
             Output::MachineInit(e) => e.to_json(),
             Output::Doctor(e) => e.to_json(),
+            Output::Settings(e) => e.to_json(),
             Output::GuildSync(e) => e.to_json(),
             Output::GuildInit(e) => e.to_json(),
             Output::GuildBundle(e) => e.to_json(),
@@ -241,6 +245,7 @@ impl Output {
             Output::Commands(e) => e.exit_code(),
             Output::MachineInit(e) => e.exit_code(),
             Output::Doctor(e) => e.exit_code(),
+            Output::Settings(e) => e.exit_code(),
             Output::GuildSync(e) => e.exit_code(),
             Output::GuildInit(e) => e.exit_code(),
             Output::GuildBundle(e) => e.exit_code(),
