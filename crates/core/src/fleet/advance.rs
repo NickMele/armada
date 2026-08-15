@@ -51,6 +51,12 @@ pub enum Attention {
         /// In words, for `--json` and the screen.
         why: &'static str,
     },
+    /// Its Drone is still working. **Not [`Attention::Idle`]**, and the two are
+    /// separated because a caller looping until nothing can move has to tell
+    /// *nothing is happening* from *something is happening elsewhere*: a
+    /// `--watch` that treated a live Drone as idle would return the instant it
+    /// started one.
+    Working,
     /// Its exchange has ended. Gate the step it is on.
     Gate,
     /// It reached one of the Job's ceilings. **Stop and ask** — `needs_human` is
@@ -81,9 +87,7 @@ pub fn attention(record: &Job, observed: &Observed, alive: bool) -> Attention {
         return Attention::Ceiling(ceiling);
     }
     if alive {
-        return Attention::Idle {
-            why: "its Drone is still working",
-        };
+        return Attention::Working;
     }
     match observed.state {
         // **Waiting on a person is not the loop's to break.** Both states mean
@@ -338,10 +342,10 @@ mod tests {
     #[test]
     fn a_live_drone_is_left_alone() {
         let record = job(JobState::Running);
-        assert!(matches!(
+        assert_eq!(
             attention(&record, &observed(JobState::Running, None), true),
-            Attention::Idle { .. }
-        ));
+            Attention::Working
+        );
     }
 
     /// **A ceiling wins over a live Drone.** A ceiling that only applied

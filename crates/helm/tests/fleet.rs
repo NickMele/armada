@@ -197,6 +197,24 @@ struct Harness {
     refuse: RefCell<Vec<(String, String)>>,
     /// Prefixes that answer `ENOENT` instead of running at all.
     unspawnable: RefCell<Vec<String>>,
+    /// Whole answers, matched on a prefix of the spelled argv.
+    ///
+    /// **Needed because M4's loop reads a payload rather than an exit code.**
+    /// `armada manifest check --detach` hands back a run id and `--status`
+    /// hands back a verdict, and a harness that could only say *zero* or *one*
+    /// could not express the sequence the loop actually walks: start, still
+    /// running, red, then green.
+    scripted: RefCell<Vec<Scripted>>,
+}
+
+/// One scripted answer.
+#[derive(Clone)]
+struct Scripted {
+    prefix: String,
+    code: i32,
+    stdout: String,
+    /// Consumed on the first match, so a sequence can be written down.
+    once: bool,
 }
 
 impl Harness {
@@ -209,7 +227,39 @@ impl Harness {
                     .to_string(),
             refuse: RefCell::new(Vec::new()),
             unspawnable: RefCell::new(Vec::new()),
+            scripted: RefCell::new(Vec::new()),
         }
+    }
+
+    /// Answer every call whose argv contains `prefix` with this payload.
+    fn answering(self, prefix: &str, code: i32, stdout: &str) -> Harness {
+        self.scripted.borrow_mut().push(Scripted {
+            prefix: prefix.to_string(),
+            code,
+            stdout: stdout.to_string(),
+            once: false,
+        });
+        self
+    }
+
+    /// Answer the **next** call whose argv contains `prefix`, once.
+    ///
+    /// **Order matters and is the order they are written in**, so a test reads
+    /// as the sequence the loop walks rather than as a set of facts.
+    fn answering_once(self, prefix: &str, code: i32, stdout: &str) -> Harness {
+        let mut scripted = self.scripted.borrow_mut();
+        let at = scripted.iter().filter(|entry| entry.once).count();
+        scripted.insert(
+            at,
+            Scripted {
+                prefix: prefix.to_string(),
+                code,
+                stdout: stdout.to_string(),
+                once: true,
+            },
+        );
+        drop(scripted);
+        self
     }
 
     /// A classifier that answers with a guess rather than an answer.
@@ -321,6 +371,26 @@ impl Run for Harness {
                     signal: None,
                     stdout: String::new(),
                     stderr: stderr.clone(),
+                    timed_out: false,
+                });
+            }
+        }
+
+        {
+            let mut scripted = self.scripted.borrow_mut();
+            if let Some(at) = scripted
+                .iter()
+                .position(|entry| spelled.contains(&entry.prefix))
+            {
+                let answer = match scripted[at].once {
+                    true => scripted.remove(at),
+                    false => scripted[at].clone(),
+                };
+                return Ok(RunOutput {
+                    code: Some(answer.code),
+                    signal: None,
+                    stdout: answer.stdout,
+                    stderr: String::new(),
                     timed_out: false,
                 });
             }
@@ -3535,4 +3605,703 @@ fn what_progress_draws_never_reaches_the_envelope() {
         quiet, watched,
         "the envelope changed depending on who was watching"
     );
+}
+
+// ------------------------------------------------------- M4: the workflow loop
+//
+// **These are the tests that prove the path, and that is the point of them.**
+// `ARCHITECTURE.md` §1.2's lesson from the two bugs that shipped today is that a
+// green test on a decision function proves nothing about whether the driver ever
+// calls it — `advance::attention` and `gate::decide` have unit tests of their
+// own, and every one of them would still pass if `armada fleet tick` never
+// looked at a Job. So each of these drives the **real verb** against a **real
+// detached Drone** and asserts on what ended up on disk and on what `execve`
+// received.
+
+/// Write a workflow into this machine's guild, replacing a starter.
+///
+/// **A starter's name, so the spawn path is the real one.** `--workflow` is
+/// checked against the classification's four labels, and inventing a fifth here
+/// would be a test that only passes because it went round the check.
+fn workflow(scratch: &Scratch, name: &str, document: &str) {
+    std::fs::write(
+        scratch
+            .home
+            .path()
+            .join(".armada/guild/workflows")
+            .join(format!("{name}.yml")),
+        document,
+    )
+    .unwrap();
+}
+
+fn ticked(output: &Output) -> armada_core::envelope::TickData {
+    match output {
+        Output::Tick(envelope) => envelope.data.clone(),
+        other => panic!("not a tick: {other:?}"),
+    }
+}
+
+/// Wait until a Job's Drone has actually gone.
+///
+/// **`await_turn` is not enough, and the difference is the whole subject.** The
+/// stub writes its turn and *then* exits, so a transcript with a finished turn
+/// in it is routinely a Drone that is still a process. The loop is written to
+/// leave a live Drone alone — correctly — so a test that gated on the transcript
+/// alone would be asserting against a Job the loop had every right to skip.
+fn await_exit(scratch: &Scratch, uuid: &str) {
+    let place = scratch.place();
+    for _ in 0..600 {
+        let record = scratch.store().load(uuid).expect("the Job is on disk");
+        if !armada_fleet::drone::alive(
+            &RealRun,
+            &place.armada_home,
+            record.drone.as_ref(),
+            &place.boot_id,
+        ) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("the stub Drone never exited");
+}
+
+/// One pass of the loop over one Job.
+fn tick(scratch: &Scratch, run: &Harness, job: &str) -> armada_core::envelope::TickData {
+    let data = ticked(
+        &fleet::tick(run, &FrozenClock::new(), &scratch.place(), Some(job), false)
+            .expect("the pass answers"),
+    );
+    data
+}
+
+/// Drive the loop until the Job stops moving, and hand back every row.
+///
+/// **Bounded rather than `--watch`.** A test that could not terminate is worse
+/// than one that misses a case, and the bound is what makes the failure a
+/// readable assertion instead of a hung suite.
+fn until_settled(
+    scratch: &Scratch,
+    run: &Harness,
+    job: &str,
+    uuid: &str,
+) -> Vec<armada_core::envelope::TickRow> {
+    let mut seen = Vec::new();
+    for _ in 0..120 {
+        // Never gate a Job whose Drone is still a process: the loop would
+        // rightly answer `working`, and the test would be measuring the race.
+        await_exit(scratch, uuid);
+        let row = tick(scratch, run, job).results.remove(0);
+        let done = matches!(row.did.as_str(), "finished" | "halted" | "asked");
+        if row.did == "advanced" || row.did == "retried" {
+            // The next exchange writes to the same path; forget the last one so
+            // a later assertion is about the turn it is asking about.
+            forget_argv(uuid);
+            scratch.watch(uuid);
+            await_turn(scratch, uuid);
+        }
+        seen.push(row);
+        if done {
+            return seen;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("the loop never settled: {seen:#?}");
+}
+
+/// **The gap this milestone closes.**
+///
+/// A Drone runs one exchange under `--print` and exits. Before this, nothing
+/// observed that: the Job sat `RUNNING` for ever beside a process group that was
+/// gone, which is what a person hit on their first real spawn. One pass of the
+/// loop has to notice, gate the step, record the verdict and start the next
+/// exchange.
+#[test]
+fn a_finished_exchange_advances_the_step_instead_of_leaving_the_job_running_for_ever() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: two steps\nends_at: branch\nsteps:\n\
+         \x20 - id: one\n    skill: reproduce-failure\n    verify: { must: always }\n\
+         \x20 - id: two\n    skill: land-branch\n    verify: { must: always }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("something is broken")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    // The record still says what `spawn` wrote, because nothing reports home.
+    let before = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(before.step, "one");
+    assert_eq!(before.state, JobState::Running);
+
+    let pass = tick(&scratch, &run, &data.name);
+    assert_eq!(pass.moved, 1, "{pass:#?}");
+    assert_eq!(pass.results[0].did, "advanced");
+    assert_eq!(pass.results[0].predicate.as_deref(), Some("always"));
+
+    let after = scratch.store().load(&data.uuid).unwrap();
+    scratch.watch(&data.uuid);
+    assert_eq!(after.step, "two", "the Job did not move on");
+
+    // **The gate wrote the boundary, carrying what it rested on.** `completed`
+    // is `fleet.verdict`'s word and no Drone can write it.
+    let completed = after
+        .transitions
+        .iter()
+        .find(|entry| entry.event == armada_core::fleet::job::StepEvent::Completed)
+        .expect("the gate recorded a completion");
+    assert_eq!(completed.step, "one");
+    let gate = completed.gate.as_ref().expect("a completion carries a gate");
+    assert!(
+        !gate.evidence.is_empty(),
+        "a step passed on nothing: {gate:?}"
+    );
+
+    // **And the driver actually started the next exchange.** This is the
+    // assertion the two bugs that shipped today were missing: the decision
+    // functions would pass with nothing wired to them.
+    let argv = recorded_argv(&data.uuid);
+    assert!(
+        argv.iter().any(|word| word == "--resume"),
+        "the next step was decided and never started: {argv:?}"
+    );
+    assert!(
+        argv.iter().any(|word| word.contains("`two` step")),
+        "the next exchange was not asked for the next step: {argv:?}"
+    );
+}
+
+/// **The done-when, less its `review` step** (PHASES.md §8.6).
+///
+/// A bug workflow reproduces a failure, writes a test that fails first, fixes
+/// it, gets `check` green and lands on a local branch — with **no human turn in
+/// the middle**. Every gate is decided by an external command: a search of the
+/// tree, two `armada manifest check` runs and a `git status`.
+///
+/// **The shipped `bug` workflow has a fourth step this cannot reach**, gated on
+/// `review_clean`, which needs a reviewer Job that Fleet does not spawn. That
+/// case is its own test below, and `docs/reserved/016` is where it is recorded.
+#[test]
+fn a_bug_workflow_reproduces_fixes_and_lands_with_no_human_turn_in_the_middle() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: reproduce, fix, land\nends_at: branch\n\
+         budget:\n  iterations: 20\n  tokens: 600000\n  wall_clock: 90m\n  \
+         on_exhausted: needs_human\nsteps:\n\
+         \x20 - id: reproduce\n    skill: reproduce-failure\n    \
+         verify:\n      must: failing_test_exists\n      test: ${task.test}\n\
+         \x20 - id: fix\n    skill: implement-change\n    scope: changed\n    \
+         verify: { must: check_passes }\n\
+         \x20 - id: land\n    skill: land-branch\n    verify: { must: branch_exists }\n",
+    );
+
+    // The `reproduce` gate wants the suite **red**; the `fix` gate wants it
+    // green. One `--detach` answers with a run id and `--status` answers with
+    // the verdict, once each, in the order the workflow asks for them.
+    let run = scratch
+        .harness()
+        .answering(
+            "manifest check --detach",
+            0,
+            r#"{"schema_version":2,"verb":"check","status":"RUNNING","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        )
+        .answering_once(
+            "manifest check --status",
+            1,
+            r#"{"schema_version":2,"verb":"check","status":"FAILED","error":{"class":"tool_failed","where":"api:test","message":"1 failed"},"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        )
+        .answering(
+            "manifest check --status",
+            0,
+            r#"{"schema_version":2,"verb":"check","status":"PASS","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        );
+
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            // **Named once, before anything starts.** `${task.test}` is a
+            // placeholder nothing else substitutes, and a gate that cannot name
+            // its test stops and asks — which would be a human turn in the
+            // middle.
+            set: std::collections::BTreeMap::from([(
+                "test".to_string(),
+                "regression_bad_parse".to_string(),
+            )]),
+            ..task("the parser drops the last field")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
+    let last = rows.last().unwrap();
+    assert_eq!(last.did, "finished", "{rows:#?}");
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.state, JobState::Done);
+    assert_eq!(record.step, "land");
+    assert_eq!(record.verdict, Some(armada_core::fleet::Verdict::Pass));
+
+    // **Nothing asked a person anything.** That is the clause the milestone
+    // turns on, and an inbox entry is the only way it could have.
+    let inbox = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    assert!(inbox.is_empty(), "it stopped to ask: {inbox:#?}");
+
+    // **Every one of the three steps completed on evidence a command
+    // produced.** A `completed` with no evidence is the assertion §14.3 refuses,
+    // and `fleet.verdict` would have refused to record it.
+    for step in ["reproduce", "fix", "land"] {
+        let completed = record
+            .transitions
+            .iter()
+            .find(|entry| {
+                entry.step == step && entry.event == armada_core::fleet::job::StepEvent::Completed
+            })
+            .unwrap_or_else(|| panic!("`{step}` never completed: {:#?}", record.transitions));
+        let gate = completed.gate.as_ref().expect("a gate");
+        assert!(!gate.evidence.is_empty(), "`{step}` passed on nothing");
+    }
+
+    // **And `reproduce` passed on a check that was red.** This is the whole
+    // point of `failing_test_exists`: a Drone that "fixed" a bug it never
+    // reproduced would have a green check here.
+    let reproduce = record
+        .transitions
+        .iter()
+        .find(|entry| {
+            entry.step == "reproduce"
+                && entry.event == armada_core::fleet::job::StepEvent::Completed
+        })
+        .unwrap();
+    let evidence = &reproduce.gate.as_ref().unwrap().evidence;
+    let check = evidence
+        .iter()
+        .find(|piece| piece.kind == "check")
+        .expect("a check settled the reproduction");
+    assert_ne!(
+        check.exit, 0,
+        "a green suite was accepted as a reproduction: {evidence:#?}"
+    );
+    let found = evidence
+        .iter()
+        .find(|piece| piece.kind == "test")
+        .expect("the search for the test is evidence too");
+    assert_eq!(found.scope, "regression_bad_parse");
+}
+
+/// **`failing_test_exists` refuses a green suite**, which is the failure it
+/// exists to prevent: a Drone that "fixes" a bug it never reproduced and closes
+/// green, with its own assertion as the only evidence anybody has.
+#[test]
+fn a_green_suite_is_not_a_reproduction_and_the_step_is_run_again() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: reproduce only\nends_at: branch\n\
+         budget:\n  iterations: 20\n  tokens: 600000\n  wall_clock: 90m\n  \
+         on_exhausted: needs_human\nsteps:\n\
+         \x20 - id: reproduce\n    skill: reproduce-failure\n    \
+         verify:\n      must: failing_test_exists\n      test: regression_bad_parse\n",
+    );
+    let run = scratch
+        .harness()
+        .answering(
+            "manifest check --detach",
+            0,
+            r#"{"schema_version":2,"verb":"check","status":"RUNNING","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        )
+        .answering(
+            "manifest check --status",
+            0,
+            r#"{"schema_version":2,"verb":"check","status":"PASS","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        );
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("the parser drops the last field")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    // First pass starts the check; second reads it green and refuses.
+    assert_eq!(tick(&scratch, &run, &data.name).results[0].did, "waiting");
+    let pass = tick(&scratch, &run, &data.name);
+    scratch.watch(&data.uuid);
+    assert_eq!(pass.results[0].did, "retried", "{pass:#?}");
+    assert!(
+        pass.results[0].why.contains("nothing has been reproduced"),
+        "{}",
+        pass.results[0].why
+    );
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.step, "reproduce", "a green suite advanced the step");
+    assert_eq!(record.verdict, Some(armada_core::fleet::Verdict::Failed));
+
+    // **The retry is told what was wrong with the last attempt**, rather than
+    // being asked the same question again with no idea why it is being asked.
+    let argv = recorded_argv(&data.uuid);
+    assert!(
+        argv.iter().any(|word| word.contains("did not pass")),
+        "the retry started blind: {argv:?}"
+    );
+}
+
+/// **A step with no rope left stops and asks — it does not abort.**
+/// `on_exhausted: needs_human` is the only value the enum has, and it means the
+/// Job records where it reached and is raised to the inbox.
+#[test]
+fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: one impossible step\nends_at: branch\n\
+         budget:\n  iterations: 2\n  tokens: 600000\n  wall_clock: 90m\n  \
+         on_exhausted: needs_human\nsteps:\n\
+         \x20 - id: land\n    skill: land-branch\n    verify: { must: artifact_exists, artifact: never-written.md }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("write the thing")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
+    let words: Vec<&str> = rows.iter().map(|row| row.did.as_str()).collect();
+    assert_eq!(words, ["retried", "halted"], "{rows:#?}");
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(
+        record.state,
+        JobState::Paused,
+        "an exhausted step aborted instead of asking"
+    );
+    assert_eq!(
+        record.verdict,
+        Some(armada_core::fleet::Verdict::NeedsHuman)
+    );
+    let inbox = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    assert_eq!(inbox.len(), 1, "{inbox:#?}");
+    assert!(
+        inbox[0].body.contains("`land`"),
+        "the entry does not say which step: {}",
+        inbox[0].body
+    );
+}
+
+/// **The two predicates nothing can decide stop and say so.**
+///
+/// `review_clean` needs a reviewer Job and `subjob_passed` needs a sub-Job;
+/// Fleet starts neither. Answering *yes* to either would be the false pass the
+/// predicate exists to prevent, and answering *no* would retry until the budget
+/// was gone and then blame a ceiling — sending the reader to hunt a failing test
+/// instead of telling them what is actually missing.
+#[test]
+fn a_gate_that_needs_another_job_halts_once_and_names_what_is_missing() {
+    for (predicate, wanted) in [
+        ("review_clean", "reviewer Job"),
+        ("subjob_passed", "sub-Job"),
+    ] {
+        let scratch = Scratch::new();
+        workflow(
+            &scratch,
+            "bug",
+            &format!(
+                "name: bug\ndescription: one ungateable step\nends_at: branch\nsteps:\n\
+                 \x20 - id: review\n    verify: {{ must: {predicate} }}\n"
+            ),
+        );
+        let run = scratch.harness();
+        let data = spawn(
+            &scratch,
+            &run,
+            &Spawn {
+                workflow: Some("bug".to_string()),
+                ..task("look at it")
+            },
+        );
+        await_turn(&scratch, &data.uuid);
+        await_exit(&scratch, &data.uuid);
+
+        let pass = tick(&scratch, &run, &data.name);
+        assert_eq!(pass.results[0].did, "halted", "{predicate}: {pass:#?}");
+        assert!(
+            pass.results[0].why.contains(wanted),
+            "{predicate} did not say what is missing: {}",
+            pass.results[0].why
+        );
+
+        let record = scratch.store().load(&data.uuid).unwrap();
+        assert_eq!(record.state, JobState::Paused, "{predicate}");
+        // **It stopped once.** Retrying an undecidable gate would spend the
+        // whole budget and then report the wrong reason.
+        assert_eq!(
+            record
+                .transitions
+                .iter()
+                .filter(|entry| entry.event == armada_core::fleet::job::StepEvent::Failed)
+                .count(),
+            0,
+            "{predicate} was recorded as a failure rather than as undecidable"
+        );
+        let inbox = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+        assert_eq!(inbox.len(), 1, "{predicate}: {inbox:#?}");
+    }
+}
+
+/// **`human_approves` asks, and the answer decides.** It is the one predicate
+/// whose evidence is a person, and the loop does not break it: the Job pauses
+/// until `armada fleet answer` closes the entry.
+#[test]
+fn human_approves_pauses_until_the_answer_arrives_and_then_reads_it() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: approval, then done\nends_at: branch\nsteps:\n\
+         \x20 - id: approval\n    verify: { must: human_approves }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("is this right")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+
+    let pass = tick(&scratch, &run, &data.name);
+    assert_eq!(pass.results[0].did, "asked", "{pass:#?}");
+    assert_eq!(
+        scratch.store().load(&data.uuid).unwrap().state,
+        JobState::Paused
+    );
+
+    // A pass over a Job waiting on a person changes nothing.
+    assert_eq!(tick(&scratch, &run, &data.name).results[0].did, "idle");
+
+    // Answer it, and the same gate now holds — on the person's own words.
+    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    armada_fleet::inbox::answer(&scratch.inbox(), &entries[0].uuid, "yes, ship it").unwrap();
+    let record = scratch.store().load(&data.uuid).unwrap();
+    let mut record = record;
+    // `answer` is what restarts a paused Job on a real machine; here the loop is
+    // put back on a Job whose question has been closed.
+    record.state = JobState::Running;
+    scratch.store().save(&record).unwrap();
+
+    let pass = tick(&scratch, &run, &data.name);
+    assert_eq!(pass.results[0].did, "finished", "{pass:#?}");
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.state, JobState::Done);
+}
+
+/// **A `PASS` on the last step of a `human`-ended workflow does not close the
+/// Job.** `design` and `plan` both end at you, because no command can tell you
+/// an approach is right.
+#[test]
+fn a_workflow_that_ends_at_a_person_hands_the_job_over_rather_than_closing_it() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "design",
+        "name: design\ndescription: one step, ending at you\nends_at: human\nsteps:\n\
+         \x20 - id: explore\n    skill: explore\n    verify: { must: always }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("design".to_string()),
+            ..task("what should this look like")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+
+    let pass = tick(&scratch, &run, &data.name);
+    assert_eq!(pass.results[0].did, "asked", "{pass:#?}");
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.state, JobState::Paused, "it closed itself");
+    // The step still passed: the pause is the Job's, not the step's.
+    assert!(record.transitions.iter().any(|entry| {
+        entry.step == "explore" && entry.event == armada_core::fleet::job::StepEvent::Completed
+    }));
+    assert_eq!(
+        armada_fleet::inbox::read(&scratch.inbox()).unwrap().len(),
+        1
+    );
+}
+
+/// **A pass never touches a Job whose Drone is still working.** Gating a live
+/// exchange would start a check against a worktree being written to — and
+/// `--watch` has to be able to tell that Job from an idle one, or it returns the
+/// instant it starts one.
+#[test]
+fn a_job_whose_drone_is_mid_exchange_is_reported_as_working_and_left_alone() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: two steps\nends_at: branch\nsteps:\n\
+         \x20 - id: one\n    skill: reproduce-failure\n    verify: { must: always }\n\
+         \x20 - id: two\n    skill: land-branch\n    verify: { must: always }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task(&format!("something is broken {STAY_ALIVE}"))
+        },
+    );
+    // The stub sleeps rather than finishing, so this is a Job mid-exchange.
+    recorded_argv(&data.uuid);
+
+    let pass = tick(&scratch, &run, &data.name);
+    assert_eq!(pass.results[0].did, "working", "{pass:#?}");
+    assert_eq!(pass.moved, 0);
+    assert_eq!(scratch.store().load(&data.uuid).unwrap().step, "one");
+}
+
+/// **`--watch` runs the loop to a stop.** One command, one Job, from a finished
+/// exchange to `DONE` with nothing typed in between.
+#[test]
+fn watch_drives_a_job_to_its_end_in_one_invocation() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: one step\nends_at: branch\nsteps:\n\
+         \x20 - id: land\n    skill: land-branch\n    verify: { must: branch_exists }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("land it")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+
+    let pass = ticked(
+        &fleet::tick(
+            &run,
+            &FrozenClock::new(),
+            &scratch.place(),
+            Some(&data.name),
+            true,
+        )
+        .expect("the watch answers"),
+    );
+    assert_eq!(pass.results[0].did, "finished", "{pass:#?}");
+    assert_eq!(
+        scratch.store().load(&data.uuid).unwrap().state,
+        JobState::Done
+    );
+}
+
+/// **The shipped `bug` workflow stops at `review`, and says why.**
+///
+/// This is the honest edge of M4: `review_clean` needs a reviewer Job that Fleet
+/// does not spawn, so the shipped four-step `bug` reproduces, fixes, and then
+/// asks. `docs/reserved/016` is where that is recorded and what it would take to
+/// close it. The test exists so the boundary is a fact in the suite rather than
+/// a sentence in a document.
+#[test]
+fn the_shipped_bug_workflow_runs_to_its_review_step_and_stops_there() {
+    let scratch = Scratch::new();
+    let run = scratch
+        .harness()
+        .answering(
+            "manifest check --detach",
+            0,
+            r#"{"schema_version":2,"verb":"check","status":"RUNNING","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        )
+        .answering_once(
+            "manifest check --status",
+            1,
+            r#"{"schema_version":2,"verb":"check","status":"FAILED","error":{"class":"tool_failed","where":"api:test","message":"1 failed"},"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        )
+        .answering(
+            "manifest check --status",
+            0,
+            r#"{"schema_version":2,"verb":"check","status":"PASS","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        );
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            set: std::collections::BTreeMap::from([(
+                "test".to_string(),
+                "regression_bad_parse".to_string(),
+            )]),
+            ..task("the parser drops the last field")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
+    let last = rows.last().unwrap();
+    assert_eq!(last.did, "halted", "{rows:#?}");
+    assert!(
+        last.why.contains("reviewer Job"),
+        "the stop does not name what is missing: {}",
+        last.why
+    );
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.step, "review");
+    // The two steps before it were decided on evidence, with nobody asked.
+    for step in ["reproduce", "fix"] {
+        assert!(
+            record.transitions.iter().any(|entry| {
+                entry.step == step
+                    && entry.event == armada_core::fleet::job::StepEvent::Completed
+                    && entry
+                        .gate
+                        .as_ref()
+                        .is_some_and(|gate| !gate.evidence.is_empty())
+            }),
+            "`{step}` did not pass on evidence: {:#?}",
+            record.transitions
+        );
+    }
 }

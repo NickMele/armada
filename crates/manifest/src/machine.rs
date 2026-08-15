@@ -503,6 +503,22 @@ pub fn boot_id(run: &impl Run, cwd: &Path) -> Option<String> {
 /// why it is one half of a pair with the boot id rather than a test on its own.
 /// `None` means the process is gone, or Armada could not sample it; both are
 /// answered by declining to kill.
+///
+/// # A zombie is gone, and saying otherwise was a real bug
+///
+/// A process that has exited but whose parent has not reaped it stays in the
+/// process table with its start time intact, so a liveness check that asked
+/// only *"is there a row"* answered **yes for ever**. That is invisible in the
+/// shape Armada normally runs — `armada fleet spawn` exits, its Drone is
+/// reparented to init and reaped at once — and it is exactly the shape
+/// `armada fleet tick --watch` is not: that one starts a Drone and then polls
+/// for it, so the Drone it started was its own child, its own zombie, and its
+/// own reason never to look again.
+///
+/// So the state is sampled alongside the start time, in the same call, and `Z`
+/// is answered as gone. **The returned string is unchanged** — the state is
+/// split off and discarded — because it is compared against start times
+/// recorded by earlier versions.
 pub fn process_start_at(run: &impl Run, cwd: &Path, pid: i32) -> Option<String> {
     #[cfg(target_os = "linux")]
     {
@@ -512,7 +528,12 @@ pub fn process_start_at(run: &impl Run, cwd: &Path, pid: i32) -> Option<String> 
         // split has to start after the last `)`.
         let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
         let after_comm = stat.rsplit_once(')')?.1;
-        after_comm.split_whitespace().nth(19).map(str::to_string)
+        let mut fields = after_comm.split_whitespace();
+        // Field 3 overall — the first after the comm — is the state character.
+        if fields.next() == Some("Z") {
+            return None;
+        }
+        fields.nth(18).map(str::to_string)
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -523,7 +544,7 @@ pub fn process_start_at(run: &impl Run, cwd: &Path, pid: i32) -> Option<String> 
                     vec![
                         "ps".to_string(),
                         "-o".to_string(),
-                        "lstart=".to_string(),
+                        "state=,lstart=".to_string(),
                         "-p".to_string(),
                         pid.to_string(),
                     ],
@@ -532,7 +553,15 @@ pub fn process_start_at(run: &impl Run, cwd: &Path, pid: i32) -> Option<String> 
                 .timeout(Duration::from_secs(5)),
             )
             .ok()?;
-        let started = output.stdout.trim().to_string();
+        // `state=,lstart=` prints `S Fri Aug 15 12:00:00 2026`. The state is
+        // the first field; everything after it is the start time exactly as it
+        // was printed before the state was asked for.
+        let (state, started) = output.stdout.trim().split_once(char::is_whitespace)?;
+        let started = started.trim().to_string();
+        // `Z` alone, or `Z+` with the foreground-group flag on it.
+        if state.starts_with('Z') {
+            return None;
+        }
         (output.ok() && !started.is_empty()).then_some(started)
     }
 }

@@ -141,20 +141,36 @@ pub struct Job {
     pub facts: std::collections::BTreeMap<String, String>,
 }
 
-/// A detached check a step's gate is waiting on.
+/// What a step's gate is waiting on.
 ///
-/// **The attempt is carried with the run id, and that is the point.** A check
-/// started for attempt 1 must not be read as attempt 2's evidence: the Drone has
+/// **The attempt is carried with it, and that is the point.** A check started
+/// for attempt 1 must not be read as attempt 2's evidence: the Drone has
 /// changed the worktree in between, and a stale green would advance a step on a
-/// run that predates the work it is supposed to be judging.
+/// run that predates the work it is supposed to be judging. The same argument
+/// holds for an answer — *"yes, ship it"* about the second thing you were asked
+/// is not approval of the third.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pending {
-    /// Which step's gate started it.
+    /// Which step's gate is waiting.
     pub step: String,
-    /// The run id `armada manifest check --detach` returned.
-    pub run: String,
+    /// What it is waiting on.
+    pub on: Waiting,
     /// Which attempt at the step it belongs to.
     pub attempt: u32,
+}
+
+/// The two things a gate waits on, each named by its own id.
+///
+/// **Two variants rather than one string with a `kind` beside it**, so a run id
+/// can never be read as an inbox entry: they are both opaque identifiers, and
+/// the only thing that would catch the confusion is the type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Waiting {
+    /// A detached `armada manifest check`, by run id.
+    Check(String),
+    /// A question in the inbox, by entry id.
+    Answer(String),
 }
 
 /// One thing a Drone said about its own progress.

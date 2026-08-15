@@ -2223,10 +2223,16 @@ pub fn tick<R: Run, C: Clock>(
         // over its ceiling becomes one — so the Job's own budget is what stops
         // this loop, and a second ceiling here would be a second thing that has
         // to agree with the first.
-        let live = rows
-            .iter()
-            .any(|row| row.did != TICK_IDLE && row.did != TICK_HALTED
-                && row.did != TICK_FINISHED && row.did != TICK_ASKED);
+        // **Live means *could still move on its own*.** A Job whose Drone is
+        // working will produce something; one waiting on a check will decide;
+        // one that just advanced or retried has a Drone starting. The four that
+        // are not live are the four that need a person or need nothing.
+        let live = rows.iter().any(|row| {
+            !matches!(
+                row.did.as_str(),
+                TICK_IDLE | TICK_HALTED | TICK_FINISHED | TICK_ASKED
+            )
+        });
         if !watch || !live {
             return Ok(Output::Tick(Box::new(Envelope::ok(
                 "fleet tick",
@@ -2250,6 +2256,9 @@ pub fn tick<R: Run, C: Clock>(
 pub const TICK_IDLE: &str = "idle";
 /// Something is still running; nothing was settled.
 pub const TICK_WAITING: &str = "waiting";
+/// Its Drone is mid-exchange. **Not `idle`**, because `--watch` has to tell
+/// *nothing is happening* from *something is happening elsewhere*.
+pub const TICK_WORKING: &str = "working";
 /// The step passed and the Job moved to the next one.
 pub const TICK_ADVANCED: &str = "advanced";
 /// The step did not pass and it was started again.
@@ -2263,7 +2272,7 @@ pub const TICK_HALTED: &str = "halted";
 
 /// Whether a row is one where the loop actually did something.
 fn did_something(did: &str) -> bool {
-    !matches!(did, TICK_IDLE | TICK_WAITING)
+    !matches!(did, TICK_IDLE | TICK_WAITING | TICK_WORKING)
 }
 
 /// One pass over the Jobs in scope.
@@ -2331,6 +2340,18 @@ fn one<R: Run, C: Clock>(
                 None,
                 Vec::new(),
                 verdict,
+            ))
+        }
+        advance::Attention::Working => {
+            let mut record = record;
+            settle_if_changed(&mut record, &observed, place, now)?;
+            Ok(tick_row(
+                &record,
+                TICK_WORKING,
+                "its Drone is still working".to_string(),
+                None,
+                Vec::new(),
+                None,
             ))
         }
         advance::Attention::Gate => gate_step(run, now, place, record, &observed, &reading),

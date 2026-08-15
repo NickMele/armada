@@ -2390,6 +2390,18 @@ pub struct VerdictData {
     pub attempts: u32,
     /// What the Job is doing after it.
     pub state: crate::fleet::JobState,
+    /// The inbox entry this verdict opened, on the two that open one.
+    ///
+    /// **Returned rather than discarded**, for the reason `fleet.ask_human`
+    /// returns its own: an item a caller cannot name is an item it cannot come
+    /// back to (PLAN.md §15.3.1). The workflow loop is the caller that needs
+    /// it — a gate waiting on a person has to read *that* answer and not
+    /// whichever one is newest.
+    ///
+    /// Additive, so `schema_version` did not bump, and omitted entirely when a
+    /// verdict opened nothing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
 }
 
 /// One thing a verdict rests on.
