@@ -27,8 +27,8 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
     GuildInitData, GuildSyncData, InboxData, InitData, InitDryRun, KillData, MachineInitData,
-    McpData, ProbeData, Projection, ReportData, ScanData, ServicesData, SkillsData, SpawnData,
-    StatusData, UpDryRun, VerdictData, VerifyData,
+    McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData, ResumeData, ScanData,
+    ServicesData, SkillsData, SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -95,6 +95,12 @@ pub enum Output {
     Inbox(Box<Envelope<InboxData>>),
     /// `armada fleet answer`.
     Answer(Box<Envelope<AnswerData>>),
+    /// `armada fleet pause`.
+    Pause(Box<Envelope<PauseData>>),
+    /// `armada fleet resume`.
+    Resume(Box<Envelope<ResumeData>>),
+    /// `armada fleet reap --dry-run`, and the Bridge's preview.
+    ReapPlan(Box<Envelope<ReapPlanData>>),
     /// `armada mcp serve`, once the transport closes.
     Mcp(Box<Envelope<McpData>>),
     /// The `fleet.probe` tool. **No CLI verb**: probing is what an orchestrator
@@ -141,6 +147,9 @@ impl Output {
             Output::Kill(e) => e.to_json(),
             Output::Inbox(e) => e.to_json(),
             Output::Answer(e) => e.to_json(),
+            Output::Pause(e) => e.to_json(),
+            Output::Resume(e) => e.to_json(),
+            Output::ReapPlan(e) => e.to_json(),
             Output::Mcp(e) => e.to_json(),
             Output::Probe(e) => e.to_json(),
             Output::Report(e) => e.to_json(),
@@ -197,6 +206,9 @@ impl Output {
             Output::Kill(e) => e.exit_code(),
             Output::Inbox(e) => e.exit_code(),
             Output::Answer(e) => e.exit_code(),
+            Output::Pause(e) => e.exit_code(),
+            Output::Resume(e) => e.exit_code(),
+            Output::ReapPlan(e) => e.exit_code(),
             Output::Mcp(e) => e.exit_code(),
             Output::Probe(e) => e.exit_code(),
             Output::Report(e) => e.exit_code(),

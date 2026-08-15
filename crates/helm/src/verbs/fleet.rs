@@ -22,7 +22,8 @@
 use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, InboxData,
-    InboxRow, JobRow, KillData, Killed, ProbeData, ReportData, SpawnData, VerdictData,
+    InboxRow, JobRow, KillData, Killed, PauseData, ProbeData, ReapCandidate, ReapPlanData,
+    ReportData, ResumeData, SpawnData, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -89,10 +90,39 @@ impl Where {
     }
 
     /// Turn a `~/…` back into a real path.
+    ///
+    /// **Tilde-form is the stored form, and this is the only reader.** A Job
+    /// record keeps `repo_root` and `worktree` as `~/…`
+    /// ([`armada_core::fleet::job::Job`]), written by [`Where::shown`] at spawn
+    /// and expanded here on every use. The decision, so that nothing has to
+    /// re-take it:
+    ///
+    /// - **A record is portable.** `~/.armada/workspaces/api/rate-limit` is the
+    ///   same Job on a laptop and on a workstation, and survives a `$HOME` that
+    ///   moves — `/Users/x` to `/home/x` on a migration, or a machine whose
+    ///   accounts were renamed. An absolute path baked in at spawn is a record
+    ///   that silently names a directory belonging to somebody else.
+    /// - **It is the form the record already had**, and the two audiences
+    ///   already read it: `armada fleet ls` and `--json` both print
+    ///   `~/.armada/…`, so making the stored form absolute would either change
+    ///   what every reader sees or add a second conversion in the other
+    ///   direction.
+    /// - **The cost is that every reader must expand**, and a reader that
+    ///   forgets gets `ENOENT` on a path with a literal `~` in it. That is the
+    ///   defect this doc comment exists to stop recurring: `armada fleet board`
+    ///   handed `~/.armada/…` to `chdir` and could not board any Job at all.
+    ///
+    /// **Both forms are accepted**, because records written before this was
+    /// settled are on disk and a record is not migrated for a question that has
+    /// one right answer either way: an absolute path is already expanded, and a
+    /// bare `~` is `$HOME`.
     pub fn expand(&self, shown: &str) -> PathBuf {
-        match shown.strip_prefix("~/") {
-            Some(rest) => self.home.join(rest),
-            None => PathBuf::from(shown),
+        match shown {
+            "~" => self.home.clone(),
+            _ => match shown.strip_prefix("~/") {
+                Some(rest) => self.home.join(rest),
+                None => PathBuf::from(shown),
+            },
         }
     }
 }
@@ -800,6 +830,29 @@ pub fn kill<R: Run, C: Clock>(
             .collect(),
     };
 
+    end(run, now, place, targets, keep_branch, keep_worktree)
+}
+
+/// End every one of these Jobs, and report what each released.
+///
+/// **One teardown, shared by `kill` and `reap`.** A second copy of this loop
+/// would be a second answer to what `kill` orders and what it tolerates — and
+/// the order is the point (`commands/fleet/kill.md`), so there is one of it.
+///
+/// **A Job that will not clean does not stop the rest.** The failure is carried
+/// on that Job's row and the loop carries on, for the same reason
+/// [`manifest::Cleaned::error`] is carried rather than raised: one container
+/// that refuses to stop must not leave four other Jobs holding their worktrees.
+fn end<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    targets: Vec<Job>,
+    keep_branch: bool,
+    keep_worktree: bool,
+) -> Result<Output, ArmadaError> {
+    let store = place.store();
+    let wall = now.wall_ms();
     let mut results: Vec<Killed> = Vec::new();
     for mut record in targets {
         let path = place.expand(&record.worktree);
@@ -826,7 +879,27 @@ pub fn kill<R: Run, C: Clock>(
 
         // **Step two**: resources are released while the config that describes
         // them is still present.
-        let cleaned = manifest::clean(run, &place.exe, &path)?;
+        //
+        // **Nothing here is raised, and that is the contract rather than a
+        // tolerance** (`armada_fleet::manifest::Cleaned::error`): the Job is
+        // marked ended either way, and a `kill` that bailed out would leave the
+        // worktree as well as the Job. It was raised, once, and the symptom was
+        // the one this is written against — `x` on a Job whose worktree had
+        // been deleted failed with a message about reinstalling Armada, and
+        // left the Job `RUNNING` in the record with no way to end it.
+        //
+        // **A worktree that is gone is not asked to clean itself.** There is no
+        // directory to resolve `armada.yml` in and no config left to describe
+        // what to release; what the Job owned is recorded machine-globally, so
+        // `armada manifest clean --all` reclaims it. Running the subprocess
+        // anyway would spend a spawn to be told the directory is missing, which
+        // is what `disposition` below is about to say.
+        let cleaned = match path.is_dir() {
+            true => {
+                manifest::clean(run, &place.exe, &path).unwrap_or_else(manifest::Cleaned::failed)
+            }
+            false => manifest::Cleaned::default(),
+        };
         let mut failure = cleaned.error;
         if stopped == drone::Stopped::Survived {
             // A group still alive after SIGKILL is a real leak, and a reclaim
@@ -904,6 +977,305 @@ pub fn kill<R: Run, C: Clock>(
         Some(error) => Envelope::failed("fleet kill", None, error, data),
         None => Envelope::ok("fleet kill", None, Status::Clean, data),
     })))
+}
+
+// --------------------------------------------------------------- pause/resume
+
+/// `armada fleet pause` — stop the Drone, keep the Job.
+///
+/// **A Job is durable and a Drone is not, which is what makes this a verb rather
+/// than a signal** (PLAN.md §14.1). Pausing stops the process that is working
+/// and leaves everything the Job *is* exactly where it was: the worktree, the
+/// branch, the port block and the transcript. [`resume`] starts a new Drone on
+/// the same session, and the transcript — which is the ledger — carries on being
+/// appended to, so a Job held for an hour has not spent anything in that hour
+/// and has not had its budget reset either.
+///
+/// **`SIGSTOP` was the other candidate and is the wrong one.** A stopped process
+/// still answers `ps`, so [`armada_core::fleet::job::observe`] would go on
+/// calling it `RUNNING` — the pause would not stick — and a Claude Code session
+/// frozen mid-request holds a connection open for as long as the person is away.
+pub fn pause<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    handle: &str,
+) -> Result<Output, ArmadaError> {
+    let store = place.store();
+    let mut record = store.find(handle)?;
+    let (observed, _) = look(run, place, &record, now.wall_ms());
+
+    if observed.state.is_over() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!(
+                "`{}` has already ended — it is {}",
+                record.name, observed.state
+            ),
+            next_action: Some("`armada fleet ls --all` lists the ended ones".to_string()),
+        });
+    }
+    if observed.state == JobState::Paused {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` is already paused", record.name),
+            next_action: Some(format!(
+                "`armada fleet resume {}` starts it again",
+                record.name
+            )),
+        });
+    }
+
+    // **The Drone goes, and nothing else does.** Ownership of the group is
+    // forgotten in the same breath, because a group that is gone must not stay
+    // in the machine-global store for `armada manifest clean` to find later and
+    // decide about.
+    let stopped = drone::stop(
+        run,
+        &place.armada_home,
+        record.drone.as_ref(),
+        &place.boot_id,
+    );
+    let pgid = record.drone.as_ref().map(|handle| handle.pgid);
+    if let Some(handle) = &record.drone {
+        own::forget_drone(
+            run,
+            &place.armada_home,
+            &place.expand(&record.worktree),
+            handle.pgid,
+        );
+    }
+    record.drone = None;
+
+    // Settled from the transcript on the way in, because nothing is going to
+    // write to it again until the Job is resumed.
+    record.spend = drone::transcript(&place.stream(&record.uuid)).spend;
+    record.state = JobState::Paused;
+    store.save(&record)?;
+
+    let failure = (stopped == drone::Stopped::Survived).then(|| ArmadaError {
+        class: ErrClass::ToolFailed,
+        r#where: record.name.clone(),
+        message: "the Drone was still running after SIGKILL".to_string(),
+        next_action: Some("look for it by hand; `armada fleet ls` names it".to_string()),
+    });
+
+    let data = PauseData {
+        job: record.name.clone(),
+        uuid: record.uuid.clone(),
+        state: record.state,
+        // Reported only when there was one to stop: a Job between turns has no
+        // live Drone, and holding it is still something a person can ask for.
+        stopped: (stopped == drone::Stopped::Stopped)
+            .then_some(pgid)
+            .flatten(),
+        spend: record.spend,
+    };
+    Ok(Output::Pause(Box::new(match failure {
+        // **The Job is held either way**, for `kill`'s reason: a pause that
+        // bailed out because a group would not die would need a second pause to
+        // do the same thing again.
+        Some(error) => Envelope::failed("fleet pause", None, error, data),
+        None => Envelope::ok("fleet pause", None, Status::Ok, data),
+    })))
+}
+
+/// `armada fleet resume` — start a new Drone on the same session.
+///
+/// **Two refusals, and both are somebody else's verb.** A Job that reached a
+/// ceiling is not resumed past it — `on_exhausted: needs_human` means a person
+/// decides what happens next, and silently continuing is how a budget stops
+/// being one. A Job with an open question is *answered* rather than resumed:
+/// continuing it with [`armada_core::fleet::drone::CONTINUE`] would leave the
+/// inbox entry open forever and put words into a conversation that asked for
+/// different ones.
+pub fn resume<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    handle: &str,
+) -> Result<Output, ArmadaError> {
+    let store = place.store();
+    let mut record = store.find(handle)?;
+    let (observed, _) = look(run, place, &record, now.wall_ms());
+
+    if observed.state != JobState::Paused {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` is not paused — it is {}", record.name, observed.state),
+            next_action: Some("`armada fleet ls` says what each Job is doing".to_string()),
+        });
+    }
+
+    if let Some(ceiling) = observed.ceiling {
+        // Persisted and raised on the way out, so the ceiling is a durable fact
+        // rather than something this invocation noticed and forgot.
+        settle(&mut record, &observed, place, now)?;
+        store.save(&record)?;
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` reached its {} ceiling", record.name, ceiling.word()),
+            next_action: Some(format!(
+                "`armada fleet board {}` to take it over, or kill it",
+                record.name
+            )),
+        });
+    }
+
+    let entries = inbox::read(&place.inbox())?;
+    if inbox::open_for(&entries, &record.name).is_some() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` is waiting on an answer, not on a resume", record.name),
+            next_action: Some(format!(
+                "`armada fleet answer {} \"<your answer>\"`",
+                record.name
+            )),
+        });
+    }
+
+    // **A worktree that is gone is said so before a Drone is started in it.**
+    // `chdir` would fail inside the detached child, where the only evidence is a
+    // Drone that recorded a group and died immediately.
+    let path = place.expand(&record.worktree);
+    if !path.is_dir() {
+        return Err(ArmadaError {
+            class: ErrClass::Environment,
+            r#where: record.worktree.clone(),
+            message: format!(
+                "`{}` has no worktree left to run in: `{}` is gone",
+                record.name, record.worktree
+            ),
+            next_action: Some(format!(
+                "`armada fleet kill {}` ends it and releases what it holds",
+                record.name
+            )),
+        });
+    }
+
+    record.spend = observed.spend;
+    record.state = JobState::Running;
+    record.drone = Some(start_drone(
+        run,
+        place,
+        &record,
+        &path,
+        argv::continue_argv(&record.uuid),
+    )?);
+    store.save(&record)?;
+
+    Ok(Output::Resume(Box::new(Envelope::ok(
+        "fleet resume",
+        None,
+        Status::Ok,
+        ResumeData {
+            job: record.name.clone(),
+            uuid: record.uuid.clone(),
+            state: record.state,
+            budget_remaining: job::remaining(
+                &record.budget,
+                &record.spend,
+                record.run_time_ms(now.wall_ms()),
+            ),
+            pgid: record.drone.as_ref().map(|drone| drone.pgid),
+        },
+    ))))
+}
+
+// ------------------------------------------------------------------------ reap
+
+/// `armada fleet reap --dry-run` — every Job a reap would offer, and what each
+/// is still holding.
+///
+/// **The preview is the feature.** A bulk delete that only listed names would be
+/// asking a person to approve a decision on less information than the machine
+/// already has; what makes the answer possible is the second half of every row.
+/// A port block held by a Job whose Drone died months ago is a span nothing can
+/// use and nothing will report — and it is invisible until something puts it
+/// beside the Job's name.
+///
+/// **Observed rather than recorded**, which is what makes it useful at all: a
+/// record that still says `RUNNING` with a dead process group is exactly the Job
+/// this verb exists to find, and asking the record would file it under the one
+/// state that is never offered.
+pub fn reap_plan<R: Run, C: Clock>(run: &R, now: &C, place: &Where) -> Result<Output, ArmadaError> {
+    let wall = now.wall_ms();
+    let mut results: Vec<ReapCandidate> = Vec::new();
+    for record in place.store().all()? {
+        let (observed, _) = look(run, place, &record, wall);
+        let reaping = observed.state.reaping();
+        if !reaping.is_offered() {
+            continue;
+        }
+        results.push(ReapCandidate {
+            job: record.name.clone(),
+            uuid: record.uuid.clone(),
+            state: observed.state,
+            selected: reaping.is_default(),
+            port_block: record.port_block,
+            worktree_exists: place.expand(&record.worktree).is_dir(),
+            worktree_path: record.worktree.clone(),
+            branch: record.branch.clone(),
+            cost_usd: observed.spend.cost_usd,
+        });
+    }
+
+    let selected = results.iter().filter(|row| row.selected).count();
+    Ok(Output::ReapPlan(Box::new(Envelope::ok(
+        "fleet reap",
+        None,
+        // A read verb reports rather than judges: it exits 0 whenever the index
+        // is readable, and `SKIPPED` is what "there was nothing to do" is called.
+        match results.is_empty() {
+            true => Status::Skipped,
+            false => Status::Ok,
+        },
+        ReapPlanData { results, selected },
+    ))))
+}
+
+/// `armada fleet reap` — end exactly these Jobs.
+///
+/// **Named, never inferred.** The plan decides what is *offered*; what is taken
+/// is a list, so the preview a person read and the reap that follows cannot
+/// disagree because the fleet moved between them. A Job named here that is no
+/// longer reapable — its Drone came back to life between the preview and the
+/// `enter` — is refused rather than killed.
+pub fn reap<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    jobs: &[String],
+) -> Result<Output, ArmadaError> {
+    let store = place.store();
+    let wall = now.wall_ms();
+    let mut targets: Vec<Job> = Vec::new();
+    for handle in jobs {
+        let record = store.find(handle)?;
+        let (observed, _) = look(run, place, &record, wall);
+        if !observed.state.reaping().is_offered() {
+            return Err(ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: record.name.clone(),
+                message: format!(
+                    "`{}` is {} and a reap does not take a Job that is working",
+                    record.name, observed.state
+                ),
+                next_action: Some(format!(
+                    "`armada fleet kill {}` ends it deliberately",
+                    record.name
+                )),
+            });
+        }
+        targets.push(record);
+    }
+
+    end(run, now, place, targets, false, false)
 }
 
 // ---------------------------------------------------------------- inbox/answer

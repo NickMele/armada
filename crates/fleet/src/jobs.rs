@@ -98,10 +98,27 @@ impl Store {
     /// and the uuid is what the transcript is called. An ambiguous prefix is
     /// refused rather than resolved to the first match — killing the wrong Job
     /// is not recoverable by re-running the command.
+    ///
+    /// **A name shared by several Jobs resolves to the live one.** A name is a
+    /// handle rather than a key: [`Store::name_is_taken`] only refuses to reuse
+    /// the name of a Job that is still live, so a finished `rate-limit` and a
+    /// running `rate-limit` are both ordinary and both on disk. Taking the
+    /// oldest of them — which is what a first match over a list sorted by
+    /// creation is — means `armada fleet kill rate-limit` ends a Job that ended
+    /// last week and leaves the running one exactly as it was, reporting
+    /// success. That is the failure a person hit: an abort that answered
+    /// cleanly and changed nothing.
     pub fn find(&self, handle: &str) -> Result<Job, ArmadaError> {
         let jobs = self.all()?;
-        if let Some(job) = jobs.iter().find(|job| job.name == handle) {
-            return Ok(job.clone());
+        let named: Vec<&Job> = jobs.iter().filter(|job| job.name == handle).collect();
+        // Newest last, so `.last()` is the most recent of a set that is all
+        // finished — the one somebody typing an old name most likely means.
+        if let Some(job) = named
+            .iter()
+            .find(|job| !job.state.is_over())
+            .or_else(|| named.last())
+        {
+            return Ok((*job).clone());
         }
         let matches: Vec<&Job> = jobs
             .iter()
@@ -321,6 +338,38 @@ mod tests {
         assert_eq!(error.class, ErrClass::BadInvocation);
         let next = error.next_action.unwrap();
         assert!(next.contains("one") && next.contains("two"), "{next}");
+    }
+
+    /// **A name shared by a finished Job and a live one resolves to the live
+    /// one.** This is the shape a person actually had on disk: two records both
+    /// called `this-test`, the older one over and the newer one still `RUNNING`.
+    /// Taking the first match over a list sorted by creation aborted the one
+    /// that had already ended, reported success, and left the running Job
+    /// exactly where it was.
+    #[test]
+    fn a_name_two_jobs_share_resolves_to_the_one_that_is_still_live() {
+        let (_home, store) = store();
+        store
+            .save(&job("this-test", "aaaa-old", JobState::Aborted, 10))
+            .unwrap();
+        store
+            .save(&job("this-test", "bbbb-new", JobState::Running, 20))
+            .unwrap();
+        assert_eq!(store.find("this-test").unwrap().uuid, "bbbb-new");
+    }
+
+    /// And when every Job of that name is over, the most recent is the one
+    /// somebody typing it means.
+    #[test]
+    fn a_name_no_live_job_holds_resolves_to_the_most_recent_of_them() {
+        let (_home, store) = store();
+        store
+            .save(&job("this-test", "aaaa-old", JobState::Aborted, 10))
+            .unwrap();
+        store
+            .save(&job("this-test", "bbbb-new", JobState::Done, 20))
+            .unwrap();
+        assert_eq!(store.find("this-test").unwrap().uuid, "bbbb-new");
     }
 
     #[test]

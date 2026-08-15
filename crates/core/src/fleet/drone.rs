@@ -68,6 +68,26 @@ pub fn resume_argv(uuid: &str, prompt: &str) -> Vec<String> {
     argv
 }
 
+/// The words a Job is continued with when a person resumed it and gave none.
+///
+/// **A prompt rather than an empty argument**, because [`resume_argv`] is the
+/// headless form: `--print` needs something to print about, and an empty final
+/// argument starts a turn that has nothing to answer. It is deliberately short
+/// and deliberately not an instruction — resuming is "carry on with what you
+/// were doing", and a longer prompt here would be Armada putting words in a
+/// conversation it is not part of.
+///
+/// **`armada fleet answer` does not use it**, and that is the distinction the
+/// two verbs draw: an answer is a person's words, a resume is the absence of
+/// any.
+pub const CONTINUE: &str = "Continue from where you left off.";
+
+/// The argv for **resuming** a Job nobody said anything to —
+/// `armada fleet resume`.
+pub fn continue_argv(uuid: &str) -> Vec<String> {
+    resume_argv(uuid, CONTINUE)
+}
+
 /// The argv `armada fleet board` prints, and execs under `--exec`.
 ///
 /// **Interactive, and deliberately so.** Boarding hands you the conversation to

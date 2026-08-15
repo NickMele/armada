@@ -23,7 +23,9 @@ use std::time::{Duration, Instant};
 
 use armada_core::ctx::{Clock, Run};
 use armada_core::error::ArmadaError;
-use armada_core::fleet::bridge::{self, Departure, Filter, Frame, Key, Mode, Pressed, Screen};
+use armada_core::fleet::bridge::{
+    self, Action, Departure, Done, Filter, Frame, Key, Mode, Pressed, Screen,
+};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
@@ -113,6 +115,19 @@ pub fn paint(
         Vec::new(),
     ];
 
+    // **The preview replaces the table rather than sitting under it.** It is a
+    // different question — what would be deleted — and drawing both would put
+    // two cursors on one screen.
+    if let Mode::Reaping(reap) = &screen.mode {
+        lines.extend(preview(reap, style, width));
+        lines.push(Vec::new());
+        lines.push(vec![
+            plain("  "),
+            piece(render::reap_keys(), Role::SteelGrey),
+        ]);
+        return lines;
+    }
+
     lines.extend(render::bridge_table(&data, style, Some(screen.cursor.at())).spans(style, width));
     if frame.rows.is_empty() {
         lines.push(vec![
@@ -145,10 +160,73 @@ pub fn paint(
     });
 
     lines.push(Vec::new());
+    // **The key line reads the row the cursor is on**, so `p` over a paused Job
+    // says `resume`. A line that always said `pause` advertised the one thing
+    // that key would not do and left no way at all to start a held Job again.
     lines.push(vec![
         plain("  "),
-        piece(render::bridge_keys(), Role::SteelGrey),
+        piece(
+            render::bridge_keys(screen.cursor.selected(&frame.rows).map(|row| row.state)),
+            Role::SteelGrey,
+        ),
     ]);
+    lines
+}
+
+/// The reap preview, drawn.
+///
+/// **Words rather than a tick and a cross**, for the rule every table in Armada
+/// follows: a glyph that only appears at a terminal gives the two audiences
+/// different shapes. `take` and `keep` fold to themselves.
+fn preview(reap: &bridge::Reap, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut table = crate::render::table::Table::new(vec![
+        crate::render::table::Column::fixed(""),
+        crate::render::table::Column::fixed("status"),
+        crate::render::table::Column::fixed("job"),
+        crate::render::table::Column::fixed("state"),
+        crate::render::table::Column::flexible("holding"),
+    ])
+    .indent(2);
+
+    for (index, row) in reap.rows.iter().enumerate() {
+        table = table.row(vec![
+            match reap.cursor.is_on(index) {
+                true => crate::render::table::Cell::painted(style.caret(), Role::SignalAmber),
+                false => crate::render::table::Cell::empty(),
+            },
+            match row.selected {
+                true => crate::render::table::Cell::painted("take", Role::FlareOrange),
+                false => crate::render::table::Cell::painted("keep", Role::SteelGrey),
+            },
+            crate::render::table::Cell::painted(row.target.job.clone(), Role::NavalBlue),
+            crate::render::table::Cell::painted(
+                row.state.word(),
+                render::palette::Role::for_job_state(row.state),
+            ),
+            crate::render::table::Cell::muted(row.holding.clone()),
+        ]);
+    }
+
+    let mut lines = vec![
+        vec![
+            plain("  "),
+            bold("REAP", Role::FlareOrange),
+            plain("   "),
+            piece(
+                format!(
+                    "{} of {} ticked",
+                    reap.rows.iter().filter(|row| row.selected).count(),
+                    reap.rows.len()
+                ),
+                Role::SteelGrey,
+            ),
+        ],
+        Vec::new(),
+    ];
+    lines.extend(table.spans(style, width));
+    if reap.rows.is_empty() {
+        lines.push(vec![plain("  "), piece("nothing to reap", Role::SteelGrey)]);
+    }
     lines
 }
 
@@ -182,6 +260,11 @@ fn plain(text: impl Into<String>) -> Span {
 /// to whatever is left of the interval, so a keypress is answered immediately
 /// and the fleet is re-read exactly as often as `--interval` says — rather than
 /// the Bridge sleeping through a keystroke or spinning on an empty queue.
+// Eight, and each is a seam rather than a parameter: the two `ctx` ports, where
+// the fleet is, what was asked for, the filter, the two halves of the terminal,
+// and what to do when a key acts. Bundling them would be one struct per call
+// site with no other use.
+#[allow(clippy::too_many_arguments)]
 pub fn watch<R: Run, C: Clock>(
     run: &R,
     now: &C,
@@ -190,6 +273,7 @@ pub fn watch<R: Run, C: Clock>(
     filter: Option<&Filter>,
     style: Style,
     terminal: Terminal,
+    act: &mut dyn FnMut(&Action) -> Done,
 ) -> Result<(Frame, Departure), ArmadaError> {
     let raw = Restore::install().map_err(|_| crate::verbs::bridge::no_screen())?;
     let alt = Alt::enter().map_err(|_| crate::verbs::bridge::no_screen())?;
@@ -233,6 +317,22 @@ pub fn watch<R: Run, C: Clock>(
             match bridge::press(&mut screen, &frame.rows, pressed) {
                 Pressed::Leave(departure) => break Some(departure),
                 Pressed::Stay => draw(&mut view, &frame, &screen, style, terminal),
+                // **The action runs here, on the screen, and its failure is a
+                // line under the table.** This is the whole of the fix: an
+                // abort that could not remove a worktree used to end the Bridge
+                // and print into a shell the reader was no longer looking at,
+                // taking away the view of four other Jobs to say one thing
+                // about a fifth.
+                Pressed::Act(action) => {
+                    let done = act(&action);
+                    screen.notice = Some(done.notice);
+                    if let Some(mode) = done.mode {
+                        screen.mode = mode;
+                    }
+                    // The fleet has just changed underneath the frame in hand,
+                    // so it is re-read now rather than at the next tick.
+                    break None;
+                }
             }
             // **A changed filter re-reads now rather than at the next tick.**
             // The frame in hand was built under the old expression, so drawing
