@@ -41,7 +41,7 @@ a guild is [`guild/init.md`](guild/init.md) `--force`, which says so in the word
    - **Pull from a remote** — clones it into `~/.armada/guild/`. Done in seconds; this is the
      second-machine path.
    - **Import a bundle** — unpacks a file. For a machine that will never hold your credentials.
-   - **Build one now** — imports `~/.claude/` first, then asks **five** questions
+   - **Build one now** — imports `~/.claude/` first, then asks **seven** questions
      ([`PLAN.md`](../PLAN.md) §13.4). Import does most of the work; the interview asks only
      what cannot be read from the machine, and every question has a default.
 4. **Writes `machine.yml`** — paths, capacity, and anything machine-specific, under **one
@@ -72,12 +72,12 @@ Do you already have a guild?  > 3 build one now
   imported from ~/.claude/, 19 skills, 12 hooks, 4 plugins, CLAUDE.md
   projected into ~/.claude/, 20 placed
 
-1/5  How should agents write to you?
+1/7  How should agents write to you?
      Tone, length, and what to lead with. Every agent reads this before it says
      anything. Writes voice.md.
      enter for a new line, ctrl-d saves, esc keeps it as it was
 
-READY  guild at ~/.armada/guild, 0 answered, 5 kept as imported
+READY  guild at ~/.armada/guild, 0 answered, 7 kept as imported
 ```
 
 **This is the record, not the menu.** Live, the guild question is a selector and each prose

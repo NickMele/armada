@@ -1432,13 +1432,13 @@ pub fn chosen_line(question: &str, label: &str, chosen: usize, style: Style) -> 
     )
 }
 
-/// How far every line of a question is indented, past the `n/5`.
+/// How far every line of a question is indented, past the `n/7`.
 const ASK_INDENT: usize = 5;
 
 /// One interview question — **live**, as it is put to a person.
 ///
 /// ```text
-/// 2/5  When is work actually finished?
+/// 2/7  When is work actually finished?
 ///      What must be true before an agent tells you it is done: tests
 ///      passing, a review, a branch, a changelog entry. → expectations.md
 ///
@@ -1451,7 +1451,7 @@ const ASK_INDENT: usize = 5;
 /// wanted. The file, because each question writes one and knowing which changes
 /// the answer you give. The `now` line, because *(enter to keep what import
 /// found)* over an empty prompt is a default you cannot see. And the blank line
-/// above it, because five questions with no space between them ran together.
+/// above it, because seven questions with no space between them ran together.
 ///
 /// The one it did not have to say is that everything after the number is
 /// indented to line up under the prompt: it all belongs to the question rather

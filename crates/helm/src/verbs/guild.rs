@@ -68,7 +68,7 @@ impl Where {
 ///
 /// The three steps of `docs/commands/guild/init.md`, in that order, and the
 /// order is the point: **import runs first and does most of the work**, so the
-/// interview is five questions rather than thirty.
+/// interview is seven questions rather than thirty.
 pub fn init(
     run: &impl Run,
     place: &Where,
@@ -99,7 +99,7 @@ pub fn init(
         import::run(&from, &guild).map_err(|e| unwritable(guild.root(), &e))?
     };
 
-    // 2. Ask the five, from scratch. Every one of them has a default, and
+    // 2. Ask the seven, from scratch. Every one of them has a default, and
     //    `--defaults` is an `Ask` that takes all of them. The guild is passed in
     //    so each question can show what pressing enter would keep — import has
     //    just written it, and a default nobody can see is not a default.
@@ -108,7 +108,7 @@ pub fn init(
         answers.remote = Some(remote.clone());
     }
     // **A folder is made into a remote here, before anything is committed.**
-    // Question 5 takes either, and a folder becomes a bare repository git can
+    // Question 7 takes either, and a folder becomes a bare repository git can
     // push to — see `armada_guild::remote`. Done before the first commit so a
     // folder that cannot be written fails the verb rather than leaving a guild
     // whose remote points at nothing.
@@ -198,7 +198,7 @@ pub struct InitOptions {
     pub force: bool,
 }
 
-/// Put the five questions and collect what comes back.
+/// Put the seven questions and collect what comes back.
 ///
 /// **Every answer is optional and nothing is re-asked.** An unparseable ceiling
 /// takes the documented default rather than looping: a loop is a loop a piped
@@ -235,16 +235,19 @@ pub fn interview(ask: &mut dyn Ask, guild: Option<&Guild>) -> Answers {
 /// **Whole, and with its line breaks.** A prose question opens a text area
 /// holding this, so it is the thing being edited rather than a preview of it —
 /// and a fragment collapsed to one line would be a fragment whose paragraphs the
-/// person had to put back by hand. The two short structured questions still show
-/// theirs on a `now` line, because a triple of ceilings fits on one.
+/// person had to put back by hand. The short structured questions still show
+/// theirs on a `now` line, because one number fits on one.
 ///
-/// The fragments are read from the guild the import has just written; the
-/// ceilings are a constant; the remote has no standing value because sync being
-/// off is the absence of one, which the hint already says in words.
+/// The fragments are read from the guild the import has just written; each
+/// ceiling is the constant its own question offers as `keeps`, which is what
+/// makes the `now` line and the hint the same number by construction rather
+/// than by two people remembering to change both; the remote has no standing
+/// value because sync being off is the absence of one, which the hint already
+/// says in words.
 fn standing(question: Question, guild: Option<&Guild>) -> Option<String> {
     match question.number {
-        4 => Some(interview::Ceilings::AUTONOMOUS.written()),
-        5 => None,
+        n if interview::CEILING_QUESTIONS.contains(&n) => Some(question.keeps.to_string()),
+        7 => None,
         _ => {
             let body = std::fs::read_to_string(guild?.path(question.writes)).ok()?;
             // **Armada's own examples are not your answer.** A fragment import
@@ -315,7 +318,13 @@ fn record(answers: &mut Answers, question: Question, given: &str) {
         1 => answers.voice = Some(given.to_string()),
         2 => answers.expectations = Some(given.to_string()),
         3 => answers.how_i_work = Some(given.to_string()),
-        4 => answers.ceilings = interview::parse_ceilings(given).ok(),
+        // **One number each, and an unreadable one takes the default rather
+        // than looping** — a loop is one a piped stdin cannot escape. Each is
+        // recorded on its own, so a refused token answer no longer costs the
+        // iteration and wall-clock answers that were typed correctly.
+        4 => answers.iterations = interview::parse_iterations(given).ok(),
+        5 => answers.tokens = interview::parse_tokens(given).ok(),
+        6 => answers.wall_clock_minutes = interview::parse_minutes(given).ok(),
         _ => answers.remote = Some(given.to_string()),
     }
 }
@@ -1113,40 +1122,83 @@ mod tests {
         assert_eq!(shown(Path::new("/tmp/elsewhere")), "/tmp/elsewhere");
     }
 
-    /// The interview puts all five and records each answer against the file it
+    /// The interview puts all seven and records each answer against the file it
     /// belongs to.
     #[test]
-    fn the_interview_puts_five_questions_and_files_each_answer() {
+    fn the_interview_puts_seven_questions_and_files_each_answer() {
         let mut ask = crate::ask::Scripted {
             answers: vec![
                 Some("brief".to_string()),
                 None,
                 None,
-                Some("8, 200k, 30m".to_string()),
+                Some("8".to_string()),
+                Some("200k".to_string()),
+                Some("30m".to_string()),
                 Some("git@example.com:me/guild.git".to_string()),
             ],
             ..crate::ask::Scripted::default()
         };
         let answers = interview(&mut ask, None);
 
-        assert_eq!(ask.asked.len(), 5);
-        assert_eq!(ask.asked[0].of, 5);
+        assert_eq!(ask.asked.len(), 7);
+        assert_eq!(ask.asked[0].of, 7);
         assert_eq!(answers.voice.as_deref(), Some("brief"));
         assert_eq!(answers.expectations, None);
-        assert_eq!(answers.ceilings.unwrap().iterations, 8);
+        assert_eq!(answers.iterations, Some(8));
+        assert_eq!(answers.tokens, Some(200_000));
+        assert_eq!(answers.wall_clock_minutes, Some(30));
         assert_eq!(answers.kept(), 2);
     }
 
-    /// **An unreadable ceiling takes the default rather than looping.** A loop
-    /// is a loop a piped stdin cannot escape, and the default works.
+    /// **Each limit question shows its default on the `now` line**, and it is
+    /// the same string the hint offers — one constant, so the two cannot drift.
     #[test]
-    fn an_unreadable_ceiling_falls_back_to_the_default() {
+    fn every_limit_question_shows_the_number_enter_would_keep() {
+        let mut ask = crate::ask::Scripted::default();
+        interview(&mut ask, None);
+
+        let shown: Vec<(String, Option<String>)> = interview::CEILING_QUESTIONS
+            .iter()
+            .map(|n| {
+                let asked = &ask.asked[n - 1];
+                (asked.keeps.clone(), asked.standing.clone())
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            vec![
+                ("20".to_string(), Some("20".to_string())),
+                ("600k".to_string(), Some("600k".to_string())),
+                ("90m".to_string(), Some("90m".to_string())),
+            ]
+        );
+    }
+
+    /// **An unreadable ceiling takes the default rather than looping**, and
+    /// costs only its own question. A loop is a loop a piped stdin cannot
+    /// escape; and before the split, one mistyped value discarded all three.
+    #[test]
+    fn an_unreadable_ceiling_falls_back_to_the_default_and_costs_only_itself() {
         let mut ask = crate::ask::Scripted {
-            answers: vec![None, None, None, Some("lots".to_string()), None],
+            answers: vec![
+                None,
+                None,
+                None,
+                Some("lots".to_string()),
+                Some("200k".to_string()),
+                None,
+                None,
+            ],
             ..crate::ask::Scripted::default()
         };
         let answers = interview(&mut ask, None);
-        assert_eq!(answers.ceilings, None);
-        assert_eq!(answers.kept(), 5);
+        assert_eq!(answers.iterations, None, "refused, so defaulted");
+        assert_eq!(
+            answers.tokens,
+            Some(200_000),
+            "the readable answer survives"
+        );
+        assert_eq!(answers.wall_clock_minutes, None);
+        assert_eq!(answers.kept(), 6);
     }
 }

@@ -9,9 +9,18 @@
   [38;2;156;163;175mimported from ~/.claude/ · 19 skills · 12 hooks · 4 plugins · CLAUDE.md[0m
   [38;2;156;163;175mprojected into ~/.claude/ · 20 placed[0m
 
-[1m[38;2;255;169;64m1/5[0m  [1m[38;2;230;232;235mHow should agents write to you?[0m
+[1m[38;2;255;169;64m1/7[0m  [1m[38;2;230;232;235mHow should agents write to you?[0m
      [38;2;156;163;175mTone, length, and what to lead with. Every agent reads this before it says[0m
      [38;2;156;163;175manything. Writes voice.md.[0m
      [38;2;156;163;175menter for a new line · ctrl-d saves · esc keeps it as it was[0m
 
-[1m[38;2;61;220;132mREADY[0m  [38;2;156;163;175mguild at ~/.armada/guild · 0 answered · 5 kept as imported[0m
+[1m[38;2;255;169;64m5/7[0m  [1m[38;2;230;232;235mHow many tokens should one Job spend before it stops and asks you?[0m
+     [38;2;156;163;175mOne number — write it as 600k or as 600000, both read the same. It counts[0m
+     [38;2;156;163;175mevery token that Job spends, and at this many it stops and waits for you[0m
+     [38;2;156;163;175mexactly as the iteration limit does. This is the limit that bounds what a[0m
+     [38;2;156;163;175mJob costs. Writes workflows/*.yml.[0m
+
+     [38;2;156;163;175mnow  [0m[38;2;92;225;230m600k[0m
+     [38;2;156;163;175menter keeps 600k[0m  [38;2;92;225;230m›[0m
+
+[1m[38;2;61;220;132mREADY[0m  [38;2;156;163;175mguild at ~/.armada/guild · 0 answered · 7 kept as imported[0m
