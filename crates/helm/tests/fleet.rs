@@ -3966,9 +3966,19 @@ fn a_green_suite_is_not_a_reproduction_and_the_step_is_run_again() {
     );
 }
 
-/// **A step with no rope left stops and asks — it does not abort.**
+/// **A Job with no rope left stops and asks — it does not abort.**
 /// `on_exhausted: needs_human` is the only value the enum has, and it means the
 /// Job records where it reached and is raised to the inbox.
+///
+/// **This is the ceiling PHASES.md §8.6 asks for, and it is the Job's.** The
+/// step is ungateable on purpose — an artifact nothing ever writes — so the loop
+/// would retry it for ever; `budget.iterations` against the turn ledger is what
+/// stops it. There is deliberately no second, per-step ceiling: see
+/// `fleet::advance::after`'s `DoesNotHold` arm for the two reasons the one that
+/// was there had to go.
+///
+/// The stub spends two turns an exchange, so `iterations: 4` buys exactly two
+/// exchanges: one attempt, one retry, then the ceiling.
 #[test]
 fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
     let scratch = Scratch::new();
@@ -3976,7 +3986,7 @@ fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
         &scratch,
         "bug",
         "name: bug\ndescription: one impossible step\nends_at: branch\n\
-         budget:\n  iterations: 2\n  tokens: 600000\n  wall_clock: 90m\n  \
+         budget:\n  iterations: 4\n  tokens: 600000\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: land\n    skill: land-branch\n    verify: { must: artifact_exists, artifact: never-written.md }\n",
     );
@@ -4009,8 +4019,13 @@ fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
     let inbox = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
     assert_eq!(inbox.len(), 1, "{inbox:#?}");
     assert!(
-        inbox[0].body.contains("`land`"),
+        inbox[0].body.contains("land"),
         "the entry does not say which step: {}",
+        inbox[0].body
+    );
+    assert!(
+        inbox[0].body.contains("iterations ceiling"),
+        "the entry does not say what stopped it: {}",
         inbox[0].body
     );
 }

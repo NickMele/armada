@@ -2425,13 +2425,16 @@ fn gate_step<R: Run, C: Clock>(
     // reaches it: the separation that shipped today — a Drone reports, the gate
     // decides — is preserved by using the same verb rather than by writing the
     // record here.
+    // The inbox entry the verdict opened, if it opened one. Kept because a gate
+    // waiting on a person has to read *that* answer back.
+    let mut opened = None;
     if let Some(reached) = next.verdict() {
         let why = match &next {
             advance::Next::Ask { question } => Some(question.clone()),
             advance::Next::Halt { why, .. } => Some(why.clone()),
             _ => None,
         };
-        verdict(
+        let wrote = verdict(
             now,
             place,
             &record.name,
@@ -2440,6 +2443,9 @@ fn gate_step<R: Run, C: Clock>(
             evidence.clone(),
             why.as_deref(),
         )?;
+        if let Output::Verdict(envelope) = &wrote {
+            opened.clone_from(&envelope.data.entry);
+        }
         record = place.store().find(&record.name)?;
     }
 
@@ -2506,6 +2512,18 @@ fn gate_step<R: Run, C: Clock>(
         }
         // `verdict` already recorded `NEEDS_HUMAN` and raised the question.
         advance::Next::Ask { question } => {
+            // **Which entry, remembered.** The answer is read back off this id
+            // and no other — see [`gather`]'s `Person` arm for why an open-entry
+            // lookup cannot work, and `job::Pending` for why the attempt travels
+            // with it.
+            if let Some(entry) = opened {
+                record.pending = Some(job::Pending {
+                    step: step_id.clone(),
+                    on: job::Waiting::Answer(entry),
+                    attempt: attempts,
+                });
+                place.store().save(&record)?;
+            }
             let verdict = record.verdict;
             Ok(tick_row(&record, TICK_ASKED, question, predicate, evidence, verdict))
         }
@@ -2687,8 +2705,30 @@ fn gather<R: Run>(
             facts.branch = Some(committed(run, &worktree, &record.branch));
         }
         gate::Needs::Person => {
-            facts.answer = inbox::open_for(&entries(place)?, &record.uuid)
-                .and_then(|entry| entry.answered.clone());
+            // **The entry this attempt asked, by id — never *an* open entry.**
+            // `inbox::open_for` finds nothing the moment you reply, because
+            // `Entry::is_open` is false once `answered` is set; a gate that
+            // looked for an open entry would therefore never see the answer and
+            // would ask the same question for ever. The id is remembered in
+            // `pending` when the question is raised, and it carries the attempt
+            // with it for the reason `job::Pending` gives: *"yes, ship it"*
+            // about the second thing you were asked is not approval of the
+            // third.
+            let attempt = job::step_failures(&record.transitions, step).saturating_add(1);
+            let asked = pending
+                .as_ref()
+                .filter(|open| open.step == step && open.attempt == attempt)
+                .and_then(|open| match &open.on {
+                    job::Waiting::Answer(entry) => Some(entry.clone()),
+                    job::Waiting::Check(_) => None,
+                });
+            facts.answer = match asked {
+                None => None,
+                Some(id) => entries(place)?
+                    .into_iter()
+                    .find(|entry| entry.uuid == id)
+                    .and_then(|entry| entry.answered),
+            };
         }
         // Nothing to look at: neither is decidable, and `decide` says so.
         gate::Needs::AnotherJob { .. } | gate::Needs::Unstated { .. } => {}

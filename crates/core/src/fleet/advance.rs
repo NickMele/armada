@@ -155,10 +155,13 @@ pub enum Next {
         /// The question.
         question: String,
     },
-    /// Stop. Either a ceiling was reached or the gate cannot be decided at all.
+    /// Stop: the gate cannot be decided at all.
+    ///
+    /// **A ceiling is not one of these.** The Job's ceilings are
+    /// [`attention`]'s, checked before anything is gathered, so a run that hits
+    /// one never reaches [`after`]. See that function's `DoesNotHold` arm for
+    /// why there is no second, per-step ceiling here.
     Halt {
-        /// Which ceiling, when one was reached.
-        ceiling: Option<Ceiling>,
         /// Why, for the inbox entry.
         why: String,
     },
@@ -217,24 +220,28 @@ pub fn after(outcome: &Outcome, workflow: &Workflow, step: &str, attempts: u32) 
             },
         },
 
-        Outcome::DoesNotHold { why, .. } => {
-            match super::gate::out_of_attempts(attempts, &workflow.budget) {
-                // **Out of rope is a stop, not an abort** — `on_exhausted:
-                // needs_human` is the only value the enum has, and it means the
-                // Job records where it reached and is raised to the inbox.
-                Some(ceiling) => Next::Halt {
-                    ceiling: Some(ceiling),
-                    why: format!(
-                        "`{step}` has been attempted {attempts} times and still does not pass: \
-                         {why}"
-                    ),
-                },
-                None => Next::Retry {
-                    attempt: attempts.saturating_add(1),
-                    why: why.clone(),
-                },
-            }
-        }
+        // **A failed gate always retries, and the Job's own ceilings are what
+        // stop it.** There was a second, per-step ceiling here — `attempts`
+        // against `budget.iterations` — and it was wrong twice over.
+        //
+        // It misread the number. PLAN.md §14.3's interview asks *"how many
+        // iterations should one **Job** run before it stops and asks you?"* and
+        // says outright that `fleet::job::exhausted` is what reads the answer.
+        // `exhausted` compares it against `spend.turns`, the turn ledger summed
+        // off `num_turns`. Comparing the same declared number against a count of
+        // *attempts at one step* is a second unit on one field, and a workflow
+        // author setting `iterations: 20` cannot have meant both.
+        //
+        // And it could never fire. An attempt costs at least one turn, so
+        // `spend.turns` reaches the number no later than `attempts` does —
+        // [`attention`] halts the Job on the earlier of the two, before
+        // anything is gathered and before this function is called. The per-step
+        // ceiling was unreachable code that looked like the guard PHASES.md
+        // §8.6 asks for while the Job-wide one did the work.
+        Outcome::DoesNotHold { why, .. } => Next::Retry {
+            attempt: attempts.saturating_add(1),
+            why: why.clone(),
+        },
 
         Outcome::NotYet { why } => Next::Again { why: why.clone() },
 
@@ -248,7 +255,6 @@ pub fn after(outcome: &Outcome, workflow: &Workflow, step: &str, attempts: u32) 
         // failing test instead of telling them `review_clean` needs a reviewer
         // Job that Fleet does not spawn.
         Outcome::CannotDecide { why } => Next::Halt {
-            ceiling: None,
             why: format!("`{step}` cannot be gated: {why}"),
         },
     }
@@ -257,7 +263,6 @@ pub fn after(outcome: &Outcome, workflow: &Workflow, step: &str, attempts: u32) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fleet::gate;
     use crate::fleet::workflow::{Budget, OnExhausted, Predicate, Step, Verify};
     use crate::ports::PortBlock;
 
@@ -413,10 +418,13 @@ mod tests {
         assert_eq!(after(&held, &flow, "one", 1).verdict(), Some(Verdict::Pass));
     }
 
-    /// A failing step is retried until the workflow's per-step rope runs out,
-    /// and then **stops and asks** rather than aborting.
+    /// **A failing step is always retried, however many times it has failed** —
+    /// and the Job's ceilings, not this function, are what stop it. `attempts`
+    /// is carried so the row can say *"attempt 4"*, never so this can halt on
+    /// it: `budget.iterations` is the **Job's** turn ledger (PLAN.md §14.3) and
+    /// reading it as a per-step attempt count was a second unit on one number.
     #[test]
-    fn a_failing_step_retries_until_its_iteration_ceiling_and_then_asks() {
+    fn a_failing_step_is_retried_and_the_jobs_own_ceiling_is_what_stops_it() {
         let flow = workflow(EndsAt::Branch, &["one"]);
         let missed = Outcome::DoesNotHold {
             evidence: Vec::new(),
@@ -429,16 +437,18 @@ mod tests {
                 why: "the suite is red".to_string()
             }
         );
-        match after(&missed, &flow, "one", 3) {
-            Next::Halt { ceiling, why } => {
-                assert_eq!(ceiling, Some(Ceiling::Iterations));
-                assert!(why.contains("the suite is red"));
-            }
-            other => panic!("a step with no rope left kept going: {other:?}"),
-        }
+        // Well past `budget.iterations` — still a retry, because the ceiling is
+        // `attention`'s and it never gets this far.
         assert_eq!(
-            after(&missed, &flow, "one", 3).verdict(),
-            Some(Verdict::NeedsHuman)
+            after(&missed, &flow, "one", 99),
+            Next::Retry {
+                attempt: 100,
+                why: "the suite is red".to_string()
+            }
+        );
+        assert_eq!(
+            after(&missed, &flow, "one", 99).verdict(),
+            Some(Verdict::Failed)
         );
     }
 
@@ -455,26 +465,25 @@ mod tests {
         assert_eq!(next.verdict(), None);
     }
 
-    /// **An undecidable gate stops once rather than burning the budget.**
+    /// **An undecidable gate stops once rather than burning the budget**, and
+    /// it is the only thing that reaches [`Next::Halt`].
     #[test]
-    fn a_gate_nothing_can_decide_halts_with_no_ceiling() {
+    fn a_gate_nothing_can_decide_halts_and_names_what_is_missing() {
         let flow = workflow(EndsAt::Branch, &["review"]);
-        let stuck = gate::decide(
-            &gate::needs(&flow.steps[0].clone()),
-            &gate::Facts::default(),
-        );
-        // The fixture's step gates on `always`; build the real undecidable one.
-        let _ = stuck;
         let cannot = Outcome::CannotDecide {
             why: "`review_clean` is settled by a reviewer Job".to_string(),
         };
         match after(&cannot, &flow, "review", 1) {
-            Next::Halt { ceiling, why } => {
-                assert_eq!(ceiling, None, "an undecidable gate blamed a ceiling");
-                assert!(why.contains("reviewer Job"));
+            Next::Halt { why } => {
+                assert!(why.contains("reviewer Job"), "{why}");
+                assert!(why.contains("cannot be gated"), "{why}");
             }
             other => panic!("an undecidable gate did something: {other:?}"),
         }
+        assert_eq!(
+            after(&cannot, &flow, "review", 1).verdict(),
+            Some(Verdict::NeedsHuman)
+        );
     }
 
     /// Every settling outcome records exactly one verdict, and the two that do

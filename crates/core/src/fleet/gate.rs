@@ -44,7 +44,6 @@
 //! anything is worse than a step that stops, because the stop is visible and the
 //! false pass is not.
 
-use super::job::Ceiling;
 use super::workflow::{Predicate, Step};
 use crate::envelope::Evidence;
 use crate::error::Status;
@@ -517,23 +516,26 @@ fn probe_evidence(kind: &str, probe: &Probed) -> Evidence {
     }
 }
 
-// --------------------------------------------------------------- the ceiling
+// ---------------------------------------------------------------- the ceiling
 //
-// A step's own rope, as distinct from the Job's.
-
-/// Whether a step has been attempted as many times as the workflow allows.
-///
-/// **`iterations` is per step, which is what its own doc comment says** — *"how
-/// many times a step may be retried before the rope runs out"*. The Job-wide
-/// ceilings are [`super::job::exhausted`]'s, and both are enforced: a Job can
-/// run out of turns in the middle of a step's first attempt, and a step can
-/// run out of attempts while the Job has budget left.
-pub fn out_of_attempts(attempts: u32, budget: &super::workflow::Budget) -> Option<Ceiling> {
-    match attempts >= budget.iterations {
-        true => Some(Ceiling::Iterations),
-        false => None,
-    }
-}
+// There isn't one here, and that is deliberate.
+//
+// This module had an `out_of_attempts(attempts, budget)` that halted a step
+// once it had been attempted `budget.iterations` times. It was removed rather
+// than kept beside the Job's ceilings, for two reasons:
+//
+//   * **It read the number in the wrong unit.** PLAN.md §14.3 asks *"how many
+//     iterations should one **Job** run before it stops and asks you?"* and
+//     names [`super::job::exhausted`] as what reads the answer — a comparison
+//     against `spend.turns`, the turn ledger. Comparing the same declared
+//     number against attempts at one step is a second unit on one field.
+//   * **It could not fire.** An attempt costs at least one turn, so the turn
+//     ledger reaches the number no later than the attempt count does, and
+//     [`super::advance::attention`] halts the Job on the earlier of the two
+//     before this module is reached at all.
+//
+// The Job's ceilings are [`super::job::exhausted`]'s, and they are the hard
+// ceiling PHASES.md §8.6 asks for.
 
 #[cfg(test)]
 mod tests {
@@ -879,20 +881,5 @@ mod tests {
                 "{want:?} decided something from nothing"
             );
         }
-    }
-
-    /// A step is out of rope when it has been attempted as many times as the
-    /// workflow allows — **counted per step**, which is what `iterations` means.
-    #[test]
-    fn a_step_runs_out_of_attempts_at_its_workflows_iteration_ceiling() {
-        let budget = super::super::workflow::Budget {
-            iterations: 3,
-            tokens: 1,
-            wall_clock_ms: 1,
-            on_exhausted: super::super::workflow::OnExhausted::NeedsHuman,
-        };
-        assert_eq!(out_of_attempts(2, &budget), None);
-        assert_eq!(out_of_attempts(3, &budget), Some(Ceiling::Iterations));
-        assert_eq!(out_of_attempts(9, &budget), Some(Ceiling::Iterations));
     }
 }
