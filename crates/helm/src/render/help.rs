@@ -120,7 +120,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 44] = [
+const PAGES: [Page; 45] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -415,6 +415,23 @@ const PAGES: [Page; 44] = [
         notes: &[
             "Takes nothing else on purpose: what to do when it will not",
             "fast-forward is reported for you to decide, not chosen by a flag.",
+        ],
+    },
+    Page {
+        path: "guild upgrade",
+        synopsis: "upgrade",
+        summary: "take what Armada has learned since your guild was made",
+        usage: &["armada guild upgrade [--with-skills] [--json]"],
+        flags: &[(
+            "--with-skills",
+            "also take skills/onboard-repo/, which you may have customised",
+        )],
+        examples: &[],
+        notes: &[
+            "Your voice, expectations and how-i-work are never touched: they are",
+            "not on the branch Armada's templates ship on, so the merge has",
+            "nothing to say about them. A conflict is left in the guild with git's",
+            "markers in it for you to resolve — nothing of yours is overwritten.",
         ],
     },
     Page {

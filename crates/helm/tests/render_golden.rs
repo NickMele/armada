@@ -1308,9 +1308,73 @@ fn guild_ls_matches_its_fixture() {
                 "1 subagent".to_string(),
                 "1 workflow".to_string(),
             ],
+            // **The provenance is on the line a reader is already reading.**
+            // `armada guild upgrade` merges against this, and a version nobody
+            // can look at is one nobody can trust (`docs/reserved/006`).
+            template: Some("0.1.0 8f3a1c0d9e21".to_string()),
         },
     )));
     assert_render("guild-ls", &output);
+}
+
+/// **`armada guild upgrade` — what Armada has learned since, merged in.**
+///
+/// The fixture holds all four outcomes at once, because the reassurance is the
+/// thing a reader came for: the schema and the persona took the update, the
+/// skill was offered and not taken, and the three files that are **you** say in
+/// words that no release will ever touch them. A layout that only showed what
+/// changed would leave the one question this verb raises unanswered.
+#[test]
+fn guild_upgrade_matches_its_fixture() {
+    let row = |status: Sync, item: &str, detail: &str| SyncItem {
+        status,
+        item: item.to_string(),
+        detail: detail.to_string(),
+    };
+    let output = Output::GuildUpgrade(Box::new(Envelope::ok(
+        "guild upgrade",
+        None,
+        Status::Ready,
+        armada_core::envelope::GuildUpgradeData {
+            at: "~/.armada/guild".to_string(),
+            from: None,
+            to: "0.1.0 8f3a1c0d9e21".to_string(),
+            adopted: Some("c401123abcde".to_string()),
+            results: vec![
+                row(Sync::Added, "templates.yml", "Armada's"),
+                row(Sync::Changed, "subagents/helm.md", "operating knowledge"),
+                row(
+                    Sync::Unchanged,
+                    "workflows/workflow.schema.json",
+                    "already what Armada ships",
+                ),
+                row(
+                    Sync::Unchanged,
+                    "skills/onboard-repo/SKILL.md",
+                    "offered; --with-skills takes it",
+                ),
+                row(
+                    Sync::Unchanged,
+                    "voice.md",
+                    "yours — no release ever updates it",
+                ),
+                row(
+                    Sync::Unchanged,
+                    "expectations.md",
+                    "yours — no release ever updates it",
+                ),
+                row(
+                    Sync::Unchanged,
+                    "how-i-work.md",
+                    "yours — no release ever updates it",
+                ),
+            ],
+            applied: true,
+            headline: None,
+            projected: None,
+        },
+    )));
+    assert_render("guild-upgrade", &output);
 }
 
 /// **`armada guild show` — one item, and the layout the terminal's *view*

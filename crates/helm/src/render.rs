@@ -54,11 +54,11 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, FailureData,
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
-    GuildItemData, GuildListData, GuildSyncData, Headline, HelmData, HelmSwitchData, InboxData,
-    InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData, Projection,
-    ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData, SettingsData,
-    ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun, VerdictData,
-    VerifyData, Wiring,
+    GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData,
+    HelmSwitchData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData,
+    ProbeData, Projection, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData,
+    SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun,
+    VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, State as FailureState};
@@ -104,6 +104,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Doctor(envelope) => doctor(envelope, style, width),
         Output::Settings(envelope) => settings(envelope, style, width),
         Output::GuildSync(envelope) => guild_sync(envelope, style, width),
+        Output::GuildUpgrade(envelope) => guild_upgrade(envelope, style, width),
         Output::GuildInit(envelope) => guild_init(envelope, style, width),
         Output::GuildBundle(envelope) => guild_bundle(envelope, style, width),
         Output::GuildProject(envelope) => guild_project(envelope, style, width),
@@ -3128,6 +3129,63 @@ fn guild_sync(envelope: &Envelope<GuildSyncData>, style: Style, width: usize) ->
     out
 }
 
+/// `armada guild upgrade`.
+///
+/// **The same table `guild pull` draws, over the same question asked of a
+/// different pair.** A pull reconciles two machines; an upgrade reconciles you
+/// and a release, and the reader is scanning the same STATUS column for the same
+/// word. What it adds is the pair of digests on the summary line: an upgrade
+/// whose report does not say what it moved *from* is one nobody can check.
+fn guild_upgrade(envelope: &Envelope<GuildUpgradeData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("item", "detail", true)).indent(2);
+    for row in &data.results {
+        table = table.row(vec![
+            token(row.status.word(), Role::for_sync(row.status)),
+            Cell::plain(row.item.clone()),
+            detail_cell(style, Some(row.detail.as_str())),
+            time_cell(None),
+        ]);
+    }
+    let mut out = table.render(style, width);
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    let mut facts = vec![data.at.clone()];
+    match &data.from {
+        Some(from) if *from == data.to => facts.push(format!("already at {}", data.to)),
+        Some(from) => facts.push(format!("{from} -> {}", data.to)),
+        // **No stamp is not a blank; it is the fact.** This guild predates
+        // provenance, which is exactly why the base had to be adopted, and the
+        // next row says which commit it was adopted from.
+        None => facts.push(format!("no stamp -> {}", data.to)),
+    }
+    if let Some(adopted) = &data.adopted {
+        facts.push(format!("base adopted from {adopted}"));
+    }
+    if let Some(projected) = &data.projected {
+        facts.push(format!("projected {}", projected.facts.join(", ")));
+    }
+
+    out.push_str(&match data.headline {
+        Some(word) => {
+            let mut facts = facts.clone();
+            // The remedy is on the summary line for the same reason a
+            // conflicted pull puts it there: there is exactly one thing to do
+            // about a guild with markers in it.
+            facts.push("resolve in ~/.armada/guild".to_string());
+            facts.push("then git commit there".to_string());
+            headline(style, word, &facts)
+        }
+        None => summary(style, envelope.status, &facts),
+    });
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
 /// What a sync that worked has to report: how far it moved, and where to.
 fn sync_facts(data: &GuildSyncData) -> Vec<String> {
     let mut facts = Vec::new();
@@ -3374,6 +3432,14 @@ fn guild_list(envelope: &Envelope<GuildListData>, style: Style, width: usize) ->
         facts.push("armada guild init".to_string());
     } else {
         facts.extend(data.facts.clone());
+    }
+    // **The provenance, last on the line.** `armada guild upgrade` merges
+    // against it, and a version nobody can see is one nobody trusts
+    // (`docs/reserved/006`). An absence is not printed: a guild made before the
+    // stamp existed has no answer, and `upgrade` is where that becomes
+    // interesting rather than here.
+    if let Some(template) = &data.template {
+        facts.push(format!("templates {template}"));
     }
     out.push_str(&summary(style, envelope.status, &facts));
     if let Some(error) = &envelope.error {

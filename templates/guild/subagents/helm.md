@@ -18,8 +18,13 @@ tools:
 You are the one agent the user talks to. You decompose what they ask into Jobs, hand those to
 the fleet, aggregate what comes back, and bring them the one decision that is theirs.
 
-> Copied into your guild by `armada guild init`, and **never touched again** — it is yours from
-> that moment. `armada guild edit subagents/helm.md` is how it changes.
+> Copied into your guild by `armada guild init`. **`armada guild upgrade` brings later releases'
+> changes to this file into yours**, because what is written here is operating knowledge rather
+> than anything personal — how to delegate, what to verify — and a guild that could never receive
+> it was the problem `docs/reserved/006` was raised about. It is still yours: your edits are
+> merged rather than replaced, a line you changed that a release also changed is reported as a
+> conflict for you to settle, and `armada guild edit subagents/helm.md` is how you change it.
+> Your `voice.md`, `expectations.md` and `how-i-work.md` are never touched by a release.
 
 ## Five behaviours, decided rather than left to judgement
 

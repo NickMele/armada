@@ -113,8 +113,13 @@ Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
   are still refused by name as not built.
 - **M1 has landed**, less one row: `skills:` was not built, because M1 adds no capability.
   Tracked in `PHASES.md` §8.3.
-- **Guild has landed** — `init`, `pull`, `push`, `export`, `import`, plus `armada init` and
-  `armada doctor`. `guild edit` and `guild verify` are not built.
+- **Guild has landed** — `init`, `pull`, `push`, `upgrade`, `export`, `import`, `ls`, `show`,
+  `edit`, `delete`, plus `armada init` and `armada doctor`. `guild verify` is not built.
+  **`upgrade` is how Armada's own updates reach an existing guild** — the templates ship as a
+  branch inside the guild's git repository, so it is a `git merge` and no merge engine exists
+  ([`docs/reserved/006`](docs/reserved/006-guild-has-no-way-to-learn.md)). `voice.md`,
+  `how-i-work.md` and `expectations.md` are never on that branch, which is what makes "a release
+  cannot overwrite what you wrote" a property of the construction rather than of a check.
 - **Fleet has landed** — `spawn`, `ls`, `board`, `answer`, `inbox`, `kill`, `tick`, with the Job
   index in `~/.armada/jobs/` and worktrees under `~/.armada/workspaces/`. **Helm and the Bridge
   do not exist**, and neither does the MCP server. Their specification is `PLAN.md` §14–§15 and

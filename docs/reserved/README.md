@@ -20,7 +20,7 @@ usually asking which one applies.
 | [003](003-bridge-command-centre.md) | The Bridge as the command centre | RESERVED | helm | One screen for Fleet, Manifest and Guild, not three |
 | [004](004-guild-inventory.md) | Seeing what is in your guild | BUILT | guild | `armada guild ls` / `show` — no verb showed you what you had |
 | [005](005-inbox-label-not-identity.md) | The inbox records a label, not an identity | FIXED | fleet | Inbox entries keyed by Job name collided; they carry the Job's uuid, close when it ends, and `ls` shows the id |
-| [006](006-guild-has-no-way-to-learn.md) | The guild has no way to learn | RESERVED | guild | No provenance means no path for Armada's own updates to reach an existing guild |
+| [006](006-guild-has-no-way-to-learn.md) | The guild has no way to learn | BUILT | guild | `armada guild upgrade` — templates ship as a branch in the guild's own repo, so the upgrade is a `git merge` |
 | [007](007-scanner-should-propose.md) | The scanner should propose, not only report | BUILT | manifest | `config scan` proposes what it can prove and a tick list writes it — **drift is deferred and is the one half not built** |
 | [008](008-armada-injects-its-own-skills.md) | Armada injects its own skills | RESERVED | cross-cutting | Drones need Armada's own tools and the standing to propose manifest/guild changes |
 | [009](009-smaller-things-raised-in-use.md) | Smaller things raised in use, each with its reason | RESERVED | cross-cutting | Five small gaps — `doctor` health, `config scan`'s missing middle option, guild remote status, sync prompts, `--help` drift |

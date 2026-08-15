@@ -8,8 +8,10 @@ description: Write a repository's armada.yml with the person who owns it — one
 Write this repository's `armada.yml` **with** the person who owns it.
 
 > Copied into your guild by `armada guild init`. It is yours from that moment —
-> `armada guild edit skills/onboard-repo/SKILL.md` changes it, and nothing here
-> is updated by a later Armada release.
+> `armada guild edit skills/onboard-repo/SKILL.md` changes it. A later release's
+> version is **offered** rather than taken, because you may have customised this
+> one: `armada guild upgrade --with-skills` merges it in, and without that flag
+> nothing here moves.
 
 ## Why this is a skill and not a prompt
 

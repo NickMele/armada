@@ -1417,6 +1417,63 @@ pub struct GuildListData {
     /// say what you have and the facts say how much, and a reader who came for
     /// the second should not have to count the first.
     pub facts: Vec<String>,
+    /// Which Armada templates the Armada-written half came from — `0.1.0
+    /// 8f3a1c0d9e21` — or absent on a guild that predates the stamp.
+    ///
+    /// **A version nobody can see is one nobody trusts.** `armada guild
+    /// upgrade` merges against this, so a reader has to be able to look at it
+    /// without reading git; and an absence is itself the answer — that guild
+    /// has no base yet, and the first upgrade will adopt one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
+}
+
+/// `armada guild upgrade` — **take what Armada has learned since**.
+///
+/// The verb `docs/reserved/006` asks for. Armada's templates ship as a branch
+/// inside the guild's own repository, so an upgrade is a `git merge`: git
+/// tracks the base, merges an untouched file silently, and conflicts only where
+/// both sides changed the same lines. No merge engine is written and none is
+/// wanted.
+///
+/// **`applied` is separate from the rows for the same reason it is on a pull.**
+/// A conflicted upgrade leaves the merge in progress and changes nothing a
+/// person has to accept, so the rows are what is *waiting*; reading them as
+/// what happened is the one misreading this payload can produce.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildUpgradeData {
+    /// Where the guild is, as a person writes it.
+    pub at: String,
+    /// What the guild's stamp said before — `0.1.0 8f3a1c0d9e21`, or absent
+    /// when it had none, which is every guild made before provenance existed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// What this Armada's templates are.
+    pub to: String,
+    /// The commit a guild with no stamp adopted as its base, when it had to.
+    ///
+    /// **Reported, because a base nobody was told about is a base nobody can
+    /// dispute.** It decides which of two edits a merge treats as a change, so
+    /// a reader who disagrees with the choice needs to be able to see it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adopted: Option<String>,
+    /// One row per file the policy has something to say about — taken, offered,
+    /// conflicted, or yours and therefore never touched.
+    pub results: Vec<SyncItem>,
+    /// **Whether anything landed.** `false` on a conflict, where the merge is
+    /// left in progress for a person to resolve, and `false` on a guild that
+    /// was already at these templates.
+    pub applied: bool,
+    /// `NEEDS ATTENTION`, when a conflict needs a person.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headline: Option<Headline>,
+    /// What re-projecting the upgraded guild onto Claude Code's load path did.
+    ///
+    /// **Absent when nothing was applied.** An upgraded persona that has not
+    /// been projected is one no session will ever read, which is the same
+    /// confusing hour `guild pull` ends on a projection to avoid.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub projected: Option<Projection>,
 }
 
 /// One thing in a guild, as the envelope carries it.

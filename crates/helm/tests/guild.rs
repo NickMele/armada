@@ -1044,3 +1044,342 @@ fn listing_a_machine_with_no_guild_names_the_verb_that_makes_one() {
         "{error}"
     );
 }
+
+// --------------------------------------------------- armada guild upgrade
+//
+// **The case that has to work is a guild that already exists**, made before
+// provenance did (`docs/reserved/006`). An upgrade path that only worked for
+// guilds created after it shipped would miss every guild there is.
+//
+// So the fixture below is built in the *old* shape — Armada's files as an
+// earlier release wrote them, the person's words on top, no stamp anywhere —
+// and every test in this section runs the real binary against it.
+
+/// A guild in the shape a release before this one left behind.
+///
+/// Three files that are Armada's, at an older text; three that are the
+/// person's; a commit under the subject `guild init` writes, because for a
+/// guild with no stamp that subject **is** the provenance; and then an edit of
+/// the person's own, so the merge has something of theirs to preserve.
+fn an_unstamped_guild(machine: &Machine) -> PathBuf {
+    let guild = guild_of(machine);
+    for directory in ["subagents", "workflows", "skills/onboard-repo"] {
+        std::fs::create_dir_all(guild.join(directory)).unwrap();
+    }
+    std::fs::write(
+        guild.join("subagents/helm.md"),
+        "---\nname: helm\n---\n\n# Helm\n\nAn older persona, with none of what \
+         Armada has learned since.\n",
+    )
+    .unwrap();
+    std::fs::write(
+        guild.join("workflows/workflow.schema.json"),
+        "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \
+         \"title\": \"an older schema\"\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        guild.join("skills/onboard-repo/SKILL.md"),
+        "---\nname: onboard-repo\n---\n\n# Onboard\n\nWith one paragraph of mine \
+         in it.\n",
+    )
+    .unwrap();
+    for (fragment, body) in [
+        ("voice.md", "# Voice\n\nAnswer first. Nothing before it.\n"),
+        ("expectations.md", "# Expectations\n\nSay who acts.\n"),
+        ("how-i-work.md", "# How I work\n\nBranch, then commit.\n"),
+    ] {
+        std::fs::write(guild.join(fragment), body).unwrap();
+    }
+
+    git(&guild, &["init", "-q", "-b", "main"]);
+    git(&guild, &["add", "-A"]);
+    // **The subject is the contract.** `armada_guild::upstream::WRITTEN_BY_INIT`
+    // reads it back, because it is the only mark a pre-provenance guild carries.
+    git(
+        &guild,
+        &["commit", "-q", "-m", "guild: imported and interviewed"],
+    );
+
+    // An edit of the person's own, after the init. It must survive.
+    std::fs::write(
+        guild.join("voice.md"),
+        "# Voice\n\nAnswer first. Nothing before it. Eight lines or fewer.\n",
+    )
+    .unwrap();
+    git(&guild, &["add", "-A"]);
+    git(
+        &guild,
+        &["commit", "-q", "-m", "guild: my voice, sharpened"],
+    );
+    guild
+}
+
+fn shipped(path: &str) -> String {
+    armada_guild::upstream::body_of(path).expect("the managed file is shipped")
+}
+
+fn head_of(guild: &Path) -> String {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(guild)
+        .output()
+        .expect("git runs");
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// **The whole of `docs/reserved/006`, run.** A guild that has no provenance
+/// adopts a base from the commit `guild init` wrote, takes the persona and the
+/// schema, and does not touch one byte of what the person wrote.
+#[test]
+fn a_guild_made_before_provenance_takes_the_update_and_keeps_what_is_yours() {
+    let machine = Machine::new();
+    let guild = an_unstamped_guild(&machine);
+    let outside = machine.outside();
+    let mine = std::fs::read_to_string(guild.join("voice.md")).unwrap();
+
+    let upgraded = machine.run(&outside, &["guild", "upgrade", "--json"]);
+    assert!(upgraded.status.success(), "{}", why(&upgraded));
+    let data = &envelope(&upgraded)["data"];
+    assert_eq!(data["applied"], true, "{data}");
+
+    // **The base was adopted and it is reported.** A base nobody was told about
+    // is a base nobody can dispute.
+    assert!(data["adopted"].is_string(), "{data}");
+    assert!(
+        data["from"].is_null(),
+        "a guild with no stamp had one: {data}"
+    );
+
+    // The persona — the file 006 was raised about — is now Armada's.
+    assert_eq!(
+        std::fs::read_to_string(guild.join("subagents/helm.md")).unwrap(),
+        shipped("subagents/helm.md"),
+        "the persona did not receive what Armada has learned"
+    );
+    assert_eq!(
+        std::fs::read_to_string(guild.join("workflows/workflow.schema.json")).unwrap(),
+        shipped("workflows/workflow.schema.json")
+    );
+
+    // **The three that are you, byte for byte.** A silent overwrite here is the
+    // one unrecoverable outcome this verb has.
+    assert_eq!(
+        std::fs::read_to_string(guild.join("voice.md")).unwrap(),
+        mine,
+        "voice.md was rewritten by a release"
+    );
+    assert!(std::fs::read_to_string(guild.join("expectations.md"))
+        .unwrap()
+        .contains("Say who acts"));
+    assert!(std::fs::read_to_string(guild.join("how-i-work.md"))
+        .unwrap()
+        .contains("Branch, then commit"));
+
+    // The skill was offered, not taken: the person's paragraph is still there.
+    assert!(
+        std::fs::read_to_string(guild.join("skills/onboard-repo/SKILL.md"))
+            .unwrap()
+            .contains("one paragraph of mine"),
+        "an offered file was taken without being asked for"
+    );
+
+    // And the guild now has a base, so the *next* upgrade needs no adoption.
+    let stamp = std::fs::read_to_string(guild.join("templates.yml")).unwrap();
+    assert!(stamp.contains(&armada_guild::upstream::digest()), "{stamp}");
+}
+
+/// **Inverted**: without the upgrade the persona stays exactly as it was. A
+/// test that asserts a file matches the shipped text has to fail when nothing
+/// ran, or it is asserting about the fixture rather than about the verb.
+#[test]
+fn without_the_upgrade_the_persona_is_still_the_old_one() {
+    let machine = Machine::new();
+    let guild = an_unstamped_guild(&machine);
+    assert_ne!(
+        std::fs::read_to_string(guild.join("subagents/helm.md")).unwrap(),
+        shipped("subagents/helm.md")
+    );
+    assert!(!guild.join("templates.yml").exists());
+}
+
+/// **A file edited on both sides is a conflict, reported and left.** Nothing of
+/// the person's is chosen against, and the merge stays in the guild with git's
+/// markers in it for them to resolve.
+#[test]
+fn a_persona_edited_here_and_by_a_release_conflicts_rather_than_being_overwritten() {
+    let machine = Machine::new();
+    let guild = an_unstamped_guild(&machine);
+    let outside = machine.outside();
+
+    std::fs::write(
+        guild.join("subagents/helm.md"),
+        "---\nname: helm\n---\n\n# Helm\n\nMy own persona, which I wrote and \
+         which Armada may not silently replace.\n",
+    )
+    .unwrap();
+    git(&guild, &["add", "-A"]);
+    git(&guild, &["commit", "-q", "-m", "guild: my persona"]);
+
+    let upgraded = machine.run(&outside, &["guild", "upgrade", "--json"]);
+    assert!(!upgraded.status.success(), "a conflict exited zero");
+    let reported = envelope(&upgraded);
+    assert_eq!(reported["data"]["applied"], false);
+    assert_eq!(reported["status"], "FAILED");
+
+    let rows = reported["data"]["results"].as_array().unwrap();
+    assert!(
+        rows.iter()
+            .any(|row| row["status"] == "CONFLICT" && row["item"] == "subagents/helm.md"),
+        "{rows:?}"
+    );
+
+    // **Left, not resolved.** Both texts are in the file, which is what lets a
+    // person choose; neither was thrown away.
+    let body = std::fs::read_to_string(guild.join("subagents/helm.md")).unwrap();
+    assert!(body.contains("<<<<<<<"), "the merge was resolved for them");
+    assert!(body.contains("My own persona"), "their words were dropped");
+
+    // And nothing else moved, including the fragments.
+    assert!(std::fs::read_to_string(guild.join("voice.md"))
+        .unwrap()
+        .contains("Eight lines or fewer"));
+
+    // **Running it again does not commit the markers as a resolution.** The
+    // verb commits whatever is uncommitted before merging, so over a conflicted
+    // tree a second run would stage git's own `<<<<<<<` and call it settled —
+    // the silent overwrite this verb exists to prevent, arriving by the back
+    // door of running it twice.
+    let twice = machine.run(&outside, &["guild", "upgrade", "--json"]);
+    assert!(!twice.status.success(), "a guild mid-merge upgraded again");
+    assert!(
+        envelope(&twice)["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("merge is already in progress"),
+        "{}",
+        envelope(&twice)["error"]
+    );
+    assert!(
+        std::fs::read_to_string(guild.join("subagents/helm.md"))
+            .unwrap()
+            .contains("<<<<<<<"),
+        "the markers were committed as if they were a resolution"
+    );
+}
+
+/// The offered file is taken **only when it is asked for**, and `--with-skills`
+/// is how a caller with no terminal asks. An interactive-only verb would be a
+/// bug (PLAN.md §3.1.1).
+#[test]
+fn with_skills_takes_the_file_that_is_otherwise_only_offered() {
+    let machine = Machine::new();
+    let guild = an_unstamped_guild(&machine);
+    let outside = machine.outside();
+
+    let upgraded = machine.run(&outside, &["guild", "upgrade", "--with-skills", "--json"]);
+    assert!(upgraded.status.success(), "{}", why(&upgraded));
+    assert_eq!(
+        std::fs::read_to_string(guild.join("skills/onboard-repo/SKILL.md")).unwrap(),
+        shipped("skills/onboard-repo/SKILL.md")
+    );
+}
+
+/// **Running it twice does nothing the second time.** The digest is what
+/// identifies a template set, so a guild already at this one has no merge to
+/// make — and saying `already at` is a different answer from saying nothing.
+#[test]
+fn a_second_upgrade_finds_nothing_to_do() {
+    let machine = Machine::new();
+    let guild = an_unstamped_guild(&machine);
+    let outside = machine.outside();
+
+    assert!(machine
+        .run(&outside, &["guild", "upgrade", "--json"])
+        .status
+        .success());
+    let head = head_of(&guild);
+
+    let again = machine.run(&outside, &["guild", "upgrade", "--json"]);
+    assert!(again.status.success(), "{}", why(&again));
+    let data = &envelope(&again)["data"];
+    assert_eq!(data["applied"], false, "{data}");
+    assert_eq!(data["from"], data["to"], "{data}");
+    assert_eq!(head_of(&guild), head, "a no-op upgrade made a commit");
+}
+
+/// **`armada guild ls` shows the provenance**, because a version nobody can see
+/// is one nobody trusts — and its absence before the upgrade is itself the
+/// answer for a guild that predates the stamp.
+#[test]
+fn the_listing_shows_which_templates_the_guild_came_from() {
+    let machine = Machine::new();
+    let guild = an_unstamped_guild(&machine);
+    let outside = machine.outside();
+
+    let before = machine.run(&outside, &["guild", "ls", "--list", "--json"]);
+    assert!(envelope(&before)["data"]["template"].is_null());
+
+    machine.run(&outside, &["guild", "upgrade", "--json"]);
+    let after = machine.run(&outside, &["guild", "ls", "--list", "--json"]);
+    let template = envelope(&after)["data"]["template"]
+        .as_str()
+        .expect("the listing carries the provenance")
+        .to_string();
+    assert!(
+        template.contains(&armada_guild::upstream::digest()),
+        "{template}"
+    );
+    assert!(guild.join("templates.yml").is_file());
+
+    // **And a person sees it too.** An envelope field nothing renders is a
+    // field only an agent can read, on the verb whose audience is a person.
+    let printed = machine.run(&outside, &["guild", "ls", "--list"]);
+    assert!(stdout(&printed).contains(&template), "{}", stdout(&printed));
+}
+
+/// **Two machines, and the upgrade must not fight a pull.** The upgrade only
+/// ever adds commits to `main` locally; the branch Armada's templates live on
+/// is published separately, so the second machine merges against the *same*
+/// base rather than adopting one of its own — and a guild that arrives already
+/// upgraded has nothing for its own `upgrade` to do.
+#[test]
+fn a_second_machine_takes_the_upgrade_rather_than_repeating_it() {
+    let first = Machine::new();
+    let second = Machine::new();
+    let url = remote(&first.root.path().join("remote.git"));
+
+    let guild = an_unstamped_guild(&first);
+    git(&guild, &["remote", "add", "origin", &url]);
+    let outside = first.outside();
+    assert!(first
+        .run(&outside, &["guild", "upgrade", "--json"])
+        .status
+        .success());
+    assert!(first
+        .run(&outside, &["guild", "push", "--json"])
+        .status
+        .success());
+
+    // The second machine takes the guild whole, upgrade and all.
+    let cloned = second.run(
+        &second.outside(),
+        &["init", "--guild", &url, "--defaults", "--json"],
+    );
+    assert!(cloned.status.success(), "{}", why(&cloned));
+    assert_eq!(
+        std::fs::read_to_string(guild_of(&second).join("subagents/helm.md")).unwrap(),
+        shipped("subagents/helm.md")
+    );
+
+    // And its own upgrade finds the guild already there, **without adopting a
+    // base of its own** — the published branch is the shared one.
+    let again = second.run(&second.outside(), &["guild", "upgrade", "--json"]);
+    assert!(again.status.success(), "{}", why(&again));
+    let data = &envelope(&again)["data"];
+    assert_eq!(data["applied"], false, "{data}");
+    assert!(
+        data["adopted"].is_null(),
+        "the second machine adopted a base of its own: {data}"
+    );
+}
