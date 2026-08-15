@@ -29,7 +29,9 @@
 //!
 //! [`every_verb_the_parser_accepts_has_a_page`]: tests::every_verb_the_parser_accepts_has_a_page
 
-use crate::args::{BUILTIN_VERBS, MANIFEST_BUILT, RESERVED_GUILD_VERBS, RESERVED_TOP_LEVEL};
+use crate::args::{
+    BUILTIN_VERBS, MANIFEST_BUILT, RESERVED_CHECK_FLAGS, RESERVED_GUILD_VERBS, RESERVED_TOP_LEVEL,
+};
 
 use super::palette::Role;
 use super::style::Style;
@@ -1335,7 +1337,10 @@ fn not_built(style: Style, width: usize) -> String {
             Cell::muted("reserved"),
         ])
         .row(vec![
-            Cell::plain("armada manifest check --detach, --status"),
+            Cell::plain(format!(
+                "armada manifest check {}",
+                RESERVED_CHECK_FLAGS.join(", ")
+            )),
             Cell::muted("reserved"),
         ])
         .render(style, width);
@@ -1474,6 +1479,24 @@ mod tests {
         for path in every_verb() {
             let verb = path.rsplit(' ').next().expect("a last word");
             assert!(page.contains(verb), "`armada {path}` is not listed");
+        }
+    }
+
+    /// **The NOT BUILT YET row for `check` is drawn from `RESERVED_CHECK_FLAGS`,
+    /// not retyped.** This was the drift `docs/reserved/009` item 5 named by
+    /// example: the row and `check`'s own parser said the same two flags in two
+    /// places, so a flag added to one and not the other shipped silently. A
+    /// flag added here now reaches the page for free; this test is what fails
+    /// if that ever stops being true.
+    #[test]
+    fn the_reserved_check_flags_row_names_every_flag_in_the_list() {
+        let page = root_page();
+        assert!(page.contains("armada manifest check"), "the row is gone");
+        for flag in RESERVED_CHECK_FLAGS {
+            assert!(
+                page.contains(flag),
+                "`{flag}` is reserved and missing from the NOT BUILT YET row"
+            );
         }
     }
 
