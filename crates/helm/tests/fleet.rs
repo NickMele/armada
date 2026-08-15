@@ -2795,6 +2795,7 @@ fn browse(
         armada_helm::verbs::failures::Look::default(),
         &mut armada_helm::render::progress::Silent,
         armada_helm::verbs::failures::Lens::Failures,
+        None,
     )
     .expect("the listing answers");
     (ask, output)
@@ -2944,6 +2945,7 @@ fn without_a_terminal_the_same_verb_asks_nothing_and_lists_the_same_rows() {
         armada_helm::verbs::failures::Look::default(),
         &mut armada_helm::render::progress::Silent,
         armada_helm::verbs::failures::Lens::Failures,
+        None,
     )
     .expect("the listing answers");
 
