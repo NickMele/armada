@@ -724,6 +724,23 @@ fn emit(
     terminal: render::term::Terminal,
     home: Option<&std::path::Path>,
 ) -> ExitCode {
+    // **`mcp serve` reports on stderr, and it is the one verb that must.**
+    // stdout *is* the transport: it carried JSON-RPC frames until the moment
+    // this line runs, and a summary written into it is a frame the client
+    // cannot parse. Measured against a real client — the line arrived after the
+    // last response, as one unparseable trailing document.
+    //
+    // This is the same rule the spinner and the interview prompt already
+    // follow, arriving at the one verb where stdout does not belong to a person
+    // at all (PLAN.md §3.1.1).
+    if matches!(output, Output::Mcp(_)) {
+        let text = match json {
+            true => output.to_json(),
+            false => render::human(&output, style, terminal),
+        };
+        write_err(&text);
+        return ExitCode::from(output.exit_code());
+    }
     if json {
         write_out(&output.to_json());
     } else {

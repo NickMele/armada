@@ -116,6 +116,50 @@ one in PLAN.md §9.
 durable handles."* This is the standard shape for exposing something like a ten-minute
 `armada manifest check` over MCP — worth using rather than inventing a bespoke polling protocol.
 
+### `rmcp` is **3.1.2**, and it has the Tasks extension
+
+Re-checked against crates.io at the start of M3, because this file already said the SDK moves
+fast and the plan said "v3.x, verify before starting". What the check found, and all three
+mattered:
+
+| Claim | What is true at 3.1.2 |
+|---|---|
+| Feature set | `server`, `macros`, `schemars`, `transport-io` is the whole of a stdio server. `client` and every HTTP transport stay off. |
+| Tasks | `rmcp::task_manager::TaskManager` implements SEP-2663 server-side — spawn, `tasks/get`, `tasks/update`, `tasks/cancel`, TTL expiry. Nothing had to be written. |
+| Cost | 77 transitive packages, including tokio. It is the **only** async in this workspace, and the first dependency that brings a runtime. |
+
+**Two API shapes that a v2 example gets wrong.** `ServerInfo` is `#[non_exhaustive]`, so
+`ServerInfo { capabilities, ..Default::default() }` does not compile from another crate —
+`ServerInfo::new(caps).with_instructions(…)` is the builder that does. And `#[tool_router]`'s
+generated `tool_router()` is an associated *function* rather than a field, so a struct holding
+a `ToolRouter` field alongside it gets a dead-code warning, not a second router.
+
+**A tool description is `inputSchema` prose.** `schemars` lifts each argument's doc comment
+into the tool's schema, so those comments are read by the model and not by a maintainer.
+
+### Claude Code renames a dotted tool
+
+Measured, 2.1.233. A server that advertises `fleet.status` — which the specification allows,
+dots are legal in a tool name — is exposed to the model as `mcp__armada__fleet_status`. The
+dot becomes an underscore.
+
+**If you assume otherwise:** a prompt, a persona's `tools:` list or an `--allowedTools` flag
+written with the documented name silently matches nothing, and the model reports it has no such
+tool. The wire name stays dotted; only the client's spelling changes, so
+`tools/list` is not where you will notice.
+
+### stdout is the transport, and one line of ordinary output breaks it
+
+Measured against a real client: `armada mcp serve` wrote its shutdown envelope to stdout
+through the same path every other verb uses, and it arrived after the last JSON-RPC response as
+a trailing document no parser accepts.
+
+The verb reports on **stderr** for that reason — the same rule the spinner and the interview
+prompt already follow, arriving at the one verb where stdout belongs to a protocol rather than
+to a person. A failure is routed the same way, which is why `mcp::serve` returns its own error
+*inside* an `Output` rather than as an `Err`: `main` renders an `Err` onto stdout under
+`--json`.
+
 ## Ports — what a bind probe can and cannot see
 
 **Measured on darwin, and not re-run on Linux.** What a `bind()` refuses is decided by the

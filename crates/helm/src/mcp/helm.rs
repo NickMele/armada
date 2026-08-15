@@ -149,6 +149,10 @@ pub struct SpawnArgs {
     /// Which repository to branch from. Defaults to where the server started.
     #[serde(default)]
     pub at: Option<String>,
+    /// Below this confidence, refuse rather than spawn. Defaults to Armada's
+    /// own threshold; `0` never refuses.
+    #[serde(default)]
+    pub confidence: Option<f64>,
     /// Report the classification, the worktree, the port block and the budget,
     /// and start nothing.
     #[serde(default)]
@@ -318,8 +322,17 @@ impl Toolbelt {
                     name: args.name,
                     budget: args.budget,
                     at: args.at,
+                    confidence: args.confidence,
                     dry_run: args.dry_run,
                 },
+                // **Nobody to ask, and that is the correct answer here.** A
+                // low-confidence spawn refuses instead of proceeding, which is
+                // PLAN.md §15.4's "confirm when confidence is low" arriving as
+                // something an orchestrator can act on: it names the workflow
+                // and calls again. Prompting would mean an elicitation round
+                // trip on the path of every spawn, to ask a question the caller
+                // is better placed to answer than its user is.
+                None,
             )
         })
         .await

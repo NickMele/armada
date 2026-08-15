@@ -79,9 +79,22 @@ impl Belt {
 /// `environment`, which exits **6** — the code
 /// [`docs/commands/reference.md`](../../../../docs/commands/reference.md) gives
 /// it.
+///
+/// **It answers `Ok` even when the transport failed**, which is the one place
+/// that is right. `main` renders an `Err` by writing to stdout under `--json`,
+/// and stdout is this verb's transport — so a failure reported that way would be
+/// an unparseable frame written into the stream that just broke. Returning the
+/// failure *inside* an [`Output`] routes it through the one path that knows to
+/// write on stderr, and `exit_code()` still answers `6` because the envelope
+/// still carries the class.
 pub fn serve(world: World) -> Result<Output, ArmadaError> {
     let belt = Belt::decide(&world);
     let tools = tool_names(belt);
+    let data = || McpData {
+        transport: "stdio".to_string(),
+        toolbelt: belt.word().to_string(),
+        tools: tools.clone(),
+    };
 
     // **A current-thread runtime, built here and dropped here.** The verbs
     // underneath are blocking by design — a `docker compose up` is a subprocess
@@ -89,34 +102,46 @@ pub fn serve(world: World) -> Result<Output, ArmadaError> {
     // nothing to schedule across cores. Building it inside this function rather
     // than putting `#[tokio::main]` on `main` also keeps every other verb
     // free of a runtime it never enters.
-    let runtime = tokio::runtime::Builder::new_current_thread()
+    let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .map_err(|e| ArmadaError {
-            class: ErrClass::Environment,
-            r#where: "runtime".to_string(),
-            message: format!("the server's runtime would not start: {e}"),
-            next_action: None,
-        })?;
+    {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            return Ok(refused(
+                ArmadaError {
+                    class: ErrClass::Environment,
+                    r#where: "runtime".to_string(),
+                    message: format!("the server's runtime would not start: {e}"),
+                    next_action: None,
+                },
+                data(),
+            ))
+        }
+    };
 
-    runtime.block_on(async move {
+    let served = runtime.block_on(async move {
         let transport = rmcp::transport::stdio();
         match belt {
             Belt::Helm => run(helm::Toolbelt::new(world), transport).await,
             Belt::Drone => run(drone::Toolbelt::new(world), transport).await,
         }
-    })?;
+    });
 
-    Ok(Output::Mcp(Box::new(Envelope::ok(
-        "mcp serve",
-        None,
-        Status::Ok,
-        McpData {
-            transport: "stdio".to_string(),
-            toolbelt: belt.word().to_string(),
-            tools,
-        },
-    ))))
+    Ok(match served {
+        Ok(()) => Output::Mcp(Box::new(Envelope::ok(
+            "mcp serve",
+            None,
+            Status::Ok,
+            data(),
+        ))),
+        Err(error) => refused(error, data()),
+    })
+}
+
+/// The envelope of a server that could not serve.
+fn refused(error: ArmadaError, data: McpData) -> Output {
+    Output::Mcp(Box::new(Envelope::failed("mcp serve", None, error, data)))
 }
 
 /// Hand one handler to the transport and wait for the peer to go away.

@@ -3,8 +3,9 @@
 One MCP server. Tools namespaced by module, so the tool list has the same shape as the system
 ([`ARCHITECTURE.md`](../../ARCHITECTURE.md) §1.9).
 
-> **Status: not built — M3.** Targets `rmcp` v3.x; **re-check the API before starting**, it has
-> moved fast ([`traps.md`](../../traps.md)).
+> **Status: built — M3.** `rmcp` **3.1.2**, checked against crates.io rather than taken from
+> this line; what that check found is in [`traps.md`](../../traps.md), including the two API
+> shapes a v2 example gets wrong and the fact that Claude Code renames a dotted tool.
 
 ## Synopsis
 
@@ -32,7 +33,7 @@ Normally registered rather than run by hand — the orchestrator launches it, an
 | `fleet.kill` | [`../fleet/kill.md`](../fleet/kill.md) | Clean, then drop. |
 | `manifest.check` | [`../manifest/check.md`](../manifest/check.md) | The objective gate. |
 | `manifest.up` / `.down` / `.status` / `.clean` | corresponding pages | Workspace operations. |
-| `manifest.explain` | [`../manifest/explain.md`](../manifest/explain.md) | Evidence a stack trace does not carry. |
+| `manifest.explain` | [`../manifest/explain.md`](../manifest/explain.md) | Evidence a stack trace does not carry. **Not served**: the verb it would wrap is not built, and a tool that reimplemented one would be the thing §1.3 exists to stop. It lands with the verb. |
 | `manifest.skills` | [`../manifest/skills.md`](../manifest/skills.md) | What this repo knows about itself. Summaries only — Helm holds a routing table, not prose. |
 | `manifest.skill` | [`../manifest/skills.md`](../manifest/skills.md) | One skill resolved, **including the doc body**. A Drone calls this; Helm does not. |
 
@@ -45,6 +46,24 @@ Drones is a fork bomb with a budget.
 | `fleet.ask_human` | Raise an entry to the inbox and wait. |
 | `fleet.verdict` | Emit a step verdict ([`PLAN.md`](../../PLAN.md) §14.3). |
 
+**The two belts are two types, not one list with a filter.** A filter is a line somebody
+eventually moves, and moving it has no visible consequence until a machine is full of Drones.
+`fleet.spawn` is not *blocked* from a worker; it is absent — a Drone calling it gets `tool not
+found`, because no router on that belt has ever heard of it.
+
+**Which belt is served is decided by `ARMADA_JOB`, not by a flag.** That variable is set on
+every child of a Job and by nothing else, so a Drone's own environment answers the question. A
+flag is a thing a registration file can get wrong, and getting it wrong in one direction is the
+fork bomb.
+
+**A Drone names no Job.** Its three tools take the handle from that same variable rather than as
+an argument, so a worker cannot write another worker's record — and therefore cannot rewrite the
+evidence somebody else's verdict rests on.
+
+**A `PASS` with no evidence is refused rather than recorded.** *"A verdict is only `PASS` if it
+carries evidence an external command produced"* ([`PLAN.md`](../../PLAN.md) §14.3), and this is
+where that stops being a sentence in a prompt.
+
 ## How it works
 
 Stateless: each request is self-contained, with per-request capability negotiation and no
@@ -54,12 +73,39 @@ core → render, and a stateless server is the same shape with a different rende
 
 Long operations use the **Tasks extension** rather than a bespoke polling protocol. A real
 `manifest check` runs well past ten minutes, and the extension exists for exactly that:
-asynchronous work with polling, mid-flight input and durable handles.
+asynchronous work with polling, mid-flight input and durable handles. `manifest.check` and
+`fleet.spawn` take it; everything else answers inline, because a durable handle for a read that
+takes forty milliseconds is two round trips to save none.
+
+**The same tool answers both ways.** SEP-2663 forbids handing a task handle to a client that
+did not declare the extension — it would have nothing to poll with — so a caller that cannot
+poll gets the result inline from the same tool. That is one name in the tool list rather than a
+`check` and a `check_status`, which is the pair the extension exists to stop anyone writing.
+
+**Cancelling is cooperative and says so.** It records the intent and acknowledges; it does not
+abort the verb underneath. A `manifest check` mid-run holds process groups and a lease, and
+killing its future would leak both — the run's own interrupt path is what ends it properly.
 
 ## Output
 
 Each tool answers in the `--json` envelope of [`PLAN.md`](../../PLAN.md) §3.1, so an MCP caller and
-a shell caller parse identically.
+a shell caller parse identically — the tool result's one text block is byte-for-byte what
+`armada … --json` writes to stdout.
+
+**No `structuredContent`.** A tool returning one should declare an `outputSchema`, and `data` is
+a different shape per verb: twelve schemas kept in step with twelve structs, to restate bytes
+the caller already has. It would also have to be assembled as a `serde_json::Value`, whose map
+is a `BTreeMap` — which alphabetises an envelope this corpus writes in reading order
+([`traps.md`](../../traps.md)).
+
+**A failed verb is a tool-level error, never a protocol error.** Clients render a JSON-RPC error
+opaquely, so a `bad_config` naming the line to edit would reach the agent as "tool result
+missing". The result is flagged `isError` and the envelope travels in the content, so an agent
+reads exactly what a person would — the class, the `where`, and the `next_action`.
+
+**`armada mcp serve` itself reports on stderr**, and it is the only verb that must: stdout *is*
+the transport, and a summary written into it is a frame no client can parse. Measured — see
+[`traps.md`](../../traps.md).
 
 ## Dependencies
 
