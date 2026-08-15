@@ -12,7 +12,8 @@
 
 use armada_core::ctx::Run;
 use armada_core::envelope::{
-    Envelope, GuildBundleData, GuildInitData, GuildSyncData, Headline, Projection, Sync, SyncItem,
+    Envelope, GuildBundleData, GuildChange, GuildChangeData, GuildInitData, GuildItemRow,
+    GuildListData, GuildSyncData, Headline, Projection, Sync, SyncItem,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_guild::interview::{self, Answers, Question, QUESTIONS};
@@ -21,7 +22,7 @@ use armada_guild::{bundle, import, inventory, machine, memory, projector, remote
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::ask::Ask;
+use crate::ask::{Ask, Choice};
 use crate::verbs::Output;
 
 /// Everything a Guild verb needs from the machine, gathered at the entrypoint.
@@ -730,6 +731,505 @@ fn a_file_under(root: &Path) -> Option<String> {
     walk(root, root)
 }
 
+// ------------------------------------------------ browse, edit and delete
+//
+// **The three verbs that read a guild rather than moving one** (PLAN.md
+// §15.3.4). Every verb above this line takes the guild somewhere — onto this
+// machine, into a repo, into a bundle, to the remote — and none of them says
+// what is in it, which is the gap this closes.
+//
+// **The listing is the verb and the browser is one way of reading it.** A
+// person at a terminal navigates the rows through the same [`Ask::choose`] that
+// `armada init` puts its one question with; without a terminal the rows are
+// printed; `--json` carries them again. An interactive-only verb would be a bug
+// (PLAN.md §3.1.1), so the interaction is layered on top of an answer that
+// stands without it.
+
+/// `armada guild browse` — **what is in your guild**, and at a terminal, a way
+/// through it.
+///
+/// `interactive` is decided at the entrypoint from whether a person is there
+/// (`ARCHITECTURE.md` §1.4), never sniffed here — the same rule that lets the
+/// whole suite drive this against a `TempDir`.
+///
+/// **The listing is re-read after the browsing rather than before it.** A
+/// session that deleted two skills and reported the listing it opened with
+/// would end by printing rows for files that are no longer there.
+pub fn browse(
+    run: &impl Run,
+    place: &Where,
+    ask: &mut dyn Ask,
+    interactive: bool,
+    look: Look,
+) -> Result<Output, ArmadaError> {
+    let guild = require_guild(place)?;
+    if interactive {
+        wander(run, &guild, ask, look)?;
+    }
+    Ok(listing(&guild))
+}
+
+/// How the browser draws what it shows, carried from the entrypoint.
+///
+/// **Style and width are the entrypoint's, exactly as they are for every other
+/// render.** The browser prints a table and a file's content *during* the
+/// session, on stderr, which means it needs the two facts that decide how — and
+/// resolving them here would be this file reading the terminal, which
+/// `ARCHITECTURE.md` §1.4 puts at the entrypoint and nowhere else.
+#[derive(Debug, Clone, Copy)]
+pub struct Look {
+    /// Painted, or plain.
+    pub style: crate::render::style::Style,
+    /// Where the terminal is, for the tables drawn mid-session.
+    pub terminal: crate::render::term::Terminal,
+}
+
+impl Default for Look {
+    fn default() -> Look {
+        Look {
+            style: crate::render::style::Style::plain(),
+            terminal: crate::render::term::Terminal::piped(),
+        }
+    }
+}
+
+/// The listing, as the envelope carries it.
+fn listing(guild: &Guild) -> Output {
+    let items = inventory::Inventory::items(guild.root());
+    Output::GuildList(Box::new(Envelope::ok(
+        "guild browse",
+        None,
+        Status::Ready,
+        GuildListData {
+            at: shown(guild.root()),
+            items: items.iter().map(row_of).collect(),
+            facts: inventory_of(guild).facts(),
+        },
+    )))
+}
+
+/// One item, as the envelope carries it.
+fn row_of(item: &inventory::Item) -> GuildItemRow {
+    GuildItemRow {
+        kind: item.kind.word().to_string(),
+        name: item.name.clone(),
+        path: item.path.clone(),
+        opens: item.opens.clone(),
+        detail: item.detail.clone(),
+        bytes: item.bytes,
+    }
+}
+
+/// The browser: pick a thing, then pick what to do to it, until you are done.
+///
+/// **Two selections rather than one row of verbs**, because the two questions
+/// are asked at different moments. A reader opens this to find out what is in
+/// the guild and only then decides that one of them is wrong — and a list where
+/// every row carried three actions would be a list nobody could scan, which is
+/// the thing the verb exists to fix.
+///
+/// **It reads the guild again on every turn.** An edit changes what a row says
+/// about itself and a delete removes the row, and a browser holding the listing
+/// it opened with would offer both back.
+fn wander(run: &impl Run, guild: &Guild, ask: &mut dyn Ask, look: Look) -> Result<(), ArmadaError> {
+    loop {
+        let items = inventory::Inventory::items(guild.root());
+        if items.is_empty() {
+            return Ok(());
+        }
+        // **The kind is padded so the names line up**, which is the same reason
+        // `render/table.rs` exists at all: a column of names that starts at a
+        // different place on every row is a column nobody can scan, and
+        // scanning is the whole of what this list is for. The selector already
+        // aligns the asides against the widest label; this aligns the half of
+        // the label a reader is actually reading.
+        let widest = items
+            .iter()
+            .map(|item| item.kind.word().len())
+            .max()
+            .unwrap_or(0);
+        let mut options: Vec<Choice> = items
+            .iter()
+            .map(|item| {
+                Choice::new(
+                    &format!("{:<widest$}  {}", item.kind.word(), item.name),
+                    &item.detail,
+                )
+            })
+            .collect();
+        // **`done` is the last option and it is the default**, so `esc` and a
+        // stream that ended both leave rather than picking something. A browser
+        // whose escape hatch was an action would be one that acted on the way
+        // out.
+        options.push(Choice::new("done", "stop browsing"));
+        let done = options.len();
+        let picked = ask.choose("What is in your guild?", &options, done);
+        if picked >= done || picked == 0 {
+            return Ok(());
+        }
+        let item = items[picked - 1].clone();
+        act(run, guild, ask, look, &item)?;
+    }
+}
+
+/// What to do to the one thing that was picked.
+fn act(
+    run: &impl Run,
+    guild: &Guild,
+    ask: &mut dyn Ask,
+    look: Look,
+    item: &inventory::Item,
+) -> Result<(), ArmadaError> {
+    let mut options = vec![Choice::new("view", "print it here")];
+    if item.kind.editable() {
+        options.push(Choice::new("edit", "open it, validate it, commit it"));
+        options.push(Choice::new("delete", "remove it and commit the removal"));
+    }
+    options.push(Choice::new("back", "leave it alone"));
+    let back = options.len();
+    let chosen = ask.choose(&item.path, &options, back);
+    // **An answer outside the list leaves rather than acting.** `Ask::choose`
+    // contracts to a one-based index and every implementation honours it; the
+    // one that does not would otherwise land on the first option, and the first
+    // option must never be the one an out-of-range answer picks.
+    let Some(action) = chosen
+        .checked_sub(1)
+        .and_then(|at| options.get(at))
+        .map(|choice| choice.label.clone())
+    else {
+        return Ok(());
+    };
+
+    match action.as_str() {
+        "view" => {
+            let body = std::fs::read_to_string(guild.path(&item.opens)).unwrap_or_default();
+            let shown_text = crate::render::guild_item_view(
+                &item.opens,
+                &body,
+                look.style,
+                look.terminal.usable_width(),
+            );
+            ask.show(&shown_text);
+        }
+        "edit" => {
+            let body = std::fs::read_to_string(guild.path(&item.opens)).unwrap_or_default();
+            let Some(written) = ask.edit(&item.opens, &body) else {
+                return Ok(());
+            };
+            let output = apply_edit(run, guild, item, &written)?;
+            report(ask, look, &output);
+        }
+        "delete" => {
+            let referenced = inventory::references(guild.root(), item);
+            if !confirmed(ask, item, &referenced) {
+                return Ok(());
+            }
+            let output = apply_delete(run, guild, item, referenced)?;
+            report(ask, look, &output);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Draw what just happened, where the questions are being put.
+fn report(ask: &mut dyn Ask, look: Look, output: &Output) {
+    let mut text = crate::render::human(output, look.style, look.terminal);
+    text.push('\n');
+    ask.show(&text);
+}
+
+/// Put the one question that has to be asked before a file is removed.
+///
+/// **What will be deleted is on the screen before the question**, and so is
+/// everything else in the guild that names it. The guild syncs, so a delete is
+/// a delete on every machine — and the reader is the only one who knows whether
+/// the workflow that names this skill is one he still runs.
+///
+/// **Keeping it is the default**, which is what `esc` and an ended stream both
+/// take.
+fn confirmed(ask: &mut dyn Ask, item: &inventory::Item, referenced: &[String]) -> bool {
+    let question = match referenced {
+        [] => format!("Delete {} — {}?", item.path, item.detail),
+        names => format!(
+            "Delete {}? {} still names it: {}",
+            item.path,
+            crate::render::format::count(names.len(), "file"),
+            names.join(", ")
+        ),
+    };
+    let options = vec![
+        Choice::new("keep it", "change nothing"),
+        Choice::new("delete it", "remove it and commit the removal"),
+    ];
+    ask.choose(&question, &options, 1) == 2
+}
+
+/// `armada guild edit <item>` — open a guild file, **validate it**, commit it.
+///
+/// The contract the name was reserved under, and the middle word is the one
+/// that matters: a workflow that no longer parses, committed and pushed, is a
+/// workflow that fails on the next machine for a reason git will faithfully
+/// replicate.
+///
+/// **`--from` is the form that does not need a terminal.** An agent cannot type
+/// into a text area, and a verb whose only interface was one would be an
+/// interactive-only verb — which PLAN.md §3.1.1 calls a bug rather than a
+/// limitation.
+pub fn edit(
+    run: &impl Run,
+    place: &Where,
+    ask: &mut dyn Ask,
+    asked: &str,
+    from: Option<&Path>,
+) -> Result<Output, ArmadaError> {
+    let guild = require_guild(place)?;
+    let item = resolve(&guild, asked)?;
+    if !item.kind.editable() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: item.path.clone(),
+            message: "the workflow schema is Armada's, not yours".to_string(),
+            next_action: Some(
+                "edit the workflow instead; `armada guild browse` lists them".to_string(),
+            ),
+        });
+    }
+
+    let body = std::fs::read_to_string(guild.path(&item.opens)).unwrap_or_default();
+    let written = match from {
+        Some(path) => {
+            Some(std::fs::read_to_string(place.cwd.join(path)).map_err(|e| unreadable(path, &e))?)
+        }
+        None => ask.edit(&item.opens, &body),
+    };
+    let Some(written) = written else {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: item.path.clone(),
+            message: "nothing was typed and no --from was given, so nothing was written"
+                .to_string(),
+            next_action: Some(format!(
+                "`armada guild edit {} --from <file>` replaces it from a file",
+                item.path
+            )),
+        });
+    };
+    apply_edit(run, &guild, &item, &written)
+}
+
+/// Write, validate, and commit only if it validates.
+fn apply_edit(
+    run: &impl Run,
+    guild: &Guild,
+    item: &inventory::Item,
+    written: &str,
+) -> Result<Output, ArmadaError> {
+    let file = guild.path(&item.opens);
+    let before = std::fs::read_to_string(&file).unwrap_or_default();
+    if written == before {
+        return Ok(changed(
+            guild,
+            item,
+            GuildChange::Unchanged,
+            "it is what it was".to_string(),
+            false,
+            Vec::new(),
+        ));
+    }
+
+    // **Written before it is validated, and left written if it is not.** Losing
+    // somebody's work because a colon was in the wrong place is the worse of the
+    // two failures, and git still holds the version before it — so the refusal
+    // names the undo rather than performing it. What does not happen is the
+    // broken version reaching `push`.
+    std::fs::write(&file, written).map_err(|e| unwritable(&file, &e))?;
+
+    match armada_guild::validate::check(item.kind, &item.name, written) {
+        Ok(reading) => {
+            repo::commit_all(run, guild.root(), &format!("guild: edit {}", item.path))?;
+            Ok(changed(
+                guild,
+                item,
+                GuildChange::Edited,
+                reading,
+                true,
+                Vec::new(),
+            ))
+        }
+        Err(why) => Ok(refused(guild, item, &why)),
+    }
+}
+
+/// `armada guild delete <item>` — remove it, and **commit the removal**.
+///
+/// **Committed, because the guild is a git worktree that syncs between
+/// machines.** A delete that only unlinked a file would leave this machine's
+/// working tree ahead of its history, `guild push` would carry nothing, and the
+/// two machines would disagree about a file one of them believes was deleted.
+///
+/// **`--yes` is the form that does not need a terminal**, and without a terminal
+/// it is required: a confirmation nobody can answer is not a confirmation.
+pub fn delete(
+    run: &impl Run,
+    place: &Where,
+    ask: &mut dyn Ask,
+    asked: &str,
+    yes: bool,
+    interactive: bool,
+) -> Result<Output, ArmadaError> {
+    let guild = require_guild(place)?;
+    let item = resolve(&guild, asked)?;
+    let referenced = inventory::references(guild.root(), &item);
+
+    if !yes {
+        if !interactive {
+            return Err(ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: item.path.clone(),
+                message: "deleting needs a confirmation, and there is nobody here to give one"
+                    .to_string(),
+                next_action: Some(format!("`armada guild delete {} --yes`", item.path)),
+            });
+        }
+        if !confirmed(ask, &item, &referenced) {
+            return Ok(changed(
+                &guild,
+                &item,
+                GuildChange::Unchanged,
+                "kept".to_string(),
+                false,
+                referenced,
+            ));
+        }
+    }
+    apply_delete(run, &guild, &item, referenced)
+}
+
+/// Remove it and commit the removal.
+fn apply_delete(
+    run: &impl Run,
+    guild: &Guild,
+    item: &inventory::Item,
+    referenced: Vec<String>,
+) -> Result<Output, ArmadaError> {
+    let path = guild.path(&item.path);
+    let removed = if path.is_dir() {
+        std::fs::remove_dir_all(&path)
+    } else {
+        std::fs::remove_file(&path)
+    };
+    removed.map_err(|e| unwritable(&path, &e))?;
+    repo::commit_all(run, guild.root(), &format!("guild: delete {}", item.path))?;
+    Ok(changed(
+        guild,
+        item,
+        GuildChange::Deleted,
+        item.detail.clone(),
+        true,
+        referenced,
+    ))
+}
+
+/// The envelope one change to one item produces.
+fn changed(
+    guild: &Guild,
+    item: &inventory::Item,
+    outcome: GuildChange,
+    reading: String,
+    committed: bool,
+    referenced_by: Vec<String>,
+) -> Output {
+    Output::GuildChange(Box::new(Envelope::ok(
+        match outcome {
+            GuildChange::Deleted => "guild delete",
+            _ => "guild edit",
+        },
+        None,
+        Status::Ready,
+        GuildChangeData {
+            at: shown(guild.root()),
+            item: row_of(item),
+            outcome,
+            reading,
+            committed,
+            referenced_by,
+        },
+    )))
+}
+
+/// The envelope an edit that does not validate produces.
+///
+/// **A failure, and the exit code says so**, because the caller asked for the
+/// change to be committed and it was not. The file is on disk either way; what
+/// this reports is that the history did not move and neither will `push`.
+fn refused(guild: &Guild, item: &inventory::Item, why: &str) -> Output {
+    Output::GuildChange(Box::new(Envelope::failed(
+        "guild edit",
+        None,
+        ArmadaError {
+            class: ErrClass::ToolFailed,
+            r#where: item.path.clone(),
+            message: format!("{} does not validate: {why}", item.path),
+            next_action: Some(format!(
+                "fix it and run `armada guild edit {}` again, or \
+                 `git -C ~/.armada/guild checkout {}` to put it back",
+                item.path, item.opens
+            )),
+        },
+        GuildChangeData {
+            at: shown(guild.root()),
+            item: row_of(item),
+            outcome: GuildChange::Refused,
+            reading: why.to_string(),
+            committed: false,
+            referenced_by: Vec::new(),
+        },
+    )))
+}
+
+/// The one item a name or a path refers to, or the refusal that names why not.
+fn resolve(guild: &Guild, asked: &str) -> Result<inventory::Item, ArmadaError> {
+    let items = inventory::Inventory::items(guild.root());
+    inventory::Inventory::find(&items, asked).map_err(|matched| ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: asked.to_string(),
+        message: match matched.is_empty() {
+            true => format!("nothing in the guild is called `{asked}`"),
+            // **Two answers is a refusal, not a coin flip.** Guessing which was
+            // meant is the one mistake a verb that deletes files may not make.
+            false => format!("`{asked}` names {}", matched.join(" and ")),
+        },
+        next_action: Some(match matched.is_empty() {
+            true => "`armada guild browse` lists what is there".to_string(),
+            false => format!("name one of them: `{}`", matched.join("` or `")),
+        }),
+    })
+}
+
+/// The guild, or the refusal every read verb gives on a machine that has none.
+fn require_guild(place: &Where) -> Result<Guild, ArmadaError> {
+    let guild = place.guild();
+    if !guild.exists() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: shown(guild.root()),
+            message: "there is no guild here, so there is nothing to look at".to_string(),
+            next_action: Some("`armada init`, or `armada guild init`".to_string()),
+        });
+    }
+    Ok(guild)
+}
+
+fn unreadable(path: &Path, error: &std::io::Error) -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: path.display().to_string(),
+        message: format!("cannot read {}: {error}", path.display()),
+        next_action: Some("name a file that is there".to_string()),
+    }
+}
+
 /// The remote, or the refusal `guild/push.md` and `pull.md` both specify:
 /// **exit `2`, and point at `export`.**
 fn require_remote(run: &impl Run, guild: &Guild) -> Result<String, ArmadaError> {
@@ -929,6 +1429,362 @@ pub fn inventory_of(guild: &Guild) -> inventory::Inventory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use armada_core::ctx::{RunOutput, RunRequest, SpawnError};
+    use std::cell::RefCell;
+
+    /// Every `git` call answered `0`, and every argv kept.
+    ///
+    /// **The argv is the assertion.** Whether the deletion was committed is a
+    /// `git commit` that happened, and a fake that recorded nothing would let
+    /// the whole of "the removal reaches the other machine" pass on a verb that
+    /// never ran one — the exact failure `PLAN.md` §13 is about.
+    struct Git {
+        calls: RefCell<Vec<Vec<String>>>,
+    }
+
+    impl Git {
+        fn new() -> Git {
+            Git {
+                calls: RefCell::new(Vec::new()),
+            }
+        }
+
+        fn ran(&self, word: &str) -> bool {
+            self.calls
+                .borrow()
+                .iter()
+                .any(|argv| argv.iter().any(|part| part == word))
+        }
+    }
+
+    impl Run for Git {
+        fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+            self.calls.borrow_mut().push(request.argv.clone());
+            // **`diff --cached --quiet` answers non-zero when something *is*
+            // staged**, which is the question `repo::commit_all` asks it. A
+            // fake that answered `0` to everything would report a clean index
+            // after every write, and `commit` would never be reached — so every
+            // "it was committed" assertion below would pass on a verb that
+            // committed nothing.
+            let staged = request.argv.contains(&"--cached".to_string());
+            Ok(RunOutput {
+                code: Some(if staged { 1 } else { 0 }),
+                signal: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                timed_out: false,
+            })
+        }
+    }
+
+    /// A guild with one of everything, written here rather than copied from
+    /// anybody's machine.
+    fn a_guild() -> (tempfile::TempDir, Guild) {
+        let home = tempfile::tempdir().unwrap();
+        let guild = Guild::at(home.path());
+        std::fs::create_dir_all(guild.path(".git")).unwrap();
+        std::fs::create_dir_all(guild.path("skills/add-migration")).unwrap();
+        std::fs::create_dir_all(guild.path("subagents")).unwrap();
+        std::fs::create_dir_all(guild.path("workflows")).unwrap();
+        std::fs::write(guild.path("voice.md"), "Answer first.\n").unwrap();
+        std::fs::write(
+            guild.path("skills/add-migration/SKILL.md"),
+            "---\ndescription: Write a migration and its rollback.\n---\n",
+        )
+        .unwrap();
+        std::fs::write(
+            guild.path("subagents/dba.md"),
+            "Reaches for add-migration.\n",
+        )
+        .unwrap();
+        std::fs::write(
+            guild.path("workflows/bug.yml"),
+            starters::all()
+                .into_iter()
+                .find(|starter| starter.path.ends_with("bug.yml"))
+                .unwrap()
+                .body,
+        )
+        .unwrap();
+        (home, guild)
+    }
+
+    fn place_of(home: &tempfile::TempDir) -> Where {
+        Where {
+            armada_home: home.path().to_path_buf(),
+            cwd: home.path().to_path_buf(),
+            claude_home: home.path().join(".claude"),
+        }
+    }
+
+    /// **The listing is the answer, whether or not anybody browsed.** A verb
+    /// whose only form was interactive would be a bug (PLAN.md §3.1.1), and
+    /// this is that rule as an assertion: nothing was asked, and every kind is
+    /// still in the envelope.
+    #[test]
+    fn browsing_without_a_person_still_answers_what_is_in_the_guild() {
+        let (home, _) = a_guild();
+        let mut ask = crate::ask::Scripted::default();
+        let output = browse(
+            &Git::new(),
+            &place_of(&home),
+            &mut ask,
+            false,
+            Look::default(),
+        )
+        .unwrap();
+        let Output::GuildList(envelope) = &output else {
+            panic!("not a listing");
+        };
+        assert!(ask.chosen.is_empty(), "it asked somebody who was not there");
+        let kinds: Vec<&str> = envelope
+            .data
+            .items
+            .iter()
+            .map(|item| item.kind.as_str())
+            .collect();
+        assert_eq!(
+            kinds,
+            vec!["memory", "skill", "subagent", "workflow"],
+            "{:#?}",
+            envelope.data.items
+        );
+    }
+
+    /// **The browser puts two questions: which thing, then what to do to it.**
+    /// The second one names the item, because by then the reader has stopped
+    /// scanning and started deciding.
+    #[test]
+    fn the_browser_asks_which_thing_and_then_what_to_do_to_it() {
+        let (home, _) = a_guild();
+        let mut ask = crate::ask::Scripted {
+            // The skill, then `view`, then `done`.
+            choices: vec![2, 1],
+            ..crate::ask::Scripted::default()
+        };
+        browse(
+            &Git::new(),
+            &place_of(&home),
+            &mut ask,
+            true,
+            Look::default(),
+        )
+        .unwrap();
+
+        assert_eq!(ask.chosen[0].0, "What is in your guild?");
+        assert!(
+            ask.chosen[0]
+                .1
+                .iter()
+                // The kind is padded so the names line up under one another.
+                .any(|label| label == "skill     add-migration"),
+            "{:?}",
+            ask.chosen[0].1
+        );
+        // **`done` is last and it is the default**, so `esc` leaves rather than
+        // acting.
+        assert_eq!(ask.chosen[0].1.last().unwrap(), "done");
+
+        assert_eq!(ask.chosen[1].0, "skills/add-migration");
+        assert_eq!(
+            ask.chosen[1].1,
+            vec!["view", "edit", "delete", "back"],
+            "the actions changed"
+        );
+        // Viewing shows the file, and shows the file rather than a summary of
+        // it.
+        assert!(
+            ask.shown[0].contains("Write a migration and its rollback."),
+            "{:?}",
+            ask.shown[0]
+        );
+    }
+
+    /// **An edit is validated before it is committed, and a broken one is
+    /// not.** The contract `guild edit` was reserved under, run through the
+    /// browser rather than through the flag, because the browser is the path
+    /// that would otherwise skip it.
+    #[test]
+    fn an_edit_through_the_browser_is_validated_and_only_then_committed() {
+        let (home, guild) = a_guild();
+        let git = Git::new();
+        let mut ask = crate::ask::Scripted {
+            // The workflow, then `edit`.
+            choices: vec![4, 2],
+            edits: vec!["name: bug\nnot: a workflow\n".to_string()],
+            ..crate::ask::Scripted::default()
+        };
+        browse(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
+
+        assert!(
+            !git.ran("commit"),
+            "a workflow that does not parse was committed"
+        );
+        // The work is on disk; git is the undo and it still holds what was
+        // there before.
+        let on_disk = std::fs::read_to_string(guild.path("workflows/bug.yml")).unwrap();
+        assert!(on_disk.contains("not: a workflow"), "{on_disk}");
+        assert!(
+            ask.shown.iter().any(|shown| shown.contains("REFUSED")),
+            "{:?}",
+            ask.shown
+        );
+    }
+
+    /// The same path with a workflow that parses: written, read back, and
+    /// committed.
+    #[test]
+    fn an_edit_that_parses_is_committed_and_the_row_says_what_it_became() {
+        let (home, _) = a_guild();
+        let git = Git::new();
+        let mut ask = crate::ask::Scripted {
+            choices: vec![4, 2],
+            edits: vec![crate::ask::KEEP_THE_REST.to_string() + "\n# and a note of my own\n"],
+            ..crate::ask::Scripted::default()
+        };
+        browse(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
+
+        assert!(git.ran("commit"), "a valid edit was not committed");
+        assert!(
+            ask.shown.iter().any(|shown| shown.contains("EDITED")),
+            "{:?}",
+            ask.shown
+        );
+    }
+
+    /// **Nothing is deleted without a confirmation, and keeping it is the
+    /// default.** The guild syncs, so a delete is a delete on every machine.
+    #[test]
+    fn a_delete_is_confirmed_first_and_the_confirmation_names_what_still_uses_it() {
+        let (home, guild) = a_guild();
+        let git = Git::new();
+        let mut ask = crate::ask::Scripted {
+            // The skill, then `delete`, then `keep it`.
+            choices: vec![2, 3, 1],
+            ..crate::ask::Scripted::default()
+        };
+        browse(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
+
+        let question = &ask.chosen[2].0;
+        assert!(question.contains("skills/add-migration"), "{question}");
+        // **What else names it is in the question**, because the reader is the
+        // only one who knows whether the subagent that names it still matters.
+        assert!(question.contains("subagents/dba.md"), "{question}");
+        assert_eq!(ask.chosen[2].1, vec!["keep it", "delete it"]);
+
+        assert!(
+            guild.path("skills/add-migration").is_dir(),
+            "it was deleted"
+        );
+        assert!(!git.ran("commit"));
+    }
+
+    /// Confirmed, and then it is gone **and committed** — because a delete that
+    /// only unlinked the file would leave two machines disagreeing.
+    #[test]
+    fn a_confirmed_delete_removes_the_whole_thing_and_commits_it() {
+        let (home, guild) = a_guild();
+        let git = Git::new();
+        let mut ask = crate::ask::Scripted {
+            choices: vec![2, 3, 2],
+            ..crate::ask::Scripted::default()
+        };
+        browse(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
+
+        // The directory, not only its prose.
+        assert!(!guild.path("skills/add-migration").exists());
+        assert!(git.ran("commit"), "the removal was not committed");
+    }
+
+    /// **The browser re-reads the guild every turn.** A delete removes the row,
+    /// and a browser holding the listing it opened with would offer it back.
+    #[test]
+    fn what_was_deleted_is_gone_from_the_next_turn_of_the_browser() {
+        let (home, _) = a_guild();
+        let mut ask = crate::ask::Scripted {
+            choices: vec![2, 3, 2],
+            ..crate::ask::Scripted::default()
+        };
+        browse(
+            &Git::new(),
+            &place_of(&home),
+            &mut ask,
+            true,
+            Look::default(),
+        )
+        .unwrap();
+        let after = ask.chosen.last().unwrap();
+        assert!(
+            !after.1.iter().any(|label| label.contains("add-migration")),
+            "a deleted skill was offered again: {:?}",
+            after.1
+        );
+    }
+
+    /// **The schema is not offered for editing**, because it is what every
+    /// workflow is checked against and editing it defeats the check.
+    #[test]
+    fn the_schema_can_be_looked_at_and_not_changed() {
+        let (home, guild) = a_guild();
+        std::fs::write(guild.path("workflows/workflow.schema.json"), "{}").unwrap();
+        let mut ask = crate::ask::Scripted {
+            choices: vec![5],
+            ..crate::ask::Scripted::default()
+        };
+        browse(
+            &Git::new(),
+            &place_of(&home),
+            &mut ask,
+            true,
+            Look::default(),
+        )
+        .unwrap();
+        assert_eq!(ask.chosen[1].0, "workflows/workflow.schema.json");
+        assert_eq!(ask.chosen[1].1, vec!["view", "back"]);
+    }
+
+    /// **`--from` is the form that needs no terminal**, and without either the
+    /// verb refuses in words rather than writing nothing and reporting success.
+    #[test]
+    fn editing_with_no_terminal_and_no_from_refuses_and_names_the_flag() {
+        let (home, _) = a_guild();
+        let error = edit(
+            &Git::new(),
+            &place_of(&home),
+            &mut crate::ask::Defaults,
+            "voice.md",
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert!(error.next_action.unwrap().contains("--from"));
+    }
+
+    /// A name two things answer to is a refusal that names both. Guessing is
+    /// the one mistake a verb that deletes files may not make.
+    #[test]
+    fn a_name_two_things_answer_to_is_refused_with_both_named() {
+        let (home, guild) = a_guild();
+        std::fs::create_dir_all(guild.path("hooks")).unwrap();
+        std::fs::create_dir_all(guild.path("skills/notify")).unwrap();
+        std::fs::write(guild.path("hooks/notify"), "#!/bin/sh\n").unwrap();
+
+        let error = delete(
+            &Git::new(),
+            &place_of(&home),
+            &mut crate::ask::Defaults,
+            "notify",
+            true,
+            false,
+        )
+        .unwrap_err();
+        assert!(error.message.contains("skills/notify"), "{error:?}");
+        assert!(error.message.contains("hooks/notify"), "{error:?}");
+        assert!(
+            guild.path("hooks/notify").is_file(),
+            "it deleted one anyway"
+        );
+    }
 
     fn touched(path: &str, change: repo::Change) -> repo::Touched {
         repo::Touched {

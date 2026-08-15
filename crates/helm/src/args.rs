@@ -371,6 +371,38 @@ pub enum GuildInvocation {
         /// Replace an existing guild.
         force: bool,
     },
+    /// `armada guild browse` — **what is in your guild**.
+    ///
+    /// **The listing is the verb and the browser is one way of reading it.** A
+    /// person at a terminal navigates the rows; without one they are printed;
+    /// `--json` carries them again. An interactive-only verb would be a bug
+    /// (PLAN.md §3.1.1), which is what `--list` exists to make checkable from a
+    /// terminal that would otherwise get the browser.
+    Browse {
+        /// Emit the envelope.
+        json: bool,
+        /// Print the listing and stop, even where a person could be asked.
+        list: bool,
+    },
+    /// `armada guild edit <item>` — open it, validate it, commit it.
+    Edit {
+        /// Emit the envelope.
+        json: bool,
+        /// What to open, by name or by guild-relative path.
+        item: String,
+        /// Replace its content from this file instead of opening a box. **The
+        /// form that does not need a terminal.**
+        from: Option<String>,
+    },
+    /// `armada guild delete <item>` — remove it, and commit the removal.
+    Delete {
+        /// Emit the envelope.
+        json: bool,
+        /// What to remove, by name or by guild-relative path.
+        item: String,
+        /// Skip the confirmation. **Required where there is nobody to ask.**
+        yes: bool,
+    },
 }
 
 impl GuildInvocation {
@@ -382,7 +414,10 @@ impl GuildInvocation {
             | GuildInvocation::Pull { json }
             | GuildInvocation::Project { json, .. }
             | GuildInvocation::Export { json, .. }
-            | GuildInvocation::Import { json, .. } => *json,
+            | GuildInvocation::Import { json, .. }
+            | GuildInvocation::Browse { json, .. }
+            | GuildInvocation::Edit { json, .. }
+            | GuildInvocation::Delete { json, .. } => *json,
         }
     }
 }
@@ -507,7 +542,16 @@ pub const FLEET_VERBS: [&str; 6] = ["spawn", "ls", "board", "answer", "inbox", "
 pub const TOP_LEVEL_VERBS: [&str; 3] = ["init", "doctor", "bridge"];
 
 /// The Guild verbs this milestone built. The rest answer "not built yet".
-pub const GUILD_BUILT: [&str; 6] = ["init", "project", "pull", "push", "export", "import"];
+///
+/// **`browse`, `edit` and `delete` joined the six that move a guild** (PLAN.md
+/// §15.3.4). Every earlier verb takes the guild somewhere — onto this machine,
+/// into a repo, into a bundle, to the remote — and not one of them said what was
+/// in it. `edit` was reserved rather than invented: it was claimed as *open a
+/// guild file, validate it, commit it*, and that is the contract it was built
+/// to.
+pub const GUILD_BUILT: [&str; 9] = [
+    "init", "project", "pull", "push", "export", "import", "browse", "edit", "delete",
+];
 
 /// The Guild verbs that are claimed and not built.
 ///
@@ -515,10 +559,8 @@ pub const GUILD_BUILT: [&str; 6] = ["init", "project", "pull", "push", "export",
 /// name rather than as an unknown verb — a caller told "unknown" would go
 /// looking for a typo. The summary is the parser's, because the refusal quotes
 /// it; the built verbs' summaries live on their pages instead.
-pub const RESERVED_GUILD_VERBS: [(&str, &str); 2] = [
-    ("edit", "M2 — open a guild file, validate it, commit it"),
-    ("verify", "M2 — cross-check every workflow, skill and scope"),
-];
+pub const RESERVED_GUILD_VERBS: [(&str, &str); 1] =
+    [("verify", "M2 — cross-check every workflow, skill and scope")];
 
 /// The Manifest verbs that are built.
 ///
@@ -1210,6 +1252,29 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 include_secrets: parsed.on("--include-secrets"),
             }
         }
+        "browse" => {
+            let parsed = flags(tail, json, color, "guild browse", &["--list"], &[])?;
+            GuildInvocation::Browse {
+                json: parsed.json,
+                list: parsed.on("--list"),
+            }
+        }
+        "edit" => {
+            let parsed = flags(tail, json, color, "guild edit", &[], &["--from"])?;
+            GuildInvocation::Edit {
+                json: parsed.json,
+                item: one_item(&parsed, "edit", "opens")?,
+                from: parsed.value("--from"),
+            }
+        }
+        "delete" => {
+            let parsed = flags(tail, json, color, "guild delete", &["--yes"], &[])?;
+            GuildInvocation::Delete {
+                json: parsed.json,
+                item: one_item(&parsed, "delete", "removes")?,
+                yes: parsed.on("--yes"),
+            }
+        }
         _ => {
             let parsed = flags(
                 tail,
@@ -1239,6 +1304,26 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
         }
     };
     Ok(Invocation::Guild(Box::new(invocation)))
+}
+
+/// The one thing `armada guild edit` and `armada guild delete` act on.
+///
+/// **Required, and named in the refusal.** Both verbs write; a `guild delete`
+/// that defaulted to something would be a verb that removed a file nobody
+/// named. The message points at the verb that lists what there is to name,
+/// because "which item?" is a question with a command-shaped answer.
+fn one_item(parsed: &Flags, verb: &str, does: &str) -> Result<String, ParseFailure> {
+    parsed.positionals.first().cloned().ok_or_else(|| {
+        failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: format!("guild {verb}"),
+                message: format!("`armada guild {verb}` needs the item it {does}"),
+                next_action: Some("`armada guild browse` lists what is in your guild".to_string()),
+            },
+            parsed.json,
+        )
+    })
 }
 
 /// `armada fleet <verb>`.
@@ -2282,11 +2367,51 @@ mod tests {
                     force: false,
                 },
             ),
+            (
+                vec!["guild", "browse", "--list"],
+                GuildInvocation::Browse {
+                    json: false,
+                    list: true,
+                },
+            ),
+            (
+                vec!["guild", "edit", "voice.md", "--from", "./mine.md"],
+                GuildInvocation::Edit {
+                    json: false,
+                    item: "voice.md".to_string(),
+                    from: Some("./mine.md".to_string()),
+                },
+            ),
+            (
+                vec!["guild", "delete", "skills/add-migration", "--yes"],
+                GuildInvocation::Delete {
+                    json: false,
+                    item: "skills/add-migration".to_string(),
+                    yes: true,
+                },
+            ),
         ] {
             let Invocation::Guild(parsed) = parse(&args(&line)).unwrap().invocation else {
                 panic!("`armada {}` did not parse as a guild verb", line.join(" "))
             };
             assert_eq!(*parsed, expected, "`armada {}`", line.join(" "));
+        }
+    }
+
+    /// **`edit` and `delete` each need the item they act on.** A `guild delete`
+    /// that defaulted to something would be a verb that removed a file nobody
+    /// named, and the refusal points at the verb that lists what there is to
+    /// name rather than at a flag.
+    #[test]
+    fn editing_and_deleting_both_need_the_item_and_say_where_to_find_one() {
+        for verb in ["edit", "delete"] {
+            let err = parse(&args(&["guild", verb])).unwrap_err().error;
+            assert_eq!(err.class, ErrClass::BadInvocation, "`{verb}`");
+            assert!(err.message.contains(verb), "`{verb}`: {}", err.message);
+            assert!(
+                err.next_action.unwrap().contains("guild browse"),
+                "`{verb}` did not name the verb that lists what to name"
+            );
         }
     }
 
@@ -2315,11 +2440,14 @@ mod tests {
     /// go looking for a typo — the same rule `manifest up` already follows.
     #[test]
     fn an_unbuilt_guild_verb_names_itself_rather_than_reading_as_a_typo() {
-        for verb in ["edit", "verify"] {
-            let err = parse(&args(&["guild", verb])).unwrap_err().error;
-            assert!(err.message.contains("not built yet"), "`{verb}`");
-            assert!(err.message.contains(verb), "`{verb}`");
-        }
+        // **`edit` used to be on this list and is not any more.** It was
+        // reserved as *open a guild file, validate it, commit it* and it was
+        // built to exactly that contract (PLAN.md §15.3.4), so `verify` is what
+        // is left claimed and unbuilt.
+        let verb = "verify";
+        let err = parse(&args(&["guild", verb])).unwrap_err().error;
+        assert!(err.message.contains("not built yet"), "`{verb}`");
+        assert!(err.message.contains(verb), "`{verb}`");
         let unknown = parse(&args(&["guild", "frobnicate"])).unwrap_err().error;
         assert!(unknown.message.contains("unknown verb"), "{unknown:?}");
     }
@@ -2480,7 +2608,7 @@ mod tests {
     fn an_unbuilt_verb_has_no_page_and_says_so() {
         for line in [
             vec!["manifest", "explain", "--help"],
-            vec!["guild", "edit", "--help"],
+            vec!["guild", "verify", "--help"],
         ] {
             let failure = parse(&args(&line)).unwrap_err();
             assert!(

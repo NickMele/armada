@@ -1,0 +1,5 @@
+  [1m[38;2;156;163;175mSTATUS[0m      [1m[38;2;156;163;175mITEM[0m                  [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;255;180;84mDELETED[0m     skills/add-migration  [38;2;156;163;175mWrite a migration and its rollback.[0m
+  [38;2;255;180;84mREFERENCED[0m  1 file                [38;2;156;163;175mworkflows/feature.yml[0m
+
+[1m[38;2;61;220;132mREADY[0m  [38;2;156;163;175m~/.armada/guild · committed, armada guild push sends it[0m

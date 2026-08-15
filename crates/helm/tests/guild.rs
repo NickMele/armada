@@ -627,3 +627,348 @@ fn doctors_human_render_names_the_command_that_fixes_each_problem() {
         "a captured stdout is an agent's: {text}"
     );
 }
+
+// ------------------------------------------ browse, edit and delete (§15.3.4)
+//
+// **The three verbs that read a guild rather than moving one.** Every test
+// below runs the real binary against a scratch `$HOME`, which is the same
+// defence the rest of this file rests on and matters more here than anywhere:
+// `guild delete` removes files, and a test that could name a real guild would
+// eventually delete one.
+
+/// **The listing names what the count only counted**, which is the whole of
+/// `PLAN.md` §15.3.4. `guild init` writes four workflows, a starter skill, a
+/// persona and three fragments, and every one of them is in the answer with a
+/// line saying what it is.
+#[test]
+fn browse_names_everything_in_the_guild_rather_than_counting_it() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let listed = machine.run(&outside, &["guild", "browse", "--json"]);
+    assert!(
+        listed.status.success(),
+        "guild browse failed: {}",
+        String::from_utf8_lossy(&listed.stderr)
+    );
+    let items = envelope(&listed)["data"]["items"]
+        .as_array()
+        .unwrap()
+        .clone();
+
+    let named = |kind: &str, name: &str| {
+        items
+            .iter()
+            .any(|item| item["kind"] == kind && item["name"] == name)
+    };
+    assert!(named("memory", "voice.md"), "{items:#?}");
+    assert!(named("skill", "onboard-repo"), "{items:#?}");
+    assert!(named("subagent", "helm.md"), "{items:#?}");
+    assert!(named("workflow", "feature.yml"), "{items:#?}");
+    assert!(named("hook", "stop-notify.sh"), "{items:#?}");
+    // **The schema is shown and is not a workflow**, which is the distinction
+    // `inventory.rs` already drew for the counts.
+    assert!(named("schema", "workflow.schema.json"), "{items:#?}");
+
+    // The detail is the half `ls` cannot give.
+    let feature = items
+        .iter()
+        .find(|item| item["name"] == "feature.yml")
+        .unwrap();
+    let detail = feature["detail"].as_str().unwrap();
+    assert!(detail.contains("steps"), "{detail}");
+    assert!(detail.contains("implement"), "{detail}");
+    assert_eq!(feature["path"], "workflows/feature.yml");
+
+    // A skill is opened at its prose and deleted at its directory.
+    let skill = items
+        .iter()
+        .find(|item| item["name"] == "onboard-repo")
+        .unwrap();
+    assert_eq!(skill["path"], "skills/onboard-repo");
+    assert_eq!(skill["opens"], "skills/onboard-repo/SKILL.md");
+}
+
+/// **The three audiences carry the same facts** (`PLAN.md` §3.1.1). The browser
+/// is what a terminal gets; this is what an agent reading stdout gets, and
+/// every row in the envelope has to be on it.
+#[test]
+fn the_printed_listing_and_the_envelope_say_the_same_thing() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let text = stdout(&machine.run(&outside, &["guild", "browse"]));
+    let items = envelope(&machine.run(&outside, &["guild", "browse", "--json"]))["data"]["items"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert!(!items.is_empty(), "nothing was listed");
+
+    for item in &items {
+        let name = item["name"].as_str().unwrap();
+        let kind = item["kind"].as_str().unwrap().to_uppercase();
+        assert!(text.contains(name), "`{name}` is not on stdout:\n{text}");
+        assert!(text.contains(&kind), "`{kind}` is not on stdout:\n{text}");
+    }
+    // Status first and always a word — no tick, no cross.
+    assert!(text.contains("STATUS"), "{text}");
+    assert!(
+        !text.contains('\u{2713}') && !text.contains('\u{2717}'),
+        "{text}"
+    );
+}
+
+/// **`--from` is the form that does not need a terminal**, and it validates
+/// before it commits — the contract `edit` was reserved under.
+#[test]
+fn an_edit_that_validates_is_written_and_committed() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let mine = outside.join("voice.md");
+    std::fs::write(&mine, "# Voice\n\nAnswer first. 150 words.\n").unwrap();
+    let edited = machine.run(
+        &outside,
+        &[
+            "guild",
+            "edit",
+            "voice.md",
+            "--from",
+            mine.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert!(
+        edited.status.success(),
+        "guild edit failed: {}",
+        String::from_utf8_lossy(&edited.stderr)
+    );
+    let data = &envelope(&edited)["data"];
+    assert_eq!(data["outcome"], "EDITED");
+    assert_eq!(data["committed"], true);
+    assert_eq!(
+        std::fs::read_to_string(guild_of(&machine).join("voice.md")).unwrap(),
+        "# Voice\n\nAnswer first. 150 words.\n"
+    );
+
+    // **Committed, not merely written.** A change the history does not hold is
+    // a change `guild push` never carries.
+    let status = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(guild_of(&machine))
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&status.stdout).trim(),
+        "",
+        "the edit was left uncommitted"
+    );
+}
+
+/// **A workflow that no longer parses is not committed**, and the file is still
+/// there. Both halves matter: the broken version must not reach `push`, and
+/// somebody's work must not vanish because a colon was in the wrong place.
+#[test]
+fn an_edit_that_does_not_validate_is_refused_and_not_committed() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let broken = outside.join("broken.yml");
+    std::fs::write(&broken, "name: bug\nthis: is not a workflow\n").unwrap();
+    let refused = machine.run(
+        &outside,
+        &[
+            "guild",
+            "edit",
+            "workflows/bug.yml",
+            "--from",
+            broken.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert!(
+        !refused.status.success(),
+        "an invalid workflow was accepted: {}",
+        stdout(&refused)
+    );
+    let body = envelope(&refused);
+    assert_eq!(body["data"]["outcome"], "REFUSED");
+    assert_eq!(body["data"]["committed"], false);
+    assert!(
+        body["error"]["next_action"]
+            .as_str()
+            .unwrap()
+            .contains("checkout"),
+        "the undo is not named: {body}"
+    );
+
+    // The edit is on disk — git is the undo, and it still holds the version
+    // before it.
+    let on_disk = std::fs::read_to_string(guild_of(&machine).join("workflows/bug.yml")).unwrap();
+    assert!(on_disk.contains("this: is not a workflow"), "{on_disk}");
+    let status = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(guild_of(&machine))
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&status.stdout).contains("workflows/bug.yml"),
+        "the broken workflow was committed"
+    );
+}
+
+/// **A delete is committed**, because the guild is a git worktree that syncs
+/// between machines: a delete that only unlinked a file would leave the two
+/// machines disagreeing about a file one of them believes is gone.
+#[test]
+fn a_delete_removes_it_and_commits_the_removal() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+    let guild = guild_of(&machine);
+    assert!(guild.join("skills/add-migration").is_dir());
+
+    let deleted = machine.run(
+        &outside,
+        &["guild", "delete", "skills/add-migration", "--yes", "--json"],
+    );
+    assert!(
+        deleted.status.success(),
+        "guild delete failed: {}",
+        String::from_utf8_lossy(&deleted.stderr)
+    );
+    let data = &envelope(&deleted)["data"];
+    assert_eq!(data["outcome"], "DELETED");
+    assert_eq!(data["committed"], true);
+    // The whole directory, not just its prose.
+    assert!(!guild.join("skills/add-migration").exists());
+
+    let log = Command::new("git")
+        .args(["log", "-1", "--pretty=%s"])
+        .current_dir(&guild)
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&log.stdout).contains("delete skills/add-migration"),
+        "the removal is not in the history"
+    );
+    // And it is gone from the listing, which is the answer the reader gets next.
+    let listed = envelope(&machine.run(&outside, &["guild", "browse", "--json"]));
+    assert!(
+        !listed["data"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["name"] == "add-migration"),
+        "a deleted skill is still listed"
+    );
+}
+
+/// **A confirmation nobody can answer is not a confirmation.** Without a
+/// terminal, `--yes` is required rather than assumed — the refusal names it.
+#[test]
+fn deleting_without_a_terminal_needs_yes_and_says_so() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let refused = machine.run(&outside, &["guild", "delete", "voice.md", "--json"]);
+    assert!(!refused.status.success(), "it deleted without asking");
+    let error = &envelope(&refused)["error"];
+    assert_eq!(error["class"], "bad_invocation");
+    assert!(
+        error["next_action"].as_str().unwrap().contains("--yes"),
+        "{error}"
+    );
+    assert!(guild_of(&machine).join("voice.md").is_file());
+}
+
+/// **What else in the guild names it is reported.** A workflow whose skill has
+/// just been deleted fails on its next run, and this row is the only place that
+/// connection is drawn.
+#[test]
+fn deleting_something_the_guild_still_names_reports_what_names_it() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+    // A workflow of your own that names a skill of your own — which is the
+    // shape the reference check exists for.
+    std::fs::write(
+        guild_of(&machine).join("workflows/migrate.yml"),
+        "name: migrate\n",
+    )
+    .unwrap();
+    std::fs::write(
+        guild_of(&machine).join("subagents/dba.md"),
+        "Runs add-migration when the schema moves.\n",
+    )
+    .unwrap();
+
+    let deleted = machine.run(
+        &outside,
+        &["guild", "delete", "skills/add-migration", "--yes", "--json"],
+    );
+    assert!(deleted.status.success());
+    let named: Vec<String> = envelope(&deleted)["data"]["referenced_by"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|value| value.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(named, vec!["subagents/dba.md".to_string()], "{named:?}");
+}
+
+/// A name nobody has is a refusal that points at the verb which lists what
+/// there is to name — not a stack trace and not a guess.
+#[test]
+fn a_name_nothing_answers_to_is_refused_by_name() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let refused = machine.run(&outside, &["guild", "edit", "nothing-here", "--json"]);
+    assert!(!refused.status.success());
+    let error = &envelope(&refused)["error"];
+    assert!(
+        error["message"].as_str().unwrap().contains("nothing-here"),
+        "{error}"
+    );
+    assert!(
+        error["next_action"]
+            .as_str()
+            .unwrap()
+            .contains("guild browse"),
+        "{error}"
+    );
+}
+
+/// **A machine with no guild is told what to run**, not shown an empty table.
+#[test]
+fn browsing_a_machine_with_no_guild_names_the_verb_that_makes_one() {
+    let machine = Machine::new();
+    let outside = machine.outside();
+
+    let refused = machine.run(&outside, &["guild", "browse", "--json"]);
+    assert!(!refused.status.success());
+    let error = &envelope(&refused)["error"];
+    assert!(
+        error["next_action"]
+            .as_str()
+            .unwrap()
+            .contains("guild init"),
+        "{error}"
+    );
+}

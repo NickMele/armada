@@ -118,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 25] = [
+const PAGES: [Page; 28] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -426,6 +426,78 @@ const PAGES: [Page; 25] = [
         ],
         examples: &[],
         notes: &["The bundle is a path, and it is required — there is no default source."],
+    },
+    Page {
+        path: "guild browse",
+        synopsis: "browse",
+        summary: "see what is in your guild, and open it",
+        usage: &["armada guild browse [--list] [--json]"],
+        flags: &[(
+            "--list",
+            "print the listing and stop, rather than opening the browser",
+        )],
+        examples: &[
+            (
+                "armada guild browse",
+                "at a terminal: pick a thing, then view, edit or delete it",
+            ),
+            (
+                "armada guild browse --json",
+                "every item with its kind, path and summary",
+            ),
+        ],
+        notes: &[
+            "Every other guild verb moves the guild somewhere. This one says what",
+            "is in it: your skills, workflows, subagents, hooks and memory files,",
+            "each with a line about what it is.",
+        ],
+    },
+    Page {
+        path: "guild edit",
+        synopsis: "edit <item>",
+        summary: "open one guild file, validate it, and commit it",
+        usage: &[
+            "armada guild edit <item> [--json]",
+            "armada guild edit <item> --from <file> [--json]",
+        ],
+        flags: &[(
+            "--from <file>",
+            "replace its content from this file instead of opening a box",
+        )],
+        examples: &[
+            (
+                "armada guild edit voice.md",
+                "open it here and save with ctrl-d",
+            ),
+            (
+                "armada guild edit workflows/bug.yml --from ./bug.yml",
+                "replace it from a file, with no terminal needed",
+            ),
+        ],
+        notes: &[
+            "A workflow is parsed before it is committed, and one that no longer",
+            "parses is left on disk uncommitted rather than pushed to your other",
+            "machine. The item is a name or a guild-relative path.",
+        ],
+    },
+    Page {
+        path: "guild delete",
+        synopsis: "delete <item>",
+        summary: "remove one thing from your guild, and commit the removal",
+        usage: &["armada guild delete <item> [--yes] [--json]"],
+        flags: &[(
+            "--yes",
+            "skip the confirmation; required where there is nobody to ask",
+        )],
+        examples: &[(
+            "armada guild delete skills/onboard-repo --yes",
+            "remove the skill and commit it, without asking",
+        )],
+        notes: &[
+            "The removal is committed, so armada guild push carries it to your",
+            "other machines. Anything else in the guild that names it is reported",
+            "first; a project's own armada.yml is not checked.",
+        ],
     },
     // ---------------------------------------------------------------- Fleet
     Page {

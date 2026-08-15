@@ -141,8 +141,11 @@ fn an_unbuilt_verb_has_no_page() {
     let machine = Machine::new();
     let cwd = machine.outside();
 
+    // `guild edit` used to be here. It was reserved as *open a guild file,
+    // validate it, commit it* and is now built to that contract (PLAN.md
+    // §15.3.4), so `guild verify` is the claimed Guild name still unbuilt.
     for argv in [
-        ["guild", "edit", "--help"],
+        ["guild", "verify", "--help"],
         ["manifest", "explain", "--help"],
     ] {
         let output = machine.run(&cwd, &argv);

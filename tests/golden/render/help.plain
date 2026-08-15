@@ -23,6 +23,9 @@ GUILD — you, portable: voice, skills, hooks, workflows
   push             send local guild changes to the remote
   export           write the whole guild to one portable file
   import <bundle>  restore a guild from a bundle
+  browse           see what is in your guild, and open it
+  edit <item>      open one guild file, validate it, and commit it
+  delete <item>    remove one thing from your guild, and commit the removal
 
 FLEET — the agents you do not talk to: Jobs, worktrees, budgets
   spawn <task>           start an isolated agent Job on a task
@@ -47,7 +50,7 @@ GLOBAL FLAGS
 
 NOT BUILT YET
   armada helm                                 M3
-  armada guild edit, verify                   M2
+  armada guild verify                         M2
   armada manifest render, agents-md, explain  reserved
   armada manifest check --detach, --status    reserved
 
