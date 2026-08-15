@@ -65,6 +65,7 @@ and the three status enums. These pages use them without re-explaining them.
 | [`fleet/pause.md`](fleet/pause.md) | `armada fleet pause` | shipped |
 | [`fleet/resume.md`](fleet/resume.md) | `armada fleet resume` | shipped |
 | [`fleet/reap.md`](fleet/reap.md) | `armada fleet reap` | shipped |
+| [`fleet/tick.md`](fleet/tick.md) | `armada fleet tick` — the workflow loop: gate the step, then advance, retry or stop | shipped |
 
 ## Helm — the one agent you do talk to
 

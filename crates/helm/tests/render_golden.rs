@@ -35,7 +35,8 @@ use armada_core::envelope::{
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData,
     InitDryRun, JobRow, MachineInitData, NoteRow, PortReport, Problem, Projection, Released,
     ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData,
-    StatusData, Sync, SyncItem, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
+    StatusData, Sync, SyncItem, TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun,
+    VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -1580,6 +1581,125 @@ fn fleet_ls_matches_its_fixture() {
         },
     )));
     assert_render("fleet-ls", &output);
+}
+
+/// One pass of the workflow loop over a fleet — **every word `did` can take,
+/// once each**, because the colour is chosen from that word and a fixture that
+/// showed three of the eight would freeze a third of the layout.
+///
+/// **The `DETAIL` column is `<step> · <predicate> — <why>`**, and the two rows
+/// with no predicate are the ones where the loop never reached a gate: a Drone
+/// mid-exchange, and a Job stopped before anything was gathered. They are in
+/// here so the fallback spelling is pinned too, rather than being whatever the
+/// format string happens to do the day somebody edits it.
+#[test]
+fn fleet_tick_matches_its_fixture() {
+    fn row(
+        job: &str,
+        step: &str,
+        did: &str,
+        state: JobState,
+        verdict: Option<armada_core::fleet::Verdict>,
+        predicate: Option<&str>,
+        why: &str,
+    ) -> TickRow {
+        TickRow {
+            job: job.to_string(),
+            step: step.to_string(),
+            did: did.to_string(),
+            state,
+            verdict,
+            predicate: predicate.map(str::to_string),
+            evidence: Vec::new(),
+            why: why.to_string(),
+        }
+    }
+
+    let results = vec![
+        row(
+            "rate-limit",
+            "fix",
+            "advanced",
+            JobState::Running,
+            Some(armada_core::fleet::Verdict::Pass),
+            Some("check_passes"),
+            "`fix` passed; it is on `land`",
+        ),
+        row(
+            "bad-parse",
+            "reproduce",
+            "waiting",
+            JobState::Running,
+            None,
+            Some("failing_test_exists"),
+            "check run 01M00WRY00CYTZ44 is still RUNNING",
+        ),
+        row(
+            "xlsx-report",
+            "fix",
+            "retried",
+            JobState::Running,
+            Some(armada_core::fleet::Verdict::Failed),
+            Some("check_passes"),
+            "`fix` did not pass (the suite is red); attempt 3",
+        ),
+        // No gate was reached: its Drone is mid-exchange.
+        row(
+            "carina-schema",
+            "plan",
+            "working",
+            JobState::Running,
+            None,
+            None,
+            "its Drone is still working",
+        ),
+        row(
+            "release-merge",
+            "approval",
+            "asked",
+            JobState::Paused,
+            Some(armada_core::fleet::Verdict::NeedsHuman),
+            Some("human_approves"),
+            "does this look right to you?",
+        ),
+        // The honest edge of M4 (docs/reserved/016): nothing can decide it.
+        row(
+            "flaky-suite",
+            "review",
+            "halted",
+            JobState::Paused,
+            Some(armada_core::fleet::Verdict::NeedsHuman),
+            Some("review_clean"),
+            "`review` cannot be gated: `review_clean` is settled by a reviewer Job",
+        ),
+        row(
+            "nightly-flake",
+            "land",
+            "finished",
+            JobState::Done,
+            Some(armada_core::fleet::Verdict::Pass),
+            Some("branch_exists"),
+            "`land` was its last step",
+        ),
+        // Also no gate: a ceiling stops the Job before anything is gathered.
+        row(
+            "port-sweep",
+            "implement",
+            "idle",
+            JobState::Paused,
+            None,
+            None,
+            "it is waiting on you",
+        ),
+    ];
+
+    let output = Output::Tick(Box::new(Envelope::ok(
+        "fleet tick",
+        None,
+        Status::Ok,
+        TickData { moved: 4, results },
+    )));
+    assert_render("fleet-tick", &output);
 }
 
 /// One frame of `armada bridge`, which is what `--once` and `--json` emit and

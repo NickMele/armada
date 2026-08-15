@@ -223,6 +223,15 @@ pub enum FleetInvocation {
         /// Which Job.
         job: String,
     },
+    /// `armada fleet tick` — one pass of the workflow loop, or `--watch`.
+    Tick {
+        /// Emit the envelope.
+        json: bool,
+        /// One Job, or the whole fleet when absent.
+        job: Option<String>,
+        /// Keep going until nothing in scope could move again.
+        watch: bool,
+    },
     /// `armada fleet resume <job>`.
     Resume {
         /// `--json`.
@@ -338,6 +347,7 @@ impl FleetInvocation {
             | FleetInvocation::Show { json, .. }
             | FleetInvocation::Pause { json, .. }
             | FleetInvocation::Resume { json, .. }
+            | FleetInvocation::Tick { json, .. }
             | FleetInvocation::Reap { json, .. }
             | FleetInvocation::Inbox { json, .. } => *json,
         }
@@ -376,6 +386,43 @@ pub struct Spawn {
     /// Report the classification, worktree path, port block and budget. Starts
     /// nothing.
     pub dry_run: bool,
+    /// `--set k=v`, repeatable — what this task's `${task.<k>}` placeholders
+    /// mean.
+    ///
+    /// **The shipped `bug` workflow needs one.** Its first step gates on
+    /// `test: ${task.test}`, nothing in the repository substitutes it, and a
+    /// step whose test name is still a placeholder names no test. Given here,
+    /// once, before anything starts, the whole workflow then runs with no human
+    /// turn *in the middle* — which is the thing PHASES.md §8.6 asks for.
+    pub set: std::collections::BTreeMap<String, String>,
+}
+
+/// `k=v` pairs, as a map.
+///
+/// **Refused rather than ignored when the `=` is missing.** A caller who typed
+/// `--set test regression_x` meant one pair and would otherwise get a Job whose
+/// placeholder is still a placeholder — which surfaces much later, as a gate
+/// that stops and asks, with nothing pointing back at the typo.
+fn pairs(
+    given: &[String],
+    flag: &str,
+) -> Result<std::collections::BTreeMap<String, String>, ParseFailure> {
+    let mut out = std::collections::BTreeMap::new();
+    for entry in given {
+        let Some((key, value)) = entry.split_once('=') else {
+            return Err(failure(
+                ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: flag.to_string(),
+                    message: format!("`{entry}` is not a `key=value` pair"),
+                    next_action: Some(format!("`{flag} test=regression_bad_parse`")),
+                },
+                false,
+            ));
+        };
+        out.insert(key.trim().to_string(), value.to_string());
+    }
+    Ok(out)
 }
 
 /// How often the Bridge redraws, in seconds.
@@ -714,14 +761,21 @@ pub const RESERVED_TOP_LEVEL: [(&str, &str); 0] = [];
 
 /// Fleet's verbs.
 ///
-/// **All nine are built.** Fleet is usable from a shell before the MCP server or
-/// Helm exists, which is the whole point of building it first (PHASES.md §8.5) —
-/// and it is what lets every key on the Bridge name a verb a person could type.
+/// **All eleven are built.** Fleet is usable from a shell before the MCP server
+/// or Helm exists, which is the whole point of building it first
+/// (PHASES.md §8.5) — and it is what lets every key on the Bridge name a verb a
+/// person could type.
+///
+/// **`tick` is the eleventh, and it is M4's** (PHASES.md §8.6): the pass that
+/// notices a Drone's exchange has ended, gates the step, and advances, retries
+/// or stops. It is a verb rather than a daemon because Armada owns no
+/// long-lived process, so a timer, a hook, the Bridge and a person typing it are
+/// all equally valid drivers.
 ///
 /// **Names only.** What each verb is *for* is one sentence, and it is on that
 /// verb's help page — kept in two places it would eventually be two sentences.
-pub const FLEET_VERBS: [&str; 10] = [
-    "spawn", "ls", "show", "board", "answer", "inbox", "kill", "pause", "resume", "reap",
+pub const FLEET_VERBS: [&str; 11] = [
+    "spawn", "ls", "show", "board", "answer", "inbox", "kill", "pause", "resume", "reap", "tick",
 ];
 
 /// The top-level verbs that are built.
@@ -1975,7 +2029,14 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 color,
                 "fleet spawn",
                 &["--dry-run"],
-                &["--workflow", "--name", "--budget", "-C", "--confidence"],
+                &[
+                    "--workflow",
+                    "--name",
+                    "--budget",
+                    "-C",
+                    "--confidence",
+                    "--set",
+                ],
             )?;
             // **The task is required and is not defaulted.** A `spawn` with no
             // task would classify an empty string and burn a worktree, a port
@@ -2024,6 +2085,7 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 budget: parsed.every("--budget"),
                 at: parsed.value("-C"),
                 dry_run: parsed.on("--dry-run"),
+                set: pairs(&parsed.every("--set"), "--set")?,
             }))
         }
         "ls" => {
@@ -2167,6 +2229,22 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                     json: parsed.json,
                     job,
                 },
+            }
+        }
+        "tick" => {
+            let parsed = flags(tail, json, color, "fleet tick", &["--watch"], &[])?;
+            FleetInvocation::Tick {
+                json: parsed.json,
+                // **A Job is optional here and required by `pause`.** The loop's
+                // ordinary shape is a pass over the whole fleet on a timer;
+                // naming one is the debugging case, not the normal one.
+                job: one_positional(
+                    &parsed,
+                    "fleet tick",
+                    "which Job",
+                    "`armada fleet ls` lists them",
+                )?,
+                watch: parsed.on("--watch"),
             }
         }
         "reap" => {

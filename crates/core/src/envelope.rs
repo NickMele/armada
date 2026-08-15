@@ -2321,6 +2321,49 @@ pub struct AskData {
     pub answered: Option<String>,
 }
 
+/// `armada fleet tick` — the workflow loop, one pass (PHASES.md §8.6).
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct TickData {
+    /// One row per Job the pass looked at, in name order.
+    pub results: Vec<TickRow>,
+    /// How many of them the pass actually moved.
+    ///
+    /// **Counted rather than left to the reader**, because the answer to *"did
+    /// anything happen"* is the whole reason to run this on a timer, and it is
+    /// the field a `--watch` loop and a `Stop` hook both read.
+    pub moved: usize,
+}
+
+/// What one pass of the loop did about one Job.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TickRow {
+    /// The Job's handle.
+    pub job: String,
+    /// The step it was on when the pass looked.
+    pub step: String,
+    /// What the pass did — `idle`, `waiting`, `advanced`, `retried`,
+    /// `finished`, `asked`, `halted`.
+    pub did: String,
+    /// What the Job is doing after it.
+    pub state: crate::fleet::JobState,
+    /// The verdict the gate recorded, when it recorded one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<crate::fleet::Verdict>,
+    /// Which predicate gated the step, in the workflow's own spelling.
+    ///
+    /// **The schema's word, carried rather than prettified** — the same rule
+    /// [`crate::fleet::workflow::Predicate::word`] states. A reader who sees
+    /// `failing_test_exists` can grep the workflow file for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub predicate: Option<String>,
+    /// What the gate rested on — the ids and exit codes external commands
+    /// produced.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<Evidence>,
+    /// Why, in words, for the screen and the inbox.
+    pub why: String,
+}
+
 /// `fleet.verdict` — how a step ended (PLAN.md §14.3).
 ///
 /// **The one added field on the §3.1 envelope is `verdict`**, and it rides in
@@ -2347,10 +2390,27 @@ pub struct VerdictData {
     pub attempts: u32,
     /// What the Job is doing after it.
     pub state: crate::fleet::JobState,
+    /// The inbox entry this verdict opened, on the two that open one.
+    ///
+    /// **Returned rather than discarded**, for the reason `fleet.ask_human`
+    /// returns its own: an item a caller cannot name is an item it cannot come
+    /// back to (PLAN.md §15.3.1). The workflow loop is the caller that needs
+    /// it — a gate waiting on a person has to read *that* answer and not
+    /// whichever one is newest.
+    ///
+    /// Additive, so `schema_version` did not bump, and omitted entirely when a
+    /// verdict opened nothing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
 }
 
 /// One thing a verdict rests on.
-#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
+///
+/// `Eq` as well as `PartialEq`, because every field is a string or an integer
+/// and [`crate::fleet::gate`] compares whole outcomes in its tests — an
+/// assertion on *the evidence a predicate rested on* is the assertion worth
+/// making about a gate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct Evidence {
     /// What kind of thing produced it — `check`, `command`.
     pub kind: String,

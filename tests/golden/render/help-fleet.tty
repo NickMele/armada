@@ -9,6 +9,7 @@
   inbox                  [38;2;156;163;175mwhat the fleet needs from you[0m
   pause <job>            [38;2;156;163;175mstop a Job's Drone and keep everything else[0m
   resume <job>           [38;2;156;163;175mstart a paused Job's session again[0m
+  tick [<job>]           [38;2;156;163;175mgate the step it rests on, then advance, retry or stop[0m
   reap                   [38;2;156;163;175mend every finished Job and release what they hold[0m
   kill [<job>]           [38;2;156;163;175mend a Job and release everything it owns[0m
 

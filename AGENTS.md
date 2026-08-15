@@ -108,20 +108,30 @@ Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
   adding a config key. The ownership layer exists behind `init` / `up` / `down` / `clean` /
   `status` and the `commands:` dispatcher, and **`check` is built** — its scheduler, scope
   resolution, run directory and verdict aggregation, with what it settled and the gap it leaves
-  open in `PHASES.md` §9.3. `check --detach` and `check --status` are refused by name as not
-  built, and so are `render`, `agents-md` and `explain`.
+  open in `PHASES.md` §9.3. **`check --detach` and `check --status` are built** — M4's loop
+  starts a run with the first and polls it with the second. `render`, `agents-md` and `explain`
+  are still refused by name as not built.
 - **M1 has landed**, less one row: `skills:` was not built, because M1 adds no capability.
   Tracked in `PHASES.md` §8.3.
 - **Guild has landed** — `init`, `pull`, `push`, `export`, `import`, plus `armada init` and
   `armada doctor`. `guild edit` and `guild verify` are not built.
-- **Fleet has landed** — `spawn`, `ls`, `board`, `answer`, `inbox`, `kill`, with the Job index
-  in `~/.armada/jobs/` and worktrees under `~/.armada/workspaces/`. **Helm and the Bridge do
-  not exist**, and neither does the MCP server. Their specification is `PLAN.md` §14–§15 and
+- **Fleet has landed** — `spawn`, `ls`, `board`, `answer`, `inbox`, `kill`, `tick`, with the Job
+  index in `~/.armada/jobs/` and worktrees under `~/.armada/workspaces/`. **Helm and the Bridge
+  do not exist**, and neither does the MCP server. Their specification is `PLAN.md` §14–§15 and
   their usage is [`docs/commands/reference.md`](docs/commands/reference.md).
 
-**M4's loop needs `check` detached.** A verdict is only `PASS` if it carries evidence an
-external command produced, and `check` now produces it — but `--detach` and `--status` are
-still refused, so a loop can run a check to completion and cannot yet start one and poll it.
+**M4's loop is `armada fleet tick`** ([`docs/commands/fleet/tick.md`](docs/commands/fleet/tick.md)).
+A Drone runs one exchange and exits; this is what observes that, gates the step on its
+`verify:` predicate and then advances, retries or stops. **A step advances only on evidence an
+external command produced** — an agent asserting the tests pass is not evidence, an exit code
+is, and the loop runs `check --detach` and polls `--status` rather than building a second way to
+run checks.
+
+**Two of the eight predicates are refused rather than decided.** `review_clean` and
+`subjob_passed` both need another Job's verdict and Fleet spawns none from inside a gate, so the
+shipped `bug` workflow reproduces, fixes, lands and stops at `review`. The whole of the
+evaluator's coverage is
+[`docs/reserved/016-what-the-gate-cannot-prove.md`](docs/reserved/016-what-the-gate-cannot-prove.md).
 Manifest's remaining verbs are first-class work, not background work.
 
 ## Architecture rules, in short
@@ -284,8 +294,8 @@ broken `check` is one failing test rather than an unmergeable repository. **Do n
 
 **When `check` lands, it becomes the gate.** That is the end state; the interim arrangement
 exists only because a bug in a half-built tool must not be able to lock its own repository.
-`check --detach` / `--status` are the M4 blocker ([`docs/PHASES.md`](docs/PHASES.md) §8.6) —
-the engine itself has landed. See `ARCHITECTURE.md` §2.6.
+The engine, `--detach` and `--status` have all landed, and M4's loop
+([`docs/PHASES.md`](docs/PHASES.md) §8.6) is built on them. See `ARCHITECTURE.md` §2.6.
 
 ---
 

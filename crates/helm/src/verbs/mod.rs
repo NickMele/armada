@@ -33,7 +33,7 @@ use armada_core::envelope::{
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
     GuildSyncData, HelmData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData,
     PauseData, ProbeData, Projection, ReapPlanData, ReportData, ResumeData, ScanData, ServicesData,
-    ShowData, SkillsData, SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
+    ShowData, SkillsData, SpawnData, StatusData, TickData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -136,6 +136,8 @@ pub enum Output {
     Ask(Box<Envelope<AskData>>),
     /// The `fleet.verdict` tool.
     Verdict(Box<Envelope<VerdictData>>),
+    /// `armada fleet tick` — one pass of the workflow loop.
+    Tick(Box<Envelope<TickData>>),
 }
 
 impl Output {
@@ -186,6 +188,7 @@ impl Output {
             Output::Report(e) => e.to_json(),
             Output::Ask(e) => e.to_json(),
             Output::Verdict(e) => e.to_json(),
+            Output::Tick(e) => e.to_json(),
         }
     }
 
@@ -253,6 +256,7 @@ impl Output {
             Output::Report(e) => e.exit_code(),
             Output::Ask(e) => e.exit_code(),
             Output::Verdict(e) => e.exit_code(),
+            Output::Tick(e) => e.exit_code(),
         }
     }
 }

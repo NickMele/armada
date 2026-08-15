@@ -13,9 +13,11 @@
 //! are (`ARCHITECTURE.md` §1.1) and because a Drone's argv is the one thing no
 //! test may execute for real (PHASES.md §8.5).
 
+pub mod advance;
 pub mod bridge;
 pub mod classify;
 pub mod drone;
+pub mod gate;
 pub mod job;
 pub mod probe;
 pub mod workflow;

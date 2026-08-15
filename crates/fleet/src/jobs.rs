@@ -291,6 +291,8 @@ mod tests {
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
             transitions: Vec::new(),
+            pending: None,
+            facts: std::collections::BTreeMap::new(),
         }
     }
 
