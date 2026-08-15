@@ -1223,6 +1223,64 @@ fn a_skill_can_be_listed_and_resolved_and_never_run() {
     }
 }
 
+/// **The machine that was broken, run.** `~/.armada/machine.yml` carried one
+/// module's keys flat at the top level and a second module's section beside
+/// them, and the strict reader rejected the whole document — so every Manifest
+/// verb failed with `unknown field \`guild\`` before it did anything.
+///
+/// Asserted through the real binary, against the file as it was actually
+/// written, because every unit test in the reader constructs the document it
+/// then reads: the bug was that the two modules disagreed about the file, and a
+/// test that writes it in one module's voice cannot see that.
+#[test]
+fn a_machine_yml_holding_two_modules_facts_does_not_fail_every_verb() {
+    let machine = Machine::new();
+    std::fs::create_dir_all(machine.home.path().join(".armada")).unwrap();
+    let path = machine.home.path().join(".armada/machine.yml");
+    // Exactly the shape found on a real machine: pre-namespace keys, plus the
+    // section a second module wrote into the same file.
+    std::fs::write(
+        &path,
+        "cpu_slots: 8\nport_block_size: 10\nup_timeout: 600\nguild:\n  withheld: []\n",
+    )
+    .unwrap();
+
+    let repo = machine.repo("app", CONFIG);
+    for verb in [
+        &["manifest", "init", "--json"][..],
+        &["manifest", "status", "--json"][..],
+        &["fleet", "ls", "--json"][..],
+    ] {
+        let output = machine.run(&repo, verb);
+        let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "`armada {}` failed: {payload}",
+            verb.join(" ")
+        );
+    }
+
+    // The machine's number was read rather than defaulted past: a block of ten
+    // is what `port_block_size` asked for.
+    let status = machine.run(&repo, &["manifest", "status", "--json"]);
+    let payload: Value = serde_json::from_slice(&status.stdout).unwrap();
+    let block = &payload["data"]["results"][0]["port_block"];
+    assert_eq!(
+        block["to"].as_u64().unwrap() - block["from"].as_u64().unwrap(),
+        9,
+        "{payload}"
+    );
+
+    // And nothing rewrote it: a read path leaves a hand-edited file alone.
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .starts_with("cpu_slots: 8"),
+        "a read rewrote machine.yml"
+    );
+}
+
 fn namespace_of(db: &std::path::Path) -> String {
     rusqlite::Connection::open(db)
         .ok()
