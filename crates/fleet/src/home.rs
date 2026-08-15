@@ -22,6 +22,19 @@ pub fn jobs(armada_home: &Path) -> PathBuf {
     armada_home.join("jobs")
 }
 
+/// A Job's transcript: `~/.armada/jobs/<uuid>.stream.jsonl`.
+///
+/// **Beside the record and outside the worktree**, for two reasons that both
+/// matter. `armada fleet kill` drops the worktree and keeps the transcript —
+/// that is the verb's stated contract, because the transcript is the record of
+/// what happened. And a detached Drone reports to nobody, so this file *is* the
+/// ledger: `armada fleet ls` reads it to answer what a Job has spent, and a Job
+/// whose ledger lived in the tree being torn down would lose its own history at
+/// the moment somebody wanted it most.
+pub fn stream(armada_home: &Path, uuid: &str) -> PathBuf {
+    jobs(armada_home).join(format!("{uuid}.stream.jsonl"))
+}
+
 /// Where a Job's git worktree goes: `~/.armada/workspaces/<repo>/<name>`.
 ///
 /// The repository's name is a level of the path because two repositories may
@@ -88,6 +101,33 @@ mod tests {
         assert_ne!(
             worktree(Path::new("/s"), "api", "rate-limit"),
             worktree(Path::new("/s"), "web", "rate-limit")
+        );
+    }
+
+    /// **The transcript sits beside the record, not inside the worktree.**
+    /// `kill` drops the tree and keeps the transcript, and the transcript is
+    /// also the ledger — a Job that lost its own history the moment it was
+    /// killed would lose it exactly when somebody wanted it.
+    #[test]
+    fn a_transcript_lives_beside_the_record_and_outside_the_worktree() {
+        let home = Path::new("/scratch/.armada");
+        let stream = stream(home, "8f2a1c40");
+        assert_eq!(
+            stream,
+            PathBuf::from("/scratch/.armada/jobs/8f2a1c40.stream.jsonl")
+        );
+        assert!(stream.starts_with(jobs(home)));
+        assert!(!stream.starts_with(home.join("workspaces")));
+    }
+
+    /// The index lists `*.json` records; a transcript must not be read as one.
+    #[test]
+    fn a_transcript_is_not_mistaken_for_a_job_record() {
+        let stream = stream(Path::new("/scratch/.armada"), "8f2a");
+        assert_eq!(
+            stream.extension().and_then(|e| e.to_str()),
+            Some("jsonl"),
+            "a `.json` transcript would be listed as a Job and fail to parse"
         );
     }
 

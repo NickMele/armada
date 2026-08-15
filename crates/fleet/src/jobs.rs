@@ -226,6 +226,7 @@ mod tests {
             state,
             step: "implement".to_string(),
             verdict: None,
+            drone: None,
             created_at: "2026-08-09T14:02:11Z".to_string(),
             created_ms,
             spend: Spend::default(),

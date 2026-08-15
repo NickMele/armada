@@ -11,6 +11,13 @@
 //! `ls` "does not need the repository the Jobs branched from". A Fleet routed
 //! through workspace resolution would refuse to list the fleet from any
 //! directory that is not one of its worktrees, which is most directories.
+//!
+//! **`spawn` returns while the Drone is still working**, and every other verb is
+//! written around that. Nothing updates a Job's record when its turn ends — a
+//! Drone reports to nobody — so the record holds what was true when a verb last
+//! wrote it, and the truth is the transcript plus the process table.
+//! [`armada_core::fleet::job::observe`] reconciles the two, in one place, and
+//! `ls` renders that while `kill` and `answer` persist it.
 
 use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::{
@@ -19,15 +26,15 @@ use armada_core::envelope::{
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
-use armada_core::fleet::job::{self, Job, Spend};
+use armada_core::fleet::drone::Reading;
+use armada_core::fleet::job::{self, Handle, Job, Observed, Spend};
 use armada_core::fleet::workflow::{self, Workflow};
 use armada_core::fleet::{drone as argv, JobState, Verdict};
-use armada_fleet::drone::{self, Ended};
+use armada_fleet::drone;
 use armada_fleet::jobs::Store;
-use armada_fleet::{home, inbox, manifest, worktree};
+use armada_fleet::{home, inbox, manifest, own, worktree};
 use armada_guild::layout::Guild;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use crate::args::Spawn;
 use crate::verbs::Output;
@@ -47,6 +54,13 @@ pub struct Where {
     pub cwd: PathBuf,
     /// The `armada` binary itself, for the Manifest verbs run in a worktree.
     pub exe: PathBuf,
+    /// This boot.
+    ///
+    /// **Required rather than optional**, for the reason `app::build` requires
+    /// it: without one, every Drone handle looks stale across a reboot, so
+    /// Armada would either refuse to stop its own Drones forever or signal a
+    /// recycled pid. Refusing to run is better than either.
+    pub boot_id: String,
 }
 
 impl Where {
@@ -60,15 +74,113 @@ impl Where {
         home::inbox(&self.armada_home)
     }
 
+    /// Where a Job's transcript is.
+    pub fn stream(&self, uuid: &str) -> PathBuf {
+        home::stream(&self.armada_home, uuid)
+    }
+
     /// A path as a person writes it.
     pub fn shown(&self, path: &Path) -> String {
         home::tilde(path, &self.home)
     }
+
+    /// Turn a `~/…` back into a real path.
+    pub fn expand(&self, shown: &str) -> PathBuf {
+        match shown.strip_prefix("~/") {
+            Some(rest) => self.home.join(rest),
+            None => PathBuf::from(shown),
+        }
+    }
+}
+
+/// What a Job is really doing, worked out from its transcript and the process
+/// table.
+///
+/// **One function, called by every verb that needs the answer.** `ls` renders
+/// it, `kill` and `answer` persist it, and nothing computes it a second way —
+/// which is what stops `ls` and `kill` disagreeing about whether a Job is
+/// stalled.
+fn look<R: Run>(run: &R, place: &Where, record: &Job, now_ms: u64) -> (Observed, Reading) {
+    let reading = drone::transcript(&place.stream(&record.uuid));
+    // **The process table is only consulted for a Job that could still be
+    // running.** A finished Job costs no `ps`, which is what keeps `armada
+    // fleet ls --all` cheap on a machine with a long history.
+    let alive = !record.state.is_over()
+        && drone::alive(
+            run,
+            &place.armada_home,
+            record.drone.as_ref(),
+            &place.boot_id,
+        );
+    let observed = job::observe(
+        record,
+        reading.spend,
+        reading.turns.len(),
+        reading.last().is_some_and(|turn| turn.is_error),
+        alive,
+        record.run_time_ms(now_ms),
+    );
+    (observed, reading)
+}
+
+/// Write an observation back into the record.
+///
+/// **The verbs that change something persist what they saw**, so that a Job
+/// which reached a ceiling while nobody was looking is `PAUSED` on disk rather
+/// than only on a screen. `ls` deliberately does not do this: a read verb that
+/// wrote would make `armada fleet ls | head` a mutation.
+fn settle<C: Clock>(
+    record: &mut Job,
+    observed: &Observed,
+    place: &Where,
+    now: &C,
+) -> Result<(), ArmadaError> {
+    let was = record.state;
+    record.spend = observed.spend;
+    record.state = observed.state;
+
+    if let Some(ceiling) = observed.ceiling {
+        // **Exhaustion is an outcome, never a silent stop** (PLAN.md §14.3):
+        // the Job records what it spent and where it reached, and is raised.
+        if record.verdict != Some(Verdict::NeedsHuman) {
+            record.verdict = Some(Verdict::NeedsHuman);
+            raise(
+                place,
+                now,
+                record,
+                inbox::Kind::NeedsHuman,
+                &format!(
+                    "reached its {} ceiling on the {} step",
+                    ceiling.word(),
+                    record.step
+                ),
+            )?;
+        }
+    } else if observed.state == JobState::Stalled && was != JobState::Stalled {
+        // **Raised once, when it first stalls.** A stall re-raised on every `ls`
+        // would turn the inbox into a poll, and a diluted signal gets ignored at
+        // the moment it matters (PLAN.md §15.4).
+        raise(
+            place,
+            now,
+            record,
+            inbox::Kind::Blocked,
+            "its Drone stopped without finishing a turn",
+        )?;
+    }
+    Ok(())
 }
 
 // ----------------------------------------------------------------------- spawn
 
-/// `armada fleet spawn` — classify, worktree, `manifest init`, budgeted turn.
+/// `armada fleet spawn` — classify, worktree, `manifest init`, start a Drone,
+/// **return**.
+///
+/// **It does not wait for the Drone, and that is the point of the verb.** A
+/// `spawn` that ran the turn to completion could only ever run one Job at a
+/// time, and running several is the whole of Fleet. What comes back is the
+/// handle — a uuid, a name and a process group — and everything the Job goes on
+/// to do is read afterwards from its transcript by `armada fleet ls`.
 ///
 /// **The uuid is minted and the record written before the worktree exists.** The
 /// durable handle exists before the process does, so a spawn that dies halfway
@@ -130,6 +242,7 @@ pub fn spawn<R: Run, C: Clock>(
         state: JobState::Queued,
         step: step.clone(),
         verdict: None,
+        drone: None,
         created_at: now.wall_rfc3339(),
         created_ms: now.wall_ms(),
         spend: Spend::default(),
@@ -140,14 +253,7 @@ pub fn spawn<R: Run, C: Clock>(
         // Nothing is written, nothing is claimed, and no record is left behind:
         // a preview that minted a Job would be the destructive path it was
         // previewing (`ARCHITECTURE.md` §2.1.2).
-        return Ok(envelope(
-            &record,
-            Status::Skipped,
-            classify_ms,
-            0,
-            None,
-            place,
-        ));
+        return Ok(envelope(&record, Status::Skipped, classify_ms, 0, place));
     }
 
     // **Recorded before anything is created.** Everything after this line can
@@ -174,18 +280,17 @@ pub fn spawn<R: Run, C: Clock>(
     store.save(&record)?;
     let prepare_ms = now.mono().saturating_sub(started);
 
-    // **One bounded headless turn**, and the deadline is the workflow's own
-    // wall clock so a Drone cannot outlive the ceiling it was given.
-    let ended = drone::turn(
+    // **The Drone is started detached and `spawn` returns.** That is the whole
+    // purpose of Fleet — five Jobs at once with one thing to watch — and it is
+    // why nothing here waits, reads a ledger, or reports a spend: the Drone is
+    // still working when this function ends.
+    record.drone = Some(start_drone(
         run,
+        place,
+        &record,
         &path,
         argv::spawn_argv(&uuid, &prompt(&workflow, &step, &options.task)),
-        drone::job_env(&name, &uuid),
-        Duration::from_millis(budget.wall_clock_ms),
-    )?;
-    let spend = ended.spend();
-    record.spend.add(&spend);
-    settle(&mut record, &ended, now, place)?;
+    )?);
     store.save(&record)?;
 
     Ok(envelope(
@@ -193,9 +298,38 @@ pub fn spawn<R: Run, C: Clock>(
         Status::Ready,
         classify_ms,
         prepare_ms,
-        Some(spend),
         place,
     ))
+}
+
+/// Start a Drone for a Job, and record its group where Manifest's reaper looks.
+///
+/// **Two records of one process group, and both are needed.** The Job's own
+/// carries the handle so `armada fleet ls` and `kill` can reach it without
+/// opening the machine-global store; the `owned` row is what makes an *orphaned*
+/// Drone — Armada died, the Drone did not — reapable by the same pass that
+/// reaps an orphaned service, which is the whole reason not to invent a second
+/// mechanism.
+fn start_drone<R: Run>(
+    run: &R,
+    place: &Where,
+    record: &Job,
+    worktree: &Path,
+    argv: Vec<String>,
+) -> Result<Handle, ArmadaError> {
+    let handle = drone::start(
+        run,
+        worktree,
+        &place.stream(&record.uuid),
+        argv,
+        drone::job_env(&record.name, &record.uuid),
+        &place.boot_id,
+    )?;
+    // Best-effort: the Job's own record already carries the handle, so a
+    // workspace that will not resolve costs the machine-global backstop and not
+    // the Job.
+    let _ = own::record_drone(run, &place.armada_home, worktree, &handle);
+    Ok(handle)
 }
 
 /// Which repository this Job branches from.
@@ -278,76 +412,6 @@ fn prompt(workflow: &Workflow, step: &str, task: &str) -> String {
     }
 }
 
-/// What the Job is after its turn.
-///
-/// **Exhaustion is an outcome, never a silent stop** (PLAN.md §14.3): the Job
-/// records what it spent and where it reached, and it is raised to the inbox.
-fn settle<C: Clock>(
-    record: &mut Job,
-    ended: &Ended,
-    now: &C,
-    place: &Where,
-) -> Result<(), ArmadaError> {
-    let run_time = record.run_time_ms(now.wall_ms());
-    if let Some(ceiling) = job::exhausted(&record.budget, &record.spend, run_time) {
-        record.state = JobState::Paused;
-        record.verdict = Some(Verdict::NeedsHuman);
-        return raise(
-            place,
-            now,
-            record,
-            inbox::Kind::NeedsHuman,
-            &format!(
-                "reached its {} ceiling on the {} step",
-                ceiling.word(),
-                record.step
-            ),
-        );
-    }
-
-    match ended {
-        Ended::Turn(_) => record.state = JobState::Running,
-        // Armada's own deadline. The wall-clock ceiling by another name, and it
-        // ends at a person for the same reason.
-        Ended::Timeout(_) => {
-            record.state = JobState::Paused;
-            record.verdict = Some(Verdict::NeedsHuman);
-            raise(
-                place,
-                now,
-                record,
-                inbox::Kind::NeedsHuman,
-                "its turn ran past the workflow's wall clock",
-            )?;
-        }
-        // **A Drone that died does not end its Job** (PLAN.md §14.1). The Job is
-        // `STALLED` — the observer's word — and boarding it is how you find out
-        // why.
-        Ended::Died { code, stderr } => {
-            record.state = JobState::Stalled;
-            raise(
-                place,
-                now,
-                record,
-                inbox::Kind::Blocked,
-                &format!(
-                    "its Drone ended without finishing a turn ({}){}",
-                    match code {
-                        Some(code) => format!("exit {code}"),
-                        None => "killed".to_string(),
-                    },
-                    if stderr.is_empty() {
-                        String::new()
-                    } else {
-                        format!(": {stderr}")
-                    }
-                ),
-            )?;
-        }
-    }
-    Ok(())
-}
-
 fn raise<C: Clock>(
     place: &Where,
     now: &C,
@@ -373,7 +437,6 @@ fn envelope(
     status: Status,
     classify_ms: Option<u64>,
     prepare_ms: u64,
-    spend: Option<Spend>,
     place: &Where,
 ) -> Output {
     let _ = place;
@@ -394,7 +457,7 @@ fn envelope(
             state: record.state,
             classify_ms,
             prepare_ms,
-            spend,
+            pgid: record.drone.as_ref().map(|drone| drone.pgid),
         },
     )))
 }
@@ -405,7 +468,15 @@ fn envelope(
 ///
 /// **Every column comes from data Claude Code already emits** (PHASES.md §9.1
 /// F2). Nothing here estimates a cost, a token count or a remaining budget.
-pub fn ls<C: Clock>(
+///
+/// **What it reports is an observation, not the record.** A Drone runs detached
+/// and updates nothing when its turn ends, so the state on disk is what a verb
+/// last wrote — and `ls` is the thing that looks at the transcript and the
+/// process table and says what is actually true. It writes none of it back: a
+/// read verb that mutated would make `armada fleet ls | head` a change to the
+/// fleet.
+pub fn ls<R: Run, C: Clock>(
+    run: &R,
     now: &C,
     place: &Where,
     all: bool,
@@ -416,11 +487,12 @@ pub fn ls<C: Clock>(
 
     let mut rows: Vec<JobRow> = Vec::new();
     for record in place.store().all()? {
-        let waiting = inbox::open_for(&entries, &record.name);
-        let wants_you = record.state.needs_a_person() || waiting.is_some();
         if !all && record.state.is_over() {
             continue;
         }
+        let (observed, _) = look(run, place, &record, wall);
+        let waiting = inbox::open_for(&entries, &record.name);
+        let wants_you = observed.state.needs_a_person() || waiting.is_some();
         if needs_attention && !wants_you {
             continue;
         }
@@ -429,13 +501,13 @@ pub fn ls<C: Clock>(
             uuid: record.uuid.clone(),
             name: record.name.clone(),
             workflow: record.workflow.clone(),
-            state: record.state,
-            detail: detail(&record, waiting),
+            state: observed.state,
+            detail: detail(&record, observed.state, waiting),
             runtime_s: run_time / 1_000,
-            cost_usd: record.spend.cost_usd,
-            tokens: record.spend.tokens,
-            turns: record.spend.turns,
-            budget_remaining: job::remaining(&record.budget, &record.spend, run_time),
+            cost_usd: observed.spend.cost_usd,
+            tokens: observed.spend.tokens,
+            turns: observed.spend.turns,
+            budget_remaining: job::remaining(&record.budget, &observed.spend, run_time),
             needs_attention: wants_you,
         });
     }
@@ -460,10 +532,10 @@ pub fn ls<C: Clock>(
 }
 
 /// The one thing a state word cannot say: which step, and what it is waiting on.
-fn detail(record: &Job, waiting: Option<&inbox::Entry>) -> String {
+fn detail(record: &Job, state: JobState, waiting: Option<&inbox::Entry>) -> String {
     match waiting {
         Some(entry) => entry.body.clone(),
-        None if record.state == JobState::Queued => String::new(),
+        None if state == JobState::Queued => String::new(),
         None => record.step.clone(),
     }
 }
@@ -494,44 +566,89 @@ pub fn board(place: &Where, handle: &str) -> Result<Output, ArmadaError> {
 
 // ------------------------------------------------------------------------ kill
 
-/// `armada fleet kill` — clean, drop the worktree, mark the Job ended.
+/// `armada fleet kill` — stop the Drone, clean, drop the worktree, mark the Job
+/// ended.
 ///
-/// **Three steps, in this order, and the order is the point**
-/// (`commands/fleet/kill.md`). Cleaning before removing means resources are
-/// released while the config that describes them is still present. If the order
-/// is ever reversed, nothing is lost — ownership is recorded machine-globally,
-/// so `armada manifest clean --all` still reclaims it afterwards. That safety
-/// net is the reason Manifest sits underneath Fleet.
-pub fn kill<R: Run>(
+/// **Four steps, in this order, and the order is the point**
+/// (`commands/fleet/kill.md`). The Drone goes first because it is still working:
+/// a live Drone mid-`docker compose up` would otherwise race the teardown of the
+/// very resources it is creating, and lose. Cleaning before removing means
+/// resources are released while the config that describes them is still present.
+///
+/// **If the order is ever reversed, nothing is lost.** Ownership is recorded
+/// machine-globally — including the Drone's own process group — so `armada
+/// manifest clean --all` still reclaims it afterwards. That safety net is the
+/// reason Manifest sits underneath Fleet.
+pub fn kill<R: Run, C: Clock>(
     run: &R,
+    now: &C,
     place: &Where,
     handle: Option<&str>,
     keep_branch: bool,
     keep_worktree: bool,
 ) -> Result<Output, ArmadaError> {
     let store = place.store();
+    let wall = now.wall_ms();
     let targets = match handle {
         Some(handle) => vec![store.find(handle)?],
+        // **`--all-finished` asks the observation, not the record.** A Job whose
+        // Drone finished while nobody was looking is finished, and a record that
+        // still says `RUNNING` is only what a verb last wrote.
         None => store
             .all()?
             .into_iter()
-            .filter(|record| record.state.is_over() || record.state == JobState::Paused)
+            .filter(|record| {
+                let (observed, _) = look(run, place, record, wall);
+                observed.state.is_over()
+                    || matches!(observed.state, JobState::Paused | JobState::Stalled)
+            })
             .collect(),
     };
 
     let mut results: Vec<Killed> = Vec::new();
     for mut record in targets {
-        let path = expand(place, &record.worktree);
-        // **Step one, and it is first for a reason**: resources are released
-        // while the config that describes them is still present.
+        let path = place.expand(&record.worktree);
+
+        // **What it was doing is recorded before it is ended.** A Job that
+        // stalled or hit a ceiling while nobody was looking has that written
+        // down and raised here, because after this it is `ABORTED` and the
+        // observation is no longer derivable.
+        let (observed, _) = look(run, place, &record, wall);
+        settle(&mut record, &observed, place, now)?;
+
+        // **Step one: the Drone.** It is still working, and everything below
+        // takes away what it is working with.
+        let stopped = drone::stop(
+            run,
+            &place.armada_home,
+            record.drone.as_ref(),
+            &place.boot_id,
+        );
+        if let Some(handle) = &record.drone {
+            own::forget_drone(run, &place.armada_home, &path, handle.pgid);
+        }
+        record.drone = None;
+
+        // **Step two**: resources are released while the config that describes
+        // them is still present.
         let cleaned = manifest::clean(run, &place.exe, &path)?;
         let mut failure = cleaned.error;
+        if stopped == drone::Stopped::Survived {
+            // A group still alive after SIGKILL is a real leak, and a reclaim
+            // Armada could not complete must never be silent.
+            failure.get_or_insert(ArmadaError {
+                class: ErrClass::ToolFailed,
+                r#where: record.name.clone(),
+                message: "the Drone was still running after SIGKILL".to_string(),
+                next_action: Some("look for it by hand; `armada fleet ls` names it".to_string()),
+            });
+        }
 
         // **`git worktree remove` is run from the repository, not the
         // worktree.** git refuses to remove the tree it is standing in, and by
         // this point the record is the only thing that knows where the
         // repository was.
-        let repo_root = expand(place, &record.repo_root);
+        let repo_root = place.expand(&record.repo_root);
 
         // **A directory that is already gone is not a failure.** A Job whose
         // worktree somebody deleted by hand is exactly the Job the durable
@@ -577,6 +694,10 @@ pub fn kill<R: Run>(
         // **The Job is marked ended whatever happened above.** A `kill` that
         // left a Job live because one container refused to stop would need a
         // second `kill` to do the same thing again.
+        //
+        // Its spend is settled from the transcript on the way out, because the
+        // transcript is about to be the only thing left that knows.
+        record.spend = drone::transcript(&place.stream(&record.uuid)).spend;
         record.state = JobState::Aborted;
         record.port_block = None;
         store.save(&record)?;
@@ -588,14 +709,6 @@ pub fn kill<R: Run>(
         Some(error) => Envelope::failed("fleet kill", None, error, data),
         None => Envelope::ok("fleet kill", None, Status::Clean, data),
     })))
-}
-
-/// Turn a `~/…` back into a real path.
-fn expand(place: &Where, shown: &str) -> PathBuf {
-    match shown.strip_prefix("~/") {
-        Some(rest) => place.home.join(rest),
-        None => PathBuf::from(shown),
-    }
 }
 
 // ---------------------------------------------------------------- inbox/answer
@@ -644,7 +757,13 @@ pub fn inbox<C: Clock>(
 ///
 /// **The budget is not reset.** An answer is a continuation rather than a new
 /// run, and resetting the ceiling here would make budgets unenforceable for any
-/// Job that asks a question (`commands/fleet/answer.md`).
+/// Job that asks a question (`commands/fleet/answer.md`). The resumed session
+/// appends its `result` to the same transcript, so continuing costs what it
+/// costs and the sum keeps counting.
+///
+/// **The resumed Drone is detached exactly as a fresh one is.** An answer starts
+/// a turn; it does not wait for one. A Job you answered before lunch is working
+/// while you are out, which is the behaviour the whole verb exists for.
 pub fn answer<R: Run, C: Clock>(
     run: &R,
     now: &C,
@@ -664,21 +783,56 @@ pub fn answer<R: Run, C: Clock>(
         });
     };
 
+    // **Refused before the entry is closed.** A Job whose rope has run out is
+    // not continued by answering it: `on_exhausted: needs_human` means a person
+    // decides what happens next, and silently resuming past a ceiling is how a
+    // budget stops being one.
+    let (observed, _) = look(run, place, &record, now.wall_ms());
+    if let Some(ceiling) = observed.ceiling {
+        // Persisted and raised on the way out, so the ceiling is a durable fact
+        // rather than something this invocation noticed and forgot.
+        settle(&mut record, &observed, place, now)?;
+        store.save(&record)?;
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` reached its {} ceiling", record.name, ceiling.word()),
+            next_action: Some(format!(
+                "`armada fleet board {}` to take it over, or kill it",
+                record.name
+            )),
+        });
+    }
+
     inbox::answer(&place.inbox(), &entry.uuid, said)?;
 
-    let run_time = record.run_time_ms(now.wall_ms());
-    let left = job::remaining(&record.budget, &record.spend, run_time);
-    let ended = drone::turn(
+    // A Drone left over from the previous turn is stopped first: two Drones on
+    // one session is two writers on one transcript.
+    let _ = drone::stop(
         run,
-        &expand(place, &record.worktree),
-        argv::resume_argv(&record.uuid, said),
-        drone::job_env(&record.name, &record.uuid),
-        Duration::from_millis(left.wall_clock_ms),
-    )?;
-    let spend = ended.spend();
-    record.spend.add(&spend);
+        &place.armada_home,
+        record.drone.as_ref(),
+        &place.boot_id,
+    );
+    if let Some(previous) = &record.drone {
+        own::forget_drone(
+            run,
+            &place.armada_home,
+            &place.expand(&record.worktree),
+            previous.pgid,
+        );
+    }
+
+    record.spend = observed.spend;
     record.verdict = None;
-    settle(&mut record, &ended, now, place)?;
+    record.state = JobState::Running;
+    record.drone = Some(start_drone(
+        run,
+        place,
+        &record,
+        &place.expand(&record.worktree),
+        argv::resume_argv(&record.uuid, said),
+    )?);
     store.save(&record)?;
 
     Ok(Output::Answer(Box::new(Envelope::ok(
@@ -696,7 +850,7 @@ pub fn answer<R: Run, C: Clock>(
                 &record.spend,
                 record.run_time_ms(now.wall_ms()),
             ),
-            spend: Some(spend),
+            pgid: record.drone.as_ref().map(|drone| drone.pgid),
         },
     ))))
 }

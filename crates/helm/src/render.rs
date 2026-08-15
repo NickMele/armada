@@ -439,7 +439,10 @@ fn answer(envelope: &Envelope<AnswerData>, style: Style, width: usize) -> String
             token("answered", Role::BeaconGreen),
             Cell::painted(data.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&data.answer)),
-            time_cell(data.spend.map(|spend| spend.api_ms)),
+            // **No time, because nothing was waited for.** An answer starts a
+            // turn and returns; what it costs lands in the transcript and is
+            // read by `armada fleet ls`.
+            time_cell(None),
         ]);
 
     let mut out = table.render(style, width);

@@ -1,4 +1,4 @@
-//! The Drone: **the argv Fleet builds, and the ledger it reads back**.
+//! The Drone: **the argv Fleet builds, and the ledger the transcript keeps**.
 //!
 //! A Job's conversation is an ordinary Claude Code session (PHASES.md §9.1 F1),
 //! so there is no session mechanism here — only a uuid the caller assigns before
@@ -10,17 +10,28 @@
 //! claude --resume     <uuid>                                     # boarding
 //! ```
 //!
+//! **A Drone runs detached and Armada does not wait for it.** That is the whole
+//! point of Fleet: five Jobs at once with one thing to watch. It is the same
+//! shape a `command` service already has — `setsid`, a log file rather than a
+//! pipe, and the process group recorded as owned so `armada manifest clean`
+//! reclaims it — and reusing it is what keeps an orphaned Drone reapable by the
+//! path that already reaps an orphaned service, rather than by a second
+//! mechanism nobody maintains.
+//!
 //! **This module is where the bugs are, which is why it is pure.** A missing
 //! `--session-id` mints a session Fleet cannot find again; `--resume` where
 //! `--session-id` was meant starts a Job's second turn as its first. Both are
 //! argv bugs, and a test that faked a higher layer would catch neither
 //! (`ARCHITECTURE.md` §1.1). **No test in this repository spawns a real session
-//! or spends a token** (PHASES.md §8.5) — the argv is asserted here and recorded
-//! `stream-json` is fed back as the response.
+//! or spends a token** (PHASES.md §8.5) — the argv is asserted here, and the
+//! integration suite starts a harmless stub that records the vector it was
+//! actually given.
 //!
 //! **Budgets need no accounting layer** (PHASES.md §9.1 F2). Every turn ends
 //! with a `result` event carrying `total_cost_usd`, `usage`, `num_turns` and
-//! `duration_api_ms`; [`ledger`] reads them and nothing here estimates anything.
+//! `duration_api_ms`, and a resumed session appends its own — so the transcript
+//! *is* the ledger and [`read`] sums it. Nothing here estimates anything, and
+//! nothing needs a Drone to report home.
 
 use super::job::Spend;
 use crate::error::{ArmadaError, ErrClass};
@@ -86,12 +97,6 @@ pub struct Turn {
     pub is_error: bool,
     /// The turn's own text, when it produced one.
     pub result: Option<String>,
-    /// The rate-limit window, when one was reported.
-    ///
-    /// **Strictly better than a fixed concurrency cap**, which was only ever a
-    /// proxy for the same thing: the orchestrator can decline to spawn when a
-    /// window reset is close (PHASES.md §9.1 F2).
-    pub rate_limit: Option<RateLimit>,
 }
 
 /// The rate-limit window a turn passed through.
@@ -105,46 +110,75 @@ pub struct RateLimit {
     pub resets_at: Option<u64>,
 }
 
-/// Read a turn out of a `stream-json` transcript.
+/// Everything a Job's transcript says about what it has spent and how far it
+/// got.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct Reading {
+    /// Every finished turn, in the order they finished.
+    pub turns: Vec<Turn>,
+    /// Their sum, which **is** the Job's spend. Nothing else adds it up.
+    pub spend: Spend,
+    /// The last rate-limit window seen.
+    ///
+    /// **Strictly better than a fixed concurrency cap**, which was only ever a
+    /// proxy for the same thing: the orchestrator can decline to spawn when a
+    /// window reset is close (PHASES.md §9.1 F2).
+    pub rate_limit: Option<RateLimit>,
+}
+
+impl Reading {
+    /// The turn that finished last, if any has.
+    pub fn last(&self) -> Option<&Turn> {
+        self.turns.last()
+    }
+}
+
+/// Read a Job's `stream-json` transcript.
 ///
-/// **One JSON document per line, and only two of them matter.** Everything
-/// between the `system` init and the final `result` is the conversation, which
-/// is the Drone's business and not Fleet's — PLAN.md §15.2's rule that the
-/// orchestrator reads summaries rather than raw transcripts starts here, with
-/// Fleet declining to parse them either.
+/// **The transcript is the ledger, and this is the whole of Fleet's
+/// accounting.** A Drone runs detached and reports to nobody; a resumed session
+/// appends its own `result` event to the same stream, so summing them is how a
+/// Job's spend is known — without a Drone-side mechanism, without a hook, and
+/// without a second number Armada maintains in parallel and can get wrong.
 ///
-/// A stream with no `result` event is a turn that did not finish: the process
-/// was killed, the deadline elapsed, or `claude` died. That is an ordinary
-/// outcome for a Drone and is reported as `None` rather than as a failure.
-pub fn ledger(stream: &str) -> Option<Turn> {
-    let mut turn: Option<Turn> = None;
-    let mut rate_limit: Option<RateLimit> = None;
+/// **One JSON document per line, and only two kinds matter.** Everything
+/// between the `system` init and each `result` is the conversation, which is the
+/// Drone's business and not Fleet's — PLAN.md §15.2's rule that the orchestrator
+/// reads summaries rather than raw transcripts starts here, with Fleet declining
+/// to parse them either.
+///
+/// **A stream with no `result` is a turn that has not finished**, which is the
+/// ordinary state of a Job whose Drone is still working. That is emptiness
+/// rather than failure, and the caller tells the two apart by asking whether the
+/// process group is still alive — the one question a busy Drone cannot answer
+/// about itself, which is why it belongs to the observer (PLAN.md §14.3).
+pub fn read(stream: &str) -> Reading {
+    let mut reading = Reading::default();
 
     for line in stream.lines() {
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
+        // **A line that does not parse is skipped rather than fatal.** Two
+        // shapes reach here that are not events: the partial last line a killed
+        // process leaves behind, and anything the Drone wrote to stderr — the
+        // log holds both streams, because a child that outlives Armada cannot
+        // be given a pipe ([`crate::ctx::StdioMode::Log`]).
         let Ok(event) = serde_json::from_str::<serde_json::Value>(line) else {
-            // A partial last line is what a killed process leaves behind. The
-            // turns before it are still real, so the line is skipped rather
-            // than failing the read.
             continue;
         };
         match event.get("type").and_then(|t| t.as_str()) {
-            Some("result") => turn = Some(read_result(&event)),
-            Some("rate_limit_event") => rate_limit = read_rate_limit(&event),
+            Some("result") => {
+                let turn = read_result(&event);
+                reading.spend.add(&turn.spend);
+                reading.turns.push(turn);
+            }
+            Some("rate_limit_event") => reading.rate_limit = read_rate_limit(&event),
             _ => {}
         }
     }
-
-    turn.map(|mut turn| {
-        // The window is reported alongside the turn even though it arrives on
-        // its own event, because the caller's question is "may I spawn another
-        // one", and that is one question rather than two.
-        turn.rate_limit = rate_limit;
-        turn
-    })
+    reading
 }
 
 fn read_result(event: &serde_json::Value) -> Turn {
@@ -191,7 +225,6 @@ fn read_result(event: &serde_json::Value) -> Turn {
             .get("result")
             .and_then(serde_json::Value::as_str)
             .map(str::to_string),
-        rate_limit: None,
     }
 }
 
@@ -300,7 +333,8 @@ mod tests {
 
     #[test]
     fn the_turns_ledger_is_read_straight_off_the_result_event() {
-        let turn = ledger(RECORDED).expect("a finished turn has a result event");
+        let reading = read(RECORDED);
+        let turn = reading.last().expect("a finished turn has a result event");
         assert_eq!(turn.spend.turns, 2);
         assert_eq!(turn.spend.api_ms, 2_956);
         assert!((turn.spend.cost_usd - 0.1724735).abs() < 1e-9);
@@ -314,55 +348,73 @@ mod tests {
     /// number never stops anything.
     #[test]
     fn a_cached_turn_counts_its_cache_tokens_and_not_only_its_input() {
-        let turn = ledger(RECORDED).unwrap();
-        assert_eq!(turn.spend.tokens, 4 + 85 + 14_815 + 44_357);
-        assert_ne!(turn.spend.tokens, 4 + 85, "the cache was not counted");
+        let reading = read(RECORDED);
+        assert_eq!(reading.spend.tokens, 4 + 85 + 14_815 + 44_357);
+        assert_ne!(reading.spend.tokens, 4 + 85, "the cache was not counted");
     }
 
-    /// The window travels with the turn, because "may I spawn another one" is
+    /// The window travels with the reading, because "may I spawn another one" is
     /// one question rather than two.
     #[test]
     fn the_rate_limit_window_is_reported_alongside_the_turn() {
-        let limit = ledger(RECORDED).unwrap().rate_limit.expect("a window");
+        let limit = read(RECORDED).rate_limit.expect("a window");
         assert_eq!(limit.status, "allowed");
         assert_eq!(limit.kind, "five_hour");
         assert_eq!(limit.resets_at, Some(1_754_748_131));
     }
 
-    /// **A killed Drone is an ordinary outcome, not a parse failure.** The Job
-    /// survives, the record still says what it spent up to then, and `ls`
-    /// reports it — which is the whole distinction between a Job and a Drone.
+    /// **A Drone that has not finished a turn yet reads as empty, not as
+    /// broken.** That is the ordinary state of a Job whose Drone is still
+    /// working — which, now that a Drone runs detached, is what `armada fleet
+    /// ls` sees most of the time.
     #[test]
-    fn a_stream_that_never_finished_reports_no_turn_rather_than_failing() {
-        assert_eq!(ledger(""), None);
-        assert_eq!(
-            ledger("{\"type\":\"system\",\"subtype\":\"init\"}\n{\"type\":\"assis"),
-            None
-        );
+    fn a_stream_with_no_finished_turn_reads_as_empty_rather_than_failing() {
+        for stream in [
+            "",
+            "{\"type\":\"system\",\"subtype\":\"init\"}\n{\"type\":\"assis",
+        ] {
+            let reading = read(stream);
+            assert!(reading.turns.is_empty());
+            assert!(reading.last().is_none());
+            assert_eq!(reading.spend, Spend::default());
+        }
     }
 
     /// A turn that ended in an error still carries its ledger: the spend
     /// happened whether or not the work did.
     #[test]
     fn a_failed_turn_still_reports_what_it_cost() {
-        let turn = ledger(
+        let reading = read(
             r#"{"type":"result","is_error":true,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":10,"output_tokens":2}}"#,
-        )
-        .unwrap();
+        );
+        let turn = reading.last().unwrap();
         assert!(turn.is_error);
-        assert_eq!(turn.spend.tokens, 12);
-        assert!((turn.spend.cost_usd - 0.02).abs() < 1e-9);
+        assert_eq!(reading.spend.tokens, 12);
+        assert!((reading.spend.cost_usd - 0.02).abs() < 1e-9);
     }
 
-    /// The last `result` wins, so a stream carrying two turns reports the one
-    /// that finished last.
+    /// **A resumed session appends its own `result`, so the transcript is the
+    /// ledger and the ledger is a sum.**
+    ///
+    /// This is the assertion the change to a detached Drone turns on. While
+    /// `spawn` blocked, Fleet added each turn's spend to a running total it
+    /// maintained itself; a detached Drone reports to nobody, so the file is the
+    /// only account there is — and reading only the *last* turn would reset a
+    /// Job's spend to zero every time it was answered, which is the failure that
+    /// makes a budget unenforceable for exactly the Jobs that ask questions.
     #[test]
-    fn the_last_result_event_is_the_one_reported() {
-        let turn = ledger(
-            "{\"type\":\"result\",\"num_turns\":1}\n{\"type\":\"result\",\"num_turns\":9}\n",
-        )
-        .unwrap();
-        assert_eq!(turn.spend.turns, 9);
+    fn two_turns_in_one_transcript_sum_rather_than_replace() {
+        let reading = read(
+            "{\"type\":\"result\",\"num_turns\":2,\"total_cost_usd\":0.1,\"usage\":{\"input_tokens\":100}}\n\
+             {\"type\":\"result\",\"num_turns\":3,\"total_cost_usd\":0.2,\"usage\":{\"input_tokens\":200}}\n",
+        );
+        assert_eq!(reading.turns.len(), 2);
+        assert_eq!(reading.spend.turns, 5, "not 3 — the turns are summed");
+        assert_eq!(reading.spend.tokens, 300);
+        assert!((reading.spend.cost_usd - 0.3).abs() < 1e-9);
+        // The last turn is still reachable on its own, because *how the Job
+        // ended* is a different question from *what it has spent*.
+        assert_eq!(reading.last().unwrap().spend.turns, 3);
     }
 
     /// A missing `claude` is the machine's problem and not the repository's, so

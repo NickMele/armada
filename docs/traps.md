@@ -276,6 +276,35 @@ whose handle is dropped without `wait()` leaves a `<defunct>` entry until Armada
 **Rule: every spawned `Child` is waited on, or explicitly reaped.** A long-lived
 `armada manifest check --detach` accumulating zombies across a fifteen-minute run is the case that bites.
 
+### `ps -o lstart=` answers for a zombie, so a start-time probe outlives the process
+
+Measured 2026-08-14 on darwin 27.0.0, by an assertion that failed: `armada-fleet`'s
+`drone::alive` reported a Drone as alive immediately after `stop` had confirmed the group
+gone.
+
+```
+child in its own session is SIGKILLed, parent does not wait
+ps -o lstart= -p <pid>   ->  a start time, exit 0     (the corpse answers)
+killpg(pgid, 0)          ->  the group is empty       (see the entry below)
+```
+
+Armada's liveness check is `pid_started_at` recorded against `pid_started_at` observed
+(`reap::pgid_is_ours`), and both readings come from `ps -o lstart=`. A **zombie answers that
+question with the same start time it had while running**, so the check says *provably ours and
+still there* about a process that has exited. That is the correct answer to the question it
+actually asks — "is this the same process I recorded" — and the wrong answer to the one a
+reader assumes it asks.
+
+**It does not affect Armada, and the reason is worth stating rather than being lucky about.**
+The reaping parent is the `armada` invocation that spawned the Drone, and it exits moments
+later; init then reaps, so the *next* invocation — which is the only thing that ever asks — sees
+nothing. Every caller of `alive` is a fresh process by construction.
+
+**Rule: never assert `!alive(...)` in the same process that started the child.** Ask the group
+instead: a second `stop_group` reports the group empty, which is the fact that was wanted. An
+assertion written the obvious way fails here for a reason that looks like a bug in the kill path
+and is not.
+
 ### A group holding only a zombie: `killpg` fails on darwin and **succeeds** on Linux
 
 Measured 2026-08-10 on darwin and, through CI, on `ubuntu-latest`. A child in

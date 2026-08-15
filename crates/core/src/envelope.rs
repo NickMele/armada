@@ -1229,9 +1229,15 @@ pub struct SpawnData {
     pub classify_ms: Option<u64>,
     /// How long the worktree and `armada manifest init` took together.
     pub prepare_ms: u64,
-    /// What the first turn spent, or nothing when `--dry-run` started none.
+    /// The Drone's process group, or `None` under `--dry-run`.
+    ///
+    /// **`spawn` returns while the Drone is still working**, which is the whole
+    /// point of Fleet: five Jobs at once with one thing to watch. So there is no
+    /// spend to report here — the transcript is the ledger and `armada fleet ls`
+    /// reads it. What this carries instead is the handle, so a caller can see
+    /// that something really was started.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub spend: Option<crate::fleet::job::Spend>,
+    pub pgid: Option<i32>,
 }
 
 /// `armada fleet ls` — what is running, how long, what it has spent, and who
@@ -1406,9 +1412,13 @@ pub struct AnswerData {
     /// continuation rather than a new run, and resetting the ceiling here would
     /// make budgets unenforceable for any Job that asks a question.
     pub budget_remaining: crate::fleet::job::Remaining,
-    /// What the resumed turn spent, when one ran.
+    /// The resumed Drone's process group.
+    ///
+    /// **An answer starts a turn; it does not wait for one.** A resumed Drone is
+    /// detached exactly as a fresh one is, so what is reported is that it was
+    /// started rather than what it produced.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub spend: Option<crate::fleet::job::Spend>,
+    pub pgid: Option<i32>,
 }
 
 #[cfg(test)]

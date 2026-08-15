@@ -299,6 +299,11 @@ fn dispatch(
             // runs `armada manifest init` in a worktree and has to know which
             // binary it is (`ARCHITECTURE.md` §1.4).
             exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
+            // Required rather than optional, for the reason `app::build`
+            // requires it: without one, every Drone handle looks stale across a
+            // reboot, so Armada would either refuse to stop its own Drones
+            // forever or signal a recycled pid.
+            boot_id: armada_manifest::machine::boot_id(&run, cwd).ok_or_else(no_boot_id)?,
         };
         return match *fleet {
             args::FleetInvocation::Spawn(spawn) => {
@@ -308,7 +313,7 @@ fn dispatch(
                 all,
                 needs_attention,
                 ..
-            } => verbs::fleet::ls(&SystemClock, &place, all, needs_attention),
+            } => verbs::fleet::ls(&run, &SystemClock, &place, all, needs_attention),
             args::FleetInvocation::Board { job, exec, .. } => {
                 let output = verbs::fleet::board(&place, &job)?;
                 if exec {
@@ -324,7 +329,14 @@ fn dispatch(
                 keep_branch,
                 keep_worktree,
                 ..
-            } => verbs::fleet::kill(&run, &place, job.as_deref(), keep_branch, keep_worktree),
+            } => verbs::fleet::kill(
+                &run,
+                &SystemClock,
+                &place,
+                job.as_deref(),
+                keep_branch,
+                keep_worktree,
+            ),
             args::FleetInvocation::Answer { job, answer, .. } => {
                 verbs::fleet::answer(&run, &SystemClock, &place, &job, &answer)
             }
@@ -453,6 +465,25 @@ fn dispatch(
         | Invocation::Doctor { .. }
         | Invocation::Guild(_)
         | Invocation::Fleet(_) => unreachable!("machine-scoped, and handled above"),
+    }
+}
+
+/// The refusal when this machine cannot say which boot it is on.
+///
+/// **Required rather than degraded**, for the reason `app::build` states: a boot
+/// id is what tells a live process group from a recycled pid, so without one
+/// Armada would either refuse to stop its own Drones forever or signal a
+/// stranger's process. Refusing to run is better than either.
+fn no_boot_id() -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::Environment,
+        r#where: "boot_id".to_string(),
+        message: "this machine reports no boot id".to_string(),
+        next_action: Some(
+            "Armada needs `sysctl kern.bootsessionuuid` on darwin or \
+             /proc/sys/kernel/random/boot_id on Linux"
+                .to_string(),
+        ),
     }
 }
 

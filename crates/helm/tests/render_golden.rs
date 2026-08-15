@@ -35,7 +35,7 @@ use armada_core::envelope::{
     SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
-use armada_core::fleet::job::{Remaining, Spend};
+use armada_core::fleet::job::Remaining;
 use armada_core::fleet::workflow::{Budget, OnExhausted};
 use armada_core::fleet::JobState;
 use armada_core::id::WorkspaceId;
@@ -1018,12 +1018,11 @@ fn fleet_spawn_matches_its_fixture() {
             state: JobState::Running,
             classify_ms: Some(800),
             prepare_ms: 300,
-            spend: Some(Spend {
-                cost_usd: 0.17,
-                tokens: 59_261,
-                turns: 2,
-                api_ms: 2_956,
-            }),
+            // **A spawn reports the handle, not a spend.** It returns while the
+            // Drone is still working, so there is nothing to have spent yet —
+            // and the row that used to carry a duration for the turn now
+            // carries the placeholder, which the fixture already drew.
+            pgid: Some(4212),
         },
     )));
     assert_render("fleet-spawn", &output);

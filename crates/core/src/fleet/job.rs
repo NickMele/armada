@@ -66,6 +66,13 @@ pub struct Job {
     /// The verdict, once there is one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verdict: Option<Verdict>,
+    /// The process group the Drone was last started in, if one ever was.
+    ///
+    /// **The Job outlives it, which is the whole reason the two words exist.**
+    /// A handle here is a claim about a process that may already be gone, and
+    /// [`Handle::is_ours`] is what turns it back into a fact.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drone: Option<Handle>,
     /// When it was minted. Wall clock, RFC 3339, and only ever displayed.
     pub created_at: String,
     /// Wall clock milliseconds at minting, so run time is a subtraction rather
@@ -85,6 +92,44 @@ impl Job {
     /// one (`ARCHITECTURE.md` §1.1 makes the same distinction for run ids).
     pub const fn run_time_ms(&self, now_ms: u64) -> u64 {
         now_ms.saturating_sub(self.created_ms)
+    }
+}
+
+/// A Drone's process group, and the two stamps that make it provable.
+///
+/// **Both stamps, or the handle is a permanent phantom** — the same rule
+/// `armada manifest up` records a service's group under (PLAN.md §2.3.1).
+/// Without a start time a recycled pid is indistinguishable from a live Drone,
+/// and Armada would either signal a stranger's process or refuse to signal its
+/// own forever.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Handle {
+    /// The process group id. `setsid` makes the child its own group leader, so
+    /// this is its pid.
+    pub pgid: i32,
+    /// The boot this group was started in. A row from a previous boot names a
+    /// pid that has been recycled.
+    pub boot_id: String,
+    /// When that pid started, as the machine reports it.
+    pub started_at: Option<String>,
+}
+
+impl Handle {
+    /// Whether the group this names is provably still the Drone Armada started.
+    ///
+    /// **The decision is [`crate::reap::pgid_is_ours`] and is not re-derived
+    /// here**, because "nothing is killed that Armada cannot prove is its own"
+    /// is one rule and a second implementation of it is a second answer. A Drone
+    /// is the same shape as a service's process group, and it is checked by the
+    /// same function.
+    pub fn is_ours(&self, current_boot: &str, observed_start: Option<&str>) -> bool {
+        self.pgid > 0
+            && crate::reap::pgid_is_ours(
+                Some(&self.boot_id),
+                self.started_at.as_deref(),
+                current_boot,
+                observed_start,
+            )
     }
 }
 
@@ -176,6 +221,96 @@ pub fn remaining(budget: &Budget, spend: &Spend, run_time_ms: u64) -> Remaining 
         iterations: budget.iterations.saturating_sub(spend.turns),
         tokens: budget.tokens.saturating_sub(spend.tokens),
         wall_clock_ms: budget.wall_clock_ms.saturating_sub(run_time_ms),
+    }
+}
+
+/// What a Job is actually doing, worked out from the two things that can be
+/// looked at.
+///
+/// **This exists because a Drone runs detached and reports to nobody.** Nothing
+/// updates a Job's record when its turn ends — no hook, no daemon, no callback —
+/// so the state in the index is what was true when a verb last wrote it, and the
+/// truth is the transcript plus the process table. `armada fleet ls` renders
+/// this; `kill` and `answer` persist it.
+///
+/// **`STALLED` is the observer's word and could not be anything else**
+/// (PLAN.md §14.3): a Job is stalled when its Drone produced no transcript
+/// activity, which is the one condition a busy Drone cannot self-report.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Observed {
+    /// What the Job is doing.
+    pub state: JobState,
+    /// What it has spent — **the transcript's sum, not the record's copy.**
+    pub spend: Spend,
+    /// The ceiling it has reached, if it has reached one.
+    pub ceiling: Option<Ceiling>,
+}
+
+/// Work out what a Job is doing.
+///
+/// `spend` is the transcript's own sum, `finished` is how many turns it holds,
+/// `errored` says whether the last one failed, and `alive` is whether the
+/// recorded process group is provably still Armada's.
+pub fn observe(
+    record: &Job,
+    spend: Spend,
+    finished: usize,
+    errored: bool,
+    alive: bool,
+    run_time_ms: u64,
+) -> Observed {
+    let ceiling = exhausted(&record.budget, &spend, run_time_ms);
+    let state = observe_state(record.state, ceiling.is_some(), finished, errored, alive);
+    Observed {
+        state,
+        spend,
+        ceiling,
+    }
+}
+
+/// The state half of [`observe`], written out so every case is visible.
+///
+/// **The match is exhaustive rather than a chain of `if`s**, for the reason
+/// `ARCHITECTURE.md` §1.2 gives for the scheduler: a Job state added later is a
+/// compile error here rather than a case that silently falls through to
+/// `RUNNING`.
+fn observe_state(
+    recorded: JobState,
+    exhausted: bool,
+    finished: usize,
+    errored: bool,
+    alive: bool,
+) -> JobState {
+    match recorded {
+        // **A finished Job is not re-observed.** `DONE` and `ABORTED` are the
+        // two a verb wrote deliberately, and a killed Job whose transcript
+        // happens to hold a successful turn must not come back to life.
+        JobState::Done | JobState::Aborted => recorded,
+        _ if exhausted => {
+            // Exhaustion is a first-class outcome, and it ends at a person
+            // whatever the process table says (PLAN.md §14.3).
+            JobState::Paused
+        }
+        // **A live Drone is running, whatever the record last said.** This is
+        // the case that makes `answer` work: a Job that was `PAUSED` waiting on
+        // you is `RUNNING` again the moment its resumed Drone is alive.
+        _ if alive => JobState::Running,
+        // No live Drone, and a person is waiting on the other end of it. The
+        // record's word wins, because nothing about the process table
+        // contradicts it.
+        JobState::Paused | JobState::Blocked => recorded,
+        // **Nothing was ever produced and nothing is running.** The Drone died
+        // before it finished a turn — the observation `STALLED` exists for.
+        JobState::Queued | JobState::Running | JobState::Stalled if finished == 0 => {
+            JobState::Stalled
+        }
+        // A turn finished badly and nothing is running. Also stalled: the Job
+        // needs somebody to look, which is exactly what the word claims.
+        JobState::Queued | JobState::Running | JobState::Stalled if errored => JobState::Stalled,
+        // **A turn finished cleanly and no Drone is running: the ordinary
+        // resting state** (PLAN.md §14.1), not an error and not a stall. What
+        // advances it to the next step is M4's loop.
+        JobState::Queued | JobState::Running | JobState::Stalled => JobState::Running,
     }
 }
 
@@ -414,6 +549,200 @@ mod tests {
         assert_eq!(left.wall_clock_ms, 0);
     }
 
+    // ---------------------------------------------------------- the observation
+
+    fn watching(state: JobState) -> Job {
+        Job {
+            uuid: mint_uuid("seed"),
+            name: "rate-limit".to_string(),
+            workflow: "feature".to_string(),
+            confidence: Some(0.94),
+            repo: "api".to_string(),
+            repo_root: "~/code/api".to_string(),
+            worktree: "~/.armada/workspaces/api/rate-limit".to_string(),
+            branch: "armada/rate-limit".to_string(),
+            port_block: None,
+            budget: budget(),
+            state,
+            step: "implement".to_string(),
+            verdict: None,
+            drone: None,
+            created_at: "2026-08-09T14:02:11Z".to_string(),
+            created_ms: 0,
+            spend: Spend::default(),
+            task: "add rate limiting".to_string(),
+        }
+    }
+
+    fn seen(state: JobState, finished: usize, errored: bool, alive: bool) -> JobState {
+        observe(
+            &watching(state),
+            Spend {
+                turns: 1,
+                ..Spend::default()
+            },
+            finished,
+            errored,
+            alive,
+            60_000,
+        )
+        .state
+    }
+
+    /// **A live Drone is running, whatever the record last said.** This is what
+    /// makes `answer` work: a Job that was `PAUSED` waiting on you is `RUNNING`
+    /// again the moment its resumed Drone is alive.
+    #[test]
+    fn a_job_whose_drone_is_alive_is_running_whatever_the_record_said() {
+        for state in [
+            JobState::Queued,
+            JobState::Running,
+            JobState::Paused,
+            JobState::Stalled,
+            JobState::Blocked,
+        ] {
+            assert_eq!(
+                seen(state, 1, false, true),
+                JobState::Running,
+                "{state} with a live Drone"
+            );
+        }
+    }
+
+    /// **`STALLED` is the observation nothing else can make**: no live Drone and
+    /// nothing in the transcript. A Drone that died before finishing a turn is
+    /// the case, and it is the one a busy Drone could never report about itself.
+    #[test]
+    fn a_drone_that_died_before_finishing_anything_is_a_stall() {
+        for state in [JobState::Queued, JobState::Running, JobState::Stalled] {
+            assert_eq!(seen(state, 0, false, false), JobState::Stalled, "{state}");
+        }
+    }
+
+    /// A turn that finished badly, with nothing running, needs somebody to look
+    /// — which is exactly what the word claims.
+    #[test]
+    fn a_turn_that_ended_in_an_error_leaves_the_job_stalled() {
+        assert_eq!(seen(JobState::Running, 1, true, false), JobState::Stalled);
+    }
+
+    /// **A Job with no live Drone is the ordinary resting state, not an error**
+    /// (PLAN.md §14.1). It is what you have after a turn ends, after a crash and
+    /// after a reboot, and reporting it as a failure would make the common case
+    /// look broken.
+    #[test]
+    fn a_finished_turn_with_no_live_drone_is_the_ordinary_resting_state() {
+        assert_eq!(seen(JobState::Running, 1, false, false), JobState::Running);
+        assert_eq!(seen(JobState::Queued, 2, false, false), JobState::Running);
+    }
+
+    /// A person is waiting on the other end of a `PAUSED` or `BLOCKED` Job, and
+    /// nothing about an idle process table contradicts that.
+    #[test]
+    fn a_job_waiting_on_a_person_stays_waiting_when_nothing_is_running() {
+        assert_eq!(seen(JobState::Paused, 1, false, false), JobState::Paused);
+        assert_eq!(seen(JobState::Blocked, 1, false, false), JobState::Blocked);
+    }
+
+    /// **A killed Job does not come back to life.** Its transcript still holds a
+    /// successful turn, and re-observing it as `RUNNING` would resurrect
+    /// something a person deliberately ended.
+    #[test]
+    fn a_job_that_was_ended_deliberately_is_never_re_observed() {
+        for state in [JobState::Done, JobState::Aborted] {
+            for alive in [true, false] {
+                assert_eq!(seen(state, 1, false, alive), state, "{state} alive={alive}");
+            }
+        }
+    }
+
+    /// **Exhaustion ends at a person whatever the process table says**
+    /// (PLAN.md §14.3) — including while the Drone is still going, which is the
+    /// case the ceiling exists to stop.
+    #[test]
+    fn a_job_past_its_ceiling_is_paused_even_with_a_live_drone() {
+        let observed = observe(
+            &watching(JobState::Running),
+            Spend {
+                tokens: 400_000,
+                ..Spend::default()
+            },
+            1,
+            false,
+            true,
+            60_000,
+        );
+        assert_eq!(observed.state, JobState::Paused);
+        assert_eq!(observed.ceiling, Some(Ceiling::Tokens));
+    }
+
+    /// **The spend is the transcript's, not the record's.** Nothing adds it up
+    /// twice, which is what stops a Job's cost drifting from what it actually
+    /// cost.
+    #[test]
+    fn the_observed_spend_is_the_one_that_was_handed_in() {
+        let mut record = watching(JobState::Running);
+        record.spend = Spend {
+            cost_usd: 99.0,
+            ..Spend::default()
+        };
+        let transcript = Spend {
+            cost_usd: 2.10,
+            tokens: 1_000,
+            turns: 2,
+            api_ms: 30,
+        };
+        let observed = observe(&record, transcript, 1, false, true, 1_000);
+        assert_eq!(observed.spend, transcript, "the record's copy won");
+    }
+
+    // ------------------------------------------------------------- the handle
+
+    /// **Nothing is signalled that Armada cannot prove is its own**, and the
+    /// proof is the same function a service's process group is checked with —
+    /// one rule, one implementation.
+    #[test]
+    fn a_handle_is_only_ours_when_both_stamps_agree() {
+        let handle = Handle {
+            pgid: 4212,
+            boot_id: "boot-1".to_string(),
+            started_at: Some("Sat Aug  9 14:02:11 2026".to_string()),
+        };
+        assert!(handle.is_ours("boot-1", Some("Sat Aug  9 14:02:11 2026")));
+        // A different boot: that pid has been recycled.
+        assert!(!handle.is_ours("boot-2", Some("Sat Aug  9 14:02:11 2026")));
+        // A different start time: same pid, different process.
+        assert!(!handle.is_ours("boot-1", Some("Sun Aug 10 09:00:00 2026")));
+        // Gone.
+        assert!(!handle.is_ours("boot-1", None));
+    }
+
+    /// **A pgid of zero is not a pgid**: `killpg(0, …)` signals the caller's own
+    /// group, so a handle carrying one would have `armada fleet kill` send
+    /// SIGTERM to Armada itself and everything sharing its foreground group.
+    #[test]
+    fn a_handle_with_no_group_is_never_ours() {
+        let handle = Handle {
+            pgid: 0,
+            boot_id: "boot-1".to_string(),
+            started_at: Some("t".to_string()),
+        };
+        assert!(!handle.is_ours("boot-1", Some("t")));
+    }
+
+    /// A handle with no start time cannot be proved, so it is never signalled —
+    /// the same conservative answer `reap::pgid_is_ours` gives for a row written
+    /// before those columns existed.
+    #[test]
+    fn a_handle_that_was_never_stamped_is_never_ours() {
+        let handle = Handle {
+            pgid: 4212,
+            boot_id: "boot-1".to_string(),
+            started_at: None,
+        };
+        assert!(!handle.is_ours("boot-1", Some("t")));
+    }
+
     /// Run time is wall clock, because a Job outlives a boot and a monotonic
     /// reading does not.
     #[test]
@@ -432,6 +761,7 @@ mod tests {
             state: JobState::Running,
             step: "implement".to_string(),
             verdict: None,
+            drone: None,
             created_at: "2026-08-09T14:02:11Z".to_string(),
             created_ms: 1_000_000,
             spend: Spend::default(),
@@ -463,6 +793,7 @@ mod tests {
             state: JobState::Blocked,
             step: "reproduce".to_string(),
             verdict: Some(Verdict::Blocked),
+            drone: None,
             created_at: "2026-08-09T14:02:11Z".to_string(),
             created_ms: 1_000_000,
             spend: Spend {

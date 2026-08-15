@@ -1,17 +1,30 @@
-//! Starting a Drone, and asking the cheap model what a task is.
+//! Starting a Drone, watching one, and stopping one.
 //!
-//! Both are subprocesses reached through `ctx.run`, which is what makes the argv
-//! assertable and what makes **no test spawn a real session or spend a token**
-//! (PHASES.md §8.5) possible at all: a fake returns recorded `stream-json` and
-//! the assertion is on the vector Fleet built.
+//! **A Drone runs detached and Armada does not wait for it.** That is the whole
+//! purpose of Fleet — five Jobs at once with one thing to watch — and it is the
+//! shape `armada manifest up` already gives a `command` service: `setsid` so the
+//! child is its own process group, a real log file rather than a pipe so it
+//! survives the parent, the handle dropped without a `wait`, and the group
+//! recorded as owned so `armada manifest clean` reclaims it.
 //!
-//! [`armada_core::fleet::drone`] builds those vectors. This module runs them and
-//! classifies what came back.
+//! **Reusing that shape is the point rather than a convenience.** An orphaned
+//! Drone — Armada died, the Drone did not — is then reaped by the same pass that
+//! reaps an orphaned service, and *"nothing is killed that Armada cannot prove
+//! is its own"* stays one rule with one implementation. A second mechanism for
+//! Drones would be a second set of answers to the recycled-pid question, and
+//! that question has a wrong answer that sends a real SIGKILL to a stranger.
+//!
+//! Classification is the one call here that still blocks, and it should: it is
+//! one turn of the cheapest model, and its answer is what decides whether there
+//! is a Job at all.
 
 use armada_core::ctx::{Run, RunRequest, SpawnErrorKind, StdioMode};
 use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::fleet::classify::{self, Classification};
-use armada_core::fleet::drone::{self, Turn};
+use armada_core::fleet::drone::{self, Reading};
+use armada_core::fleet::job::Handle;
+use armada_manifest::process::{self, ProcessGroup};
+use armada_manifest::{machine, posix};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::Duration;
@@ -76,85 +89,123 @@ pub fn classify(run: &impl Run, cwd: &Path, task: &str) -> Result<Classification
     classify::parse(&output.stdout)
 }
 
-/// Run one bounded headless turn and read its ledger.
+/// Start a Drone **detached**, and return the group it was given.
 ///
-/// **The deadline is the workflow's wall clock**, so a Drone cannot outlive the
-/// ceiling it was given. A turn that hits it is [`Ended::Timeout`] — an outcome
-/// the Job records, never a crash (PLAN.md §14.3).
-pub fn turn(
+/// `stream` is where its `stream-json` goes — the Job's transcript, and
+/// therefore its ledger. It is deliberately outside the worktree, so that
+/// `armada fleet kill` can drop the tree and still leave the record of what
+/// happened (`commands/fleet/kill.md`: the transcript is not deleted).
+///
+/// **This does not go through `ctx.run`, and that is not a hole in the seam.**
+/// `Run::call` runs a child to completion by definition; a Drone that ran to
+/// completion is the bug this function exists to fix. The argv is still built by
+/// the pure [`armada_core::fleet::drone`] and asserted there, and the
+/// integration suite starts a harmless stub that records the vector it was
+/// actually handed — which is a stronger assertion than a fake, because it is
+/// what `execve` received.
+pub fn start(
     run: &impl Run,
     cwd: &Path,
+    stream: &Path,
     argv: Vec<String>,
     env: BTreeMap<String, String>,
-    deadline: Duration,
-) -> Result<Ended, ArmadaError> {
-    let output = run
-        .call(
-            &RunRequest::new(argv, cwd.to_path_buf())
-                .env(env)
-                // Captured, because the ledger is in the stream. A Drone's own
-                // transcript is written by Claude Code under
-                // `~/.claude/projects/`, so nothing is lost by not inheriting.
-                .stdio(StdioMode::Capture)
-                .timeout(deadline),
-        )
-        .map_err(|e| match e.kind {
-            SpawnErrorKind::NotFound => drone::not_on_path(),
-            _ => ArmadaError {
-                class: ErrClass::Environment,
-                r#where: "drone".to_string(),
-                message: format!("the Drone would not start: {}", e.message),
-                next_action: Some("check `claude` runs, then retry unchanged".to_string()),
-            },
-        })?;
+    boot_id: &str,
+) -> Result<Handle, ArmadaError> {
+    let request = RunRequest::new(argv, cwd.to_path_buf())
+        .env(env)
+        // **A real file, not a pipe.** The Drone outlives this process, and a
+        // captured stream would leave Armada holding the read end of a pipe it
+        // is about to drop — the first write after that is `EPIPE`, which kills
+        // the Drone moments after `spawn` reported it started. It is also what
+        // makes the transcript readable by `armada fleet ls` and by a person.
+        .stdio(StdioMode::Log(stream.to_path_buf()));
 
-    // **Read before judging.** A turn that was killed at its deadline still
-    // spent what it spent, and a Job that lost its ledger because the process
-    // was stopped would under-report every ceiling from then on.
-    let ledger = drone::ledger(&output.stdout);
-    if output.timed_out {
-        return Ok(Ended::Timeout(ledger));
-    }
-    match ledger {
-        Some(turn) => Ok(Ended::Turn(Box::new(turn))),
-        None => Ok(Ended::Died {
-            code: output.code,
-            stderr: output.stderr.lines().next().unwrap_or("").to_string(),
-        }),
-    }
+    let group = ProcessGroup::spawn(&request).map_err(|e| match e.kind {
+        SpawnErrorKind::NotFound => drone::not_on_path(),
+        _ => ArmadaError {
+            class: ErrClass::Environment,
+            r#where: "drone".to_string(),
+            message: format!("the Drone would not start: {}", e.message),
+            next_action: Some("check `claude` runs, then retry unchanged".to_string()),
+        },
+    })?;
+
+    let pgid = group.pgid();
+    // **The handle is dropped and the child is not waited on**, which is the one
+    // place that is correct: a Drone is meant to outlive this process. `setsid`
+    // has already put it in its own session, so it is reparented to init, which
+    // reaps it — the zombie rule `docs/traps.md` states applies to children
+    // Armada keeps.
+    drop(group);
+
+    Ok(Handle {
+        pgid,
+        boot_id: boot_id.to_string(),
+        // Sampled after the spawn rather than remembered from it, because this
+        // is the value that will be compared later and it has to be the one the
+        // machine reports rather than the one Armada guessed.
+        started_at: machine::process_start_at(run, cwd, pgid),
+    })
 }
 
-/// How a turn ended.
+/// A Job's transcript, read.
 ///
-/// **Three outcomes and none of them is an `Err`.** A Drone that died is a fact
-/// about a process, and the Job survives it — which is the whole distinction the
-/// two words exist to draw (PLAN.md §14.1). An `Err` here would mean `spawn`
-/// reported failure for a Job that is on disk, has a worktree, and can be
-/// boarded.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Ended {
-    /// It finished a turn and reported its ledger.
-    Turn(Box<Turn>),
-    /// Armada's deadline elapsed. The ledger is whatever the turn had emitted.
-    Timeout(Option<Turn>),
-    /// The process ended without a `result` event.
-    Died {
-        /// Its exit code, when it had one.
-        code: Option<i32>,
-        /// The first line it said on the way out.
-        stderr: String,
-    },
+/// **An absent file is a Drone that has not written anything yet**, which is
+/// the ordinary state a moment after `spawn` returns — not a failure.
+pub fn transcript(stream: &Path) -> Reading {
+    drone::read(&std::fs::read_to_string(stream).unwrap_or_default())
 }
 
-impl Ended {
-    /// The ledger, whichever way it ended.
-    pub fn spend(&self) -> armada_core::fleet::job::Spend {
-        match self {
-            Ended::Turn(turn) => turn.spend,
-            Ended::Timeout(Some(turn)) => turn.spend,
-            Ended::Timeout(None) | Ended::Died { .. } => armada_core::fleet::job::Spend::default(),
-        }
+/// Whether this Drone's group is provably still running.
+///
+/// **One `ps` per live Job, and only for a Job that could still be running.**
+/// The decision itself is [`Handle::is_ours`], which is
+/// `armada_core::reap::pgid_is_ours` — the same function that decides whether
+/// `clean` may signal a service's group.
+pub fn alive(run: &impl Run, cwd: &Path, handle: Option<&Handle>, boot_id: &str) -> bool {
+    let Some(handle) = handle else {
+        return false;
+    };
+    let observed = machine::process_start_at(run, cwd, handle.pgid);
+    handle.is_ours(boot_id, observed.as_deref())
+}
+
+/// Stop a Drone: SIGTERM, a grace period, then SIGKILL.
+///
+/// **Nothing is signalled that Armada cannot prove is its own.** A handle from a
+/// previous boot, or one whose pid now has a different start time, names a
+/// recycled pid rather than a Drone — so nothing is sent and `false` is
+/// returned.
+///
+/// This runs **before** `armada manifest clean` in `armada fleet kill`: a live
+/// Drone mid-`docker compose up` would otherwise race the teardown of the very
+/// resources it is creating, and lose.
+pub fn stop(run: &impl Run, cwd: &Path, handle: Option<&Handle>, boot_id: &str) -> Stopped {
+    let Some(handle) = handle else {
+        return Stopped::NothingToStop;
+    };
+    if !alive(run, cwd, Some(handle), boot_id) {
+        return Stopped::NothingToStop;
     }
+    let report = posix::stop_group(handle.pgid, process::GRACE);
+    match (report.existed, report.gone) {
+        (true, true) => Stopped::Stopped,
+        // Uninterruptible or unreachable after SIGKILL. Saying nothing about it
+        // is the silence this whole layer is written against.
+        (true, false) => Stopped::Survived,
+        (false, _) => Stopped::NothingToStop,
+    }
+}
+
+/// What [`stop`] managed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stopped {
+    /// There was no group to signal, or it was not provably Armada's.
+    NothingToStop,
+    /// It existed and it is gone.
+    Stopped,
+    /// It was still there after SIGTERM, the grace period and SIGKILL.
+    Survived,
 }
 
 #[cfg(test)]
@@ -188,135 +239,6 @@ mod tests {
             self.seen.borrow_mut().push(request.clone());
             Ok(self.output.clone())
         }
-    }
-
-    const RECORDED: &str = r#"{"type":"system","subtype":"init"}
-{"type":"result","subtype":"success","is_error":false,"num_turns":2,"duration_api_ms":2956,"total_cost_usd":0.1724735,"stop_reason":"end_turn","usage":{"input_tokens":4,"output_tokens":85,"cache_creation_input_tokens":14815,"cache_read_input_tokens":44357}}"#;
-
-    /// **The argv PHASES.md §8.5 names, as it actually reaches the seam.** The
-    /// pure builder is asserted in `armada-core`; this is the assertion that the
-    /// shell hands that vector over unmodified.
-    #[test]
-    fn a_turn_is_run_with_the_argv_fleet_built_and_nothing_added() {
-        let run = FakeRun::answering(RECORDED);
-        let uuid = "15bfa340-33b1-4f81-bd7f-688f0f01dbb0";
-        turn(
-            &run,
-            Path::new("/w/rate-limit"),
-            drone::spawn_argv(uuid, "implement it"),
-            job_env("rate-limit", uuid),
-            Duration::from_secs(60),
-        )
-        .unwrap();
-
-        let request = &run.seen.borrow()[0];
-        assert_eq!(
-            request.argv,
-            [
-                "claude",
-                "--session-id",
-                uuid,
-                "--print",
-                "--output-format",
-                "stream-json",
-                "implement it",
-            ]
-        );
-        assert_eq!(request.cwd, Path::new("/w/rate-limit"));
-        assert_eq!(request.timeout, Some(Duration::from_secs(60)));
-    }
-
-    /// The Job's identity reaches its children, because a `Stop` hook that wants
-    /// to raise an inbox entry has nowhere else to learn which Job stopped.
-    #[test]
-    fn a_drone_is_told_which_job_it_is() {
-        let run = FakeRun::answering(RECORDED);
-        turn(
-            &run,
-            Path::new("/w"),
-            drone::spawn_argv("u", "go"),
-            job_env("rate-limit", "u"),
-            Duration::from_secs(1),
-        )
-        .unwrap();
-        let env = &run.seen.borrow()[0].env;
-        assert_eq!(env.get("ARMADA_JOB").unwrap(), "rate-limit");
-        assert_eq!(env.get("ARMADA_JOB_UUID").unwrap(), "u");
-    }
-
-    #[test]
-    fn a_finished_turn_carries_the_ledger_it_reported() {
-        let run = FakeRun::answering(RECORDED);
-        let ended = turn(
-            &run,
-            Path::new("/w"),
-            drone::spawn_argv("u", "go"),
-            BTreeMap::new(),
-            Duration::from_secs(1),
-        )
-        .unwrap();
-        assert_eq!(ended.spend().turns, 2);
-        assert!(matches!(ended, Ended::Turn(_)));
-    }
-
-    /// **A Drone that died is not an error.** The Job is on disk, has a
-    /// worktree, and can be boarded — reporting a failure would say the opposite
-    /// of what the two words exist to distinguish.
-    #[test]
-    fn a_drone_that_died_is_an_outcome_rather_than_a_failure() {
-        let run = FakeRun {
-            seen: RefCell::new(Vec::new()),
-            output: RunOutput {
-                code: Some(1),
-                signal: None,
-                stdout: String::new(),
-                stderr: "credit balance too low\n".to_string(),
-                timed_out: false,
-            },
-        };
-        let ended = turn(
-            &run,
-            Path::new("/w"),
-            drone::spawn_argv("u", "go"),
-            BTreeMap::new(),
-            Duration::from_secs(1),
-        )
-        .expect("a dead Drone is reported, not raised");
-        assert_eq!(
-            ended,
-            Ended::Died {
-                code: Some(1),
-                stderr: "credit balance too low".to_string(),
-            }
-        );
-        assert_eq!(ended.spend(), armada_core::fleet::job::Spend::default());
-    }
-
-    /// **A turn killed at its deadline still spent what it spent.** A Job that
-    /// lost its ledger because the process was stopped would under-report every
-    /// ceiling from then on.
-    #[test]
-    fn a_turn_that_hit_its_deadline_keeps_the_ledger_it_had_already_emitted() {
-        let run = FakeRun {
-            seen: RefCell::new(Vec::new()),
-            output: RunOutput {
-                code: None,
-                signal: Some(9),
-                stdout: RECORDED.to_string(),
-                stderr: String::new(),
-                timed_out: true,
-            },
-        };
-        let ended = turn(
-            &run,
-            Path::new("/w"),
-            drone::spawn_argv("u", "go"),
-            BTreeMap::new(),
-            Duration::from_secs(1),
-        )
-        .unwrap();
-        assert!(matches!(ended, Ended::Timeout(Some(_))));
-        assert_eq!(ended.spend().turns, 2, "the spend survived the kill");
     }
 
     /// The pinned model reaches the seam, on every spawn.
@@ -384,19 +306,193 @@ mod tests {
                 })
             }
         }
-        for error in [
-            classify(&Missing, Path::new("/code/api"), "x").unwrap_err(),
-            turn(
-                &Missing,
-                Path::new("/w"),
-                drone::spawn_argv("u", "go"),
-                BTreeMap::new(),
-                Duration::from_secs(1),
-            )
-            .unwrap_err(),
-        ] {
-            assert_eq!(error.class, ErrClass::Environment);
-            assert_eq!(error.class.exit_code(), 6);
+        let error = classify(&Missing, Path::new("/code/api"), "x").unwrap_err();
+        assert_eq!(error.class, ErrClass::Environment);
+        assert_eq!(error.class.exit_code(), 6);
+    }
+
+    /// **A real detached child, because the claim is about a real process.**
+    /// `sh -c 'sleep 60'` is the same harmless child `owned_processes.rs` uses:
+    /// it costs nothing, it spends no token, and it is the only honest way to
+    /// assert that a group was started and is still there afterwards.
+    #[test]
+    fn a_started_drone_is_its_own_group_and_outlives_the_call() {
+        let scratch = tempfile::tempdir().unwrap();
+        let stream = scratch.path().join("jobs/u.stream.jsonl");
+        let boot = machine::boot_id(&armada_manifest::process::RealRun, scratch.path())
+            .expect("this machine reports a boot id");
+
+        let handle = start(
+            &armada_manifest::process::RealRun,
+            scratch.path(),
+            &stream,
+            vec!["sh".to_string(), "-c".to_string(), "sleep 60".to_string()],
+            BTreeMap::new(),
+            &boot,
+        )
+        .expect("sh runs");
+
+        assert!(handle.pgid > 0, "the Drone was not detached");
+        assert!(
+            handle.started_at.is_some(),
+            "without a start time the handle can never be proved, so it could \
+             never be signalled"
+        );
+        assert!(
+            alive(
+                &armada_manifest::process::RealRun,
+                scratch.path(),
+                Some(&handle),
+                &boot
+            ),
+            "the Drone did not outlive the call that started it"
+        );
+
+        // And it stops, which is what `armada fleet kill` does first.
+        assert_eq!(
+            stop(
+                &armada_manifest::process::RealRun,
+                scratch.path(),
+                Some(&handle),
+                &boot
+            ),
+            Stopped::Stopped
+        );
+
+        // **The group is empty, and the pid is a zombie. Both are true, and they
+        // are different questions.** `stop_group` asks about the *group*, which
+        // has nobody left in it — so a second stop finds nothing, which is the
+        // assertion that proves the Drone really died. `ps` asks about the
+        // *pid*, and a signalled child stays a zombie until somebody reaps it,
+        // so `alive` still says yes inside the process that started it.
+        //
+        // It says no to the next `armada` invocation, which is the only caller
+        // that ever asks: by then this process has exited and init has reaped
+        // the zombie. Written out because an assertion made the obvious way
+        // (`!alive(…)`) fails here for a reason that looks like a bug in `stop`
+        // and is not. Recorded in `docs/traps.md`.
+        assert_eq!(
+            stop(
+                &armada_manifest::process::RealRun,
+                scratch.path(),
+                Some(&handle),
+                &boot
+            ),
+            Stopped::NothingToStop,
+            "the group still had somebody in it"
+        );
+    }
+
+    /// **The stream file is created for the Drone, not by it.** A log under a
+    /// directory that does not exist yet is the ordinary case on a machine's
+    /// first spawn, and a spawn that failed on it would be a spawn that never
+    /// worked once.
+    #[test]
+    fn the_transcript_is_written_where_it_was_told_to_be() {
+        let scratch = tempfile::tempdir().unwrap();
+        let stream = scratch.path().join("jobs/u.stream.jsonl");
+        let boot = machine::boot_id(&armada_manifest::process::RealRun, scratch.path()).unwrap();
+
+        // An absent transcript reads as a Drone that has written nothing yet.
+        assert!(transcript(&stream).turns.is_empty());
+
+        start(
+            &armada_manifest::process::RealRun,
+            scratch.path(),
+            &stream,
+            vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "printf '%s\\n' '{\"type\":\"result\",\"num_turns\":2}'".to_string(),
+            ],
+            BTreeMap::new(),
+            &boot,
+        )
+        .expect("sh runs");
+
+        // The child is detached, so give it a moment to write and exit. Polling
+        // rather than sleeping a fixed span: a fixed one is either flaky or slow.
+        for _ in 0..200 {
+            if transcript(&stream).turns.len() == 1 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
         }
+        let reading = transcript(&stream);
+        assert_eq!(
+            reading.turns.len(),
+            1,
+            "the Drone's stream was not captured"
+        );
+        assert_eq!(reading.spend.turns, 2);
+    }
+
+    /// **Nothing is signalled that Armada cannot prove is its own.** A handle
+    /// from another boot names a recycled pid, and a `kill` that trusted it
+    /// would send a real signal to a stranger's process.
+    #[test]
+    fn a_handle_from_another_boot_is_never_signalled() {
+        let scratch = tempfile::tempdir().unwrap();
+        let group = ProcessGroup::spawn(&RunRequest::new(
+            vec!["sh".to_string(), "-c".to_string(), "sleep 30".to_string()],
+            scratch.path().to_path_buf(),
+        ))
+        .expect("sh runs");
+        let pgid = group.pgid();
+        drop(group);
+
+        let stale = Handle {
+            pgid,
+            boot_id: "a-previous-boot".to_string(),
+            started_at: machine::process_start_at(
+                &armada_manifest::process::RealRun,
+                scratch.path(),
+                pgid,
+            ),
+        };
+        let boot = machine::boot_id(&armada_manifest::process::RealRun, scratch.path()).unwrap();
+
+        assert!(!alive(
+            &armada_manifest::process::RealRun,
+            scratch.path(),
+            Some(&stale),
+            &boot
+        ));
+        assert_eq!(
+            stop(
+                &armada_manifest::process::RealRun,
+                scratch.path(),
+                Some(&stale),
+                &boot
+            ),
+            Stopped::NothingToStop
+        );
+        // **And it is still there**, which is the assertion that matters: a
+        // regression here sends a real SIGKILL to something Armada does not own.
+        assert!(
+            posix::stop_group(pgid, Duration::from_millis(1)).existed,
+            "the process was killed despite the stale stamp"
+        );
+    }
+
+    #[test]
+    fn a_job_that_never_started_a_drone_has_nothing_to_stop() {
+        let scratch = tempfile::tempdir().unwrap();
+        let boot = "boot".to_string();
+        assert!(!alive(
+            &armada_manifest::process::RealRun,
+            scratch.path(),
+            None,
+            &boot
+        ));
+        assert_eq!(
+            stop(
+                &armada_manifest::process::RealRun,
+                scratch.path(),
+                None,
+                &boot
+            ),
+            Stopped::NothingToStop
+        );
     }
 }
