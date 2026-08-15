@@ -316,9 +316,46 @@ fn job_summary(style: Style, state: JobState, facts: &[String]) -> String {
 /// it, on the same reasoning that gives `armada doctor` its fix lines: a report
 /// that names a problem without the command that fixes it sends the reader to
 /// the documentation.
+///
+/// # `--dry-run` says `WOULD`, and it is the same table
+///
+/// **A preview that reads as a receipt is the worst defect a preview can have.**
+/// This function used to render a dry run and a real spawn identically —
+/// `CREATED worktree <path>` for a directory that does not exist, `STARTED
+/// drone job c099` for a process nobody started, and a `QUEUED … armada fleet
+/// board <name>` footer offering a command that refuses, because there is no
+/// Job. The run was correct; the report was not, and a reader had no way to tell
+/// the two apart. That is the one thing a dry run must never be ambiguous about.
+///
+/// So the three steps that did not happen say **`WOULD`**, in `Role::FlareOrange`
+/// — the word every other preview in this file already uses ([`init_dry`],
+/// [`clean_dry`], [`up_dry`]) rather than a fourth vocabulary for a fifth verb.
+/// The layout is untouched: same four columns, same four rows, same order, so a
+/// reader who knows the real table can read this one.
+///
+/// **The classify row is the exception, because it is the one step that really
+/// ran.** `--dry-run` still classifies — `commands/fleet/spawn.md` promises the
+/// preview reports the classification, and the workflow is the whole substance
+/// of the preview: one Haiku call is what stops a wrong workflow spending a
+/// whole Job budget. So that row keeps its past tense and its real elapsed time,
+/// which is also what makes the contrast legible: one thing happened, three
+/// would.
+///
+/// **And the footer offers no action that cannot be taken.** `armada fleet board`
+/// is gone, the `QUEUED` lead — a [`JobState`] for a Job with no record — is
+/// gone, and the line is the convention the other previews close on:
+/// `SKIPPED  <name>, dry run, nothing was spawned`.
 fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
     let mut table = Table::new(columns_for(progress::Shape::Spawn)).indent(2);
+
+    // **`SKIPPED` is the preview and `READY` is the spawn**, and they are the
+    // only two statuses `verbs::fleet::spawn` returns — the dry-run arm and the
+    // last line of the function. Read from the envelope rather than from a flag
+    // threaded down beside it, because the envelope is what a `--json` reader
+    // has to tell them apart by too, and a second signal is a second thing that
+    // can disagree. `a_preview_and_a_spawn_are_told_apart_by_status` pins it.
+    let dry = envelope.status == Status::Skipped;
 
     // Below the threshold Helm confirms at (PLAN.md §15.4). Fleet at the CLI has
     // nobody to ask, so it says so loudly instead.
@@ -327,6 +364,8 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         .is_some_and(|c| c < armada_core::fleet::classify::CONFIDENT);
 
     let (classified, role) = spawn_classified(&data.workflow, data.confidence);
+    // Past tense even under `--dry-run`: the workflow really is settled, either
+    // by a call that really was made or by the `--workflow` you passed.
     table = table.row(vec![
         token(progress::SpawnStep::Classify.done(), role),
         Cell::plain(progress::SpawnStep::Classify.id()),
@@ -334,13 +373,19 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         time_cell(data.classify_ms),
     ]);
     table = table.row(vec![
-        token(progress::SpawnStep::Worktree.done(), Role::BeaconGreen),
+        done_or_would(dry, progress::SpawnStep::Worktree.done(), Role::BeaconGreen),
         Cell::plain(progress::SpawnStep::Worktree.id()),
         detail_cell(style, Some(&data.worktree)),
-        time_cell(Some(data.prepare_ms)),
+        // Nothing was prepared, so no interval is reported. `0.0s` next to
+        // `WOULD` is a measurement of work that did not happen.
+        time_cell(match dry {
+            true => None,
+            false => Some(data.prepare_ms),
+        }),
     ]);
     table = table.row(vec![
-        token(
+        done_or_would(
+            dry,
             progress::SpawnStep::Ports.done(),
             match data.port_block {
                 Some(_) => Role::BeaconGreen,
@@ -357,29 +402,49 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         time_cell(None),
     ]);
     table = table.row(vec![
-        token(progress::SpawnStep::Drone.done(), Role::BeaconGreen),
+        done_or_would(dry, progress::SpawnStep::Drone.done(), Role::BeaconGreen),
         Cell::plain(progress::SpawnStep::Drone.id()),
         detail_cell(
             style,
-            Some(&format!(
-                "job {}, {} step",
-                armada_core::fleet::job::short(&data.uuid),
-                data.step
-            )),
+            Some(&match dry {
+                // **No job id in a preview.** The uuid is minted before the
+                // dry-run arm returns, but it is never saved — printing it
+                // hands the reader an id that resolves to nothing.
+                true => format!("{} step", data.step),
+                false => format!(
+                    "job {}, {} step",
+                    armada_core::fleet::job::short(&data.uuid),
+                    data.step
+                ),
+            }),
         ),
         time_cell(None),
     ]);
 
     let mut out = table.render(style, width);
     out.push('\n');
-    out.push_str(&job_summary(
-        style,
-        data.state,
-        &[
-            data.name.clone(),
-            format!("armada fleet board {} to take over", data.name),
-        ],
-    ));
+    out.push_str(&match dry {
+        true => summary(
+            style,
+            envelope.status,
+            &[
+                // The name it *would* take, which is the second thing worth
+                // previewing after the workflow — and the only place this table
+                // says it, now that the footer no longer offers to board it.
+                data.name.clone(),
+                "dry run".to_string(),
+                "nothing was spawned".to_string(),
+            ],
+        ),
+        false => job_summary(
+            style,
+            data.state,
+            &[
+                data.name.clone(),
+                format!("armada fleet board {} to take over", data.name),
+            ],
+        ),
+    });
     // **The warning goes under the verdict, where a fix line goes.** A guess is
     // the one thing about a spawn a reader has to act on, and it is worth a line
     // rather than a decimal in a column.
@@ -3071,6 +3136,27 @@ fn token(word: &str, role: Role) -> Cell {
     Cell::painted(word.to_uppercase(), role)
 }
 
+/// The word `WOULD`, and the one rule for when a status cell says it.
+///
+/// **There is one conditional token in this file and this is it.** `init`, `up`
+/// and `clean` each spell `token("would", Role::FlangeOrange)` inline in their
+/// own preview renderer (`Role::FlareOrange`), which was tolerable while a
+/// preview had a table shape
+/// of its own to write anyway. `spawn` shares one table between the preview and
+/// the real answer, so the choice happens per row — and a per-row choice typed
+/// out four times is four chances to leave one row in the past tense, which is
+/// the defect this exists to close.
+///
+/// A second conditional vocabulary would be worse than either: a reader who has
+/// learned that `WOULD` means "not yet" should not have to learn `PLANNED` for
+/// one verb.
+fn done_or_would(dry: bool, done: &'static str, role: Role) -> Cell {
+    match dry {
+        true => token("would", Role::FlareOrange),
+        false => token(done, role),
+    }
+}
+
 /// The columns a verb that draws a **live** table uses — the live one and the
 /// final one both.
 ///
@@ -3276,7 +3362,7 @@ fn init(envelope: &Envelope<InitData>, style: Style, width: usize) -> String {
         out.push('\n');
     }
 
-    out.push_str(&reaped(&data.reaped, style, width));
+    out.push_str(&reaped(&data.reaped, false, style, width));
     out.push_str(&summary(
         style,
         envelope.status,
@@ -3313,7 +3399,7 @@ fn init_dry(envelope: &Envelope<InitDryRun>, style: Style, width: usize) -> Stri
     if !table.is_empty() {
         out.push('\n');
     }
-    out.push_str(&reaped(&data.would_reap, style, width));
+    out.push_str(&reaped(&data.would_reap, true, style, width));
     out.push_str(&summary(
         style,
         envelope.status,
@@ -3899,7 +3985,7 @@ fn clean(envelope: &Envelope<CleanData>, style: Style, width: usize) -> String {
         out.push('\n');
     }
 
-    out.push_str(&reaped(&data.reaped, style, width));
+    out.push_str(&reaped(&data.reaped, false, style, width));
     // A zero is left out of the summary rather than printed: `0 skipped` is a
     // fact nobody was asking about, on the verb that most needs to read as calm.
     let mut facts = vec![format::count(data.results.len(), "workspace")];
@@ -4647,25 +4733,33 @@ fn commands(envelope: &Envelope<CommandsData>, style: Style, width: usize) -> St
 
 /// What a reap pass did. **Reported, never silent** — a tool that removes things
 /// without saying so is worse than one that does not remove them.
-fn reaped(plan: &ReapPlan, style: Style, width: usize) -> String {
+///
+/// **`dry` is the same distinction [`spawn`] draws, and it is here for the same
+/// reason.** [`init_dry`] renders `data.would_reap` through this function, so a
+/// preview of `armada manifest init` said `REAPED workspace <id>, directory
+/// gone` for a workspace still on disk — under a summary reading `dry run,
+/// nothing was changed`, which is the report contradicting itself in five lines.
+/// The rows a preview *keeps* rather than reclaims already read conditionally
+/// (`KEPT`, `UNSWEPT`), so only the reclaiming ones needed the word.
+fn reaped(plan: &ReapPlan, dry: bool, style: Style, width: usize) -> String {
     let mut table = Table::new(columns("reaped", "detail", false)).indent(2);
     for id in &plan.workspaces {
         table = table.row(vec![
-            token("reaped", Role::BeaconGreen),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain("workspace"),
             Cell::muted(format!("{id}, directory gone")),
         ]);
     }
     for target in &plan.resources {
         table = table.row(vec![
-            token("reaped", Role::BeaconGreen),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain(target.kind.to_string()),
             Cell::muted(format!("{}, {}", target.reference, target.workspace)),
         ]);
     }
     for lease in &plan.leases {
         table = table.row(vec![
-            token("reaped", Role::BeaconGreen),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain("lease"),
             Cell::muted(format!("{lease}, heartbeat cold")),
         ]);

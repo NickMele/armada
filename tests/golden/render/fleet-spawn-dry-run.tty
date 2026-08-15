@@ -1,0 +1,7 @@
+  [1m[38;2;156;163;175mSTATUS[0m      [1m[38;2;156;163;175mSTEP[0m      [1m[38;2;156;163;175mDETAIL[0m                           [1m[38;2;156;163;175mTIME[0m
+  [38;2;61;220;132mCLASSIFIED[0m  workflow  [38;2;156;163;175mfeature, confidence 0.91[0m         [38;2;156;163;175m0.8s[0m
+  [38;2;255;180;84mWOULD[0m       worktree  [38;2;156;163;175m~/.armada/workspaces/rate-limit[0m     [38;2;156;163;175m—[0m
+  [38;2;255;180;84mWOULD[0m       ports     [38;2;156;163;175m—[0m                                   [38;2;156;163;175m—[0m
+  [38;2;255;180;84mWOULD[0m       drone     [38;2;156;163;175mplan step[0m                           [38;2;156;163;175m—[0m
+
+[1m[38;2;156;163;175mSKIPPED[0m  [38;2;156;163;175mrate-limit · dry run · nothing was spawned[0m

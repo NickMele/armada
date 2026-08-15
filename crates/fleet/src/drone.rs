@@ -52,9 +52,28 @@ pub fn job_env(name: &str, uuid: &str) -> BTreeMap<String, String> {
 }
 
 /// Ask the cheap model what this task is (PLAN.md §14.2).
-pub fn classify(run: &impl Run, cwd: &Path, task: &str) -> Result<Classification, ArmadaError> {
+///
+/// **`tick` is called while the call is waiting, and that is what keeps a spawn
+/// from looking hung.** This is the longest single wait in the whole verb — a
+/// measured 20.6s for a one-line task, and 7.5s in the run that reported the
+/// defect — and it is the only one the caller cannot break into steps. So it
+/// goes through [`Run::call_with_tick`] rather than [`Run::call`], for the same
+/// reason `manifest init` and `manifest up` do: PLAN.md §4.3 puts anything that
+/// must happen *during* a long child in the loop that waits on it.
+///
+/// The caller decides what a tick means. `verbs::fleet::spawn` redraws its live
+/// table; a test passes `&mut || {}` and nothing is waiting on anything.
+pub fn classify(
+    run: &impl Run,
+    cwd: &Path,
+    task: &str,
+    tick: &mut dyn FnMut(),
+) -> Result<Classification, ArmadaError> {
     let output = run
-        .call(&RunRequest::new(classify::argv(task), cwd.to_path_buf()).timeout(CLASSIFY_TIMEOUT))
+        .call_with_tick(
+            &RunRequest::new(classify::argv(task), cwd.to_path_buf()).timeout(CLASSIFY_TIMEOUT),
+            tick,
+        )
         .map_err(|e| match e.kind {
             SpawnErrorKind::NotFound => drone::not_on_path(),
             _ => ArmadaError {
@@ -325,7 +344,13 @@ mod tests {
         let run = FakeRun::answering(
             r#"{"type":"result","result":"{\"workflow\":\"feature\",\"confidence\":0.94}"}"#,
         );
-        let classified = classify(&run, Path::new("/code/api"), "add rate limiting").unwrap();
+        let classified = classify(
+            &run,
+            Path::new("/code/api"),
+            "add rate limiting",
+            &mut || {},
+        )
+        .unwrap();
         assert_eq!(classified.workflow, "feature");
         assert_eq!(classified.confidence, Some(0.94));
 
@@ -348,7 +373,7 @@ mod tests {
                 timed_out: false,
             },
         };
-        let error = classify(&run, Path::new("/code/api"), "anything").unwrap_err();
+        let error = classify(&run, Path::new("/code/api"), "anything", &mut || {}).unwrap_err();
         assert_eq!(error.class, ErrClass::ToolFailed);
         assert!(error.next_action.unwrap().contains("--workflow"));
     }
@@ -365,7 +390,7 @@ mod tests {
                 timed_out: true,
             },
         };
-        let error = classify(&run, Path::new("/code/api"), "anything").unwrap_err();
+        let error = classify(&run, Path::new("/code/api"), "anything", &mut || {}).unwrap_err();
         assert_eq!(error.class, ErrClass::Timeout);
         assert_eq!(error.class.exit_code(), 4);
     }
@@ -384,7 +409,7 @@ mod tests {
                 })
             }
         }
-        let error = classify(&Missing, Path::new("/code/api"), "x").unwrap_err();
+        let error = classify(&Missing, Path::new("/code/api"), "x", &mut || {}).unwrap_err();
         assert_eq!(error.class, ErrClass::Environment);
         assert_eq!(error.class.exit_code(), 6);
     }

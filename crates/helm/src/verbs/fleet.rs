@@ -267,13 +267,73 @@ pub fn spawn<R: Run, C: Clock>(
     let repo_root = repository(run, place, options)?;
     let repo = home::repo_name(&repo_root);
 
+    // **All four rows from the first frame**, exactly as `check` plans its
+    // table by name rather than by count: a spawn stuck making a worktree
+    // should show which step that is and that three more are coming, not a
+    // number. None of them has a configured deadline, so none claims one —
+    // `render/live.rs` leaves that cell empty rather than printing `timeout 0s`.
+    //
+    // **Except under `--dry-run`, which plans the one step it takes.** A live
+    // table listing three steps a preview will never reach is the same untruth
+    // the final table used to tell, drawn a few hundred milliseconds earlier.
+    let planned: Vec<Planned<'_>> = match options.dry_run {
+        true => vec![Planned {
+            id: SpawnStep::Classify.id(),
+            timeout_ms: None,
+        }],
+        false => SpawnStep::ALL
+            .iter()
+            .map(|step| Planned {
+                id: step.id(),
+                timeout_ms: None,
+            })
+            .collect(),
+    };
+
     let classify_from = now.mono();
-    let (guessed, classify_ms) = classify(run, now, &repo_root, options)?;
+    // **The table opens before the classifying call, not after it.** Every other
+    // step of a spawn finishes in well under a second; classification is the
+    // whole of the wait — 7.5s in the run that reported this, a measured 20.6s
+    // for a one-line task — and until this it happened before there was any
+    // table, so the one part of a spawn a person waits through was the one part
+    // that reported nothing. `armada fleet spawn` looked hung and then printed
+    // everything at once, which is exactly what it looked like.
+    progress.begin(Shape::Spawn, &planned, classify_from);
+    progress.started(SpawnStep::Classify.id());
+    let (guessed, classify_ms) = classify(run, now, &repo_root, options, &mut || {
+        progress.tick(now.mono())
+    })?;
     let classify_to = now.mono();
+    progress.tick(classify_to);
+
+    // **The table is given back before anybody is asked, and taken again after.**
+    // `ask/select.rs` reserves an inline viewport on stderr of its own, and two
+    // of them on one stream is a corrupted screen — which is why this used to be
+    // solved by not opening the table until the interview was over. Closing it
+    // for the duration keeps that property without paying for it with silence on
+    // every confident spawn, which is nearly all of them.
+    let interviewing = !guessed.is_confident(settle_threshold(options));
+    if interviewing {
+        progress.finish();
+    }
     // Blocks on a person when the classification was a guess, which is why the
     // reading above it is taken before this line and not after: the time
     // somebody took to answer is not time spent classifying.
     let classification = settle_workflow(guessed, options, ask)?;
+    if interviewing {
+        // Reopened from the same starting reading, so the classify row still
+        // reports the interval the call took rather than restarting its clock.
+        progress.begin(Shape::Spawn, &planned, classify_from);
+        progress.started(SpawnStep::Classify.id());
+        progress.tick(classify_to);
+    }
+    let (classified, role) =
+        crate::render::spawn_classified(&classification.workflow, classification.confidence);
+    progress.finished(
+        SpawnStep::Classify.id(),
+        Reached::Word(SpawnStep::Classify.done(), role),
+        Some(&classified),
+    );
     let workflow = read_workflow(place, &classification.workflow)?;
     let budget = workflow::override_budget(workflow.budget, &options.budget)?;
 
@@ -341,30 +401,6 @@ pub fn spawn<R: Run, C: Clock>(
     // fail, and every one of those failures leaves a Job on disk rather than an
     // orphaned worktree holding a port block nobody can name.
     store.save(&record)?;
-
-    // **All four rows from the first frame**, exactly as `check` plans its
-    // table by name rather than by count: a spawn stuck making a worktree
-    // should show which step that is and that three more are coming, not a
-    // number. None of them has a configured deadline, so none claims one —
-    // `render/live.rs` leaves that cell empty rather than printing `timeout 0s`.
-    let planned: Vec<Planned<'_>> = SpawnStep::ALL
-        .iter()
-        .map(|step| Planned {
-            id: step.id(),
-            timeout_ms: None,
-        })
-        .collect();
-    progress.begin(Shape::Spawn, &planned, classify_from);
-    // Already done by the time the table can safely open, and reported with the
-    // interval it took rather than as a row that mysteriously starts complete.
-    progress.started(SpawnStep::Classify.id());
-    progress.tick(classify_to);
-    let (classified, role) = crate::render::spawn_classified(&record.workflow, record.confidence);
-    progress.finished(
-        SpawnStep::Classify.id(),
-        Reached::Word(SpawnStep::Classify.done(), role),
-        Some(&classified),
-    );
 
     let started = now.mono();
     progress.tick(started);
@@ -504,6 +540,7 @@ fn classify<R: Run, C: Clock>(
     now: &C,
     repo_root: &Path,
     options: &Spawn,
+    tick: &mut dyn FnMut(),
 ) -> Result<(Classification, Option<u64>), ArmadaError> {
     match &options.workflow {
         // **No call at all for an override.** Classification is one cheap call
@@ -513,10 +550,23 @@ fn classify<R: Run, C: Clock>(
         Some(named) => Ok((Classification::overridden(named), None)),
         None => {
             let started = now.mono();
-            let classified = drone::classify(run, repo_root, &options.task)?;
+            let classified = drone::classify(run, repo_root, &options.task, tick)?;
             Ok((classified, Some(now.mono().saturating_sub(started))))
         }
     }
+}
+
+/// The confidence this spawn settles at, and the one place it is decided.
+///
+/// **Read twice and therefore not typed twice.** [`settle_workflow`] uses it to
+/// decide whether to ask, and [`spawn`] uses it to decide whether to give the
+/// terminal back before it does — and a spawn that closed its live table for an
+/// interview that never happened, or held it open through one, would be the two
+/// halves disagreeing about a number.
+fn settle_threshold(options: &Spawn) -> f64 {
+    options
+        .confidence
+        .unwrap_or(armada_core::fleet::classify::CONFIDENT)
 }
 
 /// A guess, settled by a person — or refused.
@@ -544,10 +594,7 @@ fn settle_workflow(
     options: &Spawn,
     ask: Option<&mut dyn Ask>,
 ) -> Result<Classification, ArmadaError> {
-    let threshold = options
-        .confidence
-        .unwrap_or(armada_core::fleet::classify::CONFIDENT);
-    if guessed.is_confident(threshold) {
+    if guessed.is_confident(settle_threshold(options)) {
         return Ok(guessed);
     }
 

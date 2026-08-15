@@ -33,9 +33,9 @@ use armada_core::envelope::{
     ComponentsData, DispatchData, DoctorData, Envelope, Evidence, FailureData, FailuresData,
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData,
-    JobRow, MachineInitData, NoteRow, PortReport, Problem, Projection, Released, ResolvedSkillView,
-    ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync,
-    SyncItem, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
+    InitDryRun, JobRow, MachineInitData, NoteRow, PortReport, Problem, Projection, Released,
+    ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData,
+    StatusData, Sync, SyncItem, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -198,6 +198,83 @@ fn init_matches_its_fixture() {
         },
     )));
     assert_render("init", &output);
+}
+
+/// **A preview's reap rows say `WOULD` too, and the same table proves it.**
+///
+/// `init --dry-run` renders `data.would_reap` through the very function that
+/// renders a real `init`'s `data.reaped`, so it reported `REAPED workspace
+/// <id>, directory gone` for a workspace still on disk — under a summary
+/// reading `dry run, nothing was changed`. That is the `fleet spawn` defect
+/// again, three lines further down the same file: a preview and a receipt drawn
+/// by one function with one vocabulary.
+///
+/// The rows a reap *declines* to touch already read conditionally — `KEPT`,
+/// `UNSWEPT` — so those are asserted unchanged, which is what makes this a fix
+/// to the reclaiming rows rather than a rewording of the table.
+#[test]
+fn an_init_preview_would_reap_rather_than_having_reaped() {
+    let plan = ReapPlan {
+        workspaces: vec![WorkspaceId::from_stored("3d9cc7ba")],
+        leases: vec!["run/3d9cc7ba".to_string()],
+        skipped: vec!["docker unreachable".to_string()],
+        ..ReapPlan::default()
+    };
+
+    let render = |output: &Output| render::human(output, Style::plain(), Terminal::piped());
+
+    let previewed = render(&Output::InitDryRun(Box::new(Envelope::ok(
+        "init",
+        Some(workspace()),
+        Status::Ready,
+        InitDryRun {
+            would_claim: Some(block()),
+            would_run: vec!["pnpm install".to_string()],
+            would_reap: plan.clone(),
+        },
+    ))));
+    let done = render(&Output::Init(Box::new(Envelope::ok(
+        "init",
+        Some(workspace()),
+        Status::Ready,
+        InitData {
+            port_block: Some(block()),
+            claimed_at: "2026-08-09T14:02:11Z".to_string(),
+            ports: BTreeMap::from([("api".to_string(), 5460)]),
+            reaped: plan,
+            results: vec![ResultRow::new("api", Status::Ready)],
+        },
+    ))));
+
+    // **The status column, not the whole render.** `REAPED` is also the name of
+    // the second column, so a bare `contains` matches the header and passes on
+    // the broken output — which it did, first time.
+    let status_words = |text: &str| -> Vec<String> {
+        text.lines()
+            .filter(|line| line.starts_with("  "))
+            .filter_map(|line| line.split_whitespace().next().map(str::to_string))
+            .collect()
+    };
+
+    assert!(
+        status_words(&done).contains(&"REAPED".to_string()),
+        "a real reap stopped saying so:\n{done}"
+    );
+    assert!(
+        !status_words(&previewed).contains(&"REAPED".to_string()),
+        "a preview claimed a reap it did not perform:\n{previewed}"
+    );
+    assert!(
+        status_words(&previewed).contains(&"WOULD".to_string()),
+        "the preview's reap rows say nothing conditional:\n{previewed}"
+    );
+    // A row a reap declines to touch is already conditional in both, and stays
+    // spelled the way it was.
+    for kept in ["UNSWEPT", "docker unreachable"] {
+        assert!(previewed.contains(kept), "{previewed}");
+        assert!(done.contains(kept), "{done}");
+    }
+    assert!(previewed.contains("nothing was changed"));
 }
 
 /// `armada manifest up`: one service ready, one that never answered.
@@ -2168,6 +2245,156 @@ fn fleet_spawn_matches_its_fixture() {
         },
     )));
     assert_render("fleet-spawn", &output);
+}
+
+/// `armada fleet spawn --dry-run`, which must not read as a spawn that happened.
+///
+/// **The fixture beside it is the whole assertion.** `fleet-spawn.plain` and
+/// `fleet-spawn-dry-run.plain` are the same four rows in the same four columns,
+/// and the only thing separating them is the vocabulary — so a reader comparing
+/// the two files sees exactly what a reader comparing two terminals would.
+/// Before this, the two renders were byte-identical apart from the elapsed
+/// times: a preview said `CREATED worktree <path>` for a directory that does not
+/// exist and closed on `QUEUED … armada fleet board rate-limit`, an action that
+/// refuses because there is no Job to board.
+///
+/// **`WOULD` rather than a word of its own**, because `manifest init`, `manifest
+/// up` and `manifest clean` already say it and a second conditional vocabulary
+/// would be worse than either. The classify row keeps `CLASSIFIED` because it is
+/// the one step a preview really takes.
+#[test]
+fn fleet_spawn_dry_run_matches_its_fixture() {
+    let output = Output::Spawn(Box::new(Envelope::ok(
+        "fleet spawn",
+        None,
+        // The status the dry-run arm of `verbs::fleet::spawn` returns, and what
+        // the renderer reads to know this is a preview.
+        Status::Skipped,
+        SpawnData {
+            uuid: "8f2a1c40-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
+            name: "rate-limit".to_string(),
+            workflow: "feature".to_string(),
+            confidence: Some(0.91),
+            worktree: "~/.armada/workspaces/rate-limit".to_string(),
+            branch: "armada/rate-limit".to_string(),
+            // **No block, because none was claimed.** A preview does not run
+            // `armada manifest init`, so it does not know which span it would
+            // get — and inventing one would be the same defect in a new column.
+            port_block: None,
+            budget: Budget {
+                iterations: 20,
+                tokens: 600_000,
+                wall_clock_ms: 90 * 60 * 1_000,
+                on_exhausted: OnExhausted::NeedsHuman,
+            },
+            step: "plan".to_string(),
+            // Still `Queued`, because the record was built and never saved —
+            // which is why the footer leads with the envelope's `SKIPPED`
+            // instead. A `JobState` here would name the state of a Job that has
+            // no record.
+            state: JobState::Queued,
+            // Real, and the only real measurement on the table: the classifying
+            // call is the one step a dry run makes.
+            classify_ms: Some(800),
+            prepare_ms: 0,
+            pgid: None,
+        },
+    )));
+    assert_render("fleet-spawn-dry-run", &output);
+}
+
+/// **A preview and a spawn are told apart by the envelope's status, and by
+/// nothing else.**
+///
+/// `render::spawn` reads `Status::Skipped` to mean "this did not happen", which
+/// is safe for exactly as long as the dry-run arm is the only thing that returns
+/// it. Inverted — with both arms returning the same status — the two renders go
+/// back to being indistinguishable, which is the defect. So the pairing is
+/// asserted here rather than left as a comment: the real spawn's four rows say
+/// what was done, the preview's three say what would be, and neither text
+/// appears in the other.
+#[test]
+fn a_preview_and_a_spawn_are_told_apart_by_status() {
+    let spawn = |status: Status, state: JobState, block: Option<PortBlock>| {
+        render::human(
+            &Output::Spawn(Box::new(Envelope::ok(
+                "fleet spawn",
+                None,
+                status,
+                SpawnData {
+                    uuid: "8f2a1c40-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
+                    name: "rate-limit".to_string(),
+                    workflow: "feature".to_string(),
+                    confidence: Some(0.91),
+                    worktree: "~/.armada/workspaces/rate-limit".to_string(),
+                    branch: "armada/rate-limit".to_string(),
+                    port_block: block,
+                    budget: Budget {
+                        iterations: 20,
+                        tokens: 600_000,
+                        wall_clock_ms: 90 * 60 * 1_000,
+                        on_exhausted: OnExhausted::NeedsHuman,
+                    },
+                    step: "plan".to_string(),
+                    state,
+                    classify_ms: Some(800),
+                    prepare_ms: 300,
+                    pgid: None,
+                },
+            ))),
+            Style::plain(),
+            Terminal::piped(),
+        )
+    };
+
+    let real = spawn(
+        Status::Ready,
+        JobState::Running,
+        Some(PortBlock {
+            from: 5470,
+            to: 5479,
+        }),
+    );
+    let preview = spawn(Status::Skipped, JobState::Queued, None);
+
+    // What a spawn says and a preview must never say. Every one of these was in
+    // the reported output of a run that created nothing.
+    for done in ["CREATED", "CLAIMED", "STARTED", "fleet board"] {
+        assert!(real.contains(done), "a real spawn stopped saying `{done}`");
+        assert!(
+            !preview.contains(done),
+            "a preview says `{done}`, which a reader cannot tell from a spawn:\n{preview}"
+        );
+    }
+    // **`QUEUED` gets its own line because it is a `JobState`, not a status.**
+    // A real spawn that has not started its Drone yet legitimately leads with
+    // it, so it is not in the list above — but a preview has no Job at all, and
+    // leading with the state of one is how the reported output claimed a Job
+    // existed. This is the assertion that would have caught that.
+    assert!(
+        !preview.contains("QUEUED"),
+        "a preview named a Job state for a Job with no record:\n{preview}"
+    );
+    // And what a preview says instead.
+    for would in ["WOULD", "SKIPPED", "dry run", "nothing was spawned"] {
+        assert!(
+            preview.contains(would),
+            "a preview stopped saying `{would}`"
+        );
+        assert!(
+            !real.contains(would),
+            "a real spawn says `{would}`, which reads as a preview:\n{real}"
+        );
+    }
+    // The one row a preview really does perform keeps its past tense, with the
+    // interval it really took.
+    assert!(preview.contains("CLASSIFIED"));
+    assert!(preview.contains("0.8s"));
+    // And the one it does not: no interval is reported for work not done.
+    assert!(
+        !preview.contains("0.0s"),
+        "a preview timed work that never happened:\n{preview}"
+    );
 }
 
 /// **A guess is said in words, not left as a decimal in a column.**

@@ -70,10 +70,46 @@ is a terminal, never under `--json`, and one row per step from the first frame
 so the step it is stuck on has a name. The live table and the final one share
 their columns rather than agreeing on them, so the two cannot drift.
 
-**The table opens once the classification is settled**, because a spawn below
-the confidence threshold stops and asks, and the prompt reserves a viewport on
-stderr of its own. The `classified` row is not lost to that — it appears the
-moment the table opens, carrying the time it actually took.
+**The table opens before the classifying call**, which is the only part of a
+spawn anybody waits through: every other step finishes in well under a second,
+and classification has been measured at 7.5s and at 20.6s. It used to open
+afterwards, so a spawn showed nothing for its whole perceptible duration and
+then printed everything at once. The `workflow` row ticks through the wait,
+because the call goes through the same `call_with_tick` that renews a lease
+under a long child.
+
+**It is handed back for an interview and taken again after.** A spawn below the
+confidence threshold stops and asks, and the prompt reserves a viewport on
+stderr of its own — two on one stream is a corrupted screen. The `classified`
+row survives the handover: the table reopens from the same starting reading, so
+the row still carries the time the call actually took rather than restarting its
+clock.
+
+### `--dry-run`
+
+```
+  STATUS      STEP      DETAIL                           TIME
+  CLASSIFIED  workflow  feature, confidence 0.91         0.8s
+  WOULD       worktree  ~/.armada/workspaces/rate-limit     -
+  WOULD       ports     -                                   -
+  WOULD       drone     plan step                           -
+
+SKIPPED  rate-limit, dry run, nothing was spawned
+```
+
+**A preview must not read as a receipt.** This is the same four rows in the same
+four columns as the table above, and the vocabulary is the only thing separating
+them — `WOULD`, which [`init`](../manifest/init.md), `up` and `clean` already
+say, rather than a fourth word for a fifth verb. Nothing is created, no block is
+claimed, no record is written, and the footer offers no `armada fleet board`,
+because there is no Job to board.
+
+**The `classified` row keeps its past tense, because a preview really does
+classify.** That is the one step with a cost, and it is worth paying: the
+workflow is the substance of the preview, and one call of the cheapest model is
+what stops the wrong workflow spending a whole Job budget. `--workflow` skips it
+for anyone who wants a preview that calls nothing. The live table under
+`--dry-run` plans that one row and no others.
 
 **The confidence is on the screen and not only in the payload.** A guess has to be visible as
 a guess, or nobody knows to override it. An override reports *you named it* rather than a
