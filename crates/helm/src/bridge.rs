@@ -24,7 +24,9 @@ use std::time::{Duration, Instant};
 use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::ShowData;
 use armada_core::error::ArmadaError;
-use armada_core::fleet::bridge::{self, Departure, Filter, Frame, Key, Mode, Pressed, Screen};
+use armada_core::fleet::bridge::{
+    self, Action, Departure, Done, Filter, Frame, Key, Mode, Pressed, Screen,
+};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
@@ -123,6 +125,46 @@ pub fn paint(
         Vec::new(),
     ];
 
+    // **The preview replaces the table rather than sitting under it.** It is a
+    // different question — what would be deleted — and drawing both would put
+    // two cursors on one screen.
+    if let Mode::Reaping(reap) = &screen.mode {
+        lines.extend(preview(reap, style, width));
+        lines.push(Vec::new());
+        lines.push(vec![
+            plain("  "),
+            piece(render::reap_keys(), Role::SteelGrey),
+        ]);
+        return lines;
+    }
+
+    // **Every binding, because the line could not carry them all.** The line
+    // drops its lowest-priority pairs rather than wrapping — wrapping would make
+    // the frame one row taller — and this is where the ones it dropped are.
+    if screen.mode == Mode::Keys {
+        let selected = screen.cursor.selected(&frame.rows).map(|row| row.state);
+        let mut table = crate::render::table::Table::new(vec![
+            crate::render::table::Column::fixed("key"),
+            crate::render::table::Column::flexible("does"),
+        ])
+        .indent(2);
+        for (key, does) in render::bridge_every_key(selected) {
+            table = table.row(vec![
+                crate::render::table::Cell::painted(key, Role::SignalAmber),
+                crate::render::table::Cell::muted(does),
+            ]);
+        }
+        lines.push(vec![plain("  "), bold("KEYS", Role::SignalAmber)]);
+        lines.push(Vec::new());
+        lines.extend(table.spans(style, width));
+        lines.push(Vec::new());
+        lines.push(vec![
+            plain("  "),
+            piece("any key returns to the fleet", Role::SteelGrey),
+        ]);
+        return lines;
+    }
+
     lines.extend(render::bridge_table(&data, style, Some(screen.cursor.at())).spans(style, width));
     if frame.rows.is_empty() {
         lines.push(vec![
@@ -155,9 +197,18 @@ pub fn paint(
     });
 
     lines.push(Vec::new());
+    // **The key line reads the row the cursor is on**, so `p` over a paused Job
+    // says `resume`. A line that always said `pause` advertised the one thing
+    // that key would not do and left no way at all to start a held Job again.
     lines.push(vec![
         plain("  "),
-        piece(render::bridge_keys(), Role::SteelGrey),
+        piece(
+            render::bridge_keys(
+                screen.cursor.selected(&frame.rows).map(|row| row.state),
+                width,
+            ),
+            Role::SteelGrey,
+        ),
     ]);
     lines
 }
@@ -205,6 +256,69 @@ fn detail_pane(job: &str, detail: Option<&ShowData>, style: Style, width: usize)
     lines
 }
 
+/// The reap preview, drawn.
+///
+/// **Words rather than a tick and a cross**, for the rule every table in Armada
+/// follows: a glyph that only appears at a terminal gives the two audiences
+/// different shapes. `take` and `keep` fold to themselves.
+fn preview(reap: &bridge::Reap, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut table = crate::render::table::Table::new(vec![
+        crate::render::table::Column::fixed(""),
+        crate::render::table::Column::fixed("status"),
+        crate::render::table::Column::fixed("job"),
+        // **The uuid is on the row, because a name is not unique.** Two Jobs can
+        // share one — `name_is_taken` only refuses to reuse a *live* Job's name
+        // — and a preview of what is about to be deleted that cannot tell two
+        // rows apart is a preview that cannot be read.
+        crate::render::table::Column::fixed("uuid"),
+        crate::render::table::Column::fixed("state"),
+        crate::render::table::Column::flexible("holding"),
+    ])
+    .indent(2);
+
+    for (index, row) in reap.rows.iter().enumerate() {
+        table = table.row(vec![
+            match reap.cursor.is_on(index) {
+                true => crate::render::table::Cell::painted(style.caret(), Role::SignalAmber),
+                false => crate::render::table::Cell::empty(),
+            },
+            match row.selected {
+                true => crate::render::table::Cell::painted("take", Role::FlareOrange),
+                false => crate::render::table::Cell::painted("keep", Role::SteelGrey),
+            },
+            crate::render::table::Cell::painted(row.target.job.clone(), Role::NavalBlue),
+            crate::render::table::Cell::muted(row.target.short().to_string()),
+            crate::render::table::Cell::painted(
+                row.state.word(),
+                render::palette::Role::for_job_state(row.state),
+            ),
+            crate::render::table::Cell::muted(row.holding.clone()),
+        ]);
+    }
+
+    let mut lines = vec![
+        vec![
+            plain("  "),
+            bold("REAP", Role::FlareOrange),
+            plain("   "),
+            piece(
+                format!(
+                    "{} of {} ticked",
+                    reap.rows.iter().filter(|row| row.selected).count(),
+                    reap.rows.len()
+                ),
+                Role::SteelGrey,
+            ),
+        ],
+        Vec::new(),
+    ];
+    lines.extend(table.spans(style, width));
+    if reap.rows.is_empty() {
+        lines.push(vec![plain("  "), piece("nothing to reap", Role::SteelGrey)]);
+    }
+    lines
+}
+
 fn piece(text: impl Into<String>, role: Role) -> Span {
     Span {
         text: text.into(),
@@ -235,6 +349,11 @@ fn plain(text: impl Into<String>) -> Span {
 /// to whatever is left of the interval, so a keypress is answered immediately
 /// and the fleet is re-read exactly as often as `--interval` says — rather than
 /// the Bridge sleeping through a keystroke or spinning on an empty queue.
+// Eight, and each is a seam rather than a parameter: the two `ctx` ports, where
+// the fleet is, what was asked for, the filter, the two halves of the terminal,
+// and what to do when a key acts. Bundling them would be one struct per call
+// site with no other use.
+#[allow(clippy::too_many_arguments)]
 pub fn watch<R: Run, C: Clock>(
     run: &R,
     now: &C,
@@ -243,6 +362,7 @@ pub fn watch<R: Run, C: Clock>(
     filter: Option<&Filter>,
     style: Style,
     terminal: Terminal,
+    act: &mut dyn FnMut(&Action) -> Done,
 ) -> Result<(Frame, Departure), ArmadaError> {
     let raw = Restore::install().map_err(|_| crate::verbs::bridge::no_screen())?;
     let alt = Alt::enter().map_err(|_| crate::verbs::bridge::no_screen())?;
@@ -310,6 +430,22 @@ pub fn watch<R: Run, C: Clock>(
                         style,
                         terminal,
                     );
+                }
+                // **The action runs here, on the screen, and its failure is a
+                // line under the table.** This is the whole of the fix: an
+                // abort that could not remove a worktree used to end the Bridge
+                // and print into a shell the reader was no longer looking at,
+                // taking away the view of four other Jobs to say one thing
+                // about a fifth.
+                Pressed::Act(action) => {
+                    let done = act(&action);
+                    screen.notice = Some(done.notice);
+                    if let Some(mode) = done.mode {
+                        screen.mode = mode;
+                    }
+                    // The fleet has just changed underneath the frame in hand,
+                    // so it is re-read now rather than at the next tick.
+                    break None;
                 }
             }
             // **A changed filter re-reads now rather than at the next tick.**
@@ -727,6 +863,151 @@ mod tests {
             }],
             progress: Vec::new(),
         }
+    }
+
+    /// **The key line reads the row the cursor is on.** A line that always said
+    /// `pause` over a `PAUSED` Job advertised the one thing that key would not
+    /// do, and left the reader with no way at all to start a held Job again.
+    #[test]
+    fn the_key_line_says_resume_over_a_paused_job_and_pause_over_a_running_one() {
+        let frame = Frame {
+            rows: vec![
+                row("rate-limit", JobState::Running, false),
+                row("xlsx-report", JobState::Paused, false),
+            ],
+            ..frame()
+        };
+        let line = |screen: &Screen| {
+            let drawn = text(&paint(
+                &frame,
+                screen,
+                None,
+                Status::Running,
+                Style::plain(),
+                80,
+            ));
+            drawn
+                .iter()
+                .find(|line| line.contains("q quit"))
+                .cloned()
+                .expect("a key line")
+        };
+
+        let mut screen = Screen::default();
+        let running = line(&screen);
+        assert!(running.contains("p pause"), "{running}");
+        assert!(!running.contains("p resume"), "{running}");
+
+        screen.cursor.next(2);
+        let held = line(&screen);
+        assert!(
+            held.contains("p resume"),
+            "a paused Job is still offered `pause`: {held}"
+        );
+        assert!(!held.contains("p pause"), "{held}");
+    }
+
+    /// **The key line stays one line and never wraps**, at every width the
+    /// two audiences meet — which is what keeps the frame's height constant.
+    /// What does not fit drops, in the priority order `render.rs` states, and
+    /// `q quit` is never what drops: a full-screen program that does not say how
+    /// to leave is a trap.
+    #[test]
+    fn the_key_line_fits_its_width_at_every_width_and_never_loses_quit() {
+        for width in [40, 60, 72, 74, 80, 100, 120] {
+            for state in [None, Some(JobState::Paused)] {
+                let line = render::bridge_keys(state, width);
+                assert!(
+                    line.chars().count() + 2 <= width,
+                    "the key line is {} wide at {width}: {line}",
+                    line.chars().count() + 2
+                );
+                assert!(line.contains("q quit"), "quit fell off at {width}: {line}");
+                // Anything it could not carry is reachable, and the line says so.
+                let hidden = render::bridge_keys_hidden(state, width);
+                assert_eq!(
+                    line.contains("? keys"),
+                    !hidden.is_empty(),
+                    "at {width} the line and the overflow disagree: {line}"
+                );
+            }
+        }
+    }
+
+    /// **Every binding is on the page `?` opens**, including the ones the line
+    /// dropped and the one that has no verb behind it. An overflow key that did
+    /// not list what overflowed would be worse than no overflow key.
+    #[test]
+    fn the_keys_page_lists_every_binding_the_line_could_not_carry() {
+        let drawn = drawn(&Screen {
+            mode: Mode::Keys,
+            ..Screen::default()
+        });
+        let all = drawn.join("\n");
+        for word in ["board", "new", "pause", "abort", "answer", "filter", "reap"] {
+            assert!(
+                all.contains(word),
+                "`{word}` is not on the keys page:\n{all}"
+            );
+        }
+        assert!(all.contains("chat"), "an unbound-looking key is unlisted");
+        assert!(all.contains("quit"), "{all}");
+        // The fleet table is not underneath it: it is a page, not a pane.
+        assert!(!all.contains("rate-limit"), "{all}");
+    }
+
+    /// **The reap preview says what each Job is holding**, which is the whole
+    /// point of previewing: the cost of reaping and the cost of *not* reaping
+    /// have to be on the same row. And `take`/`keep` are words rather than a
+    /// tick and a cross, so both audiences read the same shape.
+    #[test]
+    fn the_reap_preview_shows_what_each_job_holds_and_which_rows_are_ticked() {
+        let screen = Screen {
+            mode: Mode::Reaping(bridge::Reap {
+                rows: vec![
+                    bridge::ReapRow {
+                        target: bridge::Target {
+                            job: "rate-limit".to_string(),
+                            uuid: "rate-limit-uuid".to_string(),
+                        },
+                        state: JobState::Done,
+                        selected: true,
+                        holding: "ports 5470-5479, worktree".to_string(),
+                    },
+                    bridge::ReapRow {
+                        target: bridge::Target {
+                            job: "xlsx-report".to_string(),
+                            uuid: "xlsx-report-uuid".to_string(),
+                        },
+                        state: JobState::Paused,
+                        selected: false,
+                        holding: "branch armada/xlsx-report".to_string(),
+                    },
+                ],
+                cursor: Default::default(),
+            }),
+            ..Screen::default()
+        };
+        let drawn = drawn(&screen);
+        let all = drawn.join("\n");
+        assert!(all.contains("REAP"), "{all}");
+        assert!(all.contains("1 of 2 ticked"), "{all}");
+        // **The uuid is on every row**, because two Jobs can share a name and a
+        // preview of what is about to be deleted has to be readable when they
+        // do.
+        assert!(all.contains("rate-lim"), "no uuid column:\n{all}");
+        assert!(all.contains("xlsx-rep"), "no uuid column:\n{all}");
+        assert!(all.contains("ports 5470-5479"), "{all}");
+        assert!(all.contains("take"), "{all}");
+        assert!(all.contains("keep"), "{all}");
+        // No tick and no cross: a glyph that only appears at a terminal gives
+        // the two audiences different shapes.
+        assert!(
+            !all.contains('\u{2713}') && !all.contains('\u{2717}'),
+            "{all}"
+        );
+        assert!(all.contains("space toggle"), "{all}");
+        assert!(all.contains("esc cancel"), "{all}");
     }
 
     /// An empty fleet says so rather than drawing nothing, and says which of the

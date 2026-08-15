@@ -82,17 +82,39 @@ indistinguishable from an idle fleet.
 | `↵` | Board the selected Job | [`../fleet/board.md`](../fleet/board.md) |
 | `d` | **Why does it need me** — the selected Job in full, over the table | [`../fleet/show.md`](../fleet/show.md) |
 | `n` | New Job | [`../fleet/spawn.md`](../fleet/spawn.md) |
-| `p` | Pause / resume | — · **not built**, and the screen says so rather than swallowing the key |
+| `p` | Pause a running Job, **resume a paused one** | [`../fleet/pause.md`](../fleet/pause.md) · [`../fleet/resume.md`](../fleet/resume.md) |
 | `x` | Abort — **then `y`** | [`../fleet/kill.md`](../fleet/kill.md) |
 | `a` | Answer the selected Job's question | [`../fleet/answer.md`](../fleet/answer.md) |
+| `r` | Reap — opens a preview, reaps nothing until you confirm | [`../fleet/reap.md`](../fleet/reap.md) |
 | `/` | Filter | — |
-| `c` | Drop into Helm | [`helm.md`](helm.md) · **not built** |
+| `c` | Drop into Helm | [`helm.md`](helm.md) · **entering is off**, and it says so on the screen |
+| `?` | Every binding, including the ones the key line could not carry | — |
 | `q`, `esc`, `ctrl-c` | Leave, printing the last frame | — |
 | `↑` `↓`, `k` `j` | Move the cursor | — |
 
 Every key maps to a verb that already exists and is reachable from a shell. **The Bridge adds no
 capability**, which is what keeps it a rendering choice rather than an architectural one. A key
 whose verb does not exist yet says so; it does not grow one here.
+
+### A key that fails does not take the screen with it
+
+**Every key used to leave.** The Bridge stopped, said which verb it had chosen, and let the
+shell run it — so a `kill` that could not remove a worktree took away the view of four other
+Jobs in order to say something about a fifth, and said it into a shell nobody was looking at any
+more. It was measured: pressing `x` on a Job whose worktree had been deleted answered *"`armada
+manifest clean` could not be found to run — reinstall armada"*, ended the screen, and left the
+Job `RUNNING` in the record.
+
+So `x`, `p`, `r` and `c` **run where they were pressed**, and their answer — success or failure
+— is the line under the table. The frame is re-read immediately afterwards, so what changed is
+on the screen by the time the notice is.
+
+**Four keys still end it, and each has a reason the others do not**: `q` is the deliberate exit;
+`↵` *replaces this process* with `claude`, so the tty, the signals and the exit code become the
+session's; and `n` and `a` need words the screen does not have, so the Bridge gives the terminal
+back and opens the same inline box the interview uses ([`../render.md`](../render.md)). An empty
+answer starts nothing. A `↵` that could not board is a notice like any other failure — only a
+successful board ends the frame.
 
 ### `d` — the detail view
 
@@ -101,26 +123,58 @@ raised by an inbox entry, and the frame draws the flag but not the entry. `d` dr
 [`../fleet/show.md`](../fleet/show.md)'s payload over the table — the question in its own words,
 the whole task, the step, the ceilings, and what the Job is still holding.
 
-**It stays on the screen**, unlike every other key that shows you something. Those hand the
-terminal back and run a verb in it; this one answers a question you are already at the Bridge to
-ask, and leaving to read the answer would mean coming back to a screen that had moved on. The
-pane re-reads on the same cadence as the frame, and `↑`/`↓` move it to the next Job so a fleet is
-read one at a time. `esc`, `d` again and `q` all close it; only `ctrl-c` leaves the Bridge.
+**It stays on the screen**, which is what `x`, `p`, `r` and `c` now do too — it answers a
+question you are already at the Bridge to ask, and leaving to read the answer would mean coming
+back to a screen that had moved on. The pane re-reads on the same cadence as the frame, and
+`↑`/`↓` move it to the next Job so a fleet is read one at a time. `esc`, `d` again and `q` all
+close it; only `ctrl-c` leaves the Bridge.
 
-**`d` is deliberately not on the key line.** That line is seventy-four columns and the shortest
-pair worth adding takes it to eighty-one, so a person at a standard terminal would read a wrapped
-key line while an agent read a straight one — the same measurement that kept middle dots off it,
-and the one thing this whole render is written against. An unnamed key is the cheaper cost, and
-this section is where it stops being unnamed.
+**`d` is second on the key line, and the overflow is what pays for it.** It was left unnamed
+while the line had no way to shed anything: eight pairs is eighty-four columns, and the choice
+then was a wrapped key line — which a person at a standard terminal would read while an agent
+read a straight one — or a silent key. Now what does not fit drops in priority order and `? keys`
+says so, so at eighty columns `/ filter` and `r reap` move onto the page `?` opens and the key
+that answers `NEEDS YOU: YES` is advertised where the reader is looking. `q quit` never drops.
 
 **`x` asks twice, and anything but `y` declines.** Abort ends a Job, deletes its worktree and
 drops its branch. One keypress doing that to whatever row the cursor happened to be on is the
 mistake worth one extra character, and a confirmation only one key can refuse is one that gets
 answered by accident.
 
-**`n` and `a` need words the screen does not have**, so the Bridge gives the terminal back and
-opens the same inline box the interview uses ([`../render.md`](../render.md)). An empty answer
-starts nothing.
+**A key names its Job by uuid, not by name.** A uuid is identity; a name is a label, and nothing
+enforces that a label is unique — a finished `rate-limit` and a running one are both ordinary and
+both on disk. From a shell that ambiguity is refused ([`../fleet/kill.md`](../fleet/kill.md)),
+because only you know which one you meant. On the screen there is nothing to be ambiguous about:
+the cursor is on exactly one row, and the key carries that row's uuid.
+
+### The key line is one line, and that is a budget
+
+The line must not wrap: a second row would make the frame taller, which moves everything above
+it, and the redraw tests assert the height does not change. Eighty columns leaves seventy-eight
+for the line, and nine key/word pairs is eighty-two.
+
+So the line **drops rather than wraps**, in priority order — `enter`, `n`, `p`, `x`, `a`, `/`,
+`r` — with `q quit` pinned, because a full-screen program that does not say how to leave is a
+trap. When anything was dropped the line says `? keys`, and `?` opens the page that lists all of
+them.
+
+**`c chat` is not on the line.** It is still bound and still answers, but space on that line is
+the scarcest thing the Bridge has and an unbuilt verb does not get any of it while a built one
+goes unadvertised.
+
+**Keys are named, never glyphed.** The drawing above uses `↵`; the line writes `enter`, because
+it is read by both audiences and a glyph that folds to ASCII would give them different words for
+the same key.
+
+### The reap preview
+
+`r` reads [`../fleet/reap.md`](../fleet/reap.md)'s plan and draws it **over** the table — a
+different question deserves the whole screen rather than a pane, and two cursors on one screen
+is two questions about which row you are on. Rows toggle with `space`, `enter` reaps exactly
+what is ticked, and `esc` leaves everything untouched.
+
+Being safe to open out of curiosity is what makes it get read, so `r` reaps nothing and
+confirming an empty selection is treated as a keypress that meant something else.
 
 **Leaving prints the last frame.** The screen is gone and what it was showing is not, which is
 the difference between closing a view and losing what you were looking at.
@@ -138,7 +192,7 @@ the difference between closing a view and losing what you were looking at.
 
 RUNNING  4 jobs, 1 need you, $8.40 today
 
-  enter board  n new  p pause  x abort  a answer  / filter  c chat  q quit
+  enter board  n new  p pause  x abort  a answer  / filter  r reap  q quit
 ```
 
 The live screen is this frame with a caret on the selected row, `LIVE` beside the title, and one
@@ -182,12 +236,15 @@ a positive number of seconds · `6` `environment` — there is no terminal to ta
 **`--filter` is parsed before the screen is taken**, so a typo is answered on the terminal you are
 standing in rather than after it has been blanked.
 
-A key that leaves ends in that verb's exit code: `enter` becomes `claude`'s, `x` becomes
-[`kill`](../fleet/kill.md)'s. Armada is not in the middle of it.
+**A key that acts does not change the exit code**, because it does not end the screen: its
+answer is a line under the table, and the Bridge still exits `0` when you leave it. The one key
+that ends in another verb's code is `↵`, which becomes `claude`'s — Armada is not in the middle
+of it from the `exec` on.
 
 Full table and the one rule behind it: [`../reference.md`](../reference.md).
 
 ## See also
 
 [`helm.md`](helm.md) · [`../fleet/ls.md`](../fleet/ls.md) · [`inbox.md`](inbox.md) ·
-[`../glossary.md`](../../glossary.md)
+[`../fleet/pause.md`](../fleet/pause.md) · [`../fleet/resume.md`](../fleet/resume.md) ·
+[`../fleet/reap.md`](../fleet/reap.md) · [`../glossary.md`](../../glossary.md)

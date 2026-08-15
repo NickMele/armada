@@ -54,9 +54,9 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData,
     GuildBundleData, GuildInitData, GuildSyncData, Headline, HelmData, InboxData, InitData,
-    InitDryRun, KillData, MachineInitData, McpData, ProbeData, Projection, ReportData, ResultRow,
-    ScanData, ServicesData, ShowData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun,
-    VerdictData, VerifyData, Wiring,
+    InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData,
+    ReportData, ResultRow, ResumeData, ScanData, ServicesData, ShowData, SkillsData, SpawnData,
+    StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -111,6 +111,9 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Kill(envelope) => kill(envelope, style, width),
         Output::Inbox(envelope) => inbox(envelope, style, width),
         Output::Answer(envelope) => answer(envelope, style, width),
+        Output::Pause(envelope) => pause(envelope, style, width),
+        Output::Resume(envelope) => resume(envelope, style, width),
+        Output::ReapPlan(envelope) => reap_plan(envelope, style, width),
         Output::Mcp(envelope) => served(envelope, style),
         Output::Probe(envelope) => probe(envelope, style, width),
         Output::Report(envelope) => reported(envelope, style, width),
@@ -460,21 +463,84 @@ fn ls_facts(data: &FleetLsData) -> Vec<String> {
     facts
 }
 
-/// The Bridge's key line, in the order `commands/helm/bridge.md` lists them.
+/// The Bridge's keys, **in priority order: the last ones drop first.**
 ///
 /// **Named rather than glyphed.** The page draws `↵`; this writes `enter`,
 /// because a key line is read by both audiences and a glyph that folds to ASCII
 /// would give the two of them different words for the same key. Everything else
 /// on the Bridge is a single character and needs no folding.
-const KEYS: [(&str, &str); 8] = [
-    ("enter", "board"),
-    ("n", "new"),
-    ("p", "pause"),
-    ("x", "abort"),
-    ("a", "answer"),
-    ("/", "filter"),
-    ("c", "chat"),
-    ("q", "quit"),
+///
+/// **`p`'s word is the one that varies**, because it is the one key whose verb
+/// depends on the row under the cursor — `pause` over a running Job, `resume`
+/// over a paused one. A second list of states here would let the line and the
+/// binding drift, so both ask
+/// [`armada_core::fleet::bridge::pause_key`], which is why this is a function
+/// and not a `const`.
+///
+/// **`c chat` is not here.** The line must stay one line — `bridge.rs`'s tests
+/// assert the frame does not change height — so space on it is the scarcest
+/// thing the Bridge has, and an unbuilt verb does not get any of it while a
+/// built one goes unadvertised. `c` is still bound and still answers.
+///
+/// **Order is priority and not importance-of-verb.** `enter` is first because it
+/// is what a person tries on a table with a cursor; `d detail` is second for the
+/// same reason, and because it is the only key that answers the one column that
+/// is ever a call to action; `r reap` is last because it is occasional
+/// housekeeping rather than something done while watching. What falls off the
+/// end at a given width falls off in that order, and [`QUIT`] is never one of
+/// them.
+///
+/// **`d detail` is on the line now, and it is the overflow that pays for it.**
+/// It was left unnamed while the line had no way to shed anything: eight pairs
+/// is eighty-four columns, and the choice then was a wrapped line or a silent
+/// key. Now what does not fit drops and `? keys` says so, so the key that
+/// answers `NEEDS YOU: YES` is advertised wherever there is room for it and
+/// reachable through `?` wherever there is not.
+fn bridge_key_pairs(selected: Option<JobState>) -> [(&'static str, &'static str); 8] {
+    [
+        ("enter", "board"),
+        ("d", "detail"),
+        ("n", "new"),
+        ("p", armada_core::fleet::bridge::pause_key(selected)),
+        ("x", "abort"),
+        ("a", "answer"),
+        ("/", "filter"),
+        ("r", "reap"),
+    ]
+}
+
+/// The one key that never drops off the line.
+///
+/// **Because a full-screen program that does not say how to leave is a trap.**
+/// Everything else on the line is a convenience; this one is the exit.
+const QUIT: (&str, &str) = ("q", "quit");
+
+/// What the line says when it could not carry everything.
+///
+/// **The honest overflow.** Nine pairs is eighty-two columns against a budget of
+/// seventy-eight, so at some point a key line either wraps — changing the frame's
+/// height, which the tests forbid — or stops listing everything. This is the
+/// third option: it names itself, and `?` shows the rest.
+const MORE: (&str, &str) = ("?", "keys");
+
+/// Two spaces per gap, which is the one separator on this screen that is the
+/// same for both audiences (see [`bridge_keys`]).
+const KEY_GAP: usize = 2;
+
+/// The two columns every table on this screen is indented by, which the key line
+/// shares and therefore has to pay for out of its own budget.
+const KEY_INDENT: usize = 2;
+
+/// The reap preview's own keys, for the mode that has its own.
+///
+/// **A separate line for a separate screen.** The fleet's keys do nothing while
+/// a preview is open, and printing them would advertise eight keys of which two
+/// work.
+const REAP_KEYS: [(&str, &str); 4] = [
+    ("arrows", "move"),
+    ("space", "toggle"),
+    ("enter", "reap"),
+    ("esc", "cancel"),
 ];
 
 /// `armada bridge` — one frame of the live screen.
@@ -518,9 +584,13 @@ fn bridge(envelope: &Envelope<BridgeData>, style: Style, width: usize) -> String
     out.push('\n');
     out.push_str(&bridge_summary(data, envelope.status, style));
     out.push('\n');
+    // **No row is under a cursor in `--once`, so `p` prints its default word.**
+    // The frame a pipe reads describes the fleet rather than a selection, and a
+    // key line that guessed at a state nobody is standing on would be a claim
+    // about a cursor that does not exist.
     out.push_str(&format!(
         "  {}\n",
-        style.paint(Role::SteelGrey, &bridge_keys())
+        style.paint(Role::SteelGrey, &bridge_keys(None, width))
     ));
     out
 }
@@ -627,11 +697,74 @@ pub fn bridge_summary_pieces(data: &BridgeData, status: Status, style: Style) ->
 /// at a standard terminal would read a wrapped key line while an agent read a
 /// straight one. The drawing on `commands/helm/bridge.md` spaces them the same
 /// way, for the same reason.
-pub fn bridge_keys() -> String {
-    KEYS.iter()
+pub fn bridge_keys(selected: Option<JobState>, width: usize) -> String {
+    spelled(&shown_keys(selected, width))
+}
+
+/// The keys the line could not carry, for the page `?` opens.
+///
+/// **Asked of the same function that trims the line**, so the overlay and the
+/// line cannot disagree about which keys are hidden — which is the only way an
+/// overflow key is worth having at all.
+pub fn bridge_keys_hidden(selected: Option<JobState>, width: usize) -> Vec<(String, String)> {
+    let shown = shown_keys(selected, width);
+    bridge_key_pairs(selected)
+        .iter()
+        .filter(|pair| !shown.contains(pair))
+        .map(|(key, does)| ((*key).to_string(), (*does).to_string()))
+        .collect()
+}
+
+/// Every binding the Bridge has, for the page `?` opens — including the ones
+/// that were never on the line because they have no verb behind them.
+pub fn bridge_every_key(selected: Option<JobState>) -> Vec<(String, String)> {
+    let mut all: Vec<(String, String)> = bridge_key_pairs(selected)
+        .iter()
+        .chain(std::iter::once(&QUIT))
+        .map(|(key, does)| ((*key).to_string(), (*does).to_string()))
+        .collect();
+    all.push(("c".to_string(), "chat — entering is off".to_string()));
+    all.push(("arrows, j k".to_string(), "move the cursor".to_string()));
+    all.push((
+        "esc".to_string(),
+        "clear the filter, then leave".to_string(),
+    ));
+    all
+}
+
+/// The pairs that fit, with [`QUIT`] pinned last and [`MORE`] when any were cut.
+///
+/// **It drops rather than wraps.** A key line that wrapped would make the frame
+/// one row taller, which moves everything above it — and the Bridge's own tests
+/// assert the frame does not change height between redraws.
+fn shown_keys(selected: Option<JobState>, width: usize) -> Vec<(&'static str, &'static str)> {
+    let all = bridge_key_pairs(selected);
+    let budget = width.saturating_sub(KEY_INDENT);
+    let mut taken = all.len();
+    loop {
+        let mut line: Vec<(&str, &str)> = all[..taken].to_vec();
+        if taken < all.len() {
+            line.push(MORE);
+        }
+        line.push(QUIT);
+        if spelled(&line).chars().count() <= budget || taken == 0 {
+            return line;
+        }
+        taken -= 1;
+    }
+}
+
+/// The reap preview's key line, in the same shape.
+pub fn reap_keys() -> String {
+    spelled(&REAP_KEYS)
+}
+
+fn spelled(pairs: &[(&str, &str)]) -> String {
+    pairs
+        .iter()
         .map(|(key, does)| format!("{key} {does}"))
         .collect::<Vec<_>>()
-        .join("  ")
+        .join(&" ".repeat(KEY_GAP))
 }
 
 /// What a frame counts, in the order the drawing counts it.
@@ -1348,6 +1481,162 @@ fn answer(envelope: &Envelope<AnswerData>, style: Style, width: usize) -> String
         ],
     ));
     out
+}
+
+/// `armada fleet pause` — the Job that was held, and the Drone that stopped.
+fn pause(envelope: &Envelope<PauseData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let table = Table::new(columns("job", "detail", true))
+        .indent(2)
+        .row(vec![
+            token("paused", Role::SignalAmber),
+            Cell::painted(data.job.clone(), Role::NavalBlue),
+            detail_cell(
+                style,
+                Some(&match data.stopped {
+                    Some(pgid) => format!("stopped the Drone, group {pgid}"),
+                    // **Ordinary rather than a failure.** A Job between turns
+                    // has no live Drone, and holding it is still a thing a
+                    // person can ask for.
+                    None => "no Drone was running".to_string(),
+                }),
+            ),
+            time_cell(None),
+        ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&job_summary(
+        style,
+        data.state,
+        &[
+            data.job.clone(),
+            // **What it has spent, not what it will**: the worktree, the branch
+            // and the port block are all still held, which is the difference
+            // between pausing and killing.
+            format!("{} spent", format::money(data.spend.cost_usd)),
+            "worktree kept".to_string(),
+        ],
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// `armada fleet resume` — the Job that was continued, and its new Drone.
+fn resume(envelope: &Envelope<ResumeData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let table = Table::new(columns("job", "detail", true))
+        .indent(2)
+        .row(vec![
+            token("resumed", Role::BeaconGreen),
+            Cell::painted(data.job.clone(), Role::NavalBlue),
+            detail_cell(
+                style,
+                Some(&match data.pgid {
+                    Some(pgid) => format!("started a Drone, group {pgid}"),
+                    None => "started a Drone".to_string(),
+                }),
+            ),
+            // **No time, for `answer`'s reason**: a resume starts a turn and
+            // returns rather than waiting for one.
+            time_cell(None),
+        ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&job_summary(
+        style,
+        data.state,
+        &[
+            data.job.clone(),
+            // **The budget was not reset**, and this is where a reader sees it:
+            // a resume continues the same session.
+            format!(
+                "{} remaining",
+                format::count(data.budget_remaining.iterations as usize, "iteration")
+            ),
+        ],
+    ));
+    out
+}
+
+/// `armada fleet reap --dry-run` — every Job a reap offers, and what each holds.
+///
+/// **What it is holding is the column that makes this readable**, and it is why
+/// the preview exists at all: a port block held by a Job whose Drone died months
+/// ago is a span nothing can use and nothing else reports.
+///
+/// **`take` and `keep` are words rather than a tick and a cross**, for the rule
+/// every table here follows: a glyph that only appears at a terminal gives the
+/// two audiences different shapes.
+fn reap_plan(envelope: &Envelope<ReapPlanData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("job"),
+        // **The uuid, because a name is not unique.** Two Jobs can share one —
+        // `name_is_taken` only refuses to reuse a *live* Job's name — and it is
+        // also what `--job` takes, so the row carries the handle the next
+        // command needs.
+        Column::fixed("uuid"),
+        Column::fixed("state"),
+        Column::flexible("holding"),
+        Column::fixed("spent").right(),
+    ])
+    .indent(2);
+
+    for row in &data.results {
+        table = table.row(vec![
+            match row.selected {
+                true => token("take", Role::FlareOrange),
+                // **Listed and left alone.** A state you might still act on is
+                // not garbage, and hiding it would make the preview a shorter
+                // list of a different question.
+                false => token("keep", Role::SteelGrey),
+            },
+            Cell::painted(row.job.clone(), Role::NavalBlue),
+            Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
+            job_state(row.state),
+            detail_cell(style, Some(&holding(style, row))),
+            Cell::muted(match row.cost_usd > 0.0 {
+                true => format::money(row.cost_usd),
+                false => style.nothing().to_string(),
+            }),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    if table.is_empty() {
+        out.push_str("  nothing to reap\n");
+    }
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            format::count(data.results.len(), "job"),
+            format!("{} to take", data.selected),
+            // **Said every time, because a preview that reaped would be the
+            // destructive path it was previewing** (`ARCHITECTURE.md` §2.1.2).
+            "nothing reaped".to_string(),
+        ],
+    ));
+    out
+}
+
+/// What one reap candidate is still holding, in one cell.
+fn holding(style: Style, row: &armada_core::envelope::ReapCandidate) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(block) = row.port_block {
+        parts.push(format!("ports {}-{}", block.from, block.to));
+    }
+    if row.worktree_exists {
+        parts.push(format!("worktree {}", row.worktree_path));
+    }
+    parts.push(format!("branch {}", row.branch));
+    parts.join(style.between())
 }
 
 // ------------------------------------------------------------- M2: the machine

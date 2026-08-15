@@ -5,4 +5,4 @@
 
 RUNNING  1 job, $0.45 today, filter state=RUNNING, 3 hidden
 
-  enter board  n new  p pause  x abort  a answer  / filter  c chat  q quit
+  enter board  d detail  n new  p pause  x abort  a answer  ? keys  q quit

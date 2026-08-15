@@ -1710,6 +1710,97 @@ pub struct Killed {
     pub error: Option<ArmadaError>,
 }
 
+/// `armada fleet pause` — the Job that was held, and the Drone that was stopped.
+///
+/// **A Job is durable and a Drone is not** (PLAN.md §14.1), which is what lets
+/// pause be a real verb rather than a process signal: the worktree, the port
+/// block, the branch and the transcript all stay exactly as they are, and the
+/// only thing that ends is the process that was working. Resuming starts a new
+/// Drone on the same session.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PauseData {
+    /// The handle.
+    pub job: String,
+    /// The session id.
+    pub uuid: String,
+    /// What it is doing now: `PAUSED`.
+    pub state: crate::fleet::JobState,
+    /// The process group that was stopped, when there was one still running.
+    ///
+    /// **`None` is ordinary rather than a failure.** A Job between turns has no
+    /// live Drone, and holding it is still a thing a person can ask for.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stopped: Option<i32>,
+    /// What it has spent, settled from the transcript on the way out — because
+    /// nothing is going to write to that transcript again until it is resumed.
+    pub spend: crate::fleet::job::Spend,
+}
+
+/// `armada fleet resume` — the Job that was continued, and its new Drone.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ResumeData {
+    /// The handle.
+    pub job: String,
+    /// The session id.
+    pub uuid: String,
+    /// What it is doing now: `RUNNING`.
+    pub state: crate::fleet::JobState,
+    /// **Not reset by resuming**, for [`AnswerData`]'s reason: a resume is a
+    /// continuation of the same session, and a ceiling that reset every time a
+    /// Job was held and let go again would not be a ceiling.
+    pub budget_remaining: crate::fleet::job::Remaining,
+    /// The new Drone's process group.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pgid: Option<i32>,
+}
+
+/// `armada fleet reap --dry-run`, and the Bridge's preview — what a reap would
+/// take, and what each candidate is still holding.
+///
+/// **The preview is the feature and not a confirmation dialog.** A bulk delete
+/// that only listed names would be asking a person to approve a decision on
+/// less information than the machine has; what makes the answer possible is the
+/// second half of every row — the port block, the containers and the worktree
+/// that go on being held for as long as the Job is not reaped.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct ReapPlanData {
+    /// Every Job a reap would offer, in the order `ls` produced them.
+    pub results: Vec<ReapCandidate>,
+    /// How many of them are taken with nothing said.
+    pub selected: usize,
+}
+
+/// One Job a reap is offering, and what it is holding on to.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ReapCandidate {
+    /// The handle.
+    pub job: String,
+    /// The session id.
+    pub uuid: String,
+    /// What it is **really** doing, observed rather than recorded: a record
+    /// that still says `RUNNING` with a dead Drone is the case this whole verb
+    /// exists for.
+    pub state: crate::fleet::JobState,
+    /// Whether a reap takes it unless somebody says otherwise.
+    ///
+    /// **A state you might still act on is not garbage**
+    /// ([`crate::fleet::JobState::reaping`]): `PAUSED` means needs-you and
+    /// `STALLED` is a Job you may want to start again, so both are listed with
+    /// this `false` rather than left out or taken.
+    pub selected: bool,
+    /// The span it is still holding, when there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port_block: Option<PortBlock>,
+    /// Whether the worktree is still on disk.
+    pub worktree_exists: bool,
+    /// Where it is, as a person writes it.
+    pub worktree_path: String,
+    /// The branch it is on.
+    pub branch: String,
+    /// What it has spent, so the cost of the thing being deleted is on the row.
+    pub cost_usd: f64,
+}
+
 /// What became of a Job's directory or branch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

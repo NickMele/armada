@@ -33,6 +33,13 @@ armada fleet board <job> [--print] [--exec] [--json]
 Looks up the Job's worktree and uuid and produces the two facts needed to enter it. With
 `--exec` it performs the `cd` and `exec` itself.
 
+**A Job record stores its worktree as `~/…` and `--exec` expands it before `chdir` sees it.**
+The tilde is the shell's to expand and there is no shell in an `exec`, so handing the stored
+string straight to the child made `--exec` — and `↵` on [`../helm/bridge.md`](../helm/bridge.md)
+— fail on every Job on the machine with `No such file or directory`, about a directory that was
+there all along. A worktree that is genuinely gone is said so by name, before the `exec`, because
+`exec`'s own errno cannot tell a missing directory from a missing `claude`.
+
 **It does not stop a running Drone first.** If a turn is in flight, resuming interactively while
 it runs is a conflict — check [`ls.md`](ls.md) for `PAUSED` or `BLOCKED` before boarding, or use
 [`answer.md`](answer.md) if all you have is a decision.

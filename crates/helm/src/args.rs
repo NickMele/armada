@@ -189,6 +189,33 @@ pub enum FleetInvocation {
         /// Kill every Job whose workflow has terminated.
         all_finished: bool,
     },
+    /// `armada fleet pause <job>`.
+    Pause {
+        /// `--json`.
+        json: bool,
+        /// Which Job.
+        job: String,
+    },
+    /// `armada fleet resume <job>`.
+    Resume {
+        /// `--json`.
+        json: bool,
+        /// Which Job.
+        job: String,
+    },
+    /// `armada fleet reap`.
+    Reap {
+        /// `--json`.
+        json: bool,
+        /// `--job <job>`, repeatable: reap exactly these instead of the
+        /// default set. This is what the Bridge's preview dispatches once a
+        /// person has ticked the rows they meant.
+        jobs: Vec<String>,
+        /// `--dry-run`: the plan, and nothing reaped.
+        dry_run: bool,
+        /// `--yes`: reap without asking, which is what a pipe has to pass.
+        yes: bool,
+    },
     /// `armada fleet answer <job> "<answer>"`.
     Answer {
         /// Emit the envelope.
@@ -226,6 +253,9 @@ impl FleetInvocation {
             | FleetInvocation::Kill { json, .. }
             | FleetInvocation::Answer { json, .. }
             | FleetInvocation::Show { json, .. }
+            | FleetInvocation::Pause { json, .. }
+            | FleetInvocation::Resume { json, .. }
+            | FleetInvocation::Reap { json, .. }
             | FleetInvocation::Inbox { json, .. } => *json,
         }
     }
@@ -526,12 +556,15 @@ pub const RESERVED_TOP_LEVEL: [(&str, &str); 0] = [];
 
 /// Fleet's verbs.
 ///
-/// **All six are built.** Fleet is usable from a shell before the MCP server or
-/// Helm exists, which is the whole point of building it first (PHASES.md §8.5).
+/// **All nine are built.** Fleet is usable from a shell before the MCP server or
+/// Helm exists, which is the whole point of building it first (PHASES.md §8.5) —
+/// and it is what lets every key on the Bridge name a verb a person could type.
 ///
 /// **Names only.** What each verb is *for* is one sentence, and it is on that
 /// verb's help page — kept in two places it would eventually be two sentences.
-pub const FLEET_VERBS: [&str; 7] = ["spawn", "ls", "show", "board", "answer", "inbox", "kill"];
+pub const FLEET_VERBS: [&str; 10] = [
+    "spawn", "ls", "show", "board", "answer", "inbox", "kill", "pause", "resume", "reap",
+];
 
 /// The top-level verbs that are built.
 ///
@@ -1518,6 +1551,56 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
             FleetInvocation::Show {
                 json: parsed.json,
                 job,
+            }
+        }
+        "pause" | "resume" => {
+            let r#where = format!("fleet {name}");
+            let parsed = flags(tail, json, color, &r#where, &[], &[])?;
+            let Some(job) = one_positional(
+                &parsed,
+                &r#where,
+                "which Job",
+                "`armada fleet ls` lists them",
+            )?
+            else {
+                return Err(needs_positional(
+                    &r#where,
+                    &format!("`armada fleet {name}` needs a Job"),
+                    "`armada fleet ls` lists them",
+                    parsed.json,
+                ));
+            };
+            match name {
+                "pause" => FleetInvocation::Pause {
+                    json: parsed.json,
+                    job,
+                },
+                _ => FleetInvocation::Resume {
+                    json: parsed.json,
+                    job,
+                },
+            }
+        }
+        "reap" => {
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "fleet reap",
+                &["--dry-run", "--yes"],
+                &["--job"],
+            )?;
+            // **A bulk delete never happens by accident, and this is where that
+            // is decided rather than at a terminal.** `--dry-run` previews;
+            // `--yes` reaps; neither is the plan and nothing else. A `reap` with
+            // no answer either way asks at a terminal and refuses without one,
+            // because the alternative — reaping because nobody was there to say
+            // no — is the accident the flag exists to prevent.
+            FleetInvocation::Reap {
+                json: parsed.json,
+                jobs: parsed.every("--job"),
+                dry_run: parsed.on("--dry-run"),
+                yes: parsed.on("--yes"),
             }
         }
         "answer" => {
@@ -2794,7 +2877,7 @@ mod tests {
         for verb in FLEET_VERBS {
             let tail: &[&str] = match verb {
                 "spawn" => &["a task"],
-                "show" | "board" | "kill" => &["rate-limit"],
+                "show" | "board" | "kill" | "pause" | "resume" => &["rate-limit"],
                 "answer" => &["rate-limit", "go on"],
                 _ => &[],
             };

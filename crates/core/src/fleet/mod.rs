@@ -103,6 +103,63 @@ impl JobState {
     pub const fn needs_a_person(self) -> bool {
         matches!(self, JobState::Blocked | JobState::Paused)
     }
+
+    /// What a bulk reap does with a Job in this state
+    /// (`commands/fleet/reap.md`).
+    ///
+    /// **A state you might still act on is not garbage**, and that one sentence
+    /// decides every row of the match. `DONE` and `ABORTED` are finished and
+    /// nothing further will happen to them. `STALLED` and `BLOCKED` are the two
+    /// a person may still push along — a stalled Job is one whose Drone died,
+    /// and starting it again is a reasonable next move rather than a reason to
+    /// delete the branch it was working on. `PAUSED` is the strongest case of
+    /// all: it *means* needs-you, so reaping it by default would delete the very
+    /// Jobs the fleet is asking about.
+    ///
+    /// **`RUNNING` is never offered**, because the observation is what produces
+    /// it: a Job only observes as `RUNNING` while its process group is provably
+    /// still Armada's ([`crate::fleet::job::observe`]). A record that *says*
+    /// `RUNNING` with a dead Drone observes as `STALLED` or `PAUSED` and is
+    /// offered by those rows — which is what makes the leaked port block of a
+    /// Job nobody noticed had died reclaimable at all.
+    ///
+    /// **`QUEUED` is never offered either**, for the opposite reason: it has
+    /// spent nothing, holds nothing and is about to start.
+    pub const fn reaping(self) -> Reaping {
+        match self {
+            JobState::Done | JobState::Aborted => Reaping::Taken,
+            JobState::Stalled | JobState::Blocked | JobState::Paused => Reaping::Offered,
+            JobState::Running | JobState::Queued => Reaping::Never,
+        }
+    }
+}
+
+/// What a bulk reap does with one Job, before anybody has toggled anything.
+///
+/// **Three answers rather than two**, because the middle one is the feature: a
+/// preview that only showed what it was about to take would hide the Jobs whose
+/// cost of *not* reaping — a port block held, a worktree on disk — is exactly
+/// what a person is deciding about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reaping {
+    /// Not listed at all.
+    Never,
+    /// Listed, and left for a person to turn on.
+    Offered,
+    /// Listed, and taken unless a person turns it off.
+    Taken,
+}
+
+impl Reaping {
+    /// Whether a reap lists this Job at all.
+    pub const fn is_offered(self) -> bool {
+        !matches!(self, Reaping::Never)
+    }
+
+    /// Whether a reap takes it with nothing said.
+    pub const fn is_default(self) -> bool {
+        matches!(self, Reaping::Taken)
+    }
 }
 
 impl fmt::Display for JobState {

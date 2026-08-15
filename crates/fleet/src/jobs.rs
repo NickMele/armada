@@ -98,10 +98,28 @@ impl Store {
     /// and the uuid is what the transcript is called. An ambiguous prefix is
     /// refused rather than resolved to the first match — killing the wrong Job
     /// is not recoverable by re-running the command.
+    ///
+    /// **An ambiguous *name* is refused too, and that is the decision worth
+    /// stating.** A uuid is identity; a name is a label, and nothing enforces
+    /// that a label is unique — [`Store::name_is_taken`] only refuses to reuse
+    /// the name of a Job that is still *live*, so a finished `rate-limit` and a
+    /// running `rate-limit` are both ordinary and both on disk. Resolution used
+    /// to take the first match over a list sorted by creation, and say nothing
+    /// about the choice.
+    ///
+    /// **A live Job does not win the tie**, which was the tempting fix. It is
+    /// the same coin flip with better odds: a person who typed a name that
+    /// means two things knows which one they meant and Armada does not, and
+    /// `kill` is not undoable. So both candidates are named — with the state,
+    /// the step and the day that tell them apart — and the uuid is what
+    /// disambiguates.
     pub fn find(&self, handle: &str) -> Result<Job, ArmadaError> {
         let jobs = self.all()?;
-        if let Some(job) = jobs.iter().find(|job| job.name == handle) {
-            return Ok(job.clone());
+        let named: Vec<&Job> = jobs.iter().filter(|job| job.name == handle).collect();
+        match named.as_slice() {
+            [job] => return Ok((*job).clone()),
+            [] => {}
+            several => return Err(ambiguous(handle, several, "names")),
         }
         let matches: Vec<&Job> = jobs
             .iter()
@@ -110,19 +128,7 @@ impl Store {
         match matches.as_slice() {
             [job] => Ok((*job).clone()),
             [] => Err(unknown(handle, &jobs)),
-            several => Err(ArmadaError {
-                class: ErrClass::BadInvocation,
-                r#where: handle.to_string(),
-                message: format!("`{handle}` names {} Jobs", several.len()),
-                next_action: Some(format!(
-                    "use a name: {}",
-                    several
-                        .iter()
-                        .map(|job| job.name.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )),
-            }),
+            several => Err(ambiguous(handle, several, "is the start of")),
         }
     }
 
@@ -189,6 +195,57 @@ impl Store {
                 "check ~/.armada/jobs/ is readable, then retry unchanged".to_string(),
             ),
         }
+    }
+}
+
+/// How long a uuid has to be before it is a handle a person can type.
+///
+/// **Eight, which is what `git` settled on for the same problem**: long enough
+/// that a collision is not a practical worry over the number of Jobs one machine
+/// has, short enough to retype from a screen.
+pub const SHORT_UUID: usize = 8;
+
+/// A uuid as a handle: the first [`SHORT_UUID`] characters.
+pub fn short(uuid: &str) -> &str {
+    match uuid.char_indices().nth(SHORT_UUID) {
+        Some((at, _)) => &uuid[..at],
+        None => uuid,
+    }
+}
+
+/// A handle that means more than one Job, refused rather than resolved.
+///
+/// **Every candidate, with what tells them apart.** A refusal that only said
+/// "two Jobs" would leave the reader to run `ls` and match the rows up by eye;
+/// the state, the step and the day are what a person actually recognises a Job
+/// by, and the short uuid is what they type next.
+fn ambiguous(handle: &str, several: &[&Job], verb: &str) -> ArmadaError {
+    let described: Vec<String> = several
+        .iter()
+        .map(|job| {
+            format!(
+                "{} {} at {}, {}",
+                short(&job.uuid),
+                job.state.word(),
+                match job.step.is_empty() {
+                    true => "no step",
+                    false => job.step.as_str(),
+                },
+                // The day, not the instant: the timestamp is only ever displayed
+                // and a reader is telling "this morning's" from "last week's".
+                job.created_at.split('T').next().unwrap_or(&job.created_at)
+            )
+        })
+        .collect();
+    ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: handle.to_string(),
+        message: format!(
+            "`{handle}` {verb} {} Jobs: {}",
+            several.len(),
+            described.join("; ")
+        ),
+        next_action: Some(format!("name one by uuid: `{}`", short(&several[0].uuid))),
     }
 }
 
@@ -319,8 +376,78 @@ mod tests {
             .unwrap();
         let error = store.find("8f2a").unwrap_err();
         assert_eq!(error.class, ErrClass::BadInvocation);
-        let next = error.next_action.unwrap();
-        assert!(next.contains("one") && next.contains("two"), "{next}");
+        // Both candidates, by the uuid that disambiguates them — the *name* is
+        // not the answer here, because two Jobs can share one.
+        assert!(
+            error.message.contains("8f2a-aaa") && error.message.contains("8f2a-bbb"),
+            "{}",
+            error.message
+        );
+        assert!(error.next_action.unwrap().contains("uuid"));
+    }
+
+    /// **A name two Jobs share is refused, and both are named.** This is the
+    /// shape a person actually had on disk: two records both called
+    /// `this-test`, the older one `ABORTED` at `explore` and the newer one
+    /// `RUNNING` at `plan` and holding a port block. Resolution took the first
+    /// match over a list sorted by creation and said nothing about the choice,
+    /// so `kill this-test` would have ended the wrong one — and a kill is not
+    /// undoable.
+    ///
+    /// **A live Job does not win the tie.** That is the same coin flip with
+    /// better odds: the person who typed the name knows which they meant and
+    /// Armada does not.
+    #[test]
+    fn a_name_two_jobs_share_is_refused_rather_than_resolved() {
+        let (_home, store) = store();
+        let mut old = job("this-test", "c19d0a34-1111", JobState::Aborted, 10);
+        old.step = "explore".to_string();
+        let mut new = job("this-test", "94b1fd2e-2222", JobState::Running, 20);
+        new.step = "plan".to_string();
+        store.save(&old).unwrap();
+        store.save(&new).unwrap();
+
+        let error = store.find("this-test").unwrap_err();
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert_eq!(error.class.exit_code(), 2);
+
+        // Both candidates, with what tells them apart.
+        for word in [
+            "c19d0a34", "94b1fd2e", "ABORTED", "RUNNING", "explore", "plan",
+        ] {
+            assert!(
+                error.message.contains(word),
+                "the refusal does not name `{word}`: {}",
+                error.message
+            );
+        }
+        // And the disambiguator is a uuid a person can retype.
+        let next = error.next_action.expect("a next action");
+        assert!(next.contains("uuid"), "{next}");
+        assert!(next.contains("c19d0a34"), "{next}");
+
+        // The uuid always works, whichever one was meant.
+        assert_eq!(store.find("94b1fd2e").unwrap().uuid, "94b1fd2e-2222");
+        assert_eq!(store.find("c19d0a34").unwrap().uuid, "c19d0a34-1111");
+    }
+
+    /// **Ended does not stop being a candidate.** Both Jobs are durable records
+    /// and either could be the one meant, so an `ABORTED` and a `DONE` of one
+    /// name are ambiguous exactly as a live pair would be.
+    #[test]
+    fn a_name_only_finished_jobs_hold_is_ambiguous_too() {
+        let (_home, store) = store();
+        store
+            .save(&job("this-test", "aaaa-old", JobState::Aborted, 10))
+            .unwrap();
+        store
+            .save(&job("this-test", "bbbb-new", JobState::Done, 20))
+            .unwrap();
+        assert_eq!(
+            store.find("this-test").unwrap_err().class,
+            ErrClass::BadInvocation
+        );
+        assert_eq!(store.find("bbbb").unwrap().uuid, "bbbb-new");
     }
 
     #[test]

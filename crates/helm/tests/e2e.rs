@@ -1377,3 +1377,84 @@ fn namespace_of(db: &std::path::Path) -> String {
         })
         .unwrap_or_default()
 }
+
+/// **`armada fleet board --exec` enters the Job's worktree, and the record's
+/// tilde is expanded before `chdir` sees it.**
+///
+/// A Job record keeps its worktree as `~/…` — portable across machines, and what
+/// both audiences already read. `chdir` does no tilde expansion; that is the
+/// shell's job, and there is no shell in an `exec`. Handing the stored string
+/// straight to `Command::current_dir` made `enter` on the Bridge and `board
+/// --exec` from a prompt fail on **every Job on the machine**, with `No such
+/// file or directory` about a directory that was there all along.
+///
+/// **The stub records its own working directory and nothing else.** It spends no
+/// token, starts no session, and is on `PATH` for this one invocation.
+#[test]
+fn boarding_a_job_execs_into_the_expanded_worktree() {
+    let machine = Machine::new();
+    let armada = machine.home.path().join(".armada");
+    let worktree = armada.join("workspaces/api/rate-limit");
+    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::create_dir_all(armada.join("jobs")).unwrap();
+
+    // The record as `spawn` writes it: the worktree in tilde form.
+    let uuid = "8f2a1c40-33b1-4a5e-9d21-000000000001";
+    std::fs::write(
+        armada.join("jobs").join(format!("{uuid}.json")),
+        format!(
+            r#"{{
+              "uuid": "{uuid}",
+              "name": "rate-limit",
+              "workflow": "feature",
+              "repo": "api",
+              "repo_root": "~/code/api",
+              "worktree": "~/.armada/workspaces/api/rate-limit",
+              "branch": "armada/rate-limit",
+              "budget": {{"iterations": 20, "tokens": 2000000, "wall_clock_ms": 7200000, "on_exhausted": "needs_human"}},
+              "state": "RUNNING",
+              "step": "implement",
+              "created_at": "2026-08-09T14:02:11Z",
+              "created_ms": 1786284131000,
+              "spend": {{"cost_usd": 0.0, "tokens": 0, "turns": 0, "api_ms": 0}},
+              "task": "add rate limiting"
+            }}"#
+        ),
+    )
+    .unwrap();
+
+    // A `claude` that records where it was started and exits. It never talks to
+    // anything and it is only on `PATH` for this one command.
+    let bin = machine.root.path().join("stub-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let landed = machine.root.path().join("landed");
+    let stub = bin.join("claude");
+    std::fs::write(&stub, format!("#!/bin/sh\npwd > {}\n", landed.display())).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = machine.run_with_env(
+        machine.root.path(),
+        &["fleet", "board", "rate-limit", "--exec"],
+        &[("PATH", &path)],
+    );
+    assert!(
+        output.status.success(),
+        "board --exec failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let landed_in = std::fs::read_to_string(&landed).expect("the session never started");
+    assert_eq!(
+        std::fs::canonicalize(landed_in.trim()).unwrap(),
+        std::fs::canonicalize(&worktree).unwrap(),
+        "board did not exec inside the Job's worktree"
+    );
+}

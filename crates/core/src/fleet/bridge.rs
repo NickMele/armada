@@ -293,6 +293,89 @@ pub enum Key {
     Interrupt,
 }
 
+/// Which Job a key acted on.
+///
+/// **The name and the uuid together, because they answer different questions.**
+/// The name is what a notice says back to the person who pressed the key; the
+/// uuid is what the verb is given. A name is a *handle* rather than a key —
+/// [`crate::fleet::job::Job`] records are kept after a Job ends and the name
+/// stays on them, so a finished `rate-limit` and a running one are both
+/// ordinary and both on disk. Dispatching on the name alone is how `x` on the
+/// running row reached the one that ended last week, reported success, and left
+/// the Job on the screen exactly as it was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Target {
+    /// The handle, for saying which Job this was about.
+    pub job: String,
+    /// The session id, for saying which Job to a verb.
+    pub uuid: String,
+}
+
+impl Target {
+    /// The Job under the cursor, as something a verb can be given.
+    pub fn of(row: &JobRow) -> Target {
+        Target {
+            job: row.name.clone(),
+            uuid: row.uuid.clone(),
+        }
+    }
+
+    /// The uuid as a handle a person can retype: the first eight characters.
+    ///
+    /// **Because a name is not enough to tell two rows apart.** Two Jobs may
+    /// share one, and on a screen that is about to delete things the row has to
+    /// carry the thing that is actually unique.
+    pub fn short(&self) -> &str {
+        match self.uuid.char_indices().nth(8) {
+            Some((at, _)) => &self.uuid[..at],
+            None => &self.uuid,
+        }
+    }
+}
+
+/// One row of the reap preview.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReapRow {
+    /// Which Job.
+    pub target: Target,
+    /// What it is really doing, observed rather than recorded.
+    pub state: JobState,
+    /// Whether this row is ticked.
+    pub selected: bool,
+    /// What it is holding, already worded — the port block, the worktree.
+    ///
+    /// **Rendered by the shell that read it and carried as text**, because the
+    /// preview's whole job is to put the cost of *not* reaping beside the cost
+    /// of reaping, and what a Job holds is a question about the machine rather
+    /// than about the screen.
+    pub holding: String,
+}
+
+/// The reap preview: every candidate, and which of them are ticked.
+///
+/// **Mandatory, and the feature rather than a confirmation bolted on.** A bulk
+/// delete that only listed names would ask a person to approve a decision on
+/// less information than the machine already has.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Reap {
+    /// The candidates, in the order the plan produced them.
+    pub rows: Vec<ReapRow>,
+    /// Which row the cursor is on **inside the preview**, which is a different
+    /// question from which Job the fleet table is on.
+    pub cursor: Cursor,
+}
+
+impl Reap {
+    /// Every ticked row, as targets.
+    pub fn selected(&self) -> Vec<Target> {
+        self.rows
+            .iter()
+            .filter(|row| row.selected)
+            .map(|row| row.target.clone())
+            .collect()
+    }
+}
+
 /// What the screen is doing between keypresses.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Mode {
@@ -319,7 +402,25 @@ pub enum Mode {
     /// deletes its worktree and drops its branch, and a single keypress that
     /// does that on whatever row the cursor happened to be on is the mistake
     /// worth one extra character to avoid.
-    Confirming(String),
+    Confirming(Target),
+    /// `r` was pressed and this is what a reap would take.
+    ///
+    /// **`esc` leaves everything untouched**, which is what makes the preview
+    /// safe to open out of curiosity — and being safe to open is what makes it
+    /// get read.
+    Reaping(Reap),
+    /// `?` was pressed: every binding, including the ones the key line could
+    /// not carry.
+    ///
+    /// **The honest answer to a line that is one line.** Nine key/word pairs is
+    /// eighty-two columns against a budget of seventy-eight, so a key line
+    /// either wraps — which changes the frame's height, and the tests forbid
+    /// that — or stops listing everything. This is what "stops listing
+    /// everything" is allowed to cost: one keystroke, and the rest are there.
+    ///
+    /// **Any key closes it**, because it is a thing you glanced at rather than
+    /// a mode you work in.
+    Keys,
 }
 
 /// Leaving the screen, and what to do on the way out.
@@ -328,20 +429,72 @@ pub enum Mode {
 /// the Bridge a rendering choice rather than an architectural one
 /// (`commands/helm/bridge.md`). The screen does not perform any of them; it
 /// stops, and says which one.
+///
+/// **These are the four that genuinely cannot happen on the screen**: quitting
+/// is the deliberate exit, boarding replaces this process with `claude`, and
+/// `n` and `a` need a text box the alternate screen cannot hold. Everything
+/// else a key does is an [`Action`] and happens without giving the screen back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Departure {
     /// `q` — nothing further.
     Quit,
     /// `↵` — `armada fleet board <job>`.
-    Board(String),
+    Board(Target),
     /// `n` — `armada fleet spawn`.
     Spawn,
     /// `a` — `armada fleet answer <job>`.
-    Answer(String),
+    Answer(Target),
+}
+
+/// Something a key does **without giving the screen back**.
+///
+/// **This is the class fix, and it matters more than any one key.** Every one
+/// of these used to end the Bridge, so a `kill` that could not remove a
+/// worktree took away the view of the other four Jobs in order to say something
+/// about one — and what it said landed in a shell the reader was no longer
+/// looking at. An action that fails is a line under the table.
+///
+/// Each still names a verb reachable from a shell, which is the rule that keeps
+/// the Bridge a rendering choice: what changed is *where the answer is
+/// printed*, not what runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Action {
     /// `x`, confirmed — `armada fleet kill <job>`.
-    Abort(String),
-    /// `c` — `armada helm`.
+    Abort(Target),
+    /// `p` on a Job that is running — `armada fleet pause <job>`.
+    Pause(Target),
+    /// `p` on a Job that is paused — `armada fleet resume <job>`.
+    Resume(Target),
+    /// `r` — read `armada fleet reap --dry-run` and open the preview over it.
+    Preview,
+    /// The preview, confirmed — `armada fleet reap` over exactly these.
+    Reap(Vec<Target>),
+    /// `c` — `armada helm`, which is not built and says so here rather than by
+    /// ending the screen to report it.
     Chat,
+}
+
+/// What carrying out an [`Action`] produced.
+///
+/// **A line and, at most, a mode.** The shell performs the action and hands
+/// back what to say; the screen decides nothing about it, which keeps the whole
+/// of the Bridge's key handling a unit test.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Done {
+    /// One line under the table, cleared by the next keypress.
+    pub notice: String,
+    /// A mode to switch into — the reap preview, and nothing else so far.
+    pub mode: Option<Mode>,
+}
+
+impl Done {
+    /// Said, and nothing else changed.
+    pub fn said(notice: impl Into<String>) -> Done {
+        Done {
+            notice: notice.into(),
+            mode: None,
+        }
+    }
 }
 
 /// What one keypress did.
@@ -349,7 +502,9 @@ pub enum Departure {
 pub enum Pressed {
     /// Redraw and carry on.
     Stay,
-    /// Stop drawing, and do this.
+    /// Carry this out, put the answer under the table, and carry on drawing.
+    Act(Action),
+    /// Stop drawing, and do this off the screen.
     Leave(Departure),
 }
 
@@ -380,14 +535,19 @@ pub fn press(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
 
     match std::mem::take(&mut screen.mode) {
         Mode::Filtering(typed) => filtering(screen, typed, key),
-        Mode::Confirming(job) => confirming(screen, job, key),
+        Mode::Confirming(target) => confirming(screen, target, key),
         Mode::Detail(job) => detail(screen, job, rows, key),
+        Mode::Reaping(reap) => reaping(screen, reap, key),
+        // **Any key closes it.** It is a thing you glanced at rather than a
+        // mode you work in, and a page that took a second deliberate keystroke
+        // to leave would be one nobody opens twice.
+        Mode::Keys => Pressed::Stay,
         Mode::Watching => watching(screen, rows, key),
     }
 }
 
 fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
-    let selected = screen.cursor.selected(rows).map(|row| row.name.clone());
+    let selected = screen.cursor.selected(rows).map(Target::of);
     match key {
         Key::Up | Key::Char('k') => screen.cursor.previous(rows.len()),
         Key::Down | Key::Char('j') => screen.cursor.next(rows.len()),
@@ -412,18 +572,21 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         }
 
         Key::Enter => match selected {
-            Some(job) => return Pressed::Leave(Departure::Board(job)),
+            Some(target) => return Pressed::Leave(Departure::Board(target)),
             None => screen.notice = Some(nothing_selected("board")),
         },
         Key::Char('n') => return Pressed::Leave(Departure::Spawn),
-        Key::Char('c') => return Pressed::Leave(Departure::Chat),
+        // **`c` answers on the screen rather than by ending it.** `armada helm`
+        // is not built, and tearing the frame down to say so took away the view
+        // of a whole fleet in order to report one unimplemented key.
+        Key::Char('c') => return Pressed::Act(Action::Chat),
 
         Key::Char('a') => match screen.cursor.selected(rows) {
             // **Only a Job with something open can be answered.** `armada fleet
             // answer` refuses one that has nothing waiting, and finding that out
             // by leaving the screen and coming back is a worse way to be told.
             Some(row) if row.needs_attention => {
-                return Pressed::Leave(Departure::Answer(row.name.clone()))
+                return Pressed::Leave(Departure::Answer(Target::of(row)))
             }
             Some(row) => {
                 screen.notice = Some(format!("`{}` has nothing open to answer", row.name));
@@ -433,34 +596,94 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
 
         // **`d` for the detail view**, the key `k9s` and `htop` already spend on
         // describing the row under the cursor — and the Bridge is modelled on
-        // both (PLAN.md §15.1). It is deliberately **not on the key line**: that
-        // line is eighty-one columns wide with one more pair on it, and a person
-        // at a standard terminal reading a wrapped key line while an agent reads
-        // a straight one is a worse cost than an undocumented key. The page
-        // documents it instead.
+        // both (PLAN.md §15.1). It sits **second on the key line**, behind
+        // `enter` only: it is the one key that answers `NEEDS YOU`, which is the
+        // one column that is ever a call to action. It was unnamed for as long
+        // as the line could only wrap or lie; now the line drops by priority and
+        // says `? keys` when it has, so naming `d` costs the two pairs at the
+        // end of the order rather than the frame's height.
         Key::Char('d') => match selected {
-            Some(job) => screen.mode = Mode::Detail(job),
+            Some(target) => screen.mode = Mode::Detail(target.job),
             None => screen.notice = Some(nothing_selected("show")),
         },
 
         Key::Char('x') => match selected {
-            Some(job) => {
-                screen.notice = Some(format!("abort `{job}`? press y"));
-                screen.mode = Mode::Confirming(job);
+            Some(target) => {
+                screen.notice = Some(format!("abort `{}`? press y", target.job));
+                screen.mode = Mode::Confirming(target);
             }
             None => screen.notice = Some(nothing_selected("abort")),
         },
 
-        // **`p` has no verb behind it and says so.** `commands/helm/bridge.md`
-        // gives pause/resume no Fleet verb, and the Bridge adds no capability —
-        // so the honest answer is the one a reserved name gives everywhere else
-        // in this CLI rather than a pause invented here.
-        Key::Char('p') => {
-            screen.notice = Some("pause/resume is not built yet".to_string());
+        // **`p` reads the row it is on.** One key, two verbs, decided by what
+        // the selected Job is doing — which is the same thing the key line says
+        // it will do, because both ask [`pause_key`].
+        Key::Char('p') => match screen.cursor.selected(rows) {
+            Some(row) => {
+                let target = Target::of(row);
+                return Pressed::Act(match row.state {
+                    JobState::Paused => Action::Resume(target),
+                    _ => Action::Pause(target),
+                });
+            }
+            None => screen.notice = Some(nothing_selected("pause")),
+        },
+
+        // **`r` opens the preview and reaps nothing.** Reading what would be
+        // taken is the whole feature, so the key that starts it must be safe to
+        // press out of curiosity.
+        Key::Char('r') => return Pressed::Act(Action::Preview),
+
+        // **`?` is what a one-line key line costs.** The line drops its lowest
+        // -priority pairs rather than wrapping, because wrapping would change
+        // the frame's height; this is where the ones it dropped are.
+        Key::Char('?') => screen.mode = Mode::Keys,
+
+        Key::Backspace | Key::Char(_) => {}
+    }
+    Pressed::Stay
+}
+
+/// The preview's own keys. **Nothing here touches the fleet** — it moves a
+/// cursor over rows the shell already read, ticks them, and either confirms or
+/// throws the whole list away.
+fn reaping(screen: &mut Screen, mut reap: Reap, key: Key) -> Pressed {
+    let rows = reap.rows.len();
+    match key {
+        Key::Up | Key::Char('k') => reap.cursor.previous(rows),
+        Key::Down | Key::Char('j') => reap.cursor.next(rows),
+
+        // Space toggles, because it is the one key a list of checkboxes has
+        // meant everywhere for thirty years.
+        Key::Char(' ') => {
+            if let Some(row) = reap.rows.get_mut(reap.cursor.at()) {
+                row.selected = !row.selected;
+            }
+        }
+
+        Key::Enter => {
+            let taken = reap.selected();
+            if taken.is_empty() {
+                // **Confirming an empty selection is not a reap of nothing, it
+                // is a keypress that meant something else.** Saying so keeps
+                // the preview open, with the rows still ticked as they were.
+                screen.notice = Some("nothing is ticked — space ticks a row".to_string());
+                screen.mode = Mode::Reaping(reap);
+                return Pressed::Stay;
+            }
+            return Pressed::Act(Action::Reap(taken));
+        }
+
+        // **`esc` leaves everything untouched**, which is what makes the
+        // preview safe to open — and being safe to open is what makes it read.
+        Key::Esc | Key::Interrupt => {
+            screen.notice = Some("nothing was reaped".to_string());
+            return Pressed::Stay;
         }
 
         Key::Backspace | Key::Char(_) => {}
     }
+    screen.mode = Mode::Reaping(reap);
     Pressed::Stay
 }
 
@@ -525,13 +748,13 @@ fn detail(screen: &mut Screen, job: String, rows: &[JobRow], key: Key) -> Presse
     }
 }
 
-fn confirming(screen: &mut Screen, job: String, key: Key) -> Pressed {
+fn confirming(screen: &mut Screen, target: Target, key: Key) -> Pressed {
     match key {
-        Key::Char('y') | Key::Char('Y') => Pressed::Leave(Departure::Abort(job)),
+        Key::Char('y') | Key::Char('Y') => Pressed::Act(Action::Abort(target)),
         // **Anything else is a no.** A confirmation that only one key can
         // decline is a confirmation that gets answered by accident.
         _ => {
-            screen.notice = Some(format!("`{job}` was not aborted"));
+            screen.notice = Some(format!("`{}` was not aborted", target.job));
             Pressed::Stay
         }
     }
@@ -539,6 +762,22 @@ fn confirming(screen: &mut Screen, job: String, key: Key) -> Pressed {
 
 fn nothing_selected(verb: &str) -> String {
     format!("no Job to {verb}")
+}
+
+/// What `p` does to the Job under the cursor, as the word the key line prints.
+///
+/// **One function, asked by the binding and by the renderer**, which is the
+/// whole of the fix: a key line that always said `pause` over a `PAUSED` Job
+/// advertised the one thing that key would not do, and left the reader with no
+/// way at all to start it again. Two lists would have drifted the first time a
+/// state was added.
+pub const fn pause_key(selected: Option<JobState>) -> &'static str {
+    match selected {
+        Some(JobState::Paused) => "resume",
+        // Everything else — including nothing selected — is `pause`, because
+        // that is what the key does to a Job that is not held.
+        _ => "pause",
+    }
 }
 
 #[cfg(test)]
@@ -736,16 +975,27 @@ mod tests {
 
     // ---------------------------------------------------------------- the keys
 
+    fn target(name: &str) -> Target {
+        Target {
+            job: name.to_string(),
+            uuid: format!("{name}-uuid"),
+        }
+    }
+
     /// **Every key that leaves names a verb reachable from a shell**, which is
     /// what keeps the Bridge a rendering choice rather than an architectural
     /// one.
+    ///
+    /// **And `↵` boards.** It has to be asserted by name, because the failure it
+    /// is written against was a keypress arriving at the wrong verb entirely:
+    /// `enter` answering with "`armada helm` is not built yet" — an error whose
+    /// own next-action line names the command that should have run.
     #[test]
     fn each_key_leaves_for_the_verb_the_page_gives_it() {
         let (_, rows) = watching_at(3);
         for (key, expected) in [
-            (Key::Enter, Departure::Board("rate-limit".to_string())),
+            (Key::Enter, Departure::Board(target("rate-limit"))),
             (Key::Char('n'), Departure::Spawn),
-            (Key::Char('c'), Departure::Chat),
             (Key::Char('q'), Departure::Quit),
             (Key::Interrupt, Departure::Quit),
             (Key::Esc, Departure::Quit),
@@ -757,6 +1007,32 @@ mod tests {
                 "{key:?}"
             );
         }
+    }
+
+    /// **A key carries the uuid as well as the name.** A name is a handle rather
+    /// than a key — a finished `rate-limit` and a running one are both on disk —
+    /// so a keypress dispatched on the name alone can reach a Job the cursor was
+    /// never on.
+    #[test]
+    fn every_key_that_acts_names_the_job_by_uuid_and_not_only_by_name() {
+        let (mut screen, rows) = watching_at(3);
+        let Pressed::Leave(Departure::Board(boarded)) = press(&mut screen, &rows, Key::Enter)
+        else {
+            panic!("enter did not board");
+        };
+        assert_eq!(boarded.uuid, "rate-limit-uuid");
+        assert_eq!(boarded.job, "rate-limit");
+    }
+
+    /// **`c` answers on the screen.** `armada helm` is not built; ending the
+    /// frame to say so took away the view of a whole fleet to report one key.
+    #[test]
+    fn chat_is_answered_without_ending_the_screen() {
+        let (mut screen, rows) = watching_at(3);
+        assert_eq!(
+            press(&mut screen, &rows, Key::Char('c')),
+            Pressed::Act(Action::Chat)
+        );
     }
 
     /// **`a` only leaves for a Job with something open.** `armada fleet answer`
@@ -775,21 +1051,24 @@ mod tests {
         screen.cursor.next(3);
         assert_eq!(
             press(&mut screen, &rows, Key::Char('a')),
-            Pressed::Leave(Departure::Answer("release-merge".to_string()))
+            Pressed::Leave(Departure::Answer(target("release-merge")))
         );
     }
 
     /// **Abort asks twice, and anything but `y` is a no.** One keypress that
     /// ends a Job, deletes its worktree and drops its branch — on whatever row
     /// the cursor happened to be on — is the mistake worth one character.
+    ///
+    /// **And it acts rather than leaving.** An abort that ended the screen
+    /// reported its failure to a shell the reader was no longer looking at.
     #[test]
     fn abort_takes_two_keys_and_declines_on_anything_but_y() {
         let (mut screen, rows) = watching_at(3);
         assert_eq!(press(&mut screen, &rows, Key::Char('x')), Pressed::Stay);
-        assert_eq!(screen.mode, Mode::Confirming("rate-limit".to_string()));
+        assert_eq!(screen.mode, Mode::Confirming(target("rate-limit")));
         assert_eq!(
             press(&mut screen, &rows, Key::Char('y')),
-            Pressed::Leave(Departure::Abort("rate-limit".to_string()))
+            Pressed::Act(Action::Abort(target("rate-limit")))
         );
 
         for declined in [Key::Char('n'), Key::Esc, Key::Enter, Key::Char('x')] {
@@ -808,17 +1087,149 @@ mod tests {
         }
     }
 
-    /// **`p` says it is not built rather than doing nothing.** The page gives
-    /// pause/resume no verb, the Bridge adds no capability, and a key that
-    /// swallows the press is indistinguishable from a dead keyboard.
+    /// **`p` reads the row it is on.** A key line that always said `pause` over
+    /// a `PAUSED` Job advertised the one thing that key would not do, and left
+    /// the reader with no way at all to start it again.
     #[test]
-    fn pause_answers_that_it_is_not_built() {
+    fn pause_reads_the_selected_rows_state_and_the_key_line_says_the_same_word() {
+        let running = row("rate-limit", JobState::Running, false);
+        let held = row("xlsx-report", JobState::Paused, false);
+        let rows = vec![running, held];
+
+        let mut screen = Screen::default();
+        assert_eq!(
+            press(&mut screen, &rows, Key::Char('p')),
+            Pressed::Act(Action::Pause(target("rate-limit")))
+        );
+        assert_eq!(pause_key(Some(JobState::Running)), "pause");
+
+        screen.cursor.next(2);
+        assert_eq!(
+            press(&mut screen, &rows, Key::Char('p')),
+            Pressed::Act(Action::Resume(target("xlsx-report")))
+        );
+        assert_eq!(pause_key(Some(JobState::Paused)), "resume");
+    }
+
+    /// An empty fleet has no row for `p` to read, and says so rather than
+    /// pausing something.
+    #[test]
+    fn pause_on_an_empty_fleet_says_there_is_no_job() {
+        let mut screen = Screen::default();
+        assert_eq!(press(&mut screen, &[], Key::Char('p')), Pressed::Stay);
+        assert_eq!(screen.notice.as_deref(), Some("no Job to pause"));
+        assert_eq!(pause_key(None), "pause");
+    }
+
+    // --------------------------------------------------------------- the reap
+
+    fn reap_row(name: &str, state: JobState, selected: bool) -> ReapRow {
+        ReapRow {
+            target: target(name),
+            state,
+            selected,
+            holding: "5470-5479 · worktree".to_string(),
+        }
+    }
+
+    fn previewing() -> Screen {
+        Screen {
+            mode: Mode::Reaping(Reap {
+                rows: vec![
+                    reap_row("rate-limit", JobState::Done, true),
+                    reap_row("xlsx-report", JobState::Paused, false),
+                    reap_row("release-merge", JobState::Aborted, true),
+                ],
+                cursor: Cursor::default(),
+            }),
+            ..Screen::default()
+        }
+    }
+
+    /// **`r` opens the preview and reaps nothing.** Reading what would be taken
+    /// is the whole feature, so the key that starts it must be safe to press out
+    /// of curiosity.
+    #[test]
+    fn r_opens_the_preview_rather_than_reaping() {
         let (mut screen, rows) = watching_at(3);
-        assert_eq!(press(&mut screen, &rows, Key::Char('p')), Pressed::Stay);
+        assert_eq!(
+            press(&mut screen, &rows, Key::Char('r')),
+            Pressed::Act(Action::Preview)
+        );
+    }
+
+    /// Rows toggle, and `enter` confirms exactly what is ticked.
+    #[test]
+    fn the_preview_toggles_rows_and_confirms_only_what_is_ticked() {
+        let mut screen = previewing();
+        // Tick the second row, which is the `PAUSED` one nothing takes by
+        // default.
+        press(&mut screen, &[], Key::Down);
+        press(&mut screen, &[], Key::Char(' '));
+        // And untick the first, which is ticked by default.
+        press(&mut screen, &[], Key::Up);
+        press(&mut screen, &[], Key::Char(' '));
+
+        assert_eq!(
+            press(&mut screen, &[], Key::Enter),
+            Pressed::Act(Action::Reap(vec![
+                target("xlsx-report"),
+                target("release-merge"),
+            ]))
+        );
+    }
+
+    /// **`esc` leaves everything untouched**, which is what makes the preview
+    /// safe to open — and being safe to open is what makes it read.
+    #[test]
+    fn esc_cancels_the_preview_and_reaps_nothing() {
+        let mut screen = previewing();
+        assert_eq!(press(&mut screen, &[], Key::Esc), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Watching);
+        assert_eq!(screen.notice.as_deref(), Some("nothing was reaped"));
+    }
+
+    /// Confirming an empty selection is a keypress that meant something else,
+    /// not a reap of nothing — so the preview stays open and says so.
+    #[test]
+    fn confirming_with_nothing_ticked_keeps_the_preview_open() {
+        let mut screen = Screen {
+            mode: Mode::Reaping(Reap {
+                rows: vec![reap_row("xlsx-report", JobState::Paused, false)],
+                cursor: Cursor::default(),
+            }),
+            ..Screen::default()
+        };
+        assert_eq!(press(&mut screen, &[], Key::Enter), Pressed::Stay);
+        assert!(matches!(screen.mode, Mode::Reaping(_)), "{:?}", screen.mode);
         assert_eq!(
             screen.notice.as_deref(),
-            Some("pause/resume is not built yet")
+            Some("nothing is ticked — space ticks a row")
         );
+    }
+
+    /// **A state you might still act on is not garbage.** `PAUSED` means
+    /// needs-you and `STALLED` is a Job somebody may want to start again, so
+    /// both are listed and neither is taken; a `RUNNING` Job is not offered at
+    /// all, because the observation only produces that word while its process
+    /// group is provably still Armada's.
+    #[test]
+    fn a_reap_takes_the_finished_offers_the_arguable_and_never_the_running() {
+        use crate::fleet::Reaping;
+        for (state, expected) in [
+            (JobState::Done, Reaping::Taken),
+            (JobState::Aborted, Reaping::Taken),
+            (JobState::Stalled, Reaping::Offered),
+            (JobState::Blocked, Reaping::Offered),
+            (JobState::Paused, Reaping::Offered),
+            (JobState::Running, Reaping::Never),
+            (JobState::Queued, Reaping::Never),
+        ] {
+            assert_eq!(state.reaping(), expected, "{}", state.word());
+        }
+        assert!(JobState::Paused.reaping().is_offered());
+        assert!(!JobState::Paused.reaping().is_default());
+        assert!(!JobState::Running.reaping().is_offered());
     }
 
     /// `/` opens holding what is in force, takes characters, and commits on
@@ -888,7 +1299,7 @@ mod tests {
     #[test]
     fn a_notice_lasts_exactly_one_keypress() {
         let (mut screen, rows) = watching_at(3);
-        press(&mut screen, &rows, Key::Char('p'));
+        press(&mut screen, &rows, Key::Char('a'));
         assert!(screen.notice.is_some());
         press(&mut screen, &rows, Key::Down);
         assert!(screen.notice.is_none());

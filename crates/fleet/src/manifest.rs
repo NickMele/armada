@@ -20,7 +20,7 @@
 //! The `--json` envelope is what comes back, and the port block is read out of
 //! it — Fleet does not claim ports and does not know how.
 
-use armada_core::ctx::{Run, RunRequest, SpawnErrorKind};
+use armada_core::ctx::{Run, RunRequest, SpawnError, SpawnErrorKind};
 use armada_core::envelope::Released;
 use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::ports::PortBlock;
@@ -102,7 +102,7 @@ pub fn clean(run: &impl Run, exe: &Path, worktree: &Path) -> Result<Cleaned, Arm
 }
 
 /// What `clean` released, and what it could not.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Cleaned {
     /// The counts, summed over the workspaces it touched.
     pub released: Released,
@@ -113,6 +113,62 @@ pub struct Cleaned {
     /// and `armada manifest clean --all` reclaims the remainder, and a `kill`
     /// that bailed out here would leave the worktree as well.
     pub error: Option<ArmadaError>,
+}
+
+impl Cleaned {
+    /// Nothing released, and this is why.
+    ///
+    /// **The shape a caller turns a raised failure back into**, so that `kill`'s
+    /// documented contract — the Job is marked ended either way — holds for the
+    /// failures [`clean`] raises as well as for the ones it carries. The two
+    /// look identical to a reader of the envelope, which is correct: both mean
+    /// "the Job ended and this is what is left to reclaim".
+    pub fn failed(error: ArmadaError) -> Cleaned {
+        Cleaned {
+            released: Released::default(),
+            error: Some(error),
+        }
+    }
+}
+
+/// Why one of Armada's own verbs would not start in a worktree.
+///
+/// **`ENOENT` on a spawn has two meanings and they need different words.**
+/// [`Run::call`] is given a program *and* a working directory, and a kernel that
+/// cannot find either answers with the same errno. Reporting both as a missing
+/// binary is how `armada fleet kill` came to tell somebody to reinstall Armada
+/// because a worktree had been deleted — advice that could not have helped,
+/// about a file that was never missing.
+///
+/// The directory is checked first because it is the one Armada can name, and
+/// because it is the one that is routinely gone: a Job's worktree is deleted by
+/// `kill`, by `git worktree prune`, or by hand, and the Job record outlives all
+/// three (PLAN.md §14.1).
+fn spawn_failure(what: &str, exe: &Path, cwd: &Path, e: &SpawnError) -> ArmadaError {
+    if e.kind == SpawnErrorKind::NotFound && !cwd.is_dir() {
+        return ArmadaError {
+            class: ErrClass::Environment,
+            r#where: cwd.display().to_string(),
+            message: format!(
+                "`{what}` had nowhere to run: the worktree `{}` is gone",
+                cwd.display()
+            ),
+            next_action: Some(
+                "`armada fleet kill <job>` ends the Job without it; \
+                 `armada manifest clean --all` reclaims what it left"
+                    .to_string(),
+            ),
+        };
+    }
+    ArmadaError {
+        class: ErrClass::Environment,
+        r#where: exe.display().to_string(),
+        message: match e.kind {
+            SpawnErrorKind::NotFound => format!("`{what}` could not be found to run"),
+            _ => format!("`{what}` would not start: {}", e.message),
+        },
+        next_action: Some("reinstall armada, then retry unchanged".to_string()),
+    }
 }
 
 fn call(
@@ -127,15 +183,7 @@ fn call(
 
     let output = run
         .call(&RunRequest::new(argv, cwd.to_path_buf()).timeout(DEADLINE))
-        .map_err(|e| ArmadaError {
-            class: ErrClass::Environment,
-            r#where: exe.display().to_string(),
-            message: match e.kind {
-                SpawnErrorKind::NotFound => format!("`{what}` could not be found to run"),
-                _ => format!("`{what}` would not start: {}", e.message),
-            },
-            next_action: Some("reinstall armada, then retry unchanged".to_string()),
-        })?;
+        .map_err(|e| spawn_failure(what, exe, cwd, &e))?;
 
     // **The envelope is read whatever the exit code was.** A `clean` that
     // released four of five resources exits non-zero and still has to say which
@@ -260,6 +308,68 @@ mod tests {
         let cleaned = clean(&run, Path::new("/bin/armada"), Path::new("/w")).unwrap();
         assert_eq!(cleaned.released.containers, 1);
         assert_eq!(cleaned.error.unwrap().class, ErrClass::ToolFailed);
+    }
+
+    /// A `Run` that cannot spawn anything at all, the way a kernel answers when
+    /// either the program or the working directory is missing.
+    struct Missing;
+
+    impl Run for Missing {
+        fn call(&self, _: &RunRequest) -> Result<RunOutput, SpawnError> {
+            Err(SpawnError {
+                program: "armada".to_string(),
+                kind: SpawnErrorKind::NotFound,
+                message: "No such file or directory (os error 2)".to_string(),
+            })
+        }
+    }
+
+    /// **`ENOENT` on a spawn has two meanings, and a missing worktree is not a
+    /// missing binary.** This is the failure a person actually hit: `x` on a Job
+    /// whose worktree had been deleted answered "`armada manifest clean` could
+    /// not be found to run — reinstall armada", which is advice that could not
+    /// have helped, about a file that was never missing.
+    #[test]
+    fn a_missing_working_directory_is_not_reported_as_a_missing_binary() {
+        let gone = Path::new("/nonexistent/armada/workspaces/api/rate-limit");
+        let error = clean(&Missing, Path::new("/usr/local/bin/armada"), gone).unwrap_err();
+
+        assert_eq!(error.class, ErrClass::Environment);
+        assert!(
+            error.message.contains("worktree") && error.message.contains("gone"),
+            "the message blames the wrong thing: {}",
+            error.message
+        );
+        assert!(
+            error.message.contains(&gone.display().to_string()),
+            "the message does not name the directory: {}",
+            error.message
+        );
+        let next = error.next_action.expect("a next action");
+        assert!(
+            !next.contains("reinstall"),
+            "reinstalling armada would not have helped: {next}"
+        );
+        // The locator is the directory, because that is the thing that is gone.
+        assert_eq!(error.r#where, gone.display().to_string());
+    }
+
+    /// **And the other meaning still reads the way it always did.** A worktree
+    /// that is really there, and an `armada` that is really missing, is the case
+    /// the old message was written for.
+    #[test]
+    fn a_missing_binary_in_a_worktree_that_exists_still_says_reinstall() {
+        let here = tempfile::tempdir().unwrap();
+        let error = clean(&Missing, Path::new("/usr/local/bin/armada"), here.path()).unwrap_err();
+
+        assert_eq!(error.class, ErrClass::Environment);
+        assert!(
+            error.message.contains("could not be found to run"),
+            "{}",
+            error.message
+        );
+        assert!(error.next_action.unwrap().contains("reinstall"));
+        assert_eq!(error.r#where, "/usr/local/bin/armada");
     }
 
     /// An answer that is not an envelope is Armada's own bug, and retrying will

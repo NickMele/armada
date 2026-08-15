@@ -395,7 +395,7 @@ fn dispatch(
                     // **The process is replaced**, so the exit code becomes
                     // `claude`'s and Armada is no longer in the picture — which
                     // is the whole of "Armada does not own a terminal".
-                    board_exec(&output)?;
+                    board_exec(&place, &output)?;
                 }
                 Ok(output)
             }
@@ -415,6 +415,15 @@ fn dispatch(
             args::FleetInvocation::Answer { job, answer, .. } => {
                 verbs::fleet::answer(&run, &SystemClock, &place, &job, &answer)
             }
+            args::FleetInvocation::Pause { job, .. } => {
+                verbs::fleet::pause(&run, &SystemClock, &place, &job)
+            }
+            args::FleetInvocation::Resume { job, .. } => {
+                verbs::fleet::resume(&run, &SystemClock, &place, &job)
+            }
+            args::FleetInvocation::Reap {
+                jobs, dry_run, yes, ..
+            } => reap(&run, &place, &jobs, dry_run, yes, style, terminal),
             args::FleetInvocation::Inbox { job, all, .. } => {
                 verbs::fleet::inbox(&SystemClock, &place, job.as_deref(), all)
             }
@@ -575,6 +584,100 @@ fn helm(
     verbs::helm::run(&SystemClock, place, wanted)
 }
 
+/// `armada fleet reap` — the preview, the answer to it, and then the reap.
+///
+/// **The preview is mandatory and it is the feature** (`commands/fleet/reap.md`).
+/// A bulk delete that only listed names would be asking a person to approve a
+/// decision on less information than the machine already has; what makes the
+/// answer possible is what each Job is *holding* — a port block, a worktree —
+/// because that is the cost of not reaping, and it is invisible everywhere else.
+///
+/// **Three surfaces and one rule: nothing is reaped without an answer.**
+///
+/// | Given | What happens |
+/// |---|---|
+/// | `--dry-run` | the plan, and nothing else, at every surface |
+/// | `--yes` | the plan is not shown and the reap happens — what a pipe passes |
+/// | a terminal | the plan is printed and the question is put |
+/// | neither, no terminal | the plan, and `bad_invocation` naming `--yes` |
+///
+/// The last row is the one worth stating: a destructive bulk action with nobody
+/// there to confirm must refuse rather than proceed, because "nobody said no" is
+/// not consent. `--json` changes only who reads the answer, exactly as it does
+/// everywhere else — a `--json` reap without `--yes` emits the plan.
+fn reap(
+    run: &RealRun,
+    place: &verbs::fleet::Where,
+    jobs: &[String],
+    dry_run: bool,
+    yes: bool,
+    style: Style,
+    terminal: render::term::Terminal,
+) -> Result<Output, ArmadaError> {
+    let plan = verbs::fleet::reap_plan(run, &SystemClock, place)?;
+    let Output::ReapPlan(envelope) = &plan else {
+        unreachable!("reap_plan answers with a plan");
+    };
+
+    if dry_run {
+        return Ok(plan);
+    }
+
+    // **Named beats inferred.** `--job` is what the Bridge's preview dispatches
+    // once a person has ticked the rows they meant, and the plan's own default
+    // set is what a bare `armada fleet reap` takes.
+    let targets: Vec<String> = match jobs.is_empty() {
+        false => jobs.to_vec(),
+        true => envelope
+            .data
+            .results
+            .iter()
+            .filter(|row| row.selected)
+            .map(|row| row.uuid.clone())
+            .collect(),
+    };
+    if targets.is_empty() {
+        // Nothing to do is the plan, which already says so — and `SKIPPED` is
+        // what "there was nothing to do" is called.
+        return Ok(plan);
+    }
+
+    if !yes {
+        if !terminal.can_ask() {
+            write_err(&render::human(&plan, style, terminal));
+            return Err(ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: "fleet reap".to_string(),
+                message: format!(
+                    "{} Jobs would be reaped and there is nobody here to confirm it",
+                    targets.len()
+                ),
+                next_action: Some(
+                    "`armada fleet reap --dry-run` shows the plan; `--yes` reaps it".to_string(),
+                ),
+            });
+        }
+        write_err(&render::human(&plan, style, terminal));
+        use armada_helm::ask::{Ask, Choice};
+        let taken = at_the_terminal(style, terminal).interactive().choose(
+            &format!("Reap {} Jobs?", targets.len()),
+            &[
+                Choice::new("keep them", "nothing is deleted"),
+                Choice::new("reap", "ends them and releases what they hold"),
+            ],
+            // **The default is the one that changes nothing.** A confirmation
+            // whose default is destructive is a confirmation answered by a
+            // stray `enter`.
+            1,
+        );
+        if taken != 2 {
+            return Ok(plan);
+        }
+    }
+
+    verbs::fleet::reap(run, &SystemClock, place, &targets)
+}
+
 /// `armada bridge` — one frame, or the screen.
 ///
 /// **Every key that leaves calls a verb this file already dispatches**, with the
@@ -617,6 +720,7 @@ fn bridge(
         filter.as_ref(),
         style,
         terminal,
+        &mut |action| on_screen(run, place, action),
     )?;
 
     use armada_core::fleet::bridge::Departure;
@@ -627,9 +731,15 @@ fn bridge(
         Departure::Quit => Ok(verbs::bridge::envelope(frame)),
 
         // `armada fleet board <job> --exec`, exactly.
-        Departure::Board(job) => {
-            let output = verbs::fleet::board(place, &job)?;
-            board_exec(&output)?;
+        //
+        // **Boarding is the one action that has to end the screen**, because it
+        // *replaces this process*: from the `exec` on, the tty, the signals and
+        // the exit code all belong to `claude`. Failing to board does not end
+        // it — the failure comes back as a notice, and the reader is still
+        // looking at the fleet.
+        Departure::Board(target) => {
+            let output = verbs::fleet::board(place, &target.uuid)?;
+            board_exec(place, &output)?;
             Ok(output)
         }
 
@@ -658,27 +768,160 @@ fn bridge(
         }
 
         // `armada fleet answer <job> "<answer>"`.
-        Departure::Answer(job) => {
-            let Some(said) = ask_text(style, &format!("Your answer to `{job}`:")) else {
+        Departure::Answer(target) => {
+            let Some(said) = ask_text(style, &format!("Your answer to `{}`:", target.job)) else {
                 return Ok(verbs::bridge::envelope(frame));
             };
-            verbs::fleet::answer(run, &SystemClock, place, &job, &said)
+            verbs::fleet::answer(run, &SystemClock, place, &target.uuid, &said)
+        }
+    }
+}
+
+/// Carry out one on-screen action, and say what to put under the table.
+///
+/// **Every failure here is a line and not the end of the screen.** That is the
+/// class fix (`commands/helm/bridge.md`): an action that tore the Bridge down to
+/// report a missing worktree took away the view of four other Jobs to say
+/// something about a fifth, and said it into a shell nobody was looking at any
+/// more. Only a terminal that has actually gone ends the Bridge.
+///
+/// **Each of these is still the verb a person could type**, with the arguments a
+/// shell would give it — which is the rule that keeps the Bridge a rendering
+/// choice rather than an architectural one. What changed is where the answer is
+/// printed.
+fn on_screen(
+    run: &RealRun,
+    place: &verbs::fleet::Where,
+    action: &armada_core::fleet::bridge::Action,
+) -> armada_core::fleet::bridge::Done {
+    use armada_core::fleet::bridge::{Action, Done, Mode, Reap, ReapRow};
+
+    /// One failure, as the line the screen shows. **The class and the locator
+    /// are dropped and the sentence is not**: a notice is one line wide, and the
+    /// sentence is the half that says what went wrong.
+    fn said(error: &ArmadaError) -> String {
+        match &error.next_action {
+            Some(next) => format!("{} — {next}", error.message),
+            None => error.message.clone(),
+        }
+    }
+
+    match action {
+        Action::Abort(target) => {
+            match verbs::fleet::kill(run, &SystemClock, place, Some(&target.uuid), false, false) {
+                Ok(output) => Done::said(match killed_cleanly(&output) {
+                    Some(error) => format!("`{}` ended — {}", target.job, said(&error)),
+                    None => format!("`{}` aborted", target.job),
+                }),
+                Err(error) => Done::said(format!("`{}` — {}", target.job, said(&error))),
+            }
         }
 
-        // `armada fleet kill <job>`. The screen has already asked twice.
-        Departure::Abort(job) => {
-            verbs::fleet::kill(run, &SystemClock, place, Some(&job), false, false)
+        Action::Pause(target) => {
+            match verbs::fleet::pause(run, &SystemClock, place, &target.uuid) {
+                Ok(_) => Done::said(format!("`{}` paused — p resumes it", target.job)),
+                Err(error) => Done::said(format!("`{}` — {}", target.job, said(&error))),
+            }
         }
 
-        // **`c` is honest about a verb that does not exist yet**, in the words
-        // the parser uses for every other claimed name.
-        Departure::Chat => Err(ArmadaError {
-            class: ErrClass::BadInvocation,
-            r#where: "helm".to_string(),
-            message: "`armada helm` is not built yet — M3 — the one agent you do talk to"
+        Action::Resume(target) => {
+            match verbs::fleet::resume(run, &SystemClock, place, &target.uuid) {
+                Ok(_) => Done::said(format!("`{}` resumed", target.job)),
+                Err(error) => Done::said(format!("`{}` — {}", target.job, said(&error))),
+            }
+        }
+
+        // **`r` reads the plan and opens the preview.** It reaps nothing, which
+        // is what makes it safe to press out of curiosity — and being safe to
+        // press is what makes it get read.
+        Action::Preview => match verbs::fleet::reap_plan(run, &SystemClock, place) {
+            Err(error) => Done::said(said(&error)),
+            Ok(output) => {
+                let verbs::Output::ReapPlan(envelope) = output else {
+                    unreachable!("reap_plan answers with a plan");
+                };
+                if envelope.data.results.is_empty() {
+                    return Done::said("nothing to reap — every Job is working");
+                }
+                let rows: Vec<ReapRow> = envelope
+                    .data
+                    .results
+                    .iter()
+                    .map(|row| ReapRow {
+                        target: armada_core::fleet::bridge::Target {
+                            job: row.job.clone(),
+                            uuid: row.uuid.clone(),
+                        },
+                        state: row.state,
+                        selected: row.selected,
+                        holding: holding(row),
+                    })
+                    .collect();
+                Done {
+                    notice: format!(
+                        "{} of {} ticked — space toggles, enter reaps, esc cancels",
+                        envelope.data.selected,
+                        rows.len()
+                    ),
+                    mode: Some(Mode::Reaping(Reap {
+                        rows,
+                        cursor: Default::default(),
+                    })),
+                }
+            }
+        },
+
+        Action::Reap(targets) => {
+            let jobs: Vec<String> = targets.iter().map(|t| t.uuid.clone()).collect();
+            match verbs::fleet::reap(run, &SystemClock, place, &jobs) {
+                Ok(output) => Done::said(match killed_cleanly(&output) {
+                    // **One Job that would not clean does not hide the rest.**
+                    Some(error) => format!("reaped {} — {}", jobs.len(), said(&error)),
+                    None => format!("reaped {}", jobs.len()),
+                }),
+                Err(error) => Done::said(said(&error)),
+            }
+        }
+
+        // **`c` is honest about what is off, and it says so on the screen
+        // rather than by ending it.** `armada helm` is built — it assembles a
+        // launch and prints the command — but *entering* one opens a Claude
+        // Code session and no path in this binary starts one
+        // (`verbs::helm::entering_is_off`). A key that dropped into a session
+        // would be that path, so `c` names the verb to run instead.
+        Action::Chat => Done::said(
+            "entering is off — run `armada helm` yourself; enter boards the selected Job"
                 .to_string(),
-            next_action: Some("`armada fleet board <job>` enters a Job's session".to_string()),
-        }),
+        ),
+    }
+}
+
+/// What one reap candidate is holding, for the preview's own column.
+fn holding(row: &armada_core::envelope::ReapCandidate) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(block) = row.port_block {
+        parts.push(format!("ports {}-{}", block.from, block.to));
+    }
+    if row.worktree_exists {
+        parts.push("worktree".to_string());
+    }
+    parts.push(format!("branch {}", row.branch));
+    parts.join(", ")
+}
+
+/// The first failure a `kill` carried, if it carried one.
+///
+/// **Carried rather than raised is the contract** — the Job is ended either way
+/// (`commands/fleet/kill.md`) — so the caller has to look at the envelope to
+/// find out whether anything was left behind.
+fn killed_cleanly(output: &Output) -> Option<ArmadaError> {
+    match output {
+        Output::Kill(envelope) => envelope
+            .data
+            .results
+            .iter()
+            .find_map(|killed| killed.error.clone()),
+        _ => None,
     }
 }
 
@@ -729,18 +972,44 @@ fn no_boot_id() -> ArmadaError {
 /// conversation it has no part in.
 ///
 /// It returns only if the exec **failed** — a successful one never comes back.
-fn board_exec(output: &Output) -> Result<(), ArmadaError> {
+///
+/// **The worktree is expanded before it is `chdir`-ed into, and that is the
+/// whole of one bug.** A Job record keeps its worktree as `~/…`
+/// ([`verbs::fleet::Where::expand`] says why), and `chdir` does no tilde
+/// expansion — that is the shell's job, and there is no shell here. Handing the
+/// stored string straight to `current_dir` made `enter` on the Bridge, and
+/// `armada fleet board --exec` from a prompt, fail on every Job on the machine
+/// with `No such file or directory` about a directory that was there all along.
+fn board_exec(place: &verbs::fleet::Where, output: &Output) -> Result<(), ArmadaError> {
     use std::os::unix::process::CommandExt;
 
     let Output::Board(envelope) = output else {
         return Ok(());
     };
     let data = &envelope.data;
+    let cwd = place.expand(&data.worktree);
+    // Said before the exec rather than as an `ENOENT` afterwards, because
+    // `exec`'s errno cannot tell a missing directory from a missing `claude`.
+    if !cwd.is_dir() {
+        return Err(ArmadaError {
+            class: ErrClass::Environment,
+            r#where: data.worktree.clone(),
+            message: format!(
+                "`{}` has no worktree left to board: `{}` is gone",
+                data.job, data.worktree
+            ),
+            next_action: Some(format!(
+                "`armada fleet kill {}` ends it and releases what it holds",
+                data.job
+            )),
+        });
+    }
+
     let mut argv = data.command.split(' ');
     let program = argv.next().unwrap_or("claude");
     let error = std::process::Command::new(program)
         .args(argv)
-        .current_dir(&data.worktree)
+        .current_dir(&cwd)
         .exec();
 
     Err(ArmadaError {

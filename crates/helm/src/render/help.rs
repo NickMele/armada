@@ -118,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 27] = [
+const PAGES: [Page; 30] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -575,6 +575,53 @@ const PAGES: [Page; 27] = [
         ],
         examples: &[],
         notes: &["`armada fleet answer <job> <answer>` is how an entry is closed."],
+    },
+    Page {
+        path: "fleet pause",
+        synopsis: "pause <job>",
+        summary: "stop a Job's Drone and keep everything else",
+        usage: &["armada fleet pause <job> [--json]"],
+        flags: &[],
+        examples: &[],
+        notes: &[
+            "The worktree, the branch and the port block all stay. A Job is",
+            "durable and a Drone is not, which is what makes this reversible.",
+        ],
+    },
+    Page {
+        path: "fleet resume",
+        synopsis: "resume <job>",
+        summary: "start a paused Job's session again",
+        usage: &["armada fleet resume <job> [--json]"],
+        flags: &[],
+        examples: &[],
+        notes: &[
+            "A Job with an open question is answered, not resumed, and one past",
+            "its ceiling is neither: a person decides what happens to that.",
+        ],
+    },
+    Page {
+        path: "fleet reap",
+        synopsis: "reap",
+        summary: "end every finished Job and release what they hold",
+        usage: &[
+            "armada fleet reap [--dry-run] [--yes] [--json]",
+            "armada fleet reap --job <job> [--job <job>]… [--yes]",
+        ],
+        flags: &[
+            ("--dry-run", "the plan, and nothing reaped"),
+            ("--yes", "reap without asking; what a pipe passes"),
+            (
+                "--job <job>",
+                "reap exactly these, instead of the default set",
+            ),
+        ],
+        examples: &[],
+        notes: &[
+            "DONE and ABORTED are taken; PAUSED, STALLED and BLOCKED are listed",
+            "and left, because a state you might still act on is not garbage.",
+            "Without --yes and without a terminal it refuses rather than reaps.",
+        ],
     },
     Page {
         path: "fleet kill",
