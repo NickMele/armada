@@ -108,10 +108,34 @@ one ANSI step apart, so at 16 colours both become bright yellow and the `RUNNING
 distinction disappears — precisely where a fallback would need to work. A terminal that cannot
 do truecolor gets the no-colour path, which is a supported mode rather than a broken one.
 
+## The interview's text area
+
+[`guild/init.md`](guild/init.md) questions 1–3 want paragraphs, so they open an editable box
+**inline**, in the terminal you are already in: wrapping, arrow keys, and a paste of several
+paragraphs that arrives whole. It is drawn with `ratatui` — already the decided crate for the
+Bridge ([`../PHASES.md`](../PHASES.md) §8.5) — and `Viewport::Inline` is what keeps everything
+above it in the scrollback rather than taking the screen.
+
+| Key | Does |
+|---|---|
+| `enter` | a new line |
+| `ctrl-d` | done |
+| `esc`, `ctrl-c` | keep the default |
+
+It takes the terminal into raw mode, which is a thing to do to a person at a keyboard and not to
+a pipe: a run whose stderr is not a TTY reads paragraphs a line at a time, and a terminal that
+refuses raw mode takes the documented default like every other question there. Raw mode and
+bracketed paste are restored on drop **and by a panic hook** — the one moment a panic message
+matters is the one moment raw mode would make it unreadable.
+
+It draws from the same palette as everything else, through `Role::rgb`. There is no second table
+of colours.
+
 ## Dependencies
 
-None. TTY detection and terminal width come from the standard library and one small crate; no
-curses, no terminfo database.
+TTY detection and terminal width come from the standard library and one small crate; no curses,
+no terminfo database. `ratatui` is the interview's text area and nothing else draws with it — see
+`crates/helm/Cargo.toml` for why it is the one exception.
 
 ## Exit codes
 

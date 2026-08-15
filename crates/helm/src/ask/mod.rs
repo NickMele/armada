@@ -23,6 +23,9 @@
 //! questions appear on the terminal, the payload appears on stdout, and neither
 //! is in the other's way.
 
+pub mod buffer;
+pub mod editor;
+
 use armada_core::envelope::Asked;
 
 /// Who answers the interview.
@@ -89,17 +92,43 @@ pub struct AtTheTerminal<W: std::io::Write, R: std::io::BufRead> {
     input: R,
     style: crate::render::style::Style,
     width: usize,
+    prose: Prose,
+}
+
+/// How a paragraph-shaped answer is typed.
+///
+/// **Two, because one of them cannot be tested and the other is most of the
+/// behaviour.** [`Prose::Area`] takes over the terminal — raw mode, an inline
+/// viewport, real key events — and no test that runs without a TTY can drive it.
+/// [`Prose::Line`] is the same question read through the same streams as every
+/// other one, which is what the whole `Ask` suite uses and what a run with no
+/// terminal gets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Prose {
+    /// The inline text area of [`editor`].
+    Area,
+    /// One line, like every other question.
+    Line,
 }
 
 impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
-    /// Ask through these two streams.
+    /// Ask through these two streams, reading paragraphs a line at a time.
     pub fn new(prompt: W, input: R, style: crate::render::style::Style, width: usize) -> Self {
         AtTheTerminal {
             prompt,
             input,
             style,
             width,
+            prose: Prose::Line,
         }
+    }
+
+    /// Open the inline text area for the three questions that want paragraphs.
+    ///
+    /// Only `main` calls this, and only when stderr is a real terminal.
+    pub fn with_text_area(mut self) -> Self {
+        self.prose = Prose::Area;
+        self
     }
 
     /// Write a prompt and read one line back. `None` at end of input.
@@ -128,6 +157,14 @@ impl<W: std::io::Write, R: std::io::BufRead> Ask for AtTheTerminal<W, R> {
             "\n{}",
             crate::render::interview_prompt(asked, self.style, self.width)
         );
+        if asked.prose && self.prose == Prose::Area {
+            let _ = self.prompt.write_all(prompt.as_bytes());
+            let _ = self.prompt.flush();
+            return match editor::read(self.style, asked.standing.as_deref()) {
+                editor::Answer::Given(text) => Some(text),
+                editor::Answer::Kept => None,
+            };
+        }
         self.put(&prompt).filter(|answer| !answer.is_empty())
     }
 
@@ -155,7 +192,8 @@ mod tests {
             prompt: "How should agents write to you?".to_string(),
             purpose: "Tone, length, and what to lead with.".to_string(),
             writes: "voice.md".to_string(),
-            hint: "enter keeps what import found".to_string(),
+            keeps: "what import found".to_string(),
+            prose: false,
             standing: Some("Lead with the answer. Keep it short.".to_string()),
         }
     }

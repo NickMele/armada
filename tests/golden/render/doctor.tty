@@ -16,7 +16,7 @@
     [38;2;255;180;84mstale[0m    [38;2;107;114;128m3 commits behind origin[0m
              [38;2;107;114;128m→ armada guild pull[0m
     [38;2;255;180;84mpartial[0m  [38;2;107;114;128mvoice.md still as imported[0m
-             [38;2;107;114;128m→ open ~/.armada/guild/voice.md and say it in your own words[0m
+             [38;2;107;114;128m→ write ~/.armada/guild/voice.md in your own words[0m
 
   [1m[38;2;255;169;64mmanifest.db[0m
     [38;2;61;220;132mok[0m       [38;2;107;114;128m2 workspaces, 0 orphans[0m

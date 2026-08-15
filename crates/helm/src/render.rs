@@ -558,23 +558,58 @@ pub fn interview_prompt(
         out.push('\n');
     }
 
-    if let Some(standing) = &asked.standing {
+    // **The absence is shown too, and it is the same fact.** A fragment import
+    // found nothing for has an empty standing value, and a `now` line that
+    // simply vanished would leave the reader with `esc keeps what import found`
+    // over nothing — which is the invisible default this line exists to end.
+    let standing = match &asked.standing {
+        Some(standing) => standing.clone(),
+        None if asked.prose => "nothing — import found none".to_string(),
+        None => String::new(),
+    };
+    if !standing.is_empty() {
         out.push('\n');
         out.push_str(&pad);
         out.push_str(&style.paint(Role::SteelGrey, "now  "));
         out.push_str(&style.paint(
             Role::RadarCyan,
-            &term::truncate(standing, width.saturating_sub(ASK_INDENT + 5)),
+            &term::truncate(&standing, width.saturating_sub(ASK_INDENT + 5)),
         ));
         out.push('\n');
     }
 
     out.push_str(&pad);
-    out.push_str(&style.paint(Role::SteelGrey, &asked.hint));
-    out.push_str("  ");
-    out.push_str(&style.paint(Role::RadarCyan, style.caret()));
-    out.push(' ');
+    out.push_str(&style.paint(Role::SteelGrey, &keys(asked, style)));
+    // **Prose ends the block; a line ends at the caret.** The text area draws
+    // its own frame under this and puts the cursor inside it, so a caret here
+    // would be a second place to type.
+    if asked.prose {
+        out.push('\n');
+    } else {
+        out.push_str("  ");
+        out.push_str(&style.paint(Role::RadarCyan, style.caret()));
+        out.push(' ');
+    }
     out
+}
+
+/// The keys a question accepts, named for the way it is being answered.
+///
+/// **The question knows what its default is; only this knows what takes it.**
+/// `enter` accepts the default at a single-line prompt and inserts a newline in
+/// a text area, so a hint that said `enter keeps …` in both would be wrong in
+/// one of them — and it is the one where the answer is three paragraphs long.
+fn keys(asked: &armada_core::envelope::Asked, style: Style) -> String {
+    if asked.prose {
+        [
+            "enter for a new line".to_string(),
+            "ctrl-d when done".to_string(),
+            format!("esc keeps {}", asked.keeps),
+        ]
+        .join(style.between())
+    } else {
+        format!("enter keeps {}", asked.keeps)
+    }
 }
 
 /// Greedy word wrap. **Not [`wrapped`]**, which spaces a run of items with a

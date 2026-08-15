@@ -57,7 +57,7 @@ you to do something. Frozen byte for byte by `tests/golden/render/doctor.plain`.
     stale    3 commits behind origin
              -> armada guild pull
     partial  voice.md still as imported
-             -> open ~/.armada/guild/voice.md and say it in your own words
+             -> write ~/.armada/guild/voice.md in your own words
 
   manifest.db
     ok       2 workspaces, 0 orphans
@@ -73,8 +73,8 @@ exactly once, so a flat list already is the grouping.
 **Every row that is not `ok` carries a fix line, and that is enforced by the type rather than by
 this sentence.** A check reports a problem through a constructor whose remedy is not optional
 (`armada_core::envelope::Finding::needs`), so a row a reader can do nothing with fails to
-compile. It is a command where one exists and a sentence where none does — *open
-`~/.armada/guild/voice.md` and say it in your own words* is a fix; *out of date* is not.
+compile. It is a command where one exists and a sentence where none does — *write
+`~/.armada/guild/voice.md` in your own words* is a fix; *out of date* is not.
 
 The status words are `ok`, `found`, `created`, `missing`, `stale`, `partial` and `offline` —
 lowercase on the screen and lowercase in the payload, because nothing here ends a run and none

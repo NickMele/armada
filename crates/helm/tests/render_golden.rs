@@ -700,7 +700,8 @@ fn armada_init_matches_its_fixture() {
                 prompt: armada_guild::interview::QUESTIONS[0].prompt.to_string(),
                 purpose: armada_guild::interview::QUESTIONS[0].purpose.to_string(),
                 writes: armada_guild::interview::QUESTIONS[0].writes.to_string(),
-                hint: armada_guild::interview::QUESTIONS[0].hint.to_string(),
+                keeps: armada_guild::interview::QUESTIONS[0].keeps.to_string(),
+                prose: true,
                 // **What import wrote, as the question shows it.** A prompt that
                 // says *enter keeps what import found* over nothing is a default
                 // the reader cannot accept with confidence, which is what a real
@@ -766,7 +767,7 @@ fn doctor_matches_its_fixture() {
             "guild",
             Problem::Partial,
             "voice.md still as imported",
-            "open ~/.armada/guild/voice.md and say it in your own words",
+            "write ~/.armada/guild/voice.md in your own words",
         ),
         settled("manifest.db", Settled::Ok, "2 workspaces, 0 orphans"),
     ];

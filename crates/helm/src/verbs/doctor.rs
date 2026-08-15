@@ -256,7 +256,7 @@ fn fragments(guild: &Guild) -> Vec<Finding> {
                 // that prose is not a command, and the row reached a reader with
                 // nothing to act on, which is the failure the rule is about.
                 format!(
-                    "open {} and say it in your own words",
+                    "write {} in your own words",
                     crate::verbs::machine::shown(&guild.path(name))
                 ),
             )

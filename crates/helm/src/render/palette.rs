@@ -98,6 +98,31 @@ impl Role {
         }
     }
 
+    /// The three channels, for a surface that takes a colour rather than an
+    /// escape sequence.
+    ///
+    /// **The interview's text area is drawn by `ratatui`**, which wants a
+    /// `Color::Rgb` and not an SGR string — and the Bridge will want the same.
+    /// This is the third spelling of one colour and the test below holds all
+    /// three together, which is the whole reason nothing outside this module
+    /// names a hex.
+    pub const fn rgb(self) -> (u8, u8, u8) {
+        match self {
+            Role::Void => (10, 14, 20),
+            Role::Foreground => (230, 232, 235),
+            Role::SignalAmber => (255, 169, 64),
+            Role::NavalBlue => (76, 159, 232),
+            Role::BeaconGreen => (61, 220, 132),
+            Role::DistressRed => (255, 92, 92),
+            Role::FlareOrange => (255, 180, 84),
+            Role::RadarCyan => (92, 225, 230),
+            Role::StasisPurple => (199, 146, 234),
+            Role::AbortPink => (255, 122, 182),
+            Role::SteelGrey => (107, 114, 128),
+            Role::DeepSlate => (30, 37, 48),
+        }
+    }
+
     /// The colour a terminal state is spoken in.
     ///
     /// **The word is the meaning and the colour only agrees with it.** Every
@@ -229,6 +254,13 @@ mod tests {
             let channel = |at: usize| u8::from_str_radix(&hex[at..at + 2], 16).unwrap();
             let expected = format!("\x1b[38;2;{};{};{}m", channel(1), channel(3), channel(5));
             assert_eq!(role.fg(), expected, "{hex} is painted wrong");
+            // The third spelling, for a surface that takes channels rather than
+            // an escape — the interview's text area today, the Bridge next.
+            assert_eq!(
+                role.rgb(),
+                (channel(1), channel(3), channel(5)),
+                "{hex} has a different value as channels than as an escape"
+            );
         }
     }
 

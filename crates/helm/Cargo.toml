@@ -52,6 +52,25 @@ serde_json = { workspace = true }
 # terminal's width is not worth one.
 terminal_size = "0.4"
 
+# **The one exception to the paragraph above, and it is not a rendering
+# dependency.** The interview's three prose questions want paragraphs, and a
+# single-line prompt that scrolls sideways is not where anyone writes one
+# (`PLAN.md` §13.4). Drawing an editable box that handles resize, arrow keys and
+# a bracketed paste is not interesting work and not what this repo is for.
+#
+# `ratatui` rather than something smaller because it is already the decided crate
+# for the Bridge (`PHASES.md` §8.5) — one dependency doing two jobs rather than a
+# second one — and `Viewport::Inline` is what lets the box sit in the terminal you
+# are already in instead of taking the screen.
+#
+# Default features off: no `palette`, no `serde`, no calendar widget. The palette
+# stays `render/palette.rs`'s, read through `Role::rgb`.
+ratatui = { version = "0.30", default-features = false, features = [
+    "crossterm",
+    "std",
+    "layout-cache",
+] }
+
 [dev-dependencies]
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 tempfile = "3"

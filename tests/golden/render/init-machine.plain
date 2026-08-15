@@ -14,6 +14,6 @@ Do you already have a guild?
      anything. Writes voice.md.
 
      now  Lead with the answer. Tables for anything comparative.
-     enter keeps what import found  >
+     enter for a new line, ctrl-d when done, esc keeps what import found
 
 READY  guild at ~/.armada/guild, 0 answered, 5 kept as imported

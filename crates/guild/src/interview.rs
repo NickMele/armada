@@ -63,10 +63,14 @@ pub struct Question {
     /// up. Each question writes one specific file for one specific purpose, and
     /// this is where it says so.
     pub purpose: &'static str,
-    /// What pressing enter does. **Always present**, because a question whose
-    /// default is invisible is a question you cannot skip at one in the
-    /// morning.
-    pub hint: &'static str,
+    /// **What the default answer is**, as the object of a sentence — *what
+    /// import found*, *20, 600k, 90m*. Always present, because a question whose
+    /// default is invisible is a question you cannot skip at one in the morning.
+    ///
+    /// The *key* that takes it is not here: it is `enter` at a single-line
+    /// prompt and `esc` in the text area, and only the render knows which one
+    /// this question got.
+    pub keeps: &'static str,
     /// The guild file the answer lands in.
     pub writes: &'static str,
     /// How it is typed.
@@ -80,7 +84,7 @@ pub const QUESTIONS: [Question; 5] = [
         prompt: "How should agents write to you?",
         purpose: "Tone, length, and what to lead with. Every agent reads this \
                   before it says anything.",
-        hint: "enter keeps what import found",
+        keeps: "what import found",
         writes: "voice.md",
         shape: Shape::Prose,
     },
@@ -90,7 +94,7 @@ pub const QUESTIONS: [Question; 5] = [
         purpose: "What must be true before an agent tells you it is done: tests \
                   passing, a review, a branch, a changelog entry. Workflows gate \
                   on this.",
-        hint: "enter keeps what import found",
+        keeps: "what import found",
         writes: "expectations.md",
         shape: Shape::Prose,
     },
@@ -99,20 +103,21 @@ pub const QUESTIONS: [Question; 5] = [
         prompt: "How should agents work in your repos?",
         purpose: "Branching, what to do without asking, what to always ask about \
                   first.",
-        hint: "enter keeps what import found",
+        keeps: "what import found",
         writes: "how-i-work.md",
         shape: Shape::Prose,
     },
     Question {
         number: 4,
         prompt: "How much should one Job spend before it stops and asks you?",
-        purpose: "Iterations, tokens and wall clock, in that order. A Job that \
-                  hits any one of them stops and reports rather than carrying on.",
+        purpose: "Iterations, tokens and wall clock, in that order, like \
+                  8, 200k, 30m. A Job that hits any one of them stops and \
+                  reports rather than carrying on.",
         // **The default is spelled out rather than described.** "the
         // per-workflow ceilings" is a sentence you cannot type; `20, 600k, 90m`
         // is the answer *and* the format, which is what a reader who has never
         // seen a ceiling before actually needs.
-        hint: "enter for 20, 600k, 90m — or type e.g. 8, 200k, 30m",
+        keeps: "20, 600k, 90m",
         writes: "workflows/*.yml",
         shape: Shape::Line,
     },
@@ -121,7 +126,7 @@ pub const QUESTIONS: [Question; 5] = [
         prompt: "Where should your guild sync to?",
         purpose: "A git URL, or a folder — iCloud Drive, a NAS, a drive you \
                   plug in. Given a folder, Armada makes it a git remote for you.",
-        hint: "enter leaves sync off — export still works",
+        keeps: "sync off, export still works",
         writes: "machine.yml",
         shape: Shape::Line,
     },
@@ -315,7 +320,7 @@ mod tests {
         for (index, question) in QUESTIONS.iter().enumerate() {
             assert_eq!(question.number, index + 1);
             assert!(
-                !question.hint.is_empty(),
+                !question.keeps.is_empty(),
                 "question {} has no visible default, so it cannot be skipped \
                  by anyone who has not read the source",
                 question.number
@@ -346,12 +351,17 @@ mod tests {
 
     /// **Question 4's default is a value, not a description.** He had no idea
     /// what to type, and "the per-workflow ceilings" is not a thing you can
-    /// type — the hint now carries the answer and the format at once.
+    /// type — the default is now the value itself, and the purpose carries the
+    /// format.
     #[test]
     fn the_budget_question_shows_its_default_as_something_you_could_type() {
-        let hint = QUESTIONS[3].hint;
-        assert!(hint.contains(&Ceilings::AUTONOMOUS.written()), "{hint}");
-        assert!(parse_ceilings(&Ceilings::AUTONOMOUS.written()).is_ok());
+        assert_eq!(QUESTIONS[3].keeps, Ceilings::AUTONOMOUS.written());
+        assert!(parse_ceilings(QUESTIONS[3].keeps).is_ok());
+        assert!(
+            parse_ceilings("8, 200k, 30m").is_ok(),
+            "the purpose offers a shape the parser refuses"
+        );
+        assert!(QUESTIONS[3].purpose.contains("8, 200k, 30m"));
     }
 
     /// Prose gets the editor and a short structured value does not.

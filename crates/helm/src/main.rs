@@ -171,12 +171,19 @@ fn machine_scoped(
     // carries the finished transcript once, at the end, which is what keeps
     // `armada init --json` working without a special case.
     let mut ask: Box<dyn armada_helm::ask::Ask> = if terminal.stderr_is_tty {
-        Box::new(armada_helm::ask::AtTheTerminal::new(
-            std::io::stderr(),
-            std::io::BufReader::new(std::io::stdin()),
-            style,
-            terminal.width,
-        ))
+        // **The text area is opened only here.** It takes the terminal into raw
+        // mode, which is a thing to do to a person at a keyboard and not to a
+        // pipe — every other construction of this reads paragraphs a line at a
+        // time, which is also what a run with no terminal gets.
+        Box::new(
+            armada_helm::ask::AtTheTerminal::new(
+                std::io::stderr(),
+                std::io::BufReader::new(std::io::stdin()),
+                style,
+                terminal.width,
+            )
+            .with_text_area(),
+        )
     } else {
         // No terminal, no interview. Every question has a default and taking
         // all of them leaves a working guild (PLAN.md §13.4) — a prompt written

@@ -16,7 +16,7 @@
     stale    3 commits behind origin
              -> armada guild pull
     partial  voice.md still as imported
-             -> open ~/.armada/guild/voice.md and say it in your own words
+             -> write ~/.armada/guild/voice.md in your own words
 
   manifest.db
     ok       2 workspaces, 0 orphans

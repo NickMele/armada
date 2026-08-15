@@ -767,8 +767,13 @@ pub struct Asked {
     pub purpose: String,
     /// The guild file this answer lands in.
     pub writes: String,
-    /// What pressing enter would have done.
-    pub hint: String,
+    /// What the default answer is, as the object of a sentence — *what import
+    /// found*. The key that takes it is the render's, because it differs between
+    /// a single-line prompt and a text area.
+    pub keeps: String,
+    /// Whether the answer is paragraphs, and therefore gets a text area rather
+    /// than a line.
+    pub prose: bool,
     /// **What pressing enter would keep, as it stands right now.**
     ///
     /// A default you cannot see is not a default you can accept with
@@ -897,7 +902,7 @@ impl Finding {
     /// `remedy` is a `String` rather than an `Option<String>` on purpose: this
     /// is the constructor that makes "every non-`ok` row carries a fix line"
     /// hold by construction. It is a command where one exists and a sentence
-    /// where none does — *open `~/.armada/guild/voice.md` and say it in your own
+    /// where none does — *write `~/.armada/guild/voice.md` in your own
     /// words* is a fix; *out of date* is not.
     pub fn needs(
         check: impl Into<String>,
@@ -1872,7 +1877,8 @@ mod tests {
                 prompt: "How should agents write to you?".to_string(),
                 purpose: "Tone, length, and what to lead with.".to_string(),
                 writes: "voice.md".to_string(),
-                hint: "enter keeps what import found".to_string(),
+                keeps: "what import found".to_string(),
+                prose: true,
                 standing: Some("Lead with the answer.".to_string()),
             }],
             questions: 5,

@@ -199,7 +199,8 @@ pub fn interview(ask: &mut dyn Ask, guild: Option<&Guild>) -> Answers {
             prompt: question.prompt.to_string(),
             purpose: question.purpose.to_string(),
             writes: question.writes.to_string(),
-            hint: question.hint.to_string(),
+            keeps: question.keeps.to_string(),
+            prose: question.shape == interview::Shape::Prose,
             standing: standing(question, guild),
         };
         let Some(given) = ask.question(&asked) else {
@@ -226,18 +227,39 @@ fn standing(question: Question, guild: Option<&Guild>) -> Option<String> {
     }
 }
 
-/// A file's content as one line: comments dropped, blanks dropped, the rest
-/// joined with a space.
+/// A file's content as one line: comments dropped, headings dropped, blanks
+/// dropped, the rest joined with a space.
 ///
-/// **The marker line goes.** Import writes `<!-- Imported from CLAUDE.md … -->`
-/// at the top of each fragment, and showing that as the standing answer would
-/// tell the reader what wrote the file rather than what it says.
+/// **Import's own note goes, and it spans six lines.** Every fragment opens with
+/// `<!-- Imported from CLAUDE.md … -->` explaining that the split was a guess —
+/// so a filter that dropped lines *beginning* with `<!--` left five lines of it
+/// behind, and all three questions showed the same standing answer: a paragraph
+/// about how the file was written rather than a word of what it says. Measured
+/// against a real `~/.claude/`, which is the only way that shows up.
 fn one_line(body: &str) -> String {
-    body.lines()
+    without_comments(body)
+        .lines()
         .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with("<!--") && !line.starts_with('#'))
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Every `<!-- … -->` span removed, however many lines it covers.
+fn without_comments(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    let mut rest = body;
+    while let Some(open) = rest.find("<!--") {
+        out.push_str(&rest[..open]);
+        rest = match rest[open..].find("-->") {
+            Some(close) => &rest[open + close + 3..],
+            // An unterminated comment swallows the rest of the file, which is
+            // what a reader's markdown viewer does with it too.
+            None => "",
+        };
+    }
+    out.push_str(rest);
+    out
 }
 
 fn record(answers: &mut Answers, question: Question, given: &str) {
@@ -828,6 +850,46 @@ mod tests {
         assert_eq!(envelope.data.headline, Some(Headline::NeedsAttention));
         let error = envelope.error.as_ref().expect("no error");
         assert!(error.next_action.as_deref().unwrap().contains("wait"));
+    }
+
+    /// **What the question shows is what the file says, not who wrote it.**
+    ///
+    /// Import opens every fragment with a six-line HTML comment explaining that
+    /// the split was a guess. An earlier version of this dropped only lines
+    /// *beginning* with `<!--`, so all three prose questions showed the same
+    /// standing answer — a paragraph about how the file was written. Caught by
+    /// running the verb against a real `~/.claude/`, which is the only place it
+    /// shows.
+    #[test]
+    fn the_standing_value_is_the_content_and_not_the_note_import_left() {
+        let imported = "<!-- Imported from CLAUDE.md by `armada guild init`.\n\
+                        \n\
+                        The split between voice.md, expectations.md and how-i-work.md\n\
+                        is a guess. Edit this file directly. -->\n\
+                        \n\
+                        ## Verbosity\n\
+                        \n\
+                        150 words maximum. Lead with the answer.\n";
+        assert_eq!(
+            one_line(imported),
+            "150 words maximum. Lead with the answer."
+        );
+    }
+
+    /// A fragment import found nothing for has nothing standing, and the render
+    /// says so rather than showing an empty line.
+    #[test]
+    fn a_fragment_import_found_nothing_for_has_no_standing_value() {
+        let empty = "<!-- Imported from CLAUDE.md. -->\n\n\
+                     <!-- Import found nothing here. -->\n";
+        assert_eq!(one_line(empty), "");
+    }
+
+    /// An unterminated comment takes the rest of the file with it, which is what
+    /// a markdown viewer does too.
+    #[test]
+    fn an_unterminated_comment_swallows_what_follows_it() {
+        assert_eq!(one_line("real\n<!-- open\nmore\n"), "real");
     }
 
     /// `~` comes from the `~/.armada` the entrypoint passed down, never from a
