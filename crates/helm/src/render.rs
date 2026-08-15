@@ -4696,7 +4696,12 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
         out.push_str(&heading(
             style,
             "workspaces: candidates",
-            Some("each resolves its own dependencies"),
+            // **Why a candidate is not a proposal, said where the question
+            // arises.** A reader who sees three candidates and no `workspaces:`
+            // line among the proposals is owed the reason in the same breath:
+            // `workspaces:` means a separate product with a config of its own
+            // (PLAN.md §4.6), and `verify` requires that file to be there.
+            Some("each resolves its own dependencies; a workspace also has an armada.yml"),
         ));
         out.push_str(&wrapped(style, &candidates, width));
     }

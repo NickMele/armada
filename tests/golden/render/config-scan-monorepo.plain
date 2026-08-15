@@ -35,7 +35,7 @@ no armada.yml here, this is evidence and not a config
     scripts  pyproject.toml, uv.lock
     web      package.json, pnpm-lock.yaml
 
-  workspaces: candidates, each resolves its own dependencies
+  workspaces: candidates, each resolves its own dependencies; a workspace also has an armada.yml
     backend, scripts, web
 
   proposals, every line read out of a file, none of it inferred

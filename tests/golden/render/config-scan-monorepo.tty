@@ -35,7 +35,7 @@
     [38;2;92;225;230mscripts[0m  [38;2;156;163;175mpyproject.toml, uv.lock[0m
     [38;2;92;225;230mweb[0m      [38;2;156;163;175mpackage.json, pnpm-lock.yaml[0m
 
-  [38;2;255;169;64mworkspaces: candidates[0m · [38;2;156;163;175meach resolves its own dependencies[0m
+  [38;2;255;169;64mworkspaces: candidates[0m · [38;2;156;163;175meach resolves its own dependencies; a workspace also has an armada.yml[0m
     [38;2;156;163;175mbackend · scripts · web[0m
 
   [38;2;255;169;64mproposals[0m · [38;2;156;163;175mevery line read out of a file, none of it inferred[0m
