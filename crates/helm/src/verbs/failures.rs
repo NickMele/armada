@@ -67,10 +67,20 @@ pub fn ls<R: Run, C: Clock>(
     Ok(listing("failures", shown(read(now, place)?, all)))
 }
 
-/// Columns a navigable row spends on something other than the detail: the two
-/// spaces after the status, the two after the id, the selector's own cursor,
-/// number and indent, and the gap before the age.
-const ROW_FURNITURE: usize = 18;
+/// What the last option says, and what it says about itself.
+///
+/// **Named because [`rows`] has to reserve room for it.** The selector pads
+/// every label to the widest, so a detail that used the whole line would push
+/// this row's aside off the end — which is a wrapped row, which is the one
+/// thing every listing in Armada refuses to be.
+const DONE: (&str, &str) = ("done", "stop looking");
+
+/// Columns a navigable row spends on something other than the detail: the
+/// selector's indent, cursor, option number and their spaces (6), the gap
+/// before the aside (2), the two spaces after the status and the two after the
+/// id (4), and the widest aside any row carries — [`DONE`]'s, which is longer
+/// than any age.
+const ROW_FURNITURE: usize = 6 + 2 + 4 + DONE.1.len();
 
 /// The entries this lens shows.
 fn shown(entries: Vec<Entry>, all: bool) -> Vec<Entry> {
@@ -114,7 +124,7 @@ fn wander<R: Run, C: Clock>(
         let mut options: Vec<Choice> = rows(&entries, look);
         // **`done` is the last option and it is the default**, so `esc` and a
         // stream that ended both leave rather than acting on the way out.
-        options.push(Choice::new("done", "stop looking"));
+        options.push(Choice::new(DONE.0, DONE.1));
         let done = options.len();
         let picked = ask.choose("What has Armada broken on?", &options, done);
         if picked >= done || picked == 0 {
@@ -165,10 +175,11 @@ fn rows(entries: &[Entry], look: Look) -> Vec<Choice> {
                     "{:<widest$}  {}  {}",
                     entry.state.word(),
                     entry.id,
-                    crate::render::term::truncate(
-                        &crate::render::failure_detail(entry),
-                        room.max(8)
-                    )
+                    // **No floor under `room`.** A window too narrow for a
+                    // sentence still has to draw a row a person can pick, and
+                    // the status and the id are what they pick by — so the
+                    // detail is what gives, down to nothing.
+                    crate::render::term::truncate(&crate::render::failure_detail(entry), room)
                 ),
                 &crate::render::format::elapsed(entry.age_s * 1_000),
             )
@@ -437,6 +448,77 @@ mod tests {
             last_ms: 1_000,
             age_s: 0,
             job: None,
+        }
+    }
+
+    /// **A navigable row never wraps**, which is the one thing every listing in
+    /// Armada refuses to do (`render/term.rs`): a wrapped row loses the column
+    /// that made the listing worth having. The selector pads every label to the
+    /// widest and then draws its own indent, cursor, number and aside, so this
+    /// measures the whole line as it will be drawn — including [`DONE`]'s
+    /// aside, which is longer than any age and is what once fell off the end.
+    #[test]
+    fn a_row_and_everything_the_selector_draws_around_it_fits_the_terminal() {
+        let mut long = entry("a1b2c3d4");
+        long.message = "the worktree was not there, and neither was the branch it \
+                        was supposed to have been created on, nor the repository"
+            .to_string();
+        long.state = State::Cleared;
+        let entries = [long, entry("ff001122")];
+
+        for width in [
+            crate::render::term::Terminal::MIN_WIDTH,
+            80,
+            120,
+            crate::render::term::Terminal::FALLBACK_WIDTH,
+        ] {
+            let look = Look {
+                style: crate::render::style::Style::plain(),
+                terminal: crate::render::term::Terminal::at(width),
+            };
+            let mut options = rows(&entries, look);
+            options.push(Choice::new(DONE.0, DONE.1));
+            let widest = options
+                .iter()
+                .map(|option| option.label.chars().count())
+                .max()
+                .unwrap_or(0);
+            for option in &options {
+                // Indent, cursor, space, number, space, the padded label, two
+                // spaces, the aside — the line `ask::select::row` builds.
+                let drawn = 6 + widest + 2 + option.aside.chars().count();
+                assert!(
+                    drawn <= look.terminal.usable_width(),
+                    "at {width} columns a row draws {drawn}: {}",
+                    option.label
+                );
+            }
+        }
+    }
+
+    /// The row is the table's row: status first and always a word, then the id,
+    /// then the same detail sentence, then how long ago.
+    #[test]
+    fn a_navigable_row_is_the_listing_row_in_the_listings_order() {
+        let mut fixing = entry("ff001122");
+        fixing.state = State::Fixing;
+        fixing.age_s = 540;
+        let rows = rows(&[entry("a1b2c3d4"), fixing], Look::default());
+
+        assert!(rows[0].label.starts_with("OPEN   "), "{:?}", rows[0].label);
+        assert!(rows[1].label.starts_with("FIXING "), "{:?}", rows[1].label);
+        assert!(rows[0].label.contains("a1b2c3d4"), "{:?}", rows[0].label);
+        assert!(
+            rows[0]
+                .label
+                .contains("armada_bug, the worktree was not there"),
+            "{:?}",
+            rows[0].label
+        );
+        assert_eq!(rows[1].aside, "9m");
+        // No glyph carries meaning — the status is the whole of the signal.
+        for row in &rows {
+            assert!(!row.label.contains('✔') && !row.label.contains('✗'));
         }
     }
 

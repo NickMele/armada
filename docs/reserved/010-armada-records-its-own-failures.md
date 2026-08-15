@@ -31,6 +31,7 @@ one of those to become a Job that gets fixed."*
 |---|---|---|
 | Recording | none — a side effect of failing | `crates/helm/src/main.rs`'s `record`, at the one place errors are rendered |
 | Listing, and one entry whole | `armada failures`, `armada failures show <id>` | `crates/helm/src/verbs/failures.rs` |
+| Navigating it, at a terminal | `armada failures` — the same verb | the same, over `crates/helm/src/ask/select.rs` |
 | Promotion into a Job | `armada failures fix <id>` | the same, over `fleet spawn` |
 | Discarding | `armada failures clear <id> \| --all` | the same |
 
@@ -38,7 +39,7 @@ The format and the fold are `armada_core::failure`; the file is `armada_manifest
 Parsing a string is pure and lives in the core, opening a file is not and does not
 ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §1.5).
 
-## What gets recorded: everything that reaches the report
+## What gets recorded: everything that reaches the report, minus a refusal Armada meant
 
 **Every failure, and no filter on `class`.** Two arguments settled it and the second is the one
 that matters.
@@ -58,6 +59,80 @@ What that does admit is the mistyped verb. `bad_invocation` is a person being hu
 being broken. That is the price, and dedup is what makes it affordable: four typos are one row
 saying `x4`, and one `armada failures clear` is the end of it. **Deciding at write time is
 irreversible; deciding at read time is one keystroke.**
+
+### The correction, made after a day of real use
+
+The site was not enough, and the log said so: twelve entries in thirteen minutes and **not one
+was a bug**. Every one was `bad_invocation` — two reserved flags refusing by name, three
+reserved verbs refusing by name, and a verb somebody typed as `bogus`. The sharpest is
+`--detach is not built yet`, which is a reserved name refusing by name and is a *feature*, asked
+for deliberately. Recording it as a failure to be fixed is the log misreporting a success.
+
+The class still cannot draw the line, for the reason above. What can is **whose mistake it
+was**: *did Armada do something wrong, or did the caller ask for something that does not exist?*
+That is `armada_core::failure::Fault`, and three things about it are the design:
+
+- **Only a refusal site can answer it**, because only it knows whether it recognised what it was
+  refusing. So the parser marks its own refusals and the marker travels out on `ParseFailure`.
+  Nothing downstream re-derives it from the message, which would be a second grammar over
+  Armada's own prose.
+- **Unmarked is recorded.** `Fault::Armadas` is the default, so the failure mode of the seam is
+  one noisy row — deduplicated, one `clear` away — rather than a bug that is never reported.
+  That direction is not negotiable.
+- **A site saying `unknown` has that claim audited.** Saying a name is unknown is a refusal
+  Armada meant *only if it is true*, so the site checks the whole roster — `every_verb()` plus
+  every reserved table — rather than the one table it happens to hold. `unknown command
+  `guild verify``, about a verb the help page advertises under NOT BUILT YET, is Armada
+  contradicting its own roster: it is a bug, and it stays recorded. That is the test the seam
+  was placed to pass, because it is one line away in the parser from
+  `unknown verb `armada guild bogus``, which is a typo and is not.
+
+A verb's own refusals are untouched — see *Known rough edge* below, which is still deliberate.
+
+### And a throwaway worktree is not the machine's to keep
+
+The same log recorded failures from agents' worktrees under `.claude/worktrees/`. Those are not
+kept either, and the reason is not that they are uninteresting: **the entry cannot survive its
+own subject.** The row's `cwd` is what `armada failures fix` branches the Job from, and a
+worktree under `.claude/worktrees/` or `~/.armada/workspaces/` is removed when the work that
+made it ends — so by the time anybody reads the row it names a directory that is gone. The Job
+cannot start there and the failure cannot be reproduced there. An agent that hits a real bug has
+a better channel anyway: the report it hands back, which a person reads.
+
+It is a substring test on the path rather than a `git` call, because the whole premise of this
+code path is that something has already gone wrong.
+
+## The listing is navigable at a terminal
+
+**Asked for in these words:** *"It should be an interactive terminal, whatever that is called,
+so that I can navigate the list and quickly dispatch a job rather than having to remember the ID
+and copy it and then run fix with the ID."*
+
+`armada guild ls` is the shape and the precedent: **at a terminal the listing is navigable;
+through a pipe, and under `--json` even at a terminal, it is the same listing printed once.**
+Same verb, and deliberately **no flag that opts into the interaction** — a terminal is the flag,
+which is [`PLAN.md`](../PLAN.md) §3.1.1's three audiences working normally. An interactive-only
+verb would be a bug rather than a feature, so the interaction is layered on an answer that
+stands without it.
+
+From a selected row, three things and a way out — **show it whole**, **spawn a Job on it**,
+**discard it**. Each runs the function `show`, `fix` and `clear` already are, so there is one
+implementation of each and one place a field can be added to it. **The selection carries the id
+into `fix`**, which is the whole feature: nothing is retyped and nothing is mistyped.
+
+Three things are reused rather than rebuilt: `crates/helm/src/ask/select.rs` is the selector, it
+exists because a one-off was rejected once already; `guild::report` draws what just happened,
+onto stderr where every mid-session report goes; and `render::failure_detail` writes the detail
+cell, so the person navigating and the person reading a pipe cannot be shown two sentences.
+
+The rows keep the table's shape — `STATUS · ID · DETAIL · TIME`, in that order, status first and
+always a word. **No tick and no cross**: a row told apart by a glyph or a colour is a row a
+monochrome terminal cannot tell apart at all.
+
+**Discarding asks nothing first**, which is where this parts company with `guild ls`'s delete.
+That removes a file from a guild that syncs to every machine; this appends a line to an
+append-only log, keeps the id and the entry, and reopens on the next recurrence. There is
+nothing to confirm because there is nothing to lose.
 
 ## Deduplication is what makes this observability rather than a log
 
@@ -125,3 +200,9 @@ site is the filter, not the class — and it means browsing the log can add to i
 to one row and `clear` ends it. It was left as-is deliberately: `show` failing to resolve a
 prefix could also be Armada mis-resolving one, which is a real bug shape, and an exemption would
 be the first hole in "nothing fails unseen".
+
+**`Fault` did not change that**, and the boundary is worth stating because it looks arbitrary
+from a distance. The parser's refusals are marked because the parser *knows the whole space of
+names* and can say for certain that one is not in it. A verb resolving a prefix against a log
+knows only what the log happens to hold, and "I did not find it" is exactly what a resolution
+bug looks like from the inside. The seam is where the certainty is.
