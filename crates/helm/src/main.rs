@@ -190,6 +190,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         | Invocation::Commands { json } => *json,
         Invocation::MachineInit(init) => init.json,
         Invocation::Doctor { json, .. } => *json,
+        Invocation::Settings { json } => *json,
         Invocation::Bridge(bridge) => bridge.json,
         Invocation::Helm(helm) => helm.json,
         Invocation::HelmEnable { json } | Invocation::HelmDisable { json } => *json,
@@ -263,6 +264,7 @@ fn machine_scoped(
             }
             verbs::doctor::run(&run, place)
         }
+        Invocation::Settings { .. } => verbs::settings::run(place),
         Invocation::Guild(guild) => match *guild {
             args::GuildInvocation::Init {
                 from,
@@ -707,7 +709,10 @@ fn dispatch(
     // opened.** See `machine_scoped` for why both halves of that matter.
     if matches!(
         invocation,
-        Invocation::MachineInit(_) | Invocation::Doctor { .. } | Invocation::Guild(_)
+        Invocation::MachineInit(_)
+            | Invocation::Doctor { .. }
+            | Invocation::Settings { .. }
+            | Invocation::Guild(_)
     ) {
         let place = verbs::guild::Where {
             armada_home: armada_manifest::machine::armada_home(home),
@@ -822,6 +827,7 @@ fn dispatch(
         Invocation::Version | Invocation::Help(_) => unreachable!("handled before dispatch"),
         Invocation::MachineInit(_)
         | Invocation::Doctor { .. }
+        | Invocation::Settings { .. }
         | Invocation::Guild(_)
         | Invocation::Fleet(_)
         | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),

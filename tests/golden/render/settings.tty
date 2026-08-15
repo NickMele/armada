@@ -1,0 +1,7 @@
+  [1m[38;2;156;163;175mSTATUS[0m   [1m[38;2;156;163;175mNAME[0m                      [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;255;169;64mMACHINE[0m  manifest.cpu_slots        [38;2;156;163;175m6 — ~/.armada/machine.yml[0m
+  [38;2;255;169;64mMACHINE[0m  manifest.port_block_size  [38;2;156;163;175m10 — ~/.armada/machine.yml[0m
+  [38;2;255;169;64mMACHINE[0m  helm.enter                [38;2;156;163;175mon — ~/.armada/machine.yml[0m
+  [38;2;76;159;232mSYNCED[0m   guild.settings.json       [38;2;156;163;175m3 settings — ~/.armada/guild/settings.json[0m
+
+[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m4 settings[0m

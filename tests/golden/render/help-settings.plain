@@ -1,0 +1,12 @@
+armada settings — every setting: its value, where it lives, whether it syncs
+
+USAGE
+  armada settings [--json]
+
+FLAGS
+  --json          answer as one JSON object, for a script or an agent
+  --color <when>  auto (default), always, never; NO_COLOR wins
+
+Read-only. `armada helm enable`/`disable` and the guild's own verbs are
+still how a setting changes; this only shows what they left behind.
+A setting nobody has touched still gets a row, with its default.

@@ -33,10 +33,10 @@ use armada_core::envelope::{
     ComponentsData, DispatchData, DoctorData, Envelope, Evidence, FailureData, FailuresData,
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData,
-    InitDryRun, JobRow, MachineInitData, NoteRow, PortReport, Problem, Projection, Released,
-    ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData,
-    StatusData, Sync, SyncItem, TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun,
-    VerifyData,
+    InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem, Projection,
+    Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, SettingRow, SettingsData,
+    Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, TickData, TickRow,
+    TransitionRow, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -1124,6 +1124,57 @@ fn doctor_matches_its_fixture() {
     assert_render("doctor", &output);
 }
 
+/// **`armada settings`** — one machine-local row per Manifest and Helm key,
+/// and one synced row for a guild's `settings.json`, which is what a machine
+/// with a customised `machine.yml` and an ordinary guild actually shows: two
+/// colours, and the STATUS column is what tells them apart rather than the
+/// path in DETAIL.
+#[test]
+fn settings_matches_its_fixture() {
+    fn row(locality: Locality, name: &str, value: &str, at: &str) -> SettingRow {
+        SettingRow {
+            locality,
+            name: name.to_string(),
+            value: value.to_string(),
+            at: at.to_string(),
+        }
+    }
+    let output = Output::Settings(Box::new(Envelope::ok(
+        "settings",
+        None,
+        Status::Ok,
+        SettingsData {
+            settings: vec![
+                row(
+                    Locality::Machine,
+                    "manifest.cpu_slots",
+                    "6",
+                    "~/.armada/machine.yml",
+                ),
+                row(
+                    Locality::Machine,
+                    "manifest.port_block_size",
+                    "10",
+                    "~/.armada/machine.yml",
+                ),
+                row(
+                    Locality::Machine,
+                    "helm.enter",
+                    "on",
+                    "~/.armada/machine.yml",
+                ),
+                row(
+                    Locality::Synced,
+                    "guild.settings.json",
+                    "3 settings",
+                    "~/.armada/guild/settings.json",
+                ),
+            ],
+        },
+    )));
+    assert_render("settings", &output);
+}
+
 /// **`armada guild pull` that found a conflict**, which is the case worth
 /// freezing: nothing was applied, and the rows are what is waiting.
 #[test]
@@ -1429,6 +1480,7 @@ fn the_help_pages_match_their_fixtures() {
         ("help-fleet-spawn", Topic::Verb("fleet spawn")),
         ("help-guild-init", Topic::Verb("guild init")),
         ("help-doctor", Topic::Verb("doctor")),
+        ("help-settings", Topic::Verb("settings")),
     ] {
         for (audience, style, terminal) in audiences() {
             failures.extend(check_golden(

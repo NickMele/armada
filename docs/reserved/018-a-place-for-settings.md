@@ -1,7 +1,7 @@
 ---
 id: 018
 title: A place for settings
-status: RESERVED
+status: BUILT
 module: cross-cutting
 raised: real use, 2026-08-15
 ---
@@ -62,3 +62,37 @@ fact into a synced repository**, which is the one mistake the split exists to pr
 
 **Not scheduled.** But the cost of leaving it is not zero: every module that adds a switch adds
 its own verb and its own reader, and the third one is where retrofitting starts to hurt.
+
+## What shipped, and what did not
+
+**`armada settings`** ([`docs/commands/settings.md`](../commands/settings.md)) answers the first
+bullet of "What is actually open" the way it was argued there: reading is the cheap half and it
+is useful today, so it shipped alone. **No setter, not even a small one, not even behind a
+flag** — the two questions a generic writer raises, per-key validation and an explicit
+sync-versus-machine decision for every key, are exactly as open as they were when this was
+written.
+
+It reuses the readers rather than adding a fourth: `crates/manifest/src/machine.rs` and
+`crates/helm/src/machine.rs` for `machine.yml`'s two sections, and
+`armada_guild::inventory::Inventory::items` — `armada guild ls`'s own call — for the guild's
+config-shaped files. Nothing here re-reads or re-parses `settings.json`; the count that listing
+already computes is the value this one shows.
+
+**Every row says which side of `PLAN.md` §13.1's line it is on**, as the STATUS word rather than
+as a fact left to be inferred from the path — `MACHINE` for `machine.yml`'s two sections,
+`SYNCED` for the guild's. `helm.enter` is `MACHINE`, on this listing exactly as everywhere else,
+which is the worked example the line's own rationale gives.
+
+**Still open, exactly as listed above:**
+
+- **A verb versus purpose-named verbs** was not decided either way — `armada helm enable` still
+  reads better than a generic setter would, and this listing does not argue against that; it only
+  makes the split visible.
+- **Where a portable preference goes** is unanswered. Nothing here adds a guild-side settings
+  surface beyond what `armada guild ls` already showed; the guild's own machine-local section
+  (`guild.remote`, `guild.withheld` — `crates/guild/src/machine.rs`) is deliberately not on this
+  listing either, on the same "no new surface until it earns one" reasoning.
+- **Precedence**, once a key can be set in both halves, is still unwritten — there is no such key
+  yet.
+- **`doctor` reporting settings drift** is not built. `armada settings` and `armada doctor` answer
+  different questions today; folding one into the other is future work, not assumed here.

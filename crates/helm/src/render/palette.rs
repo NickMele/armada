@@ -186,6 +186,21 @@ impl Role {
         }
     }
 
+    /// The colour a setting's [`Locality`](armada_core::envelope::Locality) is
+    /// spoken in.
+    ///
+    /// **Two colours for two answers, and neither is red or green.** Neither
+    /// side of `PLAN.md` §13.1's line is a problem — a setting is not wrong for
+    /// being machine-local — so this is the one distinction on the page that is
+    /// not a verdict: amber for what stays here, blue for what travels with you.
+    pub const fn for_locality(locality: armada_core::envelope::Locality) -> Role {
+        use armada_core::envelope::Locality;
+        match locality {
+            Locality::Machine => Role::SignalAmber,
+            Locality::Synced => Role::NavalBlue,
+        }
+    }
+
     /// The colour a sync outcome is spoken in.
     ///
     /// **`conflict` is red and nothing else is.** It is the one row on a `guild

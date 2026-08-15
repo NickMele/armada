@@ -56,8 +56,9 @@ use armada_core::envelope::{
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
     GuildItemData, GuildListData, GuildSyncData, Headline, HelmData, HelmSwitchData, InboxData,
     InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData, Projection,
-    ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData, ShowData, SkillsData,
-    SpawnData, StatusData, TickData, Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
+    ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData, SettingsData,
+    ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun, VerdictData,
+    VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, State as FailureState};
@@ -101,6 +102,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Commands(envelope) => commands(envelope, style, width),
         Output::MachineInit(envelope) => machine_init(envelope, style, width),
         Output::Doctor(envelope) => doctor(envelope, style, width),
+        Output::Settings(envelope) => settings(envelope, style, width),
         Output::GuildSync(envelope) => guild_sync(envelope, style, width),
         Output::GuildInit(envelope) => guild_init(envelope, style, width),
         Output::GuildBundle(envelope) => guild_bundle(envelope, style, width),
@@ -2982,6 +2984,38 @@ fn doctor(envelope: &Envelope<DoctorData>, style: Style, width: usize) -> String
         Some(word) => headline(style, word, &data.tally),
         None => summary(style, envelope.status, &data.tally),
     });
+    out
+}
+
+/// `armada settings` — every setting Armada knows about.
+///
+/// **The STATUS word is `Locality`, not `Health`: this is `guild_list`'s
+/// shape, not `doctor`'s.** Nothing here is a problem to fix — it is a report
+/// of what is, and the one fact worth colouring is which side of `PLAN.md`
+/// §13.1's line a row is on, so that is the STATUS word rather than a verdict.
+fn settings(envelope: &Envelope<SettingsData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("name", "detail", true)).indent(2);
+    for row in &data.settings {
+        table = table.row(vec![
+            token(row.locality.word(), Role::for_locality(row.locality)),
+            Cell::plain(row.name.clone()),
+            detail_cell(style, Some(&format!("{} — {}", row.value, row.at))),
+            time_cell(None),
+        ]);
+    }
+    let mut out = table.render(style, width);
+    if !table.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[format::count(data.settings.len(), "setting")],
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
     out
 }
 

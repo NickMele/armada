@@ -1523,6 +1523,67 @@ impl GuildChange {
     }
 }
 
+/// `armada settings` — every setting Armada knows about: its current value,
+/// where it lives, and which side of `PLAN.md` §13.1's line it is on.
+///
+/// **Read-only, and deliberately so** (`docs/reserved/018-a-place-for-settings.md`):
+/// a generic writer is where the type and validation questions live, and this
+/// is the cheap half — seeing what is configured, and what could be — built
+/// first because it makes the split in [`Locality`] visible before anything
+/// can write across it.
+///
+/// **A setting nobody has touched still gets a row**, carrying its default.
+/// "What can I configure" and "what have I configured" are the same question
+/// here, and omitting the untouched ones would answer only the second.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SettingsData {
+    /// One row per setting, machine-local ones first.
+    pub settings: Vec<SettingRow>,
+}
+
+/// One setting, wherever it lives.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SettingRow {
+    /// Which side of `PLAN.md` §13.1's line this setting is on — the fact a
+    /// reader most needs and the one most easily got wrong, so it is the
+    /// STATUS word rather than a fact left to be inferred from [`SettingRow::at`].
+    pub locality: Locality,
+    /// The dotted key — `manifest.cpu_slots`, `helm.enter`, `guild.settings.json`.
+    pub name: String,
+    /// The current value, already resolved against its documented default.
+    pub value: String,
+    /// Where this setting lives, as a person writes the path (`~/...`, never
+    /// a literal `$HOME` — this repository stays public, `AGENTS.md` rule 2).
+    pub at: String,
+}
+
+/// Which side of `PLAN.md` §13.1's line a setting is on.
+///
+/// **The line, restated:** what describes *you* syncs; what describes *this
+/// machine and its running processes* never does. `helm.enter` lives in
+/// `machine.yml` for exactly that reason — putting it in the guild would
+/// silently enable Helm on every machine that guild is ever pulled onto.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Locality {
+    /// Describes this machine and its running processes. Lives in
+    /// `~/.armada/machine.yml`, one section per module, and never syncs.
+    Machine,
+    /// Describes you. Lives in the guild, and syncs between every machine you
+    /// use (`PLAN.md` §13.1).
+    Synced,
+}
+
+impl Locality {
+    /// The word, in both the STATUS column and the payload.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Locality::Machine => "machine",
+            Locality::Synced => "synced",
+        }
+    }
+}
+
 // ------------------------------------------------------------------ M3: Fleet
 //
 // **Fleet's bodies live here for the same reason Manifest's and Guild's do**:

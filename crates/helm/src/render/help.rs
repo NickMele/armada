@@ -120,7 +120,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 43] = [
+const PAGES: [Page; 44] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -830,6 +830,19 @@ const PAGES: [Page; 43] = [
         flags: &[("--fix", "repair what is safely repairable")],
         examples: &[],
         notes: &["Every finding carries the line that fixes it, whether or not --fix ran."],
+    },
+    Page {
+        path: "settings",
+        synopsis: "settings",
+        summary: "every setting: its value, where it lives, whether it syncs",
+        usage: &["armada settings [--json]"],
+        flags: &[],
+        examples: &[],
+        notes: &[
+            "Read-only. `armada helm enable`/`disable` and the guild's own verbs are",
+            "still how a setting changes; this only shows what they left behind.",
+            "A setting nobody has touched still gets a row, with its default.",
+        ],
     },
     Page {
         path: "failures",
