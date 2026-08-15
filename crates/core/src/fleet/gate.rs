@@ -135,6 +135,38 @@ fn unsubstituted(text: &str) -> bool {
     text.contains("${")
 }
 
+/// Fill a step's `${task.<key>}` placeholders from a Job's own facts.
+///
+/// # Why this is not [`crate::template`]
+///
+/// That module is **Manifest's** grammar — `${workspace.id}`, `${port.NAME}`,
+/// `${files}`, `${env.NAME}` — and it is used at sites where an unrecognised
+/// placeholder is `bad_config` because nothing would ever expand it. A workflow
+/// document is Guild's, its `${task.test}` is Fleet's, and the two namespaces
+/// have no overlap. Adding a `task` namespace to Manifest's `Vars` would make
+/// `armada.yml` accept `${task.test}` — a placeholder that can never be resolved
+/// there — which is a wider grammar bought for nothing.
+///
+/// # Why an unresolved placeholder is left alone
+///
+/// It is left exactly as written, and [`needs`] then reports it as
+/// [`Needs::Unstated`]. Substituting an empty string would turn *"nobody said
+/// which test"* into *"look for a test called ``"*, and the search would come
+/// back empty and read as *"the Drone never wrote it"*.
+pub fn resolve(step: &Step, facts: &std::collections::BTreeMap<String, String>) -> Step {
+    let fill = |text: &Option<String>| -> Option<String> {
+        text.as_ref().map(|written| {
+            facts.iter().fold(written.clone(), |acc, (key, value)| {
+                acc.replace(&format!("${{task.{key}}}"), value)
+            })
+        })
+    };
+    let mut resolved = step.clone();
+    resolved.verify.test = fill(&step.verify.test);
+    resolved.verify.artifact = fill(&step.verify.artifact);
+    resolved
+}
+
 /// What a step's gate would have to have looked at.
 ///
 /// **A [`Step`] and not a [`super::workflow::Verify`]**, because `scope:` lives
@@ -757,6 +789,33 @@ mod tests {
                 test: "regression_x".to_string(),
                 scope: None,
             }
+        );
+    }
+
+    /// **A Job's own facts fill the placeholder.** `armada fleet spawn --set
+    /// test=<name>` is what makes the shipped `bug` workflow runnable with no
+    /// human turn in the middle: the name is given once, before anything starts.
+    #[test]
+    fn a_jobs_facts_fill_the_workflows_placeholders() {
+        let mut written = step(Predicate::FailingTestExists);
+        written.verify.test = Some("${task.test}".to_string());
+        let facts = std::collections::BTreeMap::from([(
+            "test".to_string(),
+            "regression_bad_parse".to_string(),
+        )]);
+        assert_eq!(
+            needs(&resolve(&written, &facts)),
+            Needs::RedCheck {
+                test: "regression_bad_parse".to_string(),
+                scope: None,
+            }
+        );
+        // **Unresolved is left as written, never blanked.** A search for `` would
+        // come back empty and read as "the Drone never wrote the test".
+        let nothing = std::collections::BTreeMap::new();
+        assert_eq!(
+            resolve(&written, &nothing).verify.test.as_deref(),
+            Some("${task.test}")
         );
     }
 

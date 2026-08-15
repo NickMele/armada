@@ -376,6 +376,43 @@ pub struct Spawn {
     /// Report the classification, worktree path, port block and budget. Starts
     /// nothing.
     pub dry_run: bool,
+    /// `--set k=v`, repeatable — what this task's `${task.<k>}` placeholders
+    /// mean.
+    ///
+    /// **The shipped `bug` workflow needs one.** Its first step gates on
+    /// `test: ${task.test}`, nothing in the repository substitutes it, and a
+    /// step whose test name is still a placeholder names no test. Given here,
+    /// once, before anything starts, the whole workflow then runs with no human
+    /// turn *in the middle* — which is the thing PHASES.md §8.6 asks for.
+    pub set: std::collections::BTreeMap<String, String>,
+}
+
+/// `k=v` pairs, as a map.
+///
+/// **Refused rather than ignored when the `=` is missing.** A caller who typed
+/// `--set test regression_x` meant one pair and would otherwise get a Job whose
+/// placeholder is still a placeholder — which surfaces much later, as a gate
+/// that stops and asks, with nothing pointing back at the typo.
+fn pairs(
+    given: &[String],
+    flag: &str,
+) -> Result<std::collections::BTreeMap<String, String>, ParseFailure> {
+    let mut out = std::collections::BTreeMap::new();
+    for entry in given {
+        let Some((key, value)) = entry.split_once('=') else {
+            return Err(failure(
+                ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: flag.to_string(),
+                    message: format!("`{entry}` is not a `key=value` pair"),
+                    next_action: Some(format!("`{flag} test=regression_bad_parse`")),
+                },
+                false,
+            ));
+        };
+        out.insert(key.trim().to_string(), value.to_string());
+    }
+    Ok(out)
 }
 
 /// How often the Bridge redraws, in seconds.
@@ -1975,7 +2012,14 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 color,
                 "fleet spawn",
                 &["--dry-run"],
-                &["--workflow", "--name", "--budget", "-C", "--confidence"],
+                &[
+                    "--workflow",
+                    "--name",
+                    "--budget",
+                    "-C",
+                    "--confidence",
+                    "--set",
+                ],
             )?;
             // **The task is required and is not defaulted.** A `spawn` with no
             // task would classify an empty string and burn a worktree, a port
@@ -2024,6 +2068,7 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 budget: parsed.every("--budget"),
                 at: parsed.value("-C"),
                 dry_run: parsed.on("--dry-run"),
+                set: pairs(&parsed.every("--set"), "--set")?,
             }))
         }
         "ls" => {

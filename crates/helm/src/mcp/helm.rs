@@ -157,6 +157,13 @@ pub struct SpawnArgs {
     /// and start nothing.
     #[serde(default)]
     pub dry_run: bool,
+    /// What this task's `${task.<key>}` placeholders mean, as `key=value`.
+    ///
+    /// The shipped `bug` workflow gates its first step on `test: ${task.test}`,
+    /// so a bug Job that should run to completion without stopping to ask wants
+    /// `set: ["test=<the test you want written>"]`.
+    #[serde(default)]
+    pub set: Vec<String>,
 }
 
 /// `fleet.status`.
@@ -324,6 +331,12 @@ impl Toolbelt {
                     at: args.at,
                     confidence: args.confidence,
                     dry_run: args.dry_run,
+                    set: args
+                        .set
+                        .iter()
+                        .filter_map(|pair| pair.split_once('='))
+                        .map(|(key, value)| (key.trim().to_string(), value.to_string()))
+                        .collect(),
                 },
                 // **Nobody to ask, and that is the correct answer here.** A
                 // low-confidence spawn refuses instead of proceeding, which is

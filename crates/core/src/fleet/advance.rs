@@ -190,10 +190,10 @@ impl Next {
 
 /// Decide what follows a gate's answer.
 ///
-/// `attempts` is how many attempts at this step have **begun**
-/// ([`super::job::step_attempts`]), so the retry this would be is `attempts + 1`
-/// and the ceiling is reached when `attempts` has already used the workflow's
-/// rope.
+/// `attempts` is how many attempts at this step have been **made** — one more
+/// than [`super::job::step_failures`], for the reason that function's own
+/// comment gives: a ceiling counted from what a Drone reported is a ceiling a
+/// silent Drone never reaches and a chatty one reaches twice as fast.
 ///
 /// **Exhaustive over [`Outcome`], with no `_ =>` arm.**
 pub fn after(outcome: &Outcome, workflow: &Workflow, step: &str, attempts: u32) -> Next {

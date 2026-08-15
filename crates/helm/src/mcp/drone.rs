@@ -221,6 +221,9 @@ impl Toolbelt {
                 &args.step,
                 reached,
                 evidence,
+                // The Drone's own account is already in `fleet.report`; the
+                // generic inbox sentence is the right one here.
+                None,
             )
         })
         .await

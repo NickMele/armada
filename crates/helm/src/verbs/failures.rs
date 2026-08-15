@@ -348,6 +348,8 @@ pub fn fix<R: Run, C: Clock>(
         at: Some(place.expand(&entry.cwd).display().to_string()),
         confidence: None,
         dry_run,
+        // A failure's task names no `${task.…}` placeholder.
+        set: std::collections::BTreeMap::new(),
     };
     let output = crate::verbs::fleet::spawn(run, now, place, &spawn, ask, progress)?;
 

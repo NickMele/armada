@@ -116,6 +116,45 @@ pub struct Job {
     /// written before this field existed still parses.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub transitions: Vec<Transition>,
+    /// The detached `armada manifest check` this Job's gate is waiting on.
+    ///
+    /// **On disk, because the poll and the start are different invocations.**
+    /// `armada fleet tick` starts a check and returns; a later tick reads it.
+    /// Holding the run id in memory would mean one process had to stay alive
+    /// across a check that takes minutes, which is the shape `--detach` exists
+    /// to remove (PHASES.md §8.6).
+    ///
+    /// Additive, so `schema_version` stays 1, and defaulted so every Job record
+    /// written before this field existed still parses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending: Option<Pending>,
+    /// What a person said this task's `${task.…}` placeholders mean.
+    ///
+    /// **Seeded once, before anything runs** — `armada fleet spawn --set
+    /// test=<name>`. The shipped `bug` workflow gates its first step on
+    /// `test: ${task.test}`, and nothing in the repository substituted it; a
+    /// value given at spawn is what lets the whole workflow run with no human
+    /// turn *in the middle*, which is what PHASES.md §8.6 asks for.
+    ///
+    /// Additive and defaulted, for the reason above.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub facts: std::collections::BTreeMap<String, String>,
+}
+
+/// A detached check a step's gate is waiting on.
+///
+/// **The attempt is carried with the run id, and that is the point.** A check
+/// started for attempt 1 must not be read as attempt 2's evidence: the Drone has
+/// changed the worktree in between, and a stale green would advance a step on a
+/// run that predates the work it is supposed to be judging.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pending {
+    /// Which step's gate started it.
+    pub step: String,
+    /// The run id `armada manifest check --detach` returned.
+    pub run: String,
+    /// Which attempt at the step it belongs to.
+    pub attempt: u32,
 }
 
 /// One thing a Drone said about its own progress.
@@ -309,6 +348,33 @@ pub fn step_attempts(transitions: &[Transition], step: &str) -> u32 {
     transitions
         .iter()
         .filter(|entry| entry.step == step && entry.event.opens())
+        .count()
+        .try_into()
+        .unwrap_or(u32::MAX)
+}
+
+/// How many attempts at `step` the **gate** has already failed.
+///
+/// # Why the loop counts failures rather than entries
+///
+/// [`step_attempts`] counts what has *begun*, and what begins is reported by
+/// the Drone through `fleet.report`. That is right for the screen — a reader
+/// looking at a stuck Job wants *attempt three* while it is still running — and
+/// wrong for a ceiling, in both directions:
+///
+/// | | |
+/// |---|---|
+/// | a Drone that never reports `entered` | begins nothing, so a ceiling counted from entries never trips and the loop retries for ever |
+/// | a Drone that reports `entered` twice | begins two, so the rope the workflow declared is halved |
+///
+/// **A `failed` transition is written by exactly one thing**, the gate, exactly
+/// once per settled attempt (`fleet.verdict`). So the retry count is a fact
+/// Armada produced about its own decisions, and no Drone can inflate or
+/// suppress it. The attempt now under way is one more than this.
+pub fn step_failures(transitions: &[Transition], step: &str) -> u32 {
+    transitions
+        .iter()
+        .filter(|entry| entry.step == step && entry.event == StepEvent::Failed)
         .count()
         .try_into()
         .unwrap_or(u32::MAX)

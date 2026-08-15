@@ -150,7 +150,12 @@ impl Where {
 /// it, `kill` and `answer` persist it, and nothing computes it a second way —
 /// which is what stops `ls` and `kill` disagreeing about whether a Job is
 /// stalled.
-fn look<R: Run>(run: &R, place: &Where, record: &Job, now_ms: u64) -> (Observed, Reading) {
+fn look<R: Run>(
+    run: &R,
+    place: &Where,
+    record: &Job,
+    now_ms: u64,
+) -> (Observed, Reading, bool) {
     let reading = drone::transcript(&place.stream(&record.uuid));
     // **The process table is only consulted for a Job that could still be
     // running.** A finished Job costs no `ps`, which is what keeps `armada
@@ -170,7 +175,14 @@ fn look<R: Run>(run: &R, place: &Where, record: &Job, now_ms: u64) -> (Observed,
         alive,
         record.run_time_ms(now_ms),
     );
-    (observed, reading)
+    // **`alive` comes back out rather than being asked a second time.**
+    // `armada fleet tick` needs it as a fact of its own — a Job whose Drone is
+    // still working is not gated — and [`observe`] folds it into a state, which
+    // is lossy: `RUNNING` is both "a Drone is alive" and "a turn finished
+    // cleanly and nothing is running". Those are the two cases the loop has to
+    // tell apart, and a second `ps` to re-ask would be a second answer that
+    // could disagree with this one.
+    (observed, reading, alive)
 }
 
 /// Write an observation back into the record.
@@ -388,6 +400,8 @@ pub fn spawn<R: Run, C: Clock>(
         progress: Vec::new(),
         attempts: std::collections::BTreeMap::new(),
         transitions: Vec::new(),
+        pending: None,
+        facts: options.set.clone(),
     };
 
     if options.dry_run {
@@ -843,7 +857,7 @@ pub fn ls<R: Run, C: Clock>(
         if !all && record.state.is_over() {
             continue;
         }
-        let (observed, _) = look(run, place, &record, wall);
+        let (observed, _, _) = look(run, place, &record, wall);
         // **By uuid, and never for a Job that is over.** The first is the
         // defect `005` records; the second is its first consequence, and it is
         // asserted here as well as written at the close because `--all` draws
@@ -970,7 +984,7 @@ pub fn show<R: Run, C: Clock>(
 ) -> Result<Output, ArmadaError> {
     let record = place.store().find(handle)?;
     let wall = now.wall_ms();
-    let (observed, _) = look(run, place, &record, wall);
+    let (observed, _, _) = look(run, place, &record, wall);
     let run_time = record.run_time_ms(wall);
 
     // **Every entry this Job raised, not only the open one.** `ls` folds the
@@ -1117,7 +1131,7 @@ pub fn kill<R: Run, C: Clock>(
             .all()?
             .into_iter()
             .filter(|record| {
-                let (observed, _) = look(run, place, record, wall);
+                let (observed, _, _) = look(run, place, record, wall);
                 observed.state.is_over()
                     || matches!(observed.state, JobState::Paused | JobState::Stalled)
             })
@@ -1155,7 +1169,7 @@ fn end<R: Run, C: Clock>(
         // stalled or hit a ceiling while nobody was looking has that written
         // down and raised here, because after this it is `ABORTED` and the
         // observation is no longer derivable.
-        let (observed, _) = look(run, place, &record, wall);
+        let (observed, _, _) = look(run, place, &record, wall);
         settle(&mut record, &observed, place, now)?;
 
         // **Step one: the Drone.** It is still working, and everything below
@@ -1308,7 +1322,7 @@ pub fn pause<R: Run, C: Clock>(
 ) -> Result<Output, ArmadaError> {
     let store = place.store();
     let mut record = store.find(handle)?;
-    let (observed, _) = look(run, place, &record, now.wall_ms());
+    let (observed, _, _) = look(run, place, &record, now.wall_ms());
 
     if observed.state.is_over() {
         return Err(ArmadaError {
@@ -1404,7 +1418,7 @@ pub fn resume<R: Run, C: Clock>(
 ) -> Result<Output, ArmadaError> {
     let store = place.store();
     let mut record = store.find(handle)?;
-    let (observed, _) = look(run, place, &record, now.wall_ms());
+    let (observed, _, _) = look(run, place, &record, now.wall_ms());
 
     if observed.state != JobState::Paused {
         return Err(ArmadaError {
@@ -1512,7 +1526,7 @@ pub fn reap_plan<R: Run, C: Clock>(run: &R, now: &C, place: &Where) -> Result<Ou
     let wall = now.wall_ms();
     let mut results: Vec<ReapCandidate> = Vec::new();
     for record in place.store().all()? {
-        let (observed, _) = look(run, place, &record, wall);
+        let (observed, _, _) = look(run, place, &record, wall);
         let reaping = observed.state.reaping();
         if !reaping.is_offered() {
             continue;
@@ -1562,7 +1576,7 @@ pub fn reap<R: Run, C: Clock>(
     let mut targets: Vec<Job> = Vec::new();
     for handle in jobs {
         let record = store.find(handle)?;
-        let (observed, _) = look(run, place, &record, wall);
+        let (observed, _, _) = look(run, place, &record, wall);
         if !observed.state.reaping().is_offered() {
             return Err(ArmadaError {
                 class: ErrClass::BadInvocation,
@@ -1702,7 +1716,7 @@ pub fn answer<R: Run, C: Clock>(
     // not continued by answering it: `on_exhausted: needs_human` means a person
     // decides what happens next, and silently resuming past a ceiling is how a
     // budget stops being one.
-    let (observed, _) = look(run, place, &record, now.wall_ms());
+    let (observed, _, _) = look(run, place, &record, now.wall_ms());
     if let Some(ceiling) = observed.ceiling {
         // Persisted and raised on the way out, so the ceiling is a durable fact
         // rather than something this invocation noticed and forgot.
@@ -2024,6 +2038,14 @@ pub fn ask_human<C: Clock>(
 /// `BLOCKED` and `NEEDS_HUMAN` raise to the inbox on their way out, because both
 /// mean the Job has stopped and neither can be discovered by a person who is not
 /// looking.
+///
+/// **`why` is the entry's own words, and `None` is the Drone's case.** A Drone
+/// calling `fleet.verdict` has already said what it was doing through
+/// `fleet.report`, so the generic sentence is enough; the loop
+/// ([`tick`]) knows precisely which ceiling was reached or which predicate could
+/// not be decided, and an inbox that said *"reached a judgement call"* about a
+/// step nobody could gate would send the reader to read the transcript to find
+/// out what Armada already knew.
 pub fn verdict<C: Clock>(
     now: &C,
     place: &Where,
@@ -2031,6 +2053,7 @@ pub fn verdict<C: Clock>(
     step: &str,
     reached: Verdict,
     evidence: Vec<Evidence>,
+    why: Option<&str>,
 ) -> Result<Output, ArmadaError> {
     if reached == Verdict::Pass && evidence.is_empty() {
         return Err(ArmadaError {
@@ -2099,7 +2122,12 @@ pub fn verdict<C: Clock>(
                 now,
                 &record,
                 inbox::Kind::Blocked,
-                &format!("`{step}` is blocked and cannot proceed without an external change"),
+                &match why {
+                    Some(why) => why.to_string(),
+                    None => format!(
+                        "`{step}` is blocked and cannot proceed without an external change"
+                    ),
+                },
             )?;
         }
         Verdict::NeedsHuman => {
@@ -2108,7 +2136,10 @@ pub fn verdict<C: Clock>(
                 now,
                 &record,
                 inbox::Kind::NeedsHuman,
-                &format!("`{step}` reached a judgement call"),
+                &match why {
+                    Some(why) => why.to_string(),
+                    None => format!("`{step}` reached a judgement call"),
+                },
             )?;
         }
         Verdict::Pass | Verdict::Failed => {}
