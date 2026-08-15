@@ -22,6 +22,7 @@ use std::io::Stdout;
 use std::time::{Duration, Instant};
 
 use armada_core::ctx::{Clock, Run};
+use armada_core::envelope::ShowData;
 use armada_core::error::ArmadaError;
 use armada_core::fleet::bridge::{self, Departure, Filter, Frame, Key, Mode, Pressed, Screen};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -95,10 +96,19 @@ pub fn key_of(code: KeyCode, modifiers: KeyModifiers) -> Option<Key> {
 pub fn paint(
     frame: &Frame,
     screen: &Screen,
+    detail: Option<&ShowData>,
     status: armada_core::error::Status,
     style: Style,
     width: usize,
 ) -> Vec<Vec<Span>> {
+    // **The detail view covers the table rather than sitting beside it.** The
+    // question it answers — *why does this one need me* — is about one row, and
+    // a pane squeezed in next to six columns would truncate the one sentence the
+    // whole view exists to show in full.
+    if let Mode::Detail(job) = &screen.mode {
+        return detail_pane(job.as_str(), detail, style, width);
+    }
+
     let data = crate::verbs::bridge::data(frame.clone());
     let mut lines: Vec<Vec<Span>> = vec![
         vec![
@@ -148,6 +158,49 @@ pub fn paint(
     lines.push(vec![
         plain("  "),
         piece(render::bridge_keys(), Role::SteelGrey),
+    ]);
+    lines
+}
+
+/// One Job, in full, drawn over the table.
+///
+/// **`render::show_lines` and nothing of its own**, which is what makes this a
+/// second *surface* rather than a second view: `armada fleet show <job>` at a
+/// terminal, the same command through a pipe and this pane are one description
+/// emitted three ways (PLAN.md §3.1.1).
+fn detail_pane(job: &str, detail: Option<&ShowData>, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut lines: Vec<Vec<Span>> = vec![
+        vec![
+            plain("  "),
+            bold("ARMADA BRIDGE", Role::SignalAmber),
+            plain("   "),
+            piece(job.to_string(), Role::NavalBlue),
+        ],
+        Vec::new(),
+    ];
+    match detail {
+        Some(data) => lines.extend(render::show_lines(data, style, width)),
+        // **A Job that went while the pane was open says so.** `kill` in another
+        // shell is the ordinary way this happens, and a pane that simply emptied
+        // would read as a failed redraw.
+        None => lines.push(vec![
+            plain("  "),
+            piece(
+                format!("`{job}` is no longer in the fleet"),
+                Role::SteelGrey,
+            ),
+        ]),
+    }
+    lines.push(Vec::new());
+    lines.push(vec![
+        plain("  "),
+        // **Its own key line, not the Bridge's.** Nothing else on this screen is
+        // reachable from here, so listing the Bridge's eight keys would name
+        // seven that do nothing.
+        piece(
+            "esc back  up/down another job  ctrl-c quit",
+            Role::SteelGrey,
+        ),
     ]);
     lines
 }
@@ -205,7 +258,18 @@ pub fn watch<R: Run, C: Clock>(
     let outcome = loop {
         let frame = crate::verbs::bridge::read(run, now, place, screen.filter.as_ref())?;
         screen.cursor.clamp(frame.rows.len());
-        draw(&mut view, &frame, &screen, style, terminal);
+        // **Re-read on the same cadence as the frame.** An open detail pane is
+        // the Bridge, and a Bridge that froze one Job while the rest kept moving
+        // would be the one screen in Armada that lies about being live.
+        let mut detail = detail_of(run, now, place, &screen);
+        draw(
+            &mut view,
+            &frame,
+            &screen,
+            detail.as_deref(),
+            style,
+            terminal,
+        );
 
         let deadline = Instant::now() + interval;
         let departure = loop {
@@ -232,7 +296,21 @@ pub fn watch<R: Run, C: Clock>(
             let showing = screen.filter.clone();
             match bridge::press(&mut screen, &frame.rows, pressed) {
                 Pressed::Leave(departure) => break Some(departure),
-                Pressed::Stay => draw(&mut view, &frame, &screen, style, terminal),
+                Pressed::Stay => {
+                    // The key may have just opened the pane, or moved it to
+                    // another row; either way what it shows is read now rather
+                    // than at the next tick, for the reason a committed filter
+                    // re-reads now.
+                    detail = detail_of(run, now, place, &screen);
+                    draw(
+                        &mut view,
+                        &frame,
+                        &screen,
+                        detail.as_deref(),
+                        style,
+                        terminal,
+                    );
+                }
             }
             // **A changed filter re-reads now rather than at the next tick.**
             // The frame in hand was built under the old expression, so drawing
@@ -257,26 +335,54 @@ pub fn watch<R: Run, C: Clock>(
     Ok(outcome)
 }
 
+/// What the open pane is showing, or `None` when no pane is open.
+///
+/// **One call to the verb, and no read of its own.** `armada fleet show <job>`
+/// is the whole of it, so the pane cannot drift from what the same command
+/// prints in a shell — and a Job that has gone comes back as `None` rather than
+/// as an error that would tear down the screen.
+fn detail_of<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    screen: &Screen,
+) -> Option<Box<ShowData>> {
+    let Mode::Detail(job) = &screen.mode else {
+        return None;
+    };
+    match crate::verbs::fleet::show(run, now, place, job) {
+        Ok(crate::verbs::Output::Show(envelope)) => Some(Box::new(envelope.data)),
+        _ => None,
+    }
+}
+
 fn draw(
     view: &mut ratatui::Terminal<ratatui::backend::CrosstermBackend<Stdout>>,
     frame: &Frame,
     screen: &Screen,
+    detail: Option<&ShowData>,
     style: Style,
     terminal: Terminal,
 ) {
     let status = crate::verbs::bridge::status_of(frame);
-    let lines: Vec<ratatui::text::Line<'static>> =
-        paint(frame, screen, status, style, terminal.usable_width())
-            .iter()
-            .map(|spans| {
-                ratatui::text::Line::from(
-                    spans
-                        .iter()
-                        .map(|span| live::paint(span, style))
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect();
+    let lines: Vec<ratatui::text::Line<'static>> = paint(
+        frame,
+        screen,
+        detail,
+        status,
+        style,
+        terminal.usable_width(),
+    )
+    .iter()
+    .map(|spans| {
+        ratatui::text::Line::from(
+            spans
+                .iter()
+                .map(|span| live::paint(span, style))
+                .collect::<Vec<_>>(),
+        )
+    })
+    .collect();
     // A failed write is dropped: the next redraw is two seconds away and the
     // fleet is unaffected either way.
     let _ = view.draw(|f| {
@@ -343,6 +449,7 @@ mod tests {
         text(&paint(
             &frame(),
             screen,
+            None,
             Status::Running,
             Style::plain(),
             80,
@@ -485,6 +592,143 @@ mod tests {
         }
     }
 
+    /// **The pane answers the question the table could not**, and it is
+    /// `render::show_lines` that answers it — the same words `armada fleet show`
+    /// prints in a shell.
+    #[test]
+    fn the_detail_pane_draws_the_reason_the_task_and_its_own_keys() {
+        let screen = Screen {
+            mode: Mode::Detail("release-merge".to_string()),
+            ..Screen::default()
+        };
+        let shown = detail();
+        let all = text(&paint(
+            &frame(),
+            &screen,
+            Some(&shown),
+            Status::Running,
+            Style::plain(),
+            80,
+        ))
+        .join("\n");
+
+        // The defect, closed: the entry's own words, whole.
+        assert!(
+            all.contains("the CI timeout is 30s and the flake needs 90s"),
+            "{all}"
+        );
+        // And the task, whole — not the column's worth of it.
+        assert!(all.contains(&shown.task), "{all}");
+        assert!(all.contains("TASK"), "{all}");
+        // The three facts that disagree when something is wrong.
+        for fact in ["RECORDED", "ALIVE", "HELD"] {
+            assert!(all.contains(fact), "no {fact} row:\n{all}");
+        }
+        // Its own key line, because none of the Bridge's eight work from here.
+        assert!(all.contains("esc back"), "{all}");
+        assert!(
+            !all.contains("n new"),
+            "the Bridge's keys are named:\n{all}"
+        );
+        // **Still no progress column**, on the surface most tempted by one.
+        assert!(!all.contains("PROGRESS"), "{all}");
+    }
+
+    /// The table is **covered, not squeezed beside**: a pane sharing the width
+    /// with six columns would truncate the one sentence it exists to show.
+    #[test]
+    fn the_detail_pane_replaces_the_table_rather_than_joining_it() {
+        let screen = Screen {
+            mode: Mode::Detail("release-merge".to_string()),
+            ..Screen::default()
+        };
+        let all = text(&paint(
+            &frame(),
+            &screen,
+            Some(&detail()),
+            Status::Running,
+            Style::plain(),
+            80,
+        ))
+        .join("\n");
+        assert!(
+            !all.contains("rate-limit"),
+            "the table is still drawn:\n{all}"
+        );
+        assert!(!all.contains("NEEDS YOU"), "{all}");
+    }
+
+    /// A Job that went while the pane was open says so. `armada fleet kill` in
+    /// another shell is the ordinary way this happens, and a pane that simply
+    /// emptied would read as a failed redraw.
+    #[test]
+    fn a_detail_pane_whose_job_has_gone_says_so() {
+        let screen = Screen {
+            mode: Mode::Detail("release-merge".to_string()),
+            ..Screen::default()
+        };
+        let all = text(&paint(
+            &frame(),
+            &screen,
+            None,
+            Status::Running,
+            Style::plain(),
+            80,
+        ))
+        .join("\n");
+        assert!(
+            all.contains("`release-merge` is no longer in the fleet"),
+            "{all}"
+        );
+    }
+
+    /// One Job with a question open against it.
+    fn detail() -> armada_core::envelope::ShowData {
+        armada_core::envelope::ShowData {
+            job: "release-merge".to_string(),
+            uuid: "release-merge-uuid".to_string(),
+            workflow: "feature".to_string(),
+            state: JobState::Blocked,
+            recorded_state: JobState::Running,
+            drone_pgid: Some(48122),
+            drone_alive: true,
+            step: "implement".to_string(),
+            attempt: 2,
+            task: "raise the nightly CI timeout so the flake stops failing the run".to_string(),
+            runtime_s: 840,
+            created_at: "2026-08-09T14:02:11Z".to_string(),
+            cost_usd: 2.10,
+            tokens: 1_000,
+            turns: 3,
+            budget: armada_core::fleet::workflow::Budget {
+                iterations: 12,
+                tokens: 400_000,
+                wall_clock_ms: 90 * 60 * 1_000,
+                on_exhausted: armada_core::fleet::workflow::OnExhausted::NeedsHuman,
+            },
+            budget_remaining: Remaining {
+                iterations: 9,
+                tokens: 399_000,
+                wall_clock_ms: 60 * 60 * 1_000,
+            },
+            repo: "orders".to_string(),
+            branch: "armada/release-merge".to_string(),
+            worktree: "~/.armada/workspaces/orders/release-merge".to_string(),
+            port_block: None,
+            needs_attention: true,
+            asked: vec![armada_core::envelope::InboxRow {
+                uuid: "e1".to_string(),
+                job: "release-merge".to_string(),
+                kind: "NEEDS_HUMAN".to_string(),
+                raised_at: "2026-08-09T14:12:11Z".to_string(),
+                waiting_s: 9 * 60,
+                body: "the CI timeout is 30s and the flake needs 90s. Raise it?".to_string(),
+                answered: None,
+            }],
+            progress: Vec::new(),
+        }
+    }
+
     /// An empty fleet says so rather than drawing nothing, and says which of the
     /// two empties it is.
     #[test]
@@ -504,6 +748,7 @@ mod tests {
             let drawn = text(&paint(
                 &empty,
                 &Screen::default(),
+                None,
                 Status::Ok,
                 Style::plain(),
                 80,

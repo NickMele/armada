@@ -1,0 +1,22 @@
+  STATUS  JOB          WORKFLOW  STEP       SPENT  TIME
+  PAUSED  xlsx-report  bug       reproduce  $1.25    1h
+
+  TASK
+  the nightly xlsx export writes an empty sheet about one run in five; reproduce
+  it, then fix it
+
+  STATUS    FACT      DETAIL
+  RECORDED  state     RUNNING, as a verb last wrote it
+  GONE      drone     process group 48122 is not Armada's any more
+  SPENT     budget    4 of 15 turns, 119k of 400k tokens, $1.25
+  LEFT      budget    11 turns, 280k tokens, 25m
+  SINCE     started   2026-08-09T14:02:11Z
+  HELD      ports     5470-5479
+  HELD      worktree  ~/.armada/workspaces/reports/xlsx-report
+  HELD      branch    armada/xlsx-report
+  FROM      repo      reports
+
+  STATUS    STEP       DETAIL                                               TIME
+  REPORTED  reproduce  eleven runs, no empty sheet yet; widening the fixt…   36m
+
+PAUSED  xlsx-report, bug, needs you, $1.25

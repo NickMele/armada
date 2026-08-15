@@ -22,7 +22,8 @@
 use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, InboxData,
-    InboxRow, JobRow, KillData, Killed, ProbeData, ReportData, SpawnData, VerdictData,
+    InboxRow, JobRow, KillData, Killed, NoteRow, ProbeData, ReportData, ShowData, SpawnData,
+    VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -755,6 +756,120 @@ pub fn board(place: &Where, handle: &str) -> Result<Output, ArmadaError> {
             uuid: record.uuid.clone(),
             branch: record.branch.clone(),
             command: argv::board_argv(&record.uuid).join(" "),
+        },
+    ))))
+}
+
+// ------------------------------------------------------------------------ show
+
+/// `armada fleet show` — **one Job, and why it wants you.**
+///
+/// **The verb behind the Bridge's detail view, and it exists as a verb for that
+/// reason.** `commands/helm/bridge.md` says every key maps to a verb that
+/// already exists and is reachable from a shell — that is what keeps the Bridge
+/// a rendering choice rather than an architectural one — so the pane renders
+/// this payload rather than growing a read of its own. It is also what gives the
+/// view all three audiences (PLAN.md §3.1.1) instead of only the one at a
+/// terminal.
+///
+/// **Nothing here explains anything twice.** The state is [`look`]'s, the same
+/// one `ls` renders; the reason it wants you is the inbox entry's own body, the
+/// same one `armada fleet inbox` prints; the step is the record's. This verb
+/// gathers and never rephrases — a second wording of one state is a bug that
+/// only shows up when the two are read side by side.
+///
+/// **Read-only, like every other view.** No `settle`, so `show` on a Job that
+/// reached a ceiling reports it without persisting it or raising a second inbox
+/// entry: watching something must not change it (PLAN.md §15.2), and the Bridge
+/// re-reads this every interval.
+pub fn show<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    handle: &str,
+) -> Result<Output, ArmadaError> {
+    let record = place.store().find(handle)?;
+    let wall = now.wall_ms();
+    let (observed, _) = look(run, place, &record, wall);
+    let run_time = record.run_time_ms(wall);
+
+    // **Every entry this Job raised, not only the open one.** `ls` folds the
+    // oldest open entry into one `detail` cell and drops the rest; a reader
+    // asking why a Job wants them is often looking at the second question, and
+    // an answered one is the record of what was already decided.
+    //
+    // **Cut to entries raised after this Job was minted**, because a handle is
+    // reusable once a Job is over: without it, a fresh `nightly-flake` would
+    // inherit the questions its namesake asked last week.
+    let asked: Vec<InboxRow> = inbox::read(&place.inbox())?
+        .into_iter()
+        .filter(|entry| entry.job == record.name && entry.raised_ms >= record.created_ms)
+        .map(|entry| InboxRow {
+            uuid: entry.uuid,
+            job: entry.job,
+            kind: entry.kind.word().to_string(),
+            raised_at: entry.raised_at,
+            waiting_s: wall.saturating_sub(entry.raised_ms) / 1_000,
+            body: entry.body,
+            answered: entry.answered,
+        })
+        .collect();
+
+    // **Newest first, which is the opposite of the inbox's order and is meant
+    // to be.** An inbox is a queue and is answered oldest first; progress is a
+    // log, and the useful end of a log is the last thing that happened.
+    let mut progress: Vec<NoteRow> = record
+        .progress
+        .iter()
+        .map(|note| NoteRow {
+            at: note.at.clone(),
+            ago_s: wall.saturating_sub(note.at_ms) / 1_000,
+            step: note.step.clone(),
+            body: note.body.clone(),
+        })
+        .collect();
+    progress.reverse();
+
+    let waiting_on_you =
+        observed.state.needs_a_person() || asked.iter().any(|row| row.answered.is_none());
+
+    Ok(Output::Show(Box::new(Envelope::ok(
+        "fleet show",
+        None,
+        // **The Job's state is not the command's**, and `show` succeeds whenever
+        // the record is readable — the same rule `ls` follows. A `BLOCKED` Job
+        // reported successfully is exit 0.
+        Status::Ok,
+        ShowData {
+            job: record.name.clone(),
+            uuid: record.uuid.clone(),
+            workflow: record.workflow.clone(),
+            state: observed.state,
+            recorded_state: record.state,
+            drone_pgid: record.drone.as_ref().map(|handle| handle.pgid),
+            drone_alive: drone::alive(
+                run,
+                &place.armada_home,
+                record.drone.as_ref(),
+                &place.boot_id,
+            ),
+            step: record.step.clone(),
+            attempt: record.attempts.get(&record.step).copied().unwrap_or(0),
+            task: record.task.clone(),
+            runtime_s: run_time / 1_000,
+            created_at: record.created_at.clone(),
+            cost_usd: observed.spend.cost_usd,
+            tokens: observed.spend.tokens,
+            turns: observed.spend.turns,
+            budget: record.budget,
+            budget_remaining: job::remaining(&record.budget, &observed.spend, run_time),
+            repo: record.repo.clone(),
+            branch: record.branch.clone(),
+            worktree: record.worktree.clone(),
+            port_block: record.port_block,
+            needs_attention: waiting_on_you,
+            asked,
+            progress,
         },
     ))))
 }

@@ -1450,6 +1450,116 @@ pub struct BridgeData {
     pub hidden: usize,
 }
 
+/// `armada fleet show` — **one Job, and why it wants you.**
+///
+/// **The view a table cannot be.** [`JobRow`] is a row: its `TASK` is truncated
+/// to a column and its `detail` is already the *fold* of two different facts —
+/// the open inbox entry's body when there is one, and the step name when there
+/// is not (`verbs/fleet.rs`'s `detail`). A reader looking at `NEEDS YOU: YES`
+/// and wanting to know *why* cannot get the answer back out of that fold, and
+/// that is the defect this payload exists to close.
+///
+/// **It re-derives no explanation.** `state`, `detail` and the entry bodies are
+/// the ones `armada fleet ls` and `armada fleet inbox` already report, carried
+/// rather than rephrased — two components explaining one state in different
+/// words is the failure the Bridge's one-table rule exists to prevent.
+///
+/// **Three facts that are always separate here and nowhere else**, because they
+/// disagree exactly when something has gone wrong: what the *record* says
+/// ([`Self::recorded_state`]), what *looking* says ([`Self::state`]), and
+/// whether the Drone's process group is still there ([`Self::drone_alive`]). A
+/// Job recorded `RUNNING` whose Drone is gone while its port block is still
+/// claimed is undiagnosable from any other view Armada draws.
+///
+/// **No transcript.** The activity here is [`Self::progress`] — the Drone's own
+/// `fleet.report` notes — because the orchestrator reads summaries and never raw
+/// transcripts (PLAN.md §15.2), and a detail view that dumped one would break
+/// that constraint on the surface most likely to be read every day.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ShowData {
+    /// The handle.
+    pub job: String,
+    /// The session id.
+    pub uuid: String,
+    /// Which workflow.
+    pub workflow: String,
+    /// What it is doing, **observed** — the transcript and the process table,
+    /// which is what `armada fleet ls` reports.
+    pub state: crate::fleet::JobState,
+    /// What the record on disk says.
+    ///
+    /// **Kept beside the observed one rather than collapsed into it.** A Drone
+    /// runs detached and updates nothing when its turn ends, so the record is
+    /// what a verb last wrote; the two agreeing is the ordinary case and the two
+    /// disagreeing is the whole diagnosis.
+    pub recorded_state: crate::fleet::JobState,
+    /// The process group the Drone was last started in, if one ever was.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drone_pgid: Option<i32>,
+    /// Whether that process group is **provably still Armada's**, this boot.
+    pub drone_alive: bool,
+    /// The step it is on.
+    pub step: String,
+    /// How many times that step has been attempted.
+    pub attempt: u32,
+    /// The task, whole, in the words it was given in.
+    ///
+    /// **Never truncated at this width or any other.** The `TASK` column is a
+    /// column and this is the sentence; a detail view that shortened it would be
+    /// the row again.
+    pub task: String,
+    /// How long it has been alive, in seconds.
+    pub runtime_s: u64,
+    /// When it was minted, RFC 3339.
+    pub created_at: String,
+    /// Dollars, summed off the turns' `total_cost_usd`.
+    pub cost_usd: f64,
+    /// Every kind of token, summed off the turns' `usage`.
+    pub tokens: u64,
+    /// Turns, summed off the turns' `num_turns`.
+    pub turns: u32,
+    /// **The ceilings themselves**, which no row carries: `ls` reports what is
+    /// left, and "eleven turns left" does not say whether that is nearly all of
+    /// them or nearly none.
+    pub budget: crate::fleet::workflow::Budget,
+    /// What is left of each ceiling.
+    pub budget_remaining: crate::fleet::job::Remaining,
+    /// The repository it branched from, by name.
+    pub repo: String,
+    /// The branch the worktree is on.
+    pub branch: String,
+    /// Where the worktree is, as a person writes it.
+    pub worktree: String,
+    /// The span `armada manifest init` claimed, if it got that far.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port_block: Option<PortBlock>,
+    /// Whether it is waiting on you.
+    pub needs_attention: bool,
+    /// **Why it wants you**, oldest first — [`InboxRow`] unchanged, so an entry
+    /// here and the same entry from `armada fleet inbox` parse identically.
+    pub asked: Vec<InboxRow>,
+    /// What the Drone said about its own progress, **newest first**.
+    pub progress: Vec<NoteRow>,
+}
+
+/// One `fleet.report` note, as `show` reports it.
+///
+/// **Best-effort and labelled as such.** An agent can forget to report progress
+/// but cannot forget to stop, which is what makes the inbox reliable and this
+/// list not (PLAN.md §15.3). It is here because it is the Drone's own account
+/// and it is cheap; nothing decides anything on it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct NoteRow {
+    /// When, RFC 3339.
+    pub at: String,
+    /// How long ago, in seconds.
+    pub ago_s: u64,
+    /// The step it was reported against.
+    pub step: String,
+    /// What it said.
+    pub body: String,
+}
+
 /// `armada fleet board` — the two facts needed to enter a Job.
 ///
 /// **It does not attach, and it never will.** Boarding hands you the

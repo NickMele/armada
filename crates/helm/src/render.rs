@@ -55,8 +55,8 @@ use armada_core::envelope::{
     ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData,
     GuildBundleData, GuildInitData, GuildSyncData, Headline, HelmData, InboxData, InitData,
     InitDryRun, KillData, MachineInitData, McpData, ProbeData, Projection, ReportData, ResultRow,
-    ScanData, ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData,
-    VerifyData, Wiring,
+    ScanData, ServicesData, ShowData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun,
+    VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -106,6 +106,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
         Output::Bridge(envelope) => bridge(envelope, style, width),
         Output::Helm(envelope) => helm(envelope, style, width),
+        Output::Show(envelope) => show(envelope, style, width),
         Output::Board(envelope) => board(envelope, style, width),
         Output::Kill(envelope) => kill(envelope, style, width),
         Output::Inbox(envelope) => inbox(envelope, style, width),
@@ -718,6 +719,455 @@ fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
             ),
         ],
     ));
+    out
+}
+
+// ------------------------------------------------------------------- fleet show
+// one Job, and why it wants you — the view the Bridge's table cannot be
+
+/// `armada fleet show` — the whole of one Job.
+///
+/// **Written once, for three audiences and two surfaces.** [`show_lines`] is the
+/// only description of this view; this paints it for a terminal and a pipe, the
+/// Bridge's detail pane hands the same pieces to `ratatui`, and `--json` emits
+/// the payload. A second description would be a second layout by the following
+/// milestone, which is the rule [`bridge_table`] already states.
+fn show(envelope: &Envelope<ShowData>, style: Style, width: usize) -> String {
+    let mut out = String::new();
+    for line in show_lines(&envelope.data, style, width) {
+        out.push_str(&paint_line(&line, style));
+        out.push('\n');
+    }
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// The detail view as **coloured pieces** — the one description of it.
+///
+/// **What the reader came for is first and in full.** The complaint this answers
+/// is a `NEEDS YOU: YES` with no way to find out why, so the inbox entry that
+/// raised it is above the task, the budget and the paths — and it is wrapped
+/// prose rather than a cell, because the answer to *why* is a sentence and a
+/// column would truncate it. So is the task, for the same reason: the `TASK`
+/// column is a column, and this is what it was cut from.
+///
+/// **Nothing here is rephrased.** Every state word is [`JobState::word`], every
+/// entry body is the inbox's own, and the step is the record's — the payload
+/// gathers and this draws. Two components explaining one state in different
+/// words is the failure `bridge_summary_pieces` exists to prevent, stated for a
+/// second view.
+///
+/// **There is no progress bar and no percentage**, here least of all. A detail
+/// view is exactly where one would look like a measurement; nothing emits
+/// percent-complete (PHASES.md §9.1 F2), and what is honest — turns, tokens and
+/// wall clock against their ceilings — is drawn as the numbers they are.
+pub fn show_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut lines: Vec<Vec<Span>> = Vec::new();
+
+    // **The row he was looking at, unchanged.** The Bridge's table put him here;
+    // opening with the same Job in the same shape is what makes the rest of the
+    // page read as *more about this*, rather than as a second report.
+    let identity = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("job"),
+        Column::fixed("workflow"),
+        Column::flexible("step"),
+        Column::fixed("spent").right(),
+        Column::fixed("time").right(),
+    ])
+    .indent(2)
+    .row(vec![
+        job_state(data.state),
+        Cell::painted(data.job.clone(), Role::NavalBlue),
+        Cell::muted(data.workflow.clone()),
+        detail_cell(style, Some(&step_and_attempt(data))),
+        Cell::muted(match data.cost_usd > 0.0 {
+            true => format::money(data.cost_usd),
+            false => style.nothing().to_string(),
+        }),
+        Cell::muted(match data.state == JobState::Queued {
+            true => style.nothing().to_string(),
+            false => format::elapsed(data.runtime_s * 1_000),
+        }),
+    ]);
+    lines.extend(identity.spans(style, width));
+
+    lines.extend(asked_lines(data, style, width));
+    lines.extend(task_lines(data, width));
+
+    // **The three facts that disagree when something is wrong, side by side.**
+    // What the record says, whether the Drone is still there and what the Job is
+    // still holding are separate rows because they are separate questions — a
+    // Job recorded `RUNNING` whose Drone is gone while its ports are still
+    // claimed reads as healthy in every other view Armada draws.
+    lines.push(Vec::new());
+    lines.extend(facts_table(data, style).spans(style, width));
+
+    lines.extend(progress_lines(data, style, width));
+
+    lines.push(Vec::new());
+    lines.push(show_summary_pieces(data, style));
+    lines
+}
+
+/// The step, and how many times it has been tried.
+///
+/// **An attempt against the ceiling that governs it**, not a position in the
+/// workflow: the step *index* would mean reading the workflow document, which is
+/// a second source, and the number that decides anything is the iteration
+/// ceiling (PLAN.md §14.3) rather than how many steps remain.
+fn step_and_attempt(data: &ShowData) -> String {
+    match (data.step.is_empty(), data.attempt) {
+        (true, _) => String::new(),
+        (false, 0 | 1) => data.step.clone(),
+        (false, n) => format!("{}, attempt {n} of {}", data.step, data.budget.iterations),
+    }
+}
+
+/// **Why it wants you** — the entries, each with its own words underneath.
+///
+/// **Every entry this Job raised, and the open ones are not separated out.** An
+/// answered question is the record of what was already decided, and a reader
+/// looking at a second question usually needs the first one to make sense of it.
+/// The `STATUS` word says which is which.
+fn asked_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    if data.asked.is_empty() {
+        return Vec::new();
+    }
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("asked"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
+    for row in &data.asked {
+        table = table.row(vec![
+            token(
+                match row.answered.is_some() {
+                    true => "answered",
+                    false => &row.kind,
+                },
+                match (row.answered.is_some(), row.kind.as_str()) {
+                    (true, _) => Role::SteelGrey,
+                    (false, "BLOCKED") => Role::DistressRed,
+                    (false, _) => Role::FlareOrange,
+                },
+            ),
+            Cell::muted(row.uuid.clone()),
+            Cell::muted(format::elapsed(row.waiting_s * 1_000)),
+        ]);
+    }
+
+    // **The bodies are spliced under their own rows**, so one header names all
+    // of them and each sentence still hangs off the entry it belongs to. The
+    // table decided the column widths over every row before any of this, which
+    // is why the rows still line up with prose between them.
+    let rows = table.spans(style, width);
+    let mut lines = vec![Vec::new()];
+    let mut rest = rows.into_iter();
+    if let Some(header) = rest.next() {
+        lines.push(header);
+    }
+    for (spans, row) in rest.zip(&data.asked) {
+        lines.push(spans);
+        lines.extend(prose(&row.body, Role::Foreground, ASKED_INDENT, width));
+        if let Some(answer) = &row.answered {
+            // **Your answer is under the question**, in the same block: an
+            // entry read a week later is a pair, and the two halves apart are
+            // half a record.
+            lines.extend(prose(
+                &format!("you said: {answer}"),
+                Role::SteelGrey,
+                ASKED_INDENT,
+                width,
+            ));
+        }
+    }
+    lines
+}
+
+/// **The task, whole.** A heading and then the sentence, because the `TASK`
+/// column is a column and this is what it was cut from.
+fn task_lines(data: &ShowData, width: usize) -> Vec<Vec<Span>> {
+    if data.task.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = vec![Vec::new(), vec![spaces(2), block_heading("TASK")]];
+    lines.extend(prose(&data.task, Role::Foreground, 2, width));
+    lines
+}
+
+/// What the record says, whether the Drone is there, and what is still held.
+fn facts_table(data: &ShowData, style: Style) -> Table {
+    let mut table = Table::new(columns("fact", "detail", false)).indent(2);
+
+    // **Always drawn, even when it agrees.** The two states agreeing is the
+    // ordinary case and the two disagreeing is the whole diagnosis; a row that
+    // appeared only on disagreement would teach nobody where to look.
+    table = table.row(vec![
+        token("recorded", Role::SteelGrey),
+        Cell::muted("state"),
+        detail_cell(
+            style,
+            Some(&format!(
+                "{}, as a verb last wrote it",
+                data.recorded_state.word()
+            )),
+        ),
+    ]);
+
+    table = table.row(match (data.drone_pgid, data.drone_alive) {
+        (Some(pgid), true) => vec![
+            token("alive", Role::BeaconGreen),
+            Cell::muted("drone"),
+            detail_cell(style, Some(&format!("process group {pgid}"))),
+        ],
+        // **Red only while something still expects it to be running.** A Drone
+        // that is gone because its Job finished is the ordinary end of a Job,
+        // and colouring that as a fault would make the colour mean nothing on
+        // the one row where it has to mean something.
+        (Some(pgid), false) => vec![
+            token(
+                "gone",
+                match data.recorded_state.is_over() {
+                    true => Role::SteelGrey,
+                    false => Role::DistressRed,
+                },
+            ),
+            Cell::muted("drone"),
+            detail_cell(
+                style,
+                Some(&format!("process group {pgid} is not Armada's any more")),
+            ),
+        ],
+        (None, _) => vec![
+            token("never", Role::SteelGrey),
+            Cell::muted("drone"),
+            detail_cell(style, Some("no Drone was ever started")),
+        ],
+    });
+
+    table = table
+        .row(vec![
+            token("spent", Role::SteelGrey),
+            Cell::muted("budget"),
+            detail_cell(
+                style,
+                Some(&format!(
+                    "{} of {} turns, {} of {} tokens, {}",
+                    data.turns,
+                    data.budget.iterations,
+                    token_count(data.tokens),
+                    token_count(data.budget.tokens),
+                    format::money(data.cost_usd),
+                )),
+            ),
+        ])
+        .row(vec![
+            token("left", Role::SteelGrey),
+            Cell::muted("budget"),
+            detail_cell(
+                style,
+                Some(&format!(
+                    "{} turns, {} tokens, {}",
+                    data.budget_remaining.iterations,
+                    token_count(data.budget_remaining.tokens),
+                    // **[`format::elapsed`], the same spelling the `TIME` column
+                    // uses.** `25m` beside a run time of `1h` compares; `25m 00s`
+                    // beside it is the same fact in a second notation.
+                    format::elapsed(data.budget_remaining.wall_clock_ms),
+                )),
+            ),
+        ])
+        .row(vec![
+            token("since", Role::SteelGrey),
+            Cell::muted("started"),
+            detail_cell(style, Some(&data.created_at)),
+        ]);
+
+    // **What it is holding, which is what a stopped Job does not release.** Each
+    // is a thing `armada fleet kill` would take back, and a Job whose Drone is
+    // gone is holding all of them with nothing working on them.
+    if let Some(block) = data.port_block {
+        table = table.row(vec![
+            token("held", Role::RadarCyan),
+            Cell::muted("ports"),
+            detail_cell(style, Some(&style.span(block.from, block.to))),
+        ]);
+    }
+    table
+        .row(vec![
+            token("held", Role::RadarCyan),
+            Cell::muted("worktree"),
+            detail_cell(style, Some(&data.worktree)),
+        ])
+        .row(vec![
+            token("held", Role::RadarCyan),
+            Cell::muted("branch"),
+            detail_cell(style, Some(&data.branch)),
+        ])
+        .row(vec![
+            token("from", Role::SteelGrey),
+            Cell::muted("repo"),
+            detail_cell(style, Some(&data.repo)),
+        ])
+}
+
+/// **Recent activity — the Drone's own notes, and never its transcript.**
+///
+/// The orchestrator reads summaries and never raw transcripts (PLAN.md §15.2),
+/// and a detail view is exactly the surface where that constraint would erode:
+/// the transcript is right there and it is the easiest thing to print. These are
+/// `fleet.report` notes, which the Drone wrote about itself.
+///
+/// **Truncated in a column, unlike the two blocks above, and deliberately.** A
+/// note is a log line; the question and the task are the answer.
+fn progress_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    if data.progress.is_empty() {
+        return Vec::new();
+    }
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("step"),
+        Column::flexible("detail"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
+    for note in &data.progress {
+        table = table.row(vec![
+            token("reported", Role::SteelGrey),
+            Cell::muted(note.step.clone()),
+            detail_cell(style, Some(&note.body)),
+            Cell::muted(format::elapsed(note.ago_s * 1_000)),
+        ]);
+    }
+    let mut lines = vec![Vec::new()];
+    lines.extend(table.spans(style, width));
+    lines
+}
+
+/// The last line: the Job's own state, then what it is counted from.
+fn show_summary_pieces(data: &ShowData, style: Style) -> Vec<Span> {
+    let mut facts = vec![data.job.clone(), data.workflow.clone()];
+    // Omitted at zero rather than printed as `0 open`, for the reason the Bridge
+    // omits its needs-you count: the value of the line is that "needs me" stays
+    // a signal (PLAN.md §15.4).
+    if data.needs_attention {
+        facts.push("needs you".to_string());
+    }
+    let open = data
+        .asked
+        .iter()
+        .filter(|row| row.answered.is_none())
+        .count();
+    if open > 0 {
+        facts.push(format!("{open} open"));
+    }
+    facts.push(format::money(data.cost_usd));
+    vec![
+        Span {
+            text: data.state.word().to_string(),
+            role: Some(Role::for_job_state(data.state)),
+            bold: true,
+        },
+        Span {
+            text: "  ".to_string(),
+            role: None,
+            bold: false,
+        },
+        Span {
+            text: facts.join(style.between()),
+            role: Some(Role::SteelGrey),
+            bold: false,
+        },
+    ]
+}
+
+/// How far an entry's own words are set in from the margin.
+///
+/// **Under its row's second column**, so a sentence reads as hanging off the
+/// entry that raised it rather than as a paragraph of its own.
+const ASKED_INDENT: usize = 4;
+
+/// Wrapped prose as spans, indented, in one role.
+///
+/// **No [`Style`], which is the point of putting it here.** Both audiences break
+/// at the same words because the wrap is measured in characters and not in
+/// anything a style decides — so a sentence that fits on two lines for a person
+/// fits on two lines in a pipe (`wrap_prose`).
+fn prose(text: &str, role: Role, indent: usize, width: usize) -> Vec<Vec<Span>> {
+    wrap_prose(text, width.saturating_sub(indent))
+        .into_iter()
+        .map(|line| {
+            vec![
+                spaces(indent),
+                Span {
+                    text: line,
+                    role: Some(role),
+                    bold: false,
+                },
+            ]
+        })
+        .collect()
+}
+
+/// A heading spelled and coloured exactly as a table's own headers are, so a
+/// block of prose sits under the same kind of label a column does.
+fn block_heading(word: &str) -> Span {
+    Span {
+        text: word.to_uppercase(),
+        role: Some(Role::SteelGrey),
+        bold: true,
+    }
+}
+
+fn spaces(n: usize) -> Span {
+    Span {
+        text: " ".repeat(n),
+        role: None,
+        bold: false,
+    }
+}
+
+/// A token count, short enough to sit beside another one.
+///
+/// **Rounded down and marked, never rounded to a prettier number.** `119k` for
+/// 119,900 says "at least this many", which is the direction a ceiling is read
+/// in; a `120k` that was really 119,900 would be a budget line that overstates
+/// what has been spent.
+fn token_count(n: u64) -> String {
+    match n {
+        0..=9_999 => n.to_string(),
+        10_000..=999_999 => format!("{}k", n / 1_000),
+        _ => format!("{}.{}M", n / 1_000_000, (n % 1_000_000) / 100_000),
+    }
+}
+
+/// Spans painted into one line, trailing padding removed.
+///
+/// **The trim is at the line and not at the span**, because a padding span in
+/// the middle of a row is real spacing and only the run at the end is not. The
+/// same rule `Table::render` follows: trailing whitespace is what makes a diff
+/// of two captured outputs unreadable (`render/table.rs`).
+fn paint_line(spans: &[Span], style: Style) -> String {
+    let whole: String = spans.iter().map(|span| span.text.as_str()).collect();
+    let keep = whole.trim_end().chars().count();
+    let mut out = String::new();
+    let mut seen = 0;
+    for span in spans {
+        if seen >= keep {
+            break;
+        }
+        let text: String = span.text.chars().take(keep - seen).collect();
+        seen += span.text.chars().count();
+        out.push_str(&match (span.role, span.bold) {
+            (Some(role), true) => style.strong(role, &text),
+            (Some(role), false) => style.paint(role, &text),
+            (None, _) => text,
+        });
+    }
     out
 }
 

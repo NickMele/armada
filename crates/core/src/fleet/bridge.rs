@@ -301,6 +301,17 @@ pub enum Mode {
     Watching,
     /// `/` is open and this is what has been typed into it.
     Filtering(String),
+    /// `d` was pressed and this Job's detail view is open, covering the table.
+    ///
+    /// **A mode rather than a [`Departure`], because the Bridge is live.** Every
+    /// other key that shows you something leaves the screen and runs a verb in
+    /// the terminal it gives back; this one answers *why does it need me*, which
+    /// is the question you are already at the Bridge to ask, and leaving to read
+    /// the answer would mean coming back to a screen that had moved on. What is
+    /// drawn is `armada fleet show <job>`'s own payload — the same verb, on the
+    /// same read, so the Bridge still adds no capability
+    /// (`commands/helm/bridge.md`).
+    Detail(String),
     /// `x` was pressed on this Job and it is waiting for a `y`.
     ///
     /// **Abort is the one key that asks twice.** Every other key on the Bridge
@@ -370,6 +381,7 @@ pub fn press(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
     match std::mem::take(&mut screen.mode) {
         Mode::Filtering(typed) => filtering(screen, typed, key),
         Mode::Confirming(job) => confirming(screen, job, key),
+        Mode::Detail(job) => detail(screen, job, rows, key),
         Mode::Watching => watching(screen, rows, key),
     }
 }
@@ -417,6 +429,18 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
                 screen.notice = Some(format!("`{}` has nothing open to answer", row.name));
             }
             None => screen.notice = Some(nothing_selected("answer")),
+        },
+
+        // **`d` for the detail view**, the key `k9s` and `htop` already spend on
+        // describing the row under the cursor — and the Bridge is modelled on
+        // both (PLAN.md §15.1). It is deliberately **not on the key line**: that
+        // line is eighty-one columns wide with one more pair on it, and a person
+        // at a standard terminal reading a wrapped key line while an agent reads
+        // a straight one is a worse cost than an undocumented key. The page
+        // documents it instead.
+        Key::Char('d') => match selected {
+            Some(job) => screen.mode = Mode::Detail(job),
+            None => screen.notice = Some(nothing_selected("show")),
         },
 
         Key::Char('x') => match selected {
@@ -470,6 +494,35 @@ fn filtering(screen: &mut Screen, mut typed: String, key: Key) -> Pressed {
         Key::Up | Key::Down => screen.mode = Mode::Filtering(typed),
     }
     Pressed::Stay
+}
+
+/// The detail view is open. **It is a reader, so almost every key closes it.**
+///
+/// A pane you have to remember the exit key for is a pane people stop opening.
+/// `esc`, `d` again and `q` all go back, and only `ctrl-c` leaves the Bridge —
+/// `q` closing the whole screen from in here would quit an application when the
+/// reader meant to close a page of it.
+fn detail(screen: &mut Screen, job: String, rows: &[JobRow], key: Key) -> Pressed {
+    let _ = job;
+    match key {
+        Key::Interrupt => Pressed::Leave(Departure::Quit),
+        // **Moving the cursor moves the pane with it**, so a fleet is read one
+        // Job at a time rather than closed and reopened between each.
+        Key::Up | Key::Char('k') | Key::Down | Key::Char('j') => {
+            match key {
+                Key::Up | Key::Char('k') => screen.cursor.previous(rows.len()),
+                _ => screen.cursor.next(rows.len()),
+            }
+            // A fleet that emptied under an open pane has nothing left to
+            // describe, so the screen goes back to saying so.
+            screen.mode = match screen.cursor.selected(rows) {
+                Some(row) => Mode::Detail(row.name.clone()),
+                None => Mode::Watching,
+            };
+            Pressed::Stay
+        }
+        _ => Pressed::Stay,
+    }
 }
 
 fn confirming(screen: &mut Screen, job: String, key: Key) -> Pressed {
@@ -852,5 +905,77 @@ mod tests {
         press(&mut screen, &rows, Key::Char('x'));
         press(&mut screen, &rows, Key::Enter);
         assert_eq!(screen.cursor.at(), 0);
+    }
+
+    // ------------------------------------------------------------- the detail
+
+    /// **`d` opens the row under the cursor and stays on the screen.** The
+    /// question it answers is one you are already at the Bridge to ask, so
+    /// answering it must not cost the screen you asked it from.
+    #[test]
+    fn d_opens_the_selected_jobs_detail_without_leaving() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Down);
+        press(&mut screen, &rows, Key::Down);
+        assert_eq!(
+            press(&mut screen, &rows, Key::Char('d')),
+            Pressed::Stay,
+            "the Bridge left"
+        );
+        assert_eq!(screen.mode, Mode::Detail("release-merge".to_string()));
+    }
+
+    /// An empty fleet has no row to describe, and says so rather than opening a
+    /// pane about nothing.
+    #[test]
+    fn d_on_an_empty_fleet_says_there_is_nothing_to_show() {
+        let mut screen = Screen::default();
+        press(&mut screen, &[], Key::Char('d'));
+        assert_eq!(screen.mode, Mode::Watching);
+        assert_eq!(screen.notice.as_deref(), Some("no Job to show"));
+    }
+
+    /// **Every ordinary key closes it, and `q` closes the pane rather than the
+    /// Bridge.** A reader who opened a page of an application and pressed `q`
+    /// meant to close the page.
+    #[test]
+    fn any_ordinary_key_closes_the_detail_and_q_does_not_quit() {
+        for key in [Key::Esc, Key::Char('d'), Key::Char('q'), Key::Enter] {
+            let (mut screen, rows) = watching_at(3);
+            press(&mut screen, &rows, Key::Char('d'));
+            assert_eq!(
+                press(&mut screen, &rows, key),
+                Pressed::Stay,
+                "{key:?} left the Bridge"
+            );
+            assert_eq!(screen.mode, Mode::Watching, "{key:?} did not close it");
+        }
+    }
+
+    /// `ctrl-c` still leaves from anywhere. A pane that trapped it would be the
+    /// one place in Armada where the interrupt did not work.
+    #[test]
+    fn ctrl_c_leaves_from_inside_the_detail() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('d'));
+        assert_eq!(
+            press(&mut screen, &rows, Key::Interrupt),
+            Pressed::Leave(Departure::Quit)
+        );
+    }
+
+    /// **The pane follows the cursor**, so a fleet is read one Job at a time
+    /// rather than closed and reopened between each.
+    #[test]
+    fn the_arrows_move_the_detail_to_the_next_job() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('d'));
+        press(&mut screen, &rows, Key::Down);
+        assert_eq!(screen.cursor.at(), 1);
+        assert_eq!(screen.mode, Mode::Detail("xlsx-report".to_string()));
+
+        press(&mut screen, &rows, Key::Char('k'));
+        assert_eq!(screen.cursor.at(), 0);
+        assert_eq!(screen.mode, Mode::Detail("rate-limit".to_string()));
     }
 }

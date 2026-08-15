@@ -31,9 +31,9 @@
 use armada_core::envelope::{
     Asked, BridgeData, CheckData, CleanData, ComponentView, ComponentsData, DispatchData,
     DoctorData, Envelope, Finding, FleetLsData, GrantedCommand, GuildChoice, GuildSyncData,
-    Headline, InitData, JobRow, MachineInitData, PortReport, Problem, Projection, Released,
-    ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, SkillsData, SpawnData,
-    StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
+    Headline, InboxRow, InitData, JobRow, MachineInitData, NoteRow, PortReport, Problem,
+    Projection, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, ShowData,
+    SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -1374,6 +1374,156 @@ fn helm_matches_its_fixture() {
         },
     )));
     assert_render("helm", &output);
+}
+
+/// `armada fleet show` — **the view the Bridge's `NEEDS YOU: YES` did not have.**
+///
+/// The complaint this freezes the answer to: a paused Job, a truncated task and
+/// a column saying somebody is needed, with no way at all to find out why. Every
+/// half of that is here — the entry that raised the flag in its own words, the
+/// task whole, the step, the ceilings, and what the Job is still holding.
+///
+/// **Two things are prose and everything else is a column, deliberately.** The
+/// question and the task are the two values a column would have to truncate, and
+/// a truncated answer to *why does this need me* is not a shorter answer, it is
+/// the wrong one. The rest are facts that compare down a column.
+///
+/// **There is no progress column here either.** A detail view is the place one
+/// would look most like a measurement, and nothing emits percent-complete
+/// (PHASES.md §9.1 F2) — so turns, tokens and wall clock are drawn against their
+/// ceilings as the numbers they are.
+#[test]
+fn fleet_show_matches_its_fixture() {
+    let output = Output::Show(Box::new(Envelope::ok(
+        "fleet show",
+        None,
+        Status::Ok,
+        show_data(),
+    )));
+    assert_render("fleet-show", &output);
+}
+
+/// The case that has no answer anywhere else: a Job the record calls `RUNNING`
+/// whose Drone is **gone**, still holding a port block nothing is listening on.
+///
+/// **Three facts, drawn as three rows, because they disagree.** What the record
+/// says, whether the process group is still Armada's and what is still claimed
+/// are separate questions; every other view Armada draws folds them into one
+/// state word, and this Job reads as healthy in all of them.
+///
+/// It also has nothing in its inbox, which is the second half of the case: a Job
+/// can be badly wrong and have raised nothing, because the thing that would have
+/// raised it is the thing that died.
+#[test]
+fn fleet_show_with_a_dead_drone_matches_its_fixture() {
+    let mut data = show_data();
+    data.job = "xlsx-report".to_string();
+    data.workflow = "bug".to_string();
+    // **`PAUSED`, which is where `needs_a_person` is true with nothing in the
+    // inbox** — the exact row the complaint was about. The reason it needs you
+    // is the state itself, and the pane says so by having no `ASKED` block at
+    // all rather than by leaving a `YES` unexplained.
+    data.state = JobState::Paused;
+    data.recorded_state = JobState::Running;
+    data.drone_alive = false;
+    data.needs_attention = true;
+    data.asked = Vec::new();
+    data.repo = "reports".to_string();
+    data.progress = vec![NoteRow {
+        at: "2026-08-09T14:31:11Z".to_string(),
+        ago_s: 36 * 60,
+        step: "reproduce".to_string(),
+        body: "eleven runs, no empty sheet yet; widening the fixture".to_string(),
+    }];
+    data.step = "reproduce".to_string();
+    data.attempt = 1;
+    data.task = "the nightly xlsx export writes an empty sheet about one run in \
+                 five; reproduce it, then fix it"
+        .to_string();
+    data.branch = "armada/xlsx-report".to_string();
+    data.worktree = "~/.armada/workspaces/reports/xlsx-report".to_string();
+    let output = Output::Show(Box::new(Envelope::ok("fleet show", None, Status::Ok, data)));
+    assert_render("fleet-show-gone", &output);
+}
+
+/// One Job with something of everything: an answered question, an open one, a
+/// budget part spent and two notes.
+fn show_data() -> ShowData {
+    ShowData {
+        job: "release-merge".to_string(),
+        uuid: "8f2a1c40-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
+        workflow: "feature".to_string(),
+        state: JobState::Blocked,
+        recorded_state: JobState::Running,
+        drone_pgid: Some(48122),
+        drone_alive: true,
+        step: "implement".to_string(),
+        attempt: 2,
+        task: "merge the release branch and cut 4.2, resolving the migration \
+               conflict in orders before the tag goes out"
+            .to_string(),
+        runtime_s: 65 * 60,
+        created_at: "2026-08-09T14:02:11Z".to_string(),
+        cost_usd: 1.25,
+        tokens: 119_900,
+        turns: 4,
+        budget: Budget {
+            iterations: 15,
+            tokens: 400_000,
+            wall_clock_ms: 90 * 60 * 1_000,
+            on_exhausted: OnExhausted::NeedsHuman,
+        },
+        budget_remaining: Remaining {
+            iterations: 11,
+            tokens: 280_100,
+            wall_clock_ms: 25 * 60 * 1_000,
+        },
+        repo: "orders".to_string(),
+        branch: "armada/release-merge".to_string(),
+        worktree: "~/.armada/workspaces/orders/release-merge".to_string(),
+        port_block: Some(PortBlock {
+            from: 5470,
+            to: 5479,
+        }),
+        needs_attention: true,
+        asked: vec![
+            InboxRow {
+                uuid: "e30b91aa".to_string(),
+                job: "release-merge".to_string(),
+                kind: "NEEDS_HUMAN".to_string(),
+                raised_at: "2026-08-09T14:20:11Z".to_string(),
+                waiting_s: 47 * 60,
+                body: "should the 4.2 tag be signed with the release key?".to_string(),
+                answered: Some("yes, and push the tag once check is green".to_string()),
+            },
+            InboxRow {
+                uuid: "e4f1a2c9".to_string(),
+                job: "release-merge".to_string(),
+                kind: "BLOCKED".to_string(),
+                raised_at: "2026-08-09T14:58:11Z".to_string(),
+                waiting_s: 9 * 60,
+                body: "the release branch carries two migrations that both rename \
+                       the orders index. Squash them into one, or revert 0042 and \
+                       re-cut it? Both are safe; the second loses the rename."
+                    .to_string(),
+                answered: None,
+            },
+        ],
+        progress: vec![
+            NoteRow {
+                at: "2026-08-09T15:01:11Z".to_string(),
+                ago_s: 6 * 60,
+                step: "implement".to_string(),
+                body: "rebased onto main, two migration conflicts left".to_string(),
+            },
+            NoteRow {
+                at: "2026-08-09T14:26:11Z".to_string(),
+                ago_s: 41 * 60,
+                step: "plan".to_string(),
+                body: "approach agreed: squash the two migrations".to_string(),
+            },
+        ],
+    }
 }
 
 /// `armada fleet spawn`, against the layout `render_pending.rs` held for M3.

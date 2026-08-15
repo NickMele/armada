@@ -386,6 +386,9 @@ fn dispatch(
                 needs_attention,
                 ..
             } => verbs::fleet::ls(&run, &SystemClock, &place, all, needs_attention),
+            args::FleetInvocation::Show { job, .. } => {
+                verbs::fleet::show(&run, &SystemClock, &place, &job)
+            }
             args::FleetInvocation::Board { job, exec, .. } => {
                 let output = verbs::fleet::board(&place, &job)?;
                 if exec {

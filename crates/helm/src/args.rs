@@ -198,6 +198,13 @@ pub enum FleetInvocation {
         /// What to tell it.
         answer: String,
     },
+    /// `armada fleet show <job>` — one Job, and why it wants you.
+    Show {
+        /// Emit the envelope.
+        json: bool,
+        /// Which Job.
+        job: String,
+    },
     /// `armada fleet inbox`.
     Inbox {
         /// Emit the envelope.
@@ -218,6 +225,7 @@ impl FleetInvocation {
             | FleetInvocation::Board { json, .. }
             | FleetInvocation::Kill { json, .. }
             | FleetInvocation::Answer { json, .. }
+            | FleetInvocation::Show { json, .. }
             | FleetInvocation::Inbox { json, .. } => *json,
         }
     }
@@ -523,7 +531,7 @@ pub const RESERVED_TOP_LEVEL: [(&str, &str); 0] = [];
 ///
 /// **Names only.** What each verb is *for* is one sentence, and it is on that
 /// verb's help page — kept in two places it would eventually be two sentences.
-pub const FLEET_VERBS: [&str; 6] = ["spawn", "ls", "board", "answer", "inbox", "kill"];
+pub const FLEET_VERBS: [&str; 7] = ["spawn", "ls", "show", "board", "answer", "inbox", "kill"];
 
 /// The top-level verbs that are built.
 ///
@@ -1323,7 +1331,7 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 class: ErrClass::BadInvocation,
                 r#where: format!("fleet {name}"),
                 message: format!("unknown verb `armada fleet {name}`"),
-                next_action: Some("`armada fleet --help` lists the six".to_string()),
+                next_action: Some("`armada fleet --help` lists them".to_string()),
             },
             json,
         ));
@@ -1489,6 +1497,27 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 keep_branch: parsed.on("--keep-branch") || parsed.on("--keep-worktree"),
                 keep_worktree: parsed.on("--keep-worktree"),
                 all_finished,
+            }
+        }
+        "show" => {
+            let parsed = flags(tail, json, color, "fleet show", &[], &[])?;
+            let Some(job) = one_positional(
+                &parsed,
+                "fleet show",
+                "which Job",
+                "`armada fleet ls` lists them",
+            )?
+            else {
+                return Err(needs_positional(
+                    "fleet show",
+                    "`armada fleet show` needs a Job",
+                    "`armada fleet show nightly-flake`",
+                    parsed.json,
+                ));
+            };
+            FleetInvocation::Show {
+                json: parsed.json,
+                job,
             }
         }
         "answer" => {
@@ -2765,7 +2794,7 @@ mod tests {
         for verb in FLEET_VERBS {
             let tail: &[&str] = match verb {
                 "spawn" => &["a task"],
-                "board" | "kill" => &["rate-limit"],
+                "show" | "board" | "kill" => &["rate-limit"],
                 "answer" => &["rate-limit", "go on"],
                 _ => &[],
             };
@@ -2784,7 +2813,7 @@ mod tests {
         }
     }
 
-    /// A verb Fleet does not have is a typo, and the message says where the six
+    /// A verb Fleet does not have is a typo, and the message says where they
     /// are listed rather than leaving the caller to guess.
     #[test]
     fn an_unknown_fleet_verb_is_refused_by_name() {

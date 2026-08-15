@@ -54,6 +54,7 @@ and the three status enums. These pages use them without re-explaining them.
 |---|---|---|
 | [`fleet/spawn.md`](fleet/spawn.md) | `armada fleet spawn` | shipped |
 | [`fleet/ls.md`](fleet/ls.md) | `armada fleet ls` | shipped |
+| [`fleet/show.md`](fleet/show.md) | `armada fleet show` — one Job, and why it needs you | shipped |
 | [`fleet/inbox.md`](fleet/inbox.md) | `armada fleet inbox` | shipped |
 | [`fleet/answer.md`](fleet/answer.md) | `armada fleet answer` | shipped |
 | [`fleet/board.md`](fleet/board.md) | `armada fleet board` | shipped |

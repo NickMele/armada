@@ -80,6 +80,7 @@ indistinguishable from an idle fleet.
 | Key | Does | Verb it calls |
 |---|---|---|
 | `↵` | Board the selected Job | [`../fleet/board.md`](../fleet/board.md) |
+| `d` | **Why does it need me** — the selected Job in full, over the table | [`../fleet/show.md`](../fleet/show.md) |
 | `n` | New Job | [`../fleet/spawn.md`](../fleet/spawn.md) |
 | `p` | Pause / resume | — · **not built**, and the screen says so rather than swallowing the key |
 | `x` | Abort — **then `y`** | [`../fleet/kill.md`](../fleet/kill.md) |
@@ -92,6 +93,25 @@ indistinguishable from an idle fleet.
 Every key maps to a verb that already exists and is reachable from a shell. **The Bridge adds no
 capability**, which is what keeps it a rendering choice rather than an architectural one. A key
 whose verb does not exist yet says so; it does not grow one here.
+
+### `d` — the detail view
+
+`NEEDS YOU: YES` with no way to find out why was the defect that earned this key: the flag is
+raised by an inbox entry, and the frame draws the flag but not the entry. `d` draws
+[`../fleet/show.md`](../fleet/show.md)'s payload over the table — the question in its own words,
+the whole task, the step, the ceilings, and what the Job is still holding.
+
+**It stays on the screen**, unlike every other key that shows you something. Those hand the
+terminal back and run a verb in it; this one answers a question you are already at the Bridge to
+ask, and leaving to read the answer would mean coming back to a screen that had moved on. The
+pane re-reads on the same cadence as the frame, and `↑`/`↓` move it to the next Job so a fleet is
+read one at a time. `esc`, `d` again and `q` all close it; only `ctrl-c` leaves the Bridge.
+
+**`d` is deliberately not on the key line.** That line is seventy-four columns and the shortest
+pair worth adding takes it to eighty-one, so a person at a standard terminal would read a wrapped
+key line while an agent read a straight one — the same measurement that kept middle dots off it,
+and the one thing this whole render is written against. An unnamed key is the cheaper cost, and
+this section is where it stops being unnamed.
 
 **`x` asks twice, and anything but `y` declines.** Abort ends a Job, deletes its worktree and
 drops its branch. One keypress doing that to whatever row the cursor happened to be on is the

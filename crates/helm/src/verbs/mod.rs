@@ -28,7 +28,7 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
     GuildInitData, GuildSyncData, HelmData, InboxData, InitData, InitDryRun, KillData,
-    MachineInitData, McpData, ProbeData, Projection, ReportData, ScanData, ServicesData,
+    MachineInitData, McpData, ProbeData, Projection, ReportData, ScanData, ServicesData, ShowData,
     SkillsData, SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
@@ -91,6 +91,8 @@ pub enum Output {
     /// `armada helm` — the assembled launch. **Nothing has been started**; the
     /// envelope reports the command that would start it.
     Helm(Box<Envelope<HelmData>>),
+    /// `armada fleet show` — one Job, and why it wants you.
+    Show(Box<Envelope<ShowData>>),
     /// `armada fleet board`.
     Board(Box<Envelope<BoardData>>),
     /// `armada fleet kill`.
@@ -142,6 +144,7 @@ impl Output {
             Output::FleetLs(e) => e.to_json(),
             Output::Bridge(e) => e.to_json(),
             Output::Helm(e) => e.to_json(),
+            Output::Show(e) => e.to_json(),
             Output::Board(e) => e.to_json(),
             Output::Kill(e) => e.to_json(),
             Output::Inbox(e) => e.to_json(),
@@ -199,6 +202,7 @@ impl Output {
             Output::FleetLs(e) => e.exit_code(),
             Output::Bridge(e) => e.exit_code(),
             Output::Helm(e) => e.exit_code(),
+            Output::Show(e) => e.exit_code(),
             Output::Board(e) => e.exit_code(),
             Output::Kill(e) => e.exit_code(),
             Output::Inbox(e) => e.exit_code(),

@@ -27,6 +27,7 @@
 [1m[38;2;255;169;64mFLEET — the agents you do not talk to: Jobs, worktrees, budgets[0m
   spawn <task>           [38;2;156;163;175mstart an isolated agent Job on a task[0m
   ls                     [38;2;156;163;175mwhat is running, what it has spent, and who needs you[0m
+  show <job>             [38;2;156;163;175mone Job in full, and why it needs you[0m
   board <job>            [38;2;156;163;175mtake a Job over yourself: worktree and resume command[0m
   answer <job> <answer>  [38;2;156;163;175mgive a waiting Job your decision; let it continue[0m
   inbox                  [38;2;156;163;175mwhat the fleet needs from you[0m
