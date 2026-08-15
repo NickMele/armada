@@ -68,4 +68,4 @@ Full table and the one rule behind it: [`reference.md`](../reference.md).
 
 ## See also
 
-[`browse.md`](browse.md) · [`edit.md`](edit.md) · [`push.md`](push.md)
+[`ls.md`](ls.md) · [`edit.md`](edit.md) · [`push.md`](push.md)

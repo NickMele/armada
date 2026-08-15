@@ -628,9 +628,9 @@ fn doctors_human_render_names_the_command_that_fixes_each_problem() {
     );
 }
 
-// ------------------------------------------ browse, edit and delete (§15.3.4)
+// ------------------------------------ ls, show, edit and delete (§15.3.4)
 //
-// **The three verbs that read a guild rather than moving one.** Every test
+// **The four verbs that read a guild rather than moving one.** Every test
 // below runs the real binary against a scratch `$HOME`, which is the same
 // defence the rest of this file rests on and matters more here than anywhere:
 // `guild delete` removes files, and a test that could name a real guild would
@@ -641,16 +641,16 @@ fn doctors_human_render_names_the_command_that_fixes_each_problem() {
 /// persona and three fragments, and every one of them is in the answer with a
 /// line saying what it is.
 #[test]
-fn browse_names_everything_in_the_guild_rather_than_counting_it() {
+fn ls_names_everything_in_the_guild_rather_than_counting_it() {
     let machine = Machine::new();
     a_claude_setup(&machine);
     let outside = machine.outside();
     machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
 
-    let listed = machine.run(&outside, &["guild", "browse", "--json"]);
+    let listed = machine.run(&outside, &["guild", "ls", "--json"]);
     assert!(
         listed.status.success(),
-        "guild browse failed: {}",
+        "guild ls failed: {}",
         String::from_utf8_lossy(&listed.stderr)
     );
     let items = envelope(&listed)["data"]["items"]
@@ -691,9 +691,9 @@ fn browse_names_everything_in_the_guild_rather_than_counting_it() {
     assert_eq!(skill["opens"], "skills/onboard-repo/SKILL.md");
 }
 
-/// **The three audiences carry the same facts** (`PLAN.md` §3.1.1). The browser
-/// is what a terminal gets; this is what an agent reading stdout gets, and
-/// every row in the envelope has to be on it.
+/// **The three audiences carry the same facts** (`PLAN.md` §3.1.1). The
+/// navigable form is what a terminal gets; this is what an agent reading
+/// stdout gets, and every row in the envelope has to be on it.
 #[test]
 fn the_printed_listing_and_the_envelope_say_the_same_thing() {
     let machine = Machine::new();
@@ -701,8 +701,8 @@ fn the_printed_listing_and_the_envelope_say_the_same_thing() {
     let outside = machine.outside();
     machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
 
-    let text = stdout(&machine.run(&outside, &["guild", "browse"]));
-    let items = envelope(&machine.run(&outside, &["guild", "browse", "--json"]))["data"]["items"]
+    let text = stdout(&machine.run(&outside, &["guild", "ls"]));
+    let items = envelope(&machine.run(&outside, &["guild", "ls", "--json"]))["data"]["items"]
         .as_array()
         .unwrap()
         .clone();
@@ -720,6 +720,114 @@ fn the_printed_listing_and_the_envelope_say_the_same_thing() {
         !text.contains('\u{2713}') && !text.contains('\u{2717}'),
         "{text}"
     );
+}
+
+/// **`show` is the non-interactive way to one item's content**, which is the
+/// half `ls` cannot carry: a listing gives nine rows and none of the files.
+///
+/// The item is named the way the listing names it — a name or a guild-relative
+/// path — and the body is what is on disk, byte for byte.
+#[test]
+fn show_prints_one_item_and_carries_it_in_the_envelope() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let on_disk =
+        std::fs::read_to_string(guild_of(&machine).join("workflows/feature.yml")).unwrap();
+    let shown = machine.run(&outside, &["guild", "show", "workflows/feature.yml"]);
+    assert!(
+        shown.status.success(),
+        "guild show failed: {}",
+        String::from_utf8_lossy(&shown.stderr)
+    );
+    let text = stdout(&shown);
+    for line in on_disk.lines().filter(|line| !line.trim().is_empty()) {
+        assert!(text.contains(line), "`{line}` is not on stdout:\n{text}");
+    }
+
+    // The same file by its name rather than its path, and the envelope carries
+    // the body rather than only pointing at it.
+    let body = envelope(&machine.run(&outside, &["guild", "show", "feature.yml", "--json"]));
+    assert_eq!(body["data"]["body"], on_disk);
+    assert_eq!(body["data"]["item"]["path"], "workflows/feature.yml");
+    assert_eq!(body["data"]["item"]["kind"], "workflow");
+}
+
+/// **A name nothing answers to is refused, and the refusal names `ls`.** The
+/// same resolution `edit` and `delete` use, which is what keeps one spelling of
+/// "which item?" across the four verbs.
+#[test]
+fn showing_something_that_is_not_there_points_at_the_listing() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let refused = machine.run(&outside, &["guild", "show", "nothing-here", "--json"]);
+    assert!(!refused.status.success());
+    let error = &envelope(&refused)["error"];
+    assert!(
+        error["next_action"].as_str().unwrap().contains("guild ls"),
+        "{error}"
+    );
+}
+
+/// **`browse` is gone as a verb, not aliased.** A rename that leaves the old
+/// word working is a rename that produced two names for one idea, which is the
+/// drift `docs/glossary.md` exists to prevent.
+#[test]
+fn the_word_browse_is_no_longer_a_verb() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let refused = machine.run(&outside, &["guild", "browse", "--json"]);
+    assert!(!refused.status.success(), "`guild browse` still runs");
+    let error = &envelope(&refused)["error"];
+    assert_eq!(error["class"], "bad_invocation");
+    assert!(
+        error["message"].as_str().unwrap().contains("unknown verb"),
+        "{error}"
+    );
+}
+
+/// **"still Armada's example text" is read out of the file every time**, so it
+/// follows a fragment that is edited and then put back.
+///
+/// A detection that remembered when a file was last written would say the wrong
+/// thing on the second half of this test — and the row it is wrong about is the
+/// one a reader most often opened the listing for.
+#[test]
+fn whether_a_fragment_is_still_armadas_words_follows_the_content_both_ways() {
+    let machine = Machine::new();
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+    let fragment = guild_of(&machine).join("expectations.md");
+    let example = std::fs::read_to_string(&fragment).unwrap();
+
+    let detail_of = |name: &str| -> String {
+        envelope(&machine.run(&outside, &["guild", "ls", "--json"]))["data"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["name"] == name)
+            .unwrap()["detail"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(detail_of("expectations.md"), "still Armada's example text");
+
+    // Mine now — the marker went with the text.
+    std::fs::write(&fragment, "# Expectations\n\nGreen means green.\n").unwrap();
+    assert_eq!(detail_of("expectations.md"), "Green means green.");
+
+    // And back again. Content decides, so the answer comes back with it.
+    std::fs::write(&fragment, &example).unwrap();
+    assert_eq!(detail_of("expectations.md"), "still Armada's example text");
 }
 
 /// **`--from` is the form that does not need a terminal**, and it validates
@@ -862,7 +970,7 @@ fn a_delete_removes_it_and_commits_the_removal() {
         "the removal is not in the history"
     );
     // And it is gone from the listing, which is the answer the reader gets next.
-    let listed = envelope(&machine.run(&outside, &["guild", "browse", "--json"]));
+    let listed = envelope(&machine.run(&outside, &["guild", "ls", "--json"]));
     assert!(
         !listed["data"]["items"]
             .as_array()
@@ -947,21 +1055,18 @@ fn a_name_nothing_answers_to_is_refused_by_name() {
         "{error}"
     );
     assert!(
-        error["next_action"]
-            .as_str()
-            .unwrap()
-            .contains("guild browse"),
+        error["next_action"].as_str().unwrap().contains("guild ls"),
         "{error}"
     );
 }
 
 /// **A machine with no guild is told what to run**, not shown an empty table.
 #[test]
-fn browsing_a_machine_with_no_guild_names_the_verb_that_makes_one() {
+fn listing_a_machine_with_no_guild_names_the_verb_that_makes_one() {
     let machine = Machine::new();
     let outside = machine.outside();
 
-    let refused = machine.run(&outside, &["guild", "browse", "--json"]);
+    let refused = machine.run(&outside, &["guild", "ls", "--json"]);
     assert!(!refused.status.success());
     let error = &envelope(&refused)["error"];
     assert!(

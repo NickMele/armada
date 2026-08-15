@@ -1,0 +1,12 @@
+  skills/onboard-repo/SKILL.md
+
+  ---
+  name: onboard-repo
+  description: Write a repository's armada.yml with them.
+  ---
+
+  # Onboard a repository
+
+  One question at a time, and nothing written before they confirm.
+
+READY  ~/.armada/guild, skill, 6 KB

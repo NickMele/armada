@@ -118,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 28] = [
+const PAGES: [Page; 29] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -428,28 +428,51 @@ const PAGES: [Page; 28] = [
         notes: &["The bundle is a path, and it is required — there is no default source."],
     },
     Page {
-        path: "guild browse",
-        synopsis: "browse",
-        summary: "see what is in your guild, and open it",
-        usage: &["armada guild browse [--list] [--json]"],
+        path: "guild ls",
+        synopsis: "ls",
+        summary: "see what is in your guild",
+        usage: &["armada guild ls [--list] [--json]"],
         flags: &[(
             "--list",
-            "print the listing and stop, rather than opening the browser",
+            "print the listing and stop, rather than navigating it",
         )],
         examples: &[
             (
-                "armada guild browse",
+                "armada guild ls",
                 "at a terminal: pick a thing, then view, edit or delete it",
             ),
             (
-                "armada guild browse --json",
+                "armada guild ls --json",
                 "every item with its kind, path and summary",
             ),
         ],
         notes: &[
             "Every other guild verb moves the guild somewhere. This one says what",
             "is in it: your skills, workflows, subagents, hooks and memory files,",
-            "each with a line about what it is.",
+            "each with a line about what it is. At a terminal the rows are",
+            "navigable — there is no flag to ask for that — and through a pipe",
+            "the same rows are printed.",
+        ],
+    },
+    Page {
+        path: "guild show",
+        synopsis: "show <item>",
+        summary: "print one guild file",
+        usage: &["armada guild show <item> [--json]"],
+        flags: &[],
+        examples: &[
+            (
+                "armada guild show voice.md",
+                "the whole file, as it is on disk",
+            ),
+            (
+                "armada guild show skills/onboard-repo --json",
+                "the same content, with the row that describes it",
+            ),
+        ],
+        notes: &[
+            "The item is a name or a guild-relative path — the same names armada",
+            "guild ls prints. This is what the terminal's view action runs.",
         ],
     },
     Page {

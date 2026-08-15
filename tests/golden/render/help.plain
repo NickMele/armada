@@ -23,7 +23,8 @@ GUILD — you, portable: voice, skills, hooks, workflows
   push             send local guild changes to the remote
   export           write the whole guild to one portable file
   import <bundle>  restore a guild from a bundle
-  browse           see what is in your guild, and open it
+  ls               see what is in your guild
+  show <item>      print one guild file
   edit <item>      open one guild file, validate it, and commit it
   delete <item>    remove one thing from your guild, and commit the removal
 

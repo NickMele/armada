@@ -31,9 +31,9 @@
 use armada_core::envelope::{
     Asked, BridgeData, CheckData, CleanData, ComponentView, ComponentsData, DispatchData,
     DoctorData, Envelope, Finding, FleetLsData, GrantedCommand, GuildChange, GuildChangeData,
-    GuildChoice, GuildItemRow, GuildListData, GuildSyncData, Headline, InitData, JobRow,
-    MachineInitData, PortReport, Problem, Projection, Released, ResolvedSkillView, ResultRow,
-    ScanData, ServicesData, Settled, SkillsData, SpawnData, StatusData, Sync, SyncItem,
+    GuildChoice, GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InitData,
+    JobRow, MachineInitData, PortReport, Problem, Projection, Released, ResolvedSkillView,
+    ResultRow, ScanData, ServicesData, Settled, SkillsData, SpawnData, StatusData, Sync, SyncItem,
     Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
@@ -982,19 +982,19 @@ fn guild_pull_matches_its_fixture() {
     assert_render("guild-pull", &output);
 }
 
-/// **`armada guild browse` — the listing, which is the verb.**
+/// **`armada guild ls` — the listing, which is the verb.**
 ///
-/// The browser at a terminal draws these rows as a selector and this is what
-/// everything else gets, so freezing it freezes the half of PLAN.md §3.1.1 that
-/// is easy to lose: an interactive verb whose non-interactive form drifted would
-/// still look right to the person who built it.
+/// A terminal draws these rows as a selector and this is what everything else
+/// gets, so freezing it freezes the half of PLAN.md §3.1.1 that is easy to lose:
+/// an interactive verb whose non-interactive form drifted would still look right
+/// to the person who built it.
 ///
 /// **Every kind is in the fixture on purpose.** The STATUS column is the kind,
 /// so a fixture with only skills in it would not pin the column width — and the
 /// `memory` row that says a fragment is still Armada's example is the row a
 /// reader most often came for.
 #[test]
-fn guild_browse_matches_its_fixture() {
+fn guild_ls_matches_its_fixture() {
     let item =
         |kind: &str, name: &str, path: &str, opens: &str, detail: &str, bytes: u64| GuildItemRow {
             kind: kind.to_string(),
@@ -1005,7 +1005,7 @@ fn guild_browse_matches_its_fixture() {
             bytes,
         };
     let output = Output::GuildList(Box::new(Envelope::ok(
-        "guild browse",
+        "guild ls",
         None,
         Status::Ready,
         GuildListData {
@@ -1076,7 +1076,40 @@ fn guild_browse_matches_its_fixture() {
             ],
         },
     )));
-    assert_render("guild-browse", &output);
+    assert_render("guild-ls", &output);
+}
+
+/// **`armada guild show` — one item, and the layout the terminal's *view*
+/// draws too.**
+///
+/// Freezing it freezes the thing the split was for: `show` and the *view*
+/// action build the same envelope and go through the same renderer, so a fixture
+/// here is a fixture for both. The body is deliberately front-matter plus prose,
+/// because that is the shape a `SKILL.md` has and the shape that would tempt a
+/// renderer into reflowing it.
+#[test]
+fn guild_show_matches_its_fixture() {
+    let output = Output::GuildItem(Box::new(Envelope::ok(
+        "guild show",
+        None,
+        Status::Ready,
+        GuildItemData {
+            at: "~/.armada/guild".to_string(),
+            item: GuildItemRow {
+                kind: "skill".to_string(),
+                name: "onboard-repo".to_string(),
+                path: "skills/onboard-repo".to_string(),
+                opens: "skills/onboard-repo/SKILL.md".to_string(),
+                detail: "Write a repository's armada.yml with them.".to_string(),
+                bytes: 6210,
+            },
+            body: "---\nname: onboard-repo\ndescription: Write a repository's armada.yml \
+                   with them.\n---\n\n# Onboard a repository\n\nOne question at a time, and \
+                   nothing written before they confirm.\n"
+                .to_string(),
+        },
+    )));
+    assert_render("guild-show", &output);
 }
 
 /// **`armada guild edit` that refused to commit**, which is the case worth

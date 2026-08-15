@@ -46,7 +46,7 @@ pub trait Ask {
 
     /// Put something in front of the person, mid-conversation.
     ///
-    /// **The half of asking that is not a question.** `armada guild browse` has
+    /// **The half of asking that is not a question.** `armada guild ls` has
     /// to show a file's content between two selections and report what an edit
     /// did before offering the next one, and neither is an answer to anything.
     /// It goes to the same stream the prompts go to — stderr — for the same
@@ -101,10 +101,10 @@ pub struct Scripted {
     /// several.
     ///
     /// **Consumed rather than repeated, and that is what makes a loop
-    /// testable.** `armada guild browse` asks the same question until it is told
+    /// testable.** `armada guild ls` asks the same question until it is told
     /// to stop, so a scripted answer that repeated forever would hang the suite
-    /// rather than exercise the browser. An empty queue falls through to
-    /// [`Scripted::choice`] and then to the default, which every browser
+    /// rather than exercise the loop. An empty queue falls through to
+    /// [`Scripted::choice`] and then to the default, which every navigating
     /// question spells as *done*.
     pub choices: Vec<usize>,
     /// Every prompt that was put, in order — so a test can assert the interview

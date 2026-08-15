@@ -7,7 +7,8 @@
   push             [38;2;156;163;175msend local guild changes to the remote[0m
   export           [38;2;156;163;175mwrite the whole guild to one portable file[0m
   import <bundle>  [38;2;156;163;175mrestore a guild from a bundle[0m
-  browse           [38;2;156;163;175msee what is in your guild, and open it[0m
+  ls               [38;2;156;163;175msee what is in your guild[0m
+  show <item>      [38;2;156;163;175mprint one guild file[0m
   edit <item>      [38;2;156;163;175mopen one guild file, validate it, and commit it[0m
   delete <item>    [38;2;156;163;175mremove one thing from your guild, and commit the removal[0m
 

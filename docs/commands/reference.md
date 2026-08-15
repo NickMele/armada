@@ -42,7 +42,8 @@ and the three status enums. These pages use them without re-explaining them.
 |---|---|---|
 | [`guild/init.md`](guild/init.md) | `armada guild init` | shipped |
 | [`guild/project.md`](guild/project.md) | `armada guild project` | shipped |
-| [`guild/browse.md`](guild/browse.md) | `armada guild browse` | shipped |
+| [`guild/ls.md`](guild/ls.md) | `armada guild ls` | shipped |
+| [`guild/show.md`](guild/show.md) | `armada guild show` | shipped |
 | [`guild/edit.md`](guild/edit.md) | `armada guild edit` | shipped |
 | [`guild/delete.md`](guild/delete.md) | `armada guild delete` | shipped |
 | [`guild/push.md`](guild/push.md) | `armada guild push` | shipped |

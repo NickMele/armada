@@ -53,10 +53,10 @@ pub mod term;
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData,
-    GuildBundleData, GuildChangeData, GuildInitData, GuildListData, GuildSyncData, Headline,
-    InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, ProbeData, Projection,
-    ReportData, ResultRow, ScanData, ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed,
-    UpDryRun, VerdictData, VerifyData,
+    GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData, GuildSyncData,
+    Headline, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, ProbeData,
+    Projection, ReportData, ResultRow, ScanData, ServicesData, SkillsData, SpawnData, StatusData,
+    Unreclaimed, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -103,6 +103,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::GuildBundle(envelope) => guild_bundle(envelope, style, width),
         Output::GuildProject(envelope) => guild_project(envelope, style, width),
         Output::GuildList(envelope) => guild_list(envelope, style, width),
+        Output::GuildItem(envelope) => guild_item(envelope, style, width),
         Output::GuildChange(envelope) => guild_change(envelope, style, width),
         Output::Spawn(envelope) => spawn(envelope, style, width),
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
@@ -1066,27 +1067,62 @@ pub fn editing(title: &str, style: Style, width: usize) -> String {
     out
 }
 
-/// One guild item's content, as `armada guild browse` shows it.
+/// One guild item's content — `armada guild show`, and the terminal's *view*.
 ///
 /// **The whole file, indented and unwrapped.** A viewer that wrapped a
 /// `SKILL.md` to the terminal would show something that is not what is on disk,
 /// and the reader is here precisely to see what is on disk. Long lines overhang,
 /// which is the same choice [`wrap_prose`] makes about a word it cannot break.
-pub fn guild_item_view(path: &str, body: &str, style: Style, width: usize) -> String {
+///
+/// **One renderer, and the terminal goes through it too.** `guild ls` at a
+/// terminal draws a file through this function by building the same envelope
+/// `guild show` returns, so what a person sees and what a pipe carries cannot be
+/// two layouts maintained separately.
+fn guild_item(envelope: &Envelope<GuildItemData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
     let mut out = format!(
         "  {}\n\n",
-        style.strong(Role::SignalAmber, &term::truncate(path, width - 2))
+        style.strong(
+            Role::SignalAmber,
+            &term::truncate(&data.item.opens, width.saturating_sub(2))
+        )
     );
-    for line in body.lines() {
+    for line in data.body.lines() {
+        // **A blank line stays blank rather than becoming two spaces.** The
+        // indent is there to set the file apart from the frame around it, and
+        // trailing whitespace on an empty line is invisible until somebody
+        // copies the output into a diff.
+        if line.is_empty() {
+            out.push('\n');
+            continue;
+        }
         out.push_str(&format!("  {}\n", style.paint(Role::Foreground, line)));
     }
-    if body.is_empty() {
+    if data.body.is_empty() {
         out.push_str(&format!(
             "  {}\n",
             style.paint(Role::SteelGrey, "nothing in it")
         ));
     }
     out.push('\n');
+
+    // **Where, then what it is, then how big** — the same `at`-first summary
+    // every other guild verb ends on. The kind is here because a reader who
+    // arrived through `show <name>` never saw the listing row that carries it;
+    // the *detail* is not, because it is a sentence and a fact list is not
+    // where a sentence goes.
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            data.at.clone(),
+            data.item.kind.clone(),
+            format::bytes(data.item.bytes),
+        ],
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
     out
 }
 
@@ -1549,7 +1585,7 @@ fn interview_facts(questions: usize, answered: usize) -> Vec<String> {
     facts
 }
 
-/// `armada guild browse` — **what is in your guild**.
+/// `armada guild ls` — **what is in your guild**.
 ///
 /// **One row per thing, and the kind is the STATUS word.** Every other `guild`
 /// verb groups by area because it is reporting what *moved*; this one is
@@ -1559,7 +1595,7 @@ fn interview_facts(questions: usize, answered: usize) -> Vec<String> {
 /// set is keyed on its outcome first (`verbs/guild.rs`).
 ///
 /// **This is what a person at a terminal navigates and what an agent reads.**
-/// The browser draws these rows as a selector; without a terminal they are
+/// At a terminal `ls` draws these rows as a selector; without one they are
 /// printed. Same rows, same words, same order — PLAN.md §3.1.1 applied to the
 /// one verb most tempting to build for a terminal alone.
 fn guild_list(envelope: &Envelope<GuildListData>, style: Style, width: usize) -> String {
@@ -3931,13 +3967,16 @@ mod tests {
         assert!(head.ends_with("\n\n"), "the block does not close: {head:?}");
     }
 
-    /// **The viewer shows the file, not a rendering of it.** A reader is here
+    /// **`guild show` shows the file, not a rendering of it.** A reader is here
     /// to see what is on disk, so long lines overhang rather than wrap — the
     /// same choice `wrap_prose` makes about a word it cannot break.
     #[test]
-    fn viewing_an_item_shows_the_file_as_it_is() {
+    fn showing_an_item_shows_the_file_as_it_is() {
         let body = "---\nname: add-migration\n---\n\n# Add a migration\n";
-        let shown = guild_item_view("skills/add-migration/SKILL.md", body, Style::plain(), 80);
+        let shown = rendered(
+            &an_item("skills/add-migration/SKILL.md", body),
+            Style::plain(),
+        );
         assert!(
             shown.starts_with("  skills/add-migration/SKILL.md\n\n"),
             "{shown}"
@@ -3947,7 +3986,28 @@ mod tests {
         }
         // An empty file says so rather than drawing nothing, which reads as a
         // command that did not run.
-        assert!(guild_item_view("voice.md", "", Style::plain(), 80).contains("nothing in it"));
+        assert!(rendered(&an_item("voice.md", ""), Style::plain()).contains("nothing in it"));
+    }
+
+    /// One `guild show` envelope, for the two tests that read it.
+    fn an_item(opens: &str, body: &str) -> Output {
+        Output::GuildItem(Box::new(Envelope::ok(
+            "guild show",
+            None,
+            Status::Ready,
+            GuildItemData {
+                at: "~/.armada/guild".to_string(),
+                item: armada_core::envelope::GuildItemRow {
+                    kind: "skill".to_string(),
+                    name: "add-migration".to_string(),
+                    path: "skills/add-migration".to_string(),
+                    opens: opens.to_string(),
+                    detail: "Write a migration and its rollback.".to_string(),
+                    bytes: body.len() as u64,
+                },
+                body: body.to_string(),
+            },
+        )))
     }
 
     /// **The row that says the guild is in effect and not merely written.**

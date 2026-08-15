@@ -371,18 +371,32 @@ pub enum GuildInvocation {
         /// Replace an existing guild.
         force: bool,
     },
-    /// `armada guild browse` — **what is in your guild**.
+    /// `armada guild ls` — **what is in your guild**.
     ///
-    /// **The listing is the verb and the browser is one way of reading it.** A
+    /// **The listing is the verb and navigating it is one way of reading it.** A
     /// person at a terminal navigates the rows; without one they are printed;
     /// `--json` carries them again. An interactive-only verb would be a bug
     /// (PLAN.md §3.1.1), which is what `--list` exists to make checkable from a
-    /// terminal that would otherwise get the browser.
-    Browse {
+    /// terminal that would otherwise navigate.
+    ///
+    /// **There is no flag that turns the navigating on**, and that is the point:
+    /// a terminal is the flag (PLAN.md §3.1.1). `--list` only goes the other
+    /// way, so the three audiences can be compared from one of them.
+    Ls {
         /// Emit the envelope.
         json: bool,
         /// Print the listing and stop, even where a person could be asked.
         list: bool,
+    },
+    /// `armada guild show <item>` — **one item's content**.
+    ///
+    /// The same word `fleet show` and `manifest skills show` already use for
+    /// "one of them, in full" (`docs/glossary.md`).
+    Show {
+        /// Emit the envelope.
+        json: bool,
+        /// What to print, by name or by guild-relative path.
+        item: String,
     },
     /// `armada guild edit <item>` — open it, validate it, commit it.
     Edit {
@@ -415,7 +429,8 @@ impl GuildInvocation {
             | GuildInvocation::Project { json, .. }
             | GuildInvocation::Export { json, .. }
             | GuildInvocation::Import { json, .. }
-            | GuildInvocation::Browse { json, .. }
+            | GuildInvocation::Ls { json, .. }
+            | GuildInvocation::Show { json, .. }
             | GuildInvocation::Edit { json, .. }
             | GuildInvocation::Delete { json, .. } => *json,
         }
@@ -543,14 +558,19 @@ pub const TOP_LEVEL_VERBS: [&str; 3] = ["init", "doctor", "bridge"];
 
 /// The Guild verbs this milestone built. The rest answer "not built yet".
 ///
-/// **`browse`, `edit` and `delete` joined the six that move a guild** (PLAN.md
-/// §15.3.4). Every earlier verb takes the guild somewhere — onto this machine,
-/// into a repo, into a bundle, to the remote — and not one of them said what was
-/// in it. `edit` was reserved rather than invented: it was claimed as *open a
-/// guild file, validate it, commit it*, and that is the contract it was built
-/// to.
-pub const GUILD_BUILT: [&str; 9] = [
-    "init", "project", "pull", "push", "export", "import", "browse", "edit", "delete",
+/// **`ls`, `show`, `edit` and `delete` joined the six that move a guild**
+/// (PLAN.md §15.3.4). Every earlier verb takes the guild somewhere — onto this
+/// machine, into a repo, into a bundle, to the remote — and not one of them said
+/// what was in it. `edit` was reserved rather than invented: it was claimed as
+/// *open a guild file, validate it, commit it*, and that is the contract it was
+/// built to.
+///
+/// **`ls` and `show` are spelled the way Fleet already spells them.** `fleet ls`
+/// is a listing and `show <thing>` is one thing in full, in this module and in
+/// Manifest's `skills show`; a Guild that invented a third word for a listing
+/// would be the drift `docs/glossary.md` exists to prevent.
+pub const GUILD_BUILT: [&str; 10] = [
+    "init", "project", "pull", "push", "export", "import", "ls", "show", "edit", "delete",
 ];
 
 /// The Guild verbs that are claimed and not built.
@@ -1252,11 +1272,18 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 include_secrets: parsed.on("--include-secrets"),
             }
         }
-        "browse" => {
-            let parsed = flags(tail, json, color, "guild browse", &["--list"], &[])?;
-            GuildInvocation::Browse {
+        "ls" => {
+            let parsed = flags(tail, json, color, "guild ls", &["--list"], &[])?;
+            GuildInvocation::Ls {
                 json: parsed.json,
                 list: parsed.on("--list"),
+            }
+        }
+        "show" => {
+            let parsed = flags(tail, json, color, "guild show", &[], &[])?;
+            GuildInvocation::Show {
+                json: parsed.json,
+                item: one_item(&parsed, "show", "prints")?,
             }
         }
         "edit" => {
@@ -1306,12 +1333,12 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
     Ok(Invocation::Guild(Box::new(invocation)))
 }
 
-/// The one thing `armada guild edit` and `armada guild delete` act on.
+/// The one thing `armada guild show`, `edit` and `delete` act on.
 ///
-/// **Required, and named in the refusal.** Both verbs write; a `guild delete`
-/// that defaulted to something would be a verb that removed a file nobody
-/// named. The message points at the verb that lists what there is to name,
-/// because "which item?" is a question with a command-shaped answer.
+/// **Required, and named in the refusal.** Two of the three write; a `guild
+/// delete` that defaulted to something would be a verb that removed a file
+/// nobody named. The message points at the verb that lists what there is to
+/// name, because "which item?" is a question with a command-shaped answer.
 fn one_item(parsed: &Flags, verb: &str, does: &str) -> Result<String, ParseFailure> {
     parsed.positionals.first().cloned().ok_or_else(|| {
         failure(
@@ -1319,7 +1346,7 @@ fn one_item(parsed: &Flags, verb: &str, does: &str) -> Result<String, ParseFailu
                 class: ErrClass::BadInvocation,
                 r#where: format!("guild {verb}"),
                 message: format!("`armada guild {verb}` needs the item it {does}"),
-                next_action: Some("`armada guild browse` lists what is in your guild".to_string()),
+                next_action: Some("`armada guild ls` lists what is in your guild".to_string()),
             },
             parsed.json,
         )
@@ -2368,10 +2395,17 @@ mod tests {
                 },
             ),
             (
-                vec!["guild", "browse", "--list"],
-                GuildInvocation::Browse {
+                vec!["guild", "ls", "--list"],
+                GuildInvocation::Ls {
                     json: false,
                     list: true,
+                },
+            ),
+            (
+                vec!["guild", "show", "skills/add-migration"],
+                GuildInvocation::Show {
+                    json: false,
+                    item: "skills/add-migration".to_string(),
                 },
             ),
             (
@@ -2398,21 +2432,36 @@ mod tests {
         }
     }
 
-    /// **`edit` and `delete` each need the item they act on.** A `guild delete`
-    /// that defaulted to something would be a verb that removed a file nobody
-    /// named, and the refusal points at the verb that lists what there is to
-    /// name rather than at a flag.
+    /// **`show`, `edit` and `delete` each need the item they act on.** A `guild
+    /// delete` that defaulted to something would be a verb that removed a file
+    /// nobody named, and the refusal points at the verb that lists what there is
+    /// to name rather than at a flag.
     #[test]
-    fn editing_and_deleting_both_need_the_item_and_say_where_to_find_one() {
-        for verb in ["edit", "delete"] {
+    fn the_item_verbs_all_need_the_item_and_say_where_to_find_one() {
+        for verb in ["show", "edit", "delete"] {
             let err = parse(&args(&["guild", verb])).unwrap_err().error;
             assert_eq!(err.class, ErrClass::BadInvocation, "`{verb}`");
             assert!(err.message.contains(verb), "`{verb}`: {}", err.message);
             assert!(
-                err.next_action.unwrap().contains("guild browse"),
+                err.next_action.unwrap().contains("guild ls"),
                 "`{verb}` did not name the verb that lists what to name"
             );
         }
+    }
+
+    /// **`ls` is not a synonym for a word that was retired.** `browse` was the
+    /// name for one milestone and is now spelled the way `fleet ls` spells it;
+    /// keeping the old word alive as an alias is how two names for one idea
+    /// survive a rename (`docs/glossary.md`).
+    #[test]
+    fn the_retired_word_is_not_still_a_verb() {
+        let err = parse(&args(&["guild", "browse"])).unwrap_err().error;
+        assert_eq!(err.class, ErrClass::BadInvocation);
+        assert!(
+            err.message.contains("browse"),
+            "the refusal does not name what was typed: {}",
+            err.message
+        );
     }
 
     /// **`pull` takes nothing but `--json`.** Pulling is not a decision with

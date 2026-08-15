@@ -3857,11 +3857,12 @@ this machine, into a repo, into a bundle, to the remote. The guild is the one th
 that is supposed to *be* you, and it was the only thing with no way to look at it. `export`
 writing a bundle was the standing answer to "what do I have", and it is not an answer.
 
-**What was built.** Three verbs, and the reserved `edit` was absorbed rather than duplicated.
+**What was built.** Four verbs, and the reserved `edit` was absorbed rather than duplicated.
 
 | Verb | What it is |
 |---|---|
-| `armada guild browse` | The listing: one row per thing, `STATUS · ITEM · DETAIL`, where STATUS is the kind. At a terminal it is a browser; `--list` prints it anyway; `--json` carries the same rows. |
+| `armada guild ls` | The listing: one row per thing, `STATUS · ITEM · DETAIL`, where STATUS is the kind. At a terminal the rows are navigable; `--list` prints them anyway; `--json` carries the same rows. |
+| `armada guild show <item>` | One item's content, unwrapped. The non-interactive path to a file, and what the terminal's *view* action runs — one envelope, one renderer. |
 | `armada guild edit <item>` | Open it, **validate it, commit it** — the contract the name was reserved under. `--from <file>` is the form that needs no terminal. |
 | `armada guild delete <item>` | Confirm, remove, and **commit the removal**. `--yes` is the form that needs no terminal, and without one it is required. |
 
@@ -3870,14 +3871,22 @@ writing a bundle was the standing answer to "what do I have", and it is not an a
 | Question | Answer |
 |---|---|
 | **What a "kind" is.** | An enum in `armada_guild::inventory::Kind` — `memory`, `skill`, `subagent`, `workflow`, `hook`, `settings`, `plugins`, `mcp`, `schema` — and it is the word in the STATUS column. Each kind is summarised **in its own terms**, read out of the file: a workflow by its steps, a skill by its front-matter `description`, a memory fragment by whether it is still Armada's example text. A listing that flattened both to a filename would be `ls` with extra steps, which is what that question was guarding against. |
-| **Whether viewing and editing are one verb or two.** | **Absorbed.** `guild edit` is built to its reserved contract and the browser's *edit* action calls the same code, so there is one validation path rather than two. `guild edit` is no longer on `RESERVED_GUILD_VERBS`; `verify` is what is left claimed and unbuilt. |
+| **Whether viewing and editing are one verb or two.** | **Two verbs, one implementation each.** `guild show` is the viewing and `guild edit` is built to its reserved contract; the terminal`s *view* and *edit* actions call that same code, so there is one renderer and one validation path rather than two of each. `guild edit` is no longer on `RESERVED_GUILD_VERBS`; `verify` is what is left claimed and unbuilt. |
 | **What it says about drift.** | **Nothing, deliberately.** The listing says what is *there*; `guild pull` already says what moved and `armada doctor` already says what is wrong. What the two *writing* verbs report is the one drift fact they create: whether the change is committed, and therefore whether `guild push` will carry it. |
+
+**The verbs are `ls` and `show`, not `browse`.** The first cut called the listing `browse` and
+folded one item's content into it as an action. `fleet ls` and `manifest skills show` already
+mean exactly those two things, and a third word for a listing in a third module is the drift
+[`glossary.md`](glossary.md) exists to stop — the terminology review that produced that file was
+paid for once. So the listing is `ls`, one item is `show`, and the split fell out of the rename:
+the terminal's *view* action runs `show` rather than a second renderer of its own.
 
 **The three things that were decided rather than left to taste:**
 
 - **An interactive-only verb would have been a bug** (§3.1.1). The listing is the verb and the
-  browser is one way of reading it: the rows are identical in the browser, on stdout and in
-  `--json`, and `browse --list` exists so a terminal can be made to prove it.
+  navigating it is one way of reading it: the rows are identical at a terminal, on stdout and in
+  `--json`, and `ls --list` exists so a terminal can be made to prove it. There is deliberately
+  no flag that turns the navigating *on* — a terminal is the flag.
 - **A refused edit is written and not committed.** Losing somebody's work because a colon was
   in the wrong place is the worse of the two failures; git still holds the version before it,
   and the refusal names `git -C ~/.armada/guild checkout <path>` as the undo. What does not

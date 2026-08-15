@@ -1309,13 +1309,17 @@ pub struct GuildBundleData {
     pub conflicts: Vec<String>,
 }
 
-/// `armada guild browse` — **what is in your guild**, named.
+/// `armada guild ls` — **what is in your guild**, named.
 ///
-/// **The listing is the verb, and the browser is one way of reading it.** A
+/// **The listing is the verb, and navigating it is one way of reading it.** A
 /// person at a terminal navigates these rows and picks one; an agent reads the
 /// same rows off stdout; `--json` carries the same rows again. All three see
 /// identical facts, which is PLAN.md §3.1.1's rule applied to the one verb most
 /// tempting to build for a terminal alone.
+///
+/// **`ls` is the word `fleet ls` already uses for this**, and one concept gets
+/// one name across the four modules (`docs/glossary.md`) — a third spelling in a
+/// third module is how a vocabulary stops being one.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GuildListData {
     /// Where the guild is, as a person writes it.
@@ -1349,6 +1353,30 @@ pub struct GuildItemRow {
     pub detail: String,
     /// How big the opened file is.
     pub bytes: u64,
+}
+
+/// `armada guild show <item>` — **one item's content**.
+///
+/// **The body is in the payload and not only on the screen.** `show` is the
+/// non-interactive half of reading a guild: an agent that can list nine skills
+/// and read none of them has been given a directory listing, and the row this
+/// carries alongside the body is the same [`GuildItemRow`] the listing carries,
+/// so the two answers cannot drift.
+///
+/// **This is also what the terminal's *view* action renders.** One envelope, one
+/// renderer, two ways in — the alternative is a screen and a pipe that agree
+/// until somebody edits one of them.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildItemData {
+    /// Where the guild is, as a person writes it.
+    pub at: String,
+    /// Which item, in the listing's own words.
+    pub item: GuildItemRow,
+    /// What is in the file `item.opens` names, verbatim.
+    ///
+    /// **Unwrapped and untruncated.** A reader asked for what is on disk, and a
+    /// `show` that reflowed a `SKILL.md` would answer a different question.
+    pub body: String,
 }
 
 /// `armada guild edit` and `armada guild delete` — one item, changed.

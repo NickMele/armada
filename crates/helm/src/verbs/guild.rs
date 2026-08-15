@@ -12,8 +12,8 @@
 
 use armada_core::ctx::Run;
 use armada_core::envelope::{
-    Envelope, GuildBundleData, GuildChange, GuildChangeData, GuildInitData, GuildItemRow,
-    GuildListData, GuildSyncData, Headline, Projection, Sync, SyncItem,
+    Envelope, GuildBundleData, GuildChange, GuildChangeData, GuildInitData, GuildItemData,
+    GuildItemRow, GuildListData, GuildSyncData, Headline, Projection, Sync, SyncItem,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_guild::interview::{self, Answers, Question, QUESTIONS};
@@ -731,31 +731,38 @@ fn a_file_under(root: &Path) -> Option<String> {
     walk(root, root)
 }
 
-// ------------------------------------------------ browse, edit and delete
+// ------------------------------------------ ls, show, edit and delete
 //
-// **The three verbs that read a guild rather than moving one** (PLAN.md
+// **The four verbs that read a guild rather than moving one** (PLAN.md
 // §15.3.4). Every verb above this line takes the guild somewhere — onto this
 // machine, into a repo, into a bundle, to the remote — and none of them says
 // what is in it, which is the gap this closes.
 //
-// **The listing is the verb and the browser is one way of reading it.** A
+// **The words are Fleet's words.** `fleet ls` is already the listing and `show
+// <thing>` is already one thing's content, so Guild spells the same two ideas
+// the same two ways. A module that invented a third word for a listing would be
+// the drift `docs/glossary.md` exists to stop, and the terminology review that
+// produced that file was paid for once.
+//
+// **The listing is the verb and navigating it is one way of reading it.** A
 // person at a terminal navigates the rows through the same [`Ask::choose`] that
 // `armada init` puts its one question with; without a terminal the rows are
 // printed; `--json` carries them again. An interactive-only verb would be a bug
 // (PLAN.md §3.1.1), so the interaction is layered on top of an answer that
-// stands without it.
+// stands without it — and there is deliberately no flag that *opts into* the
+// interaction, because a terminal is the flag.
 
-/// `armada guild browse` — **what is in your guild**, and at a terminal, a way
+/// `armada guild ls` — **what is in your guild**, and at a terminal, a way
 /// through it.
 ///
 /// `interactive` is decided at the entrypoint from whether a person is there
 /// (`ARCHITECTURE.md` §1.4), never sniffed here — the same rule that lets the
 /// whole suite drive this against a `TempDir`.
 ///
-/// **The listing is re-read after the browsing rather than before it.** A
+/// **The listing is re-read after the navigating rather than before it.** A
 /// session that deleted two skills and reported the listing it opened with
 /// would end by printing rows for files that are no longer there.
-pub fn browse(
+pub fn ls(
     run: &impl Run,
     place: &Where,
     ask: &mut dyn Ask,
@@ -769,13 +776,44 @@ pub fn browse(
     Ok(listing(&guild))
 }
 
-/// How the browser draws what it shows, carried from the entrypoint.
+/// `armada guild show <item>` — **one item's content**.
+///
+/// **The non-interactive path to a file, and the only one.** `ls` at a terminal
+/// draws a file by building this same envelope (see [`act`]), so a person and a
+/// pipe are reading one renderer rather than two that agree today.
+///
+/// It takes no `Run`: showing a file changes nothing, and a verb that cannot
+/// write is a verb that cannot be asked to commit by mistake.
+pub fn show(place: &Where, asked: &str) -> Result<Output, ArmadaError> {
+    let guild = require_guild(place)?;
+    let item = resolve(&guild, asked)?;
+    Ok(viewed(&guild, &item))
+}
+
+/// One item's content, as the envelope carries it.
+fn viewed(guild: &Guild, item: &inventory::Item) -> Output {
+    Output::GuildItem(Box::new(Envelope::ok(
+        "guild show",
+        None,
+        Status::Ready,
+        GuildItemData {
+            at: shown(guild.root()),
+            item: row_of(item),
+            // **Unreadable reads as empty rather than as a failure.** A guild
+            // holding a broken symlink is a guild `doctor` should report; `show`
+            // saying `nothing in it` is the honest answer to what it could read.
+            body: std::fs::read_to_string(guild.path(&item.opens)).unwrap_or_default(),
+        },
+    )))
+}
+
+/// How the terminal draws what it shows, carried from the entrypoint.
 ///
 /// **Style and width are the entrypoint's, exactly as they are for every other
-/// render.** The browser prints a table and a file's content *during* the
-/// session, on stderr, which means it needs the two facts that decide how — and
-/// resolving them here would be this file reading the terminal, which
-/// `ARCHITECTURE.md` §1.4 puts at the entrypoint and nowhere else.
+/// render.** `ls` prints a table and a file's content *during* the session, on
+/// stderr, which means it needs the two facts that decide how — and resolving
+/// them here would be this file reading the terminal, which `ARCHITECTURE.md`
+/// §1.4 puts at the entrypoint and nowhere else.
 #[derive(Debug, Clone, Copy)]
 pub struct Look {
     /// Painted, or plain.
@@ -797,7 +835,7 @@ impl Default for Look {
 fn listing(guild: &Guild) -> Output {
     let items = inventory::Inventory::items(guild.root());
     Output::GuildList(Box::new(Envelope::ok(
-        "guild browse",
+        "guild ls",
         None,
         Status::Ready,
         GuildListData {
@@ -820,7 +858,8 @@ fn row_of(item: &inventory::Item) -> GuildItemRow {
     }
 }
 
-/// The browser: pick a thing, then pick what to do to it, until you are done.
+/// Navigating the listing: pick a thing, then pick what to do to it, until you
+/// are done.
 ///
 /// **Two selections rather than one row of verbs**, because the two questions
 /// are asked at different moments. A reader opens this to find out what is in
@@ -829,7 +868,7 @@ fn row_of(item: &inventory::Item) -> GuildItemRow {
 /// the thing the verb exists to fix.
 ///
 /// **It reads the guild again on every turn.** An edit changes what a row says
-/// about itself and a delete removes the row, and a browser holding the listing
+/// about itself and a delete removes the row, and a session holding the listing
 /// it opened with would offer both back.
 fn wander(run: &impl Run, guild: &Guild, ask: &mut dyn Ask, look: Look) -> Result<(), ArmadaError> {
     loop {
@@ -858,10 +897,10 @@ fn wander(run: &impl Run, guild: &Guild, ask: &mut dyn Ask, look: Look) -> Resul
             })
             .collect();
         // **`done` is the last option and it is the default**, so `esc` and a
-        // stream that ended both leave rather than picking something. A browser
+        // stream that ended both leave rather than picking something. A session
         // whose escape hatch was an action would be one that acted on the way
         // out.
-        options.push(Choice::new("done", "stop browsing"));
+        options.push(Choice::new("done", "stop looking"));
         let done = options.len();
         let picked = ask.choose("What is in your guild?", &options, done);
         if picked >= done || picked == 0 {
@@ -901,16 +940,11 @@ fn act(
     };
 
     match action.as_str() {
-        "view" => {
-            let body = std::fs::read_to_string(guild.path(&item.opens)).unwrap_or_default();
-            let shown_text = crate::render::guild_item_view(
-                &item.opens,
-                &body,
-                look.style,
-                look.terminal.usable_width(),
-            );
-            ask.show(&shown_text);
-        }
+        // **The same envelope `armada guild show` returns, through the same
+        // renderer.** The action is spelled `view` on the screen because that is
+        // what a person picking off a list is doing; what it *runs* is `show`,
+        // so there is one layout and one place a field can be added to it.
+        "view" => report(ask, look, &viewed(guild, item)),
         "edit" => {
             let body = std::fs::read_to_string(guild.path(&item.opens)).unwrap_or_default();
             let Some(written) = ask.edit(&item.opens, &body) else {
@@ -991,7 +1025,7 @@ pub fn edit(
             r#where: item.path.clone(),
             message: "the workflow schema is Armada's, not yours".to_string(),
             next_action: Some(
-                "edit the workflow instead; `armada guild browse` lists them".to_string(),
+                "edit the workflow instead; `armada guild ls` lists them".to_string(),
             ),
         });
     }
@@ -1201,7 +1235,7 @@ fn resolve(guild: &Guild, asked: &str) -> Result<inventory::Item, ArmadaError> {
             false => format!("`{asked}` names {}", matched.join(" and ")),
         },
         next_action: Some(match matched.is_empty() {
-            true => "`armada guild browse` lists what is there".to_string(),
+            true => "`armada guild ls` lists what is there".to_string(),
             false => format!("name one of them: `{}`", matched.join("` or `")),
         }),
     })
@@ -1517,15 +1551,15 @@ mod tests {
         }
     }
 
-    /// **The listing is the answer, whether or not anybody browsed.** A verb
+    /// **The listing is the answer, whether or not anybody navigated it.** A verb
     /// whose only form was interactive would be a bug (PLAN.md §3.1.1), and
     /// this is that rule as an assertion: nothing was asked, and every kind is
     /// still in the envelope.
     #[test]
-    fn browsing_without_a_person_still_answers_what_is_in_the_guild() {
+    fn listing_without_a_person_still_answers_what_is_in_the_guild() {
         let (home, _) = a_guild();
         let mut ask = crate::ask::Scripted::default();
-        let output = browse(
+        let output = ls(
             &Git::new(),
             &place_of(&home),
             &mut ask,
@@ -1551,18 +1585,18 @@ mod tests {
         );
     }
 
-    /// **The browser puts two questions: which thing, then what to do to it.**
+    /// **`ls` at a terminal puts two questions: which thing, then what to do to it.**
     /// The second one names the item, because by then the reader has stopped
     /// scanning and started deciding.
     #[test]
-    fn the_browser_asks_which_thing_and_then_what_to_do_to_it() {
+    fn the_terminal_asks_which_thing_and_then_what_to_do_to_it() {
         let (home, _) = a_guild();
         let mut ask = crate::ask::Scripted {
             // The skill, then `view`, then `done`.
             choices: vec![2, 1],
             ..crate::ask::Scripted::default()
         };
-        browse(
+        ls(
             &Git::new(),
             &place_of(&home),
             &mut ask,
@@ -1602,10 +1636,10 @@ mod tests {
 
     /// **An edit is validated before it is committed, and a broken one is
     /// not.** The contract `guild edit` was reserved under, run through the
-    /// browser rather than through the flag, because the browser is the path
-    /// that would otherwise skip it.
+    /// terminal's own *edit* action rather than through `--from`, because that
+    /// is the path that would otherwise skip it.
     #[test]
-    fn an_edit_through_the_browser_is_validated_and_only_then_committed() {
+    fn an_edit_through_the_listing_is_validated_and_only_then_committed() {
         let (home, guild) = a_guild();
         let git = Git::new();
         let mut ask = crate::ask::Scripted {
@@ -1614,7 +1648,7 @@ mod tests {
             edits: vec!["name: bug\nnot: a workflow\n".to_string()],
             ..crate::ask::Scripted::default()
         };
-        browse(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
+        ls(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
 
         assert!(
             !git.ran("commit"),
@@ -1642,7 +1676,7 @@ mod tests {
             edits: vec![crate::ask::KEEP_THE_REST.to_string() + "\n# and a note of my own\n"],
             ..crate::ask::Scripted::default()
         };
-        browse(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
+        ls(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
 
         assert!(git.ran("commit"), "a valid edit was not committed");
         assert!(
@@ -1663,7 +1697,7 @@ mod tests {
             choices: vec![2, 3, 1],
             ..crate::ask::Scripted::default()
         };
-        browse(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
+        ls(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
 
         let question = &ask.chosen[2].0;
         assert!(question.contains("skills/add-migration"), "{question}");
@@ -1689,23 +1723,23 @@ mod tests {
             choices: vec![2, 3, 2],
             ..crate::ask::Scripted::default()
         };
-        browse(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
+        ls(&git, &place_of(&home), &mut ask, true, Look::default()).unwrap();
 
         // The directory, not only its prose.
         assert!(!guild.path("skills/add-migration").exists());
         assert!(git.ran("commit"), "the removal was not committed");
     }
 
-    /// **The browser re-reads the guild every turn.** A delete removes the row,
-    /// and a browser holding the listing it opened with would offer it back.
+    /// **The listing is re-read every turn.** A delete removes the row,
+    /// and a session holding the listing it opened with would offer it back.
     #[test]
-    fn what_was_deleted_is_gone_from_the_next_turn_of_the_browser() {
+    fn what_was_deleted_is_gone_from_the_next_turn_of_the_listing() {
         let (home, _) = a_guild();
         let mut ask = crate::ask::Scripted {
             choices: vec![2, 3, 2],
             ..crate::ask::Scripted::default()
         };
-        browse(
+        ls(
             &Git::new(),
             &place_of(&home),
             &mut ask,
@@ -1731,7 +1765,7 @@ mod tests {
             choices: vec![5],
             ..crate::ask::Scripted::default()
         };
-        browse(
+        ls(
             &Git::new(),
             &place_of(&home),
             &mut ask,
