@@ -1110,11 +1110,17 @@ mod tests {
         }
     }
 
-    /// The scope lens appears on the two verbs that take it and on neither of
-    /// the two that do not — `check` refusing `--project` is a decision
-    /// (`args.rs`), and a help page that offered it would contradict the parser.
+    /// The scope lens appears on the two verbs that **act on** it and on
+    /// neither of the two that do not.
+    ///
+    /// `check` refusing `--project` outright is a decision (`args.rs`), and a
+    /// page offering it would contradict the parser. `init` is the subtler case:
+    /// its parser goes through `common`, which reads a lens for every verb that
+    /// shares it, and `init` then ignores what it read. Listing it there would
+    /// document a flag that changes nothing — worse than not listing a flag that
+    /// is silently tolerated, which is what this asserts instead.
     #[test]
-    fn the_scope_lens_is_listed_only_where_it_is_accepted() {
+    fn the_scope_lens_is_listed_only_where_it_is_acted_on() {
         for (path, expected) in [
             ("manifest status", true),
             ("manifest clean", true),
