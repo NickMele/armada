@@ -65,10 +65,18 @@ Do you already have a guild?
   imported from ~/.claude/, 19 skills, 12 hooks, 4 plugins, CLAUDE.md
 
 1/5  How should agents write to you?
-     (enter to keep what import found) >
+     Tone, length, and what to lead with. Every agent reads this before it says
+     anything. Writes voice.md.
 
-READY  guild at ~/.armada/guild, 5 questions, 0 skipped
+     now  Lead with the answer. Tables for anything comparative.
+     enter for a new line, ctrl-d when done, esc keeps what import found
+
+READY  guild at ~/.armada/guild, 0 answered, 5 kept as imported
 ```
+
+**A question says what answer it wants and shows what enter would keep**, and the three prose
+ones open an inline text area rather than a line — both in [`guild/init.md`](guild/init.md),
+which is where the interview lives.
 
 **The prompts themselves go to stderr**, on the same rule that puts progress there
 ([`render.md`](render.md)): stdout carries the finished transcript once, at the end, so
