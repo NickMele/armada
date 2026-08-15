@@ -1284,10 +1284,7 @@ fn transition_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span
             // **The exit code, not a sentence about it** (PLAN.md §14.3). The
             // number is the fact a verdict rests on, and a summary of it is the
             // assertion the rule refuses.
-            said.push_str(&format!(
-                ", {} exited {}",
-                evidence.scope, evidence.exit
-            ));
+            said.push_str(&format!(", {} exited {}", evidence.scope, evidence.exit));
         }
         table = table.row(vec![
             token(

@@ -1811,7 +1811,7 @@ pub fn report<C: Clock>(
         });
     }
 
-    let crossing = event.map(|word| reportable(word)).transpose()?;
+    let crossing = event.map(reportable).transpose()?;
     let step = step.unwrap_or(&record.step).to_string();
 
     // **Entering a step is what moves the Job onto it.** The record's `step` is
@@ -1858,9 +1858,7 @@ pub fn report<C: Clock>(
             job: record.name.clone(),
             step,
             notes: record.progress.len(),
-            event: crossed
-                .as_ref()
-                .map(|entry| entry.event.word().to_string()),
+            event: crossed.as_ref().map(|entry| entry.event.word().to_string()),
             attempt: crossed.as_ref().map(|entry| entry.attempt),
         },
     ))))

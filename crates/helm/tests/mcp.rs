@@ -284,7 +284,7 @@ fn a_job_that_is_over_gains_no_more_notes() {
         None,
         None,
     )
-        .expect_err("a refusal");
+    .expect_err("a refusal");
 
     assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
     assert!(error.next_action.is_some());
@@ -421,7 +421,10 @@ fn a_word_that_is_not_a_boundary_is_refused_with_the_two_that_are() {
         .expect_err("a refusal")
     };
     let next = error.next_action.expect("a next action");
-    assert!(next.contains("entered") && next.contains("attempted"), "{next}");
+    assert!(
+        next.contains("entered") && next.contains("attempted"),
+        "{next}"
+    );
 }
 
 /// **The Drone asserts, the gate settles, and both survive on the record.** A

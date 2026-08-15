@@ -31,9 +31,9 @@
 use armada_core::envelope::{
     Asked, BridgeData, CheckData, CleanData, CommandView, CommandsData, ComponentView,
     ComponentsData, DispatchData, DoctorData, Envelope, Evidence, FailureData, FailuresData,
-    Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice, GuildItemData,
-    GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData, JobRow,
-    MachineInitData, NoteRow, PortReport, Problem, Projection, Released, ResolvedSkillView,
+    Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
+    GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData,
+    JobRow, MachineInitData, NoteRow, PortReport, Problem, Projection, Released, ResolvedSkillView,
     ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync,
     SyncItem, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
 };
@@ -1518,16 +1518,18 @@ fn fleet_ls_matches_its_fixture() {
 /// measurement.
 #[test]
 fn bridge_matches_its_fixture() {
+    /// `on_step` is the step and how long it has been on it, together, because
+    /// the second means nothing without the first.
     fn row(
         name: &str,
         state: JobState,
-        step: &str,
-        on_step_s: Option<u64>,
+        on_step: (&str, Option<u64>),
         task: &str,
         cost_usd: f64,
         runtime_s: u64,
         needs_attention: bool,
     ) -> JobRow {
+        let (step, on_step_s) = on_step;
         JobRow {
             uuid: format!("{name}-uuid"),
             name: name.to_string(),
@@ -1554,8 +1556,7 @@ fn bridge_matches_its_fixture() {
         row(
             "rate-limit",
             JobState::Running,
-            "implement",
-            Some(12 * 60),
+            ("implement", Some(12 * 60)),
             "add gateway limiter",
             2.10,
             14 * 60,
@@ -1564,8 +1565,7 @@ fn bridge_matches_its_fixture() {
         row(
             "carina-schema",
             JobState::Running,
-            "plan",
-            Some(3 * 60),
+            ("plan", Some(3 * 60)),
             "migrate schema",
             0.45,
             3 * 60,
@@ -1578,8 +1578,7 @@ fn bridge_matches_its_fixture() {
         row(
             "xlsx-report",
             JobState::Stalled,
-            "reproduce",
-            None,
+            ("reproduce", None),
             "generate report",
             4.60,
             22 * 60,
@@ -1588,8 +1587,7 @@ fn bridge_matches_its_fixture() {
         row(
             "release-merge",
             JobState::Blocked,
-            "implement",
-            Some(18 * 60),
+            ("implement", Some(18 * 60)),
             "merge release",
             1.25,
             65 * 60,
