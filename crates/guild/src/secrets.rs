@@ -351,47 +351,81 @@ mod tests {
         }
     }
 
-    /// A credential-shaped value, assembled rather than written down.
+    /// Credential-shaped values, kept as plain literals on purpose.
     ///
     /// **A literal token in a source file is a token as far as every secret
-    /// scanner is concerned.** GitHub's push protection refused this
-    /// repository's push over the fixtures below — correctly, because a scanner
-    /// cannot know a `ghp_` string is synthetic, and neither can someone
-    /// skimming the diff.
+    /// scanner is concerned** — GitHub's push protection blocked this
+    /// repository's push over an earlier version of these fixtures, correctly,
+    /// because a scanner cannot know a `ghp_` string is synthetic. The fix
+    /// tried first was to assemble the strings at run time so nothing scannable
+    /// sat in the file; that defeats the scanner rather than satisfying it; it
+    /// hides a realistic token body from detection instead of not having one.
     ///
-    /// This repository is the awkward case: recognising credential-shaped
-    /// values is the thing under test, so a fixture has to *be* the shape.
-    /// Joining the halves at run time gives the function under test exactly the
-    /// string it would have seen and leaves nothing scannable in the file.
+    /// The actual fix: `value_is_credential_shaped` below tests *shape* — a
+    /// registered prefix, a JWT's three segments, or a long opaque run — and
+    /// never examines what follows a prefix or fills the run. So a fixture
+    /// gains nothing from looking realistic; every value here spells out
+    /// `EXAMPLE` (checked by
+    /// [`every_credential_shaped_fixture_is_self_evidently_synthetic`] below)
+    /// and exercises the same code path a real credential would.
     ///
-    /// **Do not fold these back into literals.** The push will be blocked and
-    /// the diff will not say why.
-    fn shaped(prefix: &str, rest: &str) -> String {
-        format!("{prefix}{rest}")
-    }
+    /// The AWS one is the vendor's own documented placeholder access key id —
+    /// preferred over inventing one, since it's already recognised as synthetic
+    /// by tooling that knows AWS's format.
+    const CREDENTIAL_SHAPED_FIXTURES: &[&str] = &[
+        // GitHub personal access token prefix.
+        "ghp_EXAMPLE_NOT_A_REAL_CREDENTIAL_000001",
+        // GitHub fine-grained PAT prefix.
+        "github_pat_EXAMPLE_NOT_A_REAL_CREDENTIAL_000002",
+        // OpenAI / Anthropic / etc. secret-key prefix.
+        "sk-EXAMPLE_NOT_A_REAL_CREDENTIAL_000003",
+        // Slack token prefix (`xox`, every variant).
+        "xoxb-EXAMPLE-NOT-A-REAL-CREDENTIAL-000004",
+        // AWS's documented example access key id. See
+        // https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
+        "AKIAIOSFODNN7EXAMPLE",
+        // PEM private-key block header — no body follows, so there is no key
+        // material here even by accident.
+        "-----BEGIN OPENSSH PRIVATE KEY----- EXAMPLE_NOT_A_REAL_KEY_BODY",
+        // JWT shape: starts `eyJ`, exactly two dots. Header and payload decode
+        // to the textbook `{"alg":"HS256"}` / `{"sub":"1"}`; the signature
+        // segment carries the marker outright, since a real signature would
+        // not need to parse as anything.
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.EXAMPLE_NOT_A_REAL_CREDENTIAL_000006",
+        // The opaque fallback path on its own: no vendor prefix, long enough,
+        // two character classes (upper + digit) — nothing about it but the
+        // shape says "credential", which is exactly what this path detects.
+        "EXAMPLE_NOT_A_REAL_CREDENTIAL_000007",
+    ];
 
     /// A value under an innocuous key. This is the case that makes the second
     /// signal necessary rather than redundant.
     #[test]
     fn a_credential_shaped_value_is_caught_under_an_innocent_key() {
-        for value in [
-            shaped("ghp", "_16C7e42F292c6912E7710c838347Ae178B4a"),
-            shaped("github", "_pat_11ABCDEFG0abcdefghijkl_9zYx"),
-            shaped("sk-", "ant-api03-aaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-            shaped(
-                "xoxb",
-                "-123456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx",
-            ),
-            shaped("AKIA", "IOSFODNN7EXAMPLE"),
-            "-----BEGIN OPENSSH PRIVATE KEY-----".to_string(),
-            shaped(
-                "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.",
-                "dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk",
-            ),
-        ] {
+        for value in CREDENTIAL_SHAPED_FIXTURES {
             assert!(
-                value_is_credential_shaped(&value),
+                value_is_credential_shaped(value),
                 "`{value}` was let through"
+            );
+        }
+    }
+
+    /// **The property, not a comment.** The evasion this replaces was a doc
+    /// comment reading "do not fold these back into literals" — a promise that
+    /// lives only in a reviewer's head. This is the same promise as a gate: any
+    /// fixture standing in for a real credential must carry a substring a
+    /// reader, and a scanner, can recognise as synthetic on sight.
+    ///
+    /// Iterating [`CREDENTIAL_SHAPED_FIXTURES`] — the exact list the detection
+    /// test above asserts against, not a second hand-copied one — is what makes
+    /// this a real invariant: a fixture added to that list without the marker
+    /// fails here, rather than silently narrowing what "synthetic" means.
+    #[test]
+    fn every_credential_shaped_fixture_is_self_evidently_synthetic() {
+        for value in CREDENTIAL_SHAPED_FIXTURES {
+            assert!(
+                value.contains("EXAMPLE"),
+                "`{value}` has no synthetic marker and reads as a real credential"
             );
         }
     }
@@ -422,9 +456,9 @@ mod tests {
     /// The whole point, on the document shape it will actually meet.
     #[test]
     fn scanning_a_settings_document_names_the_key_and_never_the_value() {
-        // The credential-shaped value is spliced in rather than written — see
-        // `shaped` above for why a literal here blocks the push.
-        let helper = shaped("ghp", "_16C7e42F292c6912E7710c838347Ae178B4a");
+        // Reuses the first fixture above rather than a fresh literal, so this
+        // test cannot drift from the marker invariant either.
+        let helper = CREDENTIAL_SHAPED_FIXTURES[0];
         let raw = format!(
             r#"{{
                 "model": "claude-opus-4-1-20250805",
@@ -457,7 +491,7 @@ mod tests {
         // **The record is the whole surface, so this is the whole check.**
         let serialised = serde_json::to_string(&found).unwrap();
         assert!(
-            !serialised.contains(&helper) && !serialised.contains("not-actually-a-token"),
+            !serialised.contains(helper) && !serialised.contains("not-actually-a-token"),
             "a value reached the report: {serialised}"
         );
     }
