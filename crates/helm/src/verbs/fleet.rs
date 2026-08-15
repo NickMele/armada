@@ -151,12 +151,7 @@ impl Where {
 /// it, `kill` and `answer` persist it, and nothing computes it a second way —
 /// which is what stops `ls` and `kill` disagreeing about whether a Job is
 /// stalled.
-fn look<R: Run>(
-    run: &R,
-    place: &Where,
-    record: &Job,
-    now_ms: u64,
-) -> (Observed, Reading, bool) {
+fn look<R: Run>(run: &R, place: &Where, record: &Job, now_ms: u64) -> (Observed, Reading, bool) {
     let reading = drone::transcript(&place.stream(&record.uuid));
     // **The process table is only consulted for a Job that could still be
     // running.** A finished Job costs no `ps`, which is what keeps `armada
@@ -2392,7 +2387,10 @@ fn gate_step<R: Run, C: Clock>(
         .find(|candidate| candidate.id == step_id)
         .cloned()
     else {
-        let why = format!("the `{}` workflow has no step called `{step_id}`", flow.name);
+        let why = format!(
+            "the `{}` workflow has no step called `{step_id}`",
+            flow.name
+        );
         return halt(place, now, record, None, why);
     };
 
@@ -2452,7 +2450,14 @@ fn gate_step<R: Run, C: Clock>(
     match next {
         advance::Next::Again { why } => {
             let verdict = record.verdict;
-            Ok(tick_row(&record, TICK_WAITING, why, predicate, evidence, verdict))
+            Ok(tick_row(
+                &record,
+                TICK_WAITING,
+                why,
+                predicate,
+                evidence,
+                verdict,
+            ))
         }
         advance::Next::Advance { to } => {
             record.pending = None;
@@ -2525,11 +2530,20 @@ fn gate_step<R: Run, C: Clock>(
                 place.store().save(&record)?;
             }
             let verdict = record.verdict;
-            Ok(tick_row(&record, TICK_ASKED, question, predicate, evidence, verdict))
+            Ok(tick_row(
+                &record, TICK_ASKED, question, predicate, evidence, verdict,
+            ))
         }
         advance::Next::Halt { why, .. } => {
             let verdict = record.verdict;
-            Ok(tick_row(&record, TICK_HALTED, why, predicate, evidence, verdict))
+            Ok(tick_row(
+                &record,
+                TICK_HALTED,
+                why,
+                predicate,
+                evidence,
+                verdict,
+            ))
         }
     }
 }

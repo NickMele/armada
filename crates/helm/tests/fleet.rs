@@ -3668,11 +3668,10 @@ fn await_exit(scratch: &Scratch, uuid: &str) {
 
 /// One pass of the loop over one Job.
 fn tick(scratch: &Scratch, run: &Harness, job: &str) -> armada_core::envelope::TickData {
-    let data = ticked(
+    ticked(
         &fleet::tick(run, &FrozenClock::new(), &scratch.place(), Some(job), false)
             .expect("the pass answers"),
-    );
-    data
+    )
 }
 
 /// Drive the loop until the Job stops moving, and hand back every row.
@@ -3761,7 +3760,10 @@ fn a_finished_exchange_advances_the_step_instead_of_leaving_the_job_running_for_
         .find(|entry| entry.event == armada_core::fleet::job::StepEvent::Completed)
         .expect("the gate recorded a completion");
     assert_eq!(completed.step, "one");
-    let gate = completed.gate.as_ref().expect("a completion carries a gate");
+    let gate = completed
+        .gate
+        .as_ref()
+        .expect("a completion carries a gate");
     assert!(
         !gate.evidence.is_empty(),
         "a step passed on nothing: {gate:?}"
@@ -3963,6 +3965,87 @@ fn a_green_suite_is_not_a_reproduction_and_the_step_is_run_again() {
     assert!(
         argv.iter().any(|word| word.contains("did not pass")),
         "the retry started blind: {argv:?}"
+    );
+}
+
+/// **The exact argv the loop hands `armada manifest check`** — both flags, the
+/// scope, the run id and its position.
+///
+/// **Asserting the argv is half the rule, and this is the other half.** AGENTS.md:
+/// *"asserting on argv proves you built the string you meant, not that it
+/// works"*, so an argv assertion has to be paired with something that holds the
+/// flags against the tool that receives them. `crates/helm/tests/detach.rs` is
+/// that half: it runs the **real** `armada` binary against a real repository
+/// with `["manifest", "check", "--status", run, "--json"]` and
+/// `["manifest", "check", "--detach", "--json"]`, and
+/// `neither_flag_is_refused_as_unbuilt` proves both are accepted rather than
+/// refused by name. What this test adds is that the loop builds *those* vectors
+/// and not something adjacent — the Drone once shipped without `--verbose` and
+/// every argv assertion passed, because no Drone had ever run.
+///
+/// The two orderings that matter and would both survive a looser assertion: the
+/// run id is **positional and immediately after `--status`**, and `--json` is
+/// present on both, because the loop reads a payload rather than an exit code.
+#[test]
+fn the_loop_builds_the_check_argv_that_the_real_binary_accepts() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: one checked step\nends_at: branch\nsteps:\n\
+         \x20 - id: fix\n    skill: implement-change\n    scope: changed\n    \
+         verify: { must: check_passes }\n",
+    );
+    let run = scratch
+        .harness()
+        .answering(
+            "manifest check --detach",
+            0,
+            r#"{"schema_version":2,"verb":"check","status":"RUNNING","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        )
+        .answering(
+            "manifest check --status",
+            0,
+            r#"{"schema_version":2,"verb":"check","status":"PASS","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        );
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("the parser drops the last field")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+
+    // First pass starts the run; second reads it.
+    assert_eq!(tick(&scratch, &run, &data.name).results[0].did, "waiting");
+    assert_eq!(tick(&scratch, &run, &data.name).results[0].did, "finished");
+
+    assert_eq!(
+        run.argv_containing(&["--detach"]),
+        [
+            "/usr/local/bin/armada",
+            "manifest",
+            "check",
+            "--detach",
+            "--json",
+            "--scope",
+            "changed",
+        ],
+    );
+    assert_eq!(
+        run.argv_containing(&["--status"]),
+        [
+            "/usr/local/bin/armada",
+            "manifest",
+            "check",
+            "--status",
+            // The id the `--detach` payload handed back, positional and here.
+            "01JQRSTUVWXYZ012",
+            "--json",
+        ],
     );
 }
 

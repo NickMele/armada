@@ -51,14 +51,13 @@ pub mod table;
 pub mod term;
 
 use armada_core::envelope::{
-    TickData,
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, FailureData,
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
     GuildItemData, GuildListData, GuildSyncData, Headline, HelmData, InboxData, InitData,
     InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData,
     ReportData, ResultRow, ResumeData, ScanData, ServicesData, ShowData, SkillsData, SpawnData,
-    StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
+    StatusData, TickData, Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, State as FailureState};
@@ -279,7 +278,6 @@ fn stepped(envelope: &Envelope<VerdictData>, style: Style, width: usize) -> Stri
     ));
     out
 }
-
 
 /// `armada fleet tick` — one pass of the workflow loop.
 ///

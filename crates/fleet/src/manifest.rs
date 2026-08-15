@@ -77,13 +77,7 @@ pub fn check_detach(
         args.push("--scope");
         args.push(scope);
     }
-    let envelope = call(
-        run,
-        exe,
-        worktree,
-        &args,
-        "armada manifest check --detach",
-    )?;
+    let envelope = call(run, exe, worktree, &args, "armada manifest check --detach")?;
     envelope
         .get("data")
         .and_then(|data| data.get("run_id"))
