@@ -16,7 +16,8 @@
 //! ├── manifest.db            # NEVER SYNCS — ports, containers, leases, here
 //! ├── jobs/                  # NEVER SYNCS — the Job index
 //! ├── workspaces/            # NEVER SYNCS — the git worktrees themselves
-//! └── machine.yml            # NEVER SYNCS — paths, capacity, what was withheld
+//! ├── machine.yml            # NEVER SYNCS — paths, capacity, what was withheld
+//! └── projection.json        # NEVER SYNCS — what was placed in THIS ~/.claude/
 //! ```
 //!
 //! **The line is not "content syncs, state does not".** The guild *is* state and
@@ -75,10 +76,57 @@ pub fn holds(directory: &str) -> &'static str {
 ///
 /// Read by `armada doctor`, and by the test below that holds it against
 /// [`Guild::root`].
-pub const NEVER_SYNCS: [&str; 4] = ["manifest.db", "jobs", "workspaces", "machine.yml"];
+///
+/// `projection.json` is here because it records what was placed in **this**
+/// machine's `~/.claude/` ([`crate::project::MANIFEST`]). Syncing it would tell
+/// a second machine that files it has never written are Armada's to overwrite,
+/// which is the one mistake projection may not make.
+pub const NEVER_SYNCS: [&str; 5] = [
+    "manifest.db",
+    "jobs",
+    "workspaces",
+    "machine.yml",
+    crate::project::MANIFEST,
+];
 
 /// The directories a guild is made of, under `guild/`.
 pub const GUILD_DIRECTORIES: [&str; 4] = ["hooks", "skills", "subagents", "workflows"];
+
+/// A tree the guild and `~/.claude/` both hold, named at each end.
+///
+/// The two names differ once: Claude Code calls them `agents` and Armada calls
+/// them `subagents`, and [`glossary.md`](../../../docs/glossary.md) is the
+/// single definition of that word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tree {
+    /// What it is called under `~/.claude/`.
+    pub claude: &'static str,
+    /// What it is called under `~/.armada/guild/`.
+    pub guild: &'static str,
+}
+
+/// The three trees that travel between `~/.claude/` and a guild.
+///
+/// **One mapping, read in both directions.** [`crate::import`] reads it
+/// left-to-right to adopt what is already on the machine;
+/// [`crate::project`] reads it right-to-left to put the guild back on Claude
+/// Code's load path. Two copies of this table would be two chances for
+/// projection to write `subagents/` into a directory Claude Code does not read
+/// — which is the whole failure `PHASES.md` §8.4 records.
+pub const TREES: [Tree; 3] = [
+    Tree {
+        claude: "skills",
+        guild: "skills",
+    },
+    Tree {
+        claude: "agents",
+        guild: "subagents",
+    },
+    Tree {
+        claude: "hooks",
+        guild: "hooks",
+    },
+];
 
 /// The starter skill that writes a repository's `armada.yml` with you — the
 /// guild's first real content (PLAN.md §13.4), and what `armada manifest config
@@ -327,6 +375,32 @@ mod tests {
         }
     }
 
+    /// **Every tree the guild carries is a directory the guild is made of.** A
+    /// tree named here but missing from [`GUILD_DIRECTORIES`] would be one
+    /// import filled and `guild pull` never reported, or one projection wrote
+    /// from a directory nothing ever creates.
+    #[test]
+    fn every_tree_that_travels_is_one_of_the_guilds_own_directories() {
+        for tree in TREES {
+            assert!(
+                GUILD_DIRECTORIES.contains(&tree.guild),
+                "`{}` travels and yet is not one of the guild's directories",
+                tree.guild
+            );
+        }
+    }
+
+    /// The one place the two vocabularies differ, asserted so that a rename on
+    /// either side fails here rather than in somebody's session.
+    #[test]
+    fn claude_codes_agents_are_armadas_subagents() {
+        let subagents = TREES
+            .iter()
+            .find(|tree| tree.guild == "subagents")
+            .expect("the guild carries subagents");
+        assert_eq!(subagents.claude, "agents");
+    }
+
     /// `guild/` is the one of the three created directories that travels.
     #[test]
     fn only_the_guild_directory_syncs() {
@@ -335,6 +409,7 @@ mod tests {
         assert_eq!(sync_of("workspaces"), Sync::Never);
         assert_eq!(sync_of("machine.yml"), Sync::Never);
         assert_eq!(sync_of("manifest.db"), Sync::Never);
+        assert_eq!(sync_of(crate::project::MANIFEST), Sync::Never);
     }
 
     /// An empty `guild/` is not a guild. `armada init` makes the directory on

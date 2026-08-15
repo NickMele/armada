@@ -84,6 +84,7 @@ name = "armada-guild"
 version = "0.1.0"
 dependencies = [
  "armada-core",
+ "blake3",
  "serde",
  "serde_json",
  "serde_yaml_ng",

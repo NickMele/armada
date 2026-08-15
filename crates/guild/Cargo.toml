@@ -18,6 +18,11 @@ description = "The Guild module: your voice, skills, hooks, subagents and workfl
 # `cargo xtask boundaries` enforces that; if it fails, the design is wrong.
 [dependencies]
 armada-core = { path = "../core" }
+# The hash a projection manifest records (PLAN.md §13.2). The workspace already
+# pins one hash and this is it, for the reason the pin exists: two versions of
+# one hash is two readings of one file that stop matching across an upgrade —
+# and here that would report every projected file as edited by hand.
+blake3 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }

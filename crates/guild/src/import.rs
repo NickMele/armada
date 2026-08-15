@@ -15,6 +15,12 @@
 //! | `.mcp.json` | `mcp.yml` |
 //! | `CLAUDE.md` | `voice.md` · `expectations.md` · `how-i-work.md` ([`crate::memory`]) |
 //!
+//! The first three rows are [`crate::layout::TREES`], and [`crate::project`]
+//! reads that same table the other way round to put the guild back on Claude
+//! Code's load path. **One table, two directions** — two copies of it would be
+//! two chances for projection to write `subagents/` into a directory Claude
+//! Code does not read.
+//!
 //! # The secret guard runs on the way in, not on the way out
 //!
 //! Every JSON document adopted goes through [`crate::secrets`] **before it is
@@ -65,15 +71,6 @@ impl Imported {
     }
 }
 
-/// The directories copied verbatim, and what they are called at each end.
-const TREES: [(&str, &str); 3] = [
-    ("skills", "skills"),
-    // Claude Code calls them agents; Armada calls them subagents, and the
-    // glossary is the single definition of that word.
-    ("agents", "subagents"),
-    ("hooks", "hooks"),
-];
-
 /// The JSON documents adopted, scrubbed, and re-spelled as YAML where the guild
 /// keeps YAML.
 const DOCUMENTS: [(&str, &str); 3] = [
@@ -103,8 +100,11 @@ pub fn run(from: &Path, guild: &Guild) -> std::io::Result<Imported> {
         return Ok(imported);
     }
 
-    for (source, destination) in TREES {
-        copy_tree(&from.join(source), &guild.path(destination))?;
+    // **The mapping is [`crate::layout::TREES`], read left-to-right.**
+    // Projection reads the same table the other way; two copies of it would be
+    // two chances for the two halves to disagree about what `agents/` is called.
+    for tree in crate::layout::TREES {
+        copy_tree(&from.join(tree.claude), &guild.path(tree.guild))?;
     }
 
     for (source, destination) in DOCUMENTS {
