@@ -621,13 +621,17 @@ pub fn interview_prompt(
         out.push('\n');
     }
 
-    // **The absence is shown too, and it is the same fact.** A fragment import
-    // found nothing for has an empty standing value, and a `now` line that
+    // **The absence is shown too, and it is the same fact.** A `now` line that
     // simply vanished would leave the reader with `esc keeps what import found`
     // over nothing — which is the invisible default this line exists to end.
+    //
+    // `nothing of yours yet` rather than `import found nothing`, because the
+    // file is not empty: import found nothing, so it holds the examples Armada
+    // wrote (`armada_guild::memory`). What it does not hold is a word of yours,
+    // and that is what the question is asking about.
     let standing = match &asked.standing {
         Some(standing) => standing.clone(),
-        None if asked.prose => "nothing — import found none".to_string(),
+        None if asked.prose => "nothing of yours yet".to_string(),
         None => String::new(),
     };
     if !standing.is_empty() {

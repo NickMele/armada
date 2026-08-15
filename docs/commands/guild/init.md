@@ -37,6 +37,14 @@ The importer **refuses to adopt credential-shaped values.** Anything that looks 
 goes to `machine.yml`, which never syncs. A secret that has reached a remote cannot be
 un-pushed, so this is built here rather than retrofitted.
 
+`CLAUDE.md` is carved into `voice.md`, `expectations.md` and `how-i-work.md`. **Each opens with
+what it is for, not with where it came from** — its heading, who reads it and when, and what to
+write in it — and where import found nothing, Armada writes four examples under a heading that
+says they are examples. A file you have to invent from a blank page is a file you close again.
+Every fragment Armada writes carries a marker, and `armada doctor` names it until you replace
+it: `still as imported`, or `still Armada's example text`. See
+[`PLAN.md`](../../PLAN.md) §13.4.
+
 ### 2. Ask five questions, from scratch
 
 | # | Asked | Written to | Default if you press enter |

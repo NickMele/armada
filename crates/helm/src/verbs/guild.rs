@@ -17,7 +17,7 @@ use armada_core::envelope::{
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_guild::interview::{self, Answers, Question, QUESTIONS};
 use armada_guild::layout::Guild;
-use armada_guild::{bundle, import, inventory, machine, remote, repo, starters};
+use armada_guild::{bundle, import, inventory, machine, memory, remote, repo, starters};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -222,25 +222,42 @@ fn standing(question: Question, guild: Option<&Guild>) -> Option<String> {
         5 => None,
         _ => {
             let body = std::fs::read_to_string(guild?.path(question.writes)).ok()?;
-            Some(one_line(&body)).filter(|line| !line.is_empty())
+            // **Armada's own examples are not a standing answer.** A fragment
+            // import found nothing for now holds a template — a purpose line and
+            // four examples marked as replaceable — and showing that as *what
+            // enter keeps* would tell a reader his memory file said something it
+            // never said. `now` reads `nothing of yours yet` instead, which is
+            // the truth and is also what the file says about itself.
+            if memory::state(&body) == Some(memory::Unedited::Example) {
+                return None;
+            }
+            Some(one_line(&body, memory::Fragment::of(question.writes)))
+                .filter(|line| !line.is_empty())
         }
     }
 }
 
-/// A file's content as one line: comments dropped, headings dropped, blanks
-/// dropped, the rest joined with a space.
+/// A file's content as one line: **Armada's words dropped, yours kept**.
 ///
-/// **Import's own note goes, and it spans six lines.** Every fragment opens with
-/// `<!-- Imported from CLAUDE.md … -->` explaining that the split was a guess —
-/// so a filter that dropped lines *beginning* with `<!--` left five lines of it
-/// behind, and all three questions showed the same standing answer: a paragraph
-/// about how the file was written rather than a word of what it says. Measured
-/// against a real `~/.claude/`, which is the only way that shows up.
-fn one_line(body: &str) -> String {
+/// Comments, headings, blanks, and the two lines Armada writes into every
+/// fragment — who reads it, and what to write in it. What is left is the
+/// content, joined with a space.
+///
+/// Every clause of that was earned by showing the wrong thing to a real reader.
+/// A filter that dropped lines *beginning* with `<!--` left five lines of a
+/// six-line comment behind, so all three questions offered the same standing
+/// answer: a paragraph about how the file had been written. And the purpose
+/// lines are prose rather than headings, so nothing structural distinguishes
+/// them — they are matched against what `armada-guild` says it wrote, which is
+/// the only reading that cannot drift from it.
+fn one_line(body: &str, which: Option<memory::Fragment>) -> String {
+    let armadas: Vec<&str> = which
+        .map(|which| vec![which.read_by(), which.asks()])
+        .unwrap_or_default();
     without_comments(body)
         .lines()
         .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter(|line| !line.is_empty() && !line.starts_with('#') && !armadas.contains(line))
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -854,42 +871,50 @@ mod tests {
 
     /// **What the question shows is what the file says, not who wrote it.**
     ///
-    /// Import opens every fragment with a six-line HTML comment explaining that
-    /// the split was a guess. An earlier version of this dropped only lines
-    /// *beginning* with `<!--`, so all three prose questions showed the same
-    /// standing answer — a paragraph about how the file was written. Caught by
-    /// running the verb against a real `~/.claude/`, which is the only place it
-    /// shows.
+    /// Run against what `armada-guild` actually writes rather than a hand-typed
+    /// approximation of it, because every mistake this test exists for was a
+    /// line of Armada's own boilerplate that the filter did not know about — a
+    /// six-line comment matched only on its first line, and then the two purpose
+    /// lines, which are prose and have nothing structural to match on at all.
     #[test]
-    fn the_standing_value_is_the_content_and_not_the_note_import_left() {
-        let imported = "<!-- Imported from CLAUDE.md by `armada guild init`.\n\
-                        \n\
-                        The split between voice.md, expectations.md and how-i-work.md\n\
-                        is a guess. Edit this file directly. -->\n\
-                        \n\
-                        ## Verbosity\n\
-                        \n\
-                        150 words maximum. Lead with the answer.\n";
+    fn the_standing_value_is_the_content_and_not_what_armada_wrote_around_it() {
+        let imported = &armada_guild::memory::split(
+            "## Verbosity\n\n150 words maximum. Lead with the answer.\n",
+        )[0]
+        .1;
         assert_eq!(
-            one_line(imported),
+            one_line(imported, Some(memory::Fragment::Voice)),
             "150 words maximum. Lead with the answer."
         );
     }
 
-    /// A fragment import found nothing for has nothing standing, and the render
-    /// says so rather than showing an empty line.
+    /// **A fragment import found nothing for offers no standing answer**, even
+    /// though the file is not empty: it holds Armada's examples, and offering
+    /// those as *what enter keeps* would tell a reader his memory file said
+    /// something it never said.
     #[test]
-    fn a_fragment_import_found_nothing_for_has_no_standing_value() {
-        let empty = "<!-- Imported from CLAUDE.md. -->\n\n\
-                     <!-- Import found nothing here. -->\n";
-        assert_eq!(one_line(empty), "");
+    fn armadas_own_examples_are_not_offered_as_your_answer() {
+        let home = tempfile::tempdir().unwrap();
+        let guild = Guild::at(home.path());
+        std::fs::create_dir_all(guild.root()).unwrap();
+        for (name, body) in armada_guild::memory::split("") {
+            std::fs::write(guild.path(name), body).unwrap();
+        }
+        for question in QUESTIONS.iter().take(3) {
+            assert_eq!(
+                standing(*question, Some(&guild)),
+                None,
+                "question {} offered Armada's examples as an answer",
+                question.number
+            );
+        }
     }
 
     /// An unterminated comment takes the rest of the file with it, which is what
     /// a markdown viewer does too.
     #[test]
     fn an_unterminated_comment_swallows_what_follows_it() {
-        assert_eq!(one_line("real\n<!-- open\nmore\n"), "real");
+        assert_eq!(one_line("real\n<!-- open\nmore\n", None), "real");
     }
 
     /// `~` comes from the `~/.armada` the entrypoint passed down, never from a

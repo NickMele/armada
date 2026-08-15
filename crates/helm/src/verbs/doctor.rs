@@ -366,16 +366,19 @@ fn fragments(guild: &Guild) -> Vec<Finding> {
     }
     memory::FRAGMENTS
         .iter()
-        .filter(|name| {
-            std::fs::read_to_string(guild.path(name))
-                .map(|body| body.contains("Imported from CLAUDE.md"))
-                .unwrap_or(false)
+        .filter_map(|name| {
+            let body = std::fs::read_to_string(guild.path(name)).ok()?;
+            // **Asked of the file rather than matched here.** `armada-guild`
+            // writes these and owns what "still Armada's words" looks like; a
+            // second reading of it in this file is how the two eventually
+            // disagree about whether somebody has written his own voice.
+            Some((name, memory::state(&body)?))
         })
-        .map(|name| {
+        .map(|(name, state)| {
             Finding::needs(
                 GUILD,
                 Problem::Partial,
-                format!("{name} still as imported"),
+                format!("{name} {}", state.said()),
                 // **A sentence rather than a command, and that is still a fix.**
                 // There is no verb that writes this for you — `armada guild
                 // edit` is not built — so the remedy is the path and what to do
@@ -761,7 +764,7 @@ mod tests {
         let (_home, place) = machine_with_a_guild();
         std::fs::write(
             place.guild().path("voice.md"),
-            "<!-- Imported from CLAUDE.md by `armada guild init`. -->\n",
+            format!("<!-- {} imported -->\n", memory::MARKER),
         )
         .unwrap();
         let data = data(
@@ -845,7 +848,7 @@ mod tests {
         for fragment in memory::FRAGMENTS {
             std::fs::write(
                 place.guild().path(fragment),
-                "<!-- Imported from CLAUDE.md by `armada guild init`. -->\n",
+                format!("<!-- {} imported -->\n", memory::MARKER),
             )
             .unwrap();
         }

@@ -3141,6 +3141,37 @@ you abandon during setup.
 `expectations.md` (what "done" means), `how-i-work.md` (process and tooling). Each is
 separately editable and separately projected, which one file would not be.
 
+#### Every fragment says what it is for. Provenance is not purpose.
+
+A fragment used to open with two comments about where it had come from and nothing about what it
+was for — and after a default run, `expectations.md` was *only* those two comments. The person
+who opened it said he had no idea what it meant, which is a fair reading of a file that says a
+machine wrote it and then stops.
+
+So each fragment now opens the same way whether import found anything or not:
+
+| | |
+|---|---|
+| its own heading | `# Expectations` |
+| **who reads it, and when** | *Every agent reads this before it tells you a Job is done, and a workflow's verify step gates on it.* |
+| what to write | *Write what has to be true before it may say so.* |
+
+What follows differs. Where import found sections, they follow. **Where it found nothing, Armada
+writes examples** — four lines under a heading that says they are examples and not your answer.
+A file you have to invent from a blank page is a file you close again; a file with four plausible
+lines in it is one you edit. The examples are chosen to be harmless if they are never replaced.
+
+**Which is safe only because the file still reports itself as not yours.** Every fragment Armada
+writes carries a machine-readable marker, and `armada doctor` names the file until it is gone —
+`still as imported` for a carved-up `CLAUDE.md`, `still Armada's example text` for a template.
+The marker is a token rather than a sentence, because the previous check matched on the prose
+*"Imported from CLAUDE.md"*, which somebody could reasonably keep after replacing everything
+under it and then be told for ever that the file was not his.
+
+**The interview does not offer Armada's examples as your answer.** Question 1–3's `now` line
+reads `nothing of yours yet` for a templated fragment rather than quoting the examples back —
+showing them would tell a reader his memory file said something it never said.
+
 #### Five questions, and none of them ask you to confirm the import
 
 The interview asks what cannot be read from the machine, **from scratch**:
