@@ -41,6 +41,20 @@ const BUSY_TIMEOUT_MS: u64 = 5_000;
 /// The key the namespace UUID is stored under.
 const NAMESPACE_KEY: &str = "namespace";
 
+/// What [`Db::peek_stats`] found: a row count per table, and how much of the
+/// ownership store is reclaimable.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Stats {
+    /// `(table name, row count)`, in the order `sqlite_master` names them —
+    /// derived, so a table `migrate` adds shows up here without this struct
+    /// changing.
+    pub tables: Vec<(String, usize)>,
+    /// `owned` rows whose workspace's directory is already gone.
+    pub reclaimable_owned: usize,
+    /// `workspaces` rows in the same state.
+    pub reclaimable_workspaces: usize,
+}
+
 /// The machine-global store.
 #[derive(Debug)]
 pub struct Db {
@@ -267,6 +281,104 @@ impl Db {
             |row| row.get(0),
         )
         .ok()
+    }
+
+    /// A row count per table, plus how much of `owned` and `workspaces` is
+    /// reclaimable — read without writing anything, best-effort like
+    /// [`Db::peek_namespace`], and for the same reason: `armada doctor` promises
+    /// never to write to `~/.armada/`, and [`Db::open`] can migrate the schema.
+    ///
+    /// **Presence is not health.** A store that exists and holds four thousand
+    /// dead rows is a different answer from one that merely exists, and this is
+    /// what lets `doctor` tell the two apart (`docs/reserved/009-smaller-things-raised-in-use.md`
+    /// item 1).
+    ///
+    /// **The table list comes from `sqlite_master`, never from a name written
+    /// here.** A table added to [`Db::migrate`] and never added to a hand-kept
+    /// list is the exact defect item 5 of the same document fixed for
+    /// `armada --help`: a report that stopped tracking what it describes.
+    ///
+    /// **"Reclaimable" is [`armada_core::reap::registry_pass`]'s rule and no
+    /// other** — a `workspaces` row whose path is `PathStat::Missing`, and an
+    /// `owned` row pointing at one. Doctor asking a second question about
+    /// staleness is how a doctor row and a `clean --orphaned` disagree about
+    /// what is dead.
+    pub fn peek_stats(path: &Path) -> Option<Stats> {
+        let conn =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+
+        let names: Vec<String> = conn
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name",
+            )
+            .ok()?
+            .query_map([], |row| row.get(0))
+            .ok()?
+            .collect::<Result<_, _>>()
+            .ok()?;
+
+        let tables: Vec<(String, usize)> = names
+            .into_iter()
+            .map(|name| {
+                let count: i64 = conn
+                    .query_row(&format!("SELECT COUNT(*) FROM \"{name}\""), [], |row| {
+                        row.get(0)
+                    })
+                    .unwrap_or(0);
+                (name, count as usize)
+            })
+            .collect();
+
+        let workspaces: Vec<(String, PathBuf)> = conn
+            .prepare("SELECT id, path FROM workspaces")
+            .ok()?
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    PathBuf::from(row.get::<_, String>(1)?),
+                ))
+            })
+            .ok()?
+            .collect::<Result<_, _>>()
+            .ok()?;
+
+        let rows: Vec<(
+            armada_core::registry::WorkspaceRow,
+            armada_core::reap::PathStat,
+        )> = workspaces
+            .into_iter()
+            .map(|(id, path)| {
+                let stat = crate::fs::stat(&path);
+                (
+                    armada_core::registry::WorkspaceRow {
+                        id: armada_core::id::WorkspaceId::from_stored(id),
+                        path,
+                        project: None,
+                        ports: None,
+                        claimed_at: String::new(),
+                    },
+                    stat,
+                )
+            })
+            .collect();
+        let dead: std::collections::BTreeSet<String> = armada_core::reap::registry_pass(&rows)
+            .into_iter()
+            .map(|id| id.as_str().to_string())
+            .collect();
+
+        let owners: Vec<String> = conn
+            .prepare("SELECT workspace FROM owned")
+            .ok()?
+            .query_map([], |row| row.get(0))
+            .ok()?
+            .collect::<Result<_, _>>()
+            .ok()?;
+
+        Some(Stats {
+            tables,
+            reclaimable_workspaces: dead.len(),
+            reclaimable_owned: owners.iter().filter(|w| dead.contains(*w)).count(),
+        })
     }
 
     /// Carry a namespace recovered from a replaced database into this one.
@@ -1254,6 +1366,97 @@ mod tests {
             panic!()
         };
         assert_eq!(first, second);
+    }
+
+    /// **The table list is read off the schema, not hand-typed here.** A fresh
+    /// database has every table `migrate` creates, each at zero rows — proof
+    /// that a table added there needs no matching edit to `peek_stats`.
+    #[test]
+    fn peek_stats_names_every_table_the_schema_has() {
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("manifest.db");
+        Db::open(home.path()).unwrap();
+
+        let stats = Db::peek_stats(&path).expect("a fresh database is readable");
+        let names: Vec<&str> = stats.tables.iter().map(|(n, _)| n.as_str()).collect();
+        for expected in ["meta", "workspaces", "owned", "leases"] {
+            assert!(names.contains(&expected), "{names:?} is missing {expected}");
+        }
+        // `meta` carries the namespace written at creation; every other table
+        // is empty on a fresh store.
+        for (name, n) in &stats.tables {
+            let expected = if name == "meta" { 1 } else { 0 };
+            assert_eq!(*n, expected, "{name} has {n} rows: {:?}", stats.tables);
+        }
+        assert_eq!(stats.reclaimable_workspaces, 0);
+        assert_eq!(stats.reclaimable_owned, 0);
+    }
+
+    /// **A workspace whose directory is gone is reclaimable, and so is
+    /// everything it owns.** This is [`armada_core::reap::registry_pass`]'s own
+    /// rule, exercised through `peek_stats` rather than restated: presence is
+    /// not health, and this is what lets a reader tell "two workspaces, both
+    /// live" from "two workspaces, and neither is".
+    #[test]
+    fn peek_stats_counts_what_a_missing_workspace_directory_makes_reclaimable() {
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("manifest.db");
+        let mut db = Db::open(home.path()).unwrap();
+
+        let gone = home.path().join("gone");
+        db.claim_block(
+            &ws("aaaaaaaa"),
+            &gone,
+            None,
+            None,
+            armada_core::ports::PORT_BASE,
+            "t",
+        )
+        .unwrap();
+        db.record_owned(&OwnedRow {
+            workspace: ws("aaaaaaaa"),
+            kind: OwnedKind::Container,
+            reference: "c1".to_string(),
+            boot_id: None,
+            pid_started_at: None,
+            component: None,
+        })
+        .unwrap();
+
+        let live = home.path().join("live");
+        std::fs::create_dir_all(&live).unwrap();
+        db.claim_block(
+            &ws("bbbbbbbb"),
+            &live,
+            None,
+            None,
+            armada_core::ports::PORT_BASE,
+            "t",
+        )
+        .unwrap();
+
+        let stats = Db::peek_stats(&path).unwrap();
+        assert_eq!(stats.reclaimable_workspaces, 1, "{stats:?}");
+        assert_eq!(stats.reclaimable_owned, 1, "{stats:?}");
+        let workspaces = stats
+            .tables
+            .iter()
+            .find(|(n, _)| n == "workspaces")
+            .unwrap()
+            .1;
+        assert_eq!(workspaces, 2);
+    }
+
+    /// A database that cannot be opened at all — the recovery path
+    /// [`Db::peek_namespace`] already tolerates — answers `None` rather than
+    /// panicking; `store` in `doctor.rs` falls back to `present, could not be
+    /// read` on this.
+    #[test]
+    fn peek_stats_on_an_unreadable_file_answers_none() {
+        let home = tempfile::tempdir().unwrap();
+        let junk = home.path().join("manifest.db");
+        std::fs::write(&junk, b"this is not a database").unwrap();
+        assert_eq!(Db::peek_stats(&junk), None);
     }
 
     #[test]
