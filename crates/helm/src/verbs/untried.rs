@@ -125,6 +125,7 @@ fn wander<C: Clock>(
             &format!("try `armada {verb}` and report anything wrong with it"),
             &["task".to_string()],
             &place.cwd.clone(),
+            None,
         )?;
         crate::verbs::guild::report(ask, look, &output);
     }

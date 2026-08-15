@@ -108,7 +108,8 @@ pub use crate::verbs::guild::Look;
 /// reader a click and tells them nothing, and a person who typed the verb has
 /// the sentence in their head already.
 ///
-/// **The one thing it looks up is where it is** — [`project`], one `git` call.
+/// **The one thing it looks up is where it is** — [`project`], one `git` call,
+/// and [`workspace`], one config walk.
 pub fn capture<R: Run, C: Clock>(
     runner: &R,
     now: &C,
@@ -116,7 +117,14 @@ pub fn capture<R: Run, C: Clock>(
     what: &str,
     argv: &[String],
 ) -> Result<Output, ArmadaError> {
-    capture_text(now, place, what, argv, &project(runner, &place.cwd))
+    capture_text(
+        now,
+        place,
+        what,
+        argv,
+        &project(runner, &place.cwd),
+        workspace(runner, &place.cwd).as_deref(),
+    )
 }
 
 /// Capture, with the repository already decided.
@@ -124,13 +132,16 @@ pub fn capture<R: Run, C: Clock>(
 /// **Split from [`capture`] so that a caller who is not standing anywhere can
 /// still write a task.** `armada untried` is the one: *"try `armada guild
 /// edit`"* is not about the directory it was written in, and paying a `git`
-/// call to record one would be a subprocess for a fact nobody will read.
+/// call to record one would be a subprocess for a fact nobody will read. That
+/// caller has no [`Run`] to spend on [`workspace`] either, so it passes
+/// `None` — the same answer a real directory with no `armada.yml` gets.
 pub fn capture_text<C: Clock>(
     now: &C,
     place: &Where,
     what: &str,
     argv: &[String],
     project: &std::path::Path,
+    workspace: Option<&std::path::Path>,
 ) -> Result<Output, ArmadaError> {
     let what = what.trim();
     if what.is_empty() {
@@ -141,6 +152,7 @@ pub fn capture_text<C: Clock>(
         what,
         &place.home,
         project,
+        workspace,
         argv,
         &now.wall_rfc3339(),
         now.wall_ms(),
@@ -207,6 +219,32 @@ fn project(runner: &impl Run, cwd: &std::path::Path) -> std::path::PathBuf {
         .filter(|root| root.is_dir())
         .or_else(|| armada_manifest::git::root(runner, cwd))
         .unwrap_or_else(|| cwd.to_path_buf())
+}
+
+/// **The Manifest workspace `cwd` is inside, if any** — a finer unit than
+/// [`project`]'s repository. A monorepo is one git repository and may declare
+/// several workspaces (`workspaces: […]` in the root `armada.yml`), each its
+/// own `armada.yml`; a task written in `storefront/web` and one written in
+/// `storefront/backend` share [`project`]'s answer and are told apart only by
+/// this one.
+///
+/// **Reused rather than reimplemented.** `armada_manifest::discovery::resolve`
+/// is the same walk `armada manifest status` resolves cwd against — no second
+/// resolver, per the constraint that keeps the two from ever disagreeing about
+/// what a workspace is.
+///
+/// **`None` is the honest answer for a directory with no `armada.yml`.** A
+/// candidate that merely resolves its own dependencies is not a workspace
+/// until something claims it with a config file — the same line the scanner
+/// draws — so a missing config leaves this empty rather than guessing at the
+/// nearest one that does not own `cwd`. Every failure of the walk (no git, no
+/// config up to the root) is exactly the case `discovery::resolve` already
+/// treats as "no workspace here", and none of them fails capture: writing a
+/// task down cannot cost more than [`project`] already does.
+fn workspace(runner: &impl Run, cwd: &std::path::Path) -> Option<std::path::PathBuf> {
+    armada_manifest::discovery::resolve(runner, cwd)
+        .ok()
+        .map(|found| found.root)
 }
 
 /// `armada tasks` — the list, and at a terminal a way through it.

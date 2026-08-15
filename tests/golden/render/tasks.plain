@@ -1,0 +1,6 @@
+  STATUS  ID        WORKSPACE                  DETAIL                       TIME
+  OPEN    a1b2c3d4  ~/code/storefront/web      written, wire the new port…    9m
+  OPEN    5e6f7081  ~/code/storefront/backend  written, rename the retry …   26m
+  OPEN    ff001122                             written, look into the fla…    3h
+
+OK  3 tasks, 3 open, armada tasks show <id>

@@ -388,6 +388,17 @@ pub enum Line {
         /// the Job from the repository rather than from wherever the thought
         /// happened to arrive.
         cwd: String,
+        /// **The Manifest workspace the task was written in, tilde'd — a finer
+        /// unit than `cwd` above's repository.** A monorepo is one git
+        /// repository and may hold several workspaces, each its own
+        /// `armada.yml`; `cwd` answers *which checkout*, and this answers
+        /// *which of its `armada.yml`s*. `None` when capture found none — a
+        /// directory with no `armada.yml` is not a workspace, so this is left
+        /// unguessed rather than filled with the nearest config that does not
+        /// own it. Reuses `armada_manifest::discovery::resolve`, the same
+        /// resolver `armada manifest status` walks — no second one.
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        workspace: Option<String>,
     },
     /// A Job was spawned to fix this entry.
     Promoted {
@@ -445,6 +456,14 @@ pub struct Entry {
     pub argv: String,
     /// Where it was typed, most recently.
     pub cwd: String,
+    /// **The Manifest workspace this row was written in, tilde'd — set only on
+    /// a written task, and only when capture found one.** See
+    /// [`Line::Written`]'s field of the same name. `None` for every other
+    /// origin, and for a task written outside any `armada.yml`: a candidate
+    /// directory is not a workspace, so the column is left empty rather than
+    /// guessed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
     /// How many times this failure has happened since it was last cleared.
     pub count: usize,
     /// The first of those, RFC 3339.
@@ -680,10 +699,12 @@ pub fn reported(
 /// are two rows. A failure's fingerprint collapses repeats because Armada wrote
 /// them without being asked; a person who typed the same task twice made two
 /// decisions, and merging them would silently discard one.
+#[allow(clippy::too_many_arguments)]
 pub fn written(
     what: &str,
     home: &Path,
     cwd: &Path,
+    workspace: Option<&Path>,
     argv: &[String],
     at: &str,
     at_ms: u64,
@@ -704,6 +725,7 @@ pub fn written(
             what,
             argv: clean(&argv_line(argv)),
             cwd: clean(&cwd.display().to_string()),
+            workspace: workspace.map(|dir| clean(&dir.display().to_string())),
         },
     )
 }
@@ -841,6 +863,7 @@ pub fn fold(text: &str) -> Vec<Entry> {
                     next,
                     argv,
                     cwd,
+                    workspace: None,
                     count: 1,
                     first_at: at.clone(),
                     last_at: at,
@@ -872,6 +895,7 @@ pub fn fold(text: &str) -> Vec<Entry> {
                 next: None,
                 argv,
                 cwd,
+                workspace: None,
                 count: 1,
                 first_at: at.clone(),
                 last_at: at,
@@ -890,6 +914,7 @@ pub fn fold(text: &str) -> Vec<Entry> {
                 what,
                 argv,
                 cwd,
+                workspace,
             } => entries.push(Entry {
                 id,
                 state: State::Open,
@@ -900,6 +925,7 @@ pub fn fold(text: &str) -> Vec<Entry> {
                 next: None,
                 argv,
                 cwd,
+                workspace,
                 count: 1,
                 first_at: at.clone(),
                 last_at: at,
@@ -1361,6 +1387,7 @@ mod tests {
             what,
             Path::new("/scratch/home"),
             Path::new("/scratch/home/code/api"),
+            None,
             &["task".to_string(), what.to_string()],
             "2026-08-15T09:00:00Z",
             at_ms,
@@ -1396,6 +1423,39 @@ mod tests {
         // nothing, so capture cost nothing.
         assert_eq!(entry.diagnostics, None);
         assert_eq!(entry.cwd, "~/code/api");
+        // **No workspace, and that is correct rather than a gap.** Capture
+        // found no `armada.yml`, so nothing is guessed
+        // (`docs/reserved/002-tasks.md`'s "the file is the proof").
+        assert_eq!(entry.workspace, None);
+    }
+
+    /// **A task captured inside a Manifest workspace carries it, tilde'd, and
+    /// separately from `cwd`.** `cwd` is the repository (PLAN.md §2.2's
+    /// project); `workspace` is the finer unit a monorepo may hold several of
+    /// — `storefront/web` and `storefront/backend` both write `cwd: ~/code/storefront`
+    /// and are told apart only by this field.
+    #[test]
+    fn a_task_written_inside_a_workspace_carries_it_tildeed_and_apart_from_cwd() {
+        let (_, line) = written(
+            "wire the new port allocator",
+            Path::new("/scratch/home"),
+            Path::new("/scratch/home/code/storefront"),
+            Some(Path::new("/scratch/home/code/storefront/web")),
+            &["task".to_string()],
+            "2026-08-15T09:00:00Z",
+            1_000,
+            &|text| text.to_string(),
+        );
+        let Line::Written { cwd, workspace, .. } = &line else {
+            panic!("expected a written line");
+        };
+        assert_eq!(cwd, "~/code/storefront");
+        assert_eq!(workspace.as_deref(), Some("~/code/storefront/web"));
+
+        let mut text = serde_json::to_string(&line).unwrap();
+        text.push('\n');
+        let entry = &fold(&text)[0];
+        assert_eq!(entry.workspace.as_deref(), Some("~/code/storefront/web"));
     }
 
     /// **A task is not a fault**, and that one bit is what keeps `armada
@@ -1475,6 +1535,7 @@ mod tests {
             "fix the ghp_deadbeefdeadbeef push",
             Path::new("/scratch/home"),
             Path::new("/scratch/home/code/api"),
+            None,
             &["task".to_string()],
             "2026-08-15T09:00:00Z",
             1_000,

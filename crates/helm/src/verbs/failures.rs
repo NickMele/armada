@@ -595,6 +595,7 @@ mod tests {
             next: None,
             argv: "armada bridge".to_string(),
             cwd: "~/code/api".to_string(),
+            workspace: None,
             count: 1,
             first_at: "2026-08-14T09:00:00Z".to_string(),
             last_at: "2026-08-14T09:00:00Z".to_string(),

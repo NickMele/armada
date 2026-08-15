@@ -2273,6 +2273,7 @@ fn recorded(
         next: Some("reinstall armada, then retry unchanged".to_string()),
         argv: "armada bridge".to_string(),
         cwd: "~/code/orders".to_string(),
+        workspace: None,
         count,
         first_at: "2026-08-09T13:02:11Z".to_string(),
         last_at: "2026-08-09T14:58:11Z".to_string(),
@@ -2313,6 +2314,7 @@ fn filed(id: &str, what: &str, age_s: u64) -> armada_core::failure::Entry {
         next: None,
         argv: format!("armada report '{what}'"),
         cwd: "~/code/orders".to_string(),
+        workspace: None,
         count: 1,
         first_at: "2026-08-09T14:58:11Z".to_string(),
         last_at: "2026-08-09T14:58:11Z".to_string(),
@@ -2496,6 +2498,75 @@ fn failures_with_a_filed_report_matches_its_fixture() {
         },
     )));
     assert_render("failures-reported", &output);
+}
+
+/// A **written task**, authored the same way as [`recorded`] and [`filed`].
+///
+/// `workspace` is the field this fixture exists for: `None` is what a task
+/// written outside any `armada.yml` carries, and `Some` is a monorepo's finer
+/// unit than `cwd`'s repository — `cwd` is `~/code/storefront` for both of a
+/// monorepo's tasks, and only this field tells `storefront/web` from
+/// `storefront/backend`.
+fn written(
+    id: &str,
+    what: &str,
+    workspace: Option<&str>,
+    age_s: u64,
+) -> armada_core::failure::Entry {
+    armada_core::failure::Entry {
+        id: id.to_string(),
+        state: armada_core::failure::State::Open,
+        origin: armada_core::failure::Origin::Written,
+        class: None,
+        r#where: String::new(),
+        message: what.to_string(),
+        next: None,
+        argv: format!("armada task '{what}'"),
+        cwd: "~/code/storefront".to_string(),
+        workspace: workspace.map(str::to_string),
+        count: 1,
+        first_at: "2026-08-09T14:58:11Z".to_string(),
+        last_at: "2026-08-09T14:58:11Z".to_string(),
+        last_ms: 1_754_748_000_000,
+        age_s,
+        job: None,
+        diagnostics: None,
+    }
+}
+
+/// `armada tasks` — the `WORKSPACE` column, present because at least one row
+/// filled it, and blank rather than `-` on the row that did not.
+///
+/// **The scenario is `docs/reserved/002-tasks.md`'s own**: a monorepo, two
+/// tasks written in two of its workspaces, told apart though both share one
+/// repository. The third row is a task written where capture found no
+/// `armada.yml` at all — the case the column must not guess at.
+#[test]
+fn tasks_matches_its_fixture() {
+    let output = Output::Failures(Box::new(Envelope::ok(
+        "tasks",
+        None,
+        Status::Ok,
+        FailuresData {
+            open: 3,
+            results: vec![
+                written(
+                    "a1b2c3d4",
+                    "wire the new port allocator",
+                    Some("~/code/storefront/web"),
+                    9 * 60,
+                ),
+                written(
+                    "5e6f7081",
+                    "rename the retry helper",
+                    Some("~/code/storefront/backend"),
+                    26 * 60,
+                ),
+                written("ff001122", "look into the flaky golden", None, 3 * 60 * 60),
+            ],
+        },
+    )));
+    assert_render("tasks", &output);
 }
 
 /// `armada fleet spawn`, against the layout `render_pending.rs` held for M3.

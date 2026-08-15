@@ -108,6 +108,28 @@ parent, which is `PLAN.md` §2.2's project: every worktree of a repository write
 the same value, so a task written by a Drone under `.claude/worktrees/` names the
 checkout a Job can still branch from a week later.
 
+### The workspace column, added after the fact
+
+**A repository and a workspace are not the same identity, and `cwd` above only
+ever answers the first.** A monorepo is one git repository and may declare
+several workspaces (`workspaces: […]` in the root `armada.yml`), each its own
+`armada.yml` — so a task written in one workspace and a task written in a
+sibling both record the same `cwd` and the listing could not tell them apart.
+
+`Entry` and `Line::Written` each gained a second, optional field —
+`workspace` — carrying whichever `armada.yml` capture found on the way up
+from `cwd`, tilde'd. **Reused rather than reimplemented**: it is the same
+walk `armada manifest status` resolves against
+(`armada_manifest::discovery::resolve`), so the two can never disagree about
+what a workspace is. `armada tasks` draws it as a `WORKSPACE` column, dropped
+entirely when no row in the listing has one (`render/table.rs`'s "empty in
+every row" rule, unaffected by this feature) and left blank rather than
+guessed on a row whose task was written outside any `armada.yml` — a
+candidate directory that only resolves its own dependencies is not a
+workspace until a config file claims it. Scope is unchanged: this is a
+column, not a second axis to filter on, and every existing record without the
+field keeps reading as `workspace: null`.
+
 ## The three questions this left open, answered
 
 **Does a task belong to a repository or to the machine? To the machine, with the
