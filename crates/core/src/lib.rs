@@ -17,6 +17,7 @@
 
 pub mod compose;
 pub mod config;
+pub mod coverage;
 pub mod ctx;
 pub mod dispatch;
 pub mod envelope;

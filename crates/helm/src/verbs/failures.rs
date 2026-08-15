@@ -33,6 +33,70 @@ use crate::verbs::Output;
 pub use crate::verbs::fleet::Where;
 pub use crate::verbs::guild::Look;
 
+/// **Which half of one store a verb is looking at.**
+///
+/// `armada failures` and `armada tasks` read the same file, resolve ids out of
+/// the same space, promote through the same `fleet spawn` and discard through
+/// the same appended line. What they do not share is the question they ask —
+/// *what is broken* against *what did I say I would do* — and
+/// `docs/reserved/002-tasks.md` left that open deliberately, because *"a single
+/// flat list of everything may be unreadable"*.
+///
+/// **So the answer is one store, one id space, two lenses.** A flat list would
+/// mix a `bad_config` from Tuesday with *"rename the port allocator"* and make
+/// both harder to find; two stores would mean two `show`s, two `fix`es and two
+/// ids, which is the thing `docs/reserved/001-raised-items-need-identity.md`
+/// exists to forbid. The split is [`Origin::is_fault`], one function, so a
+/// fourth origin cannot arrive without deciding which listing it belongs in.
+///
+/// **`show` takes either.** An id is an id: `armada failures show <a task>`
+/// answers rather than refusing, because a reader who has the id in hand has
+/// already told you which row they mean.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lens {
+    /// `armada failures` — what went wrong, observed or reported.
+    Failures,
+    /// `armada tasks` — what you wrote down.
+    Tasks,
+}
+
+impl Lens {
+    /// Whether this entry is one of the rows this listing is about.
+    const fn shows(self, entry: &Entry) -> bool {
+        entry.origin.is_fault() == matches!(self, Lens::Failures)
+    }
+
+    /// The verb the envelope names, and the prefix every sub-verb's name takes.
+    const fn verb(self) -> &'static str {
+        match self {
+            Lens::Failures => "failures",
+            Lens::Tasks => "tasks",
+        }
+    }
+
+    /// What the listing asks when a person is navigating it.
+    const fn question(self) -> &'static str {
+        match self {
+            Lens::Failures => "What has Armada broken on?",
+            Lens::Tasks => "What did you write down?",
+        }
+    }
+
+    /// What promoting a row is called here.
+    ///
+    /// **`fix` and `start` are not synonyms** and the vocabulary rule
+    /// (`docs/glossary.md`) is why they are both here rather than one word
+    /// doing both: you fix something that is broken and you start something
+    /// that was never begun, and a task offered `fix` would read as though
+    /// Armada thought the thought was wrong.
+    const fn promote(self) -> (&'static str, &'static str) {
+        match self {
+            Lens::Failures => ("fix", "spawn a Job on it"),
+            Lens::Tasks => ("start", "spawn a Job to do it"),
+        }
+    }
+}
+
 /// `armada failures` — the log, folded, **and at a terminal a way through it**.
 ///
 /// **Cleared entries are hidden unless asked for**, which is the same lens
@@ -60,11 +124,12 @@ pub fn ls<R: Run, C: Clock>(
     interactive: bool,
     look: Look,
     progress: &mut dyn Progress,
+    lens: Lens,
 ) -> Result<Output, ArmadaError> {
     if interactive {
-        wander(run, now, place, all, ask, look, progress)?;
+        wander(run, now, place, all, ask, look, progress, lens)?;
     }
-    Ok(listing("failures", shown(read(now, place)?, all)))
+    Ok(listing(lens.verb(), shown(read(now, place)?, all, lens)))
 }
 
 /// What the last option says, and what it says about itself.
@@ -93,10 +158,14 @@ fn row_furniture(total_options: usize) -> usize {
 }
 
 /// The entries this lens shows.
-fn shown(entries: Vec<Entry>, all: bool) -> Vec<Entry> {
+///
+/// **Two filters, and they are different questions.** [`Lens`] decides which
+/// half of the store this listing is about and never changes; `all` decides
+/// whether a row you already dealt with is still worth drawing.
+fn shown(entries: Vec<Entry>, all: bool, lens: Lens) -> Vec<Entry> {
     entries
         .into_iter()
-        .filter(|entry| all || entry.state != State::Cleared)
+        .filter(|entry| lens.shows(entry) && (all || entry.state != State::Cleared))
         .collect()
 }
 
@@ -117,6 +186,7 @@ fn shown(entries: Vec<Entry>, all: bool) -> Vec<Entry> {
 /// **It reads the log again on every turn.** A Job put on an entry changes what
 /// that row says about itself, and a session holding the listing it opened with
 /// would offer `fix` on something already being fixed.
+#[allow(clippy::too_many_arguments)]
 fn wander<R: Run, C: Clock>(
     run: &R,
     now: &C,
@@ -125,9 +195,10 @@ fn wander<R: Run, C: Clock>(
     ask: &mut dyn Ask,
     look: Look,
     progress: &mut dyn Progress,
+    lens: Lens,
 ) -> Result<(), ArmadaError> {
     loop {
-        let entries = shown(read(now, place)?, all);
+        let entries = shown(read(now, place)?, all, lens);
         if entries.is_empty() {
             return Ok(());
         }
@@ -136,12 +207,12 @@ fn wander<R: Run, C: Clock>(
         // stream that ended both leave rather than acting on the way out.
         options.push(Choice::new(DONE.0, DONE.1));
         let done = options.len();
-        let picked = ask.choose("What has Armada broken on?", &options, done);
+        let picked = ask.choose(lens.question(), &options, done);
         if picked >= done || picked == 0 {
             return Ok(());
         }
         let entry = entries[picked - 1].clone();
-        act(run, now, place, ask, look, progress, &entry)?;
+        act(run, now, place, ask, look, progress, &entry, lens)?;
     }
 }
 
@@ -210,6 +281,7 @@ fn rows(entries: &[Entry], look: Look) -> Vec<Choice> {
 /// to every machine; this appends a line to an append-only log, keeps the id
 /// and the entry, and reopens on the next recurrence. There is nothing to
 /// confirm because there is nothing to lose.
+#[allow(clippy::too_many_arguments)]
 fn act<R: Run, C: Clock>(
     run: &R,
     now: &C,
@@ -218,11 +290,25 @@ fn act<R: Run, C: Clock>(
     look: Look,
     progress: &mut dyn Progress,
     entry: &Entry,
+    lens: Lens,
 ) -> Result<(), ArmadaError> {
+    let (promote, promote_aside) = lens.promote();
     let options = vec![
-        Choice::new("show", "the failure, whole"),
-        Choice::new("fix", "spawn a Job on it"),
-        Choice::new("discard", "clear it; a recurrence brings it back"),
+        Choice::new(
+            "show",
+            match lens {
+                Lens::Failures => "the failure, whole",
+                Lens::Tasks => "the task, whole",
+            },
+        ),
+        Choice::new(promote, promote_aside),
+        Choice::new(
+            "discard",
+            match lens {
+                Lens::Failures => "clear it; a recurrence brings it back",
+                Lens::Tasks => "clear it; it is done, or it is not happening",
+            },
+        ),
         Choice::new("back", "leave it alone"),
     ];
     let back = options.len();
@@ -243,8 +329,20 @@ fn act<R: Run, C: Clock>(
         // **The id goes through from the selection**, which is the feature.
         // `dry_run` is false because a person who picked *fix* off a list asked
         // for the Job, and `--dry-run` is how a caller asks for the rehearsal.
-        "fix" => fix(run, now, place, &entry.id, false, Some(&mut *ask), progress)?,
-        "discard" => clear(now, place, Some(&entry.id), false)?,
+        // No workflow is named: a failure's is decided by its origin and a
+        // task's is the one thing about it nobody has decided yet, so the
+        // person who is already sitting here is the one to ask.
+        picked if picked == promote => fix(
+            run,
+            now,
+            place,
+            &entry.id,
+            false,
+            None,
+            Some(&mut *ask),
+            progress,
+        )?,
+        "discard" => clear(now, place, Some(&entry.id), false, lens)?,
         _ => return Ok(()),
     };
     crate::verbs::guild::report(ask, look, &output);
@@ -272,24 +370,32 @@ pub fn show<C: Clock>(now: &C, place: &Where, id: &str) -> Result<Output, Armada
 /// mean reading the whole file, dropping some rows and writing it back — three
 /// chances to lose every other entry, in the file whose one property is that it
 /// survives a crash.
+/// **`--all` clears this listing and never the other one.** The store is
+/// shared, so a `tasks clear --all` that swept the failure log too would
+/// discard rows the person never had on screen — the one mistake an
+/// append-only log cannot make quiet.
 pub fn clear<C: Clock>(
     now: &C,
     place: &Where,
     id: Option<&str>,
     all: bool,
+    lens: Lens,
 ) -> Result<Output, ArmadaError> {
     let entries = read(now, place)?;
     let cleared: Vec<Entry> = match id {
+        // **By id, across both lenses.** A person holding an id has already
+        // said which row they mean, and refusing it because they typed the
+        // other verb would be Armada knowing better than the id it printed.
         Some(id) => vec![resolve(&entries, id)?],
         None => entries
             .into_iter()
-            .filter(|entry| entry.state != State::Cleared)
+            .filter(|entry| lens.shows(entry) && entry.state != State::Cleared)
             .collect(),
     };
     // Said rather than reported as an empty success: "there was nothing to
     // clear" and "the flag did nothing" read identically otherwise.
     if all && cleared.is_empty() {
-        return Ok(listing("failures clear", Vec::new()));
+        return Ok(listing(&format!("{} clear", lens.verb()), Vec::new()));
     }
 
     let path = armada_manifest::failures::path(&place.armada_home);
@@ -306,7 +412,7 @@ pub fn clear<C: Clock>(
         }
     }
     Ok(listing(
-        "failures clear",
+        &format!("{} clear", lens.verb()),
         cleared
             .into_iter()
             .map(|mut entry| {
@@ -327,12 +433,28 @@ pub fn clear<C: Clock>(
 /// **The link is written after the spawn returns and never before.** A promotion
 /// line for a Job that failed to start would put `FIXING` on a row nobody is
 /// fixing, which is the one state worse than `OPEN`.
+///
+/// # `armada tasks start` is this function, and the workflow is the difference
+///
+/// A failure and a report are both defects, so `bug` is the answer before the
+/// question is asked and naming it costs nothing. **A task's workflow is the
+/// one thing about it nobody has decided** — *"look into the flaky golden"* is
+/// a `design`, *"rename the port allocator"* is a `feature` — so an unnamed
+/// workflow falls through to the classification `armada fleet spawn` already
+/// does, including its confirm-a-guess prompt (PLAN.md §14.2). `--workflow`
+/// skips that, which is what a pipe and a test both pass.
+///
+/// **Capture is still free.** The model call, if there is one, happens when a
+/// person starts the Job and not when they wrote the sentence down — which is
+/// `docs/reserved/002-tasks.md`'s whole distinction between the two.
+#[allow(clippy::too_many_arguments)]
 pub fn fix<R: Run, C: Clock>(
     run: &R,
     now: &C,
     place: &Where,
     id: &str,
     dry_run: bool,
+    workflow: Option<&str>,
     ask: Option<&mut dyn Ask>,
     progress: &mut dyn Progress,
 ) -> Result<Output, ArmadaError> {
@@ -340,9 +462,12 @@ pub fn fix<R: Run, C: Clock>(
     let spawn = crate::args::Spawn {
         json: false,
         task: failure::task(&entry),
-        // **Named, not classified.** No model call, so this path spends nothing
-        // and a test can take it.
-        workflow: Some("bug".to_string()),
+        // **Named, not classified, whenever the origin already answers it.** A
+        // defect is a `bug`, so that path spends nothing and a test can take
+        // it.
+        workflow: workflow
+            .map(str::to_string)
+            .or_else(|| entry.origin.is_fault().then(|| "bug".to_string())),
         name: None,
         budget: Vec::new(),
         at: Some(place.expand(&entry.cwd).display().to_string()),
@@ -545,6 +670,38 @@ mod tests {
         for row in &rows {
             assert!(!row.label.contains('✔') && !row.label.contains('✗'));
         }
+    }
+
+    /// **Each lens shows its own half and nothing of the other**, asserted in
+    /// both directions: a filter tested only from the side it keeps is a filter
+    /// that passes when it does nothing.
+    #[test]
+    fn each_lens_shows_one_half_of_the_store() {
+        let mut task = entry("11112222");
+        task.origin = armada_core::failure::Origin::Written;
+        task.class = None;
+        let mut reported = entry("33334444");
+        reported.origin = armada_core::failure::Origin::Reported;
+        reported.class = None;
+        let all = vec![entry("a1b2c3d4"), reported, task];
+
+        let failures = shown(all.clone(), false, Lens::Failures);
+        let tasks = shown(all, false, Lens::Tasks);
+        assert_eq!(failures.len(), 2, "{failures:?}");
+        assert_eq!(tasks.len(), 1, "{tasks:?}");
+        assert_eq!(tasks[0].id, "11112222");
+        assert!(failures.iter().all(|entry| entry.origin.is_fault()));
+    }
+
+    /// **`start` and `fix` are not synonyms**, and the listing says the right
+    /// one — a task offered `fix` reads as Armada calling the thought a defect.
+    #[test]
+    fn the_two_lenses_name_promotion_differently_and_ask_different_questions() {
+        assert_eq!(Lens::Failures.promote().0, "fix");
+        assert_eq!(Lens::Tasks.promote().0, "start");
+        assert_eq!(Lens::Failures.verb(), "failures");
+        assert_eq!(Lens::Tasks.verb(), "tasks");
+        assert_ne!(Lens::Failures.question(), Lens::Tasks.question());
     }
 
     #[test]

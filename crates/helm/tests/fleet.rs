@@ -2703,6 +2703,7 @@ fn promoting_a_failure_spawns_a_bug_job_and_records_the_link() {
         &id[..4],
         false,
         None,
+        None,
         &mut armada_helm::render::progress::Silent,
     )
     .expect("the Job spawns");
@@ -2756,6 +2757,7 @@ fn a_dry_run_promotion_leaves_the_entry_open() {
         &id,
         true,
         None,
+        None,
         &mut armada_helm::render::progress::Silent,
     )
     .expect("a dry run answers");
@@ -2792,6 +2794,7 @@ fn browse(
         true,
         armada_helm::verbs::failures::Look::default(),
         &mut armada_helm::render::progress::Silent,
+        armada_helm::verbs::failures::Lens::Failures,
     )
     .expect("the listing answers");
     (ask, output)
@@ -2940,6 +2943,7 @@ fn without_a_terminal_the_same_verb_asks_nothing_and_lists_the_same_rows() {
         false,
         armada_helm::verbs::failures::Look::default(),
         &mut armada_helm::render::progress::Silent,
+        armada_helm::verbs::failures::Lens::Failures,
     )
     .expect("the listing answers");
 

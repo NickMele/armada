@@ -53,6 +53,9 @@
   doctor    [38;2;156;163;175mwhat this machine is missing, and what fixes it[0m
   failures  [38;2;156;163;175mwhat Armada broke on, and how to put a Job on one[0m
   report    [38;2;156;163;175mtell Armada something went wrong that it did not notice[0m
+  task      [38;2;156;163;175mwrite down a thing to do, and spend nothing on it[0m
+  tasks     [38;2;156;163;175mwhat you wrote down, and how to put a Job on one[0m
+  coverage  [38;2;156;163;175mwhich of Armada's verbs you have never run here[0m
 
 [1m[38;2;255;169;64mGLOBAL FLAGS[0m
   --json          [38;2;156;163;175manswer as one JSON object, for a script or an agent[0m
