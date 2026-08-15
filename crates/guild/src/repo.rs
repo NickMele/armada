@@ -431,12 +431,7 @@ pub fn subjects(run: &impl Run, guild: &Path) -> Result<String, ArmadaError> {
 }
 
 /// Point a branch at a commit, creating it or moving it.
-pub fn set_branch(
-    run: &impl Run,
-    guild: &Path,
-    branch: &str,
-    at: &str,
-) -> Result<(), ArmadaError> {
+pub fn set_branch(run: &impl Run, guild: &Path, branch: &str, at: &str) -> Result<(), ArmadaError> {
     git(
         run,
         guild,
@@ -951,12 +946,12 @@ mod tests {
     #[test]
     fn an_upstream_commit_is_built_in_a_private_index_and_never_checked_out() {
         let run = FakeRun::answering(&[
-            (true, ""),         // read-tree
-            (true, "b10b\n"),   // hash-object
-            (true, ""),         // update-index
-            (true, "7433\n"),   // write-tree
+            (true, ""),          // read-tree
+            (true, "b10b\n"),    // hash-object
+            (true, ""),          // update-index
+            (true, "7433\n"),    // write-tree
             (true, "01dtree\n"), // rev-parse parent^{tree}
-            (true, "c0mm17\n"), // commit-tree
+            (true, "c0mm17\n"),  // commit-tree
         ]);
         let made = commit_files(
             &run,
@@ -1037,12 +1032,11 @@ mod tests {
         )
         .unwrap();
         assert!(made.is_none());
-        assert!(
-            !run.calls
-                .borrow()
-                .iter()
-                .any(|argv| argv.contains(&"commit-tree".to_string()))
-        );
+        assert!(!run
+            .calls
+            .borrow()
+            .iter()
+            .any(|argv| argv.contains(&"commit-tree".to_string())));
     }
 
     /// **`--no-ff`, asserted.** A fast-forward would move the guild's branch
@@ -1158,7 +1152,12 @@ mod tests {
         assert!(!push_branch(&run, guild(), "armada").unwrap());
         assert_eq!(
             run.argv(0),
-            ["git", "push", "origin", "refs/heads/armada:refs/heads/armada"]
+            [
+                "git",
+                "push",
+                "origin",
+                "refs/heads/armada:refs/heads/armada"
+            ]
         );
         assert!(
             !run.argv(0).iter().any(|arg| arg.contains("force")),

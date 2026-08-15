@@ -34,8 +34,8 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
-    GuildSyncData, GuildUpgradeData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun, KillData,
-    MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
+    GuildSyncData, GuildUpgradeData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun,
+    KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
     ResumeData, ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData,
     TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
 };

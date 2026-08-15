@@ -1342,11 +1342,7 @@ fn guild_upgrade_matches_its_fixture() {
             adopted: Some("c401123abcde".to_string()),
             results: vec![
                 row(Sync::Added, "templates.yml", "Armada's"),
-                row(
-                    Sync::Changed,
-                    "subagents/helm.md",
-                    "operating knowledge",
-                ),
+                row(Sync::Changed, "subagents/helm.md", "operating knowledge"),
                 row(
                     Sync::Unchanged,
                     "workflows/workflow.schema.json",
@@ -1357,7 +1353,11 @@ fn guild_upgrade_matches_its_fixture() {
                     "skills/onboard-repo/SKILL.md",
                     "offered; --with-skills takes it",
                 ),
-                row(Sync::Unchanged, "voice.md", "yours — no release ever updates it"),
+                row(
+                    Sync::Unchanged,
+                    "voice.md",
+                    "yours — no release ever updates it",
+                ),
                 row(
                     Sync::Unchanged,
                     "expectations.md",

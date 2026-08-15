@@ -312,13 +312,9 @@ fn machine_scoped(
             // Whether a person is here is the entrypoint's to know, exactly as
             // it is for `ls`: at a terminal the offered file is a question, and
             // without one it is `--with-skills`.
-            args::GuildInvocation::Upgrade { with_skills, .. } => verbs::guild::upgrade(
-                &run,
-                place,
-                ask.as_mut(),
-                terminal.can_ask(),
-                with_skills,
-            ),
+            args::GuildInvocation::Upgrade { with_skills, .. } => {
+                verbs::guild::upgrade(&run, place, ask.as_mut(), terminal.can_ask(), with_skills)
+            }
             args::GuildInvocation::Project { remove, .. } => verbs::guild::project(place, remove),
             args::GuildInvocation::Push { force, .. } => verbs::guild::push(&run, place, force),
             args::GuildInvocation::Export {

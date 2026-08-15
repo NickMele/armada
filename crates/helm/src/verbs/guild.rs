@@ -558,10 +558,7 @@ pub fn upgrade(
     let published = publish(run, &guild)?;
 
     let (rows, applied) = match &merged {
-        repo::Merged::Clean => (
-            taken(run, &guild, &head, &files, with_skills)?,
-            true,
-        ),
+        repo::Merged::Clean => (taken(run, &guild, &head, &files, with_skills)?, true),
         repo::Merged::Conflicted(paths) => (conflicted(paths, &files, with_skills), false),
     };
     let mut rows = rows;
@@ -721,11 +718,7 @@ fn taken(
 
 /// The rows a conflicted merge produces. **Nothing landed**, so every managed
 /// file that is not conflicted is reported as waiting rather than as done.
-fn conflicted(
-    paths: &[String],
-    files: &[upstream::Managed],
-    with_skills: bool,
-) -> Vec<SyncItem> {
+fn conflicted(paths: &[String], files: &[upstream::Managed], with_skills: bool) -> Vec<SyncItem> {
     let mut rows: Vec<SyncItem> = paths
         .iter()
         .map(|path| SyncItem {

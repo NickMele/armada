@@ -56,9 +56,12 @@ pub const DIRECTORY: &str = "helm";
 
 /// The persona a bare `armada helm` runs, and the file it is read from.
 ///
-/// It lives at `~/.armada/guild/subagents/<AGENT>.md`, is seeded from
-/// `templates/guild/subagents/helm.md`, and is **yours from that moment** —
-/// Armada never touches it again (PLAN.md §15.4).
+/// It lives at `~/.armada/guild/subagents/<AGENT>.md` and is seeded from
+/// `templates/guild/subagents/helm.md`. It is **yours** — but not frozen:
+/// `armada guild upgrade` merges a later release's version into it, because
+/// what is in it is operating knowledge rather than anything personal, and a
+/// guild that could never receive it was `docs/reserved/006`. The three memory
+/// fragments are the files no release ever touches.
 pub const AGENT: &str = "helm";
 
 /// The name the MCP server is registered under, and therefore the prefix every

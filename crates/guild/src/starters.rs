@@ -132,7 +132,10 @@ pub fn write(guild_root: &Path, answers: &Answers) -> std::io::Result<Vec<String
     // records the digest of the set just written — and without it a guild has
     // no base, which is the whole of `docs/reserved/006`: not a missing merge
     // engine, a missing record of where the files came from.
-    std::fs::write(guild_root.join(crate::upstream::STAMP), crate::upstream::stamp())?;
+    std::fs::write(
+        guild_root.join(crate::upstream::STAMP),
+        crate::upstream::stamp(),
+    )?;
     written.push(crate::upstream::STAMP.to_string());
 
     Ok(written)

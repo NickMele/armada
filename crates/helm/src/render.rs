@@ -54,11 +54,11 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, FailureData,
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
-    GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData, HelmSwitchData, InboxData,
-    InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData, Projection,
-    ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData, SettingsData,
-    ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun, VerdictData,
-    VerifyData, Wiring,
+    GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData,
+    HelmSwitchData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData,
+    ProbeData, Projection, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData,
+    SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun,
+    VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, State as FailureState};

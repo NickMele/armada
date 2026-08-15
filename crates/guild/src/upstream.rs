@@ -269,10 +269,7 @@ fn fields(version: &str) -> Vec<u64> {
 /// came from — except these. `init` commits under one of these two subjects and
 /// nothing else does, so the newest of them is the last moment Armada wrote the
 /// managed files, which is exactly the base a first upgrade needs.
-pub const WRITTEN_BY_INIT: [&str; 2] = [
-    "guild: imported and interviewed",
-    "guild: re-initialised",
-];
+pub const WRITTEN_BY_INIT: [&str; 2] = ["guild: imported and interviewed", "guild: re-initialised"];
 
 /// The commit a guild with no [`STAMP`] adopts as its base.
 ///
@@ -347,7 +344,10 @@ mod tests {
             .find(|m| m.path == "subagents/helm.md")
             .expect("the persona is managed");
         assert_eq!(persona.policy, Policy::Yes);
-        assert!(persona.policy.takes(false), "it updates without being asked");
+        assert!(
+            persona.policy.takes(false),
+            "it updates without being asked"
+        );
 
         let skill = MANAGED
             .iter()

@@ -49,6 +49,7 @@ and the three status enums. These pages use them without re-explaining them.
 | [`guild/delete.md`](guild/delete.md) | `armada guild delete` | shipped |
 | [`guild/push.md`](guild/push.md) | `armada guild push` | shipped |
 | [`guild/pull.md`](guild/pull.md) | `armada guild pull` | shipped |
+| [`guild/upgrade.md`](guild/upgrade.md) | `armada guild upgrade` | shipped |
 | [`guild/export.md`](guild/export.md) | `armada guild export` | shipped |
 | [`guild/import.md`](guild/import.md) | `armada guild import` | shipped |
 
