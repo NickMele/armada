@@ -2326,7 +2326,9 @@ machine. And when a command echoes its environment on failure, Armada captures t
 
 ```yaml
 secret_providers:
-  op:       { cmd: "op read ${ref}" }
+  # `${ref}` is everything after `://`, so the scheme goes back on: real `op`
+  # rejects a bare `Engineering/github/token`.
+  op:       { cmd: "op read op://${ref}" }
   aws-sm:   { cmd: "aws secretsmanager get-secret-value --secret-id ${ref}
                      --query SecretString --output text" }
   keychain: { cmd: "security find-generic-password -s ${ref} -w" }
