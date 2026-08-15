@@ -268,6 +268,60 @@ impl RunRecord {
     }
 }
 
+/// What `.armada/run/<run-id>/detached.json` holds: the process group a
+/// `--detach` handed the run to.
+///
+/// **Written beside the run rather than only into `manifest.db`**, and the two
+/// are not redundant. The `owned` row is what `armada manifest clean` reclaims
+/// through, and it is keyed by pgid because that is what `killpg` takes; this
+/// is what answers *"is run `01J8X2` still going"*, and it is keyed by the run
+/// because that is what the caller has in its hand. A poller with only the
+/// `owned` rows would have to guess which of a workspace's groups was its run.
+///
+/// **The same three fields a Drone's handle carries, for the same reason**
+/// (`armada_core::fleet::job::Handle`): a pgid alone is not evidence. A pid is
+/// recycled, and a recorded group from a previous boot names whatever holds
+/// that number now — so the boot and the process's start time are what turn a
+/// number into a claim, and [`Detached::is_ours`] is
+/// [`crate::reap::pgid_is_ours`] rather than a second opinion about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Detached {
+    /// The process group `--detach` spawned. `setsid` makes the child its own
+    /// group leader, so this is its pid.
+    pub pgid: i32,
+    /// The boot it was started on.
+    pub boot_id: String,
+    /// When that pid started, as the machine reported it at spawn.
+    pub started_at: Option<String>,
+    /// Where the detached invocation's own output went, workspace-relative.
+    ///
+    /// **The only place a failure that happened before the run began can be
+    /// read.** A detached child refused the run lease writes an envelope and
+    /// exits without ever touching `state.json`, so without this the record
+    /// says *"no verdict"* and nothing says why.
+    pub log: String,
+}
+
+impl Detached {
+    /// Whether the group this names is provably still the run Armada started.
+    ///
+    /// **Ask it from a different process than the one that spawned the child.**
+    /// A start-time probe answers for a zombie with the same start time it had
+    /// while running (`docs/traps.md`), so a corpse this process has not reaped
+    /// reads as a survivor. Every caller here is a later `armada` invocation,
+    /// which is a fresh process by construction — but a caller that is not must
+    /// reap the group first.
+    pub fn is_ours(&self, current_boot: &str, observed_start: Option<&str>) -> bool {
+        self.pgid > 0
+            && crate::reap::pgid_is_ours(
+                Some(&self.boot_id),
+                self.started_at.as_deref(),
+                current_boot,
+                observed_start,
+            )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,5 +549,60 @@ mod tests {
         let json = serde_json::to_string(&record).expect("a run record serializes");
         assert!(json.contains("\"schema_version\":2"), "{json}");
         assert!(json.contains("\"workspace\":\"a3f91c02\""), "{json}");
+    }
+
+    fn detached(pgid: i32, boot: &str, started: Option<&str>) -> Detached {
+        Detached {
+            pgid,
+            boot_id: boot.to_string(),
+            started_at: started.map(str::to_string),
+            log: ".armada/run/01J8X2/detach.log".to_string(),
+        }
+    }
+
+    /// **A pgid alone is never enough**, which is the whole reason the record
+    /// carries three fields. Each of the four ways the claim can fail is a
+    /// process Armada must not report as its run — and the last two are what a
+    /// reboot and a recycled pid actually look like.
+    #[test]
+    fn a_detached_run_is_only_ours_with_the_boot_and_the_start_time_agreeing() {
+        let record = detached(4212, "boot-a", Some("Mon Aug 11 14:02:11 2026"));
+        assert!(record.is_ours("boot-a", Some("Mon Aug 11 14:02:11 2026")));
+
+        assert!(
+            !record.is_ours("boot-b", Some("Mon Aug 11 14:02:11 2026")),
+            "a group from a previous boot names whatever holds that number now"
+        );
+        assert!(
+            !record.is_ours("boot-a", Some("Mon Aug 11 15:31:02 2026")),
+            "a different start time is a different process on a recycled pid"
+        );
+        assert!(
+            !record.is_ours("boot-a", None),
+            "nothing to sample means the process is gone"
+        );
+        assert!(
+            !detached(4212, "boot-a", None).is_ours("boot-a", Some("anything")),
+            "a record with no start time can never be proved and never is"
+        );
+    }
+
+    /// `killpg(0, …)` signals the caller's own group, so a zero that reached a
+    /// kill path would have Armada stop itself. It is refused here as it is
+    /// everywhere else the number is trusted.
+    #[test]
+    fn a_detached_record_with_no_real_group_is_never_ours() {
+        for pgid in [0, -1] {
+            let record = detached(pgid, "boot-a", Some("now"));
+            assert!(!record.is_ours("boot-a", Some("now")), "pgid {pgid}");
+        }
+    }
+
+    #[test]
+    fn a_detach_record_round_trips_through_json() {
+        let record = detached(4212, "boot-a", Some("now"));
+        let json = serde_json::to_string(&record).expect("it serializes");
+        let read: Detached = serde_json::from_str(&json).expect("it reads back");
+        assert_eq!(read, record);
     }
 }

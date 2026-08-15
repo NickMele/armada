@@ -170,6 +170,10 @@ fn check_envelope(status: Status, error: Option<ArmadaError>, rows: Vec<ResultRo
             run_id: "01M00WRY00CYTZ44".to_string(),
             results: rows,
             reaped_runs: Vec::new(),
+            // The fixtures freeze an attached run's layout, which is the one a
+            // reader meets at a terminal. A detached run adds one row and is
+            // asserted where the flag is, in `detach.rs`.
+            detached: None,
         },
     }))
 }

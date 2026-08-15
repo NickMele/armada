@@ -482,6 +482,32 @@ pub struct CheckData {
     /// one that does not remove them.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub reaped_runs: Vec<String>,
+    /// The process group holding this run, for a run that was detached.
+    ///
+    /// **Absent on an attached run, and absent is the answer** — the run is
+    /// this process, which the caller is already waiting on. Omitted from the
+    /// payload entirely rather than serialized as `null`, so every `--json`
+    /// consumer written against a foreground run reads the same bytes it always
+    /// did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detached: Option<DetachedView>,
+}
+
+/// What `--detach` handed the run to, and whether it is still there.
+///
+/// **`alive` is a probe and not a memory.** It is answered by asking the
+/// machine about the recorded group at the moment the question is put — the
+/// run directory says what the run decided, and this says whether anything is
+/// still deciding.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DetachedView {
+    /// The process group id, which is also the detached invocation's pid.
+    pub pgid: i32,
+    /// Whether that group is provably still the run Armada started.
+    pub alive: bool,
+    /// The detached invocation's own output, workspace-relative. Where a
+    /// failure that happened before the first check is written down.
+    pub log: String,
 }
 
 /// `--dry-run` on `armada manifest check`: what would run, and nothing changed.

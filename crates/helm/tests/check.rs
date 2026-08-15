@@ -445,23 +445,7 @@ fn a_dry_run_shows_the_argv_and_writes_no_run() {
     assert_eq!(count, 0, "a dry run wrote a run directory");
 }
 
-/// `--detach` and `--status` are reserved by PLAN.md §3 and not built. Refused
-/// **by name**, because the flag is known and the honest answer is that Armada
-/// cannot do it yet — "unknown flag" would send an agent looking for a typo.
-#[test]
-fn the_two_reserved_flags_say_they_are_not_built_rather_than_unknown() {
-    let machine = Machine::new();
-    let repo = machine.repo("main", CONFIG);
-    for flag in ["--detach", "--status"] {
-        let output = machine.run(&repo, &["manifest", "check", flag, "--json"]);
-        let payload = envelope(&output);
-        assert_eq!(payload["error"]["class"], "bad_invocation", "{flag}");
-        assert!(
-            payload["error"]["message"]
-                .as_str()
-                .unwrap_or_default()
-                .contains("not built yet"),
-            "{flag}: {payload}"
-        );
-    }
-}
+// **`--detach` and `--status` were refused by name here for three
+// milestones**, and the test that asserted it has moved rather than gone: both
+// shipped in M4, and `detach.rs` now asserts the inverse — that neither answers
+// "not built yet" — beside the assertions about what they actually do.

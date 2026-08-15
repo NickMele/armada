@@ -59,7 +59,6 @@ GLOBAL FLAGS
 NOT BUILT YET
   armada guild verify                         M2
   armada manifest render, agents-md, explain  reserved
-  armada manifest check --detach, --status    reserved
 
   Each is claimed and answers `not built yet`, so that a name which is
   going to mean one thing never means something else first.

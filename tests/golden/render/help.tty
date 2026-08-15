@@ -59,7 +59,6 @@
 [1m[38;2;255;169;64mNOT BUILT YET[0m
   armada guild verify                         [38;2;156;163;175mM2[0m
   armada manifest render, agents-md, explain  [38;2;156;163;175mreserved[0m
-  armada manifest check --detach, --status    [38;2;156;163;175mreserved[0m
 
   Each is claimed and answers `not built yet`, so that a name which is
   going to mean one thing never means something else first.

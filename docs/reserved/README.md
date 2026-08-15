@@ -27,7 +27,8 @@ usually asking which one applies.
 | [010](010-armada-records-its-own-failures.md) | Armada records its own failures | BUILT | cross-cutting | `armada failures` — a failure Armada reported was gone as soon as the scrollback was; navigable at a terminal, and a refusal Armada meant is not one |
 | [011](011-what-a-drone-may-do-unattended.md) | What a Drone may do unattended | BUILT | fleet | Nothing ever granted a Drone permission, so every Job stalled on its first `git commit` |
 | [012](012-a-drones-progress-through-its-workflow.md) | A Drone's progress through its workflow | BUILT | fleet | A Job stored the current step name and nothing else — no history, no timing, and no way to tell a Drone's *"done"* from a gate agreeing |
-| [013](013-batch-a-job-from-many-entries.md) | One Job from many entries | RESERVED | helm | Select several entries and dispatch them as one Job, not one each |
+| [015](015-batch-a-job-from-many-entries.md) | One Job from many entries | RESERVED | helm | Select several entries and dispatch them as one Job, not one each |
+| [013](013-secrets-must-resolve-before-the-run-detaches.md) | Secrets must resolve before the run detaches | RESERVED | manifest | `check --detach` shipped; a resolver written into the run loop would hang a detached run at a prompt nobody can see |
 
 **When Armada's task system exists** ([002](002-tasks.md)), these become its first rows — one
 file per row is what makes that a script rather than a rewrite.

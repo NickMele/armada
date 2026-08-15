@@ -473,6 +473,87 @@ impl State {
     pub fn results(&self) -> Vec<CheckResult> {
         self.checks.values().filter_map(result_of).collect()
     }
+
+    /// **Every** check, in id order, whether or not it has a verdict yet.
+    ///
+    /// `results` is the run's answer and this is the run's *state*, which is a
+    /// different question and gets a different function rather than a flag.
+    /// [`results`](State::results) drops a check that has not finished, because
+    /// a verdict a run has not reached is not a row anybody may act on; a poll
+    /// asking *"what is this run doing"* needs the opposite — the checks still
+    /// out are the whole of the answer while it is still going.
+    ///
+    /// **The rows that do have a verdict are `result_of`'s, byte for byte.**
+    /// That is what makes `armada manifest check --status` on a finished run
+    /// report what the foreground run reported: [`conclude`] emits exactly
+    /// `result_of(entry)` when a check settles, so the shell's collected rows
+    /// and this projection of the same state cannot disagree. A second way of
+    /// building a verdict row is the one thing that could make a detached run
+    /// decide differently from an attached one, which is worse than having no
+    /// detach at all.
+    pub fn snapshot(&self) -> Vec<CheckResult> {
+        self.checks
+            .values()
+            .map(|entry| result_of(entry).unwrap_or_else(|| self.progress_of(entry)))
+            .collect()
+    }
+
+    /// A row for a check that has **not** reached a verdict.
+    ///
+    /// `RUNNING` and `WAITING` are progress and never verdicts (PLAN.md §3.1),
+    /// so nothing here may be mistaken for one: no `error`, and a duration only
+    /// where a clock has actually been running.
+    fn progress_of(&self, entry: &CheckState) -> CheckResult {
+        let row = |status: Status| CheckResult {
+            id: entry.plan.id.clone(),
+            status,
+            duration_ms: None,
+            log: None,
+            waiting_on: None,
+            error: None,
+            reason: None,
+        };
+        match &entry.phase {
+            // **The log is named while it is being written**, which is the one
+            // thing a poller most wants: a fifteen-minute check is watched by
+            // tailing the file rather than by asking again.
+            Phase::Running(running) => CheckResult {
+                duration_ms: Some(self.now_mono.saturating_sub(running.started_mono)),
+                log: entry.plan.log.clone(),
+                ..row(Status::Running)
+            },
+            Phase::Waiting(waiting) => CheckResult {
+                waiting_on: waiting.holder.as_ref().map(|holder| {
+                    waiting_on(
+                        waiting.kind,
+                        &entry.plan,
+                        holder,
+                        self.now_mono.saturating_sub(waiting.since_mono),
+                        self.budget,
+                    )
+                }),
+                ..row(Status::Waiting)
+            },
+            // Selected and not yet reached. `WAITING` rather than a state of
+            // its own: from outside the run there is no difference worth a word
+            // between "queueing for a lease" and "not started", and inventing
+            // one would put a status in the envelope that no exit code maps.
+            Phase::Pending => row(Status::Waiting),
+            // `result_of` answers for both, and this is only reached through
+            // its `None`.
+            Phase::Done(_) | Phase::Skipped => row(Status::Failed),
+        }
+    }
+
+    /// The run's verdict, once every check has settled.
+    ///
+    /// **The one statement of how a run ends**, asked both by the reducer as it
+    /// advances and by `check --status` reading a record off disk. A second
+    /// implementation for the reader is how a detached run comes to disagree
+    /// with an attached one about the same set of rows.
+    pub fn verdict(&self) -> Option<(Status, Option<ArmadaError>)> {
+        terminal(self)
+    }
 }
 
 /// What the shell observed. **The floor, plus [`Event::Tick`].**
@@ -2753,5 +2834,96 @@ mod tests {
         assert_eq!(row.status, Status::Failed);
         assert_eq!(row.duration_ms, Some(3_120));
         assert_eq!(row.reason.as_deref(), Some("because"));
+    }
+
+    // ------------------------------------------------ what a poll reads back
+
+    /// **`snapshot` has a row for every check and `results` does not.** The two
+    /// answer different questions, and a poll asking what a run is *doing*
+    /// needs the checks that have not answered — which are exactly the ones
+    /// `results` is right to leave out.
+    #[test]
+    fn a_snapshot_covers_every_check_while_the_verdict_rows_cover_none_of_them_yet() {
+        let state = run(vec![plan("api:lint"), plan("api:test")]);
+        let (state, _) = to_running(state, "api:lint");
+
+        assert!(
+            state.results().is_empty(),
+            "a check with no verdict produced a verdict row"
+        );
+        let rows = state.snapshot();
+        assert_eq!(rows.len(), 2, "a check went missing from the snapshot");
+        assert_eq!(rows[0].status, Status::Running, "the running check");
+        assert_eq!(rows[1].status, Status::Waiting, "the one not yet reached");
+        // Progress is never a verdict: nothing here may be read as a failure.
+        assert!(rows.iter().all(|row| row.error.is_none()));
+        // The log is named while it is being written, so a fifteen-minute check
+        // can be watched by tailing rather than by asking again.
+        assert!(rows[0].log.is_some(), "a running check hid its log");
+    }
+
+    /// **The verdict rows a poll reads are the rows the run emitted**, and this
+    /// is the property `--status` rests on: a detached run reporting a
+    /// different verdict from an attached one over the same state would make
+    /// the flag worse than useless.
+    #[test]
+    fn a_snapshot_of_a_finished_run_is_exactly_what_it_emitted() {
+        let state = run(vec![plan("api:lint"), plan("api:test")]);
+        let (state, _) = to_running(state, "api:lint");
+        let (state, _) = to_running(state, "api:test");
+
+        let mut emitted: BTreeMap<CheckId, CheckResult> = BTreeMap::new();
+        let mut state = state;
+        for name in ["api:lint", "api:test"] {
+            let (next, actions) = step(
+                state,
+                Event::ChildExited {
+                    check: id(name),
+                    code: 0,
+                },
+            );
+            state = next;
+            for action in actions {
+                if let Action::Emit { result } = action {
+                    emitted.insert(result.id.clone(), result);
+                }
+            }
+        }
+
+        let collected: Vec<CheckResult> = emitted.into_values().collect();
+        assert_eq!(collected.len(), 2, "the run emitted a row per check");
+        assert_eq!(
+            state.snapshot(),
+            collected,
+            "reading the record back gives different rows from the run"
+        );
+        assert_eq!(state.results(), collected, "and so does `results`");
+    }
+
+    /// A run whose checks have all settled has a verdict, and it is the same
+    /// one the reducer proposed as it finished — one statement of how a run
+    /// ends, asked by the loop and by the reader of the record alike.
+    #[test]
+    fn the_verdict_a_poll_reads_is_the_one_the_run_proposed() {
+        let state = run(vec![plan("api:lint")]);
+        let (state, _) = to_running(state, "api:lint");
+        assert!(
+            state.verdict().is_none(),
+            "a run with a check still going claimed a verdict"
+        );
+
+        let (state, actions) = step(
+            state,
+            Event::ChildExited {
+                check: id("api:lint"),
+                code: 1,
+            },
+        );
+        let proposed = actions.into_iter().find_map(|action| match action {
+            Action::Finish { status, error } => Some((status, error)),
+            _ => None,
+        });
+        assert_eq!(state.verdict(), proposed, "the record decides differently");
+        assert_eq!(state.verdict().expect("a verdict").0, Status::Failed);
     }
 }

@@ -25,6 +25,7 @@
 
 use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::failure::Fault;
+use armada_core::run::RunId;
 use armada_core::scope::Lens;
 
 use crate::render::help::Topic;
@@ -631,6 +632,17 @@ pub struct Check {
     pub jobs: Option<u32>,
     /// `--wait`: queue for the run lease instead of failing fast.
     pub wait: bool,
+    /// `--detach`: start the run in its own session and return the run id.
+    pub detach: bool,
+    /// `--status`: read a run's record rather than start one.
+    pub status: bool,
+    /// The run `--status` was pointed at. `None` is the most recent one this
+    /// workspace has kept.
+    ///
+    /// **A separate field from [`Check::status`] rather than a nested option**,
+    /// because the flag and its argument are two different questions and
+    /// `Option<Option<String>>` makes both unreadable at every use site.
+    pub run: Option<String>,
 }
 
 /// The flags more than one verb takes.
@@ -764,7 +776,14 @@ pub const MANIFEST_BUILT: [&str; 10] = [
 /// reads the same list to draw the NOT BUILT YET row. Before this, the two
 /// said the same two names in two places, and only one of them was ever the
 /// one somebody edited (`docs/reserved/009`, item 5).
-pub const RESERVED_CHECK_FLAGS: [&str; 2] = ["--detach", "--status"];
+///
+/// **Empty, and kept rather than deleted.** `--detach` and `--status` were its
+/// only two entries and both shipped (`PHASES.md` §8.6), so the list has
+/// nothing to name — but the mechanism it holds up is the one that stopped the
+/// help page and the parser drifting apart, and the next `check` flag claimed
+/// before it is built needs the list already wired rather than reinvented.
+/// Both readers already handle the empty case by drawing nothing.
+pub const RESERVED_CHECK_FLAGS: [&str; 0] = [];
 
 /// **Every verb the parser accepts**, as the caller types it after `armada`.
 ///
@@ -1024,6 +1043,22 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
             "--all-files" => parsed.all_files = true,
             "--fix" => parsed.fix = true,
             "--wait" => parsed.wait = true,
+            "--detach" => parsed.detach = true,
+            // **The run id is optional, and what decides is whether the next
+            // word *is* one.** A run id is sixteen Crockford characters and
+            // nothing else in this grammar looks like one, so asking
+            // `RunId::parse` is a decision rather than a guess — and it is the
+            // same validation the id gets everywhere else, which is what keeps
+            // `../../etc` out of a value that becomes a path.
+            "--status" => {
+                parsed.status = true;
+                if let Some(word) = rest.get(index) {
+                    if RunId::parse(word).is_ok() {
+                        parsed.run = Some(word.clone());
+                        index += 1;
+                    }
+                }
+            }
             // A list, so it consumes until the next flag. `--files` exists
             // precisely for names a shell would mangle as positionals.
             "--files" => {
@@ -1106,7 +1141,77 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
         }
     }
 
+    if let Some(error) = incoherent(&parsed) {
+        return Err(failure(error, parsed.json));
+    }
     Ok(parsed)
+}
+
+/// The `check` lines that parse and mean nothing.
+///
+/// **Refused rather than resolved by precedence**, which is the rule the whole
+/// grammar is written to (PLAN.md §3.2): a caller who typed `--status --fix`
+/// meant one of two very different things, and picking one silently is how an
+/// agent comes to believe it repaired a repository it only read. Each of these
+/// is a caller who has said two things at once, and the honest answer is to say
+/// which two.
+fn incoherent(parsed: &Check) -> Option<ArmadaError> {
+    let refuse = |message: &str, next: &str| {
+        Some(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: "check".to_string(),
+            message: message.to_string(),
+            next_action: Some(next.to_string()),
+        })
+    };
+
+    if parsed.status && parsed.detach {
+        return refuse(
+            "`--status` reads a run and `--detach` starts one",
+            "`armada manifest check --detach` prints the run id `--status` then takes",
+        );
+    }
+    // **`--status` is a read verb and takes no scope.** The run it reads was
+    // scoped when it started; a second scope now would either be ignored or
+    // silently filter somebody else's verdicts, and both are worse than saying
+    // no.
+    if parsed.status {
+        // **The bare word is answered before the flags**, because it is the
+        // mistake that is actually made: a caller reaching for a run id and
+        // mistyping it lands here, and *"it takes no <selector>"* would send
+        // them to look for a flag they did not type.
+        if let Some(word) = &parsed.selector {
+            return refuse(
+                &format!("`--status` reads a run, and `{word}` is not a run id"),
+                "a run id is 16 characters of upper-case Crockford base32; `--status` with none \
+                 reads the most recent run",
+            );
+        }
+        let scope = [
+            ("--dry-run", parsed.dry_run),
+            ("--all-files", parsed.all_files),
+            ("--fix", parsed.fix),
+            ("--wait", parsed.wait),
+            ("--files", !parsed.files.is_empty()),
+            ("--component", parsed.component.is_some()),
+            ("--concurrency", parsed.jobs.is_some()),
+        ];
+        if let Some((named, _)) = scope.iter().find(|(_, given)| *given) {
+            return refuse(
+                &format!("`--status` reads a run; it takes no {named}"),
+                "`armada manifest check --status [<run-id>]`, and nothing else",
+            );
+        }
+    }
+    // A preview changes nothing and finishes at once, so there is nothing to
+    // detach from and nothing a later `--status` could read.
+    if parsed.detach && parsed.dry_run {
+        return refuse(
+            "`--dry-run` runs nothing, so there is nothing to detach",
+            "`armada manifest check --dry-run` prints the schedule here and now",
+        );
+    }
+    None
 }
 
 // ---------------------------------------------------------------- M2: the
@@ -2860,7 +2965,12 @@ mod tests {
         for words in [
             &["--color", "never", "manifest", "explain"][..],
             &["manifest", "init", "--turbo", "--color", "never"][..],
-            &["manifest", "check", "--detach", "--color", "never"][..],
+            // Two flags that each parse and cannot both be meant — the
+            // refusal `incoherent` raises, which happens after the whole line
+            // has been read and so is the latest one `--color` has to survive.
+            &[
+                "manifest", "check", "--detach", "--status", "--color", "never",
+            ][..],
         ] {
             assert_eq!(
                 parse(&args(words)).unwrap_err().color,
@@ -3143,9 +3253,16 @@ mod tests {
     /// **The six commands that filled a real log in thirteen minutes**, and
     /// which of them Armada now writes down.
     ///
-    /// Five are refusals Armada meant — two reserved flags, two reserved verbs,
+    /// Five were refusals Armada meant — two reserved flags, two reserved verbs,
     /// one name nobody claims — and a row telling him to go and fix
     /// *`--detach` is not built yet* is the log reporting a feature as a bug.
+    ///
+    /// **Two of the six cannot be typed as refusals any longer**: `check
+    /// --detach` and `--status` shipped in M4, and the lines that asserted them
+    /// are gone rather than rewritten, because a flag that parses has nothing
+    /// to say about which failures are worth writing down. What the filter has
+    /// to keep out is now the three that remain, and the principle is unchanged.
+    ///
     /// The sixth is the one that matters: `unknown command `guild verify``,
     /// about a verb the help page advertises under NOT BUILT YET, is Armada
     /// contradicting its own roster, and it stays recorded.
@@ -3162,8 +3279,6 @@ mod tests {
         for line in [
             vec!["guild", "bogus"],
             vec!["bogus"],
-            vec!["manifest", "check", "--detach"],
-            vec!["manifest", "check", "--status"],
             vec!["manifest", "render"],
             vec!["guild", "verify"],
         ] {
@@ -3336,6 +3451,10 @@ mod tests {
     /// (`docs/reserved/009`, item 5). This is the test that catches it now: a
     /// flag added to the list and not wired into `check`'s refusal — or the
     /// reverse — fails here instead of shipping as a silent mismatch.
+    /// **The list is empty as of M4**, which makes the loop below vacuous and
+    /// the assertion after it the live one: the two flags that were on it are
+    /// built, and a regression that put either back would be a polite refusal
+    /// nothing else notices.
     #[test]
     fn every_reserved_check_flag_is_refused_as_not_built_yet() {
         for flag in RESERVED_CHECK_FLAGS {
@@ -3346,6 +3465,102 @@ mod tests {
                 failure.error.message
             );
         }
+        for built in ["--detach", "--status"] {
+            assert!(
+                !RESERVED_CHECK_FLAGS.contains(&built),
+                "`{built}` is built and is still claimed as reserved"
+            );
+        }
+    }
+
+    // --------------------------------------------------- check --detach/--status
+
+    fn check_of(words: &[&str]) -> Check {
+        let mut line = vec!["manifest", "check"];
+        line.extend_from_slice(words);
+        match parse(&args(&line)).unwrap().invocation {
+            Invocation::Check(check) => *check,
+            other => panic!("`armada {}` parsed as {other:?}", line.join(" ")),
+        }
+    }
+
+    #[test]
+    fn detach_and_status_are_parsed_rather_than_refused() {
+        assert!(check_of(&["--detach"]).detach);
+        let status = check_of(&["--status"]);
+        assert!(status.status);
+        assert_eq!(status.run, None, "no id means the most recent run");
+    }
+
+    /// **What decides whether `--status` takes the next word is whether that
+    /// word is a run id.** Sixteen Crockford characters is a shape nothing else
+    /// in this grammar has, so this is a decision rather than a guess — and it
+    /// is the same validation that keeps `../../etc` out of a value which
+    /// becomes a path.
+    #[test]
+    fn status_takes_the_next_word_only_when_it_is_a_run_id() {
+        let named = check_of(&["--status", "01M00WRY00CYTZ44"]);
+        assert_eq!(named.run.as_deref(), Some("01M00WRY00CYTZ44"));
+        assert_eq!(named.selector, None, "the id was read twice");
+
+        // Not an id: left alone, and the refusal names the word rather than
+        // sending the caller to look for a flag they did not type.
+        let failure = parse(&args(&["manifest", "check", "--status", "api:lint"])).unwrap_err();
+        assert_eq!(failure.error.class, ErrClass::BadInvocation);
+        assert!(
+            failure.error.message.contains("`api:lint` is not a run id"),
+            "{}",
+            failure.error.message
+        );
+    }
+
+    /// **Two things said at once are refused rather than resolved by
+    /// precedence.** A caller who typed `--status --fix` meant one of two very
+    /// different things, and picking one silently is how an agent comes to
+    /// believe it repaired a repository it only read.
+    #[test]
+    fn a_check_line_that_says_two_things_at_once_is_refused() {
+        for words in [
+            &["--detach", "--status"][..],
+            &["--status", "--fix"][..],
+            &["--status", "--all-files"][..],
+            &["--status", "--component", "api"][..],
+            &["--status", "--files", "a.py"][..],
+            &["--status", "--concurrency", "2"][..],
+            &["--status", "--wait"][..],
+            &["--status", "--dry-run"][..],
+            &["--status", "api:lint"][..],
+            &["--detach", "--dry-run"][..],
+        ] {
+            let mut line = vec!["manifest", "check"];
+            line.extend_from_slice(words);
+            let failure = match parse(&args(&line)) {
+                Err(failure) => failure,
+                Ok(parsed) => panic!("`armada {}` was accepted: {parsed:?}", line.join(" ")),
+            };
+            assert_eq!(
+                failure.error.class,
+                ErrClass::BadInvocation,
+                "`armada {}`",
+                line.join(" ")
+            );
+            assert!(
+                failure.error.next_action.is_some(),
+                "`armada {}` refused without saying what to type instead",
+                line.join(" ")
+            );
+        }
+    }
+
+    /// The flags that mean nothing together are the only ones refused: a
+    /// `--detach` that carries a scope is an ordinary, useful line.
+    #[test]
+    fn detach_keeps_the_scope_it_was_given() {
+        let detached = check_of(&["--detach", "--component", "api", "--fix", "--wait"]);
+        assert!(detached.detach);
+        assert_eq!(detached.component.as_deref(), Some("api"));
+        assert!(detached.fix);
+        assert!(detached.wait);
     }
 
     /// **Every verb the roster names parses, and answers `--help` with a page.**
