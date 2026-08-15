@@ -23,6 +23,42 @@ use armada_manifest::{docker, fs, machine};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// Where one non-blocking claim got to.
+///
+/// **The reason this type exists is that the shell's event loop may never
+/// block.** A blocking claim answers "someone is in the way" by sleeping, which
+/// parks whatever loop called it — for `check` that is the run loop, so for the
+/// length of the wait no deadline fires, no exited child is reaped and no
+/// interrupt is observed. `Waiting` hands that decision back to the caller,
+/// whose next turn comes round in milliseconds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Claim {
+    /// Held by this process now, and these are the rows to give back.
+    Granted(Vec<LeaseId>),
+    /// A live holder is in the way. What to say about it went to `on_wait`.
+    Waiting,
+}
+
+/// Where one turn of the claim reducer got to. The private half of [`Claim`]:
+/// it carries the sleep the reducer asked for, which only a blocking caller
+/// has any use for.
+enum Turn {
+    /// The lease is ours.
+    Granted,
+    /// A live holder is in the way, and the reducer asked for this long.
+    Waiting {
+        /// Milliseconds.
+        ms: u64,
+    },
+}
+
+/// This process, as the store records a holder: its pid and its start time.
+///
+/// The start time is what tells a recycled pid from the original, and reading
+/// it costs a subprocess — so it is read once per claim rather than once per
+/// attempt.
+type Claimant = (i32, Option<String>);
+
 /// Everything a verb needs and may not go and find for itself.
 pub struct App<R: Run, C: Clock, F: Fetch> {
     /// The three seams and the workspace.
@@ -119,9 +155,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         ceiling_ms: Option<u64>,
         on_wait: &mut dyn FnMut(armada_core::lease::WaitingOn),
     ) -> Result<LeaseId, ArmadaError> {
-        let pid = armada_manifest::posix::pid();
-        let started = machine::process_start_at(&self.ctx.run, &self.cwd(), pid);
-
+        let who = self.claimant();
         let mut state = ClaimState::new(lease.clone(), policy, ceiling_ms);
         let mut event = ClaimEvent::Start;
         // The row the last attempt saw. A reclaim deletes *that* row and no
@@ -130,105 +164,77 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         let mut observed: Option<armada_core::registry::LeaseRow> = None;
 
         loop {
-            let (next, actions) = armada_core::lease::step(state, event);
+            let (next, turn) = self.turn(state, event, &mut observed, &who, on_wait)?;
             state = next;
-            let mut pending: Option<ClaimEvent> = None;
-
-            for action in actions {
-                match action {
-                    ClaimAction::Attempt => {
-                        let now = self.ctx.now.mono();
-                        let outcome = self.db.try_acquire(
-                            &state.lease,
-                            now,
-                            &self.boot_id,
-                            pid,
-                            started.as_deref(),
-                        )?;
-                        pending = Some(match outcome {
-                            AcquireOutcome::Granted => {
-                                observed = None;
-                                ClaimEvent::Granted
-                            }
-                            AcquireOutcome::Held(row) => {
-                                let holder = armada_manifest::db::holder_of(&row, now);
-                                let cold =
-                                    is_cold(row.heartbeat_mono, now, row.boot_id == self.boot_id);
-                                observed = Some(row);
-                                if cold {
-                                    ClaimEvent::HolderCold(holder)
-                                } else {
-                                    ClaimEvent::Held(holder)
-                                }
-                            }
-                        });
-                    }
-                    ClaimAction::Reclaim(_) => {
-                        if let Some(row) = &observed {
-                            self.db
-                                .reclaim_lease(state.lease.kind, &state.lease.key, row)?;
-                        }
-                    }
-                    ClaimAction::Sleep { ms } => {
-                        let until = self.ctx.now.mono().saturating_add(ms);
-                        self.ctx.now.sleep_until(until);
-                        // **Renewed from the loop that waits, not a background
-                        // timer.** Without this a check queueing fifteen minutes
-                        // behind another workspace's `exclusive:` would stop
-                        // renewing the leases this invocation *already holds* —
-                        // including its own run lease — and a lease goes cold
-                        // after sixty seconds of silence. A third process would
-                        // then reclaim the run lease out from under a run that
-                        // is behaving exactly as specified.
-                        self.renew_held();
-                        pending = Some(ClaimEvent::Slept { ms });
-                    }
-                    ClaimAction::Report(waiting_on) => on_wait(waiting_on),
-                    ClaimAction::Granted => return Ok(lease),
-                    ClaimAction::Failed(error) => return Err(error),
-                }
-            }
-
-            match pending {
-                Some(next) => event = next,
-                // A step that produced no action to react to would spin.
-                None => {
-                    return Err(ArmadaError {
-                        class: ErrClass::ArmadaBug,
-                        r#where: "lease".to_string(),
-                        message: format!("the claim loop stalled in {:?}", state.phase),
-                        next_action: None,
-                    })
+            match turn {
+                Turn::Granted => return Ok(lease),
+                Turn::Waiting { ms } => {
+                    let until = self.ctx.now.mono().saturating_add(ms);
+                    self.ctx.now.sleep_until(until);
+                    // **Renewed from the loop that waits, not a background
+                    // timer.** Without this a claim queueing behind another
+                    // workspace would stop renewing the leases this invocation
+                    // *already holds* — including its own run lease — and a
+                    // lease goes cold after sixty seconds of silence. A third
+                    // process would then reclaim the run lease out from under a
+                    // run that is behaving exactly as specified.
+                    self.renew_held();
+                    event = ClaimEvent::Slept { ms };
                 }
             }
         }
     }
 
-    /// Take `count` CPU slots, driving the same claim reducer an exclusive
-    /// uses.
+    /// One turn at a named lease, **without sleeping**.
     ///
-    /// **Through `lease::step`, not around it** — the ceiling, the visible
-    /// wait and the meaning of `Attempt` are all stated there, and a second
-    /// loop would be a second set of answers. `Attempt` means *re-decide and
-    /// try*, which is exactly what a counted budget needs: losing means the
-    /// answer changed, so the next attempt asks the store again rather than
-    /// waiting for a slot it already picked.
+    /// The blocking claim above is a caller that answers `Turn::Waiting` by
+    /// sleeping. This is the caller that answers it by going back to its own
+    /// event loop — which is what `verbs::check`'s loop must do, because
+    /// waiting inside one action is waiting with no deadline firing and no
+    /// exited child reaped (`ARCHITECTURE.md` §1.2: **the loop never blocks**).
+    ///
+    /// No ceiling is passed, and that is not an omission: a ceiling is measured
+    /// in accumulated sleeps, and a caller that does not sleep here has to
+    /// measure the wait against its own clock. `verbs::check` reads it off the
+    /// scheduler's `Waiting::since_mono`, which is the only record of when the
+    /// claim began.
+    pub fn claim(
+        &mut self,
+        lease: &LeaseId,
+        on_wait: &mut dyn FnMut(armada_core::lease::WaitingOn),
+    ) -> Result<Claim, ArmadaError> {
+        let who = self.claimant();
+        let state = ClaimState::new(lease.clone(), Policy::Block, None);
+        let mut observed: Option<armada_core::registry::LeaseRow> = None;
+        let (_, turn) = self.turn(state, ClaimEvent::Start, &mut observed, &who, on_wait)?;
+        Ok(match turn {
+            Turn::Granted => Claim::Granted(vec![lease.clone()]),
+            Turn::Waiting { .. } => Claim::Waiting,
+        })
+    }
+
+    /// One turn at `count` CPU slots, **without sleeping**.
+    ///
+    /// **Through `lease::step`, not around it** — the visible wait and the
+    /// meaning of `Attempt` are stated there, and a second loop would be a
+    /// second set of answers. `Attempt` means *re-decide and try*, which is
+    /// exactly what a counted budget needs: losing means the answer changed, so
+    /// the next attempt asks the store again rather than waiting for a slot it
+    /// already picked.
     ///
     /// The slots' *identity* is the store's, chosen all-or-nothing inside one
     /// transaction — see
     /// [`Db::try_acquire_slots`](armada_manifest::db::Db::try_acquire_slots)
     /// for why a partial claim deadlocks and why numbering a check's own slots
     /// `0..cost` hangs the second check that starts.
-    pub fn acquire_slots(
+    pub fn claim_slots(
         &mut self,
         workspace: &WorkspaceId,
         count: u32,
         total: u32,
-        ceiling_ms: Option<u64>,
         on_wait: &mut dyn FnMut(armada_core::lease::WaitingOn),
-    ) -> Result<Vec<LeaseId>, ArmadaError> {
-        let pid = armada_manifest::posix::pid();
-        let started = machine::process_start_at(&self.ctx.run, &self.cwd(), pid);
+    ) -> Result<Claim, ArmadaError> {
+        let (pid, started) = self.claimant();
         let claim = LeaseId {
             workspace: Some(workspace.clone()),
             kind: LeaseKind::CpuSlot,
@@ -238,7 +244,7 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
             key: format!("{count} of {total}"),
         };
 
-        let mut state = ClaimState::new(claim, Policy::Block, ceiling_ms);
+        let mut state = ClaimState::new(claim, Policy::Block, None);
         let mut event = ClaimEvent::Start;
         let mut granted: Vec<LeaseId> = Vec::new();
 
@@ -285,14 +291,10 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                     // counts them, because a slot has no fixed key for the
                     // claim loop to name.
                     ClaimAction::Reclaim(_) => {}
-                    ClaimAction::Sleep { ms } => {
-                        let until = self.ctx.now.mono().saturating_add(ms);
-                        self.ctx.now.sleep_until(until);
-                        self.renew_held();
-                        pending = Some(ClaimEvent::Slept { ms });
-                    }
+                    // The caller's loop is the thing that waits.
+                    ClaimAction::Sleep { .. } => return Ok(Claim::Waiting),
                     ClaimAction::Report(waiting_on) => on_wait(waiting_on),
-                    ClaimAction::Granted => return Ok(granted),
+                    ClaimAction::Granted => return Ok(Claim::Granted(granted)),
                     ClaimAction::Failed(error) => return Err(error),
                 }
             }
@@ -304,6 +306,93 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
                         class: ErrClass::ArmadaBug,
                         r#where: "cpu-slot".to_string(),
                         message: format!("the slot claim stalled in {:?}", state.phase),
+                        next_action: None,
+                    })
+                }
+            }
+        }
+    }
+
+    /// Who this process is, as the store records a holder.
+    fn claimant(&self) -> Claimant {
+        let pid = armada_manifest::posix::pid();
+        let started = machine::process_start_at(&self.ctx.run, &self.cwd(), pid);
+        (pid, started)
+    }
+
+    /// Drive [`armada_core::lease::step`] as far as it goes without sleeping.
+    ///
+    /// **The one statement of what an attempt is**, so the two callers above
+    /// cannot disagree about it: what `Attempt` asks the store, when a cold
+    /// holder is reclaimed, and which row a reclaim deletes. They differ only
+    /// in what they do with `Turn::Waiting`.
+    fn turn(
+        &mut self,
+        state: ClaimState,
+        entry: ClaimEvent,
+        observed: &mut Option<armada_core::registry::LeaseRow>,
+        who: &Claimant,
+        on_wait: &mut dyn FnMut(armada_core::lease::WaitingOn),
+    ) -> Result<(ClaimState, Turn), ArmadaError> {
+        let (pid, started) = who;
+        let mut state = state;
+        let mut event = entry;
+
+        loop {
+            let (next, actions) = armada_core::lease::step(state, event);
+            state = next;
+            let mut pending: Option<ClaimEvent> = None;
+
+            for action in actions {
+                match action {
+                    ClaimAction::Attempt => {
+                        let now = self.ctx.now.mono();
+                        let outcome = self.db.try_acquire(
+                            &state.lease,
+                            now,
+                            &self.boot_id,
+                            *pid,
+                            started.as_deref(),
+                        )?;
+                        pending = Some(match outcome {
+                            AcquireOutcome::Granted => {
+                                *observed = None;
+                                ClaimEvent::Granted
+                            }
+                            AcquireOutcome::Held(row) => {
+                                let holder = armada_manifest::db::holder_of(&row, now);
+                                let cold =
+                                    is_cold(row.heartbeat_mono, now, row.boot_id == self.boot_id);
+                                *observed = Some(row);
+                                if cold {
+                                    ClaimEvent::HolderCold(holder)
+                                } else {
+                                    ClaimEvent::Held(holder)
+                                }
+                            }
+                        });
+                    }
+                    ClaimAction::Reclaim(_) => {
+                        if let Some(row) = observed.as_ref() {
+                            self.db
+                                .reclaim_lease(state.lease.kind, &state.lease.key, row)?;
+                        }
+                    }
+                    ClaimAction::Sleep { ms } => return Ok((state, Turn::Waiting { ms })),
+                    ClaimAction::Report(waiting_on) => on_wait(waiting_on),
+                    ClaimAction::Granted => return Ok((state, Turn::Granted)),
+                    ClaimAction::Failed(error) => return Err(error),
+                }
+            }
+
+            match pending {
+                Some(next) => event = next,
+                // A step that produced no action to react to would spin.
+                None => {
+                    return Err(ArmadaError {
+                        class: ErrClass::ArmadaBug,
+                        r#where: "lease".to_string(),
+                        message: format!("the claim loop stalled in {:?}", state.phase),
                         next_action: None,
                     })
                 }
