@@ -3003,6 +3003,67 @@ mod tests {
         assert!(unknown.message.contains("unknown verb"), "{unknown:?}");
     }
 
+    /// **The gap this closed, stated so it cannot reopen.** `render::help`'s
+    /// NOT BUILT YET row is drawn from these same four sources —
+    /// `RESERVED_TOP_LEVEL`, `BUILTIN_VERBS` minus `MANIFEST_BUILT`, and
+    /// `RESERVED_GUILD_VERBS` — rather than a retyped list, so a name that
+    /// appears on the page and is not wired into a refusal here fails this
+    /// test instead of shipping as `unknown command`/`unknown verb`. The shape
+    /// is [`crate::render::help::tests::every_verb_the_parser_accepts_has_a_page`],
+    /// asked of refusals instead of pages.
+    #[test]
+    fn every_reserved_name_the_help_lists_is_refused_as_not_built_yet() {
+        for (name, _) in RESERVED_TOP_LEVEL {
+            let err = parse(&args(&[name])).unwrap_err().error;
+            assert_eq!(err.class, ErrClass::BadInvocation);
+            assert!(
+                err.message.contains("is not built yet"),
+                "`armada {name}` did not answer \"is not built yet\": {}",
+                err.message
+            );
+        }
+        for verb in BUILTIN_VERBS
+            .iter()
+            .copied()
+            .filter(|verb| !MANIFEST_BUILT.contains(verb))
+        {
+            let err = parse(&args(&["manifest", verb])).unwrap_err().error;
+            assert_eq!(err.class, ErrClass::BadInvocation);
+            assert!(
+                err.message.contains("is not built yet"),
+                "`armada manifest {verb}` did not answer \"is not built yet\": {}",
+                err.message
+            );
+        }
+        for (name, _) in RESERVED_GUILD_VERBS {
+            let err = parse(&args(&["guild", name])).unwrap_err().error;
+            assert_eq!(err.class, ErrClass::BadInvocation);
+            assert!(
+                err.message.contains("is not built yet"),
+                "`armada guild {name}` did not answer \"is not built yet\": {}",
+                err.message
+            );
+        }
+    }
+
+    /// And the other direction: a name that is not claimed answers `unknown`,
+    /// never `is not built yet` — an agent told every typo is a future
+    /// feature would stop trusting the refusal at all.
+    #[test]
+    fn a_name_that_is_not_claimed_is_unknown_rather_than_not_built_yet() {
+        let top = parse(&args(&["frobnicate"])).unwrap_err().error;
+        assert!(top.message.contains("unknown command"), "{}", top.message);
+        assert!(!top.message.contains("not built yet"), "{}", top.message);
+
+        let guild = parse(&args(&["guild", "frobnicate"])).unwrap_err().error;
+        assert!(guild.message.contains("unknown verb"), "{}", guild.message);
+        assert!(
+            !guild.message.contains("not built yet"),
+            "{}",
+            guild.message
+        );
+    }
+
     /// Every M2 verb answers `--json`, including on the failure path — the same
     /// guarantee every other verb makes.
     #[test]
