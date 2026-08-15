@@ -65,6 +65,22 @@ a guess, or nobody knows to override it. An override reports *you named it* rath
 confidence of `1.0`: "you said so" and "the model was certain" are different facts and only
 one of them is a measurement.
 
+**Below the threshold, it is said in words rather than left as a decimal.** A real spawn
+classified a task as `design` at `0.10` and proceeded silently; a tenth is a coin flip, and a
+reader has no reason to read `0.10` in a column as a warning unless they already know where the
+line is. So a guess is labelled in its own cell and gets a line under the verdict:
+
+```
+  STATUS      STEP      DETAIL                            TIME
+  classified  workflow  design, confidence 0.10, a guess  20.6s
+
+RUNNING  this-test, armada fleet board this-test to take over
+  -> low confidence: this may be the wrong workflow. --workflow design|plan|feature|bug respawns it
+```
+
+Helm confirms below the same threshold instead of asking ([`../../PLAN.md`](../../PLAN.md)
+§15.4); Fleet at a shell has nobody to ask, so it says so loudly.
+
 **The lead word on the summary line is the Job's state, not the command's.** `RUNNING` says
 what the Job is doing; the envelope's `status` says how `spawn` ended, and they are different
 questions ([`../../PLAN.md`](../../PLAN.md) §14.3). It is spelled in the payload under

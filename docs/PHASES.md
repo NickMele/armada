@@ -248,7 +248,7 @@ gone.
 
 | Verb | Contract |
 |---|---|
-| `spawn` | Classify → worktree → `manifest init` → budgeted headless turn. Classification is Fleet's, not the orchestrator's: it is needed the moment a Job can be spawned. |
+| `spawn` | Classify → worktree → `manifest init` → **start a detached Drone and return**. Classification is Fleet's, not the orchestrator's: it is needed the moment a Job can be spawned. |
 | `ls` | Name, task, status, run time, spend, needs-attention. All of it read off `stream-json` (§9.1 F2). |
 | `inbox` | What the fleet needs from you. |
 | `answer` | Resume a Drone with your decision. |
@@ -301,6 +301,20 @@ process table whether the group is still alive. That is also what keeps a Job's 
 across `armada fleet answer`: a resumed session appends its own `result`, so continuing adds up
 rather than starting over.
 
+> **The second thing this milestone got wrong, and it is the more instructive one.** The Drone
+> argv was missing `--verbose`, which Claude Code requires alongside `--output-format
+> stream-json`. Every Job spawned, claimed a worktree and a port block, and its Drone died
+> instantly on a usage error — **while every test passed**, including one that ran a stub
+> recording what `execve` received.
+>
+> **Asserting on argv proves you built the argv you intended. It does not prove the argv is
+> accepted.** Those are different claims, and the whole suite only ever made the first. The
+> fix is in three parts, because none of them is sufficient alone: the requirement is data with
+> a pure test behind it; `armada doctor` runs the real argv against the real validator for free,
+> using a probe that provably cannot spend a token; and the limitation itself is written down in
+> [`traps.md`](traps.md), because the next thing Armada shells out to will have the same shape.
+> **The general rule: a test that only checks what you sent is not a test that you can send it.**
+
 | Not built | Where it goes |
 |---|---|
 | The MCP server, Helm, the Bridge | the two agents after this one — the three-agent shape above |
@@ -312,7 +326,7 @@ rather than starting over.
 
 | | Decided | Why not the alternative |
 |---|---|---|
-| **Testing Fleet** | Assert on the **argv** — `claude --session-id <uuid> --print --output-format stream-json` — and feed recorded `stream-json` back. **No test spawns a real session or spends tokens.** *Amended in flight: the Drone is not faked at all.* A detached Drone cannot be run through `ctx.run`, which waits by definition, so the suite starts a **stub `claude`** that records the vector it was given — what `execve` received, rather than what Armada meant to pass. Everything that is not the Drone is still faked at `ctx.run`. | Real sessions in the suite make a rate limit a red build and the API's latency a flaky one. Argv is where the bugs are anyway. The amendment was forced by the first version of `spawn` blocking, which is recorded above: **stating the fake before the design let the seam decide the design.** |
+| **Testing Fleet** | Assert on the **argv** — `claude --session-id <uuid> --print --output-format stream-json --verbose` — and feed recorded `stream-json` back. **No test spawns a real session or spends tokens.** *Amended twice in flight.* (a) The Drone is not faked at all: it runs detached, which `ctx.run` cannot express, so the suite starts a **stub `claude`** that records what `execve` received. (b) Argv assertions are **not sufficient**, so `armada doctor` runs the real argv against the real validator, free. | Real sessions in the suite make a rate limit a red build and the API's latency a flaky one. Argv is where the bugs are anyway. Both amendments were forced by failures recorded above: the first because **stating the fake before the design let the seam decide the design**, the second because **a test that only checks what you sent is not a test that you can send it** — the whole suite was green while no Drone had ever started. |
 | **The Bridge** | `ratatui`. | Hand-rolled ANSI over the existing render layer is ~300 lines, but then input handling and resize are also yours, and neither is interesting work. |
 | **Classification** | **Haiku 4.5** (`claude-haiku-4-5-20251001`). | It runs on every spawn, so its cost is the one that compounds; picking one of four labels with a confidence is exactly its shape. Keyword rules are free and wrong often enough that the override becomes the normal path. |
 | **Shape** | **Three sequential agents** — Fleet, then the MCP server, then Helm and the inbox. | One agent holding the whole milestone has no handoffs and no way to catch an early mistake before everything downstream is built on it. Fleet alone is already usable from the CLI. |

@@ -20,17 +20,21 @@ armada doctor [--fix] [--json]
 
 ## How it works
 
-Four groups of checks, in order. Each is reported independently; one failure does not stop the
+Five groups of checks, in order. Each is reported independently; one failure does not stop the
 rest.
 
 1. **Tooling** — `git`, `claude`, container runtime: present, and version.
-2. **`~/.armada`** — the directory exists, with `guild/`, `jobs/` and `workspaces/` inside it.
+2. **Drone argv** — would a Drone actually start? Every flag Fleet's argv uses is held against
+   `claude --help`, and then the argv itself is run with its prompt replaced by
+   `--input-format stream-json` and nothing on stdin, so Claude Code validates every flag,
+   starts the session, reaches EOF and exits **without making an API call**.
+3. **`~/.armada`** — the directory exists, with `guild/`, `jobs/` and `workspaces/` inside it.
    Each missing path is named, along with what writes there, because a directory is worth
    restoring only if something needs it.
-3. **Guild drift** — is `~/.armada/guild/` behind, ahead of, or diverged from its remote, and by
+4. **Guild drift** — is `~/.armada/guild/` behind, ahead of, or diverged from its remote, and by
    how many commits. This is the check that earns the command: two machines silently diverging
    is the guild's main failure mode ([`PHASES.md`](../PHASES.md) §11).
-4. **Projection** — for the current workspace, whether the guild content Claude Code is
+5. **Projection** — for the current workspace, whether the guild content Claude Code is
    actually reading matches what the guild says it should be.
 
 ## Output
@@ -85,6 +89,25 @@ printed.
 `--json` returns one result per check with `status`, `detail`, and `remedy` — the exact command
 that would fix it, or the sentence that says how. A check that passed carries no `remedy`;
 everything else always does.
+
+### Why the Drone-argv check exists
+
+Fleet's Drone argv was missing `--verbose`, which Claude Code requires alongside
+`--output-format stream-json`. Every Job spawned, claimed a worktree and a port block, and its
+Drone died instantly on a usage error nobody saw until [`fleet/ls.md`](fleet/ls.md) reported
+`STALLED`. **Every test passed throughout**, because they all asserted on the argv Armada built
+rather than on one the binary accepts — a distinction recorded in
+[`../traps.md`](../traps.md).
+
+**It costs nothing and it never will.** The probe carries no prompt and is told to read messages
+from stdin, which is closed; a turn that never happens has no ledger and no cost. If a future
+version ever answers it anyway, the check reports that as a finding rather than paying for it
+quietly.
+
+**What it does not cover**, stated because a check nobody knows the edges of is a check people
+over-trust: `claude --help` does not document combination rules — the `--verbose` requirement is
+not in it — and `--help` short-circuits before validation, so nothing can enumerate them in
+advance. The probe covers the combination Armada actually uses, which is the one that matters.
 
 ## Dependencies
 
