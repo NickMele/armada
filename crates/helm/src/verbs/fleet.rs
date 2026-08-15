@@ -2116,35 +2116,34 @@ pub fn verdict<C: Clock>(
     record.verdict = Some(reached);
     record.state = reached.settles_to();
 
-    match reached {
-        Verdict::Blocked => {
-            raise(
-                place,
-                now,
-                &record,
-                inbox::Kind::Blocked,
-                &match why {
-                    Some(why) => why.to_string(),
-                    None => format!(
-                        "`{step}` is blocked and cannot proceed without an external change"
-                    ),
-                },
-            )?;
-        }
-        Verdict::NeedsHuman => {
-            raise(
-                place,
-                now,
-                &record,
-                inbox::Kind::NeedsHuman,
-                &match why {
-                    Some(why) => why.to_string(),
-                    None => format!("`{step}` reached a judgement call"),
-                },
-            )?;
-        }
-        Verdict::Pass | Verdict::Failed => {}
-    }
+    // **The entry id is kept, not discarded.** A gate waiting on a person has to
+    // read *that* answer and not whichever one is newest, so the id the raise
+    // minted travels back out in the envelope.
+    let entry = match reached {
+        Verdict::Blocked => Some(raise(
+            place,
+            now,
+            &record,
+            inbox::Kind::Blocked,
+            &match why {
+                Some(why) => why.to_string(),
+                None => {
+                    format!("`{step}` is blocked and cannot proceed without an external change")
+                }
+            },
+        )?),
+        Verdict::NeedsHuman => Some(raise(
+            place,
+            now,
+            &record,
+            inbox::Kind::NeedsHuman,
+            &match why {
+                Some(why) => why.to_string(),
+                None => format!("`{step}` reached a judgement call"),
+            },
+        )?),
+        Verdict::Pass | Verdict::Failed => None,
+    };
     store.save(&record)?;
 
     Ok(Output::Verdict(Box::new(Envelope::ok(
@@ -2158,6 +2157,7 @@ pub fn verdict<C: Clock>(
             evidence,
             attempts,
             state: record.state,
+            entry,
         },
     ))))
 }
@@ -2713,10 +2713,16 @@ fn check<R: Run>(
     let worktree = place.expand(&record.worktree);
     let attempt = job::step_failures(&record.transitions, step).saturating_add(1);
 
+    // **A pending answer is not a pending check.** The two ids are both opaque
+    // strings and only [`job::Waiting`] tells them apart, so matching the variant
+    // is what stops an inbox entry id being handed to `check --status`.
     let mine = pending
         .as_ref()
         .filter(|open| open.step == step && open.attempt == attempt)
-        .map(|open| open.run.clone());
+        .and_then(|open| match &open.on {
+            job::Waiting::Check(run) => Some(run.clone()),
+            job::Waiting::Answer(_) => None,
+        });
 
     let Some(run_id) = mine else {
         // **Started, and nothing is decided this pass.** `--detach` returns as
@@ -2726,7 +2732,7 @@ fn check<R: Run>(
         let started = armada_fleet::manifest::check_detach(run, &place.exe, &worktree, scope)?;
         *pending = Some(job::Pending {
             step: step.to_string(),
-            run: started,
+            on: job::Waiting::Check(started),
             attempt,
         });
         return Ok(None);
