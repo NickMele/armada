@@ -7,6 +7,7 @@
 
 pub mod check;
 pub mod clean;
+pub mod components;
 pub mod config;
 pub mod dispatch;
 pub mod doctor;
@@ -22,10 +23,10 @@ pub mod status;
 use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
-    AnswerData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData,
-    DoctorData, Envelope, FleetLsData, GuildBundleData, GuildInitData, GuildSyncData, InboxData,
-    InitData, InitDryRun, KillData, MachineInitData, ScanData, ServicesData, SkillsData, SpawnData,
-    StatusData, UpDryRun, VerifyData,
+    AnswerData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
+    DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData, GuildInitData, GuildSyncData,
+    InboxData, InitData, InitDryRun, KillData, MachineInitData, ScanData, ServicesData, SkillsData,
+    SpawnData, StatusData, UpDryRun, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -64,6 +65,8 @@ pub enum Output {
     Verify(Box<Envelope<VerifyData>>),
     /// `armada manifest skills`, or `skills show <name>`.
     Skills(Box<Envelope<SkillsData>>),
+    /// `armada manifest components`.
+    Components(Box<Envelope<ComponentsData>>),
     /// `armada init` — the machine, not a workspace.
     MachineInit(Box<Envelope<MachineInitData>>),
     /// `armada doctor`.
@@ -106,6 +109,7 @@ impl Output {
             Output::Scan(e) => e.to_json(),
             Output::Verify(e) => e.to_json(),
             Output::Skills(e) => e.to_json(),
+            Output::Components(e) => e.to_json(),
             Output::MachineInit(e) => e.to_json(),
             Output::Doctor(e) => e.to_json(),
             Output::GuildSync(e) => e.to_json(),
@@ -154,6 +158,7 @@ impl Output {
             Output::Scan(e) => e.exit_code(),
             Output::Verify(e) => e.exit_code(),
             Output::Skills(e) => e.exit_code(),
+            Output::Components(e) => e.exit_code(),
             Output::MachineInit(e) => e.exit_code(),
             Output::Doctor(e) => e.exit_code(),
             Output::GuildSync(e) => e.exit_code(),

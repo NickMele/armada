@@ -71,6 +71,29 @@ fn the_schema_rejects_what_the_contract_forbids() {
             "the same for a verb PLAN.md §4.5's own list omitted",
             "manifest:\n  version: 1\n  commands:\n    explain:\n      cmd: ./scripts/explain.sh\n",
         ),
+        // **Two names the schema was silently letting through.** They are
+        // built-in verbs and were absent from the forbidden list, so a repo
+        // could declare them and have Armada's verb shadow theirs — the exact
+        // failure §4.5 exists to prevent, happening with no error at all.
+        (
+            "a commands: entry named `skills`, which the schema used to allow",
+            "manifest:\n  version: 1\n  commands:\n    skills:\n      cmd: ./scripts/skills.sh\n",
+        ),
+        (
+            "a commands: entry named `render`, the same omission",
+            "manifest:\n  version: 1\n  commands:\n    render:\n      cmd: ./scripts/render.sh\n",
+        ),
+        // And the name this milestone took. Promoting a verb into Armada's
+        // namespace takes it from every repository, which is the trade §4.5
+        // states — so the schema has to close the moment the verb ships.
+        (
+            "a commands: entry named `components`, now that the verb exists",
+            "manifest:\n  version: 1\n  commands:\n    components:\n      cmd: ./scripts/c.sh\n",
+        ),
+        (
+            "a skill named `components`, which carries the same rule (§4.8)",
+            "manifest:\n  version: 1\n  skills:\n    components:\n      summary: list them\n      doc: docs/c.md\n",
+        ),
         (
             "${files} in a commands: entry — there is no scope to compute (PLAN.md §4.5)",
             "manifest:\n  version: 1\n  commands:\n    fmt:\n      cmd: ./scripts/fmt.sh ${files}\n",

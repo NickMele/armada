@@ -648,6 +648,43 @@ pub struct SkillsData {
     pub skills: Vec<ResolvedSkillView>,
 }
 
+/// `armada manifest components` — what this repository can be filtered by.
+///
+/// **The question `--component <name>` could not answer for itself.** A caller
+/// told to narrow a run to a component had no way to learn what the components
+/// were except by opening `armada.yml`, which is the first thing a newcomer —
+/// human or agent — asks and the last thing they should have to parse. `skills:`
+/// and `commands:` had the same gap; this is the same answer, in the same shape
+/// (PLAN.md §4.5's reserved `armada manifest commands` is the third).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ComponentsData {
+    /// One row per component, in name order.
+    pub results: Vec<ResultRow>,
+    /// The components themselves, so an agent reads structure rather than a
+    /// rendered table.
+    pub components: Vec<ComponentView>,
+}
+
+/// One component, as the listing describes it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ComponentView {
+    /// The declared name — what `--component <name>` takes.
+    pub name: String,
+    /// Where its source lives, when it says.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root: Option<String>,
+    /// Whether it declares a `run:`, and so takes part in `up` and `down`.
+    ///
+    /// **A boolean rather than the driver's name.** What a caller is deciding
+    /// is whether `armada manifest up <name>` means anything for this component;
+    /// which driver it uses is a different question and `status` answers it.
+    pub runs: bool,
+    /// Its checks, by the selector each is reached with — `<component>:<check>`
+    /// truncated to the check's own name, since the component is the row.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub checks: Vec<String>,
+}
+
 /// One skill, resolved: its grants expanded to the commands they name.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedSkillView {

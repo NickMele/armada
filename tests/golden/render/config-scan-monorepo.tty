@@ -1,41 +1,41 @@
-[38;2;255;180;84mno armada.yml here[0m · [38;2;107;114;128mthis is evidence and not a config[0m
+[38;2;255;180;84mno armada.yml here[0m · [38;2;156;163;175mthis is evidence and not a config[0m
 
-  [1m[38;2;107;114;128mSTATUS[0m  [1m[38;2;107;114;128mKIND[0m             [1m[38;2;107;114;128mDETAIL[0m
-  [38;2;61;220;132mfound[0m   lockfile         [38;2;107;114;128mbackend/uv.lock, uv[0m
-  [38;2;61;220;132mfound[0m   lockfile         [38;2;107;114;128mscripts/uv.lock, uv[0m
-  [38;2;61;220;132mfound[0m   lockfile         [38;2;107;114;128mweb/pnpm-lock.yaml, pnpm@9[0m
-  [38;2;61;220;132mfound[0m   package scripts  [38;2;107;114;128m4 in web/package.json[0m
-  [38;2;61;220;132mfound[0m   compose          [38;2;107;114;128mdocker-compose.yml, 3 services[0m
-  [38;2;61;220;132mfound[0m   ci               [38;2;107;114;128m.github/workflows/ci.yml, 5 steps[0m
-  [38;2;61;220;132mfound[0m   pyproject        [38;2;107;114;128mbackend/pyproject.toml, 3 tool sections[0m
-  [38;2;61;220;132mfound[0m   pyproject        [38;2;107;114;128mscripts/pyproject.toml, 1 tool section[0m
-  [38;2;107;114;128mabsent[0m  makefile         [38;2;107;114;128m—[0m
+  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mKIND[0m             [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;61;220;132mFOUND[0m   lockfile         [38;2;156;163;175mbackend/uv.lock, uv[0m
+  [38;2;61;220;132mFOUND[0m   lockfile         [38;2;156;163;175mscripts/uv.lock, uv[0m
+  [38;2;61;220;132mFOUND[0m   lockfile         [38;2;156;163;175mweb/pnpm-lock.yaml, pnpm@9[0m
+  [38;2;61;220;132mFOUND[0m   package scripts  [38;2;156;163;175m4 in web/package.json[0m
+  [38;2;61;220;132mFOUND[0m   compose          [38;2;156;163;175mdocker-compose.yml, 3 services[0m
+  [38;2;61;220;132mFOUND[0m   ci               [38;2;156;163;175m.github/workflows/ci.yml, 5 steps[0m
+  [38;2;61;220;132mFOUND[0m   pyproject        [38;2;156;163;175mbackend/pyproject.toml, 3 tool sections[0m
+  [38;2;61;220;132mFOUND[0m   pyproject        [38;2;156;163;175mscripts/pyproject.toml, 1 tool section[0m
+  [38;2;156;163;175mABSENT[0m  makefile         [38;2;156;163;175m—[0m
 
-  [38;2;255;169;64mweb/package.json scripts[0m · [38;2;107;114;128mverbatim and not interpreted[0m
-    [38;2;92;225;230mdev[0m    [38;2;107;114;128mnext dev[0m
-    [38;2;92;225;230mbuild[0m  [38;2;107;114;128mnext build[0m
-    [38;2;92;225;230mtest[0m   [38;2;107;114;128mvitest run[0m
-    [38;2;92;225;230mlint[0m   [38;2;107;114;128meslint .[0m
+  [38;2;255;169;64mweb/package.json scripts[0m · [38;2;156;163;175mverbatim and not interpreted[0m
+    [38;2;92;225;230mdev[0m    [38;2;156;163;175mnext dev[0m
+    [38;2;92;225;230mbuild[0m  [38;2;156;163;175mnext build[0m
+    [38;2;92;225;230mtest[0m   [38;2;156;163;175mvitest run[0m
+    [38;2;92;225;230mlint[0m   [38;2;156;163;175meslint .[0m
 
   [38;2;255;169;64mpyproject tool sections[0m
-    [38;2;92;225;230mbackend/pyproject.toml[0m  [38;2;107;114;128mruff, mypy, pytest[0m
-    [38;2;92;225;230mscripts/pyproject.toml[0m  [38;2;107;114;128mruff[0m
+    [38;2;92;225;230mbackend/pyproject.toml[0m  [38;2;156;163;175mruff, mypy, pytest[0m
+    [38;2;92;225;230mscripts/pyproject.toml[0m  [38;2;156;163;175mruff[0m
 
   [38;2;255;169;64mdocker-compose.yml services[0m
-    [38;2;92;225;230mpostgres[0m  [38;2;107;114;128m${POSTGRES_PORT:-5432}[0m
-    [38;2;92;225;230mredis[0m     [38;2;107;114;128m6379[0m
-    [38;2;92;225;230msearch[0m    [38;2;107;114;128m9200[0m
+    [38;2;92;225;230mpostgres[0m  [38;2;156;163;175m${POSTGRES_PORT:-5432}[0m
+    [38;2;92;225;230mredis[0m     [38;2;156;163;175m6379[0m
+    [38;2;92;225;230msearch[0m    [38;2;156;163;175m9200[0m
 
-  [38;2;255;169;64mci steps[0m · [38;2;107;114;128mthe best existing evidence of what you actually run[0m
-    [38;2;107;114;128mpnpm --dir web install --frozen-lockfile · uv sync --project backend[0m
-    [38;2;107;114;128mpnpm --dir web test · uv run --project backend pytest[0m
+  [38;2;255;169;64mci steps[0m · [38;2;156;163;175mthe best existing evidence of what you actually run[0m
+    [38;2;156;163;175mpnpm --dir web install --frozen-lockfile · uv sync --project backend[0m
+    [38;2;156;163;175mpnpm --dir web test · uv run --project backend pytest[0m
 
-  [38;2;255;169;64mpackages[0m · [38;2;107;114;128ma directory with a manifest of its own[0m
-    [38;2;92;225;230mbackend[0m  [38;2;107;114;128mpyproject.toml, uv.lock[0m
-    [38;2;92;225;230mscripts[0m  [38;2;107;114;128mpyproject.toml, uv.lock[0m
-    [38;2;92;225;230mweb[0m      [38;2;107;114;128mpackage.json, pnpm-lock.yaml[0m
+  [38;2;255;169;64mpackages[0m · [38;2;156;163;175ma directory with a manifest of its own[0m
+    [38;2;92;225;230mbackend[0m  [38;2;156;163;175mpyproject.toml, uv.lock[0m
+    [38;2;92;225;230mscripts[0m  [38;2;156;163;175mpyproject.toml, uv.lock[0m
+    [38;2;92;225;230mweb[0m      [38;2;156;163;175mpackage.json, pnpm-lock.yaml[0m
 
-  [38;2;255;169;64mworkspaces: candidates[0m · [38;2;107;114;128meach resolves its own dependencies[0m
-    [38;2;107;114;128mbackend · scripts · web[0m
+  [38;2;255;169;64mworkspaces: candidates[0m · [38;2;156;163;175meach resolves its own dependencies[0m
+    [38;2;156;163;175mbackend · scripts · web[0m
 
-[1m[38;2;255;169;64mEvidence only.[0m [38;2;107;114;128mArmada does not guess which of these you actually run.[0m
+[1m[38;2;255;169;64mEvidence only.[0m [38;2;156;163;175mArmada does not guess which of these you actually run.[0m

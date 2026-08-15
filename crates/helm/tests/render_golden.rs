@@ -29,10 +29,11 @@
 //! than a flag you reach for without reading.
 
 use armada_core::envelope::{
-    Asked, CheckData, CleanData, DispatchData, DoctorData, Envelope, Finding, FleetLsData,
-    GrantedCommand, GuildChoice, GuildSyncData, Headline, InitData, JobRow, MachineInitData,
-    PortReport, Problem, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled,
-    SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
+    Asked, CheckData, CleanData, ComponentView, ComponentsData, DispatchData, DoctorData, Envelope,
+    Finding, FleetLsData, GrantedCommand, GuildChoice, GuildSyncData, Headline, InitData, JobRow,
+    MachineInitData, PortReport, Problem, Released, ResolvedSkillView, ResultRow, ScanData,
+    ServicesData, Settled, SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed,
+    UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -713,6 +714,49 @@ fn skills_matches_its_fixture() {
 fn skills_show_matches_its_fixture() {
     let one = declared_skills().into_iter().take(1).collect();
     assert_render("skills-show", &skills_envelope(one));
+}
+
+/// `armada manifest components` — the listing that says what `--component`
+/// takes.
+///
+/// **The report it answers**: a reader about to narrow a run had no way to learn
+/// the names except by opening `armada.yml`. The fixture holds all three shapes
+/// a component comes in — one with a service and checks, one with checks alone,
+/// and one with neither — because the `STATUS` word is the only thing that
+/// distinguishes them and a fixture with one row would freeze none of that.
+#[test]
+fn components_matches_its_fixture() {
+    fn view(name: &str, root: Option<&str>, runs: bool, checks: &[&str]) -> ComponentView {
+        ComponentView {
+            name: name.to_string(),
+            root: root.map(str::to_string),
+            runs,
+            checks: checks.iter().map(|c| (*c).to_string()).collect(),
+        }
+    }
+    let components = vec![
+        view("api", Some("services/api"), true, &["lint", "test"]),
+        view("docs", Some("docs"), false, &[]),
+        view("web", Some("apps/web"), false, &["e2e", "lint", "types"]),
+    ];
+    let results = components
+        .iter()
+        .map(|component| {
+            let mut row = ResultRow::new(component.name.clone(), Status::Ok);
+            row.reason = Some(component.checks.join(", "));
+            row
+        })
+        .collect();
+    let output = Output::Components(Box::new(Envelope::ok(
+        "components",
+        Some(workspace()),
+        Status::Ok,
+        ComponentsData {
+            results,
+            components,
+        },
+    )));
+    assert_render("components", &output);
 }
 
 // ------------------------------------------------------------------- M2: the

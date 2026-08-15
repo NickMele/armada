@@ -54,6 +54,9 @@
                     "clean",
                     "status",
                     "config",
+                    "skills",
+                    "components",
+                    "render",
                     "agents-md",
                     "explain"
                   ]
@@ -84,6 +87,9 @@
                     "clean",
                     "status",
                     "config",
+                    "skills",
+                    "components",
+                    "render",
                     "agents-md",
                     "explain"
                   ]

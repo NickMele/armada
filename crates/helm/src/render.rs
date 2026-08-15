@@ -51,10 +51,11 @@ pub mod table;
 pub mod term;
 
 use armada_core::envelope::{
-    AnswerData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData,
-    Disposition, DoctorData, Envelope, Finding, FleetLsData, GuildBundleData, GuildInitData,
-    GuildSyncData, Headline, InboxData, InitData, InitDryRun, KillData, MachineInitData, ResultRow,
-    ScanData, ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerifyData,
+    AnswerData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
+    DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData, GuildBundleData,
+    GuildInitData, GuildSyncData, Headline, InboxData, InitData, InitDryRun, KillData,
+    MachineInitData, ResultRow, ScanData, ServicesData, SkillsData, SpawnData, StatusData,
+    Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -93,6 +94,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Scan(envelope) => scan(envelope, style, width),
         Output::Verify(envelope) => verify(envelope, style, width),
         Output::Skills(envelope) => skills(envelope, style, width),
+        Output::Components(envelope) => components(envelope, style, width),
         Output::MachineInit(envelope) => machine_init(envelope, style, width),
         Output::Doctor(envelope) => doctor(envelope, style, width),
         Output::GuildSync(envelope) => guild_sync(envelope, style, width),
@@ -2572,6 +2574,59 @@ fn skills(envelope: &Envelope<SkillsData>, style: Style, width: usize) -> String
             format::count(data.skills.len(), "skill"),
             format::count(unresolved, "unresolved reference"),
         ],
+    ));
+    out
+}
+
+/// `armada manifest components` — what `--component <name>` can be given.
+///
+/// **The same shape as `skills`**, because it answers the same kind of question
+/// about the same document, and a reader who has met one has met the other.
+///
+/// The `STATUS` column says whether a component takes part in `up` and `down`,
+/// which is the one fact about it that changes what a caller does next. `RUNS`
+/// against a component with a `run:`, `DECLARED` against one without — the
+/// second is not a lesser state and is not painted as one; a component that is
+/// only a set of checks is an ordinary and common thing.
+fn components(envelope: &Envelope<ComponentsData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = header(style, envelope.workspace.as_ref(), None, None, width);
+
+    let mut table = Table::new(columns("component", "checks", false)).indent(2);
+    for component in &data.components {
+        let checks = component.checks.join(", ");
+        table = table.row(vec![
+            match component.runs {
+                true => token("runs", Role::BeaconGreen),
+                false => token("declared", Role::SteelGrey),
+            },
+            Cell::plain(component.name.clone()),
+            detail_cell(style, (!checks.is_empty()).then_some(checks.as_str())),
+        ]);
+    }
+    out.push_str(&table.render(style, width));
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    let checks: usize = data.components.iter().map(|c| c.checks.len()).sum();
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            format::count(data.components.len(), "component"),
+            format::count(checks, "check"),
+        ],
+    ));
+    // **The line that makes the list actionable.** A reader is here because they
+    // were about to type `--component` and did not know what to put after it;
+    // ending with the shape of that call saves them working it out.
+    out.push_str(&format!(
+        "\n{}\n",
+        style.paint(
+            Role::SteelGrey,
+            "`armada manifest check --component <name>`, or `<name>:<check>` for one check."
+        )
     ));
     out
 }

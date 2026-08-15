@@ -12,6 +12,7 @@ MANIFEST — what a workspace is and how to operate it
   status                what is running, what is mine, what is stale
   check [<selector>]    lint, format and test — the verb a gate calls
   skills [show <name>]  what this repository knows about itself
+  components            what this repository can be filtered by
   clean                 release what this workspace owns
   <name>                a commands: entry from this repo's armada.yml
 

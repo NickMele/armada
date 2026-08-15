@@ -29,6 +29,7 @@ and the three status enums. These pages use them without re-explaining them.
 | [`manifest/clean.md`](manifest/clean.md) | `armada manifest clean` | shipped |
 | [`manifest/commands.md`](manifest/commands.md) | `armada manifest <repo-command>` | shipped |
 | [`manifest/skills.md`](manifest/skills.md) | `armada manifest skills` · `render` | `skills` shipped · `render` not built |
+| [`manifest/components.md`](manifest/components.md) | `armada manifest components` | shipped |
 | [`manifest/up.md`](manifest/up.md) | `armada manifest up` | shipped |
 | [`manifest/down.md`](manifest/down.md) | `armada manifest down` | shipped |
 | [`manifest/check.md`](manifest/check.md) | `armada manifest check` | shipped, less `--detach` / `--status` |

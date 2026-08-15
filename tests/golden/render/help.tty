@@ -12,6 +12,7 @@
   status                [38;2;156;163;175mwhat is running, what is mine, what is stale[0m
   check [<selector>]    [38;2;156;163;175mlint, format and test — the verb a gate calls[0m
   skills [show <name>]  [38;2;156;163;175mwhat this repository knows about itself[0m
+  components            [38;2;156;163;175mwhat this repository can be filtered by[0m
   clean                 [38;2;156;163;175mrelease what this workspace owns[0m
   <name>                [38;2;156;163;175ma commands: entry from this repo's armada.yml[0m
 

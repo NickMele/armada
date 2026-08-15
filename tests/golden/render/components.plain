@@ -1,0 +1,10 @@
+armada  3d9cc7ba
+
+  STATUS    COMPONENT  CHECKS
+  RUNS      api        lint, test
+  DECLARED  docs       -
+  DECLARED  web        e2e, lint, types
+
+OK  3 components, 5 checks
+
+`armada manifest check --component <name>`, or `<name>:<check>` for one check.

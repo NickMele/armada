@@ -138,7 +138,9 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Clean { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
-        Invocation::Config { json, .. } | Invocation::Skills { json, .. } => *json,
+        Invocation::Config { json, .. }
+        | Invocation::Skills { json, .. }
+        | Invocation::Components { json } => *json,
         Invocation::MachineInit(init) => init.json,
         Invocation::Doctor { json, .. } => *json,
         Invocation::Guild(guild) => guild.json(),
@@ -444,6 +446,7 @@ fn dispatch(
             args::ConfigSub::Verify => verbs::config::verify(&mut app, progress),
         },
         Invocation::Skills { show, .. } => verbs::skills::run(&mut app, show.as_deref()),
+        Invocation::Components { .. } => verbs::components::run(&mut app),
         Invocation::Version | Invocation::Help(_) => unreachable!("handled before dispatch"),
         Invocation::MachineInit(_)
         | Invocation::Doctor { .. }

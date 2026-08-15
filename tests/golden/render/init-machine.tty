@@ -1,18 +1,18 @@
-  [1m[38;2;107;114;128mSTATUS[0m   [1m[38;2;107;114;128mCHECK[0m      [1m[38;2;107;114;128mDETAIL[0m
-  [38;2;61;220;132mfound[0m    git        [38;2;107;114;128m2.51.0[0m
-  [38;2;61;220;132mfound[0m    claude     [38;2;107;114;128m2.0.14[0m
-  [38;2;255;92;92mmissing[0m  docker     [38;2;107;114;128mnot required by every repo[0m
-  [38;2;61;220;132mcreated[0m  ~/.armada  [38;2;107;114;128mguild/, jobs/, workspaces/[0m
+  [1m[38;2;156;163;175mSTATUS[0m   [1m[38;2;156;163;175mCHECK[0m      [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;61;220;132mFOUND[0m    git        [38;2;156;163;175m2.51.0[0m
+  [38;2;61;220;132mFOUND[0m    claude     [38;2;156;163;175m2.0.14[0m
+  [38;2;255;92;92mMISSING[0m  docker     [38;2;156;163;175mnot required by every repo[0m
+  [38;2;61;220;132mCREATED[0m  ~/.armada  [38;2;156;163;175mguild/, jobs/, workspaces/[0m
 
-[38;2;255;169;64mDo you already have a guild?[0m  [38;2;107;114;128m›[0m [38;2;92;225;230m3 build one now[0m
+[38;2;255;169;64mDo you already have a guild?[0m  [38;2;156;163;175m›[0m [38;2;92;225;230m3 build one now[0m
 
-  [38;2;107;114;128mimported from ~/.claude/ · 19 skills · 12 hooks · 4 plugins · CLAUDE.md[0m
+  [38;2;156;163;175mimported from ~/.claude/ · 19 skills · 12 hooks · 4 plugins · CLAUDE.md[0m
 
 [1m[38;2;255;169;64m1/5[0m  [1m[38;2;230;232;235mHow should agents write to you?[0m
-     [38;2;107;114;128mTone, length, and what to lead with. Every agent reads this before it says[0m
-     [38;2;107;114;128manything. Writes voice.md.[0m
+     [38;2;156;163;175mTone, length, and what to lead with. Every agent reads this before it says[0m
+     [38;2;156;163;175manything. Writes voice.md.[0m
 
-     [38;2;107;114;128mnow  [0m[38;2;92;225;230mLead with the answer. Tables for anything comparative.[0m
-     [38;2;107;114;128menter for a new line · ctrl-d when done · esc keeps what import found[0m
+     [38;2;156;163;175mnow  [0m[38;2;92;225;230mLead with the answer. Tables for anything comparative.[0m
+     [38;2;156;163;175menter for a new line · ctrl-d when done · esc keeps what import found[0m
 
-[1m[38;2;61;220;132mREADY[0m  [38;2;107;114;128mguild at ~/.armada/guild · 0 answered · 5 kept as imported[0m
+[1m[38;2;61;220;132mREADY[0m  [38;2;156;163;175mguild at ~/.armada/guild · 0 answered · 5 kept as imported[0m

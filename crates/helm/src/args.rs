@@ -94,6 +94,15 @@ pub enum Invocation {
         /// Emit the envelope rather than human output.
         json: bool,
     },
+    /// `armada manifest components`.
+    ///
+    /// **Takes nothing but the shared flags.** Listing what a repository can be
+    /// filtered by is not itself a thing to filter; a caller who wants one
+    /// component's detail is asking a different verb.
+    Components {
+        /// Emit the envelope rather than human output.
+        json: bool,
+    },
     /// `armada manifest config <scan|verify>`.
     Config {
         /// Which half of the sandwich (PLAN.md §5).
@@ -386,7 +395,7 @@ pub struct Common {
 /// The verbs Manifest owns. A `commands:` entry may not shadow one — the schema
 /// rejects that, because without the rule a repo can silently break the one
 /// guarantee the project exists to provide.
-pub const BUILTIN_VERBS: [&str; 11] = [
+pub const BUILTIN_VERBS: [&str; 12] = [
     "init",
     "up",
     "down",
@@ -395,6 +404,7 @@ pub const BUILTIN_VERBS: [&str; 11] = [
     "status",
     "config",
     "skills",
+    "components",
     "render",
     "agents-md",
     "explain",
@@ -450,8 +460,16 @@ pub const RESERVED_GUILD_VERBS: [(&str, &str); 2] = [
 /// A separate list from [`BUILTIN_VERBS`], because that one claims names,
 /// several of which answer "not built yet": giving `armada manifest render
 /// --help` a page would promise a verb that does not exist.
-pub const MANIFEST_BUILT: [&str; 8] = [
-    "init", "up", "down", "status", "check", "clean", "config", "skills",
+pub const MANIFEST_BUILT: [&str; 9] = [
+    "init",
+    "up",
+    "down",
+    "status",
+    "check",
+    "clean",
+    "config",
+    "skills",
+    "components",
 ];
 
 /// **Every verb the parser accepts**, as the caller types it after `armada`.
@@ -619,6 +637,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         "check" => Ok(Invocation::Check(Box::new(check(rest, json, color)?))),
         "config" => config(rest, json, color),
         "skills" => skills(rest, json, color),
+        "components" => components(rest, json, color),
         "clean" => {
             let common = common(
                 rest,
@@ -1428,6 +1447,38 @@ fn skills(
     Ok(Invocation::Skills { show, json })
 }
 
+/// `armada manifest components`.
+///
+/// **No positional and no `show`, unlike `skills`.** A skill's detail — its
+/// grants, its doc, its verify scope — is a page of its own; a component's is
+/// already three columns wide, and the verbs that act on one (`up`, `check
+/// --component`) are where the rest of it is answered.
+fn components(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    let json = json || rest.iter().any(|a| a == "--json");
+    *color = color_in(rest, *color).map_err(|e| failure(e, json))?;
+    let words = positional(rest);
+    if !words.is_empty() {
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: words.join(" "),
+                message: "`armada manifest components` takes nothing".to_string(),
+                next_action: Some(
+                    "it lists them all; `armada manifest check --component <name>` acts on one"
+                        .to_string(),
+                ),
+            },
+            json,
+        ));
+    }
+    only_flags(rest, json, &[])?;
+    Ok(Invocation::Components { json })
+}
+
 /// The bare words of a verb's own argv, with the flags Armada owns removed.
 fn positional(rest: &[String]) -> Vec<String> {
     let mut out = Vec::new();
@@ -2099,6 +2150,43 @@ mod tests {
             failure.json,
             "a refusal lost the --json it had already seen"
         );
+    }
+
+    /// **The schema forbids exactly the names Armada claims, and no others.**
+    ///
+    /// A `commands:` entry may not shadow a built-in verb, and the *schema* is
+    /// what enforces it — so a name in [`BUILTIN_VERBS`] that the schema does
+    /// not list is a name a repository can silently take. It had happened twice
+    /// before this test existed: `skills` and `render` were claimed here and
+    /// absent there, which means a repo declaring `commands: { skills: … }`
+    /// parsed, and then `armada manifest skills` ran Armada's verb instead of
+    /// theirs. That is precisely the guarantee the project exists to provide,
+    /// broken silently.
+    ///
+    /// Two lists, because `commands:` and `skills:` carry the same rule for the
+    /// same reason (PLAN.md §4.5, §4.8); both are checked.
+    #[test]
+    fn the_schema_forbids_every_name_armada_claims() {
+        let schema: serde_json::Value =
+            serde_json::from_str(armada_core::config::SCHEMA).expect("the schema parses");
+        let manifest = &schema["$defs"]["manifest"]["properties"];
+        let mut checked = 0;
+        for section in ["commands", "skills"] {
+            let forbidden = manifest[section]["propertyNames"]["allOf"]
+                .as_array()
+                .and_then(|all| all.iter().find_map(|rule| rule["not"]["enum"].as_array()))
+                .unwrap_or_else(|| panic!("`{section}` declares no forbidden names"));
+            let mut listed: Vec<&str> = forbidden.iter().filter_map(|v| v.as_str()).collect();
+            listed.sort_unstable();
+            let mut claimed: Vec<&str> = BUILTIN_VERBS.to_vec();
+            claimed.sort_unstable();
+            assert_eq!(
+                listed, claimed,
+                "`{section}` and BUILTIN_VERBS disagree about what a repo may name"
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, 2, "a section stopped being checked");
     }
 
     /// Nothing claimed here is claimed twice: a name that is built must not
