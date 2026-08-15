@@ -246,14 +246,16 @@ fn a_child_dropped_without_wait_leaves_a_zombie_and_the_wrapper_never_does() {
 
     // The rule the three tests above depend on, and the half of it that is
     // portable is asserted right here: **a zombie stays a member of its process
-    // group until Armada reaps it**, and the reap is what clears it — on both
-    // platforms, which is why those tests reap before they judge.
+    // group until somebody reaps it**, and the reap is what clears it — on both
+    // platforms.
     //
-    // The half that is not portable, and so is recorded rather than asserted:
-    // `killpg(pgid, 0)` against a group whose only remaining member is an
-    // unreaped zombie *succeeds* on Linux and fails on darwin. So no test may
-    // ask `stop_group` whether it emptied a group Armada has not waited on yet —
-    // the answer is the platform, not the kill.
+    // The half that is not portable is that `killpg(pgid, 0)` against a group
+    // whose only remaining member is an unreaped zombie *succeeds* on Linux and
+    // fails on darwin. `posix::stop_group` closes that gap by reaping the group
+    // itself before every reading of it, so `report.gone` is now the same answer
+    // on both platforms — but only for children this process parented. The
+    // reaps above stay because they assert the mechanism rather than rely on it,
+    // and because `ps` counts a zombie on both platforms whoever reaps it.
     reap(leaked_pid);
     assert!(
         !process_state(leaked_pid).contains('Z'),

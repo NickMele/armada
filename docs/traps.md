@@ -482,10 +482,15 @@ The reaping parent is the `armada` invocation that spawned the Drone, and it exi
 later; init then reaps, so the *next* invocation — which is the only thing that ever asks — sees
 nothing. Every caller of `alive` is a fresh process by construction.
 
-**Rule: never assert `!alive(...)` in the same process that started the child.** Ask the group
-instead: a second `stop_group` reports the group empty, which is the fact that was wanted. An
-assertion written the obvious way fails here for a reason that looks like a bug in the kill path
-and is not.
+**Rule: never assert `!alive(...)` in the same process that started the child *unless something
+has reaped it first*.** `posix::stop_group` now does that reap (see the entry below), so an
+`alive` asked after a `stop` is answering about a pid that no longer exists and is trustworthy
+on both platforms. An `alive` asked about a child this process signalled by hand, and never
+waited on, is still reading a corpse's start time and still says yes.
+
+The sentence this entry carried before — *"ask the group instead: a second `stop_group` reports
+the group empty"* — was true on darwin and false on Linux, and the reason is the entry directly
+below. It is not advice, it is the same measurement seen from the other side.
 
 ### A group holding only a zombie: `killpg` fails on darwin and **succeeds** on Linux
 
@@ -519,10 +524,56 @@ same probe succeeds, so `stop_group` waits out the whole grace period,
 escalates to SIGKILL, and *still* reads the group as alive, returning
 `gone: false`. A group that died on the first SIGTERM therefore reports `CLEAN`
 on darwin and `FAILED` on Linux, and only one of those is even accidentally
-right. This is a test-shaped hazard rather than a production one, because the
-case Armada actually reclaims is an **orphan**: its parent is gone, so init reaps
-it the moment it dies and both platforms answer `ESRCH`. **Reap before reading
-the probe as "empty", and reap before counting `ps` output.**
+right. **Reap before reading the probe as "empty", and reap before counting `ps`
+output.**
+
+**It was called a test-shaped hazard, and that was the third mistake in this
+entry.** The sentence read: *"this is a test-shaped hazard rather than a
+production one, because the case Armada actually reclaims is an orphan"*. Every
+clause of it is true and the conclusion does not follow — Armada reclaims
+orphans **and** it kills children it started itself. `armada fleet kill` calls
+`fleet::drone::stop` on a Drone whose handle `drone::start` dropped on purpose,
+and the invocation that started the Drone is still its parent, because
+**`setsid` moves a child to a new session and never to a new parent**. Between
+the spawn and this process's exit, the Drone is Armada's own unreaped child by
+construction. So on Linux `armada fleet kill` reported *"the Drone would not
+die"* about a Drone that died on the first SIGTERM — the exact `FAILED`-for-a-
+clean-kill described above, in production, on the platform most users are on.
+
+Measured 2026-08-15 in `rust:1-bookworm`, the same assertion both ways:
+
+```
+                                              darwin        Linux
+stop(): sh -c 'sleep 60', handle dropped
+  before the fix                              Stopped 0.14s Survived 5.54s
+  after                                       Stopped 0.14s Stopped  0.02s
+```
+
+The 5.5 seconds is the tell: it is `GRACE` plus the post-SIGKILL wait, so the
+whole escalation ran and the probe still said the group was populated.
+
+**The fix is one reap, in the probe's own path, not three patched callers.**
+`posix::stop_group` calls `posix::reap_group(pgid)` — `waitpid(-pgid, WNOHANG)`
+in a loop — before *every* reading of the group, so the group is always read
+after this process's own dead have stopped counting as members of it.
+`stop_group_reaping` is the same function with the reap supplied by the caller:
+`ProcessGroup` passes its own `try_wait`, because a bare `waitpid` would consume
+an exit status that its `Child` handle is about to be asked for and leave the
+handle answering `ECHILD`. Two rules fall out, and both are load-bearing:
+
+- **`waitpid(-pgid)`, never `waitpid(-1)` and never a non-positive pgid.** `-1`
+  reaps whichever child exited first — another Job's Drone, another test's group
+  leader — and hands its status to nobody. `waitpid(0)` is this process's own
+  group. Both are refused rather than negated.
+- **`WNOHANG`, so the reap collects corpses and never waits for one.** That is
+  what keeps `Survived` a real answer: it is still what a member wedged in
+  uninterruptible sleep, or a corpse whose parent is some other process that
+  will not wait on it, produces. A reap that blocked would have deleted the
+  signal instead of correcting it.
+
+The orphan case is unchanged and free: `waitpid` on a process that was never
+this one's child returns `ECHILD`, so the reap does nothing and init's has
+already happened.
 
 > **This entry was wrong in its first form, and how it was wrong is the
 > instructive part.** It read *"a zombie answers `ESRCH` to `kill(pid, 0)`"*,
@@ -540,6 +591,14 @@ the probe as "empty", and reap before counting `ps` output.**
 > carried over from an earlier summary rather than read off the table a dozen
 > lines above it in this very entry. Reasoning from the narrative instead of
 > from the numbers is the failure this entry exists to document.
+>
+> And a third time, caught by CI on 2026-08-14: the entry closed by calling the
+> whole thing *"a test-shaped hazard rather than a production one"*. That was
+> reasoning from a category — *Armada reclaims orphans* — over a call path it
+> had not traced. `fleet::drone::start` abandons a child it is still the parent
+> of, so `drone::stop` is the production caller the sentence said did not exist.
+> The pattern across all three corrections is the same: **each one restated a
+> conclusion instead of re-reading the measurement or the code under it.**
 
 ### `std::process::exit` skips a `BufWriter` flush — and it is size-dependent
 

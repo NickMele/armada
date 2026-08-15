@@ -154,12 +154,21 @@ pub fn killpg(pgid: i32, signal: i32) -> io::Result<()> {
 /// remaining member is a zombie, `killpg(pgid, 0)` *succeeds* on Linux and
 /// fails on darwin with **`EPERM`, not `ESRCH`** — `ESRCH` arrives on both only
 /// after the `waitpid` (`docs/traps.md`). So a caller that parented the group
-/// must reap before reading this as "empty", which
-/// [`crate::process::ProcessGroup::stop`] does, and which is why its report
-/// describes the kill rather than the state after it.
+/// **must reap before reading this as "empty"** — [`stop_group`] and
+/// [`crate::process::ProcessGroup::stop`] both do, and [`reap_group`] is what
+/// they call.
 ///
-/// The case Armada actually reclaims is an **orphan**, whose parent is gone, so
-/// init reaps it the moment it dies and both platforms agree. Note the
+/// **This function is deliberately not the one that reaps.** It answers exactly
+/// one question — *does this group still have members* — and a zombie is a
+/// member. Folding the reap in here would make a probe with an obvious name do
+/// something with none of the obvious name's constraints, on every caller's
+/// behalf including the ones holding a `Child` whose status it would eat.
+///
+/// An **orphan** needs none of this: its parent is gone, so init reaps it the
+/// moment it dies and both platforms agree. That is *a* case Armada handles, and
+/// an earlier note here said it was the only one — it is not, because
+/// `armada-fleet`'s `drone::start` abandons a child this process is still the
+/// parent of, and `drone::stop` then kills it. Note the
 /// consequence of testing `rc == 0`: a genuine `EPERM` — a group Armada may not
 /// signal — also reads as "not alive". Armada started every group it probes, so
 /// it has permission by construction; a future caller that probes a group it
@@ -433,7 +442,11 @@ mod tests {
     /// process's child, with nothing left that could `wait` on it.
     fn abandoned_sleeper() -> i32 {
         let request = armada_core::ctx::RunRequest::new(
-            vec!["/bin/sh".to_string(), "-c".to_string(), "sleep 60".to_string()],
+            vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "sleep 60".to_string(),
+            ],
             std::path::PathBuf::from("/"),
         );
         let group = crate::process::ProcessGroup::spawn(&request).expect("/bin/sh exists");
@@ -464,7 +477,10 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
 
-        assert_eq!(reaped, 1, "the abandoned Drone's corpse was never collected");
+        assert_eq!(
+            reaped, 1,
+            "the abandoned Drone's corpse was never collected"
+        );
         assert!(
             !group_alive(pgid),
             "the group still had a member after its only corpse was reaped"
@@ -482,7 +498,10 @@ mod tests {
         let pgid = abandoned_sleeper();
 
         assert_eq!(reap_group(pgid), 0, "a running child was reaped");
-        assert!(group_alive(pgid), "the reap ended a group it should not have");
+        assert!(
+            group_alive(pgid),
+            "the reap ended a group it should not have"
+        );
 
         let report = stop_group(pgid, Duration::from_millis(300));
         assert!(report.existed);
