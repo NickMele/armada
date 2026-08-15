@@ -101,7 +101,14 @@ pub enum Needs {
         /// What the step named.
         path: String,
     },
-    /// The Job's branch, in the repository it branched from.
+    /// **The work, committed on the Job's branch.**
+    ///
+    /// Two facts, because the branch alone proves nothing: `armada fleet spawn`
+    /// creates the branch before the Drone starts, so *"a branch of that name
+    /// exists"* is true of every Job from the moment it is minted and would make
+    /// `branch_exists` a gate that has already passed. What the predicate's own
+    /// words claim — *"the work is on a local branch"* — is the branch **and** a
+    /// worktree with nothing left uncommitted.
     Branch,
     /// A person's answer.
     Person,
@@ -454,7 +461,7 @@ pub fn decide(needs: &Needs, facts: &Facts) -> Outcome {
             },
             Some(probe) => Outcome::DoesNotHold {
                 evidence: vec![probe_evidence("branch", probe)],
-                why: format!("`{}` is not a branch in the repository", probe.scope),
+                why: format!("the work is not committed on `{}`", probe.scope),
             },
         },
 

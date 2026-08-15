@@ -120,7 +120,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 37] = [
+const PAGES: [Page; 38] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -725,6 +725,26 @@ const PAGES: [Page; 37] = [
         notes: &[
             "A Job with an open question is answered, not resumed, and one past",
             "its ceiling is neither: a person decides what happens to that.",
+        ],
+    },
+    Page {
+        path: "fleet tick",
+        synopsis: "tick [<job>]",
+        summary: "gate the step it rests on, then advance, retry or stop",
+        usage: &[
+            "armada fleet tick [<job>] [--json]",
+            "armada fleet tick [<job>] --watch [--json]",
+        ],
+        flags: &[(
+            "--watch",
+            "keep going until nothing in scope could move again",
+        )],
+        examples: &[],
+        notes: &[
+            "A Drone runs one exchange and exits. This is what notices, runs the",
+            "step's verify: predicate, and writes the verdict it earns.",
+            "A step advances only on evidence an external command produced.",
+            "review_clean and subjob_passed stop and ask: nothing can decide them.",
         ],
     },
     Page {

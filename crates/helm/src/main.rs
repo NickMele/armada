@@ -570,6 +570,9 @@ fn dispatch(
             args::FleetInvocation::Resume { job, .. } => {
                 verbs::fleet::resume(&run, &SystemClock, &place, &job)
             }
+            args::FleetInvocation::Tick { job, watch, .. } => {
+                verbs::fleet::tick(&run, &SystemClock, &place, job.as_deref(), watch)
+            }
             args::FleetInvocation::Reap {
                 jobs, dry_run, yes, ..
             } => reap(&run, &place, &jobs, dry_run, yes, style, terminal),

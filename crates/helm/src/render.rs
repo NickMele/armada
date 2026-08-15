@@ -51,6 +51,7 @@ pub mod table;
 pub mod term;
 
 use armada_core::envelope::{
+    TickData,
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, FailureData,
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
@@ -127,6 +128,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Report(envelope) => reported(envelope, style, width),
         Output::Ask(envelope) => asked(envelope, style, width),
         Output::Verdict(envelope) => stepped(envelope, style, width),
+        Output::Tick(envelope) => ticked(envelope, style, width),
     }
 }
 
@@ -273,6 +275,72 @@ fn stepped(envelope: &Envelope<VerdictData>, style: Style, width: usize) -> Stri
             data.job.clone(),
             format!("{} {}", data.step, data.verdict.word()),
             format!("attempt {}", data.attempts),
+        ],
+    ));
+    out
+}
+
+
+/// `armada fleet tick` — one pass of the workflow loop.
+///
+/// **One row per Job, and the predicate is a column.** A reader watching a
+/// fleet advance wants to know which gate settled a step, not only that it
+/// settled: `failing_test_exists` on a `reproduce` row is the difference
+/// between *"it moved on"* and *"it moved on because a test it wrote is failing
+/// in the tree"*, and `job.rs`'s [`Gate`](armada_core::fleet::job::Gate) already
+/// makes the same argument about the record.
+///
+/// **The word is the payload's**, in both audiences, for the reason every other
+/// render in this file carries the schema's spelling: a reader who sees
+/// `check_passes` can grep their workflow for it.
+fn ticked(envelope: &Envelope<TickData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("job", "detail", false)).indent(2);
+    for row in &data.results {
+        table = table.row(vec![
+            token(
+                &row.did,
+                match row.did.as_str() {
+                    "advanced" | "finished" => Role::BeaconGreen,
+                    "halted" | "retried" => Role::DistressRed,
+                    "asked" => Role::SignalAmber,
+                    _ => Role::SteelGrey,
+                },
+            ),
+            Cell::painted(row.job.clone(), Role::NavalBlue),
+            detail_cell(
+                style,
+                Some(&match &row.predicate {
+                    Some(must) => format!("{} · {must} — {}", row.step, row.why),
+                    None => format!("{} — {}", row.step, row.why),
+                }),
+            ),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    if table.is_empty() {
+        out.push_str("  no Jobs\n");
+    }
+    out.push('\n');
+    out.push_str(&headlined(
+        style,
+        &style.strong(
+            match data.moved {
+                0 => Role::SteelGrey,
+                _ => Role::BeaconGreen,
+            },
+            "TICK",
+        ),
+        &[
+            match data.moved {
+                1 => "1 Job moved".to_string(),
+                moved => format!("{moved} Jobs moved"),
+            },
+            match data.results.len() {
+                1 => "1 looked at".to_string(),
+                seen => format!("{seen} looked at"),
+            },
         ],
     ));
     out

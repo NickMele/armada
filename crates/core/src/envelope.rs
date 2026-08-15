@@ -2321,6 +2321,49 @@ pub struct AskData {
     pub answered: Option<String>,
 }
 
+/// `armada fleet tick` — the workflow loop, one pass (PHASES.md §8.6).
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct TickData {
+    /// One row per Job the pass looked at, in name order.
+    pub results: Vec<TickRow>,
+    /// How many of them the pass actually moved.
+    ///
+    /// **Counted rather than left to the reader**, because the answer to *"did
+    /// anything happen"* is the whole reason to run this on a timer, and it is
+    /// the field a `--watch` loop and a `Stop` hook both read.
+    pub moved: usize,
+}
+
+/// What one pass of the loop did about one Job.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TickRow {
+    /// The Job's handle.
+    pub job: String,
+    /// The step it was on when the pass looked.
+    pub step: String,
+    /// What the pass did — `idle`, `waiting`, `advanced`, `retried`,
+    /// `finished`, `asked`, `halted`.
+    pub did: String,
+    /// What the Job is doing after it.
+    pub state: crate::fleet::JobState,
+    /// The verdict the gate recorded, when it recorded one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<crate::fleet::Verdict>,
+    /// Which predicate gated the step, in the workflow's own spelling.
+    ///
+    /// **The schema's word, carried rather than prettified** — the same rule
+    /// [`crate::fleet::workflow::Predicate::word`] states. A reader who sees
+    /// `failing_test_exists` can grep the workflow file for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub predicate: Option<String>,
+    /// What the gate rested on — the ids and exit codes external commands
+    /// produced.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<Evidence>,
+    /// Why, in words, for the screen and the inbox.
+    pub why: String,
+}
+
 /// `fleet.verdict` — how a step ended (PLAN.md §14.3).
 ///
 /// **The one added field on the §3.1 envelope is `verdict`**, and it rides in

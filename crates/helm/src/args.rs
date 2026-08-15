@@ -224,6 +224,15 @@ pub enum FleetInvocation {
         job: String,
     },
     /// `armada fleet resume <job>`.
+    /// `armada fleet tick` — one pass of the workflow loop, or `--watch`.
+    Tick {
+        /// Emit the envelope.
+        json: bool,
+        /// One Job, or the whole fleet when absent.
+        job: Option<String>,
+        /// Keep going until nothing in scope could move again.
+        watch: bool,
+    },
     Resume {
         /// `--json`.
         json: bool,
@@ -338,6 +347,7 @@ impl FleetInvocation {
             | FleetInvocation::Show { json, .. }
             | FleetInvocation::Pause { json, .. }
             | FleetInvocation::Resume { json, .. }
+            | FleetInvocation::Tick { json, .. }
             | FleetInvocation::Reap { json, .. }
             | FleetInvocation::Inbox { json, .. } => *json,
         }
@@ -751,14 +761,21 @@ pub const RESERVED_TOP_LEVEL: [(&str, &str); 0] = [];
 
 /// Fleet's verbs.
 ///
-/// **All nine are built.** Fleet is usable from a shell before the MCP server or
-/// Helm exists, which is the whole point of building it first (PHASES.md §8.5) —
-/// and it is what lets every key on the Bridge name a verb a person could type.
+/// **All eleven are built.** Fleet is usable from a shell before the MCP server
+/// or Helm exists, which is the whole point of building it first
+/// (PHASES.md §8.5) — and it is what lets every key on the Bridge name a verb a
+/// person could type.
+///
+/// **`tick` is the eleventh, and it is M4's** (PHASES.md §8.6): the pass that
+/// notices a Drone's exchange has ended, gates the step, and advances, retries
+/// or stops. It is a verb rather than a daemon because Armada owns no
+/// long-lived process, so a timer, a hook, the Bridge and a person typing it are
+/// all equally valid drivers.
 ///
 /// **Names only.** What each verb is *for* is one sentence, and it is on that
 /// verb's help page — kept in two places it would eventually be two sentences.
-pub const FLEET_VERBS: [&str; 10] = [
-    "spawn", "ls", "show", "board", "answer", "inbox", "kill", "pause", "resume", "reap",
+pub const FLEET_VERBS: [&str; 11] = [
+    "spawn", "ls", "show", "board", "answer", "inbox", "kill", "pause", "resume", "reap", "tick",
 ];
 
 /// The top-level verbs that are built.
@@ -2212,6 +2229,22 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                     json: parsed.json,
                     job,
                 },
+            }
+        }
+        "tick" => {
+            let parsed = flags(tail, json, color, "fleet tick", &["--watch"], &[])?;
+            FleetInvocation::Tick {
+                json: parsed.json,
+                // **A Job is optional here and required by `pause`.** The loop's
+                // ordinary shape is a pass over the whole fleet on a timer;
+                // naming one is the debugging case, not the normal one.
+                job: one_positional(
+                    &parsed,
+                    "fleet tick",
+                    "which Job",
+                    "`armada fleet ls` lists them",
+                )?,
+                watch: parsed.on("--watch"),
             }
         }
         "reap" => {

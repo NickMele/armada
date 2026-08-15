@@ -19,18 +19,19 @@
 //! [`armada_core::fleet::job::observe`] reconciles the two, in one place, and
 //! `ls` renders that while `kill` and `answer` persist it.
 
-use armada_core::ctx::{Clock, Run};
+use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
     InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ReapCandidate,
-    ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TransitionRow, VerdictData,
+    ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow, TransitionRow,
+    VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
 use armada_core::fleet::drone::Reading;
 use armada_core::fleet::job::{self, Handle, Job, Observed, Spend};
 use armada_core::fleet::workflow::{self, Workflow};
-use armada_core::fleet::{drone as argv, JobState, Verdict};
+use armada_core::fleet::{advance, drone as argv, gate, JobState, Verdict};
 use armada_fleet::drone;
 use armada_fleet::jobs::Store;
 use armada_fleet::{home, inbox, manifest, own, worktree};
@@ -2159,4 +2160,646 @@ pub fn verdict<C: Clock>(
             state: record.state,
         },
     ))))
+}
+
+// ------------------------------------------------------------------------ tick
+
+/// How often `--watch` looks again.
+///
+/// **Two seconds, the Bridge's cadence and `fleet.ask_human`'s**, and for the
+/// same reason: a pass over an idle fleet is a directory listing, a transcript
+/// tail and a `ps`, none of which any Drone notices. A third number here would
+/// be a third thing to tune.
+pub const TICK_POLL_MS: u64 = 2_000;
+
+/// `armada fleet tick` — **the workflow loop** (PHASES.md §8.6).
+///
+/// # The gap this closes
+///
+/// A Drone runs one exchange under `--print` and exits. That is correct — it is
+/// what lets `spawn` return and several Jobs run at once — but **nothing
+/// observed the exchange ending**, so a Job went `RUNNING` and stayed there for
+/// ever beside a process group that was gone. This is the thing that observes
+/// it, gates the step, and then advances, retries or stops.
+///
+/// # The shape, and why the decisions are not here
+///
+/// Everything this function decides was decided in
+/// [`armada_core::fleet::advance`] and [`armada_core::fleet::gate`]. What lives
+/// here is the order the adapter calls go in:
+///
+/// 1. [`look`] — the transcript and the process table, reconciled once.
+/// 2. `advance::attention` — is there anything to do at all.
+/// 3. [`gather`] — start or poll a check, search the tree, stat a path, read the
+///    inbox. **The only I/O in the gate**, and it is driven by `gate::needs`
+///    rather than by a second copy of the mapping.
+/// 4. `gate::decide` — does the predicate hold.
+/// 5. `advance::after` — advance, retry, ask or stop.
+/// 6. [`verdict`] — the record, written by the verb that already refuses a
+///    `PASS` with no evidence. **`fleet.report` still writes only `entered` and
+///    `attempted`**; the two words a gate owns are still written by one thing,
+///    and that thing is now something that exists.
+///
+/// # Why this is a verb rather than a daemon
+///
+/// Armada owns no long-lived process and this milestone does not add one. A pass
+/// is idempotent and cheap, so a timer, a `Stop` hook, the Bridge or a person
+/// typing it are all valid drivers — and `--watch` is one of them rather than
+/// the only one. A daemon would need its own lease, its own crash recovery and
+/// its own answer to *"what happened while it was down"*, all to replace a
+/// command that can simply be run again.
+pub fn tick<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    handle: Option<&str>,
+    watch: bool,
+) -> Result<Output, ArmadaError> {
+    loop {
+        let rows = pass(run, now, place, handle)?;
+        let moved = rows.iter().filter(|row| did_something(&row.did)).count();
+        // **`--watch` ends when there is nothing left that could move.** A Job
+        // that is finished, halted or waiting on a person is `idle`, and a Job
+        // over its ceiling becomes one — so the Job's own budget is what stops
+        // this loop, and a second ceiling here would be a second thing that has
+        // to agree with the first.
+        let live = rows
+            .iter()
+            .any(|row| row.did != TICK_IDLE && row.did != TICK_HALTED
+                && row.did != TICK_FINISHED && row.did != TICK_ASKED);
+        if !watch || !live {
+            return Ok(Output::Tick(Box::new(Envelope::ok(
+                "fleet tick",
+                None,
+                Status::Ok,
+                TickData {
+                    results: rows,
+                    moved,
+                },
+            ))));
+        }
+        now.sleep_until(now.mono().saturating_add(TICK_POLL_MS));
+    }
+}
+
+/// The words a row's `did` may take.
+///
+/// **Named constants rather than literals at seven call sites**, because two of
+/// them decide whether `--watch` goes round again and a typo in one of those
+/// would be a loop that never ends or one that ends immediately.
+pub const TICK_IDLE: &str = "idle";
+/// Something is still running; nothing was settled.
+pub const TICK_WAITING: &str = "waiting";
+/// The step passed and the Job moved to the next one.
+pub const TICK_ADVANCED: &str = "advanced";
+/// The step did not pass and it was started again.
+pub const TICK_RETRIED: &str = "retried";
+/// The last step passed and the Job is `DONE`.
+pub const TICK_FINISHED: &str = "finished";
+/// It stopped and put a question in the inbox.
+pub const TICK_ASKED: &str = "asked";
+/// It stopped: a ceiling, or a gate nothing can decide.
+pub const TICK_HALTED: &str = "halted";
+
+/// Whether a row is one where the loop actually did something.
+fn did_something(did: &str) -> bool {
+    !matches!(did, TICK_IDLE | TICK_WAITING)
+}
+
+/// One pass over the Jobs in scope.
+fn pass<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    handle: Option<&str>,
+) -> Result<Vec<TickRow>, ArmadaError> {
+    let store = place.store();
+    let records = match handle {
+        Some(handle) => vec![store.find(handle)?],
+        None => {
+            let mut all = store.all()?;
+            all.sort_by(|a, b| a.name.cmp(&b.name));
+            all
+        }
+    };
+    records
+        .into_iter()
+        .map(|record| one(run, now, place, record))
+        .collect()
+}
+
+/// What the loop did about one Job.
+fn one<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    record: Job,
+) -> Result<TickRow, ArmadaError> {
+    let wall = now.wall_ms();
+    let (observed, reading, alive) = look(run, place, &record, wall);
+
+    match advance::attention(&record, &observed, alive) {
+        advance::Attention::Idle { why } => {
+            // **What was observed is persisted on the way past.** `ls` refuses
+            // to, because a read verb that wrote would make `armada fleet ls |
+            // head` a mutation — but this verb's whole job is to move Jobs on,
+            // and a Job whose Drone died is one whose record should say so
+            // rather than waiting for somebody to run `kill`.
+            let mut record = record;
+            settle_if_changed(&mut record, &observed, place, now)?;
+            Ok(tick_row(
+                &record,
+                TICK_IDLE,
+                why.to_string(),
+                None,
+                Vec::new(),
+                None,
+            ))
+        }
+        advance::Attention::Ceiling(ceiling) => {
+            let mut record = record;
+            // `settle` records the ceiling and raises it: exhaustion is a
+            // first-class outcome and `on_exhausted: needs_human` means stop and
+            // ask, never abort.
+            settle(&mut record, &observed, place, now)?;
+            place.store().save(&record)?;
+            let verdict = record.verdict;
+            Ok(tick_row(
+                &record,
+                TICK_HALTED,
+                format!("it reached its {} ceiling", ceiling.word()),
+                None,
+                Vec::new(),
+                verdict,
+            ))
+        }
+        advance::Attention::Gate => gate_step(run, now, place, record, &observed, &reading),
+    }
+}
+
+/// Gate the step a Job is resting on, and act on the answer.
+fn gate_step<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    mut record: Job,
+    observed: &Observed,
+    reading: &Reading,
+) -> Result<TickRow, ArmadaError> {
+    // **The spend the transcript sums, written down before anything else.** A
+    // pass that advanced a step without persisting what the last exchange cost
+    // would let a Job cross a ceiling and be gated anyway on the next pass.
+    record.spend = observed.spend;
+
+    let flow = match read_workflow(place, &record.workflow) {
+        Ok(flow) => flow,
+        // **A guild that cannot be read stops the Job rather than failing the
+        // pass.** One Job whose workflow is missing must not stop the loop
+        // moving every other Job on.
+        Err(error) => {
+            let why = format!(
+                "its `{}` workflow could not be read: {}",
+                record.workflow, error.message
+            );
+            return halt(place, now, record, None, why);
+        }
+    };
+    let step_id = record.step.clone();
+    let Some(step) = flow
+        .steps
+        .iter()
+        .find(|candidate| candidate.id == step_id)
+        .cloned()
+    else {
+        let why = format!("the `{}` workflow has no step called `{step_id}`", flow.name);
+        return halt(place, now, record, None, why);
+    };
+
+    let want = gate::needs(&gate::resolve(&step, &record.facts));
+    // Taken out and put back so the gatherer may record a run it started while
+    // still reading the rest of the record.
+    let mut pending = record.pending.take();
+    let facts = gather(run, place, &record, &want, &step_id, reading, &mut pending);
+    record.pending = pending;
+    let outcome = gate::decide(&want, &facts?);
+    // Whatever was started or read is recorded before anything acts on it: a
+    // pass that started a check and then failed to save the run id would start
+    // a second one on the next pass, for ever.
+    place.store().save(&record)?;
+
+    let attempts = job::step_failures(&record.transitions, &step_id).saturating_add(1);
+    let next = advance::after(&outcome, &flow, &step_id, attempts);
+    let evidence = match &outcome {
+        gate::Outcome::Holds { evidence } | gate::Outcome::DoesNotHold { evidence, .. } => {
+            evidence.clone()
+        }
+        gate::Outcome::NotYet { .. }
+        | gate::Outcome::AsksAPerson { .. }
+        | gate::Outcome::CannotDecide { .. } => Vec::new(),
+    };
+    let predicate = Some(step.verify.must.word().to_string());
+
+    // **Nothing is settled until the verdict is written, and the verdict is
+    // written by `fleet.verdict`.** This is the one caller that legitimately
+    // reaches it: the separation that shipped today — a Drone reports, the gate
+    // decides — is preserved by using the same verb rather than by writing the
+    // record here.
+    if let Some(reached) = next.verdict() {
+        let why = match &next {
+            advance::Next::Ask { question } => Some(question.clone()),
+            advance::Next::Halt { why, .. } => Some(why.clone()),
+            _ => None,
+        };
+        verdict(
+            now,
+            place,
+            &record.name,
+            &step_id,
+            reached,
+            evidence.clone(),
+            why.as_deref(),
+        )?;
+        record = place.store().find(&record.name)?;
+    }
+
+    match next {
+        advance::Next::Again { why } => {
+            let verdict = record.verdict;
+            Ok(tick_row(&record, TICK_WAITING, why, predicate, evidence, verdict))
+        }
+        advance::Next::Advance { to } => {
+            record.pending = None;
+            record.step.clone_from(&to);
+            start_step(run, place, &mut record, &flow, &to, None)?;
+            place.store().save(&record)?;
+            Ok(tick_row(
+                &record,
+                TICK_ADVANCED,
+                format!("`{step_id}` passed; it is on `{to}`"),
+                predicate,
+                evidence,
+                Some(Verdict::Pass),
+            ))
+        }
+        advance::Next::Retry { attempt, why } => {
+            record.pending = None;
+            start_step(run, place, &mut record, &flow, &step_id, Some(&why))?;
+            place.store().save(&record)?;
+            Ok(tick_row(
+                &record,
+                TICK_RETRIED,
+                format!("`{step_id}` did not pass ({why}); attempt {attempt}"),
+                predicate,
+                evidence,
+                Some(Verdict::Failed),
+            ))
+        }
+        advance::Next::Finish => {
+            record.pending = None;
+            record.state = JobState::Done;
+            close_entries(place, &record)?;
+            place.store().save(&record)?;
+            Ok(tick_row(
+                &record,
+                TICK_FINISHED,
+                format!("`{step_id}` was its last step"),
+                predicate,
+                evidence,
+                Some(Verdict::Pass),
+            ))
+        }
+        advance::Next::Hand { why } => {
+            record.pending = None;
+            record.state = JobState::Paused;
+            record.verdict = Some(Verdict::NeedsHuman);
+            raise(place, now, &record, inbox::Kind::NeedsHuman, &why)?;
+            place.store().save(&record)?;
+            Ok(tick_row(
+                &record,
+                TICK_ASKED,
+                why,
+                predicate,
+                evidence,
+                Some(Verdict::NeedsHuman),
+            ))
+        }
+        // `verdict` already recorded `NEEDS_HUMAN` and raised the question.
+        advance::Next::Ask { question } => {
+            let verdict = record.verdict;
+            Ok(tick_row(&record, TICK_ASKED, question, predicate, evidence, verdict))
+        }
+        advance::Next::Halt { why, .. } => {
+            let verdict = record.verdict;
+            Ok(tick_row(&record, TICK_HALTED, why, predicate, evidence, verdict))
+        }
+    }
+}
+
+/// Stop a Job the loop cannot gate at all, and say why.
+fn halt<C: Clock>(
+    place: &Where,
+    now: &C,
+    mut record: Job,
+    predicate: Option<String>,
+    why: String,
+) -> Result<TickRow, ArmadaError> {
+    record.state = JobState::Paused;
+    record.verdict = Some(Verdict::NeedsHuman);
+    raise(place, now, &record, inbox::Kind::NeedsHuman, &why)?;
+    place.store().save(&record)?;
+    Ok(tick_row(
+        &record,
+        TICK_HALTED,
+        why,
+        predicate,
+        Vec::new(),
+        Some(Verdict::NeedsHuman),
+    ))
+}
+
+/// Persist an observation only when it changed something.
+///
+/// **A save per pass on an idle fleet would rewrite every record every two
+/// seconds**, which is a lot of writes to record that nothing happened — and it
+/// would re-raise a stall the inbox has already reported.
+fn settle_if_changed<C: Clock>(
+    record: &mut Job,
+    observed: &Observed,
+    place: &Where,
+    now: &C,
+) -> Result<(), ArmadaError> {
+    if record.state == observed.state && record.spend == observed.spend {
+        return Ok(());
+    }
+    settle(record, observed, place, now)?;
+    place.store().save(record)
+}
+
+/// One row of the pass.
+fn tick_row(
+    record: &Job,
+    did: &str,
+    why: String,
+    predicate: Option<String>,
+    evidence: Vec<Evidence>,
+    verdict: Option<Verdict>,
+) -> TickRow {
+    TickRow {
+        job: record.name.clone(),
+        step: record.step.clone(),
+        did: did.to_string(),
+        state: record.state,
+        verdict,
+        predicate,
+        evidence,
+        why,
+    }
+}
+
+/// Start a Drone on a step.
+///
+/// **`--resume`, not a fresh session.** A Job's conversation is one Claude Code
+/// session across every step (PLAN.md §14.1); starting the next step in a new
+/// one would throw away everything the last step established and pay to
+/// rediscover it.
+fn start_step<R: Run>(
+    run: &R,
+    place: &Where,
+    record: &mut Job,
+    flow: &Workflow,
+    step: &str,
+    failed: Option<&str>,
+) -> Result<(), ArmadaError> {
+    let path = place.expand(&record.worktree);
+    if !path.is_dir() {
+        return Err(ArmadaError {
+            class: ErrClass::Environment,
+            r#where: record.worktree.clone(),
+            message: format!(
+                "`{}` has no worktree left to run in: `{}` is gone",
+                record.name, record.worktree
+            ),
+            next_action: Some(format!(
+                "`armada fleet kill {}` ends it and releases what it holds",
+                record.name
+            )),
+        });
+    }
+    let mut ask = prompt(flow, step, &record.task);
+    if let Some(failed) = failed {
+        // **The gate's own words, handed back.** A retry that started with the
+        // same prompt as the first attempt is an agent asked to do the same
+        // thing again with no idea what was wrong with the last answer.
+        ask = format!(
+            "{ask}\n\nThe previous attempt did not pass this step's gate: {failed}\n\
+             Fix that. Armada re-runs the gate when your turn ends."
+        );
+    }
+    record.state = JobState::Running;
+    record.drone = Some(start_drone(
+        run,
+        place,
+        record,
+        &path,
+        argv::resume_argv(&record.uuid, &ask, &place.posture()?),
+    )?);
+    Ok(())
+}
+
+// --------------------------------------------------------- gathering the facts
+
+/// Look at whatever this step's predicate needs looked at.
+///
+/// **Driven by [`gate::Needs`], and it is the only I/O in the gate.** Nothing
+/// here decides anything: every branch answers a question and hands the answer
+/// back for [`gate::decide`] to weigh, which is what keeps the decision testable
+/// with values and no filesystem.
+fn gather<R: Run>(
+    run: &R,
+    place: &Where,
+    record: &Job,
+    want: &gate::Needs,
+    step: &str,
+    reading: &Reading,
+    pending: &mut Option<job::Pending>,
+) -> Result<gate::Facts, ArmadaError> {
+    let worktree = place.expand(&record.worktree);
+    let mut facts = gate::Facts::default();
+
+    match want {
+        gate::Needs::Nothing => {
+            // **How the exchange ended, read off the transcript.** The turn's
+            // own `is_error` is the fact; `--print` exits before anything could
+            // ask the process, which is why this is the ledger and not a wait.
+            facts.turn = reading.last().map(|turn| gate::Probed {
+                scope: step.to_string(),
+                exit: i32::from(turn.is_error),
+            });
+        }
+        gate::Needs::GreenCheck { scope } => {
+            facts.check = check(run, place, record, step, scope.as_deref(), pending)?;
+        }
+        gate::Needs::RedCheck { test, scope } => {
+            facts.test = Some(searched(run, &worktree, test));
+            // **The search first, and the check only if it found something.** A
+            // check run costs a repository's whole suite; starting one to
+            // decide a predicate whose other half has already failed is the one
+            // avoidable expense in the loop.
+            if facts.test.as_ref().is_some_and(gate::Probed::found) {
+                facts.check = check(run, place, record, step, scope.as_deref(), pending)?;
+            }
+        }
+        gate::Needs::Path { path } => {
+            // **Joined onto the worktree, and an absolute path is refused by
+            // `join` doing exactly what it is asked.** A workflow naming `/etc`
+            // would be gating on a file outside the Job entirely, which is a
+            // `armada guild verify` finding rather than something to silently
+            // allow here — it is reported as *not on disk* until that verb
+            // exists to refuse it (`docs/reserved/016`).
+            let at = worktree.join(path);
+            facts.artifact = Some(gate::Probed {
+                scope: path.clone(),
+                exit: i32::from(!at.exists()),
+            });
+        }
+        gate::Needs::Branch => {
+            facts.branch = Some(committed(run, &worktree, &record.branch));
+        }
+        gate::Needs::Person => {
+            facts.answer = inbox::open_for(&entries(place)?, &record.uuid)
+                .and_then(|entry| entry.answered.clone());
+        }
+        // Nothing to look at: neither is decidable, and `decide` says so.
+        gate::Needs::AnotherJob { .. } | gate::Needs::Unstated { .. } => {}
+    }
+    Ok(facts)
+}
+
+/// Start a check for this step, or read the one already running.
+///
+/// **One run per attempt, and the attempt travels with the id.** A check started
+/// for attempt one must never settle attempt two: the Drone has rewritten the
+/// worktree in between, and a stale green would advance a step on a run that
+/// predates the work it is judging.
+fn check<R: Run>(
+    run: &R,
+    place: &Where,
+    record: &Job,
+    step: &str,
+    scope: Option<&str>,
+    pending: &mut Option<job::Pending>,
+) -> Result<Option<gate::CheckFact>, ArmadaError> {
+    let worktree = place.expand(&record.worktree);
+    let attempt = job::step_failures(&record.transitions, step).saturating_add(1);
+
+    let mine = pending
+        .as_ref()
+        .filter(|open| open.step == step && open.attempt == attempt)
+        .map(|open| open.run.clone());
+
+    let Some(run_id) = mine else {
+        // **Started, and nothing is decided this pass.** `--detach` returns as
+        // soon as the run is handed to its own session, so the answer arrives on
+        // a later pass — which is the whole reason the loop is a repeatable verb
+        // rather than one long call.
+        let started = armada_fleet::manifest::check_detach(run, &place.exe, &worktree, scope)?;
+        *pending = Some(job::Pending {
+            step: step.to_string(),
+            run: started,
+            attempt,
+        });
+        return Ok(None);
+    };
+
+    let (status, exit) = armada_fleet::manifest::check_status(run, &place.exe, &worktree, &run_id)?;
+    if status.is_terminal() {
+        // **Cleared the moment it decided.** A settled run left pending would be
+        // read again on the next attempt and answer about the wrong worktree.
+        *pending = None;
+    }
+    Ok(Some(gate::CheckFact {
+        run: run_id,
+        status,
+        exit,
+    }))
+}
+
+/// Whether a named test is anywhere in the Job's worktree.
+///
+/// **`--untracked`, because the test the Drone just wrote is not committed
+/// yet.** The `reproduce` step's whole output is a new failing test, and a
+/// search that only looked at tracked files would answer *"you did not write
+/// it"* about a file sitting in front of it.
+///
+/// **A fixed string, not a pattern.** A test name containing a `.` or a `[` is
+/// ordinary in most languages and is a regular expression in none of the
+/// workflows anybody writes.
+fn searched<R: Run>(run: &R, worktree: &Path, test: &str) -> gate::Probed {
+    let argv = vec![
+        "git".to_string(),
+        "grep".to_string(),
+        "--untracked".to_string(),
+        "--fixed-strings".to_string(),
+        "-l".to_string(),
+        "-e".to_string(),
+        test.to_string(),
+    ];
+    let exit = run
+        .call(&RunRequest::new(argv, worktree.to_path_buf()))
+        .ok()
+        .and_then(|output| output.code)
+        .unwrap_or(1);
+    gate::Probed {
+        scope: test.to_string(),
+        exit,
+    }
+}
+
+/// Whether the work is committed on the Job's branch.
+///
+/// Two commands, and the second is what makes the predicate mean anything:
+/// `spawn` creates the branch before the Drone starts, so the ref existing is
+/// true of every Job from the moment it is minted.
+fn committed<R: Run>(run: &R, worktree: &Path, branch: &str) -> gate::Probed {
+    let exists = run
+        .call(&RunRequest::new(
+            vec![
+                "git".to_string(),
+                "rev-parse".to_string(),
+                "--verify".to_string(),
+                "--quiet".to_string(),
+                format!("refs/heads/{branch}"),
+            ],
+            worktree.to_path_buf(),
+        ))
+        .ok()
+        .and_then(|output| output.code)
+        .unwrap_or(1);
+    if exists != 0 {
+        return gate::Probed {
+            scope: branch.to_string(),
+            exit: exists,
+        };
+    }
+    let dirty = run
+        .call(&RunRequest::new(
+            vec![
+                "git".to_string(),
+                "status".to_string(),
+                "--porcelain".to_string(),
+            ],
+            worktree.to_path_buf(),
+        ))
+        .ok()
+        .is_some_and(|output| !output.stdout.trim().is_empty());
+    match dirty {
+        true => gate::Probed {
+            scope: format!("{branch}, with changes still uncommitted"),
+            exit: 1,
+        },
+        false => gate::Probed {
+            scope: branch.to_string(),
+            exit: 0,
+        },
+    }
 }

@@ -22,7 +22,7 @@
 
 use armada_core::ctx::{Run, RunRequest, SpawnError, SpawnErrorKind};
 use armada_core::envelope::Released;
-use armada_core::error::{ArmadaError, ErrClass};
+use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::ports::PortBlock;
 use std::path::Path;
 use std::time::Duration;
@@ -53,6 +53,87 @@ pub fn init(run: &impl Run, exe: &Path, worktree: &Path) -> Result<Option<PortBl
         .get("data")
         .and_then(|data| data.get("port_block"))
         .and_then(|block| serde_json::from_value(block.clone()).ok()))
+}
+
+/// `armada manifest check --detach` in a worktree, and the run id it opened.
+///
+/// **The one way Fleet runs a check, and deliberately the detached one**
+/// (PHASES.md §8.6). The workflow loop starts a check and walks away: an
+/// attached run would hold `armada fleet tick` open for however long a
+/// repository's suite takes, which is minutes for a Job the loop is supposed to
+/// be checking on every couple of seconds — and would do it once per Job.
+///
+/// Everything that can fail synchronously fails here, in the caller's terminal:
+/// `--detach` resolves selection, the working diff, the port block and every
+/// argv before it hands the run to a `setsid`'d child.
+pub fn check_detach(
+    run: &impl Run,
+    exe: &Path,
+    worktree: &Path,
+    scope: Option<&str>,
+) -> Result<String, ArmadaError> {
+    let mut args: Vec<&str> = vec!["manifest", "check", "--detach", "--json"];
+    if let Some(scope) = scope {
+        args.push("--scope");
+        args.push(scope);
+    }
+    let envelope = call(
+        run,
+        exe,
+        worktree,
+        &args,
+        "armada manifest check --detach",
+    )?;
+    envelope
+        .get("data")
+        .and_then(|data| data.get("run_id"))
+        .and_then(|id| id.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| ArmadaError {
+            class: ErrClass::ArmadaBug,
+            r#where: "armada manifest check --detach".to_string(),
+            message: "a detached check did not report its run id".to_string(),
+            next_action: None,
+        })
+}
+
+/// What a detached check has decided, read with `armada manifest check --status`.
+///
+/// **The exit code is derived from the run's own error class, not from what
+/// `--status` exited with.** `--status` is a read verb, and *"its exit code
+/// describes the query, not the thing queried"* (`ARCHITECTURE.md` §1.7). A
+/// verdict's evidence has to carry the number the run itself produced — a
+/// successful read of a failing run exits `0`, and recording that as the check's
+/// exit code would turn every red check into evidence of a green one.
+pub fn check_status(
+    run: &impl Run,
+    exe: &Path,
+    worktree: &Path,
+    run_id: &str,
+) -> Result<(Status, i32), ArmadaError> {
+    let envelope = call(
+        run,
+        exe,
+        worktree,
+        &["manifest", "check", "--status", run_id, "--json"],
+        "armada manifest check --status",
+    )?;
+    let status: Status = envelope
+        .get("status")
+        .and_then(|status| serde_json::from_value(status.clone()).ok())
+        .ok_or_else(|| ArmadaError {
+            class: ErrClass::ArmadaBug,
+            r#where: run_id.to_string(),
+            message: "a check run reported no status".to_string(),
+            next_action: None,
+        })?;
+    let exit = envelope
+        .get("error")
+        .filter(|error| !error.is_null())
+        .and_then(|error| error.get("class"))
+        .and_then(|class| serde_json::from_value::<ErrClass>(class.clone()).ok())
+        .map_or(0, |class| i32::from(class.exit_code()));
+    Ok((status, exit))
 }
 
 /// `armada manifest clean` in a worktree — **step one of three**, and the order

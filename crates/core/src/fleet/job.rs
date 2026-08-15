@@ -937,6 +937,8 @@ mod tests {
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
             transitions: Vec::new(),
+            pending: None,
+            facts: std::collections::BTreeMap::new(),
         }
     }
 
@@ -1135,6 +1137,8 @@ mod tests {
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
             transitions: Vec::new(),
+            pending: None,
+            facts: std::collections::BTreeMap::new(),
         };
         assert_eq!(job.run_time_ms(1_840_000), 840_000);
         // A clock that stepped backwards costs a display value, never a panic.
@@ -1342,6 +1346,8 @@ mod tests {
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
             transitions: Vec::new(),
+            pending: None,
+            facts: std::collections::BTreeMap::new(),
         };
         let json = serde_json::to_string(&job).unwrap();
         assert!(!json.contains("confidence"), "an absent field is absent");

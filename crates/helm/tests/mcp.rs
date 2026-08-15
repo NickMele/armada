@@ -143,6 +143,8 @@ impl Machine {
             progress: Vec::new(),
             attempts: BTreeMap::new(),
             transitions: Vec::new(),
+            pending: None,
+            facts: std::collections::BTreeMap::new(),
         };
         Store::at(&place.armada_home).save(&record).expect("saved");
         if !transcript.is_empty() {
@@ -466,6 +468,7 @@ fn an_assertion_and_the_gate_that_disagreed_are_both_kept() {
             scope: "api:test".to_string(),
             exit: 1,
         }],
+        None,
     )
     .expect("recorded");
 
@@ -506,6 +509,7 @@ fn a_verdict_with_no_reported_entry_counts_the_attempt_as_it_always_did() {
                 scope: "api:test".to_string(),
                 exit: 1,
             }],
+            None,
         )
         .expect("recorded");
         assert_eq!(
@@ -540,6 +544,7 @@ fn a_verdict_that_stops_the_job_writes_no_boundary_and_leaves_the_attempt_open()
         "implement",
         Verdict::Blocked,
         Vec::new(),
+        None,
     )
     .expect("recorded");
 
@@ -638,6 +643,7 @@ fn a_pass_with_no_evidence_is_refused_and_nothing_is_written() {
         "implement",
         Verdict::Pass,
         Vec::new(),
+        None,
     )
     .expect_err("a refusal");
 
@@ -670,6 +676,7 @@ fn a_pass_with_evidence_advances_the_job_and_counts_the_attempt() {
             scope: "api:test".to_string(),
             exit: 0,
         }],
+        None,
     )
     .expect("recorded");
 
@@ -704,6 +711,7 @@ fn a_retried_step_counts_up_rather_than_starting_again() {
                 scope: "api:test".to_string(),
                 exit: 1,
             }],
+            None,
         )
         .expect("recorded");
         assert!(json(&output).contains(&format!("\"attempts\": {expected}")));
@@ -736,6 +744,7 @@ fn a_stopped_job_reaches_the_inbox_with_the_step_that_stopped_it() {
             "review",
             reached,
             Vec::new(),
+            None,
         )
         .expect("recorded");
 
