@@ -1423,6 +1423,33 @@ pub struct JobRow {
     pub needs_attention: bool,
 }
 
+/// `armada bridge` — one frame of the live screen.
+///
+/// **A frame and a listing parse identically** (`commands/helm/bridge.md`):
+/// `results`, `needs_you` and `spent_usd` are [`FleetLsData`]'s own fields,
+/// carrying [`JobRow`] unchanged, because the Bridge is a renderer over Fleet
+/// and not a second source. The three that follow describe the *frame* rather
+/// than the fleet — what the screen is showing, and what it is not.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BridgeData {
+    /// One row per Job on the screen, in `ls`'s order.
+    pub results: Vec<JobRow>,
+    /// How many of the shown rows are waiting on you.
+    pub needs_you: usize,
+    /// What the shown rows have cost between them.
+    pub spent_usd: f64,
+    /// How many of the shown rows are running.
+    pub running: usize,
+    /// The `--filter` in force, as it was typed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
+    /// **How many rows the filter removed.** A frame that reported the whole
+    /// fleet's totals over a filtered table would be lying about the two
+    /// questions the screen exists to answer, so the count of what is missing
+    /// travels with it.
+    pub hidden: usize,
+}
+
 /// `armada fleet board` — the two facts needed to enter a Job.
 ///
 /// **It does not attach, and it never will.** Boarding hands you the

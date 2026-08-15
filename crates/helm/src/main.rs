@@ -154,6 +154,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         | Invocation::Components { json } => *json,
         Invocation::MachineInit(init) => init.json,
         Invocation::Doctor { json, .. } => *json,
+        Invocation::Bridge(bridge) => bridge.json,
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Mcp { json } => *json,
@@ -308,7 +309,10 @@ fn dispatch(
     // "does not need the repository the Jobs branched from"
     // (`commands/fleet/ls.md`) — so routing it through workspace resolution
     // would refuse to list the fleet from anywhere but one of its worktrees.
-    if let Invocation::Fleet(fleet) = invocation {
+    // **The Bridge is machine-scoped for the same reason and by the same
+    // route.** It is a renderer over `fleet ls`, so it needs exactly what `ls`
+    // needs and nothing a workspace would add.
+    if matches!(invocation, Invocation::Fleet(_) | Invocation::Bridge(_)) {
         let place = verbs::fleet::Where {
             home: home.to_path_buf(),
             armada_home: armada_manifest::machine::armada_home(home),
@@ -322,6 +326,11 @@ fn dispatch(
             // reboot, so Armada would either refuse to stop its own Drones
             // forever or signal a recycled pid.
             boot_id: armada_manifest::machine::boot_id(&run, cwd).ok_or_else(no_boot_id)?,
+        };
+        let fleet = match invocation {
+            Invocation::Bridge(options) => return bridge(&run, &place, &options, style, terminal),
+            Invocation::Fleet(fleet) => fleet,
+            _ => unreachable!("both arms are matched above"),
         };
         return match *fleet {
             args::FleetInvocation::Spawn(spawn) => {
@@ -502,6 +511,128 @@ fn dispatch(
         | Invocation::Guild(_)
         | Invocation::Fleet(_)
         | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),
+        | Invocation::Bridge(_) => unreachable!("machine-scoped, and handled above"),
+    }
+}
+
+/// `armada bridge` — one frame, or the screen.
+///
+/// **Every key that leaves calls a verb this file already dispatches**, with the
+/// identical arguments a shell would give it. That is what keeps the Bridge a
+/// rendering choice rather than an architectural one: there is no code path
+/// below here that a person at a prompt could not reach by typing the verb
+/// (`commands/helm/bridge.md`).
+fn bridge(
+    run: &RealRun,
+    place: &verbs::fleet::Where,
+    options: &args::Bridge,
+    style: Style,
+    terminal: render::term::Terminal,
+) -> Result<Output, ArmadaError> {
+    // **Parsed before the screen is taken.** An unparseable `--filter` is exit 2
+    // and must not first blank somebody's terminal to say so.
+    let filter = armada_core::fleet::bridge::parse_filter(options.filter.as_deref().unwrap_or(""))?;
+
+    if options.once {
+        return verbs::bridge::once(run, &SystemClock, place, filter.as_ref());
+    }
+    // **Both streams, the same rule every widget follows.** stdout decides
+    // whether the screen was seen and stdin decides whether a key can arrive; a
+    // Bridge drawn into a pipe is a screen nobody reads that never ends.
+    if !terminal.can_ask() {
+        return Err(verbs::bridge::no_screen());
+    }
+
+    let watching = verbs::bridge::Options {
+        filter: options.filter.clone(),
+        interval_s: options.interval_s,
+        once: options.once,
+        json: options.json,
+    };
+    let (frame, departure) = armada_helm::bridge::watch(
+        run,
+        &SystemClock,
+        place,
+        &watching,
+        filter.as_ref(),
+        style,
+        terminal,
+    )?;
+
+    use armada_core::fleet::bridge::Departure;
+    match departure {
+        // **Quitting leaves the last frame in the scrollback.** The screen is
+        // gone and what it was showing is not, which is the difference between
+        // closing a view and losing what you were looking at.
+        Departure::Quit => Ok(verbs::bridge::envelope(frame)),
+
+        // `armada fleet board <job> --exec`, exactly.
+        Departure::Board(job) => {
+            let output = verbs::fleet::board(place, &job)?;
+            board_exec(&output)?;
+            Ok(output)
+        }
+
+        // `armada fleet spawn "<task>"`. The task is the one thing the screen
+        // cannot know, so it is asked for in the box every other prose question
+        // in Armada uses.
+        Departure::Spawn => {
+            let Some(task) = ask_text(style, "What should the new Job do?") else {
+                return Ok(verbs::bridge::envelope(frame));
+            };
+            verbs::fleet::spawn(
+                run,
+                &SystemClock,
+                place,
+                &args::Spawn {
+                    task,
+                    ..args::Spawn::default()
+                },
+                Some(&mut at_the_terminal(style, terminal).interactive()),
+            )
+        }
+
+        // `armada fleet answer <job> "<answer>"`.
+        Departure::Answer(job) => {
+            let Some(said) = ask_text(style, &format!("Your answer to `{job}`:")) else {
+                return Ok(verbs::bridge::envelope(frame));
+            };
+            verbs::fleet::answer(run, &SystemClock, place, &job, &said)
+        }
+
+        // `armada fleet kill <job>`. The screen has already asked twice.
+        Departure::Abort(job) => {
+            verbs::fleet::kill(run, &SystemClock, place, Some(&job), false, false)
+        }
+
+        // **`c` is honest about a verb that does not exist yet**, in the words
+        // the parser uses for every other claimed name.
+        Departure::Chat => Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: "helm".to_string(),
+            message: "`armada helm` is not built yet — M3 — the one agent you do talk to"
+                .to_string(),
+            next_action: Some("`armada fleet board <job>` enters a Job's session".to_string()),
+        }),
+    }
+}
+
+/// Ask for a paragraph, in the box the interview already uses.
+///
+/// **Off the alternate screen, never on it.** The Bridge has given the terminal
+/// back by the time this runs, so the question and the answer land in the
+/// scrollback where the reader can see what they typed.
+fn ask_text(style: Style, question: &str) -> Option<String> {
+    write_err(&format!(
+        "{}\n",
+        style.strong(render::palette::Role::SignalAmber, question)
+    ));
+    match armada_helm::ask::editor::read(style, "") {
+        armada_helm::ask::editor::Answer::Given(text) if !text.trim().is_empty() => Some(text),
+        // Nothing typed, `esc`, or a terminal that would not open a box: the
+        // Bridge simply reports the frame it was showing. A verb started on an
+        // empty prompt is worse than one not started.
+        _ => None,
     }
 }
 

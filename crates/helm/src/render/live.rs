@@ -420,7 +420,7 @@ impl Progress for Watcher {
 /// **The palette is read through [`Role::rgb`]**, which is the whole reason
 /// that method exists: no surface names a hex, so the colour a live `PASS` is
 /// drawn in cannot drift from the colour the final one is drawn in.
-fn paint(span: &Span, style: Style) -> ratatui::text::Span<'static> {
+pub(crate) fn paint(span: &Span, style: Style) -> ratatui::text::Span<'static> {
     let text = span.text.clone();
     if !style.enabled() {
         return ratatui::text::Span::raw(text);

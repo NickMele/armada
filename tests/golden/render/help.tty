@@ -32,6 +32,9 @@
   inbox                  [38;2;156;163;175mwhat the fleet needs from you[0m
   kill [<job>]           [38;2;156;163;175mend a Job and release everything it owns[0m
 
+[1m[38;2;255;169;64mTHE BRIDGE — what you watch while the fleet works[0m
+  bridge  [38;2;156;163;175mthe live screen: every Job, its state, its spend, who needs you[0m
+
 [1m[38;2;255;169;64mTHIS MACHINE[0m
   init    [38;2;156;163;175mset up this machine: checks, ~/.armada/, and your guild[0m
   doctor  [38;2;156;163;175mwhat this machine is missing, and what fixes it[0m
@@ -43,7 +46,7 @@
   -V, --version   [38;2;156;163;175mthe version[0m
 
 [1m[38;2;255;169;64mNOT BUILT YET[0m
-  armada helm, bridge                         [38;2;156;163;175mM3[0m
+  armada helm                                 [38;2;156;163;175mM3[0m
   armada guild edit, verify                   [38;2;156;163;175mM2[0m
   armada manifest render, agents-md, explain  [38;2;156;163;175mreserved[0m
   armada manifest check --detach, --status    [38;2;156;163;175mreserved[0m

@@ -1,0 +1,8 @@
+  ARMADA BRIDGE
+
+  STATUS   JOB            TASK            RUN  SPENT
+  RUNNING  carina-schema  migrate schema   3m  $0.45
+
+RUNNING  1 job, $0.45 today, filter state=RUNNING, 3 hidden
+
+  enter board  n new  p pause  x abort  a answer  / filter  c chat  q quit

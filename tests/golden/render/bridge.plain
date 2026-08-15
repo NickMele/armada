@@ -1,0 +1,11 @@
+  ARMADA BRIDGE
+
+  STATUS   JOB            TASK                 RUN  SPENT  NEEDS YOU
+  RUNNING  rate-limit     add gateway limiter  14m  $2.10  -
+  RUNNING  carina-schema  migrate schema        3m  $0.45  -
+  STALLED  xlsx-report    generate report      22m  $4.60  -
+  BLOCKED  release-merge  merge release         1h  $1.25  YES
+
+RUNNING  4 jobs, 1 need you, $8.40 today
+
+  enter board  n new  p pause  x abort  a answer  / filter  c chat  q quit

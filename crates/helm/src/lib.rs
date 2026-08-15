@@ -10,6 +10,7 @@
 pub mod app;
 pub mod args;
 pub mod ask;
+pub mod bridge;
 pub mod mcp;
 pub mod render;
 pub mod verbs;

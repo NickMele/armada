@@ -128,6 +128,8 @@ pub enum Invocation {
         /// Repair what is safely repairable.
         fix: bool,
     },
+    /// `armada bridge` — the live screen.
+    Bridge(Box<Bridge>),
     /// `armada guild <verb>`.
     Guild(Box<GuildInvocation>),
     /// `armada fleet <verb>`.
@@ -251,6 +253,38 @@ pub struct Spawn {
     /// Report the classification, worktree path, port block and budget. Starts
     /// nothing.
     pub dry_run: bool,
+}
+
+/// How often the Bridge redraws, in seconds.
+///
+/// **Two, because a read is a directory listing, a transcript tail and a `ps`**
+/// — none of which any Drone notices (`commands/helm/bridge.md`). The number is
+/// a cadence rather than a budget: nothing is interrupted by it, so it is set by
+/// what a person watching wants rather than by what a fleet can afford.
+pub const DEFAULT_INTERVAL_S: u64 = 2;
+
+/// `armada bridge`, with the flags `commands/helm/bridge.md` gives it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Bridge {
+    /// Emit one frame as the envelope and exit.
+    pub json: bool,
+    /// Show only matching Jobs.
+    pub filter: Option<String>,
+    /// Redraw cadence, in seconds.
+    pub interval_s: u64,
+    /// Render one frame and exit.
+    pub once: bool,
+}
+
+impl Default for Bridge {
+    fn default() -> Bridge {
+        Bridge {
+            json: false,
+            filter: None,
+            interval_s: DEFAULT_INTERVAL_S,
+            once: false,
+        }
+    }
 }
 
 /// `armada init`, with the flags `docs/commands/init.md` gives it.
@@ -455,10 +489,7 @@ pub const BUILTIN_VERBS: [&str; 12] = [
 /// are built, and moved to [`TOP_LEVEL_VERBS`] and [`GUILD_BUILT`]. **M3's first
 /// third emptied a fourth**: `fleet` is built, and its verbs are in
 /// [`FLEET_VERBS`].
-pub const RESERVED_TOP_LEVEL: [(&str, &str); 2] = [
-    ("helm", "M3 — the one agent you do talk to"),
-    ("bridge", "M3 — the live screen"),
-];
+pub const RESERVED_TOP_LEVEL: [(&str, &str); 1] = [("helm", "M3 — the one agent you do talk to")];
 
 /// Fleet's verbs.
 ///
@@ -473,7 +504,7 @@ pub const FLEET_VERBS: [&str; 6] = ["spawn", "ls", "board", "answer", "inbox", "
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 2] = ["init", "doctor"];
+pub const TOP_LEVEL_VERBS: [&str; 3] = ["init", "doctor", "bridge"];
 
 /// The Guild verbs this milestone built. The rest answer "not built yet".
 pub const GUILD_BUILT: [&str; 6] = ["init", "project", "pull", "push", "export", "import"];
@@ -608,6 +639,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         match name {
             "init" => return machine_init(rest, json, color),
             "doctor" => return doctor(rest, json, color),
+            "bridge" => return bridge(rest, json, color),
             "guild" => return guild(rest, json, color),
             "fleet" => return fleet(rest, json, color),
             "mcp" => return mcp(rest, json, color),
@@ -965,6 +997,62 @@ fn machine_init(
         bundle,
         defaults: parsed.on("--defaults"),
         force: parsed.on("--force"),
+    })))
+}
+
+/// `armada bridge` — the live screen.
+///
+/// **`--json` implies `--once`**, and the flag is not required alongside it: a
+/// parser waiting for one payload is not waiting for a redraw, so a `--json`
+/// that took the screen would hang the one consumer the envelope exists for.
+fn bridge(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "bridge") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+    let parsed = flags(
+        rest,
+        json,
+        color,
+        "bridge",
+        &["--once"],
+        &["--filter", "--interval"],
+    )?;
+
+    // **Refused rather than clamped.** A caller who typed `--interval banana`
+    // meant something, and silently redrawing every two seconds would look like
+    // Armada ignoring the flag. Zero is refused for its own reason: a redraw
+    // with no wait between frames is a busy loop reading the Job index.
+    let interval_s = match parsed.value("--interval") {
+        None => DEFAULT_INTERVAL_S,
+        Some(given) => match given.parse::<u64>() {
+            Ok(seconds) if seconds > 0 => seconds,
+            _ => {
+                return Err(failure(
+                    ArmadaError {
+                        class: ErrClass::BadInvocation,
+                        r#where: "--interval".to_string(),
+                        message: format!("`{given}` is not a number of seconds"),
+                        next_action: Some(
+                            "`--interval 2` is the default; reads are cheap".to_string(),
+                        ),
+                    },
+                    parsed.json,
+                ))
+            }
+        },
+    };
+
+    Ok(Invocation::Bridge(Box::new(Bridge {
+        json: parsed.json,
+        filter: parsed.value("--filter"),
+        interval_s,
+        once: parsed.on("--once") || parsed.json,
     })))
 }
 

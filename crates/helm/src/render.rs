@@ -51,11 +51,11 @@ pub mod table;
 pub mod term;
 
 use armada_core::envelope::{
-    AnswerData, AskData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
-    DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData, GuildBundleData,
-    GuildInitData, GuildSyncData, Headline, InboxData, InitData, InitDryRun, KillData,
-    MachineInitData, McpData, ProbeData, Projection, ReportData, ResultRow, ScanData, ServicesData,
-    SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData,
+    AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
+    ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData,
+    GuildBundleData, GuildInitData, GuildSyncData, Headline, InboxData, InitData, InitDryRun,
+    KillData, MachineInitData, McpData, ProbeData, Projection, ReportData, ResultRow, ScanData,
+    ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -68,7 +68,7 @@ use crate::ask::Choice;
 use crate::verbs::Output;
 use palette::Role;
 use style::Style;
-use table::{Cell, Column, Table};
+use table::{Cell, Column, Span, Table};
 use term::Terminal;
 
 /// Render for a terminal.
@@ -103,6 +103,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::GuildProject(envelope) => guild_project(envelope, style, width),
         Output::Spawn(envelope) => spawn(envelope, style, width),
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
+        Output::Bridge(envelope) => bridge(envelope, style, width),
         Output::Board(envelope) => board(envelope, style, width),
         Output::Kill(envelope) => kill(envelope, style, width),
         Output::Inbox(envelope) => inbox(envelope, style, width),
@@ -453,6 +454,199 @@ fn ls_facts(data: &FleetLsData) -> Vec<String> {
         facts.push(format!("{} need you", data.needs_you));
     }
     facts.push(format!("{} today", format::money(data.spent_usd)));
+    facts
+}
+
+/// The Bridge's key line, in the order `commands/helm/bridge.md` lists them.
+///
+/// **Named rather than glyphed.** The page draws `↵`; this writes `enter`,
+/// because a key line is read by both audiences and a glyph that folds to ASCII
+/// would give the two of them different words for the same key. Everything else
+/// on the Bridge is a single character and needs no folding.
+const KEYS: [(&str, &str); 8] = [
+    ("enter", "board"),
+    ("n", "new"),
+    ("p", "pause"),
+    ("x", "abort"),
+    ("a", "answer"),
+    ("/", "filter"),
+    ("c", "chat"),
+    ("q", "quit"),
+];
+
+/// `armada bridge` — one frame of the live screen.
+///
+/// **This is the frame, not a second listing of it.** `--once` and the redrawn
+/// screen show the same rows in the same columns; what the alternate screen adds
+/// is a cursor and a keyboard, which is exactly the difference between watching
+/// and reading (`commands/helm/bridge.md`).
+///
+/// **Three departures from the page's drawing, and each is this repository's own
+/// rule winning.** The drawing puts `JOB` first, marks the needs-you column with
+/// `●`, and boxes the whole thing. Status is first and always a word in every
+/// table Armada draws; a symbol that only appears at a terminal gives the two
+/// audiences different shapes, which `render_golden.rs` asserts of every
+/// fixture; and a box drawn in text would have to be two different boxes for the
+/// two audiences. The columns the page settled — the Job, its state, the task,
+/// run time, spend and whether it needs you — are all here, in Armada's shape.
+///
+/// **There is no progress column, deliberately.** Nothing emits percent-complete
+/// (PHASES.md §9.1 F2), and a bar computed from a turn count is a guess drawn as
+/// a measurement.
+fn bridge(envelope: &Envelope<BridgeData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = format!("{}\n\n", style.strong(Role::SignalAmber, "  ARMADA BRIDGE"));
+
+    // **No row is under a cursor here, so the cursor column is dropped.** One
+    // table describes both surfaces and the renderer decides which columns
+    // earned their width (`docs/commands/render.md`), which is what stops the
+    // screen and `--once` from becoming two layouts.
+    let table = bridge_table(data, style, None);
+    out.push_str(&table.render(style, width));
+    if table.is_empty() {
+        // **An empty fleet says so.** A screen that drew nothing would be
+        // indistinguishable from one that failed to read the index.
+        out.push_str(match data.filter {
+            Some(_) => "  no Jobs match\n",
+            None => "  no Jobs\n",
+        });
+    }
+
+    out.push('\n');
+    out.push_str(&bridge_summary(data, envelope.status, style));
+    out.push('\n');
+    out.push_str(&format!(
+        "  {}\n",
+        style.paint(Role::SteelGrey, &bridge_keys())
+    ));
+    out
+}
+
+/// The Bridge's table, described once for both surfaces.
+///
+/// **One table, two emitters** — the same split `render/live.rs` uses for the
+/// run: `Table::render` paints escape sequences for `--once`, `Table::spans`
+/// hands `ratatui` coloured pieces for the live screen, and both ask this
+/// function which columns exist and how wide they are. Two descriptions would
+/// drift in the first frame.
+///
+/// `cursor` is the row under the caret, or `None` when nobody is watching — and
+/// a cursor column no row filled is dropped, header and all, which is why
+/// `--once` shows no empty gutter.
+pub fn bridge_table(data: &BridgeData, style: Style, cursor: Option<usize>) -> Table {
+    let mut table = Table::new(vec![
+        // The caret, for the surface that has one. **A character rather than a
+        // colour**, for the reason `ask/select.rs` gives: a row told apart only
+        // by being amber is a row a monochrome terminal cannot tell apart.
+        Column::fixed(""),
+        Column::fixed("status"),
+        Column::fixed("job"),
+        Column::flexible("task"),
+        Column::fixed("run").right(),
+        Column::fixed("spent").right(),
+        // **The only column that is ever a call to action**, and the only one
+        // besides the caret that disappears when nothing fills it: a `NEEDS YOU`
+        // header over a column of placeholders claims somebody is waiting.
+        Column::fixed("needs you"),
+    ])
+    .indent(2);
+
+    for (index, row) in data.results.iter().enumerate() {
+        table = table.row(vec![
+            match cursor == Some(index) {
+                true => Cell::painted(style.caret(), Role::SignalAmber),
+                false => Cell::empty(),
+            },
+            job_state(row.state),
+            Cell::painted(row.name.clone(), Role::NavalBlue),
+            detail_cell(style, Some(row.task.as_str())),
+            // A Job that has not run yet is a dash in both number columns, for
+            // the reason `fleet ls` gives: a zero reads as a measurement, and
+            // nothing has been measured.
+            Cell::muted(if row.state == JobState::Queued {
+                style.nothing().to_string()
+            } else {
+                format::elapsed(row.runtime_s * 1_000)
+            }),
+            Cell::muted(if row.cost_usd > 0.0 {
+                format::money(row.cost_usd)
+            } else {
+                style.nothing().to_string()
+            }),
+            if row.needs_attention {
+                Cell::painted("YES", Role::DistressRed)
+            } else {
+                Cell::nothing()
+            },
+        ]);
+    }
+    table
+}
+
+/// The Bridge's summary line, painted, for `--once`.
+pub fn bridge_summary(data: &BridgeData, status: Status, style: Style) -> String {
+    summary(style, status, &frame_facts(data))
+}
+
+/// The same line as **coloured pieces**, for the screen.
+///
+/// **The two must not drift**, which is what the test beside them asserts: a
+/// terminal reading `4 jobs · 1 need you` on the screen and `4 jobs, 1 need you`
+/// from `--once` would be one render behaving as two. So the separator, the lead
+/// word and the facts are all decided here and only the emitting differs — the
+/// screen cannot take escape sequences, because `ratatui` prints an SGR string
+/// it finds in a value literally.
+pub fn bridge_summary_pieces(data: &BridgeData, status: Status, style: Style) -> Vec<Span> {
+    vec![
+        Span {
+            text: status.to_string(),
+            role: Some(Role::for_status(status)),
+            bold: true,
+        },
+        Span {
+            text: "  ".to_string(),
+            role: None,
+            bold: false,
+        },
+        Span {
+            text: frame_facts(data).join(style.between()),
+            role: Some(Role::SteelGrey),
+            bold: false,
+        },
+    ]
+}
+
+/// The key line's text, unpainted, for both surfaces.
+///
+/// **Two spaces between pairs, not [`Style::between`]** — which is the one
+/// separator on this screen that is the same for both audiences. A middle dot
+/// costs a column per gap and the line is eighty-one wide with them, so a person
+/// at a standard terminal would read a wrapped key line while an agent read a
+/// straight one. The drawing on `commands/helm/bridge.md` spaces them the same
+/// way, for the same reason.
+pub fn bridge_keys() -> String {
+    KEYS.iter()
+        .map(|(key, does)| format!("{key} {does}"))
+        .collect::<Vec<_>>()
+        .join("  ")
+}
+
+/// What a frame counts, in the order the drawing counts it.
+///
+/// **Over the rows on the screen, never over the whole fleet.** A filtered frame
+/// reporting the fleet's totals would be answering a question nobody asked; the
+/// filter and what it removed are said instead, so the smaller numbers are
+/// accounted for rather than mysterious.
+fn frame_facts(data: &BridgeData) -> Vec<String> {
+    let mut facts = vec![format::count(data.results.len(), "job")];
+    if data.needs_you > 0 {
+        facts.push(format!("{} need you", data.needs_you));
+    }
+    facts.push(format!("{} today", format::money(data.spent_usd)));
+    if let Some(filter) = &data.filter {
+        facts.push(format!("filter {filter}"));
+        facts.push(format!("{} hidden", data.hidden));
+    }
     facts
 }
 

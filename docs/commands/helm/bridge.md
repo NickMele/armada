@@ -2,8 +2,9 @@
 
 The live screen. Every Job, its state, what it has spent, and who needs you.
 
-> **Status: not built — M3.** Scheduled alongside Helm and Fleet. An earlier draft deferred the
-> ambient view indefinitely; [`PLAN.md`](../../PLAN.md) §15.1 records why that was reversed.
+> **Status: built — M3.** An earlier draft deferred the ambient view indefinitely;
+> [`PLAN.md`](../../PLAN.md) §15.1 records why that was reversed. The frame's layout is frozen by
+> `tests/golden/render/bridge.plain` and its `.tty` twin, and by `bridge-filtered` beside them.
 
 Helm is where you talk. The Bridge is what you watch. It redraws in place like `htop` or `k9s`
 — no scrollback, no history, just the current state of the fleet.
@@ -20,7 +21,7 @@ armada bridge [--filter <expr>] [--interval <s>] [--once] [--json]
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `--filter` | expression | — | Show only matching Jobs. Same selector grammar as [`../fleet/ls.md`](../fleet/ls.md). |
+| `--filter` | expression | — | Show only matching Jobs. See [below](#the-filter). |
 | `--interval` | seconds | `2` | Redraw cadence. Reads are cheap — no process is interrupted. |
 | `--once` | flag | off | Render one frame and exit. For a screenshot, a pipe, or a terminal that cannot hold alt-screen. |
 | `--json` | flag | off | Emit one frame as the `--json` envelope and exit. Implies `--once`. |
@@ -38,6 +39,25 @@ not change it — the same rule that governs probe ([`PLAN.md`](../../PLAN.md) �
 
 **It holds no state.** The Bridge is a renderer over Fleet; closing it loses nothing, and
 everything it shows is available from [`../fleet/ls.md`](../fleet/ls.md) as a table.
+
+### The filter
+
+A bare word matches the Job's name, its workflow, its state or its task; `key=value` asks about
+one of them. Both are case-insensitive substrings, because `state=running` is what somebody types
+at a live screen.
+
+| Expression | Shows |
+|---|---|
+| `xlsx` | any Job whose name, workflow, state or task contains it |
+| `job=rate-limit` | by name |
+| `workflow=bug` | by workflow |
+| `state=BLOCKED` | by state |
+| `task=schema` | by the words the Job was given |
+| `needs=you` | only the Jobs waiting on an answer |
+
+**A key nothing knows, or a state word that is not a state, is refused** — `bad_invocation`,
+exit 2. Matched against nothing it would show an empty screen instead, and an empty screen is
+indistinguishable from an idle fleet.
 
 ### Columns
 
@@ -61,33 +81,67 @@ everything it shows is available from [`../fleet/ls.md`](../fleet/ls.md) as a ta
 |---|---|---|
 | `↵` | Board the selected Job | [`../fleet/board.md`](../fleet/board.md) |
 | `n` | New Job | [`../fleet/spawn.md`](../fleet/spawn.md) |
-| `p` | Pause / resume | — |
-| `x` | Abort | [`../fleet/kill.md`](../fleet/kill.md) |
+| `p` | Pause / resume | — · **not built**, and the screen says so rather than swallowing the key |
+| `x` | Abort — **then `y`** | [`../fleet/kill.md`](../fleet/kill.md) |
 | `a` | Answer the selected Job's question | [`../fleet/answer.md`](../fleet/answer.md) |
 | `/` | Filter | — |
-| `c` | Drop into Helm | [`helm.md`](helm.md) |
+| `c` | Drop into Helm | [`helm.md`](helm.md) · **not built** |
+| `q`, `esc`, `ctrl-c` | Leave, printing the last frame | — |
+| `↑` `↓`, `k` `j` | Move the cursor | — |
 
 Every key maps to a verb that already exists and is reachable from a shell. **The Bridge adds no
-capability**, which is what keeps it a rendering choice rather than an architectural one.
+capability**, which is what keeps it a rendering choice rather than an architectural one. A key
+whose verb does not exist yet says so; it does not grow one here.
+
+**`x` asks twice, and anything but `y` declines.** Abort ends a Job, deletes its worktree and
+drops its branch. One keypress doing that to whatever row the cursor happened to be on is the
+mistake worth one extra character, and a confirmation only one key can refuse is one that gets
+answered by accident.
+
+**`n` and `a` need words the screen does not have**, so the Bridge gives the terminal back and
+opens the same inline box the interview uses ([`../render.md`](../render.md)). An empty answer
+starts nothing.
+
+**Leaving prints the last frame.** The screen is gone and what it was showing is not, which is
+the difference between closing a view and losing what you were looking at.
 
 ## Output
 
 ```
-┌─ ARMADA BRIDGE ─────────────────────────────────────── ● LIVE ─┐
-│ running 2   blocked 1   spent today $8.40                      │
-├──────────────┬─────────┬────────────────────┬─────┬───────┬────┤
-│ JOB          │ STATE   │ TASK               │ RUN │ SPENT │ ●  │
-├──────────────┼─────────┼────────────────────┼─────┼───────┼────┤
-│ rate-limit   │ RUNNING │ add gateway limiter│ 14m │ $2.10 │    │
-│ carina-schema│ RUNNING │ migrate schema     │  3m │ $0.45 │    │
-│ xlsx-report  │ STALLED │ generate report    │ 22m │ $4.60 │    │
-│ release-merge│ BLOCKED │ merge release      │ 1h  │ $1.25 │ ●  │
-└──────────────┴─────────┴────────────────────┴─────┴───────┴────┘
- ↵board  n new  p pause  x abort  a answer  /filter  c chat
+  ARMADA BRIDGE
+
+  STATUS   JOB            TASK                 RUN  SPENT  NEEDS YOU
+  RUNNING  rate-limit     add gateway limiter  14m  $2.10  -
+  RUNNING  carina-schema  migrate schema        3m  $0.45  -
+  STALLED  xlsx-report    generate report      22m  $4.60  -
+  BLOCKED  release-merge  merge release         1h  $1.25  YES
+
+RUNNING  4 jobs, 1 need you, $8.40 today
+
+  enter board  n new  p pause  x abort  a answer  / filter  c chat  q quit
 ```
 
+The live screen is this frame with a caret on the selected row, `LIVE` beside the title, and one
+line under the table for the filter box or whatever the last key had to say back.
+
+> **Three departures from an earlier drawing of this page, and each is a rule this repository
+> already had.** That drawing put `JOB` first, marked the needs-you column with `●`, and boxed the
+> whole thing.
+>
+> Status is first and always a word in **every** table Armada draws
+> ([`../render.md`](../render.md)); a symbol that only appears at a terminal gives the two
+> audiences different shapes, which the golden suite asserts of every fixture; and a box drawn in
+> text would have to be two different boxes, since the two audiences cannot share one set of
+> glyphs. Every column the drawing settled is here — the Job, its state, the task, run time,
+> spend and whether it needs you — in Armada's shape rather than in a shape of its own.
+
+**A column no row filled is dropped**, header and all, so `NEEDS YOU` disappears when nothing is
+waiting on you. That is the same rule the rest of the CLI follows, and here it means the one
+column that is ever a call to action is only ever on the screen when there is one.
+
 `--json` returns one result per Job with the same fields as
-[`../fleet/ls.md`](../fleet/ls.md), so a frame and a listing parse identically.
+[`../fleet/ls.md`](../fleet/ls.md), so a frame and a listing parse identically, plus `running`,
+`filter` and `hidden` — what the *frame* is showing, and what it is not.
 
 ## Palette
 
@@ -101,8 +155,15 @@ runs anywhere `~/.armada/` is readable.
 
 ## Exit codes
 
-`0` clean exit · `2` `bad_invocation` — an unparseable `--filter` · `6` `environment` — the
-terminal cannot support alt-screen and `--once` was not given.
+`0` clean exit · `2` `bad_invocation` — an unparseable `--filter`, or an `--interval` that is not
+a positive number of seconds · `6` `environment` — there is no terminal to take the screen of and
+`--once` was not given.
+
+**`--filter` is parsed before the screen is taken**, so a typo is answered on the terminal you are
+standing in rather than after it has been blanked.
+
+A key that leaves ends in that verb's exit code: `enter` becomes `claude`'s, `x` becomes
+[`kill`](../fleet/kill.md)'s. Armada is not in the middle of it.
 
 Full table and the one rule behind it: [`../reference.md`](../reference.md).
 

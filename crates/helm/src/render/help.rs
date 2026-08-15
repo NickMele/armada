@@ -622,6 +622,37 @@ const PAGES: [Page; 23] = [
         examples: &[],
         notes: &["Every finding carries the line that fixes it, whether or not --fix ran."],
     },
+    Page {
+        path: "bridge",
+        synopsis: "bridge",
+        summary: "the live screen: every Job, its state, its spend, who needs you",
+        usage: &[
+            "armada bridge [--filter <expr>] [--interval <s>]",
+            "armada bridge --once [--filter <expr>]",
+            "armada bridge --json",
+        ],
+        flags: &[
+            ("--filter <expr>", "show only matching Jobs"),
+            ("--interval <s>", "redraw cadence in seconds; 2 by default"),
+            ("--once", "render one frame and exit"),
+        ],
+        examples: &[
+            ("armada bridge", "watch the fleet; q leaves"),
+            (
+                "armada bridge --filter needs=you",
+                "only the Jobs waiting on an answer",
+            ),
+            (
+                "armada bridge --once",
+                "one frame, for a pipe or a terminal with no alt-screen",
+            ),
+        ],
+        notes: &[
+            "Read-only. It never resumes, interrupts or probes a Job to draw a frame.",
+            "It holds nothing: every key calls a fleet verb you could type yourself.",
+            "--filter takes a word, or job=, workflow=, state=, task=, needs=you.",
+        ],
+    },
 ];
 
 /// The page for what a caller typed after `armada`, or `None`.
@@ -667,9 +698,22 @@ pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
 /// The verbs of one module, as `(synopsis, summary)` — the shape every list of
 /// verbs on every page takes.
 fn verbs_of(module: &str) -> Vec<(&'static str, &'static str)> {
+    // **The Bridge is top-level and is not a machine verb.** `armada init` and
+    // `armada doctor` describe this laptop; the Bridge describes the fleet
+    // running on it, and filing it under `THIS MACHINE` would put it beside two
+    // verbs it has nothing in common with. It gets its own heading, so the one
+    // page a reader meets Armada on says what the screen is for.
+    const BRIDGE: &str = "bridge";
+    if module == "bridge-section" {
+        return PAGES
+            .iter()
+            .filter(|page| page.path == BRIDGE)
+            .map(|page| (page.synopsis, page.summary))
+            .collect();
+    }
     PAGES
         .iter()
-        .filter(|page| page.module() == module)
+        .filter(|page| page.module() == module && page.path != BRIDGE)
         .map(|page| (page.synopsis, page.summary))
         .collect()
 }
@@ -715,6 +759,13 @@ fn root(style: Style, terminal: Terminal) -> String {
         "FLEET — the agents you do not talk to: Jobs, worktrees, budgets",
     ));
     out.push_str(&two_column(&verbs_of("fleet")).render(style, width));
+
+    out.push('\n');
+    out.push_str(&heading(
+        style,
+        "THE BRIDGE \u{2014} what you watch while the fleet works",
+    ));
+    out.push_str(&two_column(&verbs_of("bridge-section")).render(style, width));
 
     out.push('\n');
     out.push_str(&heading(style, "THIS MACHINE"));

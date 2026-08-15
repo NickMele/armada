@@ -5,6 +5,7 @@
 //! — the shell attempting what the core proposed — and nothing that decides
 //! anything on its own.
 
+pub mod bridge;
 pub mod check;
 pub mod clean;
 pub mod components;
@@ -23,11 +24,11 @@ pub mod status;
 use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
-    AnswerData, AskData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
-    DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData, GuildInitData, GuildSyncData,
-    InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, ProbeData, Projection,
-    ReportData, ScanData, ServicesData, SkillsData, SpawnData, StatusData, UpDryRun, VerdictData,
-    VerifyData,
+    AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
+    ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData, GuildInitData,
+    GuildSyncData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, ProbeData,
+    Projection, ReportData, ScanData, ServicesData, SkillsData, SpawnData, StatusData, UpDryRun,
+    VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -84,6 +85,8 @@ pub enum Output {
     Spawn(Box<Envelope<SpawnData>>),
     /// `armada fleet ls`.
     FleetLs(Box<Envelope<FleetLsData>>),
+    /// `armada bridge` — one frame of the live screen.
+    Bridge(Box<Envelope<BridgeData>>),
     /// `armada fleet board`.
     Board(Box<Envelope<BoardData>>),
     /// `armada fleet kill`.
@@ -133,6 +136,7 @@ impl Output {
             Output::GuildProject(e) => e.to_json(),
             Output::Spawn(e) => e.to_json(),
             Output::FleetLs(e) => e.to_json(),
+            Output::Bridge(e) => e.to_json(),
             Output::Board(e) => e.to_json(),
             Output::Kill(e) => e.to_json(),
             Output::Inbox(e) => e.to_json(),
@@ -188,6 +192,7 @@ impl Output {
             Output::GuildProject(e) => e.exit_code(),
             Output::Spawn(e) => e.exit_code(),
             Output::FleetLs(e) => e.exit_code(),
+            Output::Bridge(e) => e.exit_code(),
             Output::Board(e) => e.exit_code(),
             Output::Kill(e) => e.exit_code(),
             Output::Inbox(e) => e.exit_code(),

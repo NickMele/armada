@@ -29,10 +29,11 @@
 //! than a flag you reach for without reading.
 
 use armada_core::envelope::{
-    Asked, CheckData, CleanData, ComponentView, ComponentsData, DispatchData, DoctorData, Envelope,
-    Finding, FleetLsData, GrantedCommand, GuildChoice, GuildSyncData, Headline, InitData, JobRow,
-    MachineInitData, PortReport, Problem, Projection, Released, ResolvedSkillView, ResultRow,
-    ScanData, ServicesData, Settled, SkillsData, SpawnData, StatusData, Sync, SyncItem,
+    Asked, BridgeData, CheckData, CleanData, ComponentView, ComponentsData, DispatchData,
+    DoctorData, Envelope, Finding, FleetLsData, GrantedCommand, GuildChoice, GuildSyncData,
+    Headline, InitData, JobRow, MachineInitData, PortReport, Problem, Projection, Released,
+    ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, SkillsData, SpawnData,
+    StatusData, Sync, SyncItem,
     Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
@@ -1155,6 +1156,151 @@ fn fleet_ls_matches_its_fixture() {
         },
     )));
     assert_render("fleet-ls", &output);
+}
+
+/// One frame of `armada bridge`, which is what `--once` and `--json` emit and
+/// what the live screen redraws.
+///
+/// **The Bridge's columns in Armada's shape.** `commands/helm/bridge.md` settles
+/// which columns a frame has — the Job, its state, the task, run time, spend and
+/// whether it needs you — and every one of them is here. What this fixture
+/// freezes is the *shape* they are drawn in, which is this repository's and not
+/// the page's drawing: status first and always a word, no symbol anywhere, and
+/// one render for both audiences. A `●` in a needs-you column would fail
+/// [`no_fixture_carries_a_status_symbol`] two tests below, which is the rule
+/// stating itself.
+///
+/// **There is no progress column**, deliberately: nothing emits
+/// percent-complete, and a bar computed from a turn count is a guess drawn as a
+/// measurement.
+#[test]
+fn bridge_matches_its_fixture() {
+    fn row(
+        name: &str,
+        state: JobState,
+        task: &str,
+        cost_usd: f64,
+        runtime_s: u64,
+        needs_attention: bool,
+    ) -> JobRow {
+        JobRow {
+            uuid: format!("{name}-uuid"),
+            name: name.to_string(),
+            workflow: "feature".to_string(),
+            state,
+            detail: "implement".to_string(),
+            task: task.to_string(),
+            runtime_s,
+            cost_usd,
+            tokens: 120_000,
+            turns: 4,
+            budget_remaining: Remaining {
+                iterations: 8,
+                tokens: 280_000,
+                wall_clock_ms: 1_860_000,
+            },
+            needs_attention,
+        }
+    }
+
+    let results = vec![
+        row(
+            "rate-limit",
+            JobState::Running,
+            "add gateway limiter",
+            2.10,
+            14 * 60,
+            false,
+        ),
+        row(
+            "carina-schema",
+            JobState::Running,
+            "migrate schema",
+            0.45,
+            3 * 60,
+            false,
+        ),
+        row(
+            "xlsx-report",
+            JobState::Stalled,
+            "generate report",
+            4.60,
+            22 * 60,
+            false,
+        ),
+        row(
+            "release-merge",
+            JobState::Blocked,
+            "merge release",
+            1.25,
+            65 * 60,
+            true,
+        ),
+    ];
+
+    let output = Output::Bridge(Box::new(Envelope::ok(
+        "bridge",
+        None,
+        Status::Running,
+        BridgeData {
+            needs_you: results.iter().filter(|row| row.needs_attention).count(),
+            spent_usd: results.iter().map(|row| row.cost_usd).sum(),
+            running: results
+                .iter()
+                .filter(|row| row.state == JobState::Running)
+                .count(),
+            filter: None,
+            hidden: 0,
+            results,
+        },
+    )));
+    assert_render("bridge", &output);
+}
+
+/// A filtered frame, and the two columns that disappear when nothing fills
+/// them.
+///
+/// **The counts are over what is shown and the rest is accounted for.** A
+/// filtered screen reporting the whole fleet's totals would be answering a
+/// question nobody asked, so the filter and what it hid are on the summary line.
+///
+/// `NEEDS YOU` is gone here because no row filled it — a header is a claim that
+/// somebody is waiting (`docs/commands/render.md`).
+#[test]
+fn bridge_filtered_matches_its_fixture() {
+    let results = vec![JobRow {
+        uuid: "carina-schema-uuid".to_string(),
+        name: "carina-schema".to_string(),
+        workflow: "feature".to_string(),
+        state: JobState::Running,
+        detail: "implement".to_string(),
+        task: "migrate schema".to_string(),
+        runtime_s: 3 * 60,
+        cost_usd: 0.45,
+        tokens: 12_000,
+        turns: 1,
+        budget_remaining: Remaining {
+            iterations: 11,
+            tokens: 388_000,
+            wall_clock_ms: 2_520_000,
+        },
+        needs_attention: false,
+    }];
+
+    let output = Output::Bridge(Box::new(Envelope::ok(
+        "bridge",
+        None,
+        Status::Running,
+        BridgeData {
+            needs_you: 0,
+            spent_usd: 0.45,
+            running: 1,
+            filter: Some("state=RUNNING".to_string()),
+            hidden: 3,
+            results,
+        },
+    )));
+    assert_render("bridge-filtered", &output);
 }
 
 /// `armada fleet spawn`, against the layout `render_pending.rs` held for M3.
