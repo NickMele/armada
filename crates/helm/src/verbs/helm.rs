@@ -1,7 +1,7 @@
 //! `armada helm` — **assemble the conversation; do not enter it**.
 //!
 //! Every decision this file appears to make was made somewhere else: the argv,
-//! the four documents and the record are `armada_core::helm`'s, and the guild
+//! the documents and the record are `armada_core::helm`'s, and the guild
 //! that holds the persona is `armada_guild`'s. What lives here is the order the
 //! adapter calls go in, and the one refusal — no guild, no persona — that has to
 //! happen before any of them (`ARCHITECTURE.md` §1.3).
@@ -37,7 +37,7 @@
 //! explicit yes on each machine, not a default that changed out from under
 //! whoever had not been reading release notes.
 //!
-//! **The argv, the four documents and the conversation's record are built and
+//! **The argv, the documents and the conversation's record are built and
 //! verified the same way whether the switch is on or off.** [`mark_started`] is
 //! the writer the exec path calls — first, because the process is replaced and
 //! there is no after.
@@ -126,7 +126,7 @@ pub fn entering_allowed(armada_home: &Path) -> bool {
 /// `armada helm enable` — let [`ENTER`] become a session on this machine.
 ///
 /// **Writes one boolean, and nothing else.** It does not touch the guild, the
-/// persona or any of the four documents `armada helm` wires — whether a
+/// persona or any of the documents `armada helm` wires — whether a
 /// machine is *allowed* to open a session and whether it is currently *able*
 /// to (a guild, a persona, a projection) are different questions, answered by
 /// different commands. `armada helm --exec` still needs both.
@@ -207,7 +207,7 @@ pub struct Options {
 
 /// Assemble the launch, wire the inbox, and report.
 ///
-/// **Nothing here starts a process.** The four documents are written, the
+/// **Nothing here starts a process.** The documents are written, the
 /// conversation's record is read or minted, and the argv is returned as a
 /// string for a person to read or a script to parse.
 pub fn run<C: armada_core::ctx::Clock>(
@@ -222,12 +222,13 @@ pub fn run<C: armada_core::ctx::Clock>(
     let guild = Guild::at(&place.armada_home);
 
     // **The refusal comes first, before anything is written.** A `helm` that
-    // laid down four configuration files and then admitted it has no persona to
+    // laid down its configuration files and then admitted it has no persona to
     // run would have changed the machine to report a failure.
     persona(place, &guild, &agent)?;
 
     let (session, minted) = conversation(now, place, &agent, options.new)?;
-    let wiring = wire(place, &session, minted)?;
+    let voice = voice(&guild);
+    let wiring = wire(place, &session, minted, voice.as_ref())?;
 
     let launch = Launch {
         agent: agent.clone(),
@@ -235,7 +236,10 @@ pub fn run<C: armada_core::ctx::Clock>(
         mcp_config: paths(place).mcp_config.display().to_string(),
         plugin_dir: paths(place).plugin_dir.display().to_string(),
         settings: paths(place).settings.display().to_string(),
+        voice: voice.as_ref().map(|voice| voice.prompt.clone()),
     };
+    let argv = helm::launch_argv(&launch);
+    let command = helm::launch_line(&argv, &place.shown(&paths(place).voice));
     Ok(Output::Helm(Box::new(Envelope::ok(
         "helm",
         None,
@@ -247,7 +251,8 @@ pub fn run<C: armada_core::ctx::Clock>(
                 true => Conversation::Resumed,
                 false => Conversation::New,
             },
-            argv: helm::launch_argv(&launch),
+            argv,
+            command,
             results: wiring,
             launched: false,
             entering: entering_allowed(&place.armada_home),
@@ -264,6 +269,7 @@ struct Paths {
     monitors: PathBuf,
     settings: PathBuf,
     stop_hook: PathBuf,
+    voice: PathBuf,
 }
 
 fn paths(place: &Where) -> Paths {
@@ -276,7 +282,70 @@ fn paths(place: &Where) -> Paths {
         monitors: root.join("plugin/monitors/monitors.json"),
         settings: root.join("settings.json"),
         stop_hook: root.join("stop-inbox.sh"),
+        voice: root.join(helm::VOICE),
     }
+}
+
+/// **The reader's own three files, read here and handed to the launch.**
+///
+/// The persona at `templates/guild/subagents/helm.md` used to *instruct* Helm to
+/// read `~/.armada/guild/voice.md`, `expectations.md` and `how-i-work.md` at the
+/// start of a session. It could not: its `tools:` list is `mcp__armada__*` and
+/// contains no `Read` — deliberately, because "never do the work" is enforced by
+/// the absence of `Read`, `Edit` and `Bash` rather than by a paragraph. So the
+/// instruction was inert, and Helm spoke in nobody's voice while a file on the
+/// machine said exactly how to speak.
+///
+/// **Granting `Read` was the cheaper repair and the worse one.** It would have
+/// widened a toolbelt that is narrow on purpose, spent a turn per file, and left
+/// the outcome to a session remembering to do it — and a session that forgets is
+/// a session that ignores the reader. Reading them here makes it structural: the
+/// words are in the system prompt before the first turn or `armada helm` says
+/// out loud that they are not. It is the repair `armada_guild::layout::skill_argv`
+/// already made for `config scan`'s hand-over, one file over.
+///
+/// **A fragment still holding Armada's example text is not the reader's, and is
+/// skipped** — [`armada_guild::memory::state`] is the same test `armada guild
+/// ls` reports as *still Armada's example text*. Injecting the examples would
+/// make Armada's boilerplate binding in the reader's name, and they are generic
+/// advice the persona's own defaults already carry. Missing, unreadable and
+/// blank files are skipped for the same reason and reported the same way.
+///
+/// **This is the only place Armada reads those three files**, and it reads them
+/// off the guild it was given — never off `$HOME`, which nothing below the
+/// entrypoint may look at (`ARCHITECTURE.md` §1.4). That is also what lets the
+/// suite point it at a scratch guild rather than at somebody's real one.
+fn voice(guild: &Guild) -> Option<helm::Voice> {
+    let written: Vec<(&str, String)> = armada_guild::memory::FRAGMENTS
+        .iter()
+        .filter_map(|name| {
+            let body = std::fs::read_to_string(guild.path(name)).ok()?;
+            match armada_guild::memory::state(&body) {
+                Some(_) => None,
+                None => Some((*name, body)),
+            }
+        })
+        .collect();
+    let borrowed: Vec<(&str, &str)> = written
+        .iter()
+        .map(|(name, body)| (*name, body.as_str()))
+        .collect();
+    helm::voice(&borrowed)
+}
+
+/// What the wired row says when none of the three is the reader's yet.
+///
+/// **Said rather than left silent, and this is the row that would have caught
+/// the bug.** A launch that quietly appended nothing looks exactly like a launch
+/// that appended everything; the reader's complaint — *"Helm is going to be very
+/// verbose"* — was true for months with the instruction sitting unread in the
+/// persona. A row naming the files and the command that fills them turns that
+/// into something visible on every single launch.
+fn no_voice_yet() -> String {
+    format!(
+        "none yet — {} are Armada's words; `armada guild edit voice.md`",
+        armada_guild::memory::FRAGMENTS.join(", ")
+    )
 }
 
 /// Refuse a machine that has no guild, or a guild with no such persona.
@@ -411,7 +480,12 @@ pub fn mark_started(place: &Where, session: &Session) -> Result<(), ArmadaError>
 /// keep a registration pointing at a binary that is not there. Regenerating is
 /// cheap and the diff is reported, so a reader who edited one by hand sees that
 /// it was replaced.
-fn wire(place: &Where, session: &Session, minted: Wiring) -> Result<Vec<Wired>, ArmadaError> {
+fn wire(
+    place: &Where,
+    session: &Session,
+    minted: Wiring,
+    voice: Option<&helm::Voice>,
+) -> Result<Vec<Wired>, ArmadaError> {
     let paths = paths(place);
     let inbox = armada_fleet::home::inbox(&place.armada_home);
     let exe = paths_ok(place, &inbox)?;
@@ -446,6 +520,32 @@ fn wire(place: &Where, session: &Session, minted: Wiring) -> Result<Vec<Wired>, 
         at: place.shown(&paths.stop_hook),
         state: hook,
         detail: "Stop hook: a turn does not end while the inbox is unread".to_string(),
+    });
+    // **The reader's own words, and a row either way.** The document is what
+    // `"$(cat …)"` in the printed command reads, so it has to be on disk before
+    // that line is printed — and when there is nothing to write, the stale one
+    // from a launch before they edited their guild is removed rather than left
+    // to make a printed command say something the argv does not.
+    wired.push(Wired {
+        what: "voice".to_string(),
+        at: match voice {
+            Some(_) => place.shown(&paths.voice),
+            None => place.shown(Guild::at(&place.armada_home).root()),
+        },
+        state: match voice {
+            Some(voice) => write(&paths.voice, &voice.document())?,
+            None => match paths.voice.exists() {
+                true => {
+                    let _ = std::fs::remove_file(&paths.voice);
+                    Wiring::Written
+                }
+                false => Wiring::Unchanged,
+            },
+        },
+        detail: match voice {
+            Some(voice) => voice.said(),
+            None => no_voice_yet(),
+        },
     });
     wired.push(Wired {
         what: "conversation".to_string(),

@@ -3832,6 +3832,16 @@ does not.
 over prose, and every item labelled with who acts. That is voice, it belongs to the guild, and
 it is the half of Guild that plugins cannot carry (§13.3).
 
+**Your own three fragments are injected at launch, not read.** `~/.armada/guild/voice.md`,
+`expectations.md` and `how-i-work.md` are appended to the system prompt by `armada helm`
+([`commands/helm/helm.md`](commands/helm/helm.md)). The persona used to instruct Helm to read
+them, which it could not do: the `tools:` list above is what enforces *never do the work*, so
+there is no `Read` in it and the instruction was inert. Granting `Read` would have widened a
+toolbelt that is narrow on purpose and left the outcome to a session remembering; injection
+makes it structural. A fragment still holding Armada's example text is skipped rather than
+made binding in your name, and the launch says which — because a launch that quietly appended
+nothing looks exactly like one that appended everything.
+
 ### 14.6 The four workflows, and the predicates they gate on
 
 The starter set ships at [`templates/guild/workflows/`](../templates/guild/workflows/) and is

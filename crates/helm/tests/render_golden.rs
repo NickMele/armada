@@ -2092,6 +2092,11 @@ fn helm_matches_its_fixture() {
                 "claude".to_string(),
                 "--agent".to_string(),
                 "helm".to_string(),
+                // The reader's own words, inline, exactly as `--exec` would
+                // hand them to `claude` — and exactly what the printed line
+                // below must *not* paste.
+                "--append-system-prompt".to_string(),
+                "# Your user's own standing instructions\n\n…".to_string(),
                 "--mcp-config".to_string(),
                 "~/.armada/helm/mcp.json".to_string(),
                 "--plugin-dir".to_string(),
@@ -2101,6 +2106,18 @@ fn helm_matches_its_fixture() {
                 "--session-id".to_string(),
                 "15bfa340-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
             ],
+            // **The same launch, and the reason it is a separate field.** The
+            // argv above carries the reader's prose as bytes; this is the line
+            // a person pastes to reproduce it, which is why the prose appears
+            // here as `"$(cat …)"` and the fixture freezes that it never
+            // appears any other way.
+            command: "claude --agent helm --append-system-prompt \
+                      \"$(cat ~/.armada/helm/guild-voice.md)\" \
+                      --mcp-config ~/.armada/helm/mcp.json \
+                      --plugin-dir ~/.armada/helm/plugin \
+                      --settings ~/.armada/helm/settings.json \
+                      --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0"
+                .to_string(),
             results: vec![
                 wired(
                     "toolbelt",
@@ -2116,6 +2133,11 @@ fn helm_matches_its_fixture() {
                     "backstop",
                     "~/.armada/helm/stop-inbox.sh",
                     "Stop hook: a turn does not end while the inbox is unread",
+                ),
+                wired(
+                    "voice",
+                    "~/.armada/helm/guild-voice.md",
+                    "voice.md, how-i-work.md: your words, and they outrank the persona",
                 ),
                 Wired {
                     state: Wiring::Unchanged,

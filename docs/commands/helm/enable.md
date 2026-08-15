@@ -40,7 +40,7 @@ section — the same shape `manifest:`'s section already takes there, one sectio
 write only when the value actually changes, so running either twice in a row is silent about the
 second time — the envelope's `changed` says whether anything was written.
 
-Neither touches the guild, the persona, or any of the four documents `armada helm` wires up. Being
+Neither touches the guild, the persona, or any of the documents `armada helm` wires up. Being
 *allowed* to open a session and being currently *able* to — a guild that exists, a persona that is
 projected — are different questions, answered by different commands. `armada helm --exec` needs
 both to be true.

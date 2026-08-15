@@ -1,4 +1,4 @@
-//! Helm's pure decisions: **the argv, the four configuration files, and the
+//! Helm's pure decisions: **the argv, the configuration files, and the
 //! record that makes it the same conversation tomorrow** (PLAN.md §15).
 //!
 //! Helm is a Claude Code session running an orchestrator persona from the
@@ -77,6 +77,198 @@ pub const SERVER: &str = "armada";
 /// The program Helm is. The same binary a Drone is, because Helm is a session.
 pub use crate::fleet::drone::CLAUDE;
 
+/// The flag that carries the reader's own words into the session.
+///
+/// **`--append-system-prompt` rather than `--system-prompt`**: the session keeps
+/// the persona and everything Claude Code normally is, and *gains* the reader's
+/// standing instructions, rather than being reduced to them. It is in [`FLAGS`],
+/// so `armada doctor` holds it against `claude --help` like every other flag the
+/// launch uses.
+pub const APPEND: &str = "--append-system-prompt";
+
+/// The document [`voice`] assembles, written under `~/.armada/helm/`.
+///
+/// **Named so it cannot be mistaken for its sources.** `~/.armada/guild/voice.md`
+/// is the reader's, hand-edited and synced; this is a generated file rewritten on
+/// every launch, exactly like `mcp.json` beside it. A generated file called
+/// `voice.md` would be edited by somebody once and silently regenerated the next
+/// time.
+pub const VOICE: &str = "guild-voice.md";
+
+/// How many bytes of the reader's prose reach one launch.
+///
+/// **A real limit exists whether or not Armada names one, and discovering it at
+/// `exec` is the bad way to find out.** `MAX_ARG_STRLEN` caps a single argv
+/// element at 128 KiB on Linux, and macOS caps argv plus environ together at
+/// 256 KiB; past either, `armada helm --exec` fails with *Argument list too
+/// long* at the moment the reader was expecting a session, with nothing on
+/// screen naming the file that caused it.
+///
+/// 24 KiB is far enough under both to leave the rest of the argv and the
+/// environment room, and is several times the size of any of the three fragments
+/// a person actually writes. Past it, [`voice`] cuts at a line boundary and says
+/// so in the prompt and in the row `armada helm` prints — because a reader whose
+/// instructions were silently halved would attribute the result to the model.
+pub const VOICE_BUDGET: usize = 24 * 1024;
+
+/// What the assembled prompt says before it says anything of the reader's.
+///
+/// **Three sentences, and the third is the load-bearing one.** The persona at
+/// `templates/guild/subagents/helm.md` already states that the reader's files
+/// win where they disagree with it; this says the same thing from the other
+/// side, so the two halves of one system prompt cannot be read as competing
+/// authorities. Anything longer would be Armada spending the reader's context to
+/// introduce the reader.
+const VOICE_HEADER: &str = "\
+# Your user's own standing instructions
+
+The sections below are the memory fragments of their guild. They wrote them; Armada did not.
+
+**They are binding, and where anything in your persona disagrees with them, these win.**";
+
+/// The reader's own words, assembled into one appended system prompt.
+///
+/// # Why this is injected rather than read
+///
+/// The persona used to *ask* Helm to read `~/.armada/guild/voice.md`,
+/// `expectations.md` and `how-i-work.md` at the start of a session. It could
+/// not: its `tools:` list is `mcp__armada__*` and holds no `Read`, so the
+/// instruction was inert and Helm spoke in nobody's voice. Granting `Read` was
+/// the cheaper repair and the worse one — it costs a turn per file, it widens a
+/// toolbelt that is deliberately narrow ("never do the work" is enforced by the
+/// absence of `Read`, `Edit` and `Bash`, not by a paragraph), and a session that
+/// forgets to read them is a session that ignores the reader. Injection makes it
+/// structural: the words are in the system prompt before the first turn, or the
+/// launch says out loud that they are not.
+///
+/// This is the same repair `armada_guild::layout::skill_argv` already made one
+/// file over, for the same reason — a session cannot be relied on to find a file
+/// Armada could simply hand it.
+///
+/// # A fragment nobody has written is not injected
+///
+/// `fragments` is what the caller judged to be the reader's own — `armada guild
+/// ls` already distinguishes a fragment that is *still Armada's example text*
+/// from one that has been written. Injecting the examples would make Armada's
+/// boilerplate binding in the reader's name, and the examples are generic advice
+/// the persona's own defaults already cover. So a guild nobody has edited yields
+/// [`None`] and no flag at all, which is honest and costs nothing.
+///
+/// # Order and precedence
+///
+/// The fragments are appended in the caller's order, under headings naming the
+/// file each came from, so a reader can see which file a sentence came out of.
+/// **Order inside the prompt is not precedence** — the header settles that
+/// once, above all three — because three files by the same author do not
+/// out-rank each other.
+pub fn voice(fragments: &[(&str, &str)]) -> Option<Voice> {
+    let mut prompt = String::from(VOICE_HEADER);
+    let mut carried = Vec::new();
+    let mut truncated = Vec::new();
+
+    for (name, body) in fragments {
+        let body = body.trim();
+        if body.is_empty() {
+            continue;
+        }
+        let heading = format!("\n\n## ~/.armada/guild/{name}\n\n");
+        // The reservation is for the truncation note, which is written *after*
+        // the budget has already been spent and must not be what overruns it.
+        let room = VOICE_BUDGET.saturating_sub(prompt.len() + heading.len() + NOTE);
+        prompt.push_str(&heading);
+        if body.len() <= room {
+            prompt.push_str(body);
+        } else {
+            let kept = cut_at_line(body, room);
+            if !kept.is_empty() {
+                prompt.push_str(kept);
+                prompt.push('\n');
+            }
+            prompt.push_str(&format!(
+                "\n[armada: `{name}` is {} bytes and a launch carries at most {VOICE_BUDGET}; \
+                 the first {} of it reached this session. Shorten it, or move the detail into \
+                 a skill.]",
+                body.len(),
+                kept.len()
+            ));
+            truncated.push((*name).to_string());
+        }
+        carried.push((*name).to_string());
+    }
+
+    match carried.is_empty() {
+        true => None,
+        false => Some(Voice {
+            prompt,
+            carried,
+            truncated,
+        }),
+    }
+}
+
+/// Room held back for a truncation note, so that saying the prose was cut is
+/// not itself what overruns [`VOICE_BUDGET`].
+const NOTE: usize = 256;
+
+/// The reader's words, and what had to be done to fit them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Voice {
+    /// The appended system prompt, exactly as it reaches the argv.
+    ///
+    /// **No trailing newline**, so that `"$(cat …)"` in [`launch_line`] produces
+    /// this string byte for byte — command substitution strips trailing
+    /// newlines, and a printed command that is not the argv is wrong in the one
+    /// place a reader cannot check it.
+    pub prompt: String,
+    /// The fragments that reached it, in the order they appear.
+    pub carried: Vec<String>,
+    /// The fragments that reached it only in part.
+    pub truncated: Vec<String>,
+}
+
+impl Voice {
+    /// The bytes to write to `~/.armada/helm/`[`VOICE`].
+    ///
+    /// The prompt plus the newline every text file ends with — and the newline
+    /// `"$(cat …)"` then strips back off, which is what keeps the file and the
+    /// argv the same string.
+    pub fn document(&self) -> String {
+        format!("{}\n", self.prompt)
+    }
+
+    /// The one line `armada helm` prints about it.
+    pub fn said(&self) -> String {
+        let carried = self.carried.join(", ");
+        match self.truncated.is_empty() {
+            true => format!("{carried}: your words, and they outrank the persona"),
+            false => format!(
+                "{carried}: your words, and they outrank the persona; {} cut at {} KB",
+                self.truncated.join(", "),
+                VOICE_BUDGET / 1024
+            ),
+        }
+    }
+}
+
+/// The largest prefix of `body` that is whole lines and fits in `room`.
+///
+/// Cutting mid-sentence would hand the session half an instruction, which reads
+/// as a complete one; a line boundary is the coarsest cut that cannot invent a
+/// rule the reader never wrote.
+fn cut_at_line(body: &str, room: usize) -> &str {
+    if room >= body.len() {
+        return body;
+    }
+    let mut end = room;
+    while end > 0 && !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    match body[..end].rfind('\n') {
+        Some(newline) => &body[..newline],
+        None => "",
+    }
+}
+
 /// Which conversation `armada helm` is, and whether it exists yet.
 ///
 /// **Persisted, because resuming is the whole point.** "Resuming the same
@@ -146,6 +338,13 @@ pub struct Launch {
     pub plugin_dir: String,
     /// `~/.armada/helm/settings.json`.
     pub settings: String,
+    /// The reader's own standing instructions, assembled by [`voice`].
+    ///
+    /// **[`None`] is a guild nobody has written yet**, not an error and not a
+    /// degraded launch: the persona's own defaults already produce a terse Helm,
+    /// and injecting the example text would make Armada's boilerplate binding in
+    /// the reader's name.
+    pub voice: Option<String>,
 }
 
 /// The command that starts, or resumes, the one conversation.
@@ -164,6 +363,18 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
         // argv opens an ordinary session that happens to have Armada's tools.
         "--agent".to_string(),
         launch.agent.clone(),
+    ];
+    // **Immediately after the persona, because it qualifies the persona.**
+    // Everything below this is wiring — a toolbelt, a plugin, a hook — and none
+    // of it has anything to say about how Helm talks. Position is not
+    // precedence: what outranks what is settled in the prose ([`voice`]), and
+    // has to be, because a flag's place in an argv is not something a model
+    // reads.
+    if let Some(voice) = &launch.voice {
+        argv.push(APPEND.to_string());
+        argv.push(voice.clone());
+    }
+    argv.extend([
         "--mcp-config".to_string(),
         launch.mcp_config.clone(),
         // **The monitor, and it is the only thing the plugin carries.** A
@@ -179,7 +390,7 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
         // never stops.
         "--settings".to_string(),
         launch.settings.clone(),
-    ];
+    ]);
     argv.push(
         match launch.session.resumable_as(&launch.agent) {
             true => "--resume",
@@ -200,14 +411,49 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
 /// (`docs/traps.md`). A flag renamed or removed under Armada would otherwise
 /// surface as a Helm that will not start, in the one session the reader cannot
 /// ask Armada about — because Helm is how they ask.
-pub const FLAGS: [&str; 6] = [
+pub const FLAGS: [&str; 7] = [
     "--agent",
+    APPEND,
     "--mcp-config",
     "--plugin-dir",
     "--settings",
     "--session-id",
     "--resume",
 ];
+
+/// The same launch, written as a line a person can read and paste.
+///
+/// **Two renderings of one thing, and both have to work** — the rule
+/// `armada_guild::layout::skill_command_line` already follows for the hand-over
+/// it prints. [`launch_argv`] is what `--exec` becomes, with the reader's prose
+/// already inlined; this is what `armada helm` *prints*, and inlining twenty
+/// kilobytes of somebody's `voice.md` into that line would produce an
+/// unreadable, unpasteable screenful in place of the one line this verb exists
+/// to produce.
+///
+/// **Derived from the argv rather than built beside it**, so the two cannot
+/// drift: every word is the argv's own except the appended prompt, which becomes
+/// `"$(cat …)"` against the file the launch just wrote. That substitution
+/// reproduces the argv byte for byte — [`Voice::document`] is the prompt plus
+/// the single trailing newline that command substitution strips back off.
+///
+/// `voice_at` is the path as a person writes it, `~/…` rather than absolute:
+/// this line is pasted and screen-shared, and an absolute home is both longer to
+/// read and somebody's name in a terminal.
+pub fn launch_line(argv: &[String], voice_at: &str) -> String {
+    let mut out: Vec<String> = Vec::with_capacity(argv.len());
+    let mut prose = false;
+    for word in argv {
+        if prose {
+            out.push(format!("\"$(cat {voice_at})\""));
+            prose = false;
+            continue;
+        }
+        prose = word == APPEND;
+        out.push(word.clone());
+    }
+    out.join(" ")
+}
 
 /// The toolbelt, as a `--mcp-config` document.
 ///
@@ -386,7 +632,30 @@ mod tests {
             mcp_config: "/scratch/.armada/helm/mcp.json".to_string(),
             plugin_dir: "/scratch/.armada/helm/plugin".to_string(),
             settings: "/scratch/.armada/helm/settings.json".to_string(),
+            voice: None,
         }
+    }
+
+    /// The same launch on a machine whose reader has written their guild.
+    fn a_spoken_launch() -> Launch {
+        Launch {
+            voice: Some(a_voice().prompt),
+            ..a_launch(false)
+        }
+    }
+
+    /// Three fragments in the reader's own words — **written here rather than
+    /// copied from anybody's machine.** This repository is public and a fixture
+    /// is the easiest place for somebody's real memory file to end up in it.
+    fn a_voice() -> Voice {
+        voice(&[
+            ("voice.md", "# Voice\n\nAnswer in one line. No preamble.\n"),
+            (
+                "expectations.md",
+                "# Expectations\n\nGreen suite, or say so.\n",
+            ),
+        ])
+        .expect("two written fragments")
     }
 
     /// **The whole vector, exactly.** A test asserting on anything less specific
@@ -450,6 +719,7 @@ mod tests {
         let used: Vec<String> = launch_argv(&a_launch(false))
             .into_iter()
             .chain(launch_argv(&a_launch(true)))
+            .chain(launch_argv(&a_spoken_launch()))
             .filter(|word| word.starts_with("--"))
             .collect();
         for flag in &used {
@@ -465,6 +735,138 @@ mod tests {
                 "`{flag}` is checked for and used by nothing"
             );
         }
+    }
+
+    /// **The reader's own words are in the argv, not merely referred to by it.**
+    ///
+    /// This is the assertion the whole change exists for. The persona used to
+    /// *ask* Helm to read the three files and Helm had no `Read` tool, so the
+    /// instruction was inert and nothing on the machine said so. A launch that
+    /// named the paths — or that granted `Read` and hoped — would pass a laxer
+    /// test than this one and would still be able to start a session that had
+    /// never seen a word the reader wrote.
+    #[test]
+    fn the_readers_own_words_reach_the_session_as_bytes() {
+        let argv = launch_argv(&a_spoken_launch());
+        let at = argv
+            .iter()
+            .position(|word| word == APPEND)
+            .expect("the reader's words are not in the launch at all");
+        // Immediately after the persona it qualifies, and before the wiring.
+        assert_eq!(&argv[..at], ["claude", "--agent", "helm"]);
+        let prompt = &argv[at + 1];
+        assert!(prompt.contains("Answer in one line."), "{prompt}");
+        assert!(prompt.contains("Green suite, or say so."), "{prompt}");
+        // Each is attributed to the file it came out of.
+        assert!(prompt.contains("~/.armada/guild/voice.md"), "{prompt}");
+        assert!(
+            prompt.contains("~/.armada/guild/expectations.md"),
+            "{prompt}"
+        );
+        // **The persona does not have to be argued with.** It already says the
+        // reader's files win; the appended half says the same from its side, so
+        // one system prompt cannot read as two competing authorities.
+        assert!(
+            prompt.contains("these win"),
+            "the prompt does not settle precedence: {prompt}"
+        );
+        assert_eq!(&argv[at + 2..at + 4], ["--mcp-config", MCP]);
+    }
+
+    const MCP: &str = "/scratch/.armada/helm/mcp.json";
+
+    /// **A guild nobody has written injects nothing at all** — no flag, no
+    /// empty prompt, no heading with nothing under it. Armada's example text
+    /// made binding in the reader's name is worse than the persona's own
+    /// defaults, which already produce a terse Helm.
+    #[test]
+    fn an_unwritten_guild_adds_no_flag_and_no_empty_prompt() {
+        assert_eq!(voice(&[]), None);
+        assert_eq!(
+            voice(&[("voice.md", "   \n\n")]),
+            None,
+            "whitespace is not a voice"
+        );
+        let argv = launch_argv(&a_launch(false));
+        assert!(!argv.iter().any(|word| word == APPEND), "{argv:?}");
+    }
+
+    /// **Prose with no length bound meets a launch with one.** A single argv
+    /// element is capped at 128 KiB on Linux and argv plus environ at 256 KiB on
+    /// macOS; past either, `--exec` fails with *Argument list too long* and
+    /// names no file. So the cut happens here, at a line boundary, and says so
+    /// in the prompt itself — a reader whose instructions were silently halved
+    /// would blame the model.
+    #[test]
+    fn prose_past_the_budget_is_cut_at_a_line_and_says_so() {
+        let long = "A line of somebody's standing instructions.\n".repeat(2_000);
+        let voice = voice(&[("how-i-work.md", &long)]).expect("it is written");
+        assert!(long.len() > VOICE_BUDGET, "the fixture is not over budget");
+        assert!(
+            voice.prompt.len() <= VOICE_BUDGET,
+            "{} bytes would be handed to exec",
+            voice.prompt.len()
+        );
+        assert!(voice.prompt.ends_with(']'), "{}", voice.prompt);
+        assert!(voice.prompt.contains("Shorten it"), "{}", voice.prompt);
+        assert_eq!(voice.truncated, ["how-i-work.md"]);
+        assert!(voice.said().contains("cut at 24 KB"), "{}", voice.said());
+        // Whole lines only: half a sentence reads as a whole instruction, and
+        // the one that would be cut here ends mid-word.
+        assert!(
+            !voice.prompt.contains("A line of somebody's standing in\n"),
+            "a line was cut mid-word"
+        );
+        let partial = voice
+            .prompt
+            .lines()
+            .filter(|line| line.starts_with("A line"))
+            .find(|line| *line != "A line of somebody's standing instructions.");
+        assert_eq!(partial, None, "a line of the reader's prose was halved");
+    }
+
+    /// **The printed line and the argv are the same launch.** A reader who
+    /// pastes what `armada helm` printed and a reader whose `--exec` was
+    /// exec'd must land in the same session; `"$(cat …)"` is what makes the
+    /// second reproduce the first, and it reproduces it exactly because
+    /// [`Voice::document`] adds the one newline the substitution strips.
+    #[test]
+    fn the_printed_line_reproduces_the_argv_it_stands_for() {
+        let voice = a_voice();
+        let argv = launch_argv(&a_spoken_launch());
+        let line = launch_line(&argv, "~/.armada/helm/guild-voice.md");
+
+        assert!(
+            line.contains("--append-system-prompt \"$(cat ~/.armada/helm/guild-voice.md)\""),
+            "{line}"
+        );
+        assert!(
+            !line.contains("Answer in one line."),
+            "the prose is inlined: {line}"
+        );
+        assert!(
+            !line.contains('\n'),
+            "the printed command is one line: {line}"
+        );
+        // The substitution's own guarantee: the file is the prompt plus the
+        // newline `$(cat …)` removes.
+        assert_eq!(voice.document(), format!("{}\n", voice.prompt));
+        assert_eq!(voice.document().trim_end_matches('\n'), voice.prompt);
+        // Every other word is the argv's own, untouched.
+        for word in ["claude", "--agent", "helm", "--mcp-config", MCP] {
+            assert!(line.contains(word), "{word} is missing from {line}");
+        }
+    }
+
+    /// A launch with nothing to append prints exactly what it did before, so
+    /// the substitution cannot appear on a machine that has no voice file.
+    #[test]
+    fn a_silent_launch_prints_the_plain_argv() {
+        let argv = launch_argv(&a_launch(false));
+        assert_eq!(
+            launch_line(&argv, "~/.armada/helm/guild-voice.md"),
+            argv.join(" ")
+        );
     }
 
     /// **Helm is interactive, so it carries none of the headless flags.**
