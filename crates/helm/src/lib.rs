@@ -15,4 +15,5 @@ pub mod machine;
 pub mod mcp;
 pub mod redact;
 pub mod render;
+pub mod secrets;
 pub mod verbs;
