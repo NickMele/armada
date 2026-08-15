@@ -32,7 +32,8 @@ use armada_core::envelope::{
     Asked, BridgeData, CheckData, CleanData, CommandView, CommandsData, ComponentView,
     ComponentsData, DispatchData, DoctorData, Envelope, Evidence, FailureData, FailuresData,
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
-    GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData,
+    GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxData, InboxRow,
+    InitData,
     InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem, Projection,
     Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, SettingRow, SettingsData,
     Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, TickData, TickRow,
@@ -1698,6 +1699,84 @@ fn fleet_ls_matches_its_fixture() {
         },
     )));
     assert_render("fleet-ls", &output);
+}
+
+/// `armada fleet inbox` — **the table `001` is about, with the id it lacked.**
+///
+/// This listing had no fixture at all until now, which is why two things could
+/// be wrong in it without anybody noticing:
+///
+/// - **No `ID` column.** Every entry has carried its own `uuid` in `--json`
+///   since it was written and the table never drew it, so the only way to refer
+///   to a row was *"the second one"* — which is
+///   `docs/reserved/001-raised-items-need-identity.md`'s complaint, printed.
+///   `armada fleet ls` was given the same column for the same reason
+///   (`docs/reserved/005-inbox-label-not-identity.md`); this table was missed.
+/// - **`BLOCKED` never painted red.** The colour was chosen by matching
+///   `row.kind` against `"blocked"`, and the field holds `Kind::word()`, which
+///   is `BLOCKED`. The arm was dead, so the one kind that cannot proceed
+///   without you read in the same orange as one that merely asked a question.
+///
+/// **The three rows are the three states a reader has to tell apart**: a
+/// question waiting, a Job that cannot move, and one already answered. The
+/// third greys — `PLAN.md` §15.4's rule that a signal which never stands down
+/// stops being one — and it keeps its id, because `armada fleet inbox --all`
+/// is how you find what a Job asked before it ended.
+#[test]
+fn fleet_inbox_matches_its_fixture() {
+    fn row(uuid: &str, job: &str, kind: &str, body: &str, waiting_s: u64) -> InboxRow {
+        InboxRow {
+            uuid: uuid.to_string(),
+            job_uuid: Some("c19d0a34-3069-4f6a-9d1e-2b7c8a5f0e11".to_string()),
+            job: job.to_string(),
+            kind: kind.to_string(),
+            raised_at: "2026-08-09T14:02:11Z".to_string(),
+            waiting_s,
+            body: body.to_string(),
+            answered: None,
+            closed: None,
+        }
+    }
+
+    let mut answered = row(
+        "7d1c5e02-8a44-4b90-9f31-0c6d2e8a1b47",
+        "rate-limit",
+        "NEEDS_HUMAN",
+        "which of the two ports should the proxy take?",
+        3 * 60 * 60,
+    );
+    answered.answered = Some("the higher one".to_string());
+
+    let results = vec![
+        row(
+            "4f2a91c8-6b03-4d17-8e5a-91c30b6f2d84",
+            "nightly-flake",
+            "NEEDS_HUMAN",
+            "raise the CI timeout to 90s, or drop the flaky test?",
+            65 * 60,
+        ),
+        row(
+            "b83e7a15-2c9d-4e60-b1f7-58a04d3c9e26",
+            "rate-limit",
+            "BLOCKED",
+            "the staging database is not reachable from the worktree",
+            22 * 60,
+        ),
+        answered,
+    ];
+
+    let output = Output::Inbox(Box::new(Envelope::ok(
+        "fleet inbox",
+        None,
+        // **An empty or a full inbox is `OK` either way.** Nothing here failed;
+        // the question is what is waiting, and the count answers it.
+        Status::Ok,
+        InboxData {
+            open: results.iter().filter(|row| row.is_open()).count(),
+            results,
+        },
+    )));
+    assert_render("fleet-inbox", &output);
 }
 
 /// One pass of the workflow loop over a fleet — **every word `did` can take,

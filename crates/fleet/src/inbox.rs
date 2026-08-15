@@ -432,6 +432,56 @@ pub fn open_for<'a>(entries: &'a [Entry], job_uuid: &str) -> Option<&'a Entry> {
         .find(|entry| entry.job_uuid.as_deref() == Some(job_uuid) && entry.is_open())
 }
 
+/// The **open** entry an id names — by prefix, when the prefix names exactly
+/// one.
+///
+/// **This is the half of `001` the inbox was still missing.**
+/// `docs/reserved/005-inbox-label-not-identity.md` gave an entry a `job_uuid`
+/// so it could say which Job it belonged to; nothing gave a *reader* a way to
+/// say which entry they meant. `armada fleet answer <job>` names the Job and
+/// [`open_for`] picks the oldest of its open entries, so a Job that asked twice
+/// cannot be answered out of order and a table of five entries offers one
+/// action that does not name a row. An id fixes that from the reader's side.
+///
+/// **Only open entries are matched**, and that is the design rather than an
+/// optimisation. An id that resolves to an answered or closed entry would give
+/// the caller a row with nothing to answer — which is
+/// `005`'s second consequence, *the footer offers an action that cannot work*,
+/// arriving by a new route. `Ok(None)` means "this is not an entry id", which
+/// is what lets the caller fall back to resolving it as a Job handle.
+///
+/// **Ambiguity is refused rather than resolved**, exactly as
+/// `armada failures show` refuses it: picking one of two for the caller would
+/// close a question they did not name.
+pub fn find_open<'a>(entries: &'a [Entry], id: &str) -> Result<Option<&'a Entry>, ArmadaError> {
+    // An empty prefix would match every open entry; it is not an id and the
+    // ambiguity error it would raise would be nonsense.
+    if id.is_empty() {
+        return Ok(None);
+    }
+    let matched: Vec<&Entry> = entries
+        .iter()
+        .filter(|entry| entry.is_open() && entry.uuid.starts_with(id))
+        .collect();
+    match matched.as_slice() {
+        [] => Ok(None),
+        [one] => Ok(Some(one)),
+        many => Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: id.to_string(),
+            message: format!(
+                "`{id}` names {} open entries: {}",
+                many.len(),
+                many.iter()
+                    .map(|entry| crate::jobs::short(&entry.uuid))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            next_action: Some("give more of the id".to_string()),
+        }),
+    }
+}
+
 fn append(path: &Path, line: &Line) -> Result<(), ArmadaError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| unreadable(parent, &e))?;
@@ -874,5 +924,81 @@ mod tests {
                 why
             );
         }
+    }
+
+    // ------------------------------------------------------- an entry's own id
+
+    /// **A prefix names the row, and the row is not the oldest one.**
+    ///
+    /// This is the difference `docs/reserved/001-raised-items-need-identity.md`
+    /// exists to make. Both entries below belong to one Job, so
+    /// [`open_for`] answers `first` for either of them; only an id can say
+    /// *the second one* without a sentence.
+    #[test]
+    fn an_open_entry_is_found_by_a_prefix_of_its_own_id() {
+        let (_home, path) = scratch();
+        raised(&path, "aaaa1111-e", "job-uuid", "api", 1, "first");
+        raised(&path, "bbbb2222-e", "job-uuid", "api", 2, "second");
+        let entries = read(&path).unwrap();
+
+        assert_eq!(open_for(&entries, "job-uuid").unwrap().body, "first");
+        assert_eq!(find_open(&entries, "bbbb").unwrap().unwrap().body, "second");
+        assert_eq!(find_open(&entries, "aaaa").unwrap().unwrap().body, "first");
+    }
+
+    /// **An id nothing open answers to is `None`, not an error** — which is
+    /// what lets `armada fleet answer` try the same word as a Job handle
+    /// afterwards. An error here would make every Job-named answer fail.
+    #[test]
+    fn a_handle_that_names_no_open_entry_is_not_an_error() {
+        let (_home, path) = scratch();
+        raised(&path, "aaaa1111-e", "job-uuid", "api", 1, "first");
+        let entries = read(&path).unwrap();
+
+        assert!(find_open(&entries, "api").unwrap().is_none());
+        // The empty string would otherwise prefix-match every open entry and
+        // report an ambiguity about an id nobody typed.
+        assert!(find_open(&entries, "").unwrap().is_none());
+    }
+
+    /// **An answered entry is not findable**, so an id cannot be used to
+    /// re-answer something already closed. That is
+    /// `docs/reserved/005-inbox-label-not-identity.md`'s second consequence —
+    /// *an action that can only fail is worse than no action* — arriving by the
+    /// new route.
+    #[test]
+    fn only_open_entries_answer_to_an_id() {
+        let (_home, path) = scratch();
+        raised(&path, "aaaa1111-e", "job-uuid", "api", 1, "first");
+        answer(&path, "aaaa1111-e", "go ahead").unwrap();
+        let entries = read(&path).unwrap();
+
+        assert!(find_open(&entries, "aaaa").unwrap().is_none());
+    }
+
+    /// **Two matches are refused rather than picked between.** The same rule
+    /// `armada failures show` follows: resolving an ambiguous prefix for the
+    /// caller closes a question they did not name.
+    #[test]
+    fn a_prefix_naming_two_open_entries_is_refused() {
+        let (_home, path) = scratch();
+        raised(&path, "aaaa1111-e", "job-uuid", "api", 1, "first");
+        raised(&path, "aaaa2222-e", "other-uuid", "web", 2, "second");
+        let entries = read(&path).unwrap();
+
+        let error = find_open(&entries, "aaaa").unwrap_err();
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert!(
+            error.message.contains("names 2 open entries"),
+            "the refusal should say how many and which: {}",
+            error.message
+        );
+        // Inverted once: a prefix long enough to be unambiguous must resolve,
+        // or the assertion above would pass for a function that refused
+        // everything.
+        assert_eq!(
+            find_open(&entries, "aaaa1111").unwrap().unwrap().body,
+            "first"
+        );
     }
 }

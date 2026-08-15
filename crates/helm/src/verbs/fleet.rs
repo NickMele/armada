@@ -1661,6 +1661,14 @@ fn row(entry: &inbox::Entry, wall: u64) -> InboxRow {
 
 /// `armada fleet answer` — close the entry, and resume the Job with it.
 ///
+/// **The handle is an entry id or a Job**, in that order, and the entry id is
+/// the one this verb is really about
+/// (`docs/reserved/001-raised-items-need-identity.md`). The Job form is kept
+/// because it is what every existing caller types and because a Job with one
+/// open question needs no id to disambiguate it; the entry form is what makes a
+/// row in a table something you can act on one at a time, which is the whole
+/// complaint.
+///
 /// **The budget is not reset.** An answer is a continuation rather than a new
 /// run, and resetting the ceiling here would make budgets unenforceable for any
 /// Job that asks a question (`commands/fleet/answer.md`). The resumed session
@@ -1678,7 +1686,29 @@ pub fn answer<R: Run, C: Clock>(
     said: &str,
 ) -> Result<Output, ArmadaError> {
     let store = place.store();
-    let mut record = store.find(handle)?;
+    let entries = entries(place)?;
+
+    // **The handle is tried as an entry id before it is tried as a Job**, which
+    // is `docs/reserved/001-raised-items-need-identity.md` arriving in the verb
+    // 005 fixed the store half of. A Job that asked twice has two open rows and
+    // naming the Job says which one you mean only by accident — [`open_for`]
+    // picks the oldest. Naming the row says it exactly, and the row is what the
+    // table you are reading it off draws.
+    //
+    // **Entry first, Job second, and never both.** The two spaces cannot be
+    // merged — a Job's uuid and an entry's are different identities of
+    // different things — so the order is the decision: an id that names an open
+    // entry means that entry, and anything else falls through to the Job index
+    // exactly as it did before. Nothing that worked stops working, because a
+    // Job handle has never been an open entry's uuid.
+    let picked = inbox::find_open(&entries, handle)?.cloned();
+    let mut record = match &picked {
+        // `job_uuid` is `Some` for every open entry — `is_open` requires it
+        // (`inbox.rs`) — so this cannot fall through to the Job index by
+        // accident. The `unwrap_or` is the total spelling of that invariant.
+        Some(entry) => store.load(entry.job_uuid.as_deref().unwrap_or_default())?,
+        None => store.find(handle)?,
+    };
 
     // **A Job that has ended is refused before anything is read.** Its entries
     // were closed when it ended, so there is nothing to find — but the message
@@ -1698,14 +1728,19 @@ pub fn answer<R: Run, C: Clock>(
         });
     }
 
-    let entries = entries(place)?;
-    let Some(entry) = inbox::open_for(&entries, &record.uuid) else {
-        return Err(ArmadaError {
-            class: ErrClass::BadInvocation,
-            r#where: record.name.clone(),
-            message: format!("`{}` has nothing open to answer", record.name),
-            next_action: Some("`armada fleet inbox` lists what is waiting".to_string()),
-        });
+    let entry = match &picked {
+        Some(entry) => entry,
+        None => {
+            let Some(entry) = inbox::open_for(&entries, &record.uuid) else {
+                return Err(ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: record.name.clone(),
+                    message: format!("`{}` has nothing open to answer", record.name),
+                    next_action: Some("`armada fleet inbox` lists what is waiting".to_string()),
+                });
+            };
+            entry
+        }
     };
 
     // **Refused before the entry is closed.** A Job whose rope has run out is

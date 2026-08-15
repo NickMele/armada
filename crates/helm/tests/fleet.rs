@@ -2259,6 +2259,97 @@ fn the_inbox_reports_what_is_open_and_changes_nothing() {
     assert!(armada_fleet::inbox::read(&scratch.inbox()).unwrap()[0].is_open());
 }
 
+/// **A row is answered by its own id, and the row answered is the one named.**
+///
+/// This is `docs/reserved/001-raised-items-need-identity.md`'s complaint stated
+/// as a test. Both entries below belong to one Job, so `armada fleet answer
+/// <job>` reaches the oldest and there is no way to say *the second one* except
+/// in a sentence. Naming the entry says it.
+#[test]
+fn an_entry_is_answered_by_its_own_id_rather_than_by_its_jobs_name() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    await_turn(&scratch, &data.uuid);
+
+    for (id, body) in [("aaaa1111-e", "raise the CI timeout?"), ("bbbb2222-e", "or drop the flaky test?")] {
+        armada_fleet::inbox::raise(
+            &scratch.inbox(),
+            id,
+            &data.uuid,
+            &data.name,
+            armada_fleet::inbox::Kind::NeedsHuman,
+            "2026-08-09T14:02:11Z",
+            1,
+            body,
+        )
+        .unwrap();
+    }
+
+    fleet::answer(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        // Four characters off the table, which is what a person retypes.
+        "bbbb",
+        "drop it",
+    )
+    .unwrap();
+    scratch.watch(&data.uuid);
+
+    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    let answered: Vec<(&str, Option<&str>)> = entries
+        .iter()
+        .map(|entry| (entry.uuid.as_str(), entry.answered.as_deref()))
+        .collect();
+    assert_eq!(
+        answered,
+        vec![
+            // Inverted once: had the id been ignored and the Job resolved
+            // instead, `open_for` would have answered this row and the two
+            // cells below would be the other way round.
+            ("aaaa1111-e", None),
+            ("bbbb2222-e", Some("drop it")),
+        ],
+        "the id named the second entry and the first was answered"
+    );
+}
+
+/// **A handle that names no open entry is still a Job handle**, so every caller
+/// that has ever typed a Job's name goes on working. The fallback is what makes
+/// the id an addition rather than a break.
+#[test]
+fn a_job_name_still_answers_when_it_names_no_entry() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    await_turn(&scratch, &data.uuid);
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "aaaa1111-e",
+        &data.uuid,
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "2026-08-09T14:02:11Z",
+        1,
+        "well?",
+    )
+    .unwrap();
+
+    fleet::answer(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &data.name,
+        "carry on",
+    )
+    .unwrap();
+    scratch.watch(&data.uuid);
+
+    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    assert_eq!(entries[0].answered.as_deref(), Some("carry on"));
+}
+
 #[test]
 fn an_empty_inbox_succeeds_and_reports_nothing() {
     let scratch = Scratch::new();

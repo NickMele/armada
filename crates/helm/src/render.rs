@@ -1737,9 +1737,28 @@ fn released(style: Style, killed: &armada_core::envelope::Killed) -> String {
 }
 
 /// `armada fleet inbox` — what the fleet needs from you.
+///
+/// **The `ID` column is `001`'s whole demand, and this table was the last
+/// listing without one.** `docs/reserved/005-inbox-label-not-identity.md` gave
+/// `armada fleet ls` a uuid column for the same reason and left this one alone:
+/// an entry has carried its own `uuid` in `--json` since it was written, and a
+/// person reading the table could not see it. So the row that asked you
+/// something was a row you could only refer to as *"the second one"* — which is
+/// `docs/reserved/001-raised-items-need-identity.md`'s complaint, printed.
+///
+/// **Eight characters, via [`armada_fleet::jobs::short`]**, the same width the
+/// Job column's ids use and the same width the ambiguity errors print. `--json`
+/// keeps the whole uuid; the table shows what a person retypes.
 fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut table = Table::new(columns("job", "detail", true)).indent(2);
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("id"),
+        Column::fixed("job"),
+        Column::flexible("detail"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
 
     for row in &data.results {
         table = table.row(vec![
@@ -1750,12 +1769,21 @@ fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
                 // as a live question is the diluted signal PLAN.md §15.4 is
                 // about, and it is how five entries against two dead Jobs went
                 // on looking urgent.
+                // **`BLOCKED`, upper case, because that is what the field
+                // holds.** `InboxRow::kind` is `inbox::Kind::word()` and every
+                // one of those is upper case; the arm here read `"blocked"` and
+                // so had never once matched, which meant a blocked entry — the
+                // one kind that cannot proceed without you — painted in the
+                // same orange as a Job that merely asked a question. Found by
+                // writing this table's first golden fixture, which is the
+                // argument for having one.
                 match (row.is_open(), row.kind.as_str()) {
                     (false, _) => Role::SteelGrey,
-                    (true, "blocked") => Role::DistressRed,
+                    (true, "BLOCKED") => Role::DistressRed,
                     (true, _) => Role::FlareOrange,
                 },
             ),
+            Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
             Cell::painted(row.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(row.body.as_str())),
             Cell::muted(format::elapsed(row.waiting_s * 1_000)),
@@ -1776,7 +1804,14 @@ fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
     // only fail, printed under a table of things that had already finished.
     let mut facts = vec![format!("{} open", data.open)];
     if data.open > 0 {
-        facts.push("armada fleet answer <job> \"…\"".to_string());
+        // **`<id>`, not `<job>`.** The action names the row the reader is
+        // looking at rather than the Job that owns it, which is the difference
+        // between acknowledging one item and acknowledging whichever of a Job's
+        // questions happens to be oldest
+        // (`docs/reserved/001-raised-items-need-identity.md`). A Job handle
+        // still works; the offer is for the id because the id is in the table
+        // above it and the Job's name is only a label.
+        facts.push("armada fleet answer <id> \"…\"".to_string());
     }
     out.push_str(&summary(style, envelope.status, &facts));
     out
