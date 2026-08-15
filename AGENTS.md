@@ -181,6 +181,35 @@ what a test may touch, not three directories, and unit tests are in-module.
 Coverage is gated on a ratchet: it may never drop. Use `#[coverage(off)]` or a documented
 exclusion, with a reason comment, for genuinely untestable lines.
 
+**No test may spend a token or start a real Claude Code session.** Not one, not once, not to
+check a flag. The suite puts a stub `claude` on `PATH`; use it. Validating flags against
+`claude --help` is free and is the established way to prove an argv is accepted — `armada
+doctor` already does it for the Drone and for Helm.
+
+**Asserting on argv proves you built the string you meant, not that it works.** The Drone once
+shipped without `--verbose` and every argv assertion passed, because no Drone had ever run. The
+same class recurred in the `config scan` hand-over: it asserted the flag, the prose, then
+`argv.len() == 3`, and so went green against a session that opened with nothing to do. Assert on
+argv **and** hold the flags against `claude --help`.
+
+**A green unit test on a reducer does not prove the driver ever feeds it the event.** Two
+scheduler bugs shipped behind passing reducer tests — `escalate: true` was unreachable so
+SIGKILL never fired, and a blocking lease claim parked the run loop so deadlines could not fire.
+Prove the path, not the piece.
+
+**Never gate on `grep -c FAILED`.** It returns 0 for a green suite and 0 for one that did not
+compile, and it has already let a red `main` through. Read the actual pass/fail counts, and
+check for compile errors separately.
+
+**Verify on `main` after merging, never in the worktree.** Fixes made in a worktree and left
+uncommitted do not travel through a merge; that has already produced a `main` that did not build
+while every branch reported green.
+
+**Two golden snapshots are known flaky under parallel load** — `up_and_down_match_their_snapshots`
+and `status_matches_its_snapshot`, both in `crates/helm/tests/golden.rs`. Re-run before treating
+a single failure as real; `docs/traps.md` has the detail and the reason it is a note rather than
+a diagnosis.
+
 ---
 
 ## Workflow
