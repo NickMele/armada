@@ -41,6 +41,7 @@ and the three status enums. These pages use them without re-explaining them.
 | Page | Command | Status |
 |---|---|---|
 | [`guild/init.md`](guild/init.md) | `armada guild init` | shipped |
+| [`guild/project.md`](guild/project.md) | `armada guild project` | shipped |
 | [`guild/edit.md`](guild/edit.md) | `armada guild edit` | not built |
 | [`guild/push.md`](guild/push.md) | `armada guild push` | shipped |
 | [`guild/pull.md`](guild/pull.md) | `armada guild pull` | shipped |

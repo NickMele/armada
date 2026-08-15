@@ -2,7 +2,9 @@
 
 Restore a guild from a bundle.
 
-> **Status: built — M2**, less the projection step (see [`pull.md`](pull.md)).
+> **Status: built — M2.** A bundle updates the guild; run
+> [`project.md`](project.md) afterwards to put what arrived on Claude Code's
+> load path.
 
 ## Synopsis
 
@@ -25,7 +27,10 @@ armada guild import <path> [--merge] [--force] [--json]
 2. Unpacks to `~/.armada/guild/`, replacing or merging per the flags.
 3. **Initialises git** and makes one initial commit. A bundle carries no history
    ([`export.md`](export.md)), so the imported guild starts a fresh one.
-4. **Projects** it: registers plugins, writes managed memory regions, applies settings.
+4. Leaves it there. **Putting it on Claude Code's load path is
+   [`project.md`](project.md)**, one verb away — a bundle is restored deliberately, often onto a
+   machine that already has a setup, and quietly rewriting `~/.claude/` as a side effect of
+   unpacking a file is not what somebody asked for.
 
 `machine.yml` in a bundle is **ignored unless it is absent locally**, so importing your own
 export onto a different machine cannot overwrite that machine's paths and capacity with
@@ -37,10 +42,13 @@ another's.
 validated  ok
 imported   19 skills · 12 hooks · 4 workflows · 3 fragments
 skipped    machine.yml (this machine has its own)
-projected  ✓
 ```
 
-`--json` returns one result per imported category plus the projection outcome.
+**No `projected` row**, and its absence is the point: `import` restores the guild and
+[`project.md`](project.md) puts it on the load path, so the run that did one does not claim the
+other.
+
+`--json` returns one result per imported category.
 
 ## Dependencies
 

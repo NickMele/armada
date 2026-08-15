@@ -3141,7 +3141,8 @@ between your machines. **No part of it ever enters this repository.**
 ├── manifest.db            # NEVER SYNCS — ports, containers, leases on THIS machine
 ├── jobs/                  # NEVER SYNCS — the Job index
 ├── workspaces/            # NEVER SYNCS — the git worktrees themselves
-└── machine.yml            # NEVER SYNCS — paths, secrets, capacity; one section per module
+├── machine.yml            # NEVER SYNCS — paths, secrets, capacity; one section per module
+└── projection.json        # NEVER SYNCS — what was placed in THIS machine's ~/.claude/ (§13.2)
 ```
 
 **The line is not "content syncs, state does not".** The guild *is* state and it *does* sync.
@@ -3177,10 +3178,36 @@ deletes the distribution problem rather than solving it: Claude Code already rea
 on every project, so a global guild is in effect everywhere with **no per-repository step at
 all**.
 
-Projection survives only for what must be repository-local: a managed region in the repo's own
-memory file, and any MCP server or setting that only makes sense there. That is the sole part
-that needs reversible bookkeeping — a manifest of what was placed and a hash of each file, so
-re-sync updates only what you have not touched and `--remove` reverses exactly.
+Projection survives, and it is smaller than it was — but it did not go away, because **a guild
+is not on any tool's load path until something puts it there.** `~/.claude/` is where Claude
+Code reads; `~/.armada/guild/` is where the guild lives; nothing walks between them on its own.
+Two things therefore need projecting, and both need the same bookkeeping:
+
+| Projected | Where | Why it is not free |
+|---|---|---|
+| **The guild's mechanical half** — skills, subagents, hooks | `~/.claude/` | Global, so it is in effect on every repository at once. Still a copy, and a copy that has to be reversible. |
+| **What must be repository-local** — a managed region in the repo's own memory file, any MCP server or setting that only makes sense there | the repository | The part that was always going to need it. |
+
+**The bookkeeping is the specification: a manifest of what was placed and a hash of each file,
+so re-sync updates only what you have not touched and `--remove` reverses exactly.** Three
+hashes answer every question — what the guild says, what is on disk, and what Armada last
+wrote — and a file whose bytes are not the bytes Armada wrote is yours, whatever the guild says.
+It is left exactly as it is and reported. Getting that wrong destroys work somebody did by hand,
+silently, on a machine they were not looking at, which is why the specification is a hash and
+not a copy.
+
+One case was decided while building it and is worth stating, because it looks like a violation
+of that rule and is not. **A file already byte-identical to what the guild says is adopted
+rather than disputed**, whether or not Armada placed it. That is the ordinary state of the
+machine the guild was imported *from*: `guild init` reads `~/.claude/skills/`, and projecting it
+back finds the same bytes at the same path with no record of having written them. Treating it as
+a conflict would report every adopted skill as one on a fresh `guild init`, and would mean the
+guild could never update one of them again. Nothing can be lost by adopting it — the bytes are
+the same, and the guild's copy is in a repository with history.
+
+The manifest itself is `~/.armada/projection.json`, and it is in §13.1's never-syncs list: it
+describes what was placed in **this** machine's `~/.claude/`, and syncing it would tell a second
+machine that files it has never written are Armada's to overwrite.
 
 ### 13.3 Packaging: what a plugin can and cannot carry
 
@@ -3188,10 +3215,37 @@ re-sync updates only what you have not touched and `--remove` reverses exactly.
 hooks, MCP servers, monitors, LSP servers and a `bin/` added to `PATH` — but **cannot carry a
 memory file**, and a plugin's own `settings.json` supports only two keys.
 
-So Guild has two halves. The mechanical half ships as a plugin and inherits Claude Code's
-installer, versioning and marketplace for free. The personal half — the memory fragments and
-the settings keys — Guild writes itself. The second half is smaller and is where all the value
-is.
+So Guild has two halves. The personal half — the memory fragments and the settings keys — Guild
+writes itself. It is smaller, and it is where all the value is. That has not changed.
+
+#### The mechanical half was going to be a plugin, and is not. What decided it
+
+This section previously read *the mechanical half ships as a plugin and inherits Claude Code's
+installer, versioning and marketplace for free*. Building it reopened the question, and three
+measurements against the installed `claude` 2.1.233 — the same way §10.1 reopened the language —
+decided it the other way.
+
+| Measured | Consequence |
+|---|---|
+| `claude plugin init <name>` scaffolds into `~/.claude/skills/<name>/`, and `claude plugin list` reports it `loaded` with **no marketplace and no install step** | The installer and versioning the plugin was credited with are **not obtained** in the one plugin form that needs no install step. There is nothing to install, nothing to update, and nothing to version. |
+| A plugin **namespaces** what it carries: a skill in plugin `p` is `p:skill` | A plugin renames `/onboard-repo` to `/armada-guild:onboard-repo` — and resolving *that name* is the entire content of [`PHASES.md`](PHASES.md) §8.4's broken path. |
+| A plugin's hooks are registered by a `hooks/hooks.json` it carries | Armada would have to synthesise one from the guild's `settings.json`, and it would **double-fire** every hook the reader's own settings already register against `~/.claude/hooks/`. |
+
+The form that *does* provide an installer and versioning is a marketplace-installed plugin — and
+that reintroduces the per-machine install step, and a second remote to publish to, which is
+exactly what §13.2 deletes by making the guild global. `guild pull` already is the distribution
+mechanism.
+
+**So: direct file placement into the directories Claude Code already reads**, with §13.2's
+manifest and hashes doing the reversibility a plugin's own installer would otherwise have done.
+The mapping is [`§13.4`](#134-the-interview)'s import table read backwards — `skills/` →
+`skills/`, `subagents/` → `agents/`, `hooks/` → `hooks/` — and it is one table in the code, read
+forwards by import and backwards by projection, because two copies of it are two chances for a
+projection to write into a directory Claude Code does not read.
+
+**A plugin is still the right mechanism for the parts direct placement has no load path for** —
+MCP servers, LSP servers, a `bin/` on `PATH` — and it lands when those are projected. §13.3
+anticipated both halves; this is which half is which.
 
 ### 13.4 The interview
 

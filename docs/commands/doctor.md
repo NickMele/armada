@@ -2,8 +2,7 @@
 
 Report what this machine is missing or has drifted on. Read-only.
 
-> **Status: built — M2**, less the projection group, which needs a projector to
-> compare against and lands with one, and `--fix`, which is refused by name.
+> **Status: built — M2**, less `--fix`, which is refused by name.
 > ([`PHASES.md`](../PHASES.md) §8.4)
 
 ## Synopsis
@@ -20,7 +19,7 @@ armada doctor [--fix] [--json]
 
 ## How it works
 
-Five groups of checks, in order. Each is reported independently; one failure does not stop the
+Six groups of checks, in order. Each is reported independently; one failure does not stop the
 rest.
 
 1. **Tooling** — `git`, `claude`, container runtime: present, and version.
@@ -39,8 +38,15 @@ rest.
    `still Armada's example text` for one import had nothing to put in. Read from a marker
    `armada guild init` writes into the file, so deleting the marker is what says *this is mine*
    ([`PLAN.md`](../PLAN.md) §13.4).
-6. **Projection** — for the current workspace, whether the guild content Claude Code is
-   actually reading matches what the guild says it should be.
+6. **Projection** — whether the guild Claude Code is actually reading is the guild you have
+   ([`guild/project.md`](guild/project.md)). Machine-global rather than per-workspace, because
+   the guild is: Claude Code reads `~/.claude/` on every project, which is what deletes the
+   per-repository step ([`PLAN.md`](../PLAN.md) §13.2).
+
+   Files **left as yours** come first, because only a person can decide about those; what is
+   merely out of date comes second, and is one command away. A machine with no guild gets no
+   row here at all — group 4 has already said so — and a guild with nothing in it says
+   `nothing in the guild to project` rather than `ok`.
 
 ## Output
 
@@ -68,10 +74,16 @@ you to do something. Frozen byte for byte by `tests/golden/render/doctor.plain`.
     partial  voice.md still as imported
              -> write ~/.armada/guild/voice.md in your own words
 
+  ~/.claude
+    partial  1 file yours rather than the guild's: hooks/stop-notify.sh
+             -> delete yours and run armada guild project, or keep it
+    stale    2 files not what the guild says
+             -> armada guild project
+
   manifest.db
     ok       2 workspaces, 0 orphans
 
-NEEDS ATTENTION  3 ok, 2 missing, 2 warnings
+NEEDS ATTENTION  3 ok, 2 missing, 4 warnings
 ```
 
 **Grouped, because a check can report more than once.** `guild` is drift plus one row per
@@ -117,8 +129,10 @@ advance. The probe covers the combination Armada actually uses, which is the one
 
 ## Dependencies
 
-Reads `~/.armada/`. Needs network only for the guild-drift check, which degrades to `warn:
-offline` without it rather than failing.
+Reads `~/.armada/` and `~/.claude/`, and **writes to neither**: the projection group runs a
+survey rather than a projection, so the command stays safe to run in a shell prompt. Needs
+network only for the guild-drift check, which degrades to `warn: offline` without it rather than
+failing.
 
 ## Exit codes
 
@@ -130,4 +144,4 @@ Full table and the one rule behind it: [`reference.md`](reference.md).
 
 ## See also
 
-[`init.md`](init.md) · [`guild/pull.md`](guild/pull.md)
+[`init.md`](init.md) · [`guild/pull.md`](guild/pull.md) · [`guild/project.md`](guild/project.md)

@@ -127,6 +127,18 @@ service rather than with git — eviction and a half-replicated push — are han
 convenience and never the only way in — a tool that can only be configured through a wizard is
 a tool you cannot fix at one in the morning.
 
+### 4. Put it where Claude Code will read it
+
+The guild's skills, subagents and hooks are written into `~/.claude/`
+([`project.md`](project.md)). **A `guild init` that stopped at step 3 left a guild nothing
+reads** — the starter skill it had just installed answered `Unknown command: /onboard-repo` in
+the session Armada handed you to ([`PHASES.md`](../../PHASES.md) §8.4).
+
+A file you had already written that the guild happens to share a name with is **left exactly as
+it is and reported**; nothing here overwrites your own work. On a first run there is usually
+nothing to report, because most of what is being projected is what step 1 just imported from
+`~/.claude/` — byte-identical, and adopted rather than disputed.
+
 ## Output
 
 ```
@@ -135,9 +147,14 @@ a tool you cannot fix at one in the morning.
   withheld  1 value      settings.json:env.GITHUB_TOKEN -> machine.yml, which never syncs
   wrote     4 files      voice.md, expectations.md, how-i-work.md, +1
   guild     initialised  git@example.com:me/guild.git
+  projected ~/.claude/   20 placed
 
 READY  guild at ~/.armada/guild, 1 answered, 4 kept as imported
 ```
+
+**The `projected` row is what says the guild is in effect and not merely written.** It turns
+amber when something was left as yours, because that is the only outcome of the step you have to
+decide about.
 
 **A `migrated` row appears once, on a machine whose `machine.yml` predates the sections.**
 That file carries one top-level section per module ([`PLAN.md`](../../PLAN.md) §4.3.1); a file
@@ -163,8 +180,9 @@ line claiming to report it is gone.
 value. Calling that skipping told someone who had followed the instructions that he had done
 nothing.
 
-`--json` returns one result per imported category and one per written file, plus `answered` — how
-many of the five you typed an answer to.
+`--json` returns one result per imported category and one per written file, `answered` — how many
+of the five you typed an answer to — and `projected`, holding `at`, one result per projected area,
+and `kept`.
 
 ## Dependencies
 
@@ -182,4 +200,4 @@ Full table and the one rule behind it: [`reference.md`](../reference.md).
 
 ## See also
 
-[`../init.md`](../init.md) · [`edit.md`](edit.md) · [`push.md`](push.md)
+[`../init.md`](../init.md) · [`project.md`](project.md) · [`edit.md`](edit.md) · [`push.md`](push.md)

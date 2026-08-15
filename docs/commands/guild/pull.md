@@ -2,9 +2,7 @@
 
 Bring this machine's guild up to date.
 
-> **Status: built — M2**, less the re-projection step, which needs a projector
-> and lands with one. A pull today updates the guild; re-writing what Claude
-> Code reads from it is the projector's half.
+> **Status: built — M2**, including re-projection ([`project.md`](project.md)).
 
 ## Synopsis
 
@@ -26,9 +24,13 @@ when it will not fast-forward, and those are reported rather than flagged.
 2. Fetches.
 3. **Fast-forwards if it can.** If it cannot, stops and reports the divergence with both commit
    counts — it never merges automatically, for the reason in [`push.md`](push.md).
-4. **Re-projects** what changed: re-registers plugins, re-writes managed memory regions,
-   re-applies settings keys. A pulled guild that has not been projected is a guild that has not
-   taken effect, and the gap between the two is a confusing hour.
+4. **Re-projects** what arrived onto Claude Code's load path ([`project.md`](project.md)). A
+   pulled guild that has not been projected is a guild that has not taken effect, and the gap
+   between the two is a confusing hour. **Only on a fast-forward** — a divergence applied
+   nothing, so there is nothing new to project and the step is skipped rather than run over a
+   working tree you are about to resolve by hand.
+   *(Plugin registrations and settings keys are the personal half [`PLAN.md`](../../PLAN.md)
+   §13.3 says Guild writes itself, and are not projected by placing a file.)*
 
 **A remote part-way through syncing is reported as a conflict, not a crash.** A push writes
 several files and a sync service replicates them in its own order, so a machine reading in
@@ -39,11 +41,27 @@ pull again. Nothing on this machine is touched. See [`PLAN.md`](../../PLAN.md) �
 ## Output
 
 ```
-pulled     4 commits from origin
-projected  2 skills added · 1 hook changed · settings updated
+  STATUS     ITEM       DETAIL
+  ADDED      skills     add-migration, triage-flake
+  CHANGED    hooks      stop-notify.sh
+  UNCHANGED  workflows  4
+
+READY  pulled 4 commits, git@example.com:me/guild.git, projected 3 placed
 ```
 
-`--json` returns the commit count and one result per re-projected item.
+**The projection is one fact on the summary line, not a second table.** What it did per file is
+[`project.md`](project.md)'s whole output, and the verb is one word long.
+
+**A file the projection left alone is named on the summary line and raises `NEEDS ATTENTION`**,
+because a pull that says it worked while your own copy of a skill is the one still in effect is
+worse than one that failed:
+
+```
+NEEDS ATTENTION  1 file left as yours in ~/.claude/, armada guild project shows which
+```
+
+`--json` returns the commit count, one result per changed area, and a `projected` object holding
+`at`, one result per re-projected area, and `kept`.
 
 ## Dependencies
 
@@ -57,4 +75,4 @@ Full table and the one rule behind it: [`reference.md`](../reference.md).
 
 ## See also
 
-[`push.md`](push.md) · [`../doctor.md`](../doctor.md)
+[`push.md`](push.md) · [`project.md`](project.md) · [`../doctor.md`](../doctor.md)

@@ -114,7 +114,7 @@ into a build. **None of the kill criteria fired.** Findings are §9.1.
 | Do resumable sessions hold up as the session model? | Yes, verified — §9.1 F1 |
 | Can budgets be enforced without an accounting layer? | Yes, and better than designed — §9.1 F2 |
 | Can the orchestrator stay aware without polling? | Yes, two mechanisms — §9.1 F3 |
-| How much of Guild do Claude Code plugins carry? | Most of the volume, none of the value — §9.1 F4 |
+| How much of Guild do Claude Code plugins carry? | Most of the volume, none of the value — §9.1 F4. Re-measured while building projection, and it carries **less than that**: [`PLAN.md`](PLAN.md) §13.3 |
 
 **Done when:** ✓ satisfied. Nothing from the spike ships; the prototypes were thrown away and
 the findings are recorded here.
@@ -205,15 +205,21 @@ its own. See [`PLAN.md`](PLAN.md) §13.
 | Starter workflows | `guild init` copies [`templates/guild/workflows/`](../templates/guild/workflows/) — design, plan, feature, bug — into `~/.armada/guild/workflows/` ([`PLAN.md`](PLAN.md) §14.6). M4's loop has nothing to run without them. |
 | Starter persona | `guild init` copies [`templates/guild/subagents/helm.md`](../templates/guild/subagents/helm.md) into `~/.armada/guild/subagents/`, then never touches it again — it is yours from that moment ([`PLAN.md`](PLAN.md) §15.4). Without it M3 has an orchestrator with no persona to run. |
 | Secret guard | Import refuses to adopt credential-shaped values; those stay in `machine.yml`, which never syncs. Built here, not retrofitted. |
+| Projection | `armada guild project` writes the guild's skills, subagents and hooks into `~/.claude/`, tracked by a manifest of what was placed and a hash of each file ([`PLAN.md`](PLAN.md) §13.2). `guild init` and `guild pull` both end on it. **A file you edited is left exactly as it is and reported** — the rule the manifest exists for. Without this the guild is a directory nothing reads; see below. |
 | `manifest render` | Renders a repo's declared skills into a harness format ([`PLAN.md`](PLAN.md) §4.8). Lands here rather than M1 because the managed-region and reversal bookkeeping is the same machinery guild projection needs ([`PLAN.md`](PLAN.md) §13.2) — building it once, for both, is the point. |
 
 **Split the packaging.** §9.1 F4 found that a Claude Code plugin carries skills, subagents,
 hooks, MCP servers, monitors and a `bin/` on `PATH` — but **cannot carry `CLAUDE.md` or user
-memory**, and a plugin's `settings.json` supports only two keys. So Guild ships the mechanical
-assets as a plugin and lets Claude Code's own installer and versioning do the distribution,
-and writes by hand only what plugins cannot carry: the memory fragments and the settings keys.
-`claude plugin init` scaffolds a plugin into `~/.claude/skills/` that auto-loads with no
-marketplace and no install step, which is exactly the shape a personal guild wants.
+memory**, and a plugin's `settings.json` supports only two keys. So Guild writes by hand what
+plugins cannot carry: the memory fragments and the settings keys.
+
+**The other half of that split was re-decided on measurement.** This paragraph used to continue
+*and ships the mechanical assets as a plugin, letting Claude Code's own installer and versioning
+do the distribution*. Building it found that the plugin form which needs no install step —
+`claude plugin init`, scaffolded into `~/.claude/skills/` and auto-loading with no marketplace —
+also provides no installer, no versioning and no update path, and that a plugin renames every
+skill it carries. The mechanical half is placed directly instead; [`PLAN.md`](PLAN.md) §13.3
+records all three measurements and what each one ruled out.
 
 **Done when:** on a machine that has never seen Armada, `armada init` → pull → a working setup,
 and a `git diff` in the guild repo shows what changed since the other machine.
@@ -223,37 +229,52 @@ and a `git diff` in the guild repo shows what changed since the other machine.
 The done-when is met and run rather than reasoned about: `crates/helm/tests/guild.rs` drives the
 real binary against real `git`, two scratch `$HOME`s and a bare repository standing in for the
 private remote. Built: `armada init`, `armada doctor`, `armada guild init` with the five-question
-interview, and `guild pull` / `push` / `export` / `import`. The starters, the secret guard and the
-three agreed layouts are in and frozen.
+interview, `guild pull` / `push` / `export` / `import`, and `guild project` — which is what makes
+the guild something Claude Code reads rather than a directory on disk. The starters, the secret
+guard and the three agreed layouts are in and frozen.
 
-Four things this milestone did **not** build, each with the reason it is a milestone of its own
+Three things this milestone did **not** build, each with the reason it is a milestone of its own
 rather than a gap:
 
 | Not built | Why |
 |---|---|
-| **Projection** | `guild pull` and `import` update the guild; nothing yet re-writes the managed regions of `~/.claude/` from it, and `armada doctor`'s fourth group has nothing to compare against until something does ([`PLAN.md`](PLAN.md) §13.2). A `doctor` reporting `ok` for a check that ran nothing would be worse than one that does not report it at all. **It is also a broken path, not only a missing feature — see below.** |
-| **`manifest render`** | Listed in the table above because its managed-region bookkeeping is the same machinery projection needs. It is the same milestone as projection, and neither is half-useful without the other. |
+| **`manifest render`** | Listed in the table above because its managed-region bookkeeping is the same machinery projection needs. Projection has since landed and built that machinery — `armada_guild::project` — so `render` is now a caller of something that exists rather than a milestone of its own. |
 | **`armada guild edit` and `guild verify`** | Reserved by name and refused by name. `edit` is `$EDITOR` plus the validation `verify` performs, so building it first would mean building half of `verify` twice. |
 | **`armada doctor --fix`** | Refused by name rather than half-implemented: every finding already carries the command that fixes it, so `--fix` is a convenience over a surface that already works, and one that silently did half of what it promised would be worse than one that says it is not built. |
 
-#### Projection being unbuilt is a broken path, not only a missing feature
+#### Projection: the broken path, and how it was closed
 
-**A guild skill is invisible to the tool Armada hands you to**, and that has already produced a
+**A guild skill used to be invisible to the tool Armada hands you to**, and it produced a
 user-visible failure. Guild skills live in `~/.armada/guild/skills/`; Claude Code loads
-`~/.claude/skills/`. Nothing copies between them, so a skill Armada ships and `guild init`
-installs cannot be invoked as `/its-name` in a session — the session answers
+`~/.claude/skills/`. Nothing copied between them, so a skill Armada ships and `guild init`
+installs could not be invoked as `/its-name` in a session — the session answered
 `Unknown command: /onboard-repo`, which is exactly what `armada manifest config scan`'s
 hand-over did until it stopped passing the name.
 
-It passes the skill's **prose** now, as an appended system prompt
-([`commands/manifest/config.md`](commands/manifest/config.md)), which needs no projection and
-works today. **That is a way around this row, not a reason to close it.** Anything else that
-wants to reach a guild skill by name has the same problem and will need the same workaround
-until projection lands — so whoever builds it should expect to delete a workaround as well as
-add a feature.
+The general rule it was an instance of, and the reason the row was kept open rather than worked
+around: **a guild is not on any tool's load path until something puts it there.** Until then,
+content is the interface and names are not.
 
-The general rule this is an instance of: **a guild is not on any tool's load path until
-something puts it there.** Until then, content is the interface and names are not.
+**Built.** `armada guild project` ([`commands/guild/project.md`](commands/guild/project.md))
+writes the guild's skills, subagents and hooks into `~/.claude/`; `guild init` and `guild pull`
+both end on it; `armada doctor` gained the group that says whether the projection is current.
+The bookkeeping is [`PLAN.md`](PLAN.md) §13.2's — a manifest of what was placed and a hash of
+each file — and **a file you edited is left exactly as it is and reported**, which is the one
+rule the whole design exists to hold.
+
+**The mechanism is direct file placement, and that reverses what
+[`PLAN.md`](PLAN.md) §13.3 expected.** Three measurements against the installed `claude` decided
+it: a skills-directory plugin obtains no installer and no versioning, a plugin renames the skill
+it carries to `plugin:skill`, and a plugin's hooks would double-fire against the reader's own
+registrations. [`PLAN.md`](PLAN.md) §13.3 records the measurements in full. A plugin remains the
+right mechanism for MCP servers, LSP servers and a `bin/` on `PATH`, which direct placement has
+no load path for.
+
+**The `config scan` workaround stays, and is no longer a workaround.** Passing the skill's prose
+as an appended system prompt works before the first projection, on a machine where the reader
+removed the projection, and if skill loading changes — none of which passing a name does. It was
+adopted as a way around this row and it survives on its own merits, so what is deleted is the
+claim that it is temporary, not the code.
 
 ### 8.5 M3 — Fleet, Helm and the Bridge
 
@@ -473,6 +494,13 @@ configuration.
 
 **Consequence:** M2 splits cleanly. The mechanical half is nearly free; the personal half — the
 most valuable part — is exactly what Armada has to write itself.
+
+**Re-measured when the mechanical half was built, and it carries less than this table implies.**
+"Yes" means a plugin can *hold* those assets, not that shipping them as one is free: the plugin
+form that needs no install step provides no installer and no versioning either, and a plugin
+renames every skill it carries to `plugin:skill`. [`PLAN.md`](PLAN.md) §13.3 records the three
+measurements and what each ruled out. The row above stands as written; what changed is what
+follows from it.
 
 ### 9.2 Prior art
 

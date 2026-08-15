@@ -29,6 +29,7 @@ They stack, and nothing points upward ([`ARCHITECTURE.md`](ARCHITECTURE.md) §1.
 | **Contract** | **The guarantee a verb makes** — what `armada manifest check` promises to do and what states it may end in. Used this way throughout [`PLAN.md`](PLAN.md) §3 and the `--json` envelope. | A task. That is a Job. |
 | **Skill** | Repo-local knowledge: a named grant plus a pointer to prose ([`PLAN.md`](PLAN.md) §4.8). The mechanical half lives in `armada.yml`; the prose is a markdown file Manifest never parses. A guild skill is the same idea, owned by you rather than the repo. | A script. It has no `cmd:` and cannot be run — only listed, resolved and rendered. |
 | **Workflow** | An ordered set of steps in your guild — `design`, `plan`, `feature`, `bug` — naming which skill runs each step and what verdict advances it ([`PLAN.md`](PLAN.md) §14.4). | Hardcoded. It is data, editable at one in the morning. |
+| **Projection** | Copying the guild's mechanical half into the directories Claude Code reads, tracked by a manifest of what was placed and a hash of each file ([`PLAN.md`](PLAN.md) §13.2). A guild is on no tool's load path until something projects it. | A sync. It runs one way, and a file you edited is left as it is and reported rather than overwritten. |
 
 **One Job has at most one live Drone.** The two words exist because their lifetimes differ, not
 to name the same thing twice ([`PLAN.md`](PLAN.md) §14.1).
