@@ -734,7 +734,7 @@ fn the_refusal_is_an_ordinary_error_with_a_class_and_a_next_action() {
 }
 
 /// **A refused `--exec` changes nothing at all.** It is turned away before the
-/// verb runs, so it cannot leave four configuration files behind as the price of
+/// verb runs, so it cannot leave a configuration file behind as the price of
 /// saying no — the rule `armada doctor --fix` already follows.
 #[test]
 fn a_refused_entry_writes_nothing() {

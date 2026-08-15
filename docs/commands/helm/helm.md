@@ -60,7 +60,7 @@ broken or that they typed it wrong, and goes looking for the spelling that works
 is off and how to turn it on, they either run `enable` or paste the printed command themselves —
 which is the honest option, and is what `next:` offers.
 
-**On, the process is replaced.** The argv, the four documents and the conversation's record are
+**On, the process is replaced.** The argv, the documents and the conversation's record are
 built and verified exactly the same way whether the switch is on or off; `--exec` on a machine
 that has enabled it records that the conversation has started and then execs `claude`, and this
 process does not come back.
@@ -101,6 +101,10 @@ one it has seen is a second conversation wearing the first one's name.
 | The conversation | `~/.armada/helm/session.json` — a uuid, the persona it belongs to, and whether it has run |
 | Awareness | [`inbox.md`](inbox.md) — a monitor plus a `Stop` hook, both written to `~/.armada/helm/` |
 
+Its job is **decompose → delegate → aggregate → report**. Classification is *not* its job; that
+belongs to Fleet ([`../fleet/spawn.md`](../fleet/spawn.md)), because a Job must be
+classifiable before Helm exists.
+
 ### Your own words are injected, not read
 
 The persona used to *instruct* Helm to read the three memory fragments at the start of a
@@ -131,10 +135,6 @@ flag's place in an argv is not something a model reads.
 capped at 128 KiB on Linux and argv plus environ at 256 KiB on macOS; past either, `--exec`
 fails with *Argument list too long* at the moment you were expecting a session, naming no file.
 Cutting here is visible; discovering it at `exec` is not.
-
-Its job is **decompose → delegate → aggregate → report**. Classification is *not* its job; that
-belongs to Fleet ([`../fleet/spawn.md`](../fleet/spawn.md)), because a Job must be
-classifiable before Helm exists.
 
 ### What it writes
 

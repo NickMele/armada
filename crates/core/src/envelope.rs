@@ -2089,7 +2089,7 @@ impl Conversation {
 /// **Configuration rather than code, which is PLAN.md §15.3's whole claim.**
 /// Neither of the inbox's two mechanisms is a process Armada runs: one is a
 /// monitor a session-scoped plugin declares, the other is a `Stop` hook the
-/// session's own settings register. What Armada writes is the four documents
+/// session's own settings register. What Armada writes is the documents
 /// that say so.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Wired {

@@ -875,7 +875,7 @@ fn dispatch(
 /// said yes.
 ///
 /// **Whether `--exec` runs at all is decided before the verb runs, not
-/// after.** A refusal that had already written four configuration files would
+/// after.** A refusal that had already written the configuration files would
 /// have changed the machine in order to say no — the same rule `armada doctor
 /// --fix` follows, and the rule the no-guild refusal inside the verb follows
 /// one level down. So [`verbs::helm::entering_allowed`] is read first, and

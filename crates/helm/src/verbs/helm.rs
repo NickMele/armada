@@ -1,7 +1,7 @@
 //! `armada helm` — **assemble the conversation; do not enter it**.
 //!
 //! Every decision this file appears to make was made somewhere else: the argv,
-//! the four documents and the record are `armada_core::helm`'s, and the guild
+//! the documents and the record are `armada_core::helm`'s, and the guild
 //! that holds the persona is `armada_guild`'s. What lives here is the order the
 //! adapter calls go in, and the one refusal — no guild, no persona — that has to
 //! happen before any of them (`ARCHITECTURE.md` §1.3).
@@ -37,7 +37,7 @@
 //! explicit yes on each machine, not a default that changed out from under
 //! whoever had not been reading release notes.
 //!
-//! **The argv, the four documents and the conversation's record are built and
+//! **The argv, the documents and the conversation's record are built and
 //! verified the same way whether the switch is on or off.** [`mark_started`] is
 //! the writer the exec path calls — first, because the process is replaced and
 //! there is no after.
@@ -126,7 +126,7 @@ pub fn entering_allowed(armada_home: &Path) -> bool {
 /// `armada helm enable` — let [`ENTER`] become a session on this machine.
 ///
 /// **Writes one boolean, and nothing else.** It does not touch the guild, the
-/// persona or any of the four documents `armada helm` wires — whether a
+/// persona or any of the documents `armada helm` wires — whether a
 /// machine is *allowed* to open a session and whether it is currently *able*
 /// to (a guild, a persona, a projection) are different questions, answered by
 /// different commands. `armada helm --exec` still needs both.
@@ -207,7 +207,7 @@ pub struct Options {
 
 /// Assemble the launch, wire the inbox, and report.
 ///
-/// **Nothing here starts a process.** The four documents are written, the
+/// **Nothing here starts a process.** The documents are written, the
 /// conversation's record is read or minted, and the argv is returned as a
 /// string for a person to read or a script to parse.
 pub fn run<C: armada_core::ctx::Clock>(
@@ -222,7 +222,7 @@ pub fn run<C: armada_core::ctx::Clock>(
     let guild = Guild::at(&place.armada_home);
 
     // **The refusal comes first, before anything is written.** A `helm` that
-    // laid down four configuration files and then admitted it has no persona to
+    // laid down its configuration files and then admitted it has no persona to
     // run would have changed the machine to report a failure.
     persona(place, &guild, &agent)?;
 

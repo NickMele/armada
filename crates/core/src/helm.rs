@@ -1,4 +1,4 @@
-//! Helm's pure decisions: **the argv, the four configuration files, and the
+//! Helm's pure decisions: **the argv, the configuration files, and the
 //! record that makes it the same conversation tomorrow** (PLAN.md §15).
 //!
 //! Helm is a Claude Code session running an orchestrator persona from the

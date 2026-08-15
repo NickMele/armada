@@ -978,7 +978,7 @@ fn frame_facts(data: &BridgeData) -> Vec<String> {
 
 /// `armada helm` — what was wired, and the command that would enter it.
 ///
-/// **Four rows and then a command, in that order.** The rows are what changed on
+/// **The wired rows and then a command, in that order.** The rows are what changed on
 /// the machine, which is what a reader has to be able to audit; the command is
 /// what they would run, and it comes last because it is the thing they act on.
 ///
