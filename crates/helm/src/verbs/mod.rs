@@ -20,6 +20,7 @@ pub mod helm;
 pub mod init;
 pub mod machine;
 pub mod preflight;
+pub mod report;
 pub mod services;
 pub mod skills;
 pub mod status;

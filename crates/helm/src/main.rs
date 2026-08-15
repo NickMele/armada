@@ -111,6 +111,7 @@ fn main() -> ExitCode {
             );
             let answered = dispatch(
                 other,
+                &argv,
                 &cwd,
                 home.as_deref(),
                 inherited,
@@ -129,7 +130,21 @@ fn main() -> ExitCode {
             // ends its own table early still may.
             progress.finish();
             match answered {
-                Ok(output) => emit(output, json, style, terminal, home.as_deref()),
+                Ok(output) => {
+                    // **The buffer is written before the answer is, not after.**
+                    // `emit` can end the process outright — `posix::die_by_signal`
+                    // on an interrupt, and `board --exec` replaces the image
+                    // entirely — so a recorder placed after it would silently skip
+                    // exactly the runs somebody is most likely to want to report.
+                    remember(
+                        &argv,
+                        &cwd,
+                        home.as_deref(),
+                        output.exit_code(),
+                        &output.to_json(),
+                    );
+                    emit(output, json, style, terminal, home.as_deref())
+                }
                 // **A verb that could not answer is Armada's**, always. The
                 // refusals a verb authors — `armada failures show <a typo>` —
                 // stay recorded on purpose: a prefix that resolved to nothing
@@ -180,6 +195,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Failures(failures) => failures.json(),
+        Invocation::Report { json, .. } => *json,
         Invocation::Mcp { json } => *json,
         Invocation::Version | Invocation::Help(_) => false,
     }
@@ -316,6 +332,7 @@ fn machine_scoped(
 #[allow(clippy::too_many_arguments)]
 fn dispatch(
     invocation: Invocation,
+    argv: &[String],
     cwd: &std::path::Path,
     home: Option<&std::path::Path>,
     inherited: BTreeMap<String, String>,
@@ -393,6 +410,30 @@ fn dispatch(
     // first would refuse to show a record of a failure that was *caused* by not
     // having one. And promoting an entry is `fleet spawn`, which needs exactly
     // what `spawn` needs and nothing a workspace would add.
+    // **`armada report` runs before every other verb's preconditions, including
+    // Fleet's.** It writes into the failures store so it wants Fleet's `Where`,
+    // but it must not inherit Fleet's requirements: a person filing a report
+    // about a machine that is broken cannot be refused *because the machine is
+    // broken*. Two of those refusals are real —
+    //
+    // - **no workspace here.** Half of what is worth reporting happens outside
+    //   one, including the failure that prompted the failure log.
+    // - **no boot id.** `armada fleet ls` refuses without one, and *"Armada
+    //   will not run on this machine"* is the single most valuable report there
+    //   is. So it is optional here and the Jobs diagnostic is what is skipped.
+    //
+    // Everything else it gathers degrades the same way, in `verbs::report`.
+    if let Invocation::Report { what, .. } = invocation {
+        let place = verbs::fleet::Where {
+            home: home.to_path_buf(),
+            armada_home: armada_manifest::machine::armada_home(home),
+            cwd: cwd.to_path_buf(),
+            exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
+            boot_id: armada_manifest::machine::boot_id(&run, cwd).unwrap_or_default(),
+        };
+        return verbs::report::run(&run, &SystemClock, &place, &what, argv);
+    }
+
     if matches!(
         invocation,
         Invocation::Fleet(_) | Invocation::Bridge(_) | Invocation::Failures(_)
@@ -658,7 +699,10 @@ fn dispatch(
         | Invocation::Guild(_)
         | Invocation::Fleet(_)
         | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),
-        Invocation::Bridge(_) | Invocation::Helm(_) | Invocation::Failures(_) => {
+        Invocation::Bridge(_)
+        | Invocation::Helm(_)
+        | Invocation::Failures(_)
+        | Invocation::Report { .. } => {
             unreachable!("machine-scoped, and handled above")
         }
     }
@@ -1388,6 +1432,57 @@ struct Ambient<'a> {
 /// is carried here from the line that refused
 /// ([`armada_core::failure::records`]), because nothing downstream of that line
 /// can still tell.
+/// Write this run into the ring buffer, so a later `armada report` can attach
+/// it.
+///
+/// **The set this exists for is the runs that succeeded.** `record` below keeps
+/// the failures; this keeps everything, which is the whole point — the run that
+/// prompted `armada report` exited `0` and printed `CREATED worktree` for work
+/// it had correctly not done, and no failure recorder could ever have held it
+/// (`docs/reserved/012`).
+///
+/// **Silent, and never able to change what the run answered.** Same rule as
+/// `record`: a recorder that turns a working command into a failing one is
+/// worse than no recorder. The write returns `bool` and it is ignored here.
+///
+/// **Every string is redacted on the way in** ([`armada_helm::redact`]), so a
+/// token typed on a command line is not at rest in `~/.armada/` even for the
+/// runs nobody ever reports.
+fn remember(
+    argv: &[String],
+    cwd: &std::path::Path,
+    home: Option<&std::path::Path>,
+    exit: u8,
+    envelope: &str,
+) {
+    let Some(home) = home else {
+        return;
+    };
+    // A throwaway worktree's runs are not the machine's to keep, for the reason
+    // `armada_core::failure::scratch` gives about failures: the row names a
+    // directory that will not exist by the time anybody reads it. Here it also
+    // keeps a fleet of agents from evicting the ten runs the person at the
+    // terminal actually did.
+    if armada_core::failure::scratch(cwd) {
+        return;
+    }
+    let now = SystemClock;
+    let latest = armada_core::recent::note(
+        argv,
+        home,
+        cwd,
+        exit,
+        Some(envelope),
+        &now.wall_rfc3339(),
+        now.wall_ms(),
+        &|text| armada_helm::redact::scrub(text),
+    );
+    let _ = armada_manifest::recent::record(
+        &armada_manifest::recent::path(&armada_manifest::machine::armada_home(home)),
+        latest,
+    );
+}
+
 fn record(error: &ArmadaError, ambient: &Ambient, fault: Fault) {
     if !armada_core::failure::records(fault, ambient.cwd) {
         return;
@@ -1413,6 +1508,27 @@ fn record(error: &ArmadaError, ambient: &Ambient, fault: Fault) {
 fn fail(error: ArmadaError, json: bool, style: Style, ambient: &Ambient, fault: Fault) -> ExitCode {
     record(&error, ambient, fault);
     let code = error.class.exit_code();
+    // **The ring buffer keeps a failing run too, and it keeps the ones the
+    // failure log deliberately does not.** A refusal Armada meant never reaches
+    // `record` (`armada_core::failure::Fault`) — but *"`--detach` is not built
+    // yet, so I ran it without and it did the wrong thing"* is a real report,
+    // and the run before it is the evidence. The two files answer different
+    // questions: one is *what should be fixed*, this one is *what was run*.
+    remember(
+        ambient.argv,
+        ambient.cwd,
+        ambient.home,
+        code,
+        &Envelope {
+            schema_version: armada_core::envelope::SCHEMA_VERSION,
+            verb: "armada".to_string(),
+            workspace: None,
+            status: Status::Failed,
+            error: Some(error.clone()),
+            data: NoData {},
+        }
+        .to_json(),
+    );
     if json {
         // The envelope shape never varies. `workspace` is `null` when
         // resolution is what failed, and a consumer must tolerate that — it

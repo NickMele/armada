@@ -480,7 +480,7 @@ pub fn failed(
             r#where,
             message,
             next: error.next_action.as_deref().map(|next| tilde(next, home)),
-            argv: tilde(&format!("armada {}", argv.join(" ")), home),
+            argv: tilde(&argv_line(argv), home),
             cwd: tilde(&cwd.display().to_string(), home),
         },
     )
@@ -574,7 +574,7 @@ pub fn reported(
             at: at.to_string(),
             at_ms,
             what,
-            argv: clean(&format!("armada {}", argv.join(" "))),
+            argv: clean(&argv_line(argv)),
             cwd: clean(&cwd.display().to_string()),
             diagnostics: Box::new(diagnostics),
         },
@@ -609,6 +609,30 @@ pub fn fingerprint(class: ErrClass, r#where: &str, message: &str) -> String {
     let mut hex = blake3::hash(subject.as_bytes()).to_hex().to_string();
     hex.truncate(ID_LEN);
     hex
+}
+
+/// The command line as it would have to be retyped.
+///
+/// **Quoted where a word has whitespace in it**, because the two callers that
+/// matter both hold a sentence as one argument — `armada report "the dry-run
+/// said CREATED and made nothing"` and `armada fleet spawn "<task>"` — and a
+/// bare join turns the record of what was run into a line that would parse as
+/// something else entirely. A recorded command a reader cannot paste back is a
+/// record of the wrong thing.
+///
+/// Single quotes, and a `'` inside a word becomes `'\''`: the POSIX shell has
+/// no escape inside single quotes, so the quote is closed, escaped and reopened.
+pub fn argv_line(argv: &[String]) -> String {
+    let mut out = String::from("armada");
+    for word in argv {
+        out.push(' ');
+        if word.is_empty() || word.contains(char::is_whitespace) || word.contains('\'') {
+            out.push_str(&format!("'{}'", word.replace('\'', "'\\''")));
+        } else {
+            out.push_str(word);
+        }
+    }
+    out
 }
 
 /// A path as a person writes it, wherever it appears in a string.
@@ -784,7 +808,9 @@ pub fn task(entry: &Entry) -> String {
          \x20   where: {}\n\
          \x20   error: {}\n",
         entry.id,
-        entry.class.map_or_else(|| "-".to_string(), |c| c.to_string()),
+        entry
+            .class
+            .map_or_else(|| "-".to_string(), |c| c.to_string()),
         entry.r#where,
         entry.message
     );

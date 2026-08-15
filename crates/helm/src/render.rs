@@ -1845,9 +1845,10 @@ fn failure_state(state: FailureState) -> Cell {
 /// job: it says where the row came from, which is the first thing a reader
 /// triaging a mixed list needs and the only thing the two halves differ on.
 pub(crate) fn failure_detail(entry: &FailureEntry) -> String {
-    let lead = entry
-        .class
-        .map_or_else(|| entry.origin.word().to_string(), |class| class.to_string());
+    let lead = entry.class.map_or_else(
+        || entry.origin.word().to_string(),
+        |class| class.to_string(),
+    );
     match entry.count {
         0 | 1 => format!("{lead}, {}", entry.message),
         n => format!("{lead} x{n}, {}", entry.message),

@@ -158,7 +158,7 @@ pub fn note(
         at: at.to_string(),
         at_ms,
         verb: verb_of(argv),
-        argv: clean(&format!("armada {}", argv.join(" "))),
+        argv: clean(&crate::failure::argv_line(argv)),
         cwd: clean(&cwd.display().to_string()),
         exit,
         envelope: envelope.map(|text| clean(&cap(text))),

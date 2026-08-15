@@ -120,7 +120,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 36] = [
+const PAGES: [Page; 37] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -834,6 +834,27 @@ const PAGES: [Page; 36] = [
             "The same failure twice is one row with a count and the time you last saw it.",
             "An id can be shortened to any prefix that names one row.",
             "Nothing here is sent anywhere: the log is this machine's and stays on it.",
+        ],
+    },
+    Page {
+        path: "report",
+        synopsis: "report",
+        summary: "tell Armada something went wrong that it did not notice",
+        usage: &["armada report \"<what happened>\" [--json]"],
+        flags: &[],
+        examples: &[
+            (
+                "armada report \"the dry-run said CREATED and made nothing\"",
+                "file it, with the diagnostics attached",
+            ),
+            ("armada failures", "your reports, beside what Armada caught"),
+        ],
+        notes: &[
+            "For output that was wrong, missing or misleading — anything that looked fine to Armada.",
+            "It attaches the last runs and what they answered, armada doctor, versions and this workspace.",
+            "Credential-shaped values and your home path are removed before anything is written.",
+            "A report lands in the same list as a recorded failure: armada failures show, fix and clear all take it.",
+            "Nothing is sent anywhere: the record is this machine's and stays on it.",
         ],
     },
     Page {

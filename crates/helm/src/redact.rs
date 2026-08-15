@@ -138,6 +138,15 @@ fn scrub_word(word: &str, keyed: bool) -> (String, bool) {
     let core = word.trim_matches(|c| FURNITURE.contains(&c));
     let (lead, trail) = split_furniture(word, core);
 
+    // **Scrubbing twice must be scrubbing once.** The ring buffer is redacted as
+    // each run ends, and then again when a report attaches it — which is
+    // deliberate belt and braces — so without this a masked value comes back as
+    // `[[redacted]]` and then `[[[redacted]]]`, and the reader learns to
+    // distrust the mask.
+    if word.contains(MASK) {
+        return (word.to_string(), false);
+    }
+
     // Shape one: `NAME=value`, which covers the environment and `--flag=value`.
     if let Some((name, value)) = core.split_once('=') {
         // **A bare `=` at the end is not an assignment.** `--force=` names no
@@ -227,7 +236,10 @@ mod tests {
     /// Guild's own asymmetry: a false positive costs a word.
     #[test]
     fn a_credential_shaped_name_redacts_however_ordinary_the_value_looks() {
-        assert_eq!(scrub("ANTHROPIC_API_KEY=hunter2"), format!("ANTHROPIC_API_KEY={MASK}"));
+        assert_eq!(
+            scrub("ANTHROPIC_API_KEY=hunter2"),
+            format!("ANTHROPIC_API_KEY={MASK}")
+        );
         assert_eq!(scrub("password=letmein"), format!("password={MASK}"));
     }
 
@@ -241,7 +253,10 @@ mod tests {
         ] {
             let scrubbed = scrub(&line);
             assert!(!scrubbed.contains("ghp_"), "{scrubbed}");
-            assert!(scrubbed.contains("--token"), "the flag survives: {scrubbed}");
+            assert!(
+                scrubbed.contains("--token"),
+                "the flag survives: {scrubbed}"
+            );
             assert!(scrubbed.contains(MASK), "{scrubbed}");
         }
     }
@@ -255,7 +270,10 @@ mod tests {
         assert!(!scrubbed.contains("ghp_"), "{scrubbed}");
         assert!(scrubbed.contains("\"authorization\""), "{scrubbed}");
         assert!(scrubbed.contains("Bearer"), "{scrubbed}");
-        assert!(scrubbed.starts_with("  "), "indentation survives: {scrubbed}");
+        assert!(
+            scrubbed.starts_with("  "),
+            "indentation survives: {scrubbed}"
+        );
         assert!(scrubbed.ends_with(","), "{scrubbed}");
     }
 
@@ -311,6 +329,22 @@ mod tests {
     fn private_key_material_does_not_survive() {
         let body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ";
         assert!(!scrub(&format!("-----BEGIN PRIVATE KEY-----\n{body}\n")).contains(body));
+    }
+
+    /// **Scrubbing twice is scrubbing once.** The ring buffer is redacted on the
+    /// way in and again when a report attaches it, and a mask that accreted
+    /// brackets on each pass would teach a reader to distrust it.
+    #[test]
+    fn scrubbing_an_already_scrubbed_line_changes_nothing() {
+        for line in [
+            format!("armada manifest check --token {TOKEN}"),
+            format!("GITHUB_TOKEN={TOKEN}"),
+            format!("  \"key\": \"{TOKEN}\","),
+        ] {
+            let once = scrub(&line);
+            assert_eq!(scrub(&once), once, "not idempotent: {once}");
+            assert!(!once.contains("[["), "{once}");
+        }
     }
 
     /// Empty input, a lone `=`, and a value that is nothing but furniture — the
