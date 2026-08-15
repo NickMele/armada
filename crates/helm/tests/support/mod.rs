@@ -150,11 +150,46 @@ pub struct Machine {
 
 impl Machine {
     pub fn new() -> Self {
-        Machine {
+        let machine = Machine {
             home: tempfile::tempdir().unwrap(),
             root: tempfile::tempdir().unwrap(),
             port_base: scratch_port_base(),
-        }
+        };
+        machine.seed_git_identity();
+        machine
+    }
+
+    /// Give the scratch `$HOME` a git identity of its own.
+    ///
+    /// **Guild's verbs commit, and a commit needs an author.** With `$HOME`
+    /// pointed at an empty directory there is no `.gitconfig` to read, so git
+    /// falls back to guessing one from `getpwuid` and the hostname — and it
+    /// *refuses the guess* unless the hostname canonicalises to something with a
+    /// domain in it. A developer's laptop is `something.local` and the guess
+    /// stands; a container's hostname is a hex id and it does not, so every
+    /// guild verb fails with `Author identity unknown` and nothing about the
+    /// test says why.
+    ///
+    /// So the identity is written rather than inherited. The suite is not
+    /// testing git's fallback, and a test whose outcome depends on what the host
+    /// is called is not a test.
+    ///
+    /// **Not `--global` and not the developer's.** It lands in the scratch
+    /// `$HOME` this machine already owns and dies with it.
+    fn seed_git_identity(&self) {
+        std::fs::write(
+            self.home.path().join(".gitconfig"),
+            "[user]\n\
+             \tname = Armada\n\
+             \temail = armada@example.test\n\
+             [init]\n\
+             \tdefaultBranch = main\n\
+             [commit]\n\
+             \tgpgsign = false\n\
+             [tag]\n\
+             \tgpgsign = false\n",
+        )
+        .unwrap();
     }
 
     /// Put this machine's `port_base` in `machine.yml`, if nothing is there yet.
