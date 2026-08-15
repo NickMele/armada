@@ -387,6 +387,11 @@ fn help_answers_at_every_level_of_the_grammar() {
     }
 
     // The child's, passed through untouched — `echoer` prints its argv.
+    //
+    // **The child has to be one that claims nothing**, which is why this is a
+    // script and not `echo`: GNU's `echo --help` answers with its own usage, so
+    // the fixture that was meant to prove `--help` reached the child was the one
+    // program that would hide it. See `Machine::repo`.
     let child = machine.run(&repo, &["manifest", "echoer", "--help"]);
     assert_eq!(
         String::from_utf8_lossy(&child.stdout).trim(),
@@ -403,7 +408,7 @@ manifest:
       root: services/api
   commands:
     echoer:
-      cmd: echo
+      cmd: ./echoer.sh
       help: Echo whatever it is given
 ";
 
@@ -787,7 +792,7 @@ manifest:
   version: 1
   commands:
     echoer:
-      cmd: echo
+      cmd: ./echoer.sh
     exiter:
       cmd: ./exiter.sh
     enver:

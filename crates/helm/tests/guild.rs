@@ -21,7 +21,7 @@ mod support;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use support::Machine;
+use support::{why, Machine};
 
 /// A bare repository, standing in for the private remote the interview names.
 fn remote(at: &Path) -> String {
@@ -43,7 +43,7 @@ fn git(cwd: &Path, args: &[&str]) {
     assert!(
         status.status.success(),
         "git {args:?} failed: {}",
-        String::from_utf8_lossy(&status.stderr)
+        why(&status)
     );
 }
 
@@ -84,7 +84,7 @@ fn envelope(output: &std::process::Output) -> Value {
         panic!(
             "not an envelope ({e}):\nstdout: {}\nstderr: {}",
             stdout(output),
-            String::from_utf8_lossy(&output.stderr)
+            why(&output)
         )
     })
 }
@@ -130,7 +130,7 @@ fn a_guild_init_leaves_the_guild_where_claude_code_reads_it() {
     assert!(
         built.status.success(),
         "guild init failed: {}",
-        String::from_utf8_lossy(&built.stderr)
+        why(&built)
     );
 
     let claude = machine.home.path().join(".claude");
@@ -186,7 +186,7 @@ fn a_file_you_edited_survives_a_re_projection_and_is_reported() {
     assert!(
         again.status.success(),
         "guild project failed: {}",
-        String::from_utf8_lossy(&again.stderr)
+        why(&again)
     );
     assert_eq!(
         std::fs::read_to_string(&skill).unwrap(),
@@ -226,7 +226,7 @@ fn removing_a_projection_takes_back_only_what_it_placed() {
     assert!(
         removed.status.success(),
         "guild project --remove failed: {}",
-        String::from_utf8_lossy(&removed.stderr)
+        why(&removed)
     );
     assert!(
         !claude.join("skills/onboard-repo/SKILL.md").exists(),
@@ -256,7 +256,7 @@ fn a_machine_that_has_never_seen_armada_gets_a_working_guild() {
     assert!(
         output.status.success(),
         "init failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+        why(&output)
     );
 
     let envelope = envelope(&output);
@@ -339,13 +339,13 @@ fn a_second_machine_pulls_the_first_machines_guild() {
     assert!(
         built.status.success(),
         "guild init failed: {}",
-        String::from_utf8_lossy(&built.stderr)
+        why(&built)
     );
     let pushed = first.run(&outside, &["guild", "push", "--json"]);
     assert!(
         pushed.status.success(),
         "push failed: {}",
-        String::from_utf8_lossy(&pushed.stderr)
+        why(&pushed)
     );
 
     // Machine two, which has never seen Armada, pulls it.
@@ -355,7 +355,7 @@ fn a_second_machine_pulls_the_first_machines_guild() {
     assert!(
         cloned.status.success(),
         "the second machine could not pull: {}",
-        String::from_utf8_lossy(&cloned.stderr)
+        why(&cloned)
     );
 
     // The same guild, file for file.
@@ -383,14 +383,14 @@ fn a_second_machine_pulls_the_first_machines_guild() {
     assert!(
         sent.status.success(),
         "the second machine could not push: {}",
-        String::from_utf8_lossy(&sent.stderr)
+        why(&sent)
     );
 
     let pulled = first.run(&outside, &["guild", "pull", "--json"]);
     assert!(
         pulled.status.success(),
         "pull failed: {}",
-        String::from_utf8_lossy(&pulled.stderr)
+        why(&pulled)
     );
     let envelope = envelope(&pulled);
     assert_eq!(
@@ -493,7 +493,7 @@ fn a_plain_folder_works_as_a_sync_remote_end_to_end() {
     assert!(
         built.status.success(),
         "guild init against a folder failed: {}",
-        String::from_utf8_lossy(&built.stderr)
+        why(&built)
     );
     assert!(
         folder.join("HEAD").is_file() && folder.join("objects").is_dir(),
@@ -504,7 +504,7 @@ fn a_plain_folder_works_as_a_sync_remote_end_to_end() {
     assert!(
         pushed.status.success(),
         "push to a folder failed: {}",
-        String::from_utf8_lossy(&pushed.stderr)
+        why(&pushed)
     );
 
     // A second machine treats it as any other remote.
@@ -514,7 +514,7 @@ fn a_plain_folder_works_as_a_sync_remote_end_to_end() {
     assert!(
         cloned.status.success(),
         "the second machine could not pull from a folder: {}",
-        String::from_utf8_lossy(&cloned.stderr)
+        why(&cloned)
     );
     assert_eq!(files(&guild_of(&first)), files(&guild_of(&second)));
 
@@ -527,7 +527,7 @@ fn a_plain_folder_works_as_a_sync_remote_end_to_end() {
     assert!(
         pulled.status.success(),
         "pull from a folder failed: {}",
-        String::from_utf8_lossy(&pulled.stderr)
+        why(&pulled)
     );
     assert_eq!(envelope(&pulled)["data"]["applied"], true);
     assert_eq!(
@@ -549,7 +549,7 @@ fn a_bundle_carries_the_guild_and_not_this_machine() {
     assert!(
         exported.status.success(),
         "export failed: {}",
-        String::from_utf8_lossy(&exported.stderr)
+        why(&exported)
     );
     let envelope = envelope(&exported);
     assert_eq!(envelope["data"]["secrets"], false);
@@ -566,7 +566,7 @@ fn a_bundle_carries_the_guild_and_not_this_machine() {
     assert!(
         imported.status.success(),
         "import failed: {}",
-        String::from_utf8_lossy(&imported.stderr)
+        why(&imported)
     );
 
     assert_eq!(files(&guild_of(&first)), files(&guild_of(&second)));
@@ -651,7 +651,7 @@ fn ls_names_everything_in_the_guild_rather_than_counting_it() {
     assert!(
         listed.status.success(),
         "guild ls failed: {}",
-        String::from_utf8_lossy(&listed.stderr)
+        why(&listed)
     );
     let items = envelope(&listed)["data"]["items"]
         .as_array()
@@ -740,7 +740,7 @@ fn show_prints_one_item_and_carries_it_in_the_envelope() {
     assert!(
         shown.status.success(),
         "guild show failed: {}",
-        String::from_utf8_lossy(&shown.stderr)
+        why(&shown)
     );
     let text = stdout(&shown);
     for line in on_disk.lines().filter(|line| !line.trim().is_empty()) {
@@ -855,7 +855,7 @@ fn an_edit_that_validates_is_written_and_committed() {
     assert!(
         edited.status.success(),
         "guild edit failed: {}",
-        String::from_utf8_lossy(&edited.stderr)
+        why(&edited)
     );
     let data = &envelope(&edited)["data"];
     assert_eq!(data["outcome"], "EDITED");
@@ -952,7 +952,7 @@ fn a_delete_removes_it_and_commits_the_removal() {
     assert!(
         deleted.status.success(),
         "guild delete failed: {}",
-        String::from_utf8_lossy(&deleted.stderr)
+        why(&deleted)
     );
     let data = &envelope(&deleted)["data"];
     assert_eq!(data["outcome"], "DELETED");
