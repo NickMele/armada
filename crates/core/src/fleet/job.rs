@@ -82,6 +82,42 @@ pub struct Job {
     pub spend: Spend,
     /// The task, in the words it was given in.
     pub task: String,
+    /// What the Drone has said about its own progress, oldest first.
+    ///
+    /// **Appended by `fleet.report`, and by nothing else.** It is the Drone's
+    /// own account, kept separately from the transcript because the transcript
+    /// is the ledger and this is the index into it: the orchestrator reads
+    /// summaries and never raw transcripts (PLAN.md §15.2), and a Drone that
+    /// says what it just finished saves a summarising call.
+    ///
+    /// **Not a substitute for the `Stop` hook.** An agent can forget to report
+    /// progress but cannot forget to stop, which is what makes the inbox
+    /// reliable and this list best-effort (PLAN.md §15.3).
+    ///
+    /// Additive, so `schema_version` stays 1, and defaulted so every Job record
+    /// written before this field existed still parses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub progress: Vec<Note>,
+    /// How many times each step has been attempted, by step name.
+    ///
+    /// **Counted here rather than derived from the verdicts**, because a
+    /// ceiling is enforced against the count and a count re-derived from a list
+    /// that `fleet.kill` may have truncated is a ceiling that quietly resets.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub attempts: std::collections::BTreeMap<String, u32>,
+}
+
+/// One thing a Drone said about its own progress.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Note {
+    /// When, wall clock, RFC 3339.
+    pub at: String,
+    /// Wall clock milliseconds, so "9m ago" is a subtraction.
+    pub at_ms: u64,
+    /// The step it was reported against.
+    pub step: String,
+    /// What it said.
+    pub body: String,
 }
 
 impl Job {
@@ -571,6 +607,8 @@ mod tests {
             created_ms: 0,
             spend: Spend::default(),
             task: "add rate limiting".to_string(),
+            progress: Vec::new(),
+            attempts: std::collections::BTreeMap::new(),
         }
     }
 
@@ -766,6 +804,8 @@ mod tests {
             created_ms: 1_000_000,
             spend: Spend::default(),
             task: "add rate limiting to the API".to_string(),
+            progress: Vec::new(),
+            attempts: std::collections::BTreeMap::new(),
         };
         assert_eq!(job.run_time_ms(1_840_000), 840_000);
         // A clock that stepped backwards costs a display value, never a panic.
@@ -803,6 +843,8 @@ mod tests {
                 api_ms: 12_000,
             },
             task: "the nightly job is flaky".to_string(),
+            progress: Vec::new(),
+            attempts: std::collections::BTreeMap::new(),
         };
         let json = serde_json::to_string(&job).unwrap();
         assert!(!json.contains("confidence"), "an absent field is absent");

@@ -16,6 +16,7 @@
 pub mod classify;
 pub mod drone;
 pub mod job;
+pub mod probe;
 pub mod workflow;
 
 use serde::{Deserialize, Serialize};

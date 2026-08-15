@@ -231,6 +231,8 @@ mod tests {
             created_ms,
             spend: Spend::default(),
             task: "do the thing".to_string(),
+            progress: Vec::new(),
+            attempts: std::collections::BTreeMap::new(),
         }
     }
 

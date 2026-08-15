@@ -23,10 +23,10 @@ pub mod status;
 use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
-    AnswerData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
+    AnswerData, AskData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
     DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData, GuildInitData, GuildSyncData,
-    InboxData, InitData, InitDryRun, KillData, MachineInitData, ScanData, ServicesData, SkillsData,
-    SpawnData, StatusData, UpDryRun, VerifyData,
+    InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, ProbeData, ReportData,
+    ScanData, ServicesData, SkillsData, SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -89,6 +89,18 @@ pub enum Output {
     Inbox(Box<Envelope<InboxData>>),
     /// `armada fleet answer`.
     Answer(Box<Envelope<AnswerData>>),
+    /// `armada mcp serve`, once the transport closes.
+    Mcp(Box<Envelope<McpData>>),
+    /// The `fleet.probe` tool. **No CLI verb**: probing is what an orchestrator
+    /// does between exchanges, and a person with a terminal reads the transcript
+    /// with `armada fleet board` instead of paying a model to summarise it.
+    Probe(Box<Envelope<ProbeData>>),
+    /// The `fleet.report` tool — a Drone's own progress note.
+    Report(Box<Envelope<ReportData>>),
+    /// The `fleet.ask_human` tool.
+    Ask(Box<Envelope<AskData>>),
+    /// The `fleet.verdict` tool.
+    Verdict(Box<Envelope<VerdictData>>),
 }
 
 impl Output {
@@ -121,6 +133,11 @@ impl Output {
             Output::Kill(e) => e.to_json(),
             Output::Inbox(e) => e.to_json(),
             Output::Answer(e) => e.to_json(),
+            Output::Mcp(e) => e.to_json(),
+            Output::Probe(e) => e.to_json(),
+            Output::Report(e) => e.to_json(),
+            Output::Ask(e) => e.to_json(),
+            Output::Verdict(e) => e.to_json(),
         }
     }
 
@@ -170,6 +187,11 @@ impl Output {
             Output::Kill(e) => e.exit_code(),
             Output::Inbox(e) => e.exit_code(),
             Output::Answer(e) => e.exit_code(),
+            Output::Mcp(e) => e.exit_code(),
+            Output::Probe(e) => e.exit_code(),
+            Output::Report(e) => e.exit_code(),
+            Output::Ask(e) => e.exit_code(),
+            Output::Verdict(e) => e.exit_code(),
         }
     }
 }

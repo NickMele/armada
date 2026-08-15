@@ -1499,6 +1499,128 @@ pub struct AnswerData {
     pub pgid: Option<i32>,
 }
 
+// ------------------------------------------------------------------- M3:
+// the toolbelt, and the three things a Drone may say
+
+/// `armada mcp serve` — what was served, and until when.
+///
+/// **The envelope of a clean shutdown**, which is the only terminal state a
+/// server that lives as long as its session has. The transport failing is
+/// `environment` and exits `6`; everything else here is `OK`
+/// (`commands/helm/mcp.md`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct McpData {
+    /// How it was served. `stdio` is the only transport, and the default.
+    pub transport: String,
+    /// Which belt was offered — `helm` or `drone`.
+    ///
+    /// **Reported rather than assumed**, because it is decided by the
+    /// environment: a process with `ARMADA_JOB` set is a Drone's child and gets
+    /// the smaller belt. A caller reading this is reading the answer to "was I
+    /// allowed to spawn", which is otherwise only discoverable by trying.
+    pub toolbelt: String,
+    /// The tools that belt carried, in the order the documentation lists them.
+    pub tools: Vec<String>,
+}
+
+/// `fleet.probe` — one Job's transcript, summarised.
+///
+/// **Read-only, and it never resumes the Drone** (PLAN.md §15.2). Messaging a
+/// busy agent to ask how it is going costs you the thing you were measuring, so
+/// the summary is produced by a second, cheap model reading the transcript the
+/// Drone has already written.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ProbeData {
+    /// The handle.
+    pub job: String,
+    /// The session id.
+    pub uuid: String,
+    /// What the Job is doing, as the record says — not as the summary guesses.
+    pub state: crate::fleet::JobState,
+    /// The step it is on.
+    pub step: String,
+    /// The summary itself, in prose.
+    ///
+    /// **This is what the orchestrator reads instead of the transcript**
+    /// (PLAN.md §15.2). A Helm that reads raw transcripts fills its window in
+    /// three days and starts forgetting the fleet.
+    pub summary: String,
+    /// How many transcript events the summary was drawn from. `0` means the
+    /// Drone has written nothing yet, which is the ordinary state a moment
+    /// after `spawn` returns.
+    pub events: usize,
+    /// Which model produced it, so a reader knows what the summary cost.
+    pub model: String,
+}
+
+/// `fleet.report` — progress, appended to the Job's own record.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ReportData {
+    /// The handle.
+    pub job: String,
+    /// The step it was reported against.
+    pub step: String,
+    /// How many notes the record now holds.
+    pub notes: usize,
+}
+
+/// `fleet.ask_human` — the entry raised, and the answer if one came.
+///
+/// **The id is the whole point** (PLAN.md §15.3.1). An item a person cannot name
+/// is an item they cannot acknowledge one row at a time.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AskData {
+    /// The handle.
+    pub job: String,
+    /// The entry's own id, which is what `armada fleet answer` closes.
+    pub entry: String,
+    /// The question, as it was asked.
+    pub question: String,
+    /// The answer, once a person has given one. `None` means it is still open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answered: Option<String>,
+}
+
+/// `fleet.verdict` — how a step ended (PLAN.md §14.3).
+///
+/// **The one added field on the §3.1 envelope is `verdict`**, and it rides in
+/// `data` rather than beside `status` for the reason the envelope is nested at
+/// all: a Job's verdict and a workspace's `Status` are different enums, and a
+/// future field called `status` in a body must not collide with the wrapper's.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct VerdictData {
+    /// The handle.
+    pub job: String,
+    /// The step this verdict is about.
+    pub step: String,
+    /// How it ended.
+    pub verdict: crate::fleet::Verdict,
+    /// What the verdict rests on.
+    ///
+    /// **A verdict is only `PASS` if it carries evidence an external command
+    /// produced** (PLAN.md §14.3). An agent asserting that the tests pass is not
+    /// evidence; an `armada manifest check` exit code is — which is why the
+    /// verb refuses a `PASS` with an empty list rather than recording one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<Evidence>,
+    /// How many times this step has now been attempted.
+    pub attempts: u32,
+    /// What the Job is doing after it.
+    pub state: crate::fleet::JobState,
+}
+
+/// One thing a verdict rests on.
+#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
+pub struct Evidence {
+    /// What kind of thing produced it — `check`, `command`.
+    pub kind: String,
+    /// Which one. A check id, a command name.
+    pub scope: String,
+    /// What it exited with. **The number, not a summary of it**: an exit code is
+    /// the fact, and a sentence about the fact is the thing §14.3 refuses.
+    pub exit: i32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

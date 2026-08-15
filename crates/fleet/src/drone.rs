@@ -23,6 +23,7 @@ use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::fleet::classify::{self, Classification};
 use armada_core::fleet::drone::{self, Reading};
 use armada_core::fleet::job::Handle;
+use armada_core::fleet::probe as probe_pure;
 use armada_manifest::process::{self, ProcessGroup};
 use armada_manifest::{machine, posix};
 use std::collections::BTreeMap;
@@ -87,6 +88,67 @@ pub fn classify(run: &impl Run, cwd: &Path, task: &str) -> Result<Classification
         });
     }
     classify::parse(&output.stdout)
+}
+
+/// Summarise a Job's transcript with the cheap model (PLAN.md §15.2).
+///
+/// **Read-only, and it cannot be anything else.** It takes the transcript as a
+/// string and returns a paragraph; there is no Job, no session id and no handle
+/// in this signature, so there is nothing here that could resume, interrupt or
+/// write to the Drone being described. The argv is
+/// [`armada_core::fleet::probe::argv`]'s and is asserted there.
+///
+/// It blocks, and it should — one turn of the cheapest model, the same shape as
+/// [`classify`], and its answer is what the orchestrator reads instead of the
+/// transcript.
+pub fn probe(
+    run: &impl Run,
+    cwd: &Path,
+    task: &str,
+    transcript: &str,
+) -> Result<String, ArmadaError> {
+    let output = run
+        .call(
+            &RunRequest::new(probe_pure::argv(task, transcript), cwd.to_path_buf())
+                .timeout(CLASSIFY_TIMEOUT),
+        )
+        .map_err(|e| match e.kind {
+            SpawnErrorKind::NotFound => drone::not_on_path(),
+            _ => ArmadaError {
+                class: ErrClass::Environment,
+                r#where: "probe".to_string(),
+                message: format!("the summarising call would not start: {}", e.message),
+                next_action: Some("check `claude` runs, then retry unchanged".to_string()),
+            },
+        })?;
+
+    if output.timed_out {
+        return Err(ArmadaError {
+            class: ErrClass::Timeout,
+            r#where: "probe".to_string(),
+            message: format!(
+                "the summary did not arrive within {}s",
+                CLASSIFY_TIMEOUT.as_secs()
+            ),
+            next_action: Some(
+                "`armada fleet board <job>` reads the transcript yourself".to_string(),
+            ),
+        });
+    }
+    if !output.ok() {
+        return Err(ArmadaError {
+            class: ErrClass::ToolFailed,
+            r#where: "probe".to_string(),
+            message: format!(
+                "the summarising call failed: {}",
+                output.stderr.lines().next().unwrap_or("no output")
+            ),
+            next_action: Some(
+                "`armada fleet board <job>` reads the transcript yourself".to_string(),
+            ),
+        });
+    }
+    probe_pure::parse(&output.stdout)
 }
 
 /// Start a Drone **detached**, and return the group it was given.

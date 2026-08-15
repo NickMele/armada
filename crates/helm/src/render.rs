@@ -51,11 +51,11 @@ pub mod table;
 pub mod term;
 
 use armada_core::envelope::{
-    AnswerData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
+    AnswerData, AskData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
     DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData, GuildBundleData,
     GuildInitData, GuildSyncData, Headline, InboxData, InitData, InitDryRun, KillData,
-    MachineInitData, ResultRow, ScanData, ServicesData, SkillsData, SpawnData, StatusData,
-    Unreclaimed, UpDryRun, VerifyData,
+    MachineInitData, McpData, ProbeData, ReportData, ResultRow, ScanData, ServicesData, SkillsData,
+    SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -106,7 +106,160 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Kill(envelope) => kill(envelope, style, width),
         Output::Inbox(envelope) => inbox(envelope, style, width),
         Output::Answer(envelope) => answer(envelope, style, width),
+        Output::Mcp(envelope) => served(envelope, style),
+        Output::Probe(envelope) => probe(envelope, style, width),
+        Output::Report(envelope) => reported(envelope, style, width),
+        Output::Ask(envelope) => asked(envelope, style, width),
+        Output::Verdict(envelope) => stepped(envelope, style, width),
     }
+}
+
+// -------------------------------------------------------- M3: the toolbelt
+//
+// **Four of these five draw for a reader who will almost never see them.**
+// `fleet.probe`, `.report`, `.ask_human` and `.verdict` are MCP tools with no
+// CLI verb (`commands/helm/mcp.md`), and their callers read the envelope. They
+// are drawn anyway because [`Output`] is one type with one renderer: a variant
+// answering `unreachable!()` here would be a panic waiting for the day somebody
+// adds the verb, and one answering `""` would print nothing and read as a hang.
+
+/// `armada mcp serve`, once the client hangs up.
+///
+/// **It names the belt it served**, which is the one fact a person running this
+/// by hand is trying to establish: whether this process would have been allowed
+/// to spawn. It is decided by the environment, so there is nowhere else to read
+/// it off.
+fn served(envelope: &Envelope<McpData>, style: Style) -> String {
+    summary(
+        style,
+        envelope.status,
+        &[
+            format!("{} toolbelt", envelope.data.toolbelt),
+            format::count(envelope.data.tools.len(), "tool"),
+            envelope.data.transport.clone(),
+        ],
+    )
+}
+
+/// `fleet.probe` — one Job's transcript, summarised.
+///
+/// **The summary gets the width and the facts get one line.** What was asked is
+/// "how is it going", and a four-column table above three sentences of prose
+/// buries the sentences — which are the answer.
+fn probe(envelope: &Envelope<ProbeData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = job_summary(
+        style,
+        data.state,
+        &[
+            data.job.clone(),
+            data.step.clone(),
+            format::count(data.events, "event"),
+        ],
+    );
+    out.push('\n');
+    for line in wrap_prose(&data.summary, width.saturating_sub(2)) {
+        out.push_str(&format!("  {line}\n"));
+    }
+    out
+}
+
+/// `fleet.report` — a Drone's own progress note, appended.
+fn reported(envelope: &Envelope<ReportData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let table = Table::new(columns("job", "detail", false))
+        .indent(2)
+        .row(vec![
+            token("noted", Role::BeaconGreen),
+            Cell::painted(data.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&data.step)),
+        ]);
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[format::count(data.notes, "note")],
+    ));
+    out
+}
+
+/// `fleet.ask_human` — the entry raised, and the answer if one arrived.
+fn asked(envelope: &Envelope<AskData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let table = Table::new(columns("job", "detail", false))
+        .indent(2)
+        .row(vec![
+            token(
+                match data.answered {
+                    Some(_) => "answered",
+                    None => "open",
+                },
+                match data.answered {
+                    Some(_) => Role::BeaconGreen,
+                    None => Role::FlareOrange,
+                },
+            ),
+            Cell::painted(data.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&data.question)),
+        ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            data.entry.clone(),
+            // **An unanswered question is a state and not a failure**, so the
+            // line names what closes it rather than apologising: the entry
+            // outlives the wait and is still in the inbox.
+            match &data.answered {
+                Some(said) => said.clone(),
+                None => "armada fleet answer <job> \"…\"".to_string(),
+            },
+        ],
+    ));
+    out
+}
+
+/// `fleet.verdict` — how a step ended, and what it rests on.
+///
+/// **The evidence is a table because it is the load-bearing half.** A `PASS`
+/// with nothing under it is refused by the verb (PLAN.md §14.3), so a reader
+/// looking at a `PASS` is looking to see *what* passed.
+fn stepped(envelope: &Envelope<VerdictData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("scope", "detail", false)).indent(2);
+    for piece in &data.evidence {
+        table = table.row(vec![
+            token(
+                &piece.kind,
+                match piece.exit {
+                    0 => Role::BeaconGreen,
+                    _ => Role::DistressRed,
+                },
+            ),
+            Cell::painted(piece.scope.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&format!("exit {}", piece.exit))),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    if table.is_empty() {
+        out.push_str("  no evidence\n");
+    }
+    out.push('\n');
+    out.push_str(&job_summary(
+        style,
+        data.state,
+        &[
+            data.job.clone(),
+            format!("{} {}", data.step, data.verdict.word()),
+            format!("attempt {}", data.attempts),
+        ],
+    ));
+    out
 }
 
 // ---------------------------------------------------------------- M3: the fleet

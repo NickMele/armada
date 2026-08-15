@@ -21,8 +21,8 @@
 
 use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::{
-    AnswerData, BoardData, Disposition, Envelope, FleetLsData, InboxData, InboxRow, JobRow,
-    KillData, Killed, SpawnData,
+    AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, InboxData,
+    InboxRow, JobRow, KillData, Killed, ProbeData, ReportData, SpawnData, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -279,6 +279,8 @@ pub fn spawn<R: Run, C: Clock>(
         created_ms: now.wall_ms(),
         spend: Spend::default(),
         task: options.task.clone(),
+        progress: Vec::new(),
+        attempts: std::collections::BTreeMap::new(),
     };
 
     if options.dry_run {
@@ -595,13 +597,19 @@ fn prompt(workflow: &Workflow, step: &str, task: &str) -> String {
     }
 }
 
+/// Raise an entry, and hand back the id it was given.
+///
+/// **The id is returned rather than discarded** because `fleet.ask_human` has to
+/// name the thing it is waiting on — and because every item a person is asked to
+/// act on needs an identity they can acknowledge one row at a time (PLAN.md
+/// §15.3.1). The callers that only raise ignore it, which costs nothing.
 fn raise<C: Clock>(
     place: &Where,
     now: &C,
     record: &Job,
     kind: inbox::Kind,
     body: &str,
-) -> Result<(), ArmadaError> {
+) -> Result<String, ArmadaError> {
     let at_ms = now.wall_ms();
     inbox::raise(
         &place.inbox(),
@@ -611,8 +619,7 @@ fn raise<C: Clock>(
         &now.wall_rfc3339(),
         at_ms,
         body,
-    )?;
-    Ok(())
+    )
 }
 
 fn envelope(
@@ -1034,6 +1041,251 @@ pub fn answer<R: Run, C: Clock>(
                 record.run_time_ms(now.wall_ms()),
             ),
             pgid: record.drone.as_ref().map(|drone| drone.pgid),
+        },
+    ))))
+}
+
+// ----------------------------------------------------------------------- probe
+
+/// `fleet.probe` — one Job's transcript, summarised, **without a word to the
+/// Drone** (PLAN.md §15.2).
+///
+/// **The only verb here that reads and never writes.** It does not `settle` what
+/// it observed, which every other verb that opens a record does: probing is what
+/// the orchestrator does *constantly* — five Jobs, asked about between every
+/// exchange — and a read that mutated would make "how is it going" a state
+/// transition. The record it reports is the record as it stands.
+///
+/// The summary itself is [`armada_fleet::drone::probe`], one turn of the cheapest
+/// model over the tail of the transcript. A Job that has written nothing gets a
+/// sentence rather than a call, because that is the ordinary state a moment
+/// after `spawn` returns and paying a model to say so is waste.
+pub fn probe<R: Run>(run: &R, place: &Where, handle: &str) -> Result<Output, ArmadaError> {
+    let record = place.store().find(handle)?;
+    let stream = std::fs::read_to_string(place.stream(&record.uuid)).unwrap_or_default();
+    let (tail, events) = armada_core::fleet::probe::tail(&stream);
+
+    let summary = if events == 0 {
+        armada_core::fleet::probe::NOTHING_YET.to_string()
+    } else {
+        drone::probe(run, &place.armada_home, &record.task, &tail)?
+    };
+
+    Ok(Output::Probe(Box::new(Envelope::ok(
+        "fleet probe",
+        None,
+        Status::Ok,
+        ProbeData {
+            job: record.name.clone(),
+            uuid: record.uuid.clone(),
+            state: record.state,
+            step: record.step.clone(),
+            summary,
+            events,
+            model: armada_core::fleet::classify::MODEL.to_string(),
+        },
+    ))))
+}
+
+// ---------------------------------------------------------------------- report
+
+/// `fleet.report` — a Drone appends progress to **its own** Job record.
+///
+/// **Its own, and nothing else's.** The Job is named by `handle`, which the MCP
+/// layer fills from `ARMADA_JOB` — the variable [`armada_fleet::drone::job_env`]
+/// sets on every child of a Job and that a Drone therefore cannot choose. A
+/// worker able to write another worker's record is a worker that can rewrite the
+/// evidence a verdict rests on.
+pub fn report<C: Clock>(
+    now: &C,
+    place: &Where,
+    handle: &str,
+    body: &str,
+) -> Result<Output, ArmadaError> {
+    let store = place.store();
+    let mut record = store.find(handle)?;
+
+    // **A Job that is over does not gain notes.** The record is the durable
+    // half, and appending to a finished one would put progress after the
+    // verdict it was meant to justify.
+    if record.state.is_over() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` is {}", record.name, record.state.word()),
+            next_action: Some("a Job that has ended takes no more progress".to_string()),
+        });
+    }
+
+    record.progress.push(armada_core::fleet::job::Note {
+        at: now.wall_rfc3339(),
+        at_ms: now.wall_ms(),
+        step: record.step.clone(),
+        body: body.to_string(),
+    });
+    store.save(&record)?;
+
+    Ok(Output::Report(Box::new(Envelope::ok(
+        "fleet report",
+        None,
+        Status::Ok,
+        ReportData {
+            job: record.name.clone(),
+            step: record.step.clone(),
+            notes: record.progress.len(),
+        },
+    ))))
+}
+
+// ------------------------------------------------------------------- ask_human
+
+/// How often the wait looks for an answer.
+///
+/// **A poll of one local file, not of a service.** The inbox is append-only on
+/// disk, so a read costs a `read_to_string` — and two seconds is short enough
+/// that a person who answers does not sit watching a Job that has not noticed.
+pub const ASK_POLL_MS: u64 = 2_000;
+
+/// `fleet.ask_human` — raise an entry, and wait for the answer.
+///
+/// **The waiting has a ceiling and the ceiling is the caller's.** An unbounded
+/// wait inside a tool call is a Drone that holds a request open for as long as
+/// its person is at lunch; expiring returns the entry's id with `answered: null`,
+/// which is a true answer — *it is still open* — rather than a failure. The
+/// entry stays in the inbox either way, so nothing is lost by the wait ending:
+/// `armada fleet answer` closes it whenever a person gets to it.
+///
+/// **This is why the tool belongs behind the tasks extension.** A long operation
+/// with polling and a durable handle is exactly what the extension is for, and
+/// inventing a second polling protocol beside it is what
+/// `commands/helm/mcp.md` refuses.
+pub fn ask_human<C: Clock>(
+    now: &C,
+    place: &Where,
+    handle: &str,
+    question: &str,
+    wait_ms: u64,
+) -> Result<Output, ArmadaError> {
+    let record = place.store().find(handle)?;
+    let entry = raise(place, now, &record, inbox::Kind::NeedsHuman, question)?;
+
+    let deadline = now.mono().saturating_add(wait_ms);
+    let mut answered = None;
+    loop {
+        // **Read before sleeping**, so a `wait_ms` of zero still reports an
+        // entry somebody had already answered — and so the first look costs no
+        // latency.
+        answered = inbox::read(&place.inbox())?
+            .into_iter()
+            .find(|row| row.uuid == entry)
+            .and_then(|row| row.answered)
+            .or(answered);
+        if answered.is_some() || now.mono() >= deadline {
+            break;
+        }
+        now.sleep_until((now.mono() + ASK_POLL_MS).min(deadline));
+    }
+
+    Ok(Output::Ask(Box::new(Envelope::ok(
+        "fleet ask_human",
+        None,
+        Status::Ok,
+        AskData {
+            job: record.name.clone(),
+            entry,
+            question: question.to_string(),
+            answered,
+        },
+    ))))
+}
+
+// --------------------------------------------------------------------- verdict
+
+/// `fleet.verdict` — how a step ended (PLAN.md §14.3).
+///
+/// **A `PASS` with no evidence is refused rather than recorded.** *"A verdict is
+/// only `PASS` if it carries evidence an external command produced"* — an agent
+/// asserting that the tests pass is not evidence, an `armada manifest check`
+/// exit code is. Refusing here is what makes that rule structural rather than a
+/// sentence in a workflow's prompt, and it is the reason the loop genuinely
+/// depends on Manifest's `check` verb.
+///
+/// `BLOCKED` and `NEEDS_HUMAN` raise to the inbox on their way out, because both
+/// mean the Job has stopped and neither can be discovered by a person who is not
+/// looking.
+pub fn verdict<C: Clock>(
+    now: &C,
+    place: &Where,
+    handle: &str,
+    step: &str,
+    reached: Verdict,
+    evidence: Vec<Evidence>,
+) -> Result<Output, ArmadaError> {
+    if reached == Verdict::Pass && evidence.is_empty() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: step.to_string(),
+            message: "a PASS carries evidence an external command produced".to_string(),
+            next_action: Some(
+                "run `manifest.check` and pass its result ids and exit codes as evidence"
+                    .to_string(),
+            ),
+        });
+    }
+
+    let store = place.store();
+    let mut record = store.find(handle)?;
+    if record.state.is_over() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` is {}", record.name, record.state.word()),
+            next_action: Some("a Job that has ended reaches no further verdict".to_string()),
+        });
+    }
+
+    let attempts = record.attempts.entry(step.to_string()).or_insert(0);
+    *attempts += 1;
+    let attempts = *attempts;
+
+    record.step = step.to_string();
+    record.verdict = Some(reached);
+    record.state = reached.settles_to();
+
+    match reached {
+        Verdict::Blocked => {
+            raise(
+                place,
+                now,
+                &record,
+                inbox::Kind::Blocked,
+                &format!("`{step}` is blocked and cannot proceed without an external change"),
+            )?;
+        }
+        Verdict::NeedsHuman => {
+            raise(
+                place,
+                now,
+                &record,
+                inbox::Kind::NeedsHuman,
+                &format!("`{step}` reached a judgement call"),
+            )?;
+        }
+        Verdict::Pass | Verdict::Failed => {}
+    }
+    store.save(&record)?;
+
+    Ok(Output::Verdict(Box::new(Envelope::ok(
+        "fleet verdict",
+        None,
+        Status::Ok,
+        VerdictData {
+            job: record.name.clone(),
+            step: step.to_string(),
+            verdict: reached,
+            evidence,
+            attempts,
+            state: record.state,
         },
     ))))
 }
