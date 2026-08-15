@@ -3841,42 +3841,57 @@ contact with a real layout is the open question.
 **Not scheduled.** Explicitly deferred by the user when raised — *"we don't have to build this
 right now"* — and downstream of the Bridge's own bugs being fixed.
 
-### 15.3.4 Reserved, not built: seeing what is in your guild
+### 15.3.4 Built: seeing what is in your guild
 
 **The complaint.** *"Right now, I have the guild set up, but I don't really know what is in
 it. Like, I wish there was a way to view easily through the guild command what the skills are
 that are in the guild, what the Claude files are that are in the guild, basically anything, and
-be able to view and edit it."*
+be able to view and edit it."* And on the shape: *"It should be interactive so that I can
+navigate the list and select it to either open it and view it or edit it. Or even the option to
+delete it."*
 
-**The diagnosis, and it is embarrassing in a useful way.** `armada guild` has seven verbs —
+**The diagnosis, and it was embarrassing in a useful way.** `armada guild` had seven verbs —
 `init`, `project`, `pull`, `push`, `export`, `import`, and the unbuilt `edit` and `verify` —
-and **not one of them shows you what you have.** Every verb moves the guild somewhere: onto
+and **not one of them showed you what you had.** Every verb moved the guild somewhere: onto
 this machine, into a repo, into a bundle, to the remote. The guild is the one thing in Armada
-that is supposed to *be* you, and it is the only thing with no way to look at it.
+that is supposed to *be* you, and it was the only thing with no way to look at it. `export`
+writing a bundle was the standing answer to "what do I have", and it is not an answer.
 
-A real guild already holds workflows, skills, subagents, `voice.md`, `how-i-work.md`,
-`expectations.md`, `settings.json` and hooks. `export` will write all of it to a bundle, which
-is the current answer to "what do I have" and is not an answer.
+**What was built.** Three verbs, and the reserved `edit` was absorbed rather than duplicated.
 
-**The shape of the fix.** A read verb that lists what the guild contains by kind, and can show
-one item's content — the same `STATUS · NAME · DETAIL · TIME` table every other listing uses,
-with `--json` for agents. `verify` (already reserved) is the *correctness* question; this is
-the prior *inventory* question, and inventory is the one you need first when a guild has
-drifted between machines.
+| Verb | What it is |
+|---|---|
+| `armada guild browse` | The listing: one row per thing, `STATUS · ITEM · DETAIL`, where STATUS is the kind. At a terminal it is a browser; `--list` prints it anyway; `--json` carries the same rows. |
+| `armada guild edit <item>` | Open it, **validate it, commit it** — the contract the name was reserved under. `--from <file>` is the form that needs no terminal. |
+| `armada guild delete <item>` | Confirm, remove, and **commit the removal**. `--yes` is the form that needs no terminal, and without one it is required. |
 
-**Design questions this leaves open:**
+**The three questions §15.3.4 left open, and how each was answered:**
 
-- **What a "kind" is.** Workflows and skills are structured and can be summarised. `voice.md`
-  is prose and can only be shown. A listing that flattens both to a filename is `ls` with extra
-  steps.
-- **Whether viewing and editing are one verb or two.** `edit` is already reserved as
-  open-validate-commit; a viewer that can also edit either absorbs it or duplicates it.
-- **What it says about drift.** The guild is a git worktree synced between machines. Whether
-  the inventory reports uncommitted or unpulled state is the difference between a listing and a
-  status.
+| Question | Answer |
+|---|---|
+| **What a "kind" is.** | An enum in `armada_guild::inventory::Kind` — `memory`, `skill`, `subagent`, `workflow`, `hook`, `settings`, `plugins`, `mcp`, `schema` — and it is the word in the STATUS column. Each kind is summarised **in its own terms**, read out of the file: a workflow by its steps, a skill by its front-matter `description`, a memory fragment by whether it is still Armada's example text. A listing that flattened both to a filename would be `ls` with extra steps, which is what that question was guarding against. |
+| **Whether viewing and editing are one verb or two.** | **Absorbed.** `guild edit` is built to its reserved contract and the browser's *edit* action calls the same code, so there is one validation path rather than two. `guild edit` is no longer on `RESERVED_GUILD_VERBS`; `verify` is what is left claimed and unbuilt. |
+| **What it says about drift.** | **Nothing, deliberately.** The listing says what is *there*; `guild pull` already says what moved and `armada doctor` already says what is wrong. What the two *writing* verbs report is the one drift fact they create: whether the change is committed, and therefore whether `guild push` will carry it. |
 
-**Not scheduled**, but this is the strongest candidate of the reserved items: it is small, it
-is self-contained, and the user hit it in ordinary use rather than in the abstract.
+**The three things that were decided rather than left to taste:**
+
+- **An interactive-only verb would have been a bug** (§3.1.1). The listing is the verb and the
+  browser is one way of reading it: the rows are identical in the browser, on stdout and in
+  `--json`, and `browse --list` exists so a terminal can be made to prove it.
+- **A refused edit is written and not committed.** Losing somebody's work because a colon was
+  in the wrong place is the worse of the two failures; git still holds the version before it,
+  and the refusal names `git -C ~/.armada/guild checkout <path>` as the undo. What does not
+  happen is a workflow that no longer parses reaching `push`.
+- **A delete is committed.** The guild is a git worktree that syncs, so a delete that only
+  unlinked a file would leave two machines disagreeing about a file one of them believes is
+  gone.
+
+**What was left.** The reference check that runs before a delete reads **the guild only** — a
+workflow naming a skill, a subagent naming a workflow. A *project's* `armada.yml` naming a
+workflow is not checked, and cannot be from here: those live in repositories Guild has no
+register of, and Guild may not ask Manifest for one (`ARCHITECTURE.md` §1.9). `guild delete`
+therefore reports what it did check rather than implying it checked everything. Closing that
+gap belongs to `guild verify`, which is where the cross-module question already lives.
 
 ### 15.4 The persona, and the four things it decides
 
