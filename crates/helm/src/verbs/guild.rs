@@ -223,7 +223,13 @@ pub fn interview(ask: &mut dyn Ask, guild: Option<&Guild>) -> Answers {
     answers
 }
 
-/// What pressing enter would keep, in one line.
+/// What the answer already is.
+///
+/// **Whole, and with its line breaks.** A prose question opens a text area
+/// holding this, so it is the thing being edited rather than a preview of it —
+/// and a fragment collapsed to one line would be a fragment whose paragraphs the
+/// person had to put back by hand. The two short structured questions still show
+/// theirs on a `now` line, because a triple of ceilings fits on one.
 ///
 /// The fragments are read from the guild the import has just written; the
 /// ceilings are a constant; the remote has no standing value because sync being
@@ -234,26 +240,27 @@ fn standing(question: Question, guild: Option<&Guild>) -> Option<String> {
         5 => None,
         _ => {
             let body = std::fs::read_to_string(guild?.path(question.writes)).ok()?;
-            // **Armada's own examples are not a standing answer.** A fragment
-            // import found nothing for now holds a template — a purpose line and
-            // four examples marked as replaceable — and showing that as *what
-            // enter keeps* would tell a reader his memory file said something it
-            // never said. `now` reads `nothing of yours yet` instead, which is
-            // the truth and is also what the file says about itself.
+            // **Armada's own examples are not your answer.** A fragment import
+            // found nothing for holds a template — a purpose line and four
+            // examples marked as replaceable — and opening the box on those
+            // would invite a reader to save them as his own words. The box opens
+            // empty and the prompt says `nothing of yours yet`.
             if memory::state(&body) == Some(memory::Unedited::Example) {
                 return None;
             }
-            Some(one_line(&body, memory::Fragment::of(question.writes)))
-                .filter(|line| !line.is_empty())
+            Some(content(&body, memory::Fragment::of(question.writes)))
+                .filter(|text| !text.is_empty())
         }
     }
 }
 
-/// A file's content as one line: **Armada's words dropped, yours kept**.
+/// A fragment's content: **Armada's words dropped, yours kept, line breaks and
+/// all**.
 ///
-/// Comments, headings, blanks, and the two lines Armada writes into every
-/// fragment — who reads it, and what to write in it. What is left is the
-/// content, joined with a space.
+/// Comments go, the file's own heading goes, and so do the two lines Armada
+/// writes into every fragment — who reads it, and what to write in it. What is
+/// left is what the person wrote, with the blank lines between its paragraphs
+/// still in place, because that is what goes into the box he then edits.
 ///
 /// Every clause of that was earned by showing the wrong thing to a real reader.
 /// A filter that dropped lines *beginning* with `<!--` left five lines of a
@@ -262,16 +269,21 @@ fn standing(question: Question, guild: Option<&Guild>) -> Option<String> {
 /// lines are prose rather than headings, so nothing structural distinguishes
 /// them — they are matched against what `armada-guild` says it wrote, which is
 /// the only reading that cannot drift from it.
-fn one_line(body: &str, which: Option<memory::Fragment>) -> String {
+fn content(body: &str, which: Option<memory::Fragment>) -> String {
     let armadas: Vec<&str> = which
         .map(|which| vec![which.read_by(), which.asks()])
         .unwrap_or_default();
     without_comments(body)
         .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#') && !armadas.contains(line))
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.starts_with('#') && !armadas.contains(&trimmed)
+        })
+        .map(str::trim_end)
         .collect::<Vec<_>>()
-        .join(" ")
+        .join("\n")
+        .trim()
+        .to_string()
 }
 
 /// Every `<!-- … -->` span removed, however many lines it covers.
@@ -881,7 +893,7 @@ mod tests {
         assert!(error.next_action.as_deref().unwrap().contains("wait"));
     }
 
-    /// **What the question shows is what the file says, not who wrote it.**
+    /// **What goes in the box is what the file says, not who wrote it.**
     ///
     /// Run against what `armada-guild` actually writes rather than a hand-typed
     /// approximation of it, because every mistake this test exists for was a
@@ -895,15 +907,33 @@ mod tests {
         )[0]
         .1;
         assert_eq!(
-            one_line(imported, Some(memory::Fragment::Voice)),
+            content(imported, Some(memory::Fragment::Voice)),
             "150 words maximum. Lead with the answer."
         );
     }
 
-    /// **A fragment import found nothing for offers no standing answer**, even
-    /// though the file is not empty: it holds Armada's examples, and offering
-    /// those as *what enter keeps* would tell a reader his memory file said
-    /// something it never said.
+    /// **The paragraphs survive, because the box is what you then edit.**
+    ///
+    /// It used to be collapsed to one line, which was fine for a preview and is
+    /// not fine for the thing being edited: a fragment whose blank lines had
+    /// been eaten is one the person has to put back by hand before he can add to
+    /// it.
+    #[test]
+    fn a_multi_paragraph_fragment_keeps_its_line_breaks() {
+        let imported = &armada_guild::memory::split(
+            "## Verbosity\n\nLead with the answer.\n\nTables for comparisons.\n",
+        )[0]
+        .1;
+        assert_eq!(
+            content(imported, Some(memory::Fragment::Voice)),
+            "Lead with the answer.\n\nTables for comparisons."
+        );
+    }
+
+    /// **A fragment import found nothing for opens an empty box**, even though
+    /// the file is not empty: it holds Armada's examples, and pre-filling with
+    /// those would invite a reader to press `ctrl-d` and save them as his own
+    /// words.
     #[test]
     fn armadas_own_examples_are_not_offered_as_your_answer() {
         let home = tempfile::tempdir().unwrap();
@@ -926,7 +956,7 @@ mod tests {
     /// a markdown viewer does too.
     #[test]
     fn an_unterminated_comment_swallows_what_follows_it() {
-        assert_eq!(one_line("real\n<!-- open\nmore\n", None), "real");
+        assert_eq!(content("real\n<!-- open\nmore\n", None), "real");
     }
 
     /// `~` comes from the `~/.armada` the entrypoint passed down, never from a

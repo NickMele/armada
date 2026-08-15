@@ -130,14 +130,24 @@ above it in the scrollback rather than taking the screen.
 | Key | Does |
 |---|---|
 | `enter` | a new line |
-| `ctrl-d` | done |
-| `esc`, `ctrl-c` | keep the default |
+| `ctrl-d` | saves what is in the box, edited or not |
+| `esc`, `ctrl-c` | keeps it as it was — the file is not touched |
+
+**The box opens holding the current value**, cursor at the end, and it scrolls when the value is
+longer than it is — the bottom border says how many lines are still below. It replaced a `now …`
+line above the box previewing the same text, which truncated at the terminal's width and was then
+drawn a second time by the widget itself without accounting for wrapping. A default you cannot
+read is not a default; one you can edit in place is.
 
 It takes the terminal into raw mode, which is a thing to do to a person at a keyboard and not to
 a pipe: a run whose stderr is not a TTY reads paragraphs a line at a time, and a terminal that
 refuses raw mode takes the documented default like every other question there. Raw mode and
 bracketed paste are restored on drop **and by a panic hook** — the one moment a panic message
 matters is the one moment raw mode would make it unreadable.
+
+**Every prompt block ends with a blank line.** A prompt is always followed by something — the
+next question, a summary table on the other stream, a session Armada just exec'd into — and all
+three read as part of the question without it.
 
 It draws from the same palette as everything else, through `Role::rgb`. There is no second table
 of colours.

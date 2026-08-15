@@ -3253,10 +3253,11 @@ one specific purpose, and the question says so.
 
 The default was invisible. `(enter to keep what import found)` printed over an empty prompt is
 not a default anyone can accept with confidence — there is no way to tell whether import found
-anything at all. Every question now shows the standing value, truncated to a line.
+anything at all.
 
-And the questions ran together. There is a blank line above each one, because the answers scroll
-past as you type them and nothing else separates one from the next.
+And the questions ran together. Every prompt block closes with a blank line: between two
+questions that separates them, and after the last one it separates the interview from the
+summary table, which without it read as one block.
 
 **Prose answers get a real editor, inline.** Questions 1–3 want paragraphs, and a single-line
 prompt that scrolls sideways is not somewhere anyone writes one — so those three open a
@@ -3266,12 +3267,30 @@ dependency doing two jobs rather than a second one. It is **not** `$EDITOR`: lea
 to answer question two and coming back for question three is a worse interview than a box that
 scrolls. Questions 4 and 5 are one short structured value each and stay a single line.
 
-**It does not show you a parsed split and ask you to correct it.** That was considered and
-rejected: reviewing a machine's guess at how to carve up your own memory file is more work than
-answering the question, and it produces a worse answer — you would be editing its interpretation
-rather than saying what you mean. Import populates the files; the interview asks fresh; your
-answers win where they overlap. Showing the standing value is not the same thing: it is a
-reminder of what is on disk, not a draft in the box waiting to be edited.
+#### The box opens holding the current value
+
+`ctrl-d` saves what is in it, edited or not; `esc` keeps it as it was and does not touch the
+file. The two are different answers: `ctrl-d` on an unchanged box says *I have read this and it
+is mine*, which clears `armada doctor`'s row; `esc` says *leave it*, which does not. The box
+scrolls, and its bottom border says how many lines are still below — an imported fragment is
+easily thirty, and one that silently kept the first eight would be a new place for an old bug.
+
+**This reverses the first version of the rule above, and the reversal is the point.** The
+interview quoted the current value on a `now` line and asked fresh, on the argument that editing
+a machine's reading of your memory file is more work than answering. What that produced was a
+line cut off at the width of the terminal — and, inside the text area, drawn a second time in a
+footer that took no account of wrapping and ran off the edge. A default you cannot read is not
+one you can accept, and retyping a paragraph from a truncated echo is not less work than editing
+it. Pre-filling makes the default visible in full, scrollable and directly editable, and deletes
+the second render because there is nothing left to draw above the box.
+
+A question with nothing to pre-fill still says so — `now  nothing of yours yet` — because an
+empty box under a prompt naming a default would be the invisible default all over again.
+
+**It still does not show you a parsed split and ask you to correct it.** That is the half of the
+old rule that was load-bearing, and it survives: Armada never shows you which sections it filed
+where and asks you to confirm the carve-up. It shows you one file, whole, and lets you write in
+it. Your answers win where they overlap.
 
 **An accepted default is `kept`, not `skipped`.** The summary reads `1 answered · 4 kept as
 imported`. Pressing enter is what the hint instructs and it accepts a value; reporting that as

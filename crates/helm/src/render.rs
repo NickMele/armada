@@ -634,15 +634,21 @@ pub fn interview_prompt(
         out.push('\n');
     }
 
-    // **The absence is shown too, and it is the same fact.** A `now` line that
-    // simply vanished would leave the reader with `esc keeps what import found`
-    // over nothing — which is the invisible default this line exists to end.
+    // **A prose question shows its default by holding it, not by quoting it.**
     //
-    // `nothing of yours yet` rather than `import found nothing`, because the
-    // file is not empty: import found nothing, so it holds the examples Armada
-    // wrote (`armada_guild::memory`). What it does not hold is a word of yours,
-    // and that is what the question is asking about.
+    // There used to be a `now …` line here for every question. On a prose one it
+    // was wrong twice: it truncated, so a long imported fragment could not be
+    // read — which is the only reason to show it — and the text area drew it a
+    // second time in a footer of its own that took no account of wrapping and
+    // ran off the edge. The box opens holding the value instead, where it is
+    // visible in full, scrollable and directly editable (`ask::editor`).
+    //
+    // The line stays for the two short structured questions, whose defaults fit
+    // in it, and for a prose question with nothing to pre-fill — `nothing of
+    // yours yet` rather than a `now` line that simply vanished, which would
+    // leave the reader with `esc keeps it as it was` over nothing.
     let standing = match &asked.standing {
+        Some(_) if asked.prose => String::new(),
         Some(standing) => standing.clone(),
         None if asked.prose => "nothing of yours yet".to_string(),
         None => String::new(),
@@ -673,18 +679,47 @@ pub fn interview_prompt(
     out
 }
 
+/// What to say when the text area could not be opened.
+///
+/// **The question has already been printed by then**, with the box's keys under
+/// it, and the box is not coming — so this both corrects the instruction and
+/// says why there is nothing to type into. Silence there would leave a person
+/// looking at `ctrl-d saves` with no box and no caret, which is worse than the
+/// single-line prompt this falls back to.
+pub fn no_text_area(style: Style, width: usize) -> String {
+    let pad = " ".repeat(ASK_INDENT);
+    let mut out = format!(
+        "{pad}{}\n",
+        style.paint(
+            Role::FlareOrange,
+            &term::truncate(
+                "this terminal will not open the box — one line, then enter",
+                width.saturating_sub(ASK_INDENT),
+            ),
+        )
+    );
+    out.push_str(&pad);
+    out.push_str(&style.paint(Role::RadarCyan, style.caret()));
+    out.push(' ');
+    out
+}
+
 /// The keys a question accepts, named for the way it is being answered.
 ///
 /// **The question knows what its default is; only this knows what takes it.**
 /// `enter` accepts the default at a single-line prompt and inserts a newline in
 /// a text area, so a hint that said `enter keeps …` in both would be wrong in
 /// one of them — and it is the one where the answer is three paragraphs long.
+///
+/// A prose hint says `esc keeps it as it was` rather than naming the default,
+/// because the default is in the box in front of you: naming it as well would be
+/// the preview this widget was pre-filled to remove.
 fn keys(asked: &armada_core::envelope::Asked, style: Style) -> String {
     if asked.prose {
         [
-            "enter for a new line".to_string(),
-            "ctrl-d when done".to_string(),
-            format!("esc keeps {}", asked.keeps),
+            "enter for a new line",
+            "ctrl-d saves",
+            "esc keeps it as it was",
         ]
         .join(style.between())
     } else {

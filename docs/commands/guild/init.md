@@ -56,35 +56,53 @@ it: `still as imported`, or `still Armada's example text`. See
 | 4 | How much should one Job spend before it stops and asks you? | `workflows/*.yml` | `20, 600k, 90m` |
 | 5 | Where should your guild sync to? | `machine.yml` | none — sync off, `export` still works |
 
-**Every question says what answer it wants, and shows what enter would keep.**
+**Every question says what answer it wants, and puts the current one in front of you.**
 
 ```
 2/5  When is work actually finished?
      What must be true before an agent tells you it is done: tests passing, a
      review, a branch, a changelog entry. Workflows gate on this. Writes
      expectations.md.
-
-     now  Tests pass, lint is clean, and someone has read the diff.
-     enter keeps what import found  >
+     enter for a new line · ctrl-d saves · esc keeps it as it was
+┌──────────────────────────────────────────────────────────────────────┐
+│ Tests pass, lint is clean, and someone has read the diff.            │
+│                                                                      │
+│ New behaviour has a test that fails without it.▌                     │
+└─────────────────────────────────────────────── 12 more below ────────┘
 ```
 
-Four things are in that block and each is there because the first real run of this interview
-did without it. The prompt is the question. The paragraph under it says what shape of answer is
-wanted and which file it lands in — *"What does "done" mean — coverage, review, commit style?"*
-did not. The `now` line is what pressing enter would keep, because a default you cannot see is
-not one you can accept with confidence. And there is a blank line above every question, because
-five of them with nothing in between ran together.
+The prompt is the question. The paragraph under it says what shape of answer is wanted and which
+file it lands in — *"What does "done" mean — coverage, review, commit style?"* did not. And the
+block ends with a blank line, because without one the last answer runs straight into the summary
+table and the interview and its result read as one thing.
 
 **Questions 1–3 open a real editor**, inline, with wrapping and arrow keys — they want
 paragraphs, and a single-line prompt that scrolls sideways is not a place anyone writes one.
-Questions 4 and 5 are one short structured value each and stay a single line. Neither opens
-`$EDITOR`; you never leave the interview.
+Questions 4 and 5 are one short structured value each and stay a single line, with a `now` line
+above them showing the default. Neither opens `$EDITOR`; you never leave the interview.
 
-**Questions are not pre-filled with the import's guess.** The `now` line *shows* what import
-found; it does not put it in the box for you to edit. Reviewing a machine's interpretation of
-your own memory file is more work than answering, and it produces a worse answer: you end up
-editing its reading rather than saying what you mean. Import populates the files; these
-questions ask fresh; your answers win where they overlap.
+### The box opens holding what you already have
+
+| Key | Does |
+|---|---|
+| `ctrl-d` | saves what is in the box, edited or not |
+| `esc`, `ctrl-c` | keeps it as it was — the file is not touched |
+
+Those two are different answers. `ctrl-d` on a box you did not change means *I have read this and
+it is mine*, and [`../doctor.md`](../doctor.md) stops naming the file; `esc` means *leave it*, and
+it does not. The box **scrolls**, and its bottom border says how many lines are still below —
+an imported fragment is easily thirty.
+
+**This reverses an earlier rule, and the reversal is the point.** The interview used to quote the
+current value on a `now` line and ask fresh, on the argument that editing a machine's reading of
+your memory file is more work than answering. What that produced was a line cut off at the width
+of the terminal — and, in the text area, drawn a second time without accounting for wrapping, so
+it ran off the edge. A default you cannot read is not one you can accept, and retyping a
+paragraph from a truncated echo is not less work than editing it.
+
+What survives is the half that was actually load-bearing: **you are never asked to confirm the
+split.** Armada does not show you which sections it filed where and ask you to correct it. It
+shows you one file, whole, and lets you write in it.
 
 **The four starter workflows are copied, not confirmed.** A confirmation step on a file you
 have not read yet is theatre — [`edit.md`](edit.md) changes them once you have an opinion.

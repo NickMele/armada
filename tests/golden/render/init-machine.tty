@@ -11,8 +11,6 @@
 [1m[38;2;255;169;64m1/5[0m  [1m[38;2;230;232;235mHow should agents write to you?[0m
      [38;2;156;163;175mTone, length, and what to lead with. Every agent reads this before it says[0m
      [38;2;156;163;175manything. Writes voice.md.[0m
-
-     [38;2;156;163;175mnow  [0m[38;2;92;225;230mLead with the answer. Tables for anything comparative.[0m
-     [38;2;156;163;175menter for a new line · ctrl-d when done · esc keeps what import found[0m
+     [38;2;156;163;175menter for a new line · ctrl-d saves · esc keeps it as it was[0m
 
 [1m[38;2;61;220;132mREADY[0m  [38;2;156;163;175mguild at ~/.armada/guild · 0 answered · 5 kept as imported[0m

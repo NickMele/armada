@@ -149,13 +149,27 @@ impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
     }
 
     /// Write a prompt and read one line back. `None` at end of input.
-    ///
-    /// **Flushed before the read**, because the prompt does not end in a
-    /// newline: the caret is where the cursor sits, and an unflushed prompt is a
-    /// program that appears to have hung.
     fn put(&mut self, prompt: &str) -> Option<String> {
-        let _ = self.prompt.write_all(prompt.as_bytes());
+        self.write(prompt);
+        self.line()
+    }
+
+    /// Put text where the question goes, and flush.
+    ///
+    /// **Flushed**, because a prompt does not end in a newline: the caret is
+    /// where the cursor sits, and an unflushed prompt is a program that appears
+    /// to have hung.
+    fn write(&mut self, text: &str) {
+        let _ = self.prompt.write_all(text.as_bytes());
         let _ = self.prompt.flush();
+    }
+
+    /// One line of stdin, trimmed. `None` at end of input.
+    ///
+    /// Separate from [`AtTheTerminal::write`] so that a widget which printed its
+    /// prompt and then could not open can read the answer without printing the
+    /// question a second time.
+    fn line(&mut self) -> Option<String> {
         let mut line = String::new();
         match self.input.read_line(&mut line) {
             Ok(0) | Err(_) => None,
@@ -165,24 +179,54 @@ impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
 }
 
 impl<W: std::io::Write, R: std::io::BufRead> Ask for AtTheTerminal<W, R> {
-    /// **A blank line above every question.** Five of these with nothing between
-    /// them ran together on the one run that mattered — the answers scroll past
-    /// as you type them, so the only thing separating one question from the next
-    /// is the space you put there.
+    /// A question, and then a blank line.
+    ///
+    /// **Every prompt block closes with a gap rather than opening with one.**
+    /// The two are the same between questions and different at the ends, and the
+    /// ends are where it was wrong: the last answer ran straight into the
+    /// summary table, so an interview and its result read as one block. Closing
+    /// the block puts the gap wherever a prompt is followed by anything at all —
+    /// including output on the other stream, which is what the table is.
     fn question(&mut self, asked: &Asked) -> Option<String> {
-        let prompt = format!(
-            "\n{}",
-            crate::render::interview_prompt(asked, self.style, self.width)
-        );
+        // **Written once, whichever way it is then answered.** The text area
+        // draws under the question rather than replacing it, so the prompt goes
+        // out first — and a box that fails to open must not print it again on
+        // the way to the line it falls back to.
+        self.write(&crate::render::interview_prompt(
+            asked, self.style, self.width,
+        ));
+
         if asked.prose && self.surface == Surface::Widgets {
-            let _ = self.prompt.write_all(prompt.as_bytes());
-            let _ = self.prompt.flush();
-            return match editor::read(self.style, asked.standing.as_deref()) {
-                editor::Answer::Given(text) => Some(text),
-                editor::Answer::Kept => None,
-            };
+            // **The box opens holding the value.** Not a preview above it: that
+            // truncated, and it drew a second time inside the widget without
+            // accounting for wrapping (`ask::editor`).
+            match editor::read(self.style, asked.standing.as_deref().unwrap_or("")) {
+                editor::Answer::Given(text) => {
+                    self.gap();
+                    return Some(text);
+                }
+                editor::Answer::Kept => {
+                    self.gap();
+                    return None;
+                }
+                // **A box that never opened falls through to a line**, exactly
+                // as a selector that cannot be drawn does. Keeping the default
+                // instead would leave a person watching his question scroll past
+                // with nowhere to answer it — which is what a pty that does not
+                // answer a cursor query produced.
+                //
+                // The question is already on the screen with the box's keys
+                // under it, so the correction is printed rather than the whole
+                // prompt reprinted: `ctrl-d saves` over no box is the confusing
+                // half, and it is the half this replaces.
+                editor::Answer::Unavailable => {
+                    self.write(&crate::render::no_text_area(self.style, self.width));
+                }
+            }
         }
-        self.put(&prompt).filter(|answer| !answer.is_empty())
+        let answer = self.line().filter(|answer| !answer.is_empty());
+        self.gap();
+        answer
     }
 
     /// **The selector when a person is here; the printed list otherwise.**
@@ -225,6 +269,19 @@ impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
         };
         let line = crate::render::chosen_line(question, &choice.label, chosen, self.style);
         let _ = self.prompt.write_all(line.as_bytes());
+        let _ = self.prompt.flush();
+        self.gap();
+    }
+
+    /// The blank line that closes a prompt block.
+    ///
+    /// **One rule, at every boundary.** A prompt is immediately followed by
+    /// something — the next question, a summary table, a session Armada just
+    /// exec'd into — and all three read as part of the question without it. It
+    /// goes to the same stream the prompt did, so at a terminal, where both
+    /// streams land on one screen, the gap is where the reader sees it.
+    fn gap(&mut self) {
+        let _ = self.prompt.write_all(b"\n");
         let _ = self.prompt.flush();
     }
 }
@@ -290,31 +347,33 @@ mod tests {
         assert_eq!(terminal("").choose("q", &three(), 3), 3);
     }
 
-    /// **Everything a question needs, in the order it is read**, and the caret
-    /// is the last thing on the line — the cursor sits after it.
+    /// **Everything a question needs, in the order it is read**, and the block
+    /// closes with a blank line.
     ///
-    /// Each of the four parts was asked for by name after a real first run: the
-    /// blank line that keeps five questions from running together, the purpose
-    /// and the file so the question says what answer it wants, and `now` so the
-    /// default is one you can see before you accept it.
+    /// Every part of it was asked for by name after a real run: the purpose and
+    /// the file so the question says what answer it wants, `now` so a short
+    /// default is one you can see before you accept it, and the gap at the end —
+    /// which used to be at the start, and so was missing from the one boundary
+    /// that mattered, where the last answer ran straight into the summary table.
     #[test]
-    fn a_question_says_what_it_wants_shows_what_enter_keeps_and_stands_apart() {
+    fn a_question_says_what_it_wants_shows_what_enter_keeps_and_closes_with_a_gap() {
         let mut ask = terminal("3\n");
         ask.question(&asked());
         let written = String::from_utf8(ask.prompt).unwrap();
         assert_eq!(
             written,
-            "\n1/5  How should agents write to you?\n     \
+            "1/5  How should agents write to you?\n     \
              Tone, length, and what to lead with. Writes voice.md.\n\n     \
              now  Lead with the answer. Keep it short.\n     \
-             enter keeps what import found  > "
+             enter keeps what import found  > \n"
         );
     }
 
-    /// A standing value too long for the line is cut rather than wrapped: it is
-    /// a reminder of what is on disk, not the file.
+    /// A short structured default is shown on its line and cut if it somehow
+    /// does not fit. **A prose one is not shown here at all** — it goes in the
+    /// box, where it cannot truncate.
     #[test]
-    fn a_long_standing_value_is_cut_to_one_line() {
+    fn a_long_standing_value_on_a_line_question_is_cut_to_one_line() {
         let mut ask = terminal("\n");
         ask.question(&Asked {
             standing: Some("x".repeat(200)),
@@ -325,6 +384,42 @@ mod tests {
             assert!(line.chars().count() <= 80, "{line:?}");
         }
         assert!(written.contains('…'), "the cut is marked: {written}");
+    }
+
+    /// **A prose question quotes no default, because it is holding it.**
+    ///
+    /// The `now` line truncated, so a long imported fragment could not be read —
+    /// which was the only reason to print it — and the text area drew it a second
+    /// time in a footer of its own that ran off the edge. Both go: the value is
+    /// in the box.
+    #[test]
+    fn a_prose_question_shows_no_preview_of_a_value_it_is_holding() {
+        let mut ask = terminal("\n");
+        ask.question(&Asked {
+            prose: true,
+            standing: Some("x".repeat(200)),
+            ..asked()
+        });
+        let written = String::from_utf8(ask.prompt).unwrap();
+        assert!(!written.contains("now"), "{written:?}");
+        assert!(!written.contains('…'), "{written:?}");
+        assert!(written.contains("ctrl-d saves"), "{written:?}");
+        assert!(written.contains("esc keeps it as it was"), "{written:?}");
+    }
+
+    /// **With nothing to hold, it says so.** An empty box under a prompt that
+    /// named a default would be a default nobody can see — the thing the `now`
+    /// line was added for, and the one case where it is still right.
+    #[test]
+    fn a_prose_question_with_nothing_to_hold_says_nothing_of_yours_yet() {
+        let mut ask = terminal("\n");
+        ask.question(&Asked {
+            prose: true,
+            standing: None,
+            ..asked()
+        });
+        let written = String::from_utf8(ask.prompt).unwrap();
+        assert!(written.contains("now  nothing of yours yet"), "{written:?}");
     }
 
     /// An answer outside the three takes the default rather than re-asking: a
@@ -356,7 +451,7 @@ mod tests {
              \x20 2  import a bundle\n\
              \x20 3  build one now\n\
              \x20 a number, or enter for 3  > \
-             Do you already have a guild?  > 2 import a bundle\n"
+             Do you already have a guild?  > 2 import a bundle\n\n"
         );
     }
 
@@ -368,6 +463,6 @@ mod tests {
         let mut ask = terminal("\n");
         assert_eq!(ask.choose("q", &three(), 3), 3);
         let written = String::from_utf8(ask.prompt).unwrap();
-        assert!(written.ends_with("q  > 3 build one now\n"), "{written:?}");
+        assert!(written.ends_with("q  > 3 build one now\n\n"), "{written:?}");
     }
 }
