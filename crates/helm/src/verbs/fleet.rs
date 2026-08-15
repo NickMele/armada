@@ -2462,7 +2462,9 @@ fn gate_step<R: Run, C: Clock>(
         advance::Next::Advance { to } => {
             record.pending = None;
             record.step.clone_from(&to);
-            start_step(run, place, &mut record, &flow, &to, None)?;
+            if let Err(error) = start_step(run, place, &mut record, &flow, &to, None) {
+                return stalled(place, now, record, predicate, error);
+            }
             place.store().save(&record)?;
             Ok(tick_row(
                 &record,
@@ -2475,7 +2477,9 @@ fn gate_step<R: Run, C: Clock>(
         }
         advance::Next::Retry { attempt, why } => {
             record.pending = None;
-            start_step(run, place, &mut record, &flow, &step_id, Some(&why))?;
+            if let Err(error) = start_step(run, place, &mut record, &flow, &step_id, Some(&why)) {
+                return stalled(place, now, record, predicate, error);
+            }
             place.store().save(&record)?;
             Ok(tick_row(
                 &record,
@@ -2546,6 +2550,33 @@ fn gate_step<R: Run, C: Clock>(
             ))
         }
     }
+}
+
+/// Stop a Job whose next exchange could not be started, and say why.
+///
+/// **One Job's broken machine must not end the pass.** `gate_step` already
+/// refuses to fail the whole loop over a workflow it cannot read, for the reason
+/// given there — one Job with a missing workflow must not stop the loop moving
+/// every other Job on — and a Job whose worktree has been deleted under it is
+/// the same failure arriving one step later. Propagating it would mean `armada
+/// fleet tick` over a fleet of twenty exited `6` and moved none of the other
+/// nineteen, and `--watch` would stop dead on it.
+///
+/// **The error's own words, not a summary.** `start_step` says which worktree is
+/// gone and what to run about it; a row saying *"could not start"* would send
+/// the reader back to the terminal to find out what Armada already knew.
+fn stalled<C: Clock>(
+    place: &Where,
+    now: &C,
+    record: Job,
+    predicate: Option<String>,
+    error: ArmadaError,
+) -> Result<TickRow, ArmadaError> {
+    let why = match &error.next_action {
+        Some(next) => format!("{} — {next}", error.message),
+        None => error.message.clone(),
+    };
+    halt(place, now, record, predicate, why)
 }
 
 /// Stop a Job the loop cannot gate at all, and say why.

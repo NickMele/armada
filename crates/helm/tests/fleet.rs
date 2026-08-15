@@ -4262,6 +4262,87 @@ fn a_workflow_that_ends_at_a_person_hands_the_job_over_rather_than_closing_it() 
     );
 }
 
+/// **One broken Job does not end the pass.**
+///
+/// `gate_step` already refuses to fail the whole loop over a workflow it cannot
+/// read. A worktree deleted under a Job is the same failure arriving one step
+/// later — it surfaces when the *next* exchange is started rather than when the
+/// gate is read — and it used to propagate: a fleet-wide `armada fleet tick`
+/// exited `6` and moved none of the other Jobs, and `--watch` stopped dead on
+/// it.
+///
+/// **The assertion is on the other Job**, because that is the claim. A row
+/// saying `halted` about the broken one proves nothing on its own.
+#[test]
+fn a_job_whose_worktree_is_gone_halts_and_the_rest_of_the_fleet_still_moves() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: two steps\nends_at: branch\nsteps:\n\
+         \x20 - id: one\n    skill: reproduce-failure\n    verify: { must: always }\n\
+         \x20 - id: two\n    skill: land-branch\n    verify: { must: always }\n",
+    );
+    let run = scratch.harness();
+    let broken = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("aaa the parser drops the last field")
+        },
+    );
+    let healthy = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("zzz the retry never backs off")
+        },
+    );
+    for job in [&broken, &healthy] {
+        await_turn(&scratch, &job.uuid);
+        await_exit(&scratch, &job.uuid);
+    }
+
+    // Deleted under it, which is what `armada manifest clean` or a person with
+    // a `rm -rf` does while a Job is between exchanges.
+    let record = scratch.store().load(&broken.uuid).unwrap();
+    std::fs::remove_dir_all(scratch.place().expand(&record.worktree)).unwrap();
+
+    // The whole fleet, in name order — `aaa…` first, so the broken Job is
+    // reached before the healthy one and cannot be skipped by luck.
+    let data = ticked(
+        &fleet::tick(&run, &FrozenClock::new(), &scratch.place(), None, false)
+            .expect("one gone worktree ended the whole pass"),
+    );
+    assert_eq!(data.results.len(), 2, "{data:#?}");
+
+    let stopped = &data.results[0];
+    assert_eq!(stopped.job, broken.name, "{data:#?}");
+    assert_eq!(stopped.did, "halted", "{data:#?}");
+    assert!(
+        stopped.why.contains("no worktree left to run in"),
+        "the row does not say what is wrong: {}",
+        stopped.why
+    );
+
+    let moved = &data.results[1];
+    assert_eq!(moved.job, healthy.name, "{data:#?}");
+    assert_eq!(moved.did, "advanced", "{data:#?}");
+    assert_eq!(
+        scratch.store().load(&healthy.uuid).unwrap().step,
+        "two",
+        "the healthy Job did not move"
+    );
+
+    // The stop is durable and raised, not a row that scrolls away.
+    let record = scratch.store().load(&broken.uuid).unwrap();
+    assert_eq!(record.state, JobState::Paused);
+    let inbox = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    assert_eq!(inbox.len(), 1, "{inbox:#?}");
+}
+
 /// **A pass never touches a Job whose Drone is still working.** Gating a live
 /// exchange would start a check against a worktree being written to — and
 /// `--watch` has to be able to tell that Job from an idle one, or it returns the
