@@ -6,7 +6,7 @@
 //! adapter calls go in, and the one refusal — no guild, no persona — that has to
 //! happen before any of them (`ARCHITECTURE.md` §1.3).
 //!
-//! # Entering is a separate act, and that is the design
+//! # Entering is a separate act, and right now it is switched off
 //!
 //! `armada helm` writes the configuration, reports the command, and **starts
 //! nothing**. Entering the session is [`ENTER`], and the split is not caution
@@ -19,8 +19,18 @@
 //!
 //! A verb that opened a Claude Code session as a side effect of being run can be
 //! reached by a script, by a shell alias, by a test harness and by a mistyped
-//! line — and each of those spends. So the spend is behind a flag nothing but a
-//! person types, and behind a terminal, which no pipeline has.
+//! line — and each of those spends.
+//!
+//! **So there is no path in the shipped binary that starts one.** [`ENTER`] is
+//! known to the parser and refused by [`entering_is_off`] — refused by name and
+//! with a reason, never as an unknown flag, because "unknown flag" reads as a
+//! bug and invites somebody to go looking for the spelling that works.
+//!
+//! **This is a gate on entering, not a rollback.** The argv, the four documents
+//! and the conversation's record are built and verified exactly as they will be
+//! when it comes back on; [`mark_started`] is the writer the exec path needs and
+//! is kept and tested for that reason. Turning it on is deleting a refusal and
+//! calling two functions that already exist.
 //!
 //! **The same reasoning is why bare `armada` is not wired to it.** PLAN.md §15.1
 //! says typing `armada` with no arguments enters Helm; that is the intended end
@@ -43,11 +53,50 @@ use std::path::{Path, PathBuf};
 
 use crate::verbs::Output;
 
-/// The flag that turns the assembled command into a session.
+/// The flag that would turn the assembled command into a session.
 ///
-/// Named here rather than typed in three files, because the parser, the help
-/// page and the refusal all have to say the same word.
+/// Named here rather than typed in four files, because the parser, the help
+/// page, the render's summary line and the refusal all have to say the same
+/// word.
 pub const ENTER: &str = "--exec";
+
+/// Why entering is refused, in **the one place every surface reads it from**.
+///
+/// A gate whose reason is retyped per call site is a gate that says three
+/// different things by the third edit, and the one that reads as an accident is
+/// the one somebody works around. The parser, [`entering_is_off`], the help page
+/// and the render all read this string, so the decision moves in one place or
+/// not at all.
+pub const ENTER_IS_OFF: &str = "switched off until the Bridge is fixed";
+
+/// The refusal [`ENTER`] gets, and the only answer it has.
+///
+/// **`bad_invocation`, which is the class this CLI already uses for a flag it
+/// knows and has not built** — `armada doctor --fix` and `armada manifest check
+/// --detach` are both refused this way. No new class: an invented one would say
+/// this refusal is a different kind of thing from those two, and it is not.
+///
+/// **Refused by name, never as an unknown flag.** A caller told "unknown flag"
+/// concludes Armada is broken or that they typed it wrong, and goes looking for
+/// the spelling that works. Told that it is switched off and why, they either
+/// wait or paste the command themselves — which is the honest option and is what
+/// `next_action` offers, because `armada helm` has already printed it.
+///
+/// **It says it is temporary.** A refusal that reads as permanent is one nobody
+/// asks about again, and this one is meant to be lifted.
+pub fn entering_is_off() -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: format!("helm {ENTER}"),
+        message: format!(
+            "`armada helm {ENTER}` is {ENTER_IS_OFF}: entering opens a Claude Code \
+             session, and no path in this binary starts one"
+        ),
+        next_action: Some(
+            "`armada helm` assembles and prints the command; run it yourself to enter".to_string(),
+        ),
+    }
+}
 
 /// Everything `armada helm` needs from the machine, gathered at the entrypoint.
 ///
@@ -269,6 +318,14 @@ fn record(session: &Session) -> Result<String, ArmadaError> {
 /// earlier — when the command is merely reported, say — would make the next
 /// launch `--resume` a conversation nobody ever started, which fails with *no
 /// conversation found* and is indistinguishable from a lost transcript.
+///
+/// **It has no caller while [`ENTER`] is refused, and is kept deliberately.**
+/// That gate is on entering and not on the work underneath it ([`ENTER_IS_OFF`]),
+/// so the writer the exec path needs stays here, stays tested, and turning
+/// entering back on is a deleted refusal and a call — rather than rediscovering
+/// which end of the exec this has to be written at. It is exercised directly by
+/// the suite for exactly that reason: a function kept for later that nothing
+/// runs is a function that has rotted by the time later arrives.
 pub fn mark_started(place: &Where, session: &Session) -> Result<(), ArmadaError> {
     let started = Session {
         started: true,

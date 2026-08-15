@@ -707,10 +707,14 @@ fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
             format!("conversation {}", data.conversation.word().to_lowercase()),
             // **Said out loud, because the absence of a session is the point.**
             // A reader who assumed `armada helm` had opened one would sit
-            // waiting for a prompt that is never coming.
+            // waiting for a prompt that is never coming — and one who assumed
+            // `--exec` would open it would find out by typing it. The reason is
+            // read from the one constant every surface reads it from, so this
+            // line cannot drift from the refusal it describes.
             format!(
-                "nothing started; `armada helm {}` enters it",
-                crate::verbs::helm::ENTER
+                "nothing started; {} is {}",
+                crate::verbs::helm::ENTER,
+                crate::verbs::helm::ENTER_IS_OFF
             ),
         ],
     ));

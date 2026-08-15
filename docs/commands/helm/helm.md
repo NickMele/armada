@@ -2,9 +2,9 @@
 
 The one agent you talk to.
 
-> **Status: built — M3.** The launch is assembled, the inbox is wired and the conversation is
-> remembered. **Entering the session is behind `--exec`**, which is the one thing here that
-> spends.
+> **Status: built — M3, except entering.** The launch is assembled and verified, the inbox is
+> wired and the conversation is remembered. **`--exec` is refused for now**, and no path in this
+> binary opens a Claude Code session. Run the printed command yourself to enter.
 
 **Helm is a conversation, not a screen.** It is a Claude Code session, which is the whole
 design: it needs no interface work, so it ships with Fleet instead of after everything else. The
@@ -18,16 +18,16 @@ below Helm moves either way.
 ## Synopsis
 
 ```sh
-armada helm [--agent <name>] [--new] [--exec] [--json]
+armada helm [--agent <name>] [--new] [--json]
 ```
 
 ## Arguments
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `--exec` | flag | **off** | Become the session. **This is the one that spends.** |
 | `--new` | flag | off | Start a fresh Helm conversation instead of resuming. |
 | `--agent <name>` | subagent name | `helm` | Use a different persona from `~/.armada/guild/subagents/`. |
+| `--exec` | flag | — | Become the session. **Refused for now**; see below. |
 
 ## Assembling is free; entering is not
 
@@ -39,11 +39,33 @@ armada helm [--agent <name>] [--new] [--exec] [--json]
 | Entering the session | a real budget, against a real account, for as long as it is open |
 
 A verb that opened a Claude Code session as a side effect of being run can be reached by a
-script, by a shell alias, by a test harness and by a mistyped line, and each of those spends. So
-the spend is behind **two** conditions and needs both: `--exec` on the line, and a terminal on
-the other end. A `--exec` into a pipe is refused rather than degraded — a caller who typed it
-asked for a conversation, and answering with the report they would have got anyway looks like
-Armada ignoring the flag.
+script, by a shell alias, by a test harness and by a mistyped line, and each of those spends.
+
+**So there is no path in the shipped binary that starts one.** `--exec` is known to the parser
+and refused:
+
+```
+armada helm --exec
+-> exit 2
+   bad_invocation  `armada helm --exec` is switched off until the Bridge is fixed:
+                   entering opens a Claude Code session, and no path in this binary
+                   starts one
+   next: `armada helm` assembles and prints the command; run it yourself to enter
+```
+
+**Refused by name, never as an unknown flag.** A caller told *unknown flag* concludes Armada is
+broken or that they typed it wrong, and goes looking for the spelling that works. Told that it
+is switched off and why, they either wait or paste the command themselves — which is the honest
+option, and is what `next:` offers.
+
+**This is a gate on entering, not a rollback.** The argv, the four documents and the
+conversation's record are built and verified exactly as they will be when it comes back on.
+Turning it on is deleting a refusal and calling two functions that already exist.
+
+The flag word and the reason live in one place each — `verbs::helm::ENTER` and
+`ENTER_IS_OFF` — which the parser, this page, the render's summary line and the refusal all
+read. A gate whose reason is retyped per call site says three different things by the third
+edit, and the one that reads as an accident is the one somebody works around.
 
 > **Bare `armada` does not enter Helm.** [`PLAN.md`](../../PLAN.md) §15.1 gives it the bare word
 > eventually and that remains the intended end state; it is deliberately not wired, because the
@@ -120,7 +142,7 @@ Four rows and the command.
 
   enter with claude --agent helm --mcp-config …
 
-OK  helm · conversation new · nothing started; `armada helm --exec` enters it
+OK  helm · conversation new · nothing started; --exec is switched off until the Bridge is fixed
 ```
 
 The last line is load-bearing. Four `WRITTEN` rows and a launch command, without it, read
@@ -142,10 +164,10 @@ on exactly those machines.
 
 ## Exit codes
 
-Without `--exec` the process is Armada's and exits normally. With it, the process is replaced by
-`claude`, so the exit code is whatever it exits with.
+The process is always Armada's and exits normally — nothing here replaces it.
 
-`2` `bad_invocation` — `--exec` where there is no terminal.
+`2` `bad_invocation` — `--exec`, which is refused. When it comes back on, that path will replace
+the process with `claude` and the exit code will be whatever the session exits with.
 
 `3` `bad_config` — no guild, no such persona, or a persona that is not on Claude Code's load
 path. The three are reported separately, because three different commands fix them.

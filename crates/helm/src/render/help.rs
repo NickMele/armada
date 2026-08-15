@@ -657,13 +657,15 @@ const PAGES: [Page; 26] = [
         path: "helm",
         synopsis: "helm",
         summary: "the one agent you talk to: wire the toolbelt, report the launch",
-        usage: &[
-            "armada helm [--agent <name>] [--new]",
-            "armada helm --exec",
-            "armada helm --json",
-        ],
+        usage: &["armada helm [--agent <name>] [--new]", "armada helm --json"],
+        // **The flag is listed, and listed as refused.** Leaving it off the page
+        // would make `armada helm --exec` read as a typo worth retrying, which
+        // is the reading the refusal itself is written against.
         flags: &[
-            ("--exec", "become the session. This is the one that spends."),
+            (
+                crate::verbs::helm::ENTER,
+                "become the session — refused for now; see NOTES",
+            ),
             ("--new", "start a fresh conversation instead of resuming"),
             (
                 "--agent <name>",
@@ -676,8 +678,8 @@ const PAGES: [Page; 26] = [
                 "wire the inbox and the toolbelt; print the command; start nothing",
             ),
             (
-                "armada helm --exec",
-                "enter the conversation. Opens a Claude Code session.",
+                "armada helm --json",
+                "the same, with argv as a vector a script can run",
             ),
             (
                 "armada helm --new",
@@ -685,7 +687,9 @@ const PAGES: [Page; 26] = [
             ),
         ],
         notes: &[
-            "Without --exec it starts nothing: assembling is free, entering is not.",
+            "It starts nothing. The launch is assembled and verified, and entering",
+            "is switched off until the Bridge is fixed: --exec is refused and no",
+            "path in this binary opens a session. Run the printed command to enter.",
             "It is the same conversation each day; the id lives in ~/.armada/helm/.",
             "Its toolbelt is fleet.* and manifest.*; classification is Fleet's job.",
             "There is no `helm` binary. Kubernetes owns that name on PATH.",

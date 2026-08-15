@@ -295,7 +295,22 @@ fn helm_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
         Ok(output) if output.ok() => Finding::settled(
             "helm argv",
             Settled::Ok,
-            format!("{} flags accepted, monitor validates", helm::FLAGS.len()),
+            // **The row says what was checked and that entering is off**, in
+            // that order, because both are true and a reader who saw only the
+            // first would conclude `armada helm` opens a session.
+            //
+            // **It gives the state and not the reason**, which is the one place
+            // that phrasing is not read from
+            // [`ENTER_IS_OFF`](crate::verbs::helm::ENTER_IS_OFF) — and
+            // deliberately. A `doctor` detail is a table cell about sixty-five
+            // columns wide; the full sentence truncates to *"entering switched
+            // off until t…"*, and half a reason mid-word is worse than a short
+            // one. The reason is on `armada helm --help` and in the refusal
+            // itself, which are the two surfaces a reader reaches for next.
+            format!(
+                "{} flags accepted, monitor validates; entering is off",
+                helm::FLAGS.len()
+            ),
         ),
         Ok(output) => Finding::needs(
             "helm argv",
@@ -865,6 +880,29 @@ mod tests {
         let finding = helm_argv(&run, Path::new("/tmp"), home.path());
         assert_eq!(finding.status, Health::Missing);
         assert!(finding.detail.contains("monitors.json"), "{finding:?}");
+    }
+
+    /// **`doctor` says entering is off, and the row still fits its column.**
+    /// Both halves are the assertion: a reader who saw only *"6 flags accepted"*
+    /// would conclude `armada helm` opens a session, and a row that says so and
+    /// then truncates mid-word has told them nothing either.
+    #[test]
+    fn the_healthy_row_says_the_launch_is_checked_and_entering_is_off() {
+        let home = a_wired_machine();
+        let run = Helm::healthy();
+        let finding = helm_argv(&run, Path::new("/tmp"), home.path());
+
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.detail.contains("monitor validates"), "{finding:?}");
+        assert!(finding.detail.contains("entering is off"), "{finding:?}");
+        // The `DETAIL` column a `doctor` row draws into. Measured against the
+        // real render: the full reason truncates here, which is why this row
+        // carries the state and sends the reader to `armada helm --help`.
+        assert!(
+            finding.detail.len() <= 64,
+            "the row truncates: {} columns — {finding:?}",
+            finding.detail.len()
+        );
     }
 
     /// A machine that has never run `armada helm` has no monitor to validate,

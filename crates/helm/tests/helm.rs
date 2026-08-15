@@ -1,9 +1,14 @@
 //! `armada helm` end to end, against a scratch `$HOME`.
 //!
 //! **No test here starts a Claude Code session, and none can.** The verb under
-//! test assembles a launch and reports it; entering the conversation is behind
-//! `--exec` *and* behind a terminal, and a test process has neither — which is
-//! itself asserted below rather than assumed.
+//! test assembles a launch and reports it; `--exec` is refused by name, and
+//! there is no path in the binary that opens one. That refusal is asserted
+//! rather than assumed — see [`entering_is_refused_by_name_and_says_why`], which
+//! is the deliverable of this file and not a detail of it. A gate with no test
+//! is a comment, and the first thing anybody would learn about it silently
+//! coming back on is a bill.
+//!
+//! [`entering_is_refused_by_name_and_says_why`]: entering_is_refused_by_name_and_says_why
 //!
 //! The scratch machine is [`support::Machine`]: its own `$HOME`, so the guild,
 //! the projection and `~/.armada/helm/` are all a `TempDir` and never the
@@ -409,27 +414,152 @@ fn a_refusal_writes_nothing() {
     );
 }
 
-/// **The gate, asserted.** `--exec` is the one path that opens a Claude Code
-/// session, and it is refused without a terminal — which no test, no CI job and
-/// no pipeline has. This is what makes it impossible for this suite to spend a
-/// token by accident rather than merely unlikely.
+/// **The gate, asserted. This test is the deliverable.**
+///
+/// Entering opens a Claude Code session, and no path in this binary may start
+/// one. `--exec` is known to the parser and refused — by name, with a reason,
+/// and as an ordinary error with a class and a `next:` line.
+///
+/// A gate with no test is a comment: without this, re-enabling entering is a
+/// silent one-line change, and the first thing anybody would learn about it is a
+/// bill.
 #[test]
-fn entering_is_refused_when_there_is_nobody_to_talk_to() {
+fn entering_is_refused_by_name_and_says_why() {
     let machine = Machine::new();
     a_machine_ready_for_helm(&machine);
 
     let out = machine.run(machine.root.path(), &["helm", "--exec"]);
     assert_eq!(out.status.code(), Some(2), "bad_invocation is exit 2");
-    let said = String::from_utf8_lossy(&out.stderr);
-    assert!(said.contains("not a terminal"), "{said}");
 
-    // And it did not record a conversation it never started.
-    let record = helm_home(&machine).join("session.json");
-    let session: Value = serde_json::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
-    assert_eq!(
-        session["started"], false,
-        "a refused --exec claimed the conversation had begun"
+    let said = String::from_utf8_lossy(&out.stderr);
+    // **By name, never as an unknown flag.** A caller told "unknown flag"
+    // concludes they typed it wrong and goes looking for the spelling that
+    // works — which is the reading this refusal exists to prevent.
+    assert!(
+        !said.to_lowercase().contains("unknown"),
+        "the refusal reads as a typo rather than a decision: {said}"
     );
+    assert!(said.contains("--exec"), "{said}");
+    // The reason, and that it is temporary.
+    assert!(
+        said.contains("switched off until the Bridge is fixed"),
+        "{said}"
+    );
+    // And a way forward, because `armada helm` has already printed the command.
+    assert!(said.contains("armada helm"), "{said}");
+}
+
+/// The same refusal in the envelope: a class an agent can branch on, a `where`
+/// naming the flag, and a `next_action`.
+#[test]
+fn the_refusal_is_an_ordinary_error_with_a_class_and_a_next_action() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+
+    let out = machine.run(machine.root.path(), &["helm", "--exec", "--json"]);
+    assert_eq!(out.status.code(), Some(2));
+    let envelope: Value = serde_json::from_slice(&out.stdout).expect("an envelope");
+    let error = &envelope["error"];
+    // **`bad_invocation`, the class this CLI already uses for a flag it knows
+    // and has not built** — `doctor --fix` and `check --detach` are both this.
+    // A class invented for the occasion would say the refusal is a different
+    // kind of thing from those two, and it is not.
+    assert_eq!(error["class"], "bad_invocation");
+    assert_eq!(error["where"], "helm --exec");
+    assert!(error["next_action"].as_str().is_some_and(|n| !n.is_empty()));
+}
+
+/// **A refused `--exec` changes nothing at all.** It is turned away before the
+/// verb runs, so it cannot leave four configuration files behind as the price of
+/// saying no — the rule `armada doctor --fix` already follows.
+#[test]
+fn a_refused_entry_writes_nothing() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+
+    machine.run(machine.root.path(), &["helm", "--exec"]);
+    assert!(
+        !helm_home(&machine).exists(),
+        "a refused --exec wrote {:?}",
+        helm_home(&machine)
+    );
+}
+
+/// **The one constant, read by every surface.** The parser's flag, the help
+/// page's row, the render's summary line and the refusal all have to agree, and
+/// they agree because they read the same two strings rather than four copies of
+/// the same sentence.
+#[test]
+fn every_surface_reads_the_gate_from_the_same_place() {
+    use armada_helm::verbs::helm::{ENTER, ENTER_IS_OFF};
+
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+
+    let refusal =
+        String::from_utf8_lossy(&machine.run(machine.root.path(), &["helm", "--exec"]).stderr)
+            .to_string();
+    let page =
+        String::from_utf8_lossy(&machine.run(machine.root.path(), &["helm", "--help"]).stdout)
+            .to_string();
+    let report =
+        String::from_utf8_lossy(&machine.run(machine.root.path(), &["helm"]).stdout).to_string();
+
+    for (surface, text) in [
+        ("refusal", &refusal),
+        ("help page", &page),
+        ("report", &report),
+    ] {
+        assert!(
+            text.contains(ENTER),
+            "the {surface} does not name `{ENTER}`"
+        );
+    }
+    for (surface, text) in [("refusal", &refusal), ("report", &report)] {
+        assert!(
+            text.contains(ENTER_IS_OFF),
+            "the {surface} does not give the reason: {text}"
+        );
+    }
+}
+
+/// **The record-writer the exec path needs, exercised directly.**
+///
+/// `mark_started` has no caller while entering is refused. It is kept so that
+/// turning entering back on is a deleted refusal and a call rather than a
+/// rediscovery — and it is run here for the reason anything kept for later is
+/// run: a function nothing exercises has rotted by the time later arrives.
+///
+/// It also closes the one link the rest of the suite cannot: that the flag which
+/// makes the next launch say `--resume` is the flag this function writes.
+#[test]
+fn the_writer_that_turns_a_launch_into_a_resume_still_works() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+    let first = helm_json(&machine, &[]);
+    let uuid = first["data"]["uuid"].as_str().unwrap().to_string();
+    assert_eq!(first["data"]["conversation"], "NEW");
+
+    armada_helm::verbs::helm::mark_started(
+        &armada_helm::verbs::helm::Where {
+            home: machine.home.path().to_path_buf(),
+            armada_home: machine.home.path().join(".armada"),
+            claude_home: machine.home.path().join(".claude"),
+            exe: support::armada_binary(),
+            boot_id: "test-boot".to_string(),
+        },
+        &armada_core::helm::Session {
+            uuid: uuid.clone(),
+            agent: "helm".to_string(),
+            started: true,
+        },
+    )
+    .expect("the record is writable");
+
+    let second = helm_json(&machine, &[]);
+    assert_eq!(second["data"]["conversation"], "RESUMED");
+    let argv = argv_of(&second);
+    assert_eq!(&argv[argv.len() - 2..], ["--resume", uuid.as_str()]);
 }
 
 /// The default is free. `armada helm` with no flags starts nothing, and the
@@ -448,15 +578,28 @@ fn the_default_says_out_loud_that_it_started_nothing() {
     assert!(said.contains("enter with claude --agent helm"), "{said}");
 }
 
-/// `armada helm --help` is Armada's page, and it names the flag that spends.
+/// `armada helm --help` tells the truth about all three: the launch is
+/// assembled, entering is off, and there is still no `helm` binary.
 #[test]
-fn the_page_warns_which_flag_is_the_one_that_spends() {
+fn the_page_says_the_launch_is_built_and_entering_is_off() {
     let machine = Machine::new();
     let out = machine.run(machine.root.path(), &["helm", "--help"]);
     assert!(out.status.success());
     let page = String::from_utf8_lossy(&out.stdout);
-    assert!(page.contains("--exec"), "{page}");
-    assert!(page.contains("the one that spends"), "{page}");
+    assert!(
+        page.contains("--exec"),
+        "the flag is not on its own page: {page}"
+    );
+    assert!(page.contains("assembled and verified"), "{page}");
+    assert!(
+        page.contains("switched off until the Bridge is fixed"),
+        "{page}"
+    );
+    assert!(
+        page.contains("no\n  path in this binary opens a session")
+            || page.contains("path in this binary opens a session"),
+        "{page}"
+    );
     assert!(page.contains("There is no `helm` binary"), "{page}");
 }
 
