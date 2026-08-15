@@ -80,13 +80,8 @@ fn stdout(output: &std::process::Output) -> String {
 }
 
 fn envelope(output: &std::process::Output) -> Value {
-    serde_json::from_slice(&output.stdout).unwrap_or_else(|e| {
-        panic!(
-            "not an envelope ({e}):\nstdout: {}\nstderr: {}",
-            stdout(output),
-            why(&output)
-        )
-    })
+    serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|e| panic!("not an envelope ({e}): {}", why(output)))
 }
 
 /// Every file under a directory, recursively, guild-relative.
@@ -127,11 +122,7 @@ fn a_guild_init_leaves_the_guild_where_claude_code_reads_it() {
     let outside = machine.outside();
 
     let built = machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
-    assert!(
-        built.status.success(),
-        "guild init failed: {}",
-        why(&built)
-    );
+    assert!(built.status.success(), "guild init failed: {}", why(&built));
 
     let claude = machine.home.path().join(".claude");
     // The starter skill `guild init` copies, now on the load path under the
@@ -253,11 +244,7 @@ fn a_machine_that_has_never_seen_armada_gets_a_working_guild() {
     let outside = machine.outside();
 
     let output = machine.run(&outside, &["init", "--defaults", "--json"]);
-    assert!(
-        output.status.success(),
-        "init failed: {}",
-        why(&output)
-    );
+    assert!(output.status.success(), "init failed: {}", why(&output));
 
     let envelope = envelope(&output);
     assert_eq!(envelope["status"], "READY");
@@ -336,17 +323,9 @@ fn a_second_machine_pulls_the_first_machines_guild() {
         &outside,
         &["guild", "init", "--defaults", "--remote", &hub, "--json"],
     );
-    assert!(
-        built.status.success(),
-        "guild init failed: {}",
-        why(&built)
-    );
+    assert!(built.status.success(), "guild init failed: {}", why(&built));
     let pushed = first.run(&outside, &["guild", "push", "--json"]);
-    assert!(
-        pushed.status.success(),
-        "push failed: {}",
-        why(&pushed)
-    );
+    assert!(pushed.status.success(), "push failed: {}", why(&pushed));
 
     // Machine two, which has never seen Armada, pulls it.
     let second = Machine::new();
@@ -387,11 +366,7 @@ fn a_second_machine_pulls_the_first_machines_guild() {
     );
 
     let pulled = first.run(&outside, &["guild", "pull", "--json"]);
-    assert!(
-        pulled.status.success(),
-        "pull failed: {}",
-        why(&pulled)
-    );
+    assert!(pulled.status.success(), "pull failed: {}", why(&pulled));
     let envelope = envelope(&pulled);
     assert_eq!(
         envelope["data"]["applied"], true,
@@ -648,11 +623,7 @@ fn ls_names_everything_in_the_guild_rather_than_counting_it() {
     machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
 
     let listed = machine.run(&outside, &["guild", "ls", "--json"]);
-    assert!(
-        listed.status.success(),
-        "guild ls failed: {}",
-        why(&listed)
-    );
+    assert!(listed.status.success(), "guild ls failed: {}", why(&listed));
     let items = envelope(&listed)["data"]["items"]
         .as_array()
         .unwrap()
@@ -737,11 +708,7 @@ fn show_prints_one_item_and_carries_it_in_the_envelope() {
     let on_disk =
         std::fs::read_to_string(guild_of(&machine).join("workflows/feature.yml")).unwrap();
     let shown = machine.run(&outside, &["guild", "show", "workflows/feature.yml"]);
-    assert!(
-        shown.status.success(),
-        "guild show failed: {}",
-        why(&shown)
-    );
+    assert!(shown.status.success(), "guild show failed: {}", why(&shown));
     let text = stdout(&shown);
     for line in on_disk.lines().filter(|line| !line.trim().is_empty()) {
         assert!(text.contains(line), "`{line}` is not on stdout:\n{text}");

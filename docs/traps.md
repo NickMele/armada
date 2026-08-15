@@ -1174,6 +1174,37 @@ were reported as macOS-only because Linux never reached them.
 removes the environment; it does not remove the machine. `PATH` is still an input, and every
 program reachable through it is one the test did not write.
 
+## git refuses its own auto-detected identity when the hostname has no domain
+
+Measured 2026-08-15 against git 2.39.5 (`rust:1-bookworm`) and git 2.54.0 (darwin 27.0).
+
+```
+# $HOME points at an empty directory, so there is no .gitconfig to read.
+# darwin, hostname Nicks-MacBook-Pro.local
+env -i HOME=$scratch PATH=$PATH git commit -m x
+-> exit 0, author "Nick Mele <nickmele@Nicks-MacBook-Pro.local>"
+
+# Linux container, hostname a hex id that does not canonicalise
+-> exit 128, "Author identity unknown"
+```
+
+**Absence of a `user.email` is not the trigger; an unusable *guess* is.** git falls back to
+`getpwuid` for the name and `user@hostname` for the address, then discards the address unless
+the hostname already contains a `.` or `getaddrinfo` canonicalises it into something that does.
+Every developer machine satisfies that and a container generally does not, which is why this
+reads as a platform difference and is really a hostname difference — the same code fails on a
+Mac whose hostname has been set to a bare word.
+
+**What it cost.** `crates/helm/tests/support/mod.rs` clears the environment and points `$HOME`
+at a scratch directory, which removes the developer's identity without supplying one. Ten
+tests in `crates/helm/tests/guild.rs` — every verb that commits — failed on Linux with
+`Author identity unknown` while passing on the author's machine. The harness now writes a
+`.gitconfig` into the scratch `$HOME`.
+
+**If you assume otherwise:** you will conclude that pointing `$HOME` somewhere empty is enough
+to isolate git. It isolates the *config*; the identity then comes from the host's passwd file
+and hostname, which is a machine input by another route.
+
 ## An assertion built from `stderr` alone reports nothing when Armada refuses
 
 Measured 2026-08-15, darwin 27.0.
