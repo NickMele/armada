@@ -763,18 +763,55 @@ fn record_of(workspace: &Workspace, it: &Loop<'_>) -> RunRecord {
 
 /// Write the record where it stands, and carry on if it cannot be written.
 ///
-/// **A checkpoint is evidence and never a step of the run.** It is taken as
-/// each check reaches a verdict, so a run that is SIGKILLed halfway has the
-/// verdicts it did reach on disk rather than nothing at all — which is the
-/// difference between `--status` reporting three checks and reporting a run
-/// that seems never to have started. `write_record` renames into place, so a
-/// poll arriving mid-write reads the previous checkpoint and never half of one.
+/// **A checkpoint is evidence and never a step of the run.** It is taken every
+/// time a check moves, so a run that is SIGKILLed halfway has the verdicts it
+/// did reach on disk rather than nothing at all — and so `--status` reports a
+/// check that is running as `RUNNING` rather than as the `WAITING` it was when
+/// the last verdict landed. `write_record` renames into place, so a poll
+/// arriving mid-write reads the previous checkpoint and never half of one.
 ///
 /// **Failing to write one does not fail the run.** The final write is the one
 /// that must succeed and is still checked; a disk that rejected an intermediate
 /// snapshot is not a reason to throw away checks that have already passed.
-fn checkpoint(workspace: &Workspace, it: &Loop<'_>) {
+fn checkpoint(workspace: &Workspace, it: &mut Loop<'_>) {
+    it.checkpointed = phases(&it.state);
     let _ = runs::write_record(&workspace.root, &record_of(workspace, it));
+}
+
+/// Where every check has got to, and nothing else.
+///
+/// **What decides whether the record is rewritten**, so that "on every state
+/// change" is a handful of writes per check rather than one per turn of a loop
+/// that turns every twenty milliseconds. Phases are the whole of what a reader
+/// of the record can act on; the clock reading and the byte counts move
+/// constantly and change no answer.
+///
+/// **Not a copy of anything the reducer owns.** It is a memo of what has
+/// already been persisted — the same kind of bookkeeping as [`Loop::polled`],
+/// and the reducer neither writes files nor knows one was written.
+fn phases(state: &State) -> String {
+    let mut out = String::new();
+    for entry in state.checks.values() {
+        match &entry.phase {
+            Phase::Pending => out.push('p'),
+            Phase::Waiting(waiting) => {
+                out.push('w');
+                out.push_str(&waiting.kind.to_string());
+            }
+            // A stop in progress is a state change worth recording: the run has
+            // decided to end this check and has not yet.
+            Phase::Running(running) => {
+                out.push('r');
+                if running.stopping.is_some() {
+                    out.push('!');
+                }
+            }
+            Phase::Done(_) => out.push('d'),
+            Phase::Skipped => out.push('s'),
+        }
+        out.push(',');
+    }
+    out
 }
 
 // ---------------------------------------------------------------- the run
@@ -847,6 +884,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
         // written, which is after the last check — so a fifteen-minute run
         // recorded a start time fifteen minutes after it started.
         started_at: app.ctx.now.wall_rfc3339(),
+        checkpointed: String::new(),
         ceiling_ms: app.machine.acquire_ceiling_ms(),
         held: BTreeMap::new(),
         slots: app.machine.cpu_slots,
@@ -857,7 +895,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     // asked a millisecond after `--detach` returns, and the honest answer then
     // is the run's plan; a missing file would read as *"no such run"* about a
     // run that had just been reported by id.
-    checkpoint(workspace, &loop_state);
+    checkpoint(workspace, &mut loop_state);
 
     let drove = drive(app, workspace, &mut loop_state);
     // **Nothing the shell took is left behind**, on every path out including
@@ -917,6 +955,9 @@ struct Loop<'a> {
     /// When the run began, RFC 3339. Read once at the top, because it is what
     /// the record says the run started at.
     started_at: String,
+    /// [`phases`] as of the last record written, so the next write happens when
+    /// something moved and not because a turn went by.
+    checkpointed: String,
     /// Whether `Event::Interrupted` has already been delivered. The handler's
     /// flag stays set once tripped, so without this the loop would re-deliver
     /// on every turn.
@@ -972,6 +1013,17 @@ fn drive<R: Run, C: Clock, F: Fetch>(
                 }
             }
         }
+        // **Where "the record is rewritten on every state change" is actually
+        // true.** The batch above is what moved the run; this is the first
+        // moment after it that the state is settled and nothing is mid-step. A
+        // check that has just spawned reads as `RUNNING` from here on, which is
+        // what a poll is asking about — before this, a run's record went from
+        // its plan straight to its verdicts and a `--status` in between
+        // reported a check that had been running for two minutes as waiting.
+        if phases(&it.state) != it.checkpointed {
+            checkpoint(workspace, it);
+        }
+
         if it.finish.is_some() {
             break;
         }
@@ -1075,15 +1127,7 @@ fn perform<R: Run, C: Clock, F: Fetch>(
                 .or(result.reason.as_deref());
             it.progress
                 .finished(result.id.as_str(), Verdict::Status(result.status), detail);
-            let settled = result.status.is_terminal();
             it.rows.insert(result.id.clone(), result);
-            // **Only where something was settled**, which is what makes this a
-            // handful of writes rather than one per turn: a `WAITING` row is
-            // re-emitted while a claim is queueing, and the state it reports
-            // has not changed.
-            if settled {
-                checkpoint(workspace, it);
-            }
             Ok(())
         }
         Action::Finish { status, error } => {
