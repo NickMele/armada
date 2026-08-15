@@ -747,6 +747,16 @@ pub const MANIFEST_BUILT: [&str; 10] = [
     "commands",
 ];
 
+/// `manifest check`'s own flags that are claimed and not built.
+///
+/// **The only source for both refusals.** `check`'s own parser matches against
+/// this list to decide which flags it must name as "not built yet" rather than
+/// fall through to "unknown flag", and [`render::help`](crate::render::help)
+/// reads the same list to draw the NOT BUILT YET row. Before this, the two
+/// said the same two names in two places, and only one of them was ever the
+/// one somebody edited (`docs/reserved/009`, item 5).
+pub const RESERVED_CHECK_FLAGS: [&str; 2] = ["--detach", "--status"];
+
 /// **Every verb the parser accepts**, as the caller types it after `armada`.
 ///
 /// The roster exists so that "does every verb have a `--help`" is a question
@@ -1029,7 +1039,12 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
             // name rather than falling through to "unknown flag", because the
             // flag *is* known and the honest answer is that Armada cannot do it
             // yet — an agent told "unknown flag" would go looking for a typo.
-            "--detach" | "--status" => {
+            //
+            // Matched against `RESERVED_CHECK_FLAGS` rather than against the
+            // literal names, so the NOT BUILT YET row `render::help` draws from
+            // that same list can never name a flag this arm does not also
+            // refuse, or leave out one it does.
+            _ if RESERVED_CHECK_FLAGS.contains(&arg) => {
                 return Err(failure(
                     ArmadaError {
                         class: ErrClass::BadInvocation,
@@ -3070,6 +3085,26 @@ mod tests {
             assert!(
                 BUILTIN_VERBS.contains(&built),
                 "`manifest {built}` is built and is not a claimed name"
+            );
+        }
+    }
+
+    /// **`RESERVED_CHECK_FLAGS` and `check`'s own refusal are the same list.**
+    /// Before this constant existed, the parser matched two literal flag names
+    /// and `render::help` drew the same two names again by hand in a second
+    /// place — nothing tied them together, which is exactly how the NOT BUILT
+    /// YET row drifted from what `check` actually refuses
+    /// (`docs/reserved/009`, item 5). This is the test that catches it now: a
+    /// flag added to the list and not wired into `check`'s refusal — or the
+    /// reverse — fails here instead of shipping as a silent mismatch.
+    #[test]
+    fn every_reserved_check_flag_is_refused_as_not_built_yet() {
+        for flag in RESERVED_CHECK_FLAGS {
+            let failure = parse(&args(&["manifest", "check", flag])).unwrap_err();
+            assert!(
+                failure.error.message.contains("is not built yet"),
+                "`manifest check {flag}` did not answer \"not built yet\": {}",
+                failure.error.message
             );
         }
     }
