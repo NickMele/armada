@@ -646,6 +646,21 @@ pub enum GuildInvocation {
         /// Emit the envelope.
         json: bool,
     },
+    /// `armada guild upgrade` — **take what Armada has learned since**.
+    ///
+    /// **`--with-skills` is the only flag, and it exists because one file is
+    /// offered rather than taken** (`docs/reserved/006`): `skills/onboard-repo/`
+    /// may have been customised. At a terminal the offer is a question; without
+    /// one it is this flag, because an interactive-only verb is a bug
+    /// (PLAN.md §3.1.1) and a silent default that overwrote somebody's edited
+    /// skill is the failure the whole verb is arranged around.
+    Upgrade {
+        /// Emit the envelope.
+        json: bool,
+        /// Take the files that are offered as well as the ones that are
+        /// Armada's.
+        with_skills: bool,
+    },
     /// `armada guild export`.
     Export {
         /// Emit the envelope.
@@ -733,6 +748,7 @@ impl GuildInvocation {
             GuildInvocation::Init { json, .. }
             | GuildInvocation::Push { json, .. }
             | GuildInvocation::Pull { json }
+            | GuildInvocation::Upgrade { json, .. }
             | GuildInvocation::Project { json, .. }
             | GuildInvocation::Export { json, .. }
             | GuildInvocation::Import { json, .. }
@@ -945,8 +961,13 @@ pub const TASKS_VERBS: [&str; 3] = ["show", "start", "clear"];
 /// is a listing and `show <thing>` is one thing in full, in this module and in
 /// Manifest's `skills show`; a Guild that invented a third word for a listing
 /// would be the drift `docs/glossary.md` exists to prevent.
-pub const GUILD_BUILT: [&str; 10] = [
-    "init", "project", "pull", "push", "export", "import", "ls", "show", "edit", "delete",
+/// **`upgrade` joined them** (`docs/reserved/006`). Every verb before it either
+/// moves a guild between places or reads one; not one of them could carry what
+/// Armada itself had learned since the guild was made, because a guild recorded
+/// no provenance and so had no base to merge from.
+pub const GUILD_BUILT: [&str; 11] = [
+    "init", "project", "pull", "push", "upgrade", "export", "import", "ls", "show", "edit",
+    "delete",
 ];
 
 /// The Guild verbs that are claimed and not built.
@@ -2115,6 +2136,13 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
         "pull" => {
             let parsed = flags(tail, json, color, "guild pull", &[], &[])?;
             GuildInvocation::Pull { json: parsed.json }
+        }
+        "upgrade" => {
+            let parsed = flags(tail, json, color, "guild upgrade", &["--with-skills"], &[])?;
+            GuildInvocation::Upgrade {
+                json: parsed.json,
+                with_skills: parsed.on("--with-skills"),
+            }
         }
         "project" => {
             let parsed = flags(tail, json, color, "guild project", &["--remove"], &[])?;

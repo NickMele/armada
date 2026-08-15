@@ -8,4 +8,4 @@
   PERMISSIONS  permissions.yml       dontAsk, 8 allowed, 16 denied
   SCHEMA       workflow.schema.json  what every workflow is checked against
 
-READY  ~/.armada/guild, 1 skill, 1 hook, 1 subagent, 1 workflow
+READY  ~/.armada/guild, 1 skill, 1 hook, 1 subagent, 1 workflow, templates 0.1.0 8f3a1c0d9e21

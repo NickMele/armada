@@ -1,0 +1,10 @@
+  STATUS     ITEM                            DETAIL
+  ADDED      templates.yml                   Armada's
+  CHANGED    subagents/helm.md               operating knowledge
+  UNCHANGED  workflows/workflow.schema.json  already what Armada ships
+  UNCHANGED  skills/onboard-repo/SKILL.md    offered; --with-skills takes it
+  UNCHANGED  voice.md                        yours — no release ever updates it
+  UNCHANGED  expectations.md                 yours — no release ever updates it
+  UNCHANGED  how-i-work.md                   yours — no release ever updates it
+
+READY  ~/.armada/guild, no stamp -> 0.1.0 8f3a1c0d9e21, base adopted from c401123abcde

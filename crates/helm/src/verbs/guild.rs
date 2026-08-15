@@ -13,12 +13,15 @@
 use armada_core::ctx::Run;
 use armada_core::envelope::{
     Envelope, GuildBundleData, GuildChange, GuildChangeData, GuildInitData, GuildItemData,
-    GuildItemRow, GuildListData, GuildSyncData, Headline, Projection, Sync, SyncItem,
+    GuildItemRow, GuildListData, GuildSyncData, GuildUpgradeData, Headline, Projection, Sync,
+    SyncItem,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_guild::interview::{self, Answers, Question, QUESTIONS};
 use armada_guild::layout::Guild;
-use armada_guild::{bundle, import, inventory, machine, memory, projector, remote, repo, starters};
+use armada_guild::{
+    bundle, import, inventory, machine, memory, projector, remote, repo, starters, upstream,
+};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -134,10 +137,15 @@ pub fn init(
         .extend(starters::write(guild.root(), &answers).map_err(|e| unwritable(guild.root(), &e))?);
 
     // 3. The repository, and the remote if one was named.
+    // **The two subjects are constants, and they are the ones `upstream` reads
+    // back.** A guild made before the stamp existed has no other record of when
+    // Armada last wrote its managed files, so these commit messages *are* the
+    // provenance for every guild that already exists — which makes them a
+    // contract rather than prose (`armada_guild::upstream::WRITTEN_BY_INIT`).
     if !guild.exists() {
-        repo::init(run, guild.root(), "guild: imported and interviewed")?;
+        repo::init(run, guild.root(), upstream::WRITTEN_BY_INIT[0])?;
     } else {
-        repo::commit_all(run, guild.root(), "guild: re-initialised")?;
+        repo::commit_all(run, guild.root(), upstream::WRITTEN_BY_INIT[1])?;
     }
     if let Some(remote) = &answers.remote {
         repo::set_remote(run, guild.root(), remote)?;
@@ -444,6 +452,423 @@ fn torn(remote: &str, error: &ArmadaError) -> Output {
             projected: None,
         },
     )))
+}
+
+/// `armada guild upgrade` — **take what Armada has learned since**.
+///
+/// The verb `docs/reserved/006` asks for, and the sequencing is the whole of
+/// what lives here: every rule it applies — which files may be touched, what
+/// identifies a template set, which commit a guild with no stamp adopts — was
+/// decided in `armada_guild::upstream`, and the merge itself is git's.
+///
+/// **The one thing this may never do is overwrite something the person wrote.**
+/// That is not enforced by a check here; it is enforced by the upstream branch
+/// only ever carrying [`armada_guild::upstream::MANAGED`], so a file that is
+/// yours is a file the merge has nothing to say about. `voice.md` cannot be
+/// reached by this code path at all.
+pub fn upgrade(
+    run: &impl Run,
+    place: &Where,
+    ask: &mut dyn Ask,
+    interactive: bool,
+    with_skills: bool,
+) -> Result<Output, ArmadaError> {
+    let guild = require_guild(place)?;
+    let at = shown(guild.root());
+    let before = stamp_of(&guild);
+    let to = upstream::digest();
+
+    // **Refuse to go backwards.** Two machines, one of them running an older
+    // Armada: without this, the older one takes its older template text over
+    // the newer text the other machine already merged, and every line the two
+    // releases both touched conflicts. The digest cannot say which came first;
+    // the version can, and that is the only thing it is here for.
+    if let Some(stamp) = &before {
+        if upstream::newer(&stamp.version, upstream::VERSION) {
+            return Err(ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: at,
+                message: format!(
+                    "this guild was upgraded by Armada {}, and this is {}",
+                    stamp.version,
+                    upstream::VERSION
+                ),
+                next_action: Some(
+                    "update armada on this machine, then retry unchanged".to_string(),
+                ),
+            });
+        }
+    }
+
+    // **Whatever is uncommitted is committed first**, exactly as `guild push`
+    // does it and for the same reason: git refuses to merge over a dirty tree,
+    // and an edit made outside `armada guild edit` is not the upgrade's to
+    // discard.
+    repo::commit_all(run, guild.root(), "guild: edits made outside armada")?;
+
+    let (base, adopted) = upstream_base(run, &guild)?;
+    let files = chosen(&guild, ask, interactive, with_skills);
+    let taking: Vec<(&str, String)> = files
+        .iter()
+        .map(|managed| {
+            (
+                managed.path,
+                upstream::body_of(managed.path).unwrap_or_default(),
+            )
+        })
+        .collect();
+
+    let made = repo::commit_files(
+        run,
+        guild.root(),
+        &base,
+        &taking,
+        &format!("guild: armada templates {to}"),
+    )?;
+    let Some(made) = made else {
+        // Nothing on the upstream branch moved, so there is nothing to merge.
+        // The branch is still left pointing where it was resolved to, because
+        // the *next* upgrade wants that base whether or not this one had work.
+        repo::set_branch(run, guild.root(), upstream::BRANCH, &base)?;
+        return Ok(settled(
+            &guild,
+            before,
+            to,
+            adopted,
+            already(&files, with_skills),
+            false,
+            None,
+        ));
+    };
+    repo::set_branch(run, guild.root(), upstream::BRANCH, &made)?;
+
+    let head = repo::rev(run, guild.root(), "HEAD")?.unwrap_or_default();
+    let merged = repo::merge(
+        run,
+        guild.root(),
+        upstream::BRANCH,
+        &format!("guild: upgrade to armada templates {to}"),
+    )?;
+
+    // **The upstream branch is published if there is anywhere to publish it**,
+    // and a refusal is a row rather than a failure. It carries nothing of the
+    // person's; what it carries is the base the *other* machine will merge
+    // against, and a machine that has it does a two-line merge where a machine
+    // without it has to adopt one from history.
+    let published = publish(run, &guild)?;
+
+    let (rows, applied) = match &merged {
+        repo::Merged::Clean => (
+            taken(run, &guild, &head, &files, with_skills)?,
+            true,
+        ),
+        repo::Merged::Conflicted(paths) => (conflicted(paths, &files, with_skills), false),
+    };
+    let mut rows = rows;
+    rows.extend(published);
+    rows.extend(yours());
+
+    // Only a clean merge has anything new to project. A guild mid-merge holds
+    // git's conflict markers, and projecting those into `~/.claude/agents/`
+    // would put them in front of the next session.
+    let projection = applied.then(|| projected(place)).flatten();
+
+    Ok(settled(
+        &guild, before, to, adopted, rows, applied, projection,
+    ))
+}
+
+/// The stamp this guild carries, or `None` for one made before provenance
+/// existed — which is the case that has to work.
+fn stamp_of(guild: &Guild) -> Option<upstream::Stamp> {
+    upstream::read(&std::fs::read_to_string(guild.path(upstream::STAMP)).ok()?)
+}
+
+/// Where the upstream branch starts, and whether a base had to be adopted.
+///
+/// Three cases, in the order they are preferred:
+///
+/// | The guild has | The base is |
+/// |---|---|
+/// | the remote's upstream branch | it — the other machine's base is this machine's |
+/// | only a local upstream branch | it |
+/// | neither | **adopted** from the last commit `guild init` wrote, and reported |
+fn upstream_base(run: &impl Run, guild: &Guild) -> Result<(String, Option<String>), ArmadaError> {
+    if repo::remote(run, guild.root())?.is_some() {
+        repo::fetch_branch(run, guild.root(), upstream::BRANCH)?;
+    }
+    let local = repo::rev(run, guild.root(), upstream::BRANCH)?;
+    let remote = repo::rev(
+        run,
+        guild.root(),
+        &format!("{}/{}", repo::REMOTE, upstream::BRANCH),
+    )?;
+
+    // The remote's copy wins when this machine's is behind it or absent. It
+    // never wins over a local branch that has commits the remote has not seen —
+    // that is a machine whose last push was refused, and discarding its base
+    // would change what a merge treats as a change.
+    if let Some(remote) = remote {
+        let behind = match &local {
+            Some(local) => repo::is_ancestor(run, guild.root(), local, &remote)?,
+            None => true,
+        };
+        if behind {
+            repo::set_branch(run, guild.root(), upstream::BRANCH, &remote)?;
+            return Ok((remote, None));
+        }
+    }
+    if let Some(local) = local {
+        return Ok((local, None));
+    }
+
+    // **The pre-provenance path, and it is the only guild that exists.**
+    let log = repo::subjects(run, guild.root())?;
+    let adopted = upstream::base_of(&log).ok_or_else(|| ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: shown(guild.root()),
+        message: "this guild has no history to adopt a base from".to_string(),
+        next_action: Some("`armada guild init` writes one".to_string()),
+    })?;
+    repo::set_branch(run, guild.root(), upstream::BRANCH, &adopted)?;
+    Ok((adopted.clone(), Some(short(&adopted))))
+}
+
+/// The first twelve of a commit id — enough to name it, short enough to read.
+fn short(sha: &str) -> String {
+    sha.chars().take(12).collect()
+}
+
+/// Which managed files this run writes onto the upstream branch.
+///
+/// **The offer is put only when there is something to offer.** `skills/
+/// onboard-repo/SKILL.md` is offered rather than taken because it may have been
+/// customised — but a person whose copy is byte-for-byte Armada's is being
+/// asked to decide about nothing, and a prompt that always appears is a prompt
+/// that stops being read.
+fn chosen(
+    guild: &Guild,
+    ask: &mut dyn Ask,
+    interactive: bool,
+    with_skills: bool,
+) -> Vec<upstream::Managed> {
+    if with_skills {
+        return upstream::taking(true);
+    }
+    let offered: Vec<upstream::Managed> = upstream::offering(false)
+        .into_iter()
+        .filter(|managed| differs(guild, managed.path))
+        .collect();
+    if !interactive || offered.is_empty() {
+        return upstream::taking(false);
+    }
+    let question = format!(
+        "{} may have been customised. Take Armada's?",
+        offered
+            .iter()
+            .map(|managed| managed.path)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let options = vec![
+        Choice::new("keep mine", "leave it exactly as it is"),
+        Choice::new("take Armada's", "merge the shipped version into yours"),
+    ];
+    upstream::taking(ask.choose(&question, &options, 1) == 2)
+}
+
+/// Whether what is on disk differs from what Armada now ships.
+fn differs(guild: &Guild, path: &str) -> bool {
+    let Some(shipped) = upstream::body_of(path) else {
+        return false;
+    };
+    // A file that cannot be read is one an upgrade should still offer: absent
+    // and different are the same answer to "is there anything to take here".
+    std::fs::read_to_string(guild.path(path)).map_or(true, |body| body != shipped)
+}
+
+/// The rows a clean merge produces: one per managed file that actually moved,
+/// plus one for each that was offered and declined.
+fn taken(
+    run: &impl Run,
+    guild: &Guild,
+    head: &str,
+    files: &[upstream::Managed],
+    with_skills: bool,
+) -> Result<Vec<SyncItem>, ArmadaError> {
+    let managed: Vec<&str> = files.iter().map(|managed| managed.path).collect();
+    let mut rows: Vec<SyncItem> = repo::changed(run, guild.root(), head, "HEAD")?
+        .into_iter()
+        // **Filtered to the managed set, and the filter is a belt on a brace.**
+        // Nothing else can be in this diff — the upstream commit only ever
+        // writes these paths — so a row appearing here for anything else is a
+        // bug worth not printing.
+        .filter(|touched| managed.contains(&touched.path.as_str()))
+        .map(|touched| SyncItem {
+            status: match touched.change {
+                repo::Change::Added => Sync::Added,
+                repo::Change::Removed => Sync::Removed,
+                _ => Sync::Changed,
+            },
+            item: touched.path.clone(),
+            detail: policy_of(&touched.path),
+        })
+        .collect();
+    rows.extend(unchanged_managed(files, &rows));
+    rows.extend(declined(with_skills));
+    Ok(rows)
+}
+
+/// The rows a conflicted merge produces. **Nothing landed**, so every managed
+/// file that is not conflicted is reported as waiting rather than as done.
+fn conflicted(
+    paths: &[String],
+    files: &[upstream::Managed],
+    with_skills: bool,
+) -> Vec<SyncItem> {
+    let mut rows: Vec<SyncItem> = paths
+        .iter()
+        .map(|path| SyncItem {
+            status: Sync::Conflict,
+            item: path.clone(),
+            detail: "edited here and by a release".to_string(),
+        })
+        .collect();
+    for managed in files {
+        if !paths.iter().any(|path| path == managed.path) {
+            rows.push(SyncItem {
+                status: Sync::Unchanged,
+                item: managed.path.to_string(),
+                detail: "waiting on the merge above".to_string(),
+            });
+        }
+    }
+    rows.extend(declined(with_skills));
+    rows
+}
+
+/// A managed file the merge had nothing to say about — already identical.
+fn unchanged_managed(files: &[upstream::Managed], moved: &[SyncItem]) -> Vec<SyncItem> {
+    files
+        .iter()
+        .filter(|managed| !moved.iter().any(|row| row.item == managed.path))
+        .map(|managed| SyncItem {
+            status: Sync::Unchanged,
+            item: managed.path.to_string(),
+            detail: "already what Armada ships".to_string(),
+        })
+        .collect()
+}
+
+/// The rows for an upgrade that found nothing new.
+fn already(files: &[upstream::Managed], with_skills: bool) -> Vec<SyncItem> {
+    let mut rows = unchanged_managed(files, &[]);
+    rows.extend(declined(with_skills));
+    rows.extend(yours());
+    rows
+}
+
+/// One row per managed file that was offered and not taken.
+///
+/// **Reported rather than left silent.** A file Armada declined to touch and a
+/// file Armada does not know about look identical as an absence, and only one
+/// of them has something a person might want.
+fn declined(with_skills: bool) -> Vec<SyncItem> {
+    upstream::offering(with_skills)
+        .into_iter()
+        .map(|managed| SyncItem {
+            status: Sync::Unchanged,
+            item: managed.path.to_string(),
+            detail: "offered; --with-skills takes it".to_string(),
+        })
+        .collect()
+}
+
+/// One row per file that is **you**, saying so.
+///
+/// The reassurance is the point. `voice.md` cannot be reached by this code path
+/// — it is not on the upstream branch, so the merge has nothing to say about it
+/// — and a person watching a verb rewrite their guild deserves to be told that
+/// in words rather than to infer it from an absence.
+fn yours() -> Vec<SyncItem> {
+    memory::FRAGMENTS
+        .iter()
+        .map(|fragment| SyncItem {
+            status: Sync::Unchanged,
+            item: (*fragment).to_string(),
+            detail: "yours — no release ever updates it".to_string(),
+        })
+        .collect()
+}
+
+/// Why a managed file takes updates, for its DETAIL column.
+fn policy_of(path: &str) -> String {
+    upstream::MANAGED
+        .iter()
+        .find(|managed| managed.path == path)
+        .map(|managed| managed.policy.word().to_string())
+        .unwrap_or_default()
+}
+
+/// Publish the upstream branch, when there is a remote to publish it to.
+fn publish(run: &impl Run, guild: &Guild) -> Result<Vec<SyncItem>, ArmadaError> {
+    if repo::remote(run, guild.root())?.is_none() {
+        return Ok(Vec::new());
+    }
+    if repo::push_branch(run, guild.root(), upstream::BRANCH)? {
+        return Ok(Vec::new());
+    }
+    Ok(vec![SyncItem {
+        status: Sync::Unchanged,
+        item: upstream::BRANCH.to_string(),
+        detail: "not published; the next machine adopts its own base".to_string(),
+    }])
+}
+
+/// The envelope, whichever way it went.
+fn settled(
+    guild: &Guild,
+    before: Option<upstream::Stamp>,
+    to: String,
+    adopted: Option<String>,
+    results: Vec<SyncItem>,
+    applied: bool,
+    projected: Option<Projection>,
+) -> Output {
+    let conflicts = results
+        .iter()
+        .filter(|row| row.status == Sync::Conflict)
+        .count();
+    let data = GuildUpgradeData {
+        at: shown(guild.root()),
+        from: before.as_ref().map(upstream::Stamp::written),
+        to: format!("{} {to}", upstream::VERSION),
+        adopted,
+        results,
+        applied,
+        headline: (conflicts > 0).then_some(Headline::NeedsAttention),
+        projected,
+    };
+    Output::GuildUpgrade(Box::new(if conflicts > 0 {
+        Envelope::failed(
+            "guild upgrade",
+            None,
+            ArmadaError {
+                class: ErrClass::ToolFailed,
+                r#where: data.at.clone(),
+                message: format!(
+                    "{} the merge could not resolve",
+                    crate::render::format::count(conflicts, "file")
+                ),
+                next_action: Some(
+                    "resolve the markers in ~/.armada/guild, then `git commit` there".to_string(),
+                ),
+            },
+            data,
+        )
+    } else {
+        Envelope::ok("guild upgrade", None, Status::Ready, data)
+    }))
 }
 
 /// `armada guild project` — put the guild where Claude Code will read it, or
@@ -851,6 +1276,11 @@ fn listing(guild: &Guild) -> Output {
             at: shown(guild.root()),
             items: items.iter().map(row_of).collect(),
             facts: inventory_of(guild).facts(),
+            // **Provenance where a person will see it.** `armada guild upgrade`
+            // merges against this, and a version nobody can look at is one
+            // nobody can trust — an absence here is itself the answer, and says
+            // this guild predates the stamp.
+            template: stamp_of(guild).as_ref().map(upstream::Stamp::written),
         },
     )))
 }

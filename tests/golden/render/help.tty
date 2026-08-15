@@ -21,6 +21,7 @@
   init             [38;2;156;163;175mbuild your guild by interviewing you[0m
   project          [38;2;156;163;175mput your guild where Claude Code will read it[0m
   pull             [38;2;156;163;175mbring this machine's guild up to date[0m
+  upgrade          [38;2;156;163;175mtake what Armada has learned since your guild was made[0m
   push             [38;2;156;163;175msend local guild changes to the remote[0m
   export           [38;2;156;163;175mwrite the whole guild to one portable file[0m
   import <bundle>  [38;2;156;163;175mrestore a guild from a bundle[0m

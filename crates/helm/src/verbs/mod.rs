@@ -34,7 +34,7 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
-    GuildSyncData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun, KillData,
+    GuildSyncData, GuildUpgradeData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun, KillData,
     MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
     ResumeData, ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData,
     TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
@@ -89,6 +89,8 @@ pub enum Output {
     Settings(Box<Envelope<SettingsData>>),
     /// `armada guild pull` and `armada guild push`.
     GuildSync(Box<Envelope<GuildSyncData>>),
+    /// `armada guild upgrade` — what Armada has learned since, merged in.
+    GuildUpgrade(Box<Envelope<GuildUpgradeData>>),
     /// `armada guild init`.
     GuildInit(Box<Envelope<GuildInitData>>),
     /// `armada guild export` and `armada guild import`.
@@ -176,6 +178,7 @@ impl Output {
             Output::Doctor(e) => e.to_json(),
             Output::Settings(e) => e.to_json(),
             Output::GuildSync(e) => e.to_json(),
+            Output::GuildUpgrade(e) => e.to_json(),
             Output::GuildInit(e) => e.to_json(),
             Output::GuildBundle(e) => e.to_json(),
             Output::GuildProject(e) => e.to_json(),
@@ -247,6 +250,7 @@ impl Output {
             Output::Doctor(e) => e.exit_code(),
             Output::Settings(e) => e.exit_code(),
             Output::GuildSync(e) => e.exit_code(),
+            Output::GuildUpgrade(e) => e.exit_code(),
             Output::GuildInit(e) => e.exit_code(),
             Output::GuildBundle(e) => e.exit_code(),
             Output::GuildProject(e) => e.exit_code(),
