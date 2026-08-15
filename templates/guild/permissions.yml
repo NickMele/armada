@@ -1,0 +1,77 @@
+# What a Drone may do unattended.
+#
+# A Drone is a headless `claude` session working on a Job. It runs in its own
+# git worktree, on its own `armada/<job>` branch, with nobody watching — and
+# that isolation is what makes granting it write access reasonable: it cannot
+# reach your checkout, and a bad attempt is one branch you delete.
+#
+# This file is yours. Armada reads it and never rewrites it.
+
+# What happens to a tool call the two lists below do not settle.
+#
+# `dontAsk` denies it and carries on. Every other mode that grants enough to
+# work — `acceptEdits`, `manual` — *asks* instead, and a Drone has no terminal
+# to answer with, so it waits until its wall-clock ceiling takes it. That is
+# the difference between a Job that reports being refused and a Job that
+# reports nothing at all.
+#
+# Claude Code offers: acceptEdits, auto, bypassPermissions, manual, dontAsk, plan
+mode: dontAsk
+
+# What a Drone may use. This list REPLACES the default rather than adding to
+# it, so what is written here is the whole of what is granted.
+#
+# `Bash` is granted whole on purpose. The commands a repository's checks are
+# spelled with are unbounded — `cargo test`, `npm run check`, `make`,
+# `./scripts/ci` — and every one left off an enumeration is a Job that edits
+# code it cannot then verify. `deny` below is what makes that affordable: the
+# ways out of a worktree are a finite list and the ways to run a test are not.
+allow:
+  - Read
+  - Glob
+  - Grep
+  - Edit
+  - Write
+  - NotebookEdit
+  - TodoWrite
+  - Bash
+
+# What is refused however broadly `allow` grants. Deny beats allow.
+#
+# Everything here has an effect that is not confined to the worktree. Things
+# that destroy only the Drone's own work — `rm`, `git reset --hard`,
+# `git commit --amend` — are deliberately absent: the worktree is already the
+# protection, and forbidding them would cost a Drone the ability to clean up
+# after itself.
+deny:
+  # Publishes to the shared remote — the one git operation nobody can undo for
+  # everybody else.
+  - Bash(git push:*)
+  # Repointing the remote makes every later push escape somewhere new.
+  - Bash(git remote:*)
+  # `--global` writes your own git identity, which is in no worktree.
+  - Bash(git config:*)
+  # The other Jobs' worktrees are this one's siblings; removing one kills a
+  # Drone that is still working.
+  - Bash(git worktree:*)
+  # Leaving `armada/<job>` is how a Drone's commits land on someone else's
+  # branch.
+  - Bash(git checkout:*)
+  - Bash(git switch:*)
+  # `-D` deletes another Job's branch, and this Job's branch already exists.
+  - Bash(git branch:*)
+  # Root is the definition of escaping a directory.
+  - Bash(sudo:*)
+  # The GitHub CLI opens pull requests, pushes, and deletes repositories.
+  - Bash(gh:*)
+  # Writes your real `~/.armada/` — other Jobs, other worktrees, this guild.
+  - Bash(armada:*)
+  # A Drone spawning its own sessions is spend no budget counts, in your real
+  # `~/.claude/`.
+  - Bash(claude:*)
+  # Publishing is irreversible and public.
+  - Bash(npm publish:*)
+  - Bash(pnpm publish:*)
+  - Bash(yarn publish:*)
+  - Bash(cargo publish:*)
+  - Bash(docker push:*)

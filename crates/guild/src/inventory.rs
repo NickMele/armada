@@ -126,6 +126,9 @@ pub enum Kind {
     Plugins,
     /// `mcp.yml`.
     Mcp,
+    /// `permissions.yml` — what a Drone may do unattended
+    /// ([`crate::permissions`]).
+    Permissions,
     /// `workflows/workflow.schema.json`. **Not a workflow** — the distinction
     /// [`Inventory::of`] already draws, kept here so that a listing which shows
     /// the file does not also miscount it.
@@ -145,6 +148,7 @@ impl Kind {
             Kind::Settings => "settings",
             Kind::Plugins => "plugins",
             Kind::Mcp => "mcp",
+            Kind::Permissions => "permissions",
             Kind::Schema => "schema",
         }
     }
@@ -226,6 +230,7 @@ impl Inventory {
             ("settings.json", Kind::Settings),
             ("plugins.yml", Kind::Plugins),
             ("mcp.yml", Kind::Mcp),
+            (crate::permissions::FILE, Kind::Permissions),
         ] {
             if root.join(file).is_file() {
                 items.push(item(root, kind, file, file, file));
@@ -395,6 +400,18 @@ fn detail(kind: Kind, name: &str, body: &str) -> String {
             Err(error) => format!("does not parse: {}", collapse(&error.to_string())),
         },
         Kind::Plugins | Kind::Mcp => plural(counted(body), "entry"),
+        // **The posture, not the file size.** The question a reader has about
+        // this row is what a Drone may do, and the answer is three numbers: the
+        // mode, and how long each list is.
+        Kind::Permissions => match crate::permissions::parse(body) {
+            Ok(posture) => format!(
+                "{}, {}, {}",
+                posture.mode,
+                plural(posture.allow.len(), "allowed"),
+                plural(posture.deny.len(), "denied")
+            ),
+            Err(why) => format!("unusable: {}", collapse(&why)),
+        },
         Kind::Schema => "what every workflow is checked against".to_string(),
     }
 }

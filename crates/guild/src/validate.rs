@@ -64,6 +64,18 @@ pub fn check(kind: Kind, name: &str, body: &str) -> Result<Reading, String> {
             Ok(_) => Err(format!("{name} has to be a mapping")),
             Err(error) => Err(flatten(&error.to_string())),
         },
+        // **Checked as a posture rather than as YAML.** A `permissions.yml`
+        // that parses and names a mode Claude Code does not have is valid YAML
+        // and an unusable posture, and the point of validating an edit is to
+        // find that out here rather than on the next Job.
+        Kind::Permissions => crate::permissions::parse(body).map(|posture| {
+            format!(
+                "{}, {} allowed, {} denied",
+                posture.mode,
+                posture.allow.len(),
+                posture.deny.len()
+            )
+        }),
         // **Nothing parses prose.** A `voice.md` that is there is a `voice.md`
         // that works; the only failure it has is being empty, which is checked
         // above for every kind.

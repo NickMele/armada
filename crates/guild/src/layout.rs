@@ -12,7 +12,8 @@
 //! │   ├── subagents/
 //! │   ├── workflows/
 //! │   ├── plugins.yml
-//! │   └── mcp.yml
+//! │   ├── mcp.yml
+//! │   └── permissions.yml     # what a Drone may do unattended
 //! ├── manifest.db            # NEVER SYNCS — ports, containers, leases, here
 //! ├── jobs/                  # NEVER SYNCS — the Job index
 //! ├── workspaces/            # NEVER SYNCS — the git worktrees themselves

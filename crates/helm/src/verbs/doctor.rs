@@ -950,6 +950,7 @@ mod tests {
         let real = armada_core::fleet::drone::spawn_argv(
             armada_core::fleet::drone::PROBE_SESSION,
             "a prompt",
+            &armada_core::fleet::drone::Posture::default(),
         );
         assert!(
             !probe.iter().any(|word| word == "a prompt"),
