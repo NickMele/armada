@@ -46,8 +46,9 @@
   bridge  [38;2;156;163;175mthe live screen: every Job, its state, its spend, who needs you[0m
 
 [1m[38;2;255;169;64mTHIS MACHINE[0m
-  init    [38;2;156;163;175mset up this machine: checks, ~/.armada/, and your guild[0m
-  doctor  [38;2;156;163;175mwhat this machine is missing, and what fixes it[0m
+  init      [38;2;156;163;175mset up this machine: checks, ~/.armada/, and your guild[0m
+  doctor    [38;2;156;163;175mwhat this machine is missing, and what fixes it[0m
+  failures  [38;2;156;163;175mwhat Armada broke on, and how to put a Job on one[0m
 
 [1m[38;2;255;169;64mGLOBAL FLAGS[0m
   --json          [38;2;156;163;175manswer as one JSON object, for a script or an agent[0m

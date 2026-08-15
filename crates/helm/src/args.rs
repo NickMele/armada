@@ -145,6 +145,8 @@ pub enum Invocation {
     Guild(Box<GuildInvocation>),
     /// `armada fleet <verb>`.
     Fleet(Box<FleetInvocation>),
+    /// `armada failures [<verb>]` — Armada's record of its own failures.
+    Failures(Box<FailuresInvocation>),
     /// `armada mcp serve` — the toolbelt, over stdio.
     ///
     /// **No fields but `--json`.** `--stdio` is the only transport and the
@@ -250,6 +252,62 @@ pub enum FleetInvocation {
         /// Include entries already answered.
         all: bool,
     },
+}
+
+/// One of `armada failures`' verbs.
+///
+/// **The bare word lists**, unlike `armada fleet` and `armada guild`, which
+/// answer with a page. The difference is that `failures` is a *verb* that grew
+/// three sub-verbs rather than a module that has only sub-verbs: `armada
+/// failures` on its own is a complete question with an answer, and a help page
+/// where the answer belongs would make a reader type a second command to get
+/// the thing they asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FailuresInvocation {
+    /// `armada failures`.
+    Ls {
+        /// Emit the envelope.
+        json: bool,
+        /// Include entries already cleared.
+        all: bool,
+    },
+    /// `armada failures show <id>`.
+    Show {
+        /// Emit the envelope.
+        json: bool,
+        /// Which entry, in full or by a prefix that names one.
+        id: String,
+    },
+    /// `armada failures fix <id>`.
+    Fix {
+        /// Emit the envelope.
+        json: bool,
+        /// Which entry.
+        id: String,
+        /// Report the Job that would be spawned, and spawn nothing.
+        dry_run: bool,
+    },
+    /// `armada failures clear <id>`, or `armada failures clear --all`.
+    Clear {
+        /// Emit the envelope.
+        json: bool,
+        /// Which entry, or `None` under `--all`.
+        id: Option<String>,
+        /// Clear every entry that is not already cleared.
+        all: bool,
+    },
+}
+
+impl FailuresInvocation {
+    /// Whether this invocation asked for the envelope.
+    pub fn json(&self) -> bool {
+        match self {
+            FailuresInvocation::Ls { json, .. }
+            | FailuresInvocation::Show { json, .. }
+            | FailuresInvocation::Fix { json, .. }
+            | FailuresInvocation::Clear { json, .. } => *json,
+        }
+    }
 }
 
 impl FleetInvocation {
@@ -635,7 +693,15 @@ pub const FLEET_VERBS: [&str; 10] = [
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 4] = ["init", "doctor", "bridge", "helm"];
+pub const TOP_LEVEL_VERBS: [&str; 5] = ["init", "doctor", "bridge", "helm", "failures"];
+
+/// `armada failures`' sub-verbs.
+///
+/// **Not in [`TOP_LEVEL_VERBS`] and not in [`every_verb`]**, for the reason
+/// `manifest config`'s `scan` and `verify` are not: they share one page, because
+/// they are one question — what has Armada broken on, and what do I do with one
+/// — and splitting it would make a reader visit four pages to learn one verb.
+pub const FAILURES_VERBS: [&str; 3] = ["show", "fix", "clear"];
 
 /// The Guild verbs this milestone built. The rest answer "not built yet".
 ///
@@ -787,6 +853,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "helm" => return helm(rest, json, color),
             "guild" => return guild(rest, json, color),
             "fleet" => return fleet(rest, json, color),
+            "failures" => return failures(rest, json, color),
             "mcp" => return mcp(rest, json, color),
             _ => {}
         }
@@ -1469,6 +1536,116 @@ fn one_item(parsed: &Flags, verb: &str, does: &str) -> Result<String, ParseFailu
             parsed.json,
         )
     })
+}
+
+/// `armada failures [<verb>]`.
+///
+/// **A bare `armada failures` is the listing, and a leading flag still is.**
+/// `armada failures --all` has to reach the flag loop rather than be read as a
+/// sub-verb called `--all`, so the sub-verb table is only consulted for a word
+/// that does not start with a dash.
+fn failures(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "failures") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+
+    let verb = rest
+        .first()
+        .map(String::as_str)
+        .filter(|word| !word.starts_with('-'));
+    let Some(verb) = verb else {
+        let parsed = flags(rest, json, color, "failures", &["--all"], &[])?;
+        return Ok(Invocation::Failures(Box::new(FailuresInvocation::Ls {
+            json: parsed.json,
+            all: parsed.on("--all"),
+        })));
+    };
+
+    if !FAILURES_VERBS.contains(&verb) {
+        let json = json || rest.iter().any(|a| a == "--json");
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: format!("failures {verb}"),
+                message: format!("unknown verb `armada failures {verb}`"),
+                next_action: Some("`armada failures --help` lists them".to_string()),
+            },
+            json,
+        ));
+    }
+
+    let tail = &rest[1..];
+    let invocation = match verb {
+        "show" => {
+            let parsed = flags(tail, json, color, "failures show", &[], &[])?;
+            FailuresInvocation::Show {
+                json: parsed.json,
+                id: one_id(&parsed, "failures show")?,
+            }
+        }
+        "fix" => {
+            let parsed = flags(tail, json, color, "failures fix", &["--dry-run"], &[])?;
+            FailuresInvocation::Fix {
+                json: parsed.json,
+                id: one_id(&parsed, "failures fix")?,
+                dry_run: parsed.on("--dry-run"),
+            }
+        }
+        _ => {
+            let parsed = flags(tail, json, color, "failures clear", &["--all"], &[])?;
+            let all = parsed.on("--all");
+            let id = one_positional(
+                &parsed,
+                "failures clear",
+                "which failure",
+                "`armada failures` lists them",
+            )?;
+            // **One or the other, and refused rather than ordered**, exactly as
+            // `armada fleet kill` refuses a Job beside `--all-finished`: naming
+            // an entry *and* `--all` asks two questions, and answering the wider
+            // one would discard rows nobody named.
+            if id.is_some() == all {
+                return Err(failure(
+                    ArmadaError {
+                        class: ErrClass::BadInvocation,
+                        r#where: "failures clear".to_string(),
+                        message: match all {
+                            true => "`armada failures clear` takes an id or --all, not both"
+                                .to_string(),
+                            false => "`armada failures clear` needs an id, or --all".to_string(),
+                        },
+                        next_action: Some("`armada failures` lists them".to_string()),
+                    },
+                    parsed.json,
+                ));
+            }
+            FailuresInvocation::Clear {
+                json: parsed.json,
+                id,
+                all,
+            }
+        }
+    };
+    Ok(Invocation::Failures(Box::new(invocation)))
+}
+
+/// The one id a `failures` verb takes, or a refusal that says what it wanted.
+fn one_id(parsed: &Flags, r#where: &str) -> Result<String, ParseFailure> {
+    match one_positional(parsed, r#where, "which failure", "`armada failures` lists them")? {
+        Some(id) => Ok(id),
+        None => Err(needs_positional(
+            r#where,
+            &format!("`armada {where}` needs the id of a recorded failure", where = r#where),
+            "`armada failures` lists them",
+            parsed.json,
+        )),
+    }
 }
 
 /// `armada fleet <verb>`.

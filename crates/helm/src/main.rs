@@ -23,7 +23,7 @@
 use armada_helm::{app, args, render, verbs};
 
 use args::Invocation;
-use armada_core::ctx::Ctx;
+use armada_core::ctx::{Clock, Ctx};
 use armada_core::envelope::{Envelope, NoData};
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_manifest::clock::SystemClock;
@@ -61,6 +61,16 @@ fn main() -> ExitCode {
     let terminal = render::term::Terminal::detect();
     let no_color = inherited.contains_key("NO_COLOR");
 
+    // **Everything the recorder needs, read once at the entrypoint** — the same
+    // rule the cwd, `$HOME` and the terminal follow (`ARCHITECTURE.md` §1.4).
+    // Nothing below reaches for any of it, and a failure that happens before a
+    // verb exists is still recorded because these three are already in hand.
+    let ambient = Ambient {
+        home: home.as_deref(),
+        cwd: &cwd,
+        argv: &argv,
+    };
+
     let parsed = match args::parse(&argv) {
         Ok(parsed) => parsed,
         // `--json` is answered even when the failure is the parse itself: the
@@ -68,7 +78,7 @@ fn main() -> ExitCode {
         // probing a verb that does not exist yet still reads an envelope.
         Err(failure) => {
             let style = Style::decide(failure.color, terminal.stdout_is_tty, no_color);
-            return fail(failure.error, failure.json, style);
+            return fail(failure.error, failure.json, style, &ambient);
         }
     };
     let style = Style::decide(parsed.color, terminal.stdout_is_tty, no_color);
@@ -115,7 +125,7 @@ fn main() -> ExitCode {
             progress.finish();
             match answered {
                 Ok(output) => emit(output, json, style, terminal, home.as_deref()),
-                Err(error) => fail(error, json, style),
+                Err(error) => fail(error, json, style, &ambient),
             }
         }
     }
@@ -159,6 +169,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Helm(helm) => helm.json,
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
+        Invocation::Failures(failures) => failures.json(),
         Invocation::Mcp { json } => *json,
         Invocation::Version | Invocation::Help(_) => false,
     }
@@ -365,7 +376,17 @@ fn dispatch(
     // **The Bridge is machine-scoped for the same reason and by the same
     // route.** It is a renderer over `fleet ls`, so it needs exactly what `ls`
     // needs and nothing a workspace would add.
-    if matches!(invocation, Invocation::Fleet(_) | Invocation::Bridge(_)) {
+    // **`armada failures` joins Fleet and the Bridge here, and for both of their
+    // reasons.** The failures it lists happened in whatever directory they
+    // happened in — including directories that are not workspaces, which is where
+    // the failure that prompted the feature happened — so resolving a workspace
+    // first would refuse to show a record of a failure that was *caused* by not
+    // having one. And promoting an entry is `fleet spawn`, which needs exactly
+    // what `spawn` needs and nothing a workspace would add.
+    if matches!(
+        invocation,
+        Invocation::Fleet(_) | Invocation::Bridge(_) | Invocation::Failures(_)
+    ) {
         let place = verbs::fleet::Where {
             home: home.to_path_buf(),
             armada_home: armada_manifest::machine::armada_home(home),
@@ -382,8 +403,41 @@ fn dispatch(
         };
         let fleet = match invocation {
             Invocation::Bridge(options) => return bridge(&run, &place, &options, style, terminal),
+            Invocation::Failures(failures) => {
+                return match *failures {
+                    args::FailuresInvocation::Ls { all, .. } => {
+                        verbs::failures::ls(&SystemClock, &place, all)
+                    }
+                    args::FailuresInvocation::Show { id, .. } => {
+                        verbs::failures::show(&SystemClock, &place, &id)
+                    }
+                    args::FailuresInvocation::Clear { id, all, .. } => {
+                        verbs::failures::clear(&SystemClock, &place, id.as_deref(), all)
+                    }
+                    args::FailuresInvocation::Fix { id, dry_run, .. } => {
+                        // The same rule `fleet spawn` follows: `None` when
+                        // nobody is there to answer. Promotion names the
+                        // workflow, so nothing here can reach a question — but
+                        // the argument is the verb's, not this call site's.
+                        let mut asking = terminal
+                            .can_ask()
+                            .then(|| at_the_terminal(style, terminal).interactive());
+                        verbs::failures::fix(
+                            &run,
+                            &SystemClock,
+                            &place,
+                            &id,
+                            dry_run,
+                            asking
+                                .as_mut()
+                                .map(|ask| ask as &mut dyn armada_helm::ask::Ask),
+                            progress,
+                        )
+                    }
+                }
+            }
             Invocation::Fleet(fleet) => fleet,
-            _ => unreachable!("both arms are matched above"),
+            _ => unreachable!("every arm is matched above"),
         };
         return match *fleet {
             args::FleetInvocation::Spawn(spawn) => {
@@ -577,7 +631,7 @@ fn dispatch(
         | Invocation::Guild(_)
         | Invocation::Fleet(_)
         | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),
-        Invocation::Bridge(_) | Invocation::Helm(_) => {
+        Invocation::Bridge(_) | Invocation::Helm(_) | Invocation::Failures(_) => {
             unreachable!("machine-scoped, and handled above")
         }
     }
@@ -1276,7 +1330,50 @@ fn emit(
     ExitCode::from(output.exit_code())
 }
 
-fn fail(error: ArmadaError, json: bool, style: Style) -> ExitCode {
+/// What the failure recorder needs, read once at the entrypoint.
+///
+/// **`home` is optional and the two other fields are not**, because `$HOME` is
+/// itself one of the things that can be missing — and a machine with no `$HOME`
+/// has nowhere to keep a record of the failure that says so.
+struct Ambient<'a> {
+    home: Option<&'a std::path::Path>,
+    cwd: &'a std::path::Path,
+    argv: &'a [String],
+}
+
+/// Write this failure into `~/.armada/failures.jsonl` (PLAN.md §15.3.5).
+///
+/// **Nothing about the failure changes because of this call.** The error still
+/// renders, the exit code is still `f(error.class)`, and every path in here that
+/// cannot do its job simply does not do it — a logger that turned a bug into a
+/// different bug would be worse than no logger at all.
+///
+/// **Every failure, and no filtering by class.** The reasoning is in
+/// [`armada_core::failure`]: a wrong class is itself a symptom, so a filter that
+/// trusted the class would discard exactly the reports worth keeping. The site
+/// is the filter — this is the path taken when Armada could not answer, and a
+/// check whose tests failed *did* answer and leaves through [`emit`].
+fn record(error: &ArmadaError, ambient: &Ambient) {
+    let Some(home) = ambient.home else {
+        return;
+    };
+    let now = SystemClock;
+    let (_, line) = armada_core::failure::failed(
+        error,
+        home,
+        ambient.cwd,
+        ambient.argv,
+        &now.wall_rfc3339(),
+        now.wall_ms(),
+    );
+    let _ = armada_manifest::failures::append(
+        &armada_manifest::failures::path(&armada_manifest::machine::armada_home(home)),
+        &line,
+    );
+}
+
+fn fail(error: ArmadaError, json: bool, style: Style, ambient: &Ambient) -> ExitCode {
+    record(&error, ambient);
     let code = error.class.exit_code();
     if json {
         // The envelope shape never varies. `workspace` is `null` when

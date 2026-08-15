@@ -118,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 35] = [
+const PAGES: [Page; 36] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -797,6 +797,33 @@ const PAGES: [Page; 35] = [
         flags: &[("--fix", "repair what is safely repairable")],
         examples: &[],
         notes: &["Every finding carries the line that fixes it, whether or not --fix ran."],
+    },
+    Page {
+        path: "failures",
+        synopsis: "failures",
+        summary: "what Armada broke on, and how to put a Job on one",
+        usage: &[
+            "armada failures [--all] [--json]",
+            "armada failures show <id> [--json]",
+            "armada failures fix <id> [--dry-run] [--json]",
+            "armada failures clear <id> | --all",
+        ],
+        flags: &[
+            ("--all", "listing: include cleared; clear: clear every entry"),
+            ("--dry-run", "fix: report the Job, and spawn nothing"),
+        ],
+        examples: &[
+            ("armada failures", "everything still open on this machine"),
+            ("armada failures show a1b2", "one failure, and what a Job would be told"),
+            ("armada failures fix a1b2", "a Job on the bug workflow, in the repo it happened in"),
+            ("armada failures clear a1b2", "done with it"),
+        ],
+        notes: &[
+            "Armada records every failure it reports to you, in ~/.armada/failures.jsonl.",
+            "The same failure twice is one row with a count and the time you last saw it.",
+            "An id can be shortened to any prefix that names one row.",
+            "Nothing here is sent anywhere: the log is this machine's and stays on it.",
+        ],
     },
     Page {
         path: "bridge",

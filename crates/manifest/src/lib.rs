@@ -20,6 +20,7 @@ pub mod config_file;
 pub mod db;
 pub mod discovery;
 pub mod docker;
+pub mod failures;
 pub mod fs;
 pub mod git;
 pub mod machine;
