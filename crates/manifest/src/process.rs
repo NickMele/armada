@@ -320,7 +320,16 @@ impl ProcessGroup {
                 if Instant::now() >= deadline {
                     self.timed_out = true;
                     if self.pgid != 0 {
-                        posix::stop_group(self.pgid, GRACE);
+                        // Reaped through the handle rather than by group, so
+                        // the `wait` below still finds the status: `Child`
+                        // caches what `try_wait` collected, where a bare
+                        // `waitpid` would have consumed it and left this
+                        // answering `ECHILD`.
+                        let pgid = self.pgid;
+                        let child = &mut self.child;
+                        posix::stop_group_reaping(pgid, GRACE, &mut || {
+                            let _ = child.try_wait();
+                        });
                     } else {
                         let _ = self.child.kill();
                     }
@@ -339,10 +348,20 @@ impl ProcessGroup {
         self.finish(status)
     }
 
-    /// Stop the whole tree: TERM, grace, KILL — then reap.
+    /// Stop the whole tree: TERM, grace, KILL, **reaping as it goes**.
+    ///
+    /// The reap is interleaved rather than done at the end, because `gone` is
+    /// read off a probe that a corpse of this process's own would answer — and
+    /// the two platforms answer it differently while the corpse is unreaped
+    /// (`docs/traps.md`). Reaping through the `Child` keeps the exit status
+    /// where the handle can still see it.
     pub fn stop(&mut self) -> posix::StopReport {
         let report = if self.pgid != 0 {
-            posix::stop_group(self.pgid, GRACE)
+            let pgid = self.pgid;
+            let child = &mut self.child;
+            posix::stop_group_reaping(pgid, GRACE, &mut || {
+                let _ = child.try_wait();
+            })
         } else {
             let _ = self.child.kill();
             posix::StopReport {
