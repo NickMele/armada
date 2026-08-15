@@ -263,6 +263,15 @@ because only Armada mints the Jobs — so deferring the view meant deferring the
 anything Armada knows and nothing else does. Helm still works with the Bridge unbuilt, which is
 what keeps it a rendering choice rather than an architectural one ([`PLAN.md`](PLAN.md) §15.1).
 
+#### Four decisions taken before M3 was dispatched
+
+| | Decided | Why not the alternative |
+|---|---|---|
+| **Testing Fleet** | Fake the harness at `ctx.run`. Assert on the **argv** Fleet builds — `claude --session-id <uuid> --print --output-format stream-json` — and feed recorded `stream-json` back. **No test spawns a real session or spends tokens.** | Real sessions in the suite make a rate limit a red build and the API's latency a flaky one. Argv is where the bugs are anyway. |
+| **The Bridge** | `ratatui`. | Hand-rolled ANSI over the existing render layer is ~300 lines, but then input handling and resize are also yours, and neither is interesting work. |
+| **Classification** | **Haiku 4.5** (`claude-haiku-4-5-20251001`). | It runs on every spawn, so its cost is the one that compounds; picking one of four labels with a confidence is exactly its shape. Keyword rules are free and wrong often enough that the override becomes the normal path. |
+| **Shape** | **Three sequential agents** — Fleet, then the MCP server, then Helm and the inbox. | One agent holding the whole milestone has no handoffs and no way to catch an early mistake before everything downstream is built on it. Fleet alone is already usable from the CLI. |
+
 **Staying aware without polling** (§9.1 F3): a plugin monitor tailing `~/.armada/inbox.jsonl`
 delivers fleet events into the conversation live, and a `Stop` hook refuses to end a turn while
 anything is unread. Both are configuration rather than code, and both were demonstrated in the
