@@ -1,0 +1,26 @@
+armada guild init — build your guild by interviewing you
+
+USAGE
+  armada guild init [--from <path>] [--remote <url>] [--defaults]
+  armada guild init --no-import [--force]
+
+FLAGS
+  --from <path>   import an existing setup from here
+  --no-import     start empty; import nothing
+  --remote <url>  set the sync remote without being asked
+  --defaults      take the default answer to every question
+  --force         overwrite an existing guild
+  --json          answer as one JSON object, for a script or an agent
+  --color <when>  auto (default), always, never; NO_COLOR wins
+
+EXAMPLES
+  armada guild init
+    interview you, then write ~/.armada/guild/
+
+  armada guild init --from ~/.claude --remote git@host:you/guild
+    import what you already have, and say where it syncs
+
+  armada guild init --no-import --defaults
+    an empty guild on every default answer; asks nothing
+
+Your guild is yours, not this repository's. It never lands in a project.

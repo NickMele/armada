@@ -12,8 +12,21 @@ FLAGS
   --files <path>…     run only the checks these paths belong to
   --component <name>  every check on one component
   --concurrency <n>   this run's CPU budget, overriding the machine's
-  --json              answer in the envelope (PLAN.md §3.1), not as text
+  --json              answer as one JSON object, for a script or an agent
   --color <when>      auto (default), always, never; NO_COLOR wins
 
+EXAMPLES
+  armada manifest check
+    every check whose component the working diff touched
+
+  armada manifest check api:lint
+    one check on one component, by <component>:<check>
+
+  armada manifest check --files src/main.rs src/args.rs
+    only the checks those two paths belong to
+
+  armada manifest check --component api --all-files --fix
+    every check on api, over its match: globs, applying fix:
+
 A selector is <component>:<check>, a component, or a check name.
-One selector, or several paths — never both (PLAN.md §3.2).
+One selector, or several paths — never both, so nothing is guessed.

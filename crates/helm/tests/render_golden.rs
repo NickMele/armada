@@ -851,13 +851,26 @@ fn guild_pull_matches_its_fixture() {
 }
 
 /// `armada --help`, which is the page the milestone was opened for.
+///
+/// **A representative sample rather than all thirty.** Every module page is
+/// here, because those are the pages a reader arrives at; one verb page per
+/// module, plus a machine verb, is enough to freeze the *shape* a verb page has
+/// — and `render::help`'s own tests are what hold the other twenty-six to it.
+/// Thirty more fixture pairs would be thirty more files to re-approve for a
+/// one-word change to a shared heading, which is how a golden suite stops being
+/// read.
 #[test]
 fn the_help_pages_match_their_fixtures() {
     let mut failures = Vec::new();
     for (case, topic) in [
         ("help", Topic::Root),
         ("help-manifest", Topic::Manifest),
-        ("help-check", Topic::Verb("check")),
+        ("help-guild", Topic::Guild),
+        ("help-fleet", Topic::Fleet),
+        ("help-check", Topic::Verb("manifest check")),
+        ("help-fleet-spawn", Topic::Verb("fleet spawn")),
+        ("help-guild-init", Topic::Verb("guild init")),
+        ("help-doctor", Topic::Verb("doctor")),
     ] {
         for (audience, style, terminal) in audiences() {
             failures.extend(check_golden(

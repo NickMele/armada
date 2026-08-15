@@ -408,7 +408,7 @@ pub const BUILTIN_VERBS: [&str; 11] = [
 /// Each carries the milestone that builds it (PHASES.md §8).
 ///
 /// **M2 emptied three rows out of this table** — `init`, `doctor` and `guild`
-/// are built, and moved to [`TOP_LEVEL_VERBS`] and [`GUILD_VERBS`]. **M3's first
+/// are built, and moved to [`TOP_LEVEL_VERBS`] and [`GUILD_BUILT`]. **M3's first
 /// third emptied a fourth**: `fleet` is built, and its verbs are in
 /// [`FLEET_VERBS`].
 pub const RESERVED_TOP_LEVEL: [(&str, &str); 2] = [
@@ -416,66 +416,77 @@ pub const RESERVED_TOP_LEVEL: [(&str, &str); 2] = [
     ("bridge", "M3 — the live screen"),
 ];
 
-/// Fleet's verbs, and what each is for.
+/// Fleet's verbs.
 ///
 /// **All six are built.** Fleet is usable from a shell before the MCP server or
 /// Helm exists, which is the whole point of building it first (PHASES.md §8.5).
-pub const FLEET_VERBS: [(&str, &str); 6] = [
-    ("spawn", "start an isolated agent Job on a task"),
-    (
-        "ls",
-        "what is running, what it has spent, and who needs you",
-    ),
-    (
-        "board",
-        "take a Job over yourself: worktree and resume command",
-    ),
-    (
-        "answer",
-        "give a waiting Job your decision; let it continue",
-    ),
-    ("inbox", "what the fleet needs from you"),
-    ("kill", "end a Job and release everything it owns"),
-];
+///
+/// **Names only.** What each verb is *for* is one sentence, and it is on that
+/// verb's help page — kept in two places it would eventually be two sentences.
+pub const FLEET_VERBS: [&str; 6] = ["spawn", "ls", "board", "answer", "inbox", "kill"];
 
-/// The top-level verbs that are built, and what each is for.
+/// The top-level verbs that are built.
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [(&str, &str); 2] = [
-    (
-        "init",
-        "set up this machine: checks, ~/.armada/, and your guild",
-    ),
-    ("doctor", "what this machine is missing, and what fixes it"),
-];
+pub const TOP_LEVEL_VERBS: [&str; 2] = ["init", "doctor"];
 
-/// Guild's verbs, built and unbuilt alike.
+/// The Guild verbs this milestone built. The rest answer "not built yet".
+pub const GUILD_BUILT: [&str; 5] = ["init", "pull", "push", "export", "import"];
+
+/// The Guild verbs that are claimed and not built.
 ///
-/// The unbuilt two are claimed for the same reason every other reserved name
-/// is, and they answer by name rather than as an unknown verb — a caller told
-/// "unknown" would go looking for a typo.
-pub const GUILD_VERBS: [(&str, &str); 7] = [
-    ("init", "build your guild by interviewing you"),
-    ("pull", "bring this machine's guild up to date"),
-    ("push", "send local guild changes to the remote"),
-    ("export", "write the whole guild to one portable file"),
-    ("import", "restore a guild from a bundle"),
+/// Claimed for the same reason every other reserved name is, and they answer by
+/// name rather than as an unknown verb — a caller told "unknown" would go
+/// looking for a typo. The summary is the parser's, because the refusal quotes
+/// it; the built verbs' summaries live on their pages instead.
+pub const RESERVED_GUILD_VERBS: [(&str, &str); 2] = [
     ("edit", "M2 — open a guild file, validate it, commit it"),
     ("verify", "M2 — cross-check every workflow, skill and scope"),
 ];
 
-/// The Guild verbs this milestone built. The rest answer "not built yet".
-const GUILD_BUILT: [&str; 5] = ["init", "pull", "push", "export", "import"];
-
-/// The verbs with a help page of their own — the ones Manifest has built.
+/// The Manifest verbs that are built.
 ///
 /// A separate list from [`BUILTIN_VERBS`], because that one claims names,
-/// several of which answer "not built yet": giving `armada manifest up --help` a
-/// page would promise a verb that does not exist.
-const BUILT_PAGES: [&str; 8] = [
+/// several of which answer "not built yet": giving `armada manifest render
+/// --help` a page would promise a verb that does not exist.
+pub const MANIFEST_BUILT: [&str; 8] = [
     "init", "up", "down", "status", "check", "clean", "config", "skills",
 ];
+
+/// **Every verb the parser accepts**, as the caller types it after `armada`.
+///
+/// The roster exists so that "does every verb have a `--help`" is a question
+/// with a mechanical answer rather than a hand-kept list in a test that drifts
+/// the first time somebody adds a verb and forgets. `render::help` is checked
+/// against it in both directions.
+pub fn every_verb() -> Vec<String> {
+    MANIFEST_BUILT
+        .iter()
+        .map(|verb| format!("manifest {verb}"))
+        .chain(GUILD_BUILT.iter().map(|verb| format!("guild {verb}")))
+        .chain(FLEET_VERBS.iter().map(|verb| format!("fleet {verb}")))
+        .chain(TOP_LEVEL_VERBS.iter().map(|verb| (*verb).to_string()))
+        .collect()
+}
+
+/// The page `--help` on this line asked for, if Armada owns one.
+///
+/// **One question asked of one table.** `None` means the `--help` is not
+/// Armada's: it belongs to a `commands:` child, or to a verb that is claimed and
+/// not built — and either way the line carries on being parsed.
+fn help_page(module: &str, verb: &str) -> Option<Topic> {
+    let path = match module.is_empty() {
+        true => verb.to_string(),
+        false => format!("{module} {verb}"),
+    };
+    crate::render::help::page_for(&path).map(Topic::Verb)
+}
+
+/// Whether this verb's own argv asked for its page.
+fn wants_help(rest: &[String]) -> bool {
+    rest.iter().any(|arg| is_help(arg))
+}
 
 /// `--help` in either spelling.
 fn is_help(arg: &str) -> bool {
@@ -579,12 +590,10 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
     // **A page per verb, and only for a verb Armada owns.** `armada manifest
     // worktrees --help` is the *child's* `--help`, exactly as its `--dry-run` is
     // the child's — the rule this whole module exists to keep (PLAN.md §4.5).
-    if let Some(page) = BUILT_PAGES
-        .iter()
-        .find(|name| *name == verb)
-        .filter(|_| rest.iter().any(|arg| is_help(arg)))
-    {
-        return Ok(Invocation::Help(Topic::Verb(page)));
+    if wants_help(rest) {
+        if let Some(topic) = help_page("manifest", verb) {
+            return Ok(Invocation::Help(topic));
+        }
     }
 
     match verb.as_str() {
@@ -866,6 +875,11 @@ fn machine_init(
     json: bool,
     color: &mut ColorChoice,
 ) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "init") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
     let parsed = flags(
         rest,
         json,
@@ -904,6 +918,11 @@ fn doctor(
     json: bool,
     color: &mut ColorChoice,
 ) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "doctor") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
     let parsed = flags(rest, json, color, "doctor", &["--fix"], &[])?;
     Ok(Invocation::Doctor {
         json: parsed.json,
@@ -928,7 +947,7 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
 
     if !GUILD_BUILT.contains(&name) {
         let json = json || tail.iter().any(|a| a == "--json");
-        let message = match GUILD_VERBS.iter().find(|(n, _)| *n == name) {
+        let message = match RESERVED_GUILD_VERBS.iter().find(|(n, _)| *n == name) {
             Some((_, summary)) => format!("`armada guild {name}` is not built yet — {summary}"),
             None => format!("unknown verb `armada guild {name}`"),
         };
@@ -941,6 +960,15 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
             },
             json,
         ));
+    }
+
+    // **A verb's page, before its flags are read.** `--help` on a built verb is
+    // Armada's; on a `commands:` child it is the child's, and `help_page`
+    // answering `None` is what keeps the two apart (PLAN.md §4.5).
+    if wants_help(tail) {
+        if let Some(topic) = help_page("guild", name) {
+            return Ok(Invocation::Help(topic));
+        }
     }
 
     let invocation = match name {
@@ -1034,7 +1062,7 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
     let tail = &rest[1..];
     let name = verb.as_str();
 
-    if !FLEET_VERBS.iter().any(|(known, _)| *known == name) {
+    if !FLEET_VERBS.contains(&name) {
         let json = json || tail.iter().any(|a| a == "--json");
         return Err(failure(
             ArmadaError {
@@ -1045,6 +1073,15 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
             },
             json,
         ));
+    }
+
+    // The same rule as Guild's, for the same reason: a verb's page is answered
+    // before its flags are read, so `--help` never reaches the flag loop and is
+    // never refused as unknown.
+    if wants_help(tail) {
+        if let Some(topic) = help_page("fleet", name) {
+            return Ok(Invocation::Help(topic));
+        }
     }
 
     let invocation = match name {
@@ -2068,20 +2105,104 @@ mod tests {
     /// also answer "not built yet".
     #[test]
     fn no_name_is_both_built_and_reserved() {
-        for (built, _) in TOP_LEVEL_VERBS {
+        for built in TOP_LEVEL_VERBS {
             assert!(
                 !RESERVED_TOP_LEVEL.iter().any(|(name, _)| *name == built),
                 "`{built}` is both built and reserved"
             );
         }
         for built in GUILD_BUILT {
-            let (_, summary) = GUILD_VERBS
-                .iter()
-                .find(|(name, _)| *name == built)
-                .unwrap_or_else(|| panic!("`guild {built}` is built and unlisted"));
             assert!(
-                !summary.starts_with("M2 "),
-                "`guild {built}` is built and listed as unbuilt"
+                !RESERVED_GUILD_VERBS.iter().any(|(name, _)| *name == built),
+                "`guild {built}` is both built and reserved"
+            );
+        }
+        for built in MANIFEST_BUILT {
+            assert!(
+                BUILTIN_VERBS.contains(&built),
+                "`manifest {built}` is built and is not a claimed name"
+            );
+        }
+    }
+
+    /// **Every verb the roster names parses, and answers `--help` with a page.**
+    /// The roster is what `render::help` is checked against, so a roster that
+    /// listed something the parser refuses would make that check meaningless.
+    #[test]
+    fn every_verb_on_the_roster_answers_its_own_help() {
+        for path in every_verb() {
+            let mut line: Vec<String> = path.split(' ').map(str::to_string).collect();
+            line.push("--help".to_string());
+            let Invocation::Help(Topic::Verb(page)) = parse(&line).unwrap().invocation else {
+                panic!("`armada {path} --help` is not that verb's page");
+            };
+            assert_eq!(page, path, "`armada {path} --help` drew {page}'s page");
+        }
+    }
+
+    /// **`-h` is the same flag**, everywhere the long spelling works.
+    #[test]
+    fn the_short_spelling_reaches_a_verbs_page_too() {
+        assert_eq!(
+            parse(&args(&["fleet", "spawn", "-h"])).unwrap().invocation,
+            Invocation::Help(Topic::Verb("fleet spawn"))
+        );
+    }
+
+    /// **A verb's `--help` wins over its own grammar.** `armada fleet spawn`
+    /// needs a task and `armada fleet kill` needs a Job or `--all-finished`;
+    /// asking either for its page must not be refused for the argument the
+    /// reader is asking about.
+    #[test]
+    fn help_is_answered_before_a_missing_argument_is_refused() {
+        for line in [
+            vec!["fleet", "spawn", "--help"],
+            vec!["fleet", "kill", "--help"],
+            vec!["fleet", "answer", "--help"],
+            vec!["guild", "import", "--help"],
+            vec!["manifest", "config", "--help"],
+        ] {
+            let path = line[..line.len() - 1].join(" ");
+            assert_eq!(
+                parse(&args(&line)).unwrap().invocation,
+                Invocation::Help(Topic::Verb(
+                    crate::render::help::page_for(&path).expect("a page")
+                )),
+                "`armada {path} --help` was refused rather than answered"
+            );
+        }
+    }
+
+    /// **A `commands:` child's `--help` stays the child's.** The rule this
+    /// module exists to keep: everything after a `commands:` name is passed
+    /// through, including a flag Armada itself defines.
+    #[test]
+    fn a_dispatched_commands_entry_keeps_its_own_help() {
+        let Invocation::Dispatch { name, argv, .. } =
+            parse(&args(&["manifest", "worktrees", "--help"]))
+                .unwrap()
+                .invocation
+        else {
+            panic!("`armada manifest worktrees --help` was intercepted");
+        };
+        assert_eq!(name, "worktrees");
+        assert_eq!(argv, vec!["--help".to_string()]);
+    }
+
+    /// A claimed name that is not built has no page, and says so rather than
+    /// drawing one.
+    #[test]
+    fn an_unbuilt_verb_has_no_page_and_says_so() {
+        for line in [
+            vec!["manifest", "explain", "--help"],
+            vec!["guild", "edit", "--help"],
+        ] {
+            let failure = parse(&args(&line)).unwrap_err();
+            assert!(
+                failure.error.message.contains("not built yet"),
+                "`armada {}` answered {}",
+                line.join(" "),
+                failure.error.message
             );
         }
     }
@@ -2248,7 +2369,7 @@ mod tests {
     /// the flag was typed.
     #[test]
     fn every_fleet_verb_answers_the_envelope_flag_from_either_side() {
-        for verb in FLEET_VERBS.map(|(name, _)| name) {
+        for verb in FLEET_VERBS {
             let tail: &[&str] = match verb {
                 "spawn" => &["a task"],
                 "board" | "kill" => &["rate-limit"],

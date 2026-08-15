@@ -1,0 +1,20 @@
+[1m[38;2;255;169;64marmada fleet — the agents you do not talk to: Jobs, Drones, worktrees[0m
+
+[1m[38;2;255;169;64mVERBS[0m
+  spawn <task>           [38;2;107;114;128mstart an isolated agent Job on a task[0m
+  ls                     [38;2;107;114;128mwhat is running, what it has spent, and who needs you[0m
+  board <job>            [38;2;107;114;128mtake a Job over yourself: worktree and resume command[0m
+  answer <job> <answer>  [38;2;107;114;128mgive a waiting Job your decision; let it continue[0m
+  inbox                  [38;2;107;114;128mwhat the fleet needs from you[0m
+  kill [<job>]           [38;2;107;114;128mend a Job and release everything it owns[0m
+
+`armada fleet <verb> --help` for one verb's usage and flags.
+
+You ask for work; that is a Job. Something runs it; that is a Drone.
+
+The two are separate so that a crash, a reboot or a killed process
+does not lose the work — the Job keeps its branch, its notes and what
+it spent, and you can pick it up later with `board`.
+
+Board does not attach. It hands you the conversation to drive yourself, in the
+Job's own worktree — Armada owns no terminal.

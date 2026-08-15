@@ -1,16 +1,20 @@
 armada manifest — one repository's stack: ports, services, checks
 
 VERBS
-  config  report the evidence, then verify what was written
-  init    claim this workspace: ports, .armada/, setup
-  up      start this workspace's services, and wait until they answer
-  down    stop this workspace's services; keep the port block
-  status  what is running, what is mine, what is stale
-  check   lint, format and test — the verb a gate calls
-  skills  what this repository knows about itself
-  clean   release what this workspace owns
+  config <scan|verify>  report the evidence, then verify what was written
+  init                  claim this workspace: ports, .armada/, setup
+  up [<component>]      start this workspace's services; wait until they answer
+  down [<component>]    stop this workspace's services; keep the port block
+  status                what is running, what is mine, what is stale
+  check [<selector>]    lint, format and test — the verb a gate calls
+  skills [show <name>]  what this repository knows about itself
+  clean                 release what this workspace owns
 
 NOT BUILT YET
-  render, agents-md, explain  reserved; see PHASES.md §8
+  render, agents-md, explain  claimed; each answers `not built yet`
 
-`armada manifest <verb> --help` for one verb's flags.
+`armada manifest <verb> --help` for one verb's usage and flags.
+
+A workspace is one checkout, with services and ports that are only its own.
+Claim it and you can run two branches of the same repository at once without
+either one taking the other's port or stopping the other's database.

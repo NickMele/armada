@@ -1,0 +1,20 @@
+armada guild — you, portable: machine-global, and synced between your machines
+
+VERBS
+  init             build your guild by interviewing you
+  pull             bring this machine's guild up to date
+  push             send local guild changes to the remote
+  export           write the whole guild to one portable file
+  import <bundle>  restore a guild from a bundle
+
+NOT BUILT YET
+  edit    open a guild file, validate it, commit it
+  verify  cross-check every workflow, skill and scope
+
+`armada guild <verb> --help` for one verb's usage and flags.
+
+Your guild is how you work: your voice, your skills, your workflows. Set it up
+once and it follows you — a new laptop is a `pull` rather than an afternoon.
+
+It never lands in a project's history, and what is only true of this machine
+stays on it: its settings, its database, and the Jobs running here.

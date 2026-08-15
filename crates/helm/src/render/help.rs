@@ -5,24 +5,31 @@
 //! the same twenty-five lines, and neither could be found at a glance. PHASES.md
 //! §8.3.1's done-when is that it "can be read without squinting".
 //!
-//! Three changes, and each is a rule rather than a preference:
+//! Four changes, and each is a rule rather than a preference:
 //!
 //! 1. **Grouped under headings** — usage, the verbs, the global flags, and what
 //!    is not built. A reader arrives with one of those four questions.
 //! 2. **Aligned by the same table renderer every verb uses**, so a flag column
 //!    lines up here for the same reason a status column lines up there, and a
 //!    narrow terminal truncates the explanation rather than wrapping it.
-//! 3. **A page per verb.** The root page lists verbs with one line each and
-//!    stops; `armada manifest check --help` is where `check`'s nine flags live.
-//!    Putting them all on one page is what made the old one unreadable.
+//! 3. **A page per verb — every verb, not the ones somebody got to.** One
+//!    [`PAGES`] table holds all of them, across all three modules and the two
+//!    machine verbs, and [`page_for`] is what `args.rs` asks whether a `--help`
+//!    it just saw belongs to Armada. A verb with no entry here has no `--help`,
+//!    and [`every_verb_the_parser_accepts_has_a_page`] fails when that happens.
+//! 4. **A synopsis, not a bare name, on every list.** `spawn <task>` answers
+//!    "do I give it the prompt, or does it ask me" in the line the reader was
+//!    already looking at. A name alone costs a second command to find out.
 //!
 //! **What is not built is stated, not omitted.** Half of this CLI is reserved
 //! names that answer "not built yet" (`args.rs`), and a help page that lists only
 //! what works leaves a reader to discover the rest by typing it. The lists come
 //! from `args.rs`'s own constants rather than being retyped here, so a verb
 //! cannot ship without appearing on this page — there is a test.
+//!
+//! [`every_verb_the_parser_accepts_has_a_page`]: tests::every_verb_the_parser_accepts_has_a_page
 
-use crate::args::{BUILTIN_VERBS, FLEET_VERBS, GUILD_VERBS, RESERVED_TOP_LEVEL, TOP_LEVEL_VERBS};
+use crate::args::{BUILTIN_VERBS, MANIFEST_BUILT, RESERVED_GUILD_VERBS, RESERVED_TOP_LEVEL};
 
 use super::palette::Role;
 use super::style::Style;
@@ -44,17 +51,42 @@ pub enum Topic {
     Guild,
     /// `armada fleet`, or `armada fleet --help`.
     Fleet,
-    /// `armada manifest <verb> --help`.
+    /// One verb's own page, keyed by what the caller types after `armada` —
+    /// `"manifest check"`, `"fleet spawn"`, `"doctor"`.
+    ///
+    /// **The whole path rather than the bare verb**, because `init` is three
+    /// different verbs (`armada init`, `armada manifest init`, `armada guild
+    /// init`) and a bare name could not tell them apart.
     Verb(&'static str),
 }
 
 /// One built verb's page.
 struct Page {
-    name: &'static str,
+    /// What the caller types after `armada` — `"fleet spawn"`. The key.
+    path: &'static str,
+    /// The verb and its **positional arguments**, as a module page lists it:
+    /// `"spawn <task>"`, `"kill [<job>]"`, `"ls"`.
+    ///
+    /// **Positionals only, and flags never.** The list exists to answer what a
+    /// verb *takes*; the flags are a page away and are what that page is for.
+    synopsis: &'static str,
     summary: &'static str,
     usage: &'static [&'static str],
     flags: &'static [(&'static str, &'static str)],
+    /// Real invocations, each with what it does. Empty where the synopsis
+    /// already says everything a line could.
+    examples: &'static [(&'static str, &'static str)],
     notes: &'static [&'static str],
+}
+
+impl Page {
+    /// `"fleet"` for `"fleet spawn"`, and `""` for `"doctor"`.
+    fn module(&self) -> &'static str {
+        match self.path.split_once(' ') {
+            Some((module, _)) => module,
+            None => "",
+        }
+    }
 }
 
 /// The flags every verb takes, listed on every verb's page.
@@ -65,7 +97,7 @@ struct Page {
 const EVERYWHERE: [(&str, &str); 2] = [
     (
         "--json",
-        "answer in the envelope (PLAN.md §3.1), not as text",
+        "answer as one JSON object, for a script or an agent",
     ),
     (
         "--color <when>",
@@ -73,73 +105,105 @@ const EVERYWHERE: [(&str, &str); 2] = [
     ),
 ];
 
-/// The scope lens, on the two verbs that take it.
-const LENS: [(&str, &str); 2] = [
-    ("--project", "every workspace of this repository"),
-    ("--all", "every workspace on this machine"),
-];
-
-/// The verbs Manifest has built, in the order someone meets them.
+/// Every verb with a page, in the order someone meets them.
 ///
-/// **Not alphabetical.** `config` comes first because a repository has no
-/// `armada.yml` before it runs, `init` next because nothing else works until
-/// *it* has run, and `clean` last because it undoes the rest.
-const MANIFEST: [Page; 8] = [
+/// **Not alphabetical, and grouped by module.** Within Manifest, `config` comes
+/// first because a repository has no `armada.yml` before it runs, `init` next
+/// because nothing else works until *it* has run, and `clean` last because it
+/// undoes the rest.
+///
+/// **Every flag here was read off the verb's parser, not off its document.**
+/// `docs/commands/**` describes the verb Armada is going to have; this table
+/// describes the one it has, and the two are allowed to differ only in that
+/// direction.
+const PAGES: [Page; 21] = [
+    // ------------------------------------------------------------- Manifest
     Page {
-        name: "config",
+        path: "manifest config",
+        synopsis: "config <scan|verify>",
         summary: "report the evidence, then verify what was written",
         usage: &[
             "armada manifest config scan [--json]",
             "armada manifest config verify [--json]",
         ],
         flags: &[],
+        examples: &[
+            (
+                "armada manifest config scan",
+                "the evidence: languages, services, ports, existing tooling",
+            ),
+            (
+                "armada manifest config scan --json",
+                "the same, as the envelope an agent reads before it writes",
+            ),
+            (
+                "armada manifest config verify",
+                "static pass, then every check the written armada.yml declares",
+            ),
+        ],
         notes: &[
             "scan reports facts and decides nothing; an agent authors; verify checks.",
             "scan is the one verb that runs in a repo with no armada.yml.",
         ],
     },
     Page {
-        name: "init",
+        path: "manifest init",
+        synopsis: "init",
         summary: "claim this workspace: ports, .armada/, setup",
         usage: &["armada manifest init [--json] [--dry-run]"],
         flags: &[("--dry-run", "report what would happen; change nothing")],
+        examples: &[],
         notes: &["Reaps what is no longer owned before it claims anything."],
     },
     Page {
-        name: "up",
-        summary: "start this workspace's services, and wait until they answer",
+        path: "manifest up",
+        synopsis: "up [<component>]",
+        // **Shorter by three columns than it was**, because the list it sits in
+        // now carries `skills [show <name>]` and the widest name decides the
+        // description column for every row. A truncated line on a help page is
+        // the failure the page exists to prevent.
+        summary: "start this workspace's services; wait until they answer",
         usage: &["armada manifest up [<component>] [--json] [--dry-run]"],
         flags: &[(
             "--dry-run",
             "report the argv and the ready-checks; start nothing",
         )],
+        examples: &[],
         notes: &[
             "Started is not ready: a service is up when its ready-check passes.",
             "Everything it starts is recorded before it is confirmed working.",
         ],
     },
     Page {
-        name: "down",
+        path: "manifest down",
+        synopsis: "down [<component>]",
         summary: "stop this workspace's services; keep the port block",
         usage: &["armada manifest down [<component>] [--json]"],
         flags: &[],
+        examples: &[],
         notes: &[
             "down is pause and clean is release — the port block is kept.",
             "Dependents stop before their dependencies.",
         ],
     },
     Page {
-        name: "status",
+        path: "manifest status",
+        synopsis: "status",
         summary: "what is running, what is mine, what is stale",
         usage: &["armada manifest status [--json] [--project|--all]"],
-        flags: &[],
+        flags: &[
+            ("--project", "every workspace of this repository"),
+            ("--all", "every workspace on this machine"),
+        ],
+        examples: &[],
         notes: &[
             "A read verb: its exit code describes the query, not what it found.",
             "A gate uses `armada manifest check`, never a query's exit code.",
         ],
     },
     Page {
-        name: "check",
+        path: "manifest check",
+        synopsis: "check [<selector>]",
         summary: "lint, format and test — the verb a gate calls",
         usage: &[
             "armada manifest check [flags] [<selector>]",
@@ -166,26 +230,47 @@ const MANIFEST: [Page; 8] = [
                 "this run's CPU budget, overriding the machine's",
             ),
         ],
+        examples: &[
+            (
+                "armada manifest check",
+                "every check whose component the working diff touched",
+            ),
+            (
+                "armada manifest check api:lint",
+                "one check on one component, by <component>:<check>",
+            ),
+            (
+                "armada manifest check --files src/main.rs src/args.rs",
+                "only the checks those two paths belong to",
+            ),
+            (
+                "armada manifest check --component api --all-files --fix",
+                "every check on api, over its match: globs, applying fix:",
+            ),
+        ],
         notes: &[
             "A selector is <component>:<check>, a component, or a check name.",
-            "One selector, or several paths — never both (PLAN.md §3.2).",
+            "One selector, or several paths — never both, so nothing is guessed.",
         ],
     },
     Page {
-        name: "skills",
+        path: "manifest skills",
+        synopsis: "skills [show <name>]",
         summary: "what this repository knows about itself",
         usage: &[
             "armada manifest skills [--json]",
             "armada manifest skills show <name> [--json]",
         ],
         flags: &[],
+        examples: &[],
         notes: &[
-            "A skill is a named grant plus a pointer to prose Armada never parses.",
-            "There is deliberately no way to run one (PLAN.md §4.8).",
+            "A skill tells an agent what this repository lets it do, and where the",
+            "instructions live. Armada shows you one; running it is yours to do.",
         ],
     },
     Page {
-        name: "clean",
+        path: "manifest clean",
+        synopsis: "clean",
         summary: "release what this workspace owns",
         usage: &[
             "armada manifest clean [--json] [--dry-run] [--project|--all]",
@@ -203,13 +288,286 @@ const MANIFEST: [Page; 8] = [
                 "--force-rebuild",
                 "rebuild an unreadable ~/.armada/manifest.db from labels",
             ),
+            ("--project", "every workspace of this repository"),
+            ("--all", "every workspace on this machine"),
         ],
+        examples: &[],
         notes: &[
             "A declared owns.release: command is reported, never executed.",
             "--force-rebuild needs --orphaned, and takes nothing else.",
         ],
     },
+    // ---------------------------------------------------------------- Guild
+    Page {
+        path: "guild init",
+        synopsis: "init",
+        summary: "build your guild by interviewing you",
+        usage: &[
+            "armada guild init [--from <path>] [--remote <url>] [--defaults]",
+            "armada guild init --no-import [--force]",
+        ],
+        flags: &[
+            ("--from <path>", "import an existing setup from here"),
+            ("--no-import", "start empty; import nothing"),
+            ("--remote <url>", "set the sync remote without being asked"),
+            ("--defaults", "take the default answer to every question"),
+            ("--force", "overwrite an existing guild"),
+        ],
+        examples: &[
+            (
+                "armada guild init",
+                "interview you, then write ~/.armada/guild/",
+            ),
+            (
+                "armada guild init --from ~/.claude --remote git@host:you/guild",
+                "import what you already have, and say where it syncs",
+            ),
+            (
+                "armada guild init --no-import --defaults",
+                "an empty guild on every default answer; asks nothing",
+            ),
+        ],
+        notes: &["Your guild is yours, not this repository's. It never lands in a project."],
+    },
+    Page {
+        path: "guild pull",
+        synopsis: "pull",
+        summary: "bring this machine's guild up to date",
+        usage: &["armada guild pull [--json]"],
+        flags: &[],
+        examples: &[],
+        notes: &[
+            "Takes nothing else on purpose: what to do when it will not",
+            "fast-forward is reported for you to decide, not chosen by a flag.",
+        ],
+    },
+    Page {
+        path: "guild push",
+        synopsis: "push",
+        summary: "send local guild changes to the remote",
+        usage: &["armada guild push [--force] [--json]"],
+        flags: &[(
+            "--force",
+            "force-push; refused unless the remote is strictly behind",
+        )],
+        examples: &[],
+        notes: &[],
+    },
+    Page {
+        path: "guild export",
+        synopsis: "export",
+        summary: "write the whole guild to one portable file",
+        usage: &["armada guild export [--out <path>] [--include-secrets] [--json]"],
+        flags: &[
+            ("--out <path>", "where to write the bundle"),
+            (
+                "--include-secrets",
+                "include machine.yml, which otherwise never travels",
+            ),
+        ],
+        examples: &[],
+        notes: &["machine.yml is left out by default: not travelling is what it is for."],
+    },
+    Page {
+        path: "guild import",
+        synopsis: "import <bundle>",
+        summary: "restore a guild from a bundle",
+        usage: &["armada guild import <bundle> [--merge] [--force] [--json]"],
+        flags: &[
+            (
+                "--merge",
+                "merge rather than replace; conflicts are skipped and named",
+            ),
+            ("--force", "replace an existing guild"),
+        ],
+        examples: &[],
+        notes: &["The bundle is a path, and it is required — there is no default source."],
+    },
+    // ---------------------------------------------------------------- Fleet
+    Page {
+        path: "fleet spawn",
+        synopsis: "spawn <task>",
+        summary: "start an isolated agent Job on a task",
+        usage: &[
+            "armada fleet spawn <task> [--workflow <name>] [--name <handle>]",
+            "armada fleet spawn <task> [--budget <k>=<v>]… [-C <path>] [--dry-run]",
+        ],
+        flags: &[
+            (
+                "--workflow <name>",
+                "override classification; a workflow in your guild",
+            ),
+            (
+                "--name <handle>",
+                "the Job's handle; derived from the task when absent",
+            ),
+            ("--budget <k>=<v>", "override one ceiling, repeatable"),
+            (
+                "-C <path>",
+                "the repository to branch from; the cwd's when absent",
+            ),
+            (
+                "--dry-run",
+                "report the plan: workflow, worktree, ports, budget",
+            ),
+        ],
+        examples: &[
+            (
+                "armada fleet spawn \"add rate limiting to the API\"",
+                "the task is the argument: one quoted string, given up front",
+            ),
+            (
+                "armada fleet spawn \"port the CLI to clap\" --workflow refactor",
+                "skip classification and name the workflow yourself",
+            ),
+            (
+                "armada fleet spawn \"audit the auth flow\" -C ~/work/api --dry-run",
+                "another repository, and the plan only — nothing starts",
+            ),
+        ],
+        notes: &[
+            "The task is required. Armada never prompts for it afterwards, so a",
+            "shell that ate your quotes is a refusal rather than an empty Job.",
+        ],
+    },
+    Page {
+        path: "fleet ls",
+        synopsis: "ls",
+        summary: "what is running, what it has spent, and who needs you",
+        usage: &["armada fleet ls [--all] [--needs-attention] [--json]"],
+        flags: &[
+            ("--all", "finished and killed Jobs too, not just live ones"),
+            ("--needs-attention", "only the Jobs waiting on you"),
+        ],
+        examples: &[],
+        notes: &["The handle in the first column is what every other verb takes."],
+    },
+    Page {
+        path: "fleet board",
+        synopsis: "board <job>",
+        summary: "take a Job over yourself: worktree and resume command",
+        usage: &["armada fleet board <job> [--print|--exec] [--json]"],
+        flags: &[
+            (
+                "--print",
+                "print the worktree and the resume command (default)",
+            ),
+            (
+                "--exec",
+                "cd there and exec the resume, replacing this shell",
+            ),
+        ],
+        examples: &[],
+        notes: &[
+            "Board does not attach. It hands you the conversation to drive",
+            "yourself, in the Job's own worktree — Armada owns no terminal.",
+        ],
+    },
+    Page {
+        path: "fleet answer",
+        synopsis: "answer <job> <answer>",
+        summary: "give a waiting Job your decision; let it continue",
+        usage: &["armada fleet answer <job> <answer> [--json]"],
+        flags: &[],
+        examples: &[
+            (
+                "armada fleet inbox",
+                "what is being asked, and which Job is asking it",
+            ),
+            (
+                "armada fleet answer nightly-flake \"raise the timeout to 90s\"",
+                "the Job, then the answer: two arguments, in that order",
+            ),
+        ],
+        notes: &[
+            "Two arguments, not a sentence. Quote the answer, or the shell splits",
+            "it into words and Armada refuses rather than guessing which is which.",
+        ],
+    },
+    Page {
+        path: "fleet inbox",
+        synopsis: "inbox",
+        summary: "what the fleet needs from you",
+        usage: &["armada fleet inbox [--job <job>] [--all] [--json]"],
+        flags: &[
+            ("--job <job>", "only this Job's entries"),
+            ("--all", "include entries already answered"),
+        ],
+        examples: &[],
+        notes: &["`armada fleet answer <job> <answer>` is how an entry is closed."],
+    },
+    Page {
+        path: "fleet kill",
+        synopsis: "kill [<job>]",
+        summary: "end a Job and release everything it owns",
+        usage: &[
+            "armada fleet kill <job> [--keep-branch] [--keep-worktree] [--json]",
+            "armada fleet kill --all-finished [--json]",
+        ],
+        flags: &[
+            ("--keep-branch", "leave the branch; remove the worktree"),
+            (
+                "--keep-worktree",
+                "leave the directory too; implies --keep-branch",
+            ),
+            (
+                "--all-finished",
+                "every Job whose workflow has ended, instead of one",
+            ),
+        ],
+        examples: &[],
+        notes: &[
+            "A Job or --all-finished, never both and never neither: naming one",
+            "Job and asking for all of them are two different requests.",
+        ],
+    },
+    // --------------------------------------------------------- this machine
+    Page {
+        path: "init",
+        synopsis: "init",
+        summary: "set up this machine: checks, ~/.armada/, and your guild",
+        usage: &[
+            "armada init [--guild <remote>] [--defaults] [--force]",
+            "armada init --bundle <path> [--defaults] [--force]",
+        ],
+        flags: &[
+            (
+                "--guild <remote>",
+                "clone your guild from here, without asking",
+            ),
+            ("--bundle <path>", "unpack this bundle instead of asking"),
+            ("--defaults", "take the default answer to every question"),
+            ("--force", "re-run against an existing ~/.armada/"),
+        ],
+        examples: &[],
+        notes: &[
+            "--guild and --bundle are two sources for one guild; pass one.",
+            "`armada init` sets up you, here. `armada manifest init` claims a workspace.",
+        ],
+    },
+    Page {
+        path: "doctor",
+        synopsis: "doctor",
+        summary: "what this machine is missing, and what fixes it",
+        usage: &["armada doctor [--fix] [--json]"],
+        flags: &[("--fix", "repair what is safely repairable")],
+        examples: &[],
+        notes: &["Every finding carries the line that fixes it, whether or not --fix ran."],
+    },
 ];
+
+/// The page for what a caller typed after `armada`, or `None`.
+///
+/// **This is the whole of `args.rs`'s question.** A `--help` that lands on a
+/// name with no entry here is not Armada's `--help` — it belongs to a
+/// `commands:` child, or to a verb that is not built — and the parser is
+/// answered `None` rather than being handed a second list to keep in step.
+pub fn page_for(path: &str) -> Option<&'static str> {
+    PAGES
+        .iter()
+        .find(|page| page.path == path)
+        .map(|page| page.path)
+}
 
 /// Draw a page.
 pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
@@ -227,14 +585,24 @@ pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
         Topic::Manifest => manifest(style, terminal),
         Topic::Guild => guild(style, terminal),
         Topic::Fleet => fleet(style, terminal),
-        Topic::Verb(name) => match MANIFEST.iter().find(|page| page.name == name) {
+        Topic::Verb(path) => match PAGES.iter().find(|page| page.path == path) {
             Some(page) => verb(page, style, terminal),
-            // Unreachable through `args::parse`, which only produces a
-            // `Verb` for a name in this table. Answering with the module page
+            // Unreachable through `args::parse`, which only produces a `Verb`
+            // for a path `page_for` just returned. Answering with the root page
             // rather than panicking keeps a wrong call harmless.
-            None => manifest(style, terminal),
+            None => root(style, terminal),
         },
     }
+}
+
+/// The verbs of one module, as `(synopsis, summary)` — the shape every list of
+/// verbs on every page takes.
+fn verbs_of(module: &str) -> Vec<(&'static str, &'static str)> {
+    PAGES
+        .iter()
+        .filter(|page| page.module() == module)
+        .map(|page| (page.synopsis, page.summary))
+        .collect()
 }
 
 fn root(style: Style, terminal: Terminal) -> String {
@@ -261,10 +629,7 @@ fn root(style: Style, terminal: Terminal) -> String {
         style,
         "MANIFEST — what a workspace is and how to operate it",
     ));
-    let mut verbs: Vec<(&str, &str)> = MANIFEST
-        .iter()
-        .map(|page| (page.name, page.summary))
-        .collect();
+    let mut verbs = verbs_of("manifest");
     verbs.push(("<name>", "a commands: entry from this repo's armada.yml"));
     out.push_str(&two_column(&verbs).render(style, width));
 
@@ -273,30 +638,21 @@ fn root(style: Style, terminal: Terminal) -> String {
         style,
         "GUILD — you, portable: voice, skills, hooks, workflows",
     ));
-    out.push_str(
-        &two_column(
-            &GUILD_VERBS
-                .iter()
-                .filter(|(_, summary)| !summary.starts_with("M2 "))
-                .copied()
-                .collect::<Vec<_>>(),
-        )
-        .render(style, width),
-    );
+    out.push_str(&two_column(&verbs_of("guild")).render(style, width));
 
     out.push('\n');
     out.push_str(&heading(
         style,
         "FLEET — the agents you do not talk to: Jobs, worktrees, budgets",
     ));
-    out.push_str(&two_column(&FLEET_VERBS).render(style, width));
+    out.push_str(&two_column(&verbs_of("fleet")).render(style, width));
 
     out.push('\n');
     out.push_str(&heading(style, "THIS MACHINE"));
     // **`armada init` and `armada manifest init` are two verbs**, and the one
     // place a reader is most likely to confuse them is this page — so the line
     // says which is which rather than leaving the module level to imply it.
-    out.push_str(&two_column(&TOP_LEVEL_VERBS).render(style, width));
+    out.push_str(&two_column(&verbs_of("")).render(style, width));
 
     out.push('\n');
     out.push_str(&heading(style, "GLOBAL FLAGS"));
@@ -334,33 +690,28 @@ fn guild(style: Style, terminal: Terminal) -> String {
         )
     );
     out.push_str(&heading(style, "VERBS"));
-    out.push_str(
-        &two_column(
-            &GUILD_VERBS
-                .iter()
-                .filter(|(_, summary)| !summary.starts_with("M2 "))
-                .copied()
-                .collect::<Vec<_>>(),
-        )
-        .render(style, width),
-    );
+    out.push_str(&two_column(&verbs_of("guild")).render(style, width));
     out.push('\n');
     out.push_str(&heading(style, "NOT BUILT YET"));
     out.push_str(
         &two_column(
-            &GUILD_VERBS
+            &RESERVED_GUILD_VERBS
                 .iter()
-                .filter(|(_, summary)| summary.starts_with("M2 "))
                 .map(|(name, summary)| (*name, summary.trim_start_matches("M2 \u{2014} ")))
                 .collect::<Vec<_>>(),
         )
         .render(style, width),
     );
     out.push('\n');
+    out.push_str(&trailer("armada guild"));
+    // **What the guild lets you do, not what is in it.** The old paragraph
+    // listed four filenames and cited a section number, which told a reader
+    // holding only the binary nothing they could act on.
     out.push_str(
-        "Nothing in ~/.armada/guild/ is repository content, and no part of it is ever\n\
-         committed to a project. machine.yml, manifest.db, jobs/ and workspaces/ never\n\
-         sync (PLAN.md \u{a7}13.1).\n",
+        "\nYour guild is how you work: your voice, your skills, your workflows. Set it up\n\
+         once and it follows you \u{2014} a new laptop is a `pull` rather than an afternoon.\n\n\
+         It never lands in a project's history, and what is only true of this machine\n\
+         stays on it: its settings, its database, and the Jobs running here.\n",
     );
     out
 }
@@ -376,15 +727,22 @@ fn fleet(style: Style, terminal: Terminal) -> String {
         )
     );
     out.push_str(&heading(style, "VERBS"));
-    out.push_str(&two_column(&FLEET_VERBS).render(style, width));
+    out.push_str(&two_column(&verbs_of("fleet")).render(style, width));
     out.push('\n');
+    out.push_str(&trailer("armada fleet"));
     // **The one thing a reader has to know before the verbs make sense**
     // (`glossary.md`): the durable thing and the running thing are not the same
     // thing, and every verb here acts on the durable one.
+    //
+    // **Said by what it buys the reader, not by what the record holds.** The
+    // paragraph this replaced opened by listing a Job's five fields, which is
+    // what a Job is internally and not what it means to someone deciding
+    // whether it is safe to close their laptop.
     out.push_str(
-        "A Job is durable: a uuid, a worktree, a port block, a transcript and a budget.\n\
-         A Drone is the process running it. Killing a Drone does not end its Job, and a\n\
-         Job with nothing running is the ordinary resting state (PLAN.md \u{a7}14.1).\n\n\
+        "\nYou ask for work; that is a Job. Something runs it; that is a Drone.\n\n\
+         The two are separate so that a crash, a reboot or a killed process\n\
+         does not lose the work \u{2014} the Job keeps its branch, its notes and what\n\
+         it spent, and you can pick it up later with `board`.\n\n\
          Board does not attach. It hands you the conversation to drive yourself, in the\n\
          Job's own worktree \u{2014} Armada owns no terminal.\n",
     );
@@ -401,27 +759,35 @@ fn manifest(style: Style, terminal: Terminal) -> String {
         )
     );
     out.push_str(&heading(style, "VERBS"));
-    out.push_str(
-        &two_column(
-            &MANIFEST
-                .iter()
-                .map(|page| (page.name, page.summary))
-                .collect::<Vec<_>>(),
-        )
-        .render(style, width),
-    );
+    out.push_str(&two_column(&verbs_of("manifest")).render(style, width));
     out.push('\n');
     out.push_str(&heading(style, "NOT BUILT YET"));
     out.push_str(
         &two_column(&[(
             not_built_verbs().join(", ").as_str(),
-            "reserved; see PHASES.md §8",
+            "claimed; each answers `not built yet`",
         )])
         .render(style, width),
     );
     out.push('\n');
-    out.push_str("`armada manifest <verb> --help` for one verb's flags.\n");
+    out.push_str(&trailer("armada manifest"));
+    // The same rule as Fleet's paragraph: what claiming a workspace buys you,
+    // rather than what the record of one contains.
+    out.push_str(
+        "\nA workspace is one checkout, with services and ports that are only its own.\n\
+         Claim it and you can run two branches of the same repository at once without\n\
+         either one taking the other's port or stopping the other's database.\n",
+    );
     out
+}
+
+/// The line every module page ends its verb list with.
+///
+/// **The same sentence on all three**, because a reader who learned it on one
+/// module has learned it on the others — and the module pages are the only
+/// place that sentence has to appear.
+fn trailer(module: &str) -> String {
+    format!("`{module} <verb> --help` for one verb's usage and flags.\n")
 }
 
 fn verb(page: &Page, style: Style, terminal: Terminal) -> String {
@@ -430,7 +796,7 @@ fn verb(page: &Page, style: Style, terminal: Terminal) -> String {
         "{}\n\n",
         style.strong(
             Role::SignalAmber,
-            &format!("armada manifest {} — {}", page.name, page.summary)
+            &format!("armada {} — {}", page.path, page.summary)
         )
     );
 
@@ -443,16 +809,18 @@ fn verb(page: &Page, style: Style, terminal: Terminal) -> String {
     }
     out.push_str(&usage.render(style, width));
 
-    let takes_lens = matches!(page.name, "status" | "clean");
     let mut flags: Vec<(&str, &str)> = page.flags.to_vec();
-    if takes_lens {
-        flags.extend_from_slice(&LENS);
-    }
     flags.extend_from_slice(&EVERYWHERE);
 
     out.push('\n');
     out.push_str(&heading(style, "FLAGS"));
     out.push_str(&two_column(&flags).render(style, width));
+
+    if !page.examples.is_empty() {
+        out.push('\n');
+        out.push_str(&heading(style, "EXAMPLES"));
+        out.push_str(&examples(page.examples, style));
+    }
 
     if !page.notes.is_empty() {
         out.push('\n');
@@ -460,6 +828,24 @@ fn verb(page: &Page, style: Style, terminal: Terminal) -> String {
             out.push_str(note);
             out.push('\n');
         }
+    }
+    out
+}
+
+/// The invocation, then what it does under it.
+///
+/// **Not a two-column table.** A real invocation is sixty columns wide before
+/// its explanation starts, and a table would either truncate the explanation to
+/// nothing or shear the page — so the pair stacks, and the indent is what ties
+/// the two lines together.
+fn examples(rows: &[(&str, &str)], style: Style) -> String {
+    let mut out = String::new();
+    for (index, (call, what)) in rows.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str(&format!("  {call}\n"));
+        out.push_str(&format!("    {}\n", style.paint(Role::SteelGrey, what)));
     }
     out
 }
@@ -483,13 +869,13 @@ fn two_column(rows: &[(&str, &str)]) -> Table {
 
 /// The claimed Manifest verbs that answer "not built yet".
 ///
-/// Read off `args.rs`'s own table rather than retyped, so a verb that ships
+/// Read off `args.rs`'s own tables rather than retyped, so a verb that ships
 /// leaves this list by shipping.
 fn not_built_verbs() -> Vec<&'static str> {
     BUILTIN_VERBS
         .iter()
         .copied()
-        .filter(|verb| !MANIFEST.iter().any(|page| page.name == *verb))
+        .filter(|verb| !MANIFEST_BUILT.contains(verb))
         .collect()
 }
 
@@ -500,6 +886,7 @@ fn not_built_verbs() -> Vec<&'static str> {
 fn not_built(style: Style, width: usize) -> String {
     let modules: Vec<&str> = RESERVED_TOP_LEVEL.iter().map(|(name, _)| *name).collect();
     let manifest_verbs = not_built_verbs();
+    let guild_verbs: Vec<&str> = RESERVED_GUILD_VERBS.iter().map(|(name, _)| *name).collect();
 
     let mut out = Table::new(vec![Column::fixed(""), Column::flexible("")])
         .headerless()
@@ -509,7 +896,7 @@ fn not_built(style: Style, width: usize) -> String {
             Cell::muted("M3"),
         ])
         .row(vec![
-            Cell::plain("armada guild edit, verify"),
+            Cell::plain(format!("armada guild {}", guild_verbs.join(", "))),
             Cell::muted("M2"),
         ])
         .row(vec![
@@ -522,8 +909,8 @@ fn not_built(style: Style, width: usize) -> String {
         ])
         .render(style, width);
     out.push_str(
-        "\n  Each answers `not built yet` and names its milestone, rather than\n  \
-         meaning something else for a release first (PHASES.md §8).\n",
+        "\n  Each is claimed and answers `not built yet`, so that a name which is\n  \
+         going to mean one thing never means something else first.\n",
     );
     out
 }
@@ -531,9 +918,111 @@ fn not_built(style: Style, width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::args::every_verb;
 
     fn root_page() -> String {
         render(Topic::Root, Style::plain(), Terminal::at(100))
+    }
+
+    fn page_text(path: &'static str) -> String {
+        render(Topic::Verb(path), Style::plain(), Terminal::at(100))
+    }
+
+    /// **The gap this milestone closed, stated so it cannot reopen.**
+    ///
+    /// `args.rs` enumerates every verb it accepts; every one of them has a page
+    /// here, and that page has the four things a page is. A verb that ships
+    /// without one fails this test rather than being discovered by a reader
+    /// typing `--help` and being told `unknown flag`.
+    #[test]
+    fn every_verb_the_parser_accepts_has_a_page() {
+        for path in every_verb() {
+            let key =
+                page_for(&path).unwrap_or_else(|| panic!("`armada {path}` has no --help page"));
+            let text = page_text(key);
+            assert!(
+                text.starts_with(&format!("armada {path} \u{2014} ")),
+                "`armada {path} --help` does not open by naming itself"
+            );
+            assert!(text.contains("USAGE"), "`armada {path}` has no USAGE");
+            assert!(text.contains("FLAGS"), "`armada {path}` has no FLAGS");
+        }
+    }
+
+    /// And the other direction: a page for something the parser would refuse is
+    /// a promise the CLI does not keep.
+    #[test]
+    fn every_page_is_a_verb_the_parser_accepts() {
+        let accepted = every_verb();
+        for page in &PAGES {
+            assert!(
+                accepted.iter().any(|path| path == page.path),
+                "`armada {}` has a page and is not a verb",
+                page.path
+            );
+        }
+    }
+
+    /// **USAGE shows the positional arguments, and shows which are required.**
+    /// The report that opened this was a reader asking whether `spawn` takes the
+    /// prompt or asks for it afterwards, which is exactly what a synopsis
+    /// answers and what prose never did.
+    #[test]
+    fn a_verb_that_takes_an_argument_says_so_in_its_synopsis_and_its_usage() {
+        for page in &PAGES {
+            let verb = page.path.rsplit(' ').next().expect("a last word");
+            assert!(
+                page.synopsis == verb || page.synopsis.starts_with(&format!("{verb} ")),
+                "`{}`'s synopsis does not open with the verb: {}",
+                page.path,
+                page.synopsis
+            );
+            // Every argument the module page advertises is spelled out in
+            // USAGE. `<scan|verify>` counts as two, because a reader who saw it
+            // on the module page will type one of them.
+            let usage = page.usage.join("\n");
+            for argument in page
+                .synopsis
+                .split_whitespace()
+                .skip(1)
+                .flat_map(|word| word.trim_matches(['[', ']', '<', '>']).split('|'))
+            {
+                assert!(
+                    usage.contains(argument),
+                    "`{}` advertises `{argument}` and its USAGE never mentions it",
+                    page.path
+                );
+            }
+            for line in page.usage {
+                assert!(
+                    line.starts_with(&format!("armada {}", page.path)),
+                    "`{}`'s usage line does not start with the verb: {line}",
+                    page.path
+                );
+            }
+        }
+    }
+
+    /// **A module page shows what each verb takes.** `spawn` alone sends the
+    /// reader for a second command to learn there is a task argument; `spawn
+    /// <task>` does not.
+    #[test]
+    fn the_module_pages_carry_a_synopsis_rather_than_a_bare_name() {
+        for (topic, module) in [
+            (Topic::Manifest, "manifest"),
+            (Topic::Guild, "guild"),
+            (Topic::Fleet, "fleet"),
+        ] {
+            let text = render(topic, Style::plain(), Terminal::at(100));
+            for (synopsis, _) in verbs_of(module) {
+                assert!(
+                    text.contains(synopsis),
+                    "the {module} page does not carry `{synopsis}`"
+                );
+            }
+        }
+        let fleet = render(Topic::Fleet, Style::plain(), Terminal::at(100));
+        assert!(fleet.contains("spawn <task>"), "spawn hides its argument");
     }
 
     /// **Nothing a caller can type is missing from the help.** A verb that ships
@@ -551,8 +1040,9 @@ mod tests {
                 "`armada {module}` is not on the page"
             );
         }
-        for (verb, _) in FLEET_VERBS {
-            assert!(page.contains(verb), "`armada fleet {verb}` is not listed");
+        for path in every_verb() {
+            let verb = path.rsplit(' ').next().expect("a last word");
+            assert!(page.contains(verb), "`armada {path}` is not listed");
         }
     }
 
@@ -562,24 +1052,55 @@ mod tests {
     #[test]
     fn the_fleet_page_lists_its_verbs_and_draws_the_job_drone_line() {
         let page = render(Topic::Fleet, Style::plain(), Terminal::at(100));
-        for (verb, _) in FLEET_VERBS {
-            assert!(page.contains(verb), "`{verb}` is not on the Fleet page");
+        for (synopsis, _) in verbs_of("fleet") {
+            assert!(page.contains(synopsis), "`{synopsis}` is not on the page");
         }
         assert!(page.contains("Drone"), "the Drone is not explained");
         assert!(page.contains("does not attach"), "board is not qualified");
     }
 
-    /// Every built verb has a page of its own, and it names its own flags.
+    /// Every verb's page names its own flags, and the two everything takes.
     #[test]
-    fn every_built_verb_has_a_page_listing_its_flags() {
-        for page in &MANIFEST {
-            let text = render(Topic::Verb(page.name), Style::plain(), Terminal::at(100));
-            assert!(text.starts_with(&format!("armada manifest {}", page.name)));
+    fn every_page_lists_its_flags_and_the_shared_two() {
+        for page in &PAGES {
+            let text = page_text(page.path);
             for (flag, _) in page.flags {
-                assert!(text.contains(flag), "{} lost {flag}", page.name);
+                assert!(text.contains(flag), "{} lost {flag}", page.path);
             }
             for (flag, _) in EVERYWHERE {
-                assert!(text.contains(flag), "{} lost {flag}", page.name);
+                assert!(text.contains(flag), "{} lost {flag}", page.path);
+            }
+        }
+    }
+
+    /// **The five verbs whose shape prose cannot carry have worked examples.**
+    /// Each was named in the report that opened this: a synopsis alone leaves
+    /// the reader guessing at the *shape* of a real call.
+    #[test]
+    fn the_verbs_whose_usage_is_not_obvious_carry_examples() {
+        for path in [
+            "fleet spawn",
+            "fleet answer",
+            "manifest check",
+            "manifest config",
+            "guild init",
+        ] {
+            let page = PAGES
+                .iter()
+                .find(|page| page.path == path)
+                .unwrap_or_else(|| panic!("`{path}` has no page"));
+            assert!(
+                page.examples.len() >= 2,
+                "`{path}` has fewer than two examples"
+            );
+            let text = page_text(page.path);
+            assert!(text.contains("EXAMPLES"), "`{path}` renders no EXAMPLES");
+            for (call, _) in page.examples {
+                assert!(
+                    call.starts_with("armada "),
+                    "`{path}`'s example is not an invocation: {call}"
+                );
+                assert!(text.contains(call), "`{path}` lost the example {call}");
             }
         }
     }
@@ -589,17 +1110,17 @@ mod tests {
     /// (`args.rs`), and a help page that offered it would contradict the parser.
     #[test]
     fn the_scope_lens_is_listed_only_where_it_is_accepted() {
-        for (name, expected) in [
-            ("status", true),
-            ("clean", true),
-            ("check", false),
-            ("init", false),
+        for (path, expected) in [
+            ("manifest status", true),
+            ("manifest clean", true),
+            ("manifest check", false),
+            ("manifest init", false),
         ] {
-            let text = render(Topic::Verb(name), Style::plain(), Terminal::at(100));
+            let text = page_text(path);
             assert_eq!(
                 text.contains("--project"),
                 expected,
-                "`{name}` --project listed: {}",
+                "`{path}` --project listed: {}",
                 text.contains("--project")
             );
         }
@@ -611,7 +1132,7 @@ mod tests {
     fn no_page_overflows_an_eighty_column_terminal() {
         let pages = [Topic::Root, Topic::Manifest, Topic::Guild, Topic::Fleet]
             .into_iter()
-            .chain(MANIFEST.iter().map(|page| Topic::Verb(page.name)));
+            .chain(PAGES.iter().map(|page| Topic::Verb(page.path)));
         for topic in pages {
             let text = render(topic, Style::plain(), Terminal::piped());
             for line in text.lines() {
@@ -624,12 +1145,87 @@ mod tests {
         }
     }
 
+    /// Every page the renderer can draw, at a width nothing truncates.
+    fn every_page() -> Vec<(Topic, String)> {
+        [
+            Topic::Bare,
+            Topic::Root,
+            Topic::Manifest,
+            Topic::Guild,
+            Topic::Fleet,
+        ]
+        .into_iter()
+        .chain(PAGES.iter().map(|page| Topic::Verb(page.path)))
+        .map(|topic| (topic, render(topic, Style::plain(), Terminal::at(100))))
+        .collect()
+    }
+
+    /// **No spec citation reaches a reader.**
+    ///
+    /// The person reading `--help` has the binary and not the repository, so
+    /// `(PLAN.md §3.2)` reads to them the way an error code does: it looks like
+    /// it means something and there is nowhere to go and find out. A doc comment
+    /// may cite a section, and so may a `next_action` an agent will act on —
+    /// **rendered help may not**, and a sentence that needed the citation to
+    /// carry its meaning was an incomplete sentence.
+    ///
+    /// Kept as a test rather than a habit for the same reason the page-per-verb
+    /// check is: the next page reintroduces them otherwise.
+    #[test]
+    fn no_rendered_help_cites_a_document_the_reader_does_not_have() {
+        for (topic, text) in every_page() {
+            for citation in ["§", "PLAN.md", "PHASES.md", "ARCHITECTURE.md", "traps.md"] {
+                assert!(
+                    !text.contains(citation),
+                    "{topic:?} cites {citation}. Help is read by someone holding \
+                     the binary and not the repository; say the thing the section \
+                     says, or say nothing."
+                );
+            }
+        }
+    }
+
+    /// **Fitting in eighty columns is not the same as being readable in them.**
+    /// A table degrades by truncating its description column, which is right for
+    /// a `status` listing and wrong here — the description *is* the page. The
+    /// widest synopsis sets that column for every row, so adding one lengthens
+    /// nothing and shortens everything, silently, until a summary loses its last
+    /// three words to an ellipsis.
+    #[test]
+    fn no_summary_on_a_list_of_verbs_is_truncated_away() {
+        for (topic, module) in [
+            (Topic::Root, "manifest"),
+            (Topic::Root, "guild"),
+            (Topic::Root, "fleet"),
+            (Topic::Root, ""),
+            (Topic::Manifest, "manifest"),
+            (Topic::Guild, "guild"),
+            (Topic::Fleet, "fleet"),
+        ] {
+            let text = render(topic, Style::plain(), Terminal::piped());
+            for (synopsis, summary) in verbs_of(module) {
+                assert!(
+                    text.contains(summary),
+                    "{topic:?} truncated `{synopsis}`'s summary at eighty columns"
+                );
+            }
+        }
+    }
+
     /// The help is human output, so it obeys the same rule everything else does:
     /// the two audiences differ in styling and in nothing else.
     #[test]
     fn the_help_is_unpainted_for_a_pipe_and_painted_for_a_terminal() {
         assert!(!root_page().contains('\x1b'));
         assert!(render(Topic::Root, Style::painted(), Terminal::at(100)).contains('\x1b'));
+        // And the section that is not drawn by the table renderer obeys it too.
+        assert!(!page_text("fleet spawn").contains('\x1b'));
+        assert!(render(
+            Topic::Verb("fleet spawn"),
+            Style::painted(),
+            Terminal::at(100)
+        )
+        .contains('\x1b'));
     }
 
     /// **The wordmark is on bare `armada` and on nothing else here.** A banner
@@ -639,7 +1235,12 @@ mod tests {
     fn the_wordmark_is_on_bare_armada_and_on_no_other_page() {
         let wide = Terminal::at(120);
         assert!(render(Topic::Bare, Style::painted(), wide).contains("█████╗"));
-        for topic in [Topic::Root, Topic::Manifest, Topic::Verb("check")] {
+        for topic in [
+            Topic::Root,
+            Topic::Manifest,
+            Topic::Verb("manifest check"),
+            Topic::Verb("fleet spawn"),
+        ] {
             assert!(
                 !render(topic, Style::painted(), wide).contains('█'),
                 "{topic:?} drew the wordmark"

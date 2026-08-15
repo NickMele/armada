@@ -1,0 +1,27 @@
+[1m[38;2;255;169;64marmada fleet spawn — start an isolated agent Job on a task[0m
+
+[1m[38;2;255;169;64mUSAGE[0m
+  armada fleet spawn <task> [--workflow <name>] [--name <handle>]
+  armada fleet spawn <task> [--budget <k>=<v>]… [-C <path>] [--dry-run]
+
+[1m[38;2;255;169;64mFLAGS[0m
+  --workflow <name>  [38;2;107;114;128moverride classification; a workflow in your guild[0m
+  --name <handle>    [38;2;107;114;128mthe Job's handle; derived from the task when absent[0m
+  --budget <k>=<v>   [38;2;107;114;128moverride one ceiling, repeatable[0m
+  -C <path>          [38;2;107;114;128mthe repository to branch from; the cwd's when absent[0m
+  --dry-run          [38;2;107;114;128mreport the plan: workflow, worktree, ports, budget[0m
+  --json             [38;2;107;114;128manswer as one JSON object, for a script or an agent[0m
+  --color <when>     [38;2;107;114;128mauto (default), always, never; NO_COLOR wins[0m
+
+[1m[38;2;255;169;64mEXAMPLES[0m
+  armada fleet spawn "add rate limiting to the API"
+    [38;2;107;114;128mthe task is the argument: one quoted string, given up front[0m
+
+  armada fleet spawn "port the CLI to clap" --workflow refactor
+    [38;2;107;114;128mskip classification and name the workflow yourself[0m
+
+  armada fleet spawn "audit the auth flow" -C ~/work/api --dry-run
+    [38;2;107;114;128manother repository, and the plan only — nothing starts[0m
+
+The task is required. Armada never prompts for it afterwards, so a
+shell that ate your quotes is a refusal rather than an empty Job.

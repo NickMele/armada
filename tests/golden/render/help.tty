@@ -5,37 +5,37 @@
   armada                          [38;2;107;114;128menter Helm, the agent you talk to[0m
 
 [1m[38;2;255;169;64mMANIFEST — what a workspace is and how to operate it[0m
-  config  [38;2;107;114;128mreport the evidence, then verify what was written[0m
-  init    [38;2;107;114;128mclaim this workspace: ports, .armada/, setup[0m
-  up      [38;2;107;114;128mstart this workspace's services, and wait until they answer[0m
-  down    [38;2;107;114;128mstop this workspace's services; keep the port block[0m
-  status  [38;2;107;114;128mwhat is running, what is mine, what is stale[0m
-  check   [38;2;107;114;128mlint, format and test — the verb a gate calls[0m
-  skills  [38;2;107;114;128mwhat this repository knows about itself[0m
-  clean   [38;2;107;114;128mrelease what this workspace owns[0m
-  <name>  [38;2;107;114;128ma commands: entry from this repo's armada.yml[0m
+  config <scan|verify>  [38;2;107;114;128mreport the evidence, then verify what was written[0m
+  init                  [38;2;107;114;128mclaim this workspace: ports, .armada/, setup[0m
+  up [<component>]      [38;2;107;114;128mstart this workspace's services; wait until they answer[0m
+  down [<component>]    [38;2;107;114;128mstop this workspace's services; keep the port block[0m
+  status                [38;2;107;114;128mwhat is running, what is mine, what is stale[0m
+  check [<selector>]    [38;2;107;114;128mlint, format and test — the verb a gate calls[0m
+  skills [show <name>]  [38;2;107;114;128mwhat this repository knows about itself[0m
+  clean                 [38;2;107;114;128mrelease what this workspace owns[0m
+  <name>                [38;2;107;114;128ma commands: entry from this repo's armada.yml[0m
 
 [1m[38;2;255;169;64mGUILD — you, portable: voice, skills, hooks, workflows[0m
-  init    [38;2;107;114;128mbuild your guild by interviewing you[0m
-  pull    [38;2;107;114;128mbring this machine's guild up to date[0m
-  push    [38;2;107;114;128msend local guild changes to the remote[0m
-  export  [38;2;107;114;128mwrite the whole guild to one portable file[0m
-  import  [38;2;107;114;128mrestore a guild from a bundle[0m
+  init             [38;2;107;114;128mbuild your guild by interviewing you[0m
+  pull             [38;2;107;114;128mbring this machine's guild up to date[0m
+  push             [38;2;107;114;128msend local guild changes to the remote[0m
+  export           [38;2;107;114;128mwrite the whole guild to one portable file[0m
+  import <bundle>  [38;2;107;114;128mrestore a guild from a bundle[0m
 
 [1m[38;2;255;169;64mFLEET — the agents you do not talk to: Jobs, worktrees, budgets[0m
-  spawn   [38;2;107;114;128mstart an isolated agent Job on a task[0m
-  ls      [38;2;107;114;128mwhat is running, what it has spent, and who needs you[0m
-  board   [38;2;107;114;128mtake a Job over yourself: worktree and resume command[0m
-  answer  [38;2;107;114;128mgive a waiting Job your decision; let it continue[0m
-  inbox   [38;2;107;114;128mwhat the fleet needs from you[0m
-  kill    [38;2;107;114;128mend a Job and release everything it owns[0m
+  spawn <task>           [38;2;107;114;128mstart an isolated agent Job on a task[0m
+  ls                     [38;2;107;114;128mwhat is running, what it has spent, and who needs you[0m
+  board <job>            [38;2;107;114;128mtake a Job over yourself: worktree and resume command[0m
+  answer <job> <answer>  [38;2;107;114;128mgive a waiting Job your decision; let it continue[0m
+  inbox                  [38;2;107;114;128mwhat the fleet needs from you[0m
+  kill [<job>]           [38;2;107;114;128mend a Job and release everything it owns[0m
 
 [1m[38;2;255;169;64mTHIS MACHINE[0m
   init    [38;2;107;114;128mset up this machine: checks, ~/.armada/, and your guild[0m
   doctor  [38;2;107;114;128mwhat this machine is missing, and what fixes it[0m
 
 [1m[38;2;255;169;64mGLOBAL FLAGS[0m
-  --json          [38;2;107;114;128manswer in the envelope (PLAN.md §3.1), not as text[0m
+  --json          [38;2;107;114;128manswer as one JSON object, for a script or an agent[0m
   --color <when>  [38;2;107;114;128mauto (default), always, never; NO_COLOR wins[0m
   -h, --help      [38;2;107;114;128mthis page, or a verb's own flags[0m
   -V, --version   [38;2;107;114;128mthe version[0m
@@ -46,8 +46,8 @@
   armada manifest render, agents-md, explain  [38;2;107;114;128mreserved[0m
   armada manifest check --detach, --status    [38;2;107;114;128mreserved[0m
 
-  Each answers `not built yet` and names its milestone, rather than
-  meaning something else for a release first (PHASES.md §8).
+  Each is claimed and answers `not built yet`, so that a name which is
+  going to mean one thing never means something else first.
 
 Run `armada <module> <verb> --help` for a verb's own flags.
 
