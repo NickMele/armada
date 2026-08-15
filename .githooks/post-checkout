@@ -1,0 +1,7 @@
+#!/bin/sh
+# Reinstalls armada/arm when a branch switch lands on `main`. Logic lives in
+# reinstall-on-main.sh (shared with post-merge). Enable with:
+#   git config core.hooksPath .githooks
+set -eu
+HOOK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$HOOK_DIR/reinstall-on-main.sh" post-checkout "$@"

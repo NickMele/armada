@@ -96,6 +96,11 @@ cargo xtask doclint      # the docs are a deliverable; they are linted like one
 Rust stable, 2021 edition. The MSRV is pinned in `Cargo.toml`. `cargo xtask` needs no
 interpreter and no virtualenv — that is why the doc lint is Rust and not a script.
 
+Optional: `git config core.hooksPath .githooks` reinstalls the `armada`/`arm` binaries
+automatically whenever a merge or checkout updates `main` with a change that touches Rust
+sources, `Cargo.toml` or `Cargo.lock`. See `.githooks/reinstall-on-main.sh` for what it does
+and why it's synchronous. Off by default — turn it on if you rebuild against `main` often.
+
 ## Workflow
 
 Never commit to `main`. Work on a feature branch.
