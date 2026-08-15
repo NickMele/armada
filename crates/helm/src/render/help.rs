@@ -364,11 +364,14 @@ const PAGES: [Page; 21] = [
             ("--out <path>", "where to write the bundle"),
             (
                 "--include-secrets",
-                "include machine.yml, which otherwise never travels",
+                "include this machine's own settings, which normally stay",
             ),
         ],
         examples: &[],
-        notes: &["machine.yml is left out by default: not travelling is what it is for."],
+        notes: &[
+            "Left out by default, so a bundle you hand to someone else carries",
+            "none of your credentials unless you asked for it to.",
+        ],
     },
     Page {
         path: "guild import",
