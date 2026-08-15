@@ -1,0 +1,6 @@
+armada  3d9cc7ba
+
+OK  0 commands
+
+No commands: block in armada.yml, so this repository declares no verbs.
+An entry is a name, a cmd: to run, and a help: line saying what it is for.

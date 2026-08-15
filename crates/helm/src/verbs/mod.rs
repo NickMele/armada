@@ -8,6 +8,7 @@
 pub mod bridge;
 pub mod check;
 pub mod clean;
+pub mod commands;
 pub mod components;
 pub mod config;
 pub mod dispatch;
@@ -26,7 +27,7 @@ use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
-    ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
+    CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
     GuildInitData, GuildSyncData, HelmData, InboxData, InitData, InitDryRun, KillData,
     MachineInitData, McpData, ProbeData, Projection, ReportData, ScanData, ServicesData, ShowData,
     SkillsData, SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
@@ -70,6 +71,9 @@ pub enum Output {
     Skills(Box<Envelope<SkillsData>>),
     /// `armada manifest components`.
     Components(Box<Envelope<ComponentsData>>),
+    /// `armada manifest commands` — what this repository declares, listed.
+    /// **Not [`Output::Dispatch`]**, which is what happens when one is run.
+    Commands(Box<Envelope<CommandsData>>),
     /// `armada init` — the machine, not a workspace.
     MachineInit(Box<Envelope<MachineInitData>>),
     /// `armada doctor`.
@@ -134,6 +138,7 @@ impl Output {
             Output::Verify(e) => e.to_json(),
             Output::Skills(e) => e.to_json(),
             Output::Components(e) => e.to_json(),
+            Output::Commands(e) => e.to_json(),
             Output::MachineInit(e) => e.to_json(),
             Output::Doctor(e) => e.to_json(),
             Output::GuildSync(e) => e.to_json(),
@@ -192,6 +197,7 @@ impl Output {
             Output::Verify(e) => e.exit_code(),
             Output::Skills(e) => e.exit_code(),
             Output::Components(e) => e.exit_code(),
+            Output::Commands(e) => e.exit_code(),
             Output::MachineInit(e) => e.exit_code(),
             Output::Doctor(e) => e.exit_code(),
             Output::GuildSync(e) => e.exit_code(),
