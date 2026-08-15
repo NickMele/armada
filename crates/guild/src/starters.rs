@@ -126,6 +126,15 @@ pub fn write(guild_root: &Path, answers: &Answers) -> std::io::Result<Vec<String
         std::fs::write(&path, body)?;
         written.push(starter.path.to_string());
     }
+
+    // **The provenance stamp, written last and written every time.** It is not
+    // one of the starters because it is generated rather than shipped — it
+    // records the digest of the set just written — and without it a guild has
+    // no base, which is the whole of `docs/reserved/006`: not a missing merge
+    // engine, a missing record of where the files came from.
+    std::fs::write(guild_root.join(crate::upstream::STAMP), crate::upstream::stamp())?;
+    written.push(crate::upstream::STAMP.to_string());
+
     Ok(written)
 }
 
@@ -328,6 +337,22 @@ mod tests {
             let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(&body).unwrap();
             assert_eq!(parsed["budget"]["iterations"], 8);
         }
+    }
+
+    /// **A fresh guild is stamped**, so a later `armada guild upgrade` has a
+    /// base to merge from. Before this, nothing anywhere said which template
+    /// set a file came from, and the absence — not the merge — was what made
+    /// upgrading impossible (`docs/reserved/006`).
+    #[test]
+    fn a_fresh_guild_records_which_templates_it_came_from() {
+        let guild = tempfile::tempdir().unwrap();
+        let wrote = write(guild.path(), &Answers::all_defaulted()).unwrap();
+        assert!(wrote.contains(&crate::upstream::STAMP.to_string()));
+
+        let body = std::fs::read_to_string(guild.path().join(crate::upstream::STAMP)).unwrap();
+        let stamp = crate::upstream::read(&body).expect("the stamp parses");
+        assert_eq!(stamp.templates, crate::upstream::digest());
+        assert_eq!(stamp.version, crate::upstream::VERSION);
     }
 
     /// The skill and the persona are copied verbatim: nothing in the interview

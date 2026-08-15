@@ -109,7 +109,18 @@ pub struct Touched {
 
 /// Run one git command in the guild, and insist it succeeded.
 fn git(run: &impl Run, cwd: &Path, args: &[&str]) -> Result<String, ArmadaError> {
-    let output = try_git(run, cwd, args)?;
+    git_with(run, cwd, args, &[], None)
+}
+
+/// The same, with an environment layer and something on stdin.
+fn git_with(
+    run: &impl Run,
+    cwd: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+    stdin: Option<&str>,
+) -> Result<String, ArmadaError> {
+    let output = try_git_with(run, cwd, args, env, stdin)?;
     if !output.0 {
         return Err(ArmadaError {
             class: ErrClass::ToolFailed,
@@ -131,11 +142,32 @@ fn try_git(
     cwd: &Path,
     args: &[&str],
 ) -> Result<(bool, String, String), ArmadaError> {
+    try_git_with(run, cwd, args, &[], None)
+}
+
+/// The same, with an environment layer and something on stdin.
+///
+/// **Two callers and one reason each.** `GIT_INDEX_FILE` is what lets
+/// [`commit_files`] build a commit without checking anything out — the guild's
+/// working tree holds the user's edits and an upgrade must not disturb them —
+/// and `hash-object --stdin` is what lets a template body become a blob without
+/// ever being written to a file somebody could be editing at the same moment.
+fn try_git_with(
+    run: &impl Run,
+    cwd: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+    stdin: Option<&str>,
+) -> Result<(bool, String, String), ArmadaError> {
     let mut argv = vec!["git".to_string()];
     argv.extend(args.iter().map(|a| (*a).to_string()));
-    let request = RunRequest::new(argv, cwd.to_path_buf())
+    let mut request = RunRequest::new(argv, cwd.to_path_buf())
         .stdio(StdioMode::Capture)
         .timeout(DEADLINE);
+    for (key, value) in env {
+        request.env.insert((*key).to_string(), (*value).to_string());
+    }
+    request.stdin = stdin.map(str::to_string);
 
     match run.call(&request) {
         Ok(output) if output.timed_out => Err(ArmadaError {
@@ -360,6 +392,268 @@ pub fn push(run: &impl Run, guild: &Path, force: bool) -> Result<(), ArmadaError
     args.extend(["--set-upstream", REMOTE, BRANCH]);
     git(run, guild, &args)?;
     Ok(())
+}
+
+// ------------------------------------- the upstream branch, for `guild upgrade`
+//
+// **Everything below builds a commit without touching the working tree**, and
+// that is the constraint the shape follows from. `~/.armada/guild` holds the
+// user's edits and may hold work in progress; an upgrade that checked a branch
+// out to write four files onto it would be an upgrade that could lose them if
+// it were interrupted. `git read-tree` into a private index, `hash-object` from
+// stdin, `write-tree`, `commit-tree`, `update-ref` — five plumbing calls, none
+// of which reads or writes a single file in the worktree.
+//
+// The one command that does touch the worktree is [`merge`], which is the whole
+// point: it is the only place the user's files and Armada's meet, and git
+// arbitrates it rather than Armada.
+
+/// Whether a ref resolves, and to what.
+///
+/// `None` for a branch that does not exist, which is the ordinary state of
+/// [`crate::upstream::BRANCH`] on a guild that has never been upgraded.
+pub fn rev(run: &impl Run, guild: &Path, reference: &str) -> Result<Option<String>, ArmadaError> {
+    let (ok, stdout, _) = try_git(run, guild, &["rev-parse", "--verify", "--quiet", reference])?;
+    Ok(ok
+        .then(|| stdout.trim().to_string())
+        .filter(|sha| !sha.is_empty()))
+}
+
+/// `git log --format=%H %s`, newest first — the history
+/// [`crate::upstream::base_of`] reads to find a pre-provenance guild's base.
+///
+/// **The whole log, and the choosing happens in a pure function.** Asking git to
+/// `--grep` for the init subjects would put the decision in an argv, where the
+/// only test possible is that the argv was built; here the decision is a
+/// function over a string and the tests are about histories.
+pub fn subjects(run: &impl Run, guild: &Path) -> Result<String, ArmadaError> {
+    git(run, guild, &["log", "--format=%H %s"])
+}
+
+/// Point a branch at a commit, creating it or moving it.
+pub fn set_branch(
+    run: &impl Run,
+    guild: &Path,
+    branch: &str,
+    at: &str,
+) -> Result<(), ArmadaError> {
+    git(
+        run,
+        guild,
+        &["update-ref", &format!("refs/heads/{branch}"), at],
+    )?;
+    Ok(())
+}
+
+/// Whether `ancestor` is reachable from `descendant`.
+///
+/// Used to decide whether the remote's copy of the upstream branch supersedes
+/// this machine's. It is a question with three answers — yes, no, and "one of
+/// them does not exist" — and the third is `false`, because a comparison
+/// against something that is not there cannot be a fast-forward.
+pub fn is_ancestor(
+    run: &impl Run,
+    guild: &Path,
+    ancestor: &str,
+    descendant: &str,
+) -> Result<bool, ArmadaError> {
+    let (ok, _, _) = try_git(
+        run,
+        guild,
+        &["merge-base", "--is-ancestor", ancestor, descendant],
+    )?;
+    Ok(ok)
+}
+
+/// A commit holding `parent`'s tree with these paths written over it, built in
+/// a private index so the working tree is never touched.
+///
+/// **Nothing is ever removed.** The new tree is the parent's with four paths
+/// replaced, so the diff a merge sees is exactly the managed files and nothing
+/// else — which is what makes "never overwrite something the user wrote" a
+/// property of the construction rather than of a check.
+///
+/// Returns `None` when the result would be identical to the parent, because a
+/// commit with an empty diff is a commit that makes every later `merge-base`
+/// answer harder to read for no gain.
+pub fn commit_files(
+    run: &impl Run,
+    guild: &Path,
+    parent: &str,
+    files: &[(&str, String)],
+    message: &str,
+) -> Result<Option<String>, ArmadaError> {
+    // Inside `.git/`, so it is never mistaken for content and never syncs.
+    let index = guild.join(".git").join("armada-upgrade-index");
+    let index_path = index.display().to_string();
+    let env = [("GIT_INDEX_FILE", index_path.as_str())];
+    // A stale index from an interrupted run would be read as the starting
+    // point, which is the one way this could carry a file nobody asked for.
+    let _ = std::fs::remove_file(&index);
+
+    let built = build(run, guild, parent, files, message, &env);
+    // The private index is scratch, and leaving it behind would leave a `.git`
+    // entry a reader has to wonder about.
+    let _ = std::fs::remove_file(&index);
+    built
+}
+
+fn build(
+    run: &impl Run,
+    guild: &Path,
+    parent: &str,
+    files: &[(&str, String)],
+    message: &str,
+    env: &[(&str, &str)],
+) -> Result<Option<String>, ArmadaError> {
+    git_with(run, guild, &["read-tree", parent], env, None)?;
+    for (path, body) in files {
+        // `--path` so git applies the same filters it would for a checkout of
+        // that path; `--stdin` so a template body never lands on disk beside a
+        // file the reader may be editing.
+        let blob = git_with(
+            run,
+            guild,
+            &["hash-object", "-w", "--path", path, "--stdin"],
+            env,
+            Some(body),
+        )?;
+        let entry = format!("100644,{},{}", blob.trim(), path);
+        git_with(
+            run,
+            guild,
+            &["update-index", "--add", "--cacheinfo", &entry],
+            env,
+            None,
+        )?;
+    }
+    let tree = git_with(run, guild, &["write-tree"], env, None)?;
+    let tree = tree.trim().to_string();
+
+    let parent_tree = git(run, guild, &["rev-parse", &format!("{parent}^{{tree}}")])?;
+    if parent_tree.trim() == tree {
+        return Ok(None);
+    }
+
+    let commit = git(
+        run,
+        guild,
+        &["commit-tree", &tree, "-p", parent, "-m", message],
+    )?;
+    Ok(Some(commit.trim().to_string()))
+}
+
+/// What a merge did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Merged {
+    /// It landed, and the guild is committed.
+    Clean,
+    /// Both sides changed the same lines. **The merge is left in progress**,
+    /// with git's markers in the files it names, for the person to resolve —
+    /// which is the one outcome an upgrade may not decide for them.
+    Conflicted(Vec<String>),
+}
+
+/// Merge the upstream branch into whatever is checked out.
+///
+/// **`--no-ff`, so the merge is a commit and is legible.** A fast-forward would
+/// move `main` onto Armada's branch and leave a history in which the user's
+/// guild appears to *be* the template set. `--no-commit` is deliberately not
+/// used: on a clean merge the guild should end committed, because a guild that
+/// is not committed is one `guild push` will not carry.
+pub fn merge(
+    run: &impl Run,
+    guild: &Path,
+    branch: &str,
+    message: &str,
+) -> Result<Merged, ArmadaError> {
+    let (ok, _, stderr) = try_git(run, guild, &["merge", "--no-ff", "-m", message, branch])?;
+    if ok {
+        return Ok(Merged::Clean);
+    }
+    let conflicts = unmerged(run, guild)?;
+    if conflicts.is_empty() {
+        // A merge that failed for a reason that is not a conflict — an
+        // in-progress merge, an unborn branch — is the repository being in a
+        // state Armada did not put it in, and guessing is worse than saying so.
+        return Err(ArmadaError {
+            class: ErrClass::ToolFailed,
+            r#where: format!("git merge {branch}"),
+            message: first_line(&stderr).unwrap_or_else(|| "git merge failed".to_string()),
+            next_action: Some(
+                "resolve what is in progress in ~/.armada/guild, then retry".to_string(),
+            ),
+        });
+    }
+    Ok(Merged::Conflicted(conflicts))
+}
+
+/// The paths a merge could not resolve.
+pub fn unmerged(run: &impl Run, guild: &Path) -> Result<Vec<String>, ArmadaError> {
+    let (ok, stdout, _) = try_git(run, guild, &["diff", "--name-only", "--diff-filter=U"])?;
+    if !ok {
+        return Ok(Vec::new());
+    }
+    Ok(stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+/// Every path that differs between two commits.
+pub fn changed(
+    run: &impl Run,
+    guild: &Path,
+    from: &str,
+    to: &str,
+) -> Result<Vec<Touched>, ArmadaError> {
+    let (ok, stdout, _) = try_git(
+        run,
+        guild,
+        &["diff", "--name-status", &format!("{from}..{to}")],
+    )?;
+    if !ok {
+        return Ok(Vec::new());
+    }
+    Ok(parse_name_status(&stdout))
+}
+
+/// Fetch one Armada-owned branch into its remote-tracking ref, and say whether
+/// the remote has it.
+///
+/// **Forced, and that is safe because the branch is Armada's.** The refspec
+/// writes `refs/remotes/origin/<branch>`, which nothing but this module reads;
+/// the user's `main` is never a target here.
+pub fn fetch_branch(run: &impl Run, guild: &Path, branch: &str) -> Result<bool, ArmadaError> {
+    let refspec = format!("+refs/heads/{branch}:refs/remotes/{REMOTE}/{branch}");
+    let (ok, _, stderr) = try_git(run, guild, &["fetch", REMOTE, &refspec])?;
+    if ok {
+        return Ok(true);
+    }
+    if empty_remote(&stderr) {
+        return Ok(false);
+    }
+    Err(ArmadaError {
+        class: ErrClass::ToolFailed,
+        r#where: format!("git fetch {REMOTE} {branch}"),
+        message: first_line(&stderr).unwrap_or_else(|| "git fetch failed".to_string()),
+        next_action: Some("check the remote is reachable, then retry unchanged".to_string()),
+    })
+}
+
+/// Push one Armada-owned branch, and say whether it went.
+///
+/// **A rejection is an answer, not an error.** The branch carries nothing of
+/// the user's — it is regenerable from the templates — so a machine that could
+/// not publish it has still upgraded correctly, and the only cost is that the
+/// next machine adopts its base from history instead. The caller reports it on
+/// a row rather than failing a verb that did what it was asked.
+pub fn push_branch(run: &impl Run, guild: &Path, branch: &str) -> Result<bool, ArmadaError> {
+    let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
+    let (ok, _, _) = try_git(run, guild, &["push", REMOTE, &refspec])?;
+    Ok(ok)
 }
 
 #[cfg(test)]
@@ -646,5 +940,229 @@ mod tests {
         let error = divergence(&TimesOut, guild()).unwrap_err();
         assert_eq!(error.class, ErrClass::Timeout);
         assert_eq!(error.class.exit_code(), 4);
+    }
+
+    // ------------------------------------------------ the upstream branch
+
+    /// **The upgrade's commit is built without checking anything out**, and
+    /// this is that stated as argv. A `git checkout` anywhere in this sequence
+    /// would put the user's working tree — which holds their edits, and may
+    /// hold work in progress — at the mercy of an interrupted upgrade.
+    #[test]
+    fn an_upstream_commit_is_built_in_a_private_index_and_never_checked_out() {
+        let run = FakeRun::answering(&[
+            (true, ""),         // read-tree
+            (true, "b10b\n"),   // hash-object
+            (true, ""),         // update-index
+            (true, "7433\n"),   // write-tree
+            (true, "01dtree\n"), // rev-parse parent^{tree}
+            (true, "c0mm17\n"), // commit-tree
+        ]);
+        let made = commit_files(
+            &run,
+            guild(),
+            "armada",
+            &[("subagents/helm.md", "# Helm\n".to_string())],
+            "guild: armada templates abc123",
+        )
+        .unwrap();
+        assert_eq!(made.unwrap(), "c0mm17");
+
+        assert_eq!(run.argv(0), ["git", "read-tree", "armada"]);
+        assert_eq!(
+            run.argv(1),
+            [
+                "git",
+                "hash-object",
+                "-w",
+                "--path",
+                "subagents/helm.md",
+                "--stdin"
+            ],
+            "a template body written to disk is one a reader could be editing"
+        );
+        assert_eq!(
+            run.argv(2),
+            [
+                "git",
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                "100644,b10b,subagents/helm.md"
+            ]
+        );
+        assert_eq!(run.argv(3), ["git", "write-tree"]);
+        assert_eq!(
+            run.argv(5),
+            [
+                "git",
+                "commit-tree",
+                "7433",
+                "-p",
+                "armada",
+                "-m",
+                "guild: armada templates abc123"
+            ]
+        );
+        assert!(
+            !run.calls
+                .borrow()
+                .iter()
+                .any(|argv| argv.contains(&"checkout".to_string())
+                    || argv.contains(&"switch".to_string())
+                    || argv.contains(&"stash".to_string())),
+            "the working tree was touched: {:?}",
+            run.calls.borrow()
+        );
+    }
+
+    /// A tree identical to its parent's makes no commit. An empty-diff commit
+    /// on the upstream branch is one every later `merge-base` has to be read
+    /// past, for nothing.
+    #[test]
+    fn an_unchanged_template_set_makes_no_commit() {
+        let run = FakeRun::answering(&[
+            (true, ""),
+            (true, "b10b\n"),
+            (true, ""),
+            (true, "5ame\n"),
+            (true, "5ame\n"),
+        ]);
+        let made = commit_files(
+            &run,
+            guild(),
+            "armada",
+            &[("subagents/helm.md", "# Helm\n".to_string())],
+            "guild: armada templates abc123",
+        )
+        .unwrap();
+        assert!(made.is_none());
+        assert!(
+            !run.calls
+                .borrow()
+                .iter()
+                .any(|argv| argv.contains(&"commit-tree".to_string()))
+        );
+    }
+
+    /// **`--no-ff`, asserted.** A fast-forward would move the guild's branch
+    /// onto Armada's and leave a history in which the person's guild appears to
+    /// *be* the template set.
+    #[test]
+    fn a_merge_is_never_a_fast_forward() {
+        let run = FakeRun::default();
+        assert_eq!(
+            merge(&run, guild(), "armada", "guild: upgrade").unwrap(),
+            Merged::Clean
+        );
+        assert_eq!(
+            run.argv(0),
+            ["git", "merge", "--no-ff", "-m", "guild: upgrade", "armada"]
+        );
+    }
+
+    /// A conflicted merge is **left in progress and reported by name**. The one
+    /// outcome an upgrade may not decide is which of two people's words wins.
+    #[test]
+    fn a_conflicted_merge_is_left_alone_and_names_its_files() {
+        let run = FakeRun::answering(&[(false, ""), (true, "subagents/helm.md\n")]);
+        let outcome = merge(&run, guild(), "armada", "guild: upgrade").unwrap();
+        assert_eq!(
+            outcome,
+            Merged::Conflicted(vec!["subagents/helm.md".to_string()])
+        );
+        assert!(
+            !run.calls
+                .borrow()
+                .iter()
+                .any(|argv| argv.contains(&"--abort".to_string())
+                    || argv.contains(&"reset".to_string())),
+            "an abort would throw away the resolution the person is about to make"
+        );
+    }
+
+    /// A merge that failed for something other than a conflict is not silently
+    /// reported as one — there is nothing to resolve, and the message is git's.
+    #[test]
+    fn a_merge_that_failed_for_another_reason_is_a_failure() {
+        struct Broken;
+        impl Run for Broken {
+            fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+                let merging = request.argv.contains(&"merge".to_string());
+                Ok(RunOutput {
+                    code: Some(if merging { 128 } else { 0 }),
+                    signal: None,
+                    stdout: String::new(),
+                    stderr: if merging {
+                        "fatal: You have not concluded your merge\n".to_string()
+                    } else {
+                        String::new()
+                    },
+                    timed_out: false,
+                })
+            }
+        }
+        let error = merge(&Broken, guild(), "armada", "guild: upgrade").unwrap_err();
+        assert_eq!(error.class, ErrClass::ToolFailed);
+        assert!(error.message.contains("not concluded"), "{error:?}");
+    }
+
+    /// The upstream branch is fetched into its **own** remote-tracking ref, so
+    /// a forced refspec can never reach the branch the person's guild is on.
+    #[test]
+    fn fetching_the_upstream_branch_cannot_touch_main() {
+        let run = FakeRun::default();
+        assert!(fetch_branch(&run, guild(), "armada").unwrap());
+        assert_eq!(
+            run.argv(0),
+            [
+                "git",
+                "fetch",
+                "origin",
+                "+refs/heads/armada:refs/remotes/origin/armada"
+            ]
+        );
+        assert!(
+            !run.argv(0).iter().any(|arg| arg.contains(":refs/heads/")),
+            "a forced refspec pointed at a local branch: {:?}",
+            run.argv(0)
+        );
+    }
+
+    /// A remote that has never seen the upstream branch is an absence, not a
+    /// failure — which is the ordinary state of every guild until one machine
+    /// has upgraded once.
+    #[test]
+    fn a_remote_without_the_upstream_branch_is_an_absence() {
+        struct NoBranch;
+        impl Run for NoBranch {
+            fn call(&self, _: &RunRequest) -> Result<RunOutput, SpawnError> {
+                Ok(RunOutput {
+                    code: Some(1),
+                    signal: None,
+                    stdout: String::new(),
+                    stderr: "fatal: couldn't find remote ref refs/heads/armada\n".to_string(),
+                    timed_out: false,
+                })
+            }
+        }
+        assert!(!fetch_branch(&NoBranch, guild(), "armada").unwrap());
+    }
+
+    /// A rejected push of the upstream branch is `false` rather than an error:
+    /// the branch carries nothing of the person's and the upgrade already
+    /// happened.
+    #[test]
+    fn a_rejected_upstream_push_is_an_answer_rather_than_a_failure() {
+        let run = FakeRun::answering(&[(false, "")]);
+        assert!(!push_branch(&run, guild(), "armada").unwrap());
+        assert_eq!(
+            run.argv(0),
+            ["git", "push", "origin", "refs/heads/armada:refs/heads/armada"]
+        );
+        assert!(
+            !run.argv(0).iter().any(|arg| arg.contains("force")),
+            "the upstream branch is append-only; forcing it would rewrite a base"
+        );
     }
 }
