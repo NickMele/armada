@@ -148,13 +148,13 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
                 None => format!("{}, you named it", data.workflow),
             }),
         ),
-        time_cell(style, data.classify_ms),
+        time_cell(data.classify_ms),
     ]);
     table = table.row(vec![
         token("created", Role::BeaconGreen),
         Cell::plain("worktree"),
         detail_cell(style, Some(&data.worktree)),
-        time_cell(style, Some(data.prepare_ms)),
+        time_cell(Some(data.prepare_ms)),
     ]);
     table = table.row(vec![
         token(
@@ -171,7 +171,7 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
                 .map(|block| style.span(block.from, block.to))
                 .as_deref(),
         ),
-        time_cell(style, None),
+        time_cell(None),
     ]);
     table = table.row(vec![
         token("started", Role::BeaconGreen),
@@ -184,7 +184,7 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
                 data.step
             )),
         ),
-        time_cell(style, None),
+        time_cell(None),
     ]);
 
     let mut out = table.render(style, width);
@@ -315,7 +315,7 @@ fn kill(envelope: &Envelope<KillData>, style: Style, width: usize) -> String {
             ),
             Cell::painted(killed.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&released(style, killed))),
-            time_cell(style, None),
+            time_cell(None),
         ]);
         table = table.row(vec![
             token(
@@ -327,7 +327,7 @@ fn kill(envelope: &Envelope<KillData>, style: Style, width: usize) -> String {
             ),
             Cell::painted(killed.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&format!("worktree {}", killed.worktree_path))),
-            time_cell(style, None),
+            time_cell(None),
         ]);
         table = table.row(vec![
             token(
@@ -339,7 +339,7 @@ fn kill(envelope: &Envelope<KillData>, style: Style, width: usize) -> String {
             ),
             Cell::painted(killed.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&format!("branch {}", killed.branch_name))),
-            time_cell(style, None),
+            time_cell(None),
         ]);
     }
 
@@ -438,7 +438,7 @@ fn answer(envelope: &Envelope<AnswerData>, style: Style, width: usize) -> String
             token("answered", Role::BeaconGreen),
             Cell::painted(data.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&data.answer)),
-            time_cell(style, data.spend.map(|spend| spend.api_ms)),
+            time_cell(data.spend.map(|spend| spend.api_ms)),
         ]);
 
     let mut out = table.render(style, width);
