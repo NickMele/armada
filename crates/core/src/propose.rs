@@ -369,6 +369,22 @@ fn under(dir: &str, files: &[String]) -> String {
         .join(", ")
 }
 
+/// The proposals a reader left ticked.
+///
+/// **A flag per proposal, in the order they were offered**, which is the shape
+/// the tick list answers in. A short answer keeps what it did not reach rather
+/// than dropping it: the flags and the proposals are two halves of one list, and
+/// a mismatch is a bug in the caller, not a licence to write a different file
+/// from the one the reader confirmed.
+pub fn accepted(proposals: &[Proposal], ticked: &[bool]) -> Vec<Proposal> {
+    proposals
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| ticked.get(*index).copied().unwrap_or(true))
+        .map(|(_, proposal)| proposal.clone())
+        .collect()
+}
+
 /// The `armada.yml` that the accepted proposals add up to.
 ///
 /// **Only what survived.** A check whose component was rejected is dropped

@@ -1569,7 +1569,14 @@ fn hand_over(
     );
     match verbs::config::next(chosen, proposals.len()) {
         verbs::config::Next::Stop => return,
-        verbs::config::Next::Write => return write_proposals(&mut ask, proposals, style, cwd),
+        verbs::config::Next::Write => {
+            write_err(&match verbs::config::confirm(&mut ask, proposals, cwd) {
+                verbs::config::Wrote::Config(lines) => render::wrote_config(lines, style),
+                verbs::config::Wrote::Nothing => render::wrote_nothing(style),
+                verbs::config::Wrote::Failed(error) => render::error_lines(&error, style),
+            });
+            return;
+        }
         verbs::config::Next::HandOver => {}
     }
 
@@ -1620,52 +1627,6 @@ fn hand_over(
         },
         Style::plain(),
     ));
-}
-
-/// Put the proposals up to be ticked, and write what survives.
-///
-/// **Two ways to write nothing, and both are ordinary.** Esc at the tick list is
-/// one; unticking every row is the other. Neither is an error — the reader was
-/// asked and answered — so the file is not created and Armada says what it did
-/// rather than failing at him.
-///
-/// **The verify line is the point of the whole exchange.** A config Armada
-/// proposed is a config nobody has run, and layer 3 is what turns it from a
-/// plausible file into a working one (PLAN.md §5).
-fn write_proposals(
-    ask: &mut impl armada_helm::ask::Ask,
-    proposals: &[armada_core::propose::Proposal],
-    style: Style,
-    cwd: &std::path::Path,
-) {
-    // Everything offered here is provable, so the list opens with all of it
-    // ticked: the reader's work is taking off what his repository disagrees
-    // with, which is the shorter half of the job.
-    let all = vec![true; proposals.len()];
-    let Some(ticked) = ask.pick(
-        verbs::config::CONFIRM_QUESTION,
-        &verbs::config::proposal_choices(proposals),
-        &all,
-    ) else {
-        write_err(&render::wrote_nothing(style));
-        return;
-    };
-
-    let accepted: Vec<armada_core::propose::Proposal> = proposals
-        .iter()
-        .zip(&ticked)
-        .filter(|(_, on)| **on)
-        .map(|(proposal, _)| proposal.clone())
-        .collect();
-    if accepted.is_empty() {
-        write_err(&render::wrote_nothing(style));
-        return;
-    }
-
-    match verbs::config::write(cwd, &accepted) {
-        Ok(()) => write_err(&render::wrote_config(accepted.len(), style)),
-        Err(error) => write_err(&render::error_lines(&error, style)),
-    }
 }
 
 fn emit(

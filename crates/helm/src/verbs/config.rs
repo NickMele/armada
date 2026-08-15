@@ -180,6 +180,49 @@ pub fn proposal_choices(proposals: &[armada_core::propose::Proposal]) -> Vec<Cho
         .collect()
 }
 
+/// What the tick list ended in.
+#[derive(Debug)]
+pub enum Wrote {
+    /// The file, and how many lines went into it.
+    Config(usize),
+    /// **Nothing, and not as a failure.** Esc at the tick list is one way to get
+    /// here and unticking every row is the other; both are the reader answering
+    /// the question he was asked, and the evidence he was answering about is
+    /// still on the screen above him.
+    Nothing,
+    /// The file could not be written, or was already there.
+    Failed(Box<ArmadaError>),
+}
+
+/// Put the proposals up to be ticked, and write what survives.
+///
+/// **The whole exchange, in one testable place.** The entrypoint owns the
+/// terminal and nothing else here: it hands over an `Ask` and a directory and
+/// renders what comes back, which is what keeps this path covered by a scripted
+/// conversation rather than only by somebody pressing keys.
+pub fn confirm(
+    ask: &mut impl crate::ask::Ask,
+    proposals: &[armada_core::propose::Proposal],
+    root: &Path,
+) -> Wrote {
+    // Everything offered here is provable, so the list opens with all of it
+    // ticked: the reader's work is taking off what his repository disagrees
+    // with, which is the shorter half of the job.
+    let all = vec![true; proposals.len()];
+    let Some(ticked) = ask.pick(CONFIRM_QUESTION, &proposal_choices(proposals), &all) else {
+        return Wrote::Nothing;
+    };
+
+    let accepted = armada_core::propose::accepted(proposals, &ticked);
+    if accepted.is_empty() {
+        return Wrote::Nothing;
+    }
+    match write(root, &accepted) {
+        Ok(()) => Wrote::Config(accepted.len()),
+        Err(error) => Wrote::Failed(Box::new(error)),
+    }
+}
+
 /// Write the confirmed proposals as this repository's `armada.yml`.
 ///
 /// **The one thing `config scan` writes, and only after a person has ticked
