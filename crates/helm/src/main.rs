@@ -1341,7 +1341,8 @@ struct Ambient<'a> {
     argv: &'a [String],
 }
 
-/// Write this failure into `~/.armada/failures.jsonl` (PLAN.md §15.3.5).
+/// Write this failure into `~/.armada/failures.jsonl`
+/// ([`armada_core::failure`]).
 ///
 /// **Nothing about the failure changes because of this call.** The error still
 /// renders, the exit code is still `f(error.class)`, and every path in here that

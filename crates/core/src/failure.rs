@@ -1,4 +1,11 @@
-//! Armada's own failures, kept so you can come back to one (PLAN.md §15.3.5).
+//! Armada's own failures, kept so you can come back to one.
+//!
+//! **Raised in use rather than planned, and `PLAN.md` has no section for it.**
+//! `armada bridge` failed, blamed the install, and was wrong — and there was
+//! nowhere for that to be written down. The design is here, in the module that
+//! implements it, until the reserved designs have a home to move it to; what it
+//! borrows from the plan is cited where it is borrowed, and nothing here claims
+//! a section that does not exist.
 //!
 //! **Recording a failure is appending an envelope that already exists.** Every
 //! failure Armada reports is an [`ArmadaError`](crate::error::ArmadaError) — a

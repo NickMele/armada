@@ -1,6 +1,7 @@
 //! `armada failures` — what Armada broke on, and how to put a Job on one.
 //!
-//! Four things, and only the first is new work (PLAN.md §15.3.5):
+//! Four things, and only the first is new work. The design is
+//! [`armada_core::failure`]:
 //!
 //! | Verb | What it is |
 //! |---|---|

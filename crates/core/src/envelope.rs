@@ -2003,7 +2003,7 @@ impl Disposition {
 }
 
 /// `armada failures`, and `armada failures clear` — Armada's own failures
-/// (PLAN.md §15.3.5).
+/// ([`crate::failure`]).
 ///
 /// **The row is [`crate::failure::Entry`] itself**, rather than a flattened view
 /// of it. Every other listing has a row type because the payload is a projection

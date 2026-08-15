@@ -1820,7 +1820,7 @@ fn show_data() -> ShowData {
     }
 }
 
-// ------------------------------------------- Armada's own failures (PLAN §15.3.5)
+// ------------------------------------------------- Armada's own failures
 
 /// A recorded failure, authored rather than captured.
 ///

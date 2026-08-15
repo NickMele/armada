@@ -1,5 +1,4 @@
-//! `~/.armada/failures.jsonl` — **Armada's record of its own failures**
-//! (PLAN.md §15.3.5).
+//! `~/.armada/failures.jsonl` — **Armada's record of its own failures**.
 //!
 //! The format and the fold are [`armada_core::failure`]; this is the file. It is
 //! the same shape as the inbox and for the same stated reason: **append-only, so
