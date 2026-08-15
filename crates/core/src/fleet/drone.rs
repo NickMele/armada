@@ -5,9 +5,9 @@
 //! anything starts, and a subprocess.
 //!
 //! ```text
-//! claude --session-id <uuid> --print --output-format stream-json <prompt>
-//! claude --resume     <uuid> --print --output-format stream-json <answer>
-//! claude --resume     <uuid>                                     # boarding
+//! claude --session-id <uuid> --print --output-format stream-json --verbose <prompt>
+//! claude --resume     <uuid> --print --output-format stream-json --verbose <answer>
+//! claude --resume     <uuid>                                               # boarding
 //! ```
 //!
 //! **A Drone runs detached and Armada does not wait for it.** That is the whole
@@ -78,13 +78,90 @@ pub fn board_argv(uuid: &str) -> Vec<String> {
 }
 
 /// A bounded headless turn with a live event stream.
-fn headless() -> [String; 3] {
-    [
+///
+/// **`--verbose` is not optional and is not decoration.** Claude Code refuses
+/// `--print --output-format stream-json` without it:
+///
+/// ```text
+/// Error: When using --print, --output-format=stream-json requires --verbose
+/// ```
+///
+/// Measured 2026-08-14 against a real spawn, after every unit test in this file
+/// passed against an argv the binary rejects. **Asserting on argv proves the
+/// vector is the one Armada meant to build, not that it is one the program
+/// accepts** — which is the whole limitation of the testing rule, recorded in
+/// `docs/traps.md` and answered by `armada doctor`'s Drone-argv check.
+///
+/// [`STREAM_JSON_NEEDS`] states the requirement as data so that the test below,
+/// and `doctor`, both read the same source.
+fn headless() -> Vec<String> {
+    let mut argv = vec![
         "--print".to_string(),
         "--output-format".to_string(),
-        "stream-json".to_string(),
-    ]
+        STREAM_JSON.to_string(),
+    ];
+    argv.extend(STREAM_JSON_NEEDS.iter().map(|flag| (*flag).to_string()));
+    argv
 }
+
+/// The output format a Drone's turn is read from.
+pub const STREAM_JSON: &str = "stream-json";
+
+/// The flags Claude Code requires alongside `--output-format stream-json`.
+///
+/// **Stated as data rather than inlined**, so the invariant test and `armada
+/// doctor` cannot drift from the argv builder. A second entry here is a one-line
+/// change that both of them pick up.
+pub const STREAM_JSON_NEEDS: [&str; 1] = ["--verbose"];
+
+/// The argv `armada doctor` validates the Drone's flags with, **without
+/// spending a token**.
+///
+/// It is the real [`spawn_argv`] with the prompt replaced by `--input-format
+/// stream-json`. Claude Code then waits for messages on stdin; the caller gives
+/// it none, so it starts the session, gets EOF and exits **having made no API
+/// call** — measured 2026-08-14: no `result` event is emitted at all, and a turn
+/// that never happened has no ledger and no cost.
+///
+/// **Why this shape and not something simpler.** An invalid session id looks
+/// like an obvious free probe and is useless: the uuid is validated *before* the
+/// flag combination, so `Invalid session ID` masks the very error being looked
+/// for. `--resume` against an unknown session is free too, and does not exercise
+/// this rule at all — measured, the requirement applies to the `--session-id`
+/// path and not to `--resume`. Only a valid uuid on the fresh-session path
+/// reaches the check, and only closed stdin keeps it from costing anything.
+///
+/// The uuid is a fixed sentinel, so the probe reuses one transcript rather than
+/// leaving a new one behind on every run.
+pub fn probe_argv() -> Vec<String> {
+    let mut argv = spawn_argv(PROBE_SESSION, "");
+    argv.pop();
+    argv.push("--input-format".to_string());
+    argv.push(STREAM_JSON.to_string());
+    argv
+}
+
+/// The session id [`probe_argv`] uses. Valid, so validation gets past it; fixed,
+/// so the probe leaves one transcript rather than one per run.
+pub const PROBE_SESSION: &str = "00000000-0000-4000-8000-0000000a2ada";
+
+/// Every flag a Drone's argv uses, for `armada doctor` to hold against
+/// `claude --help`.
+///
+/// **The point is the next version of Claude Code, not this one.** A flag
+/// renamed or removed under Armada produces exactly the failure this list was
+/// added after: a Job that spawns, records a worktree and a port block, and
+/// whose Drone dies on a usage error nobody sees until `fleet ls` says
+/// `STALLED`.
+pub const FLAGS: [&str; 7] = [
+    "--session-id",
+    "--resume",
+    "--print",
+    "--output-format",
+    "--verbose",
+    "--model",
+    "--input-format",
+];
 
 /// What one turn reported.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -280,9 +357,112 @@ mod tests {
                 "--print",
                 "--output-format",
                 "stream-json",
+                "--verbose",
                 "reproduce the flake",
             ]
         );
+    }
+
+    /// **`stream-json` requires `--verbose`, and the binary refuses without
+    /// it.** Measured against a real spawn: every test in this file passed while
+    /// no Drone had ever run, because the argv Armada built was rejected at
+    /// argument-parse time.
+    ///
+    /// This is the assertion that would have caught it — and it is written
+    /// against [`STREAM_JSON_NEEDS`] rather than against the literal, so a
+    /// second requirement added there is enforced here without anybody
+    /// remembering to come back.
+    #[test]
+    fn every_stream_json_argv_carries_what_the_cli_requires_with_it() {
+        for argv in [spawn_argv(UUID, "go"), resume_argv(UUID, "carry on")] {
+            assert!(
+                argv.iter().any(|word| word == STREAM_JSON),
+                "{argv:?} does not stream"
+            );
+            for required in STREAM_JSON_NEEDS {
+                assert!(
+                    argv.iter().any(|word| word == required),
+                    "{argv:?} streams without {required}, which the CLI refuses"
+                );
+            }
+        }
+    }
+
+    /// **Boarding is the one argv that must *not* carry them.** It is
+    /// interactive, `--verbose` there would change what a person sees, and
+    /// nothing is streaming.
+    #[test]
+    fn boarding_carries_none_of_the_headless_flags() {
+        let argv = board_argv(UUID);
+        for flag in ["--print", "--output-format", "--verbose"] {
+            assert!(!argv.iter().any(|word| word == flag), "{argv:?} has {flag}");
+        }
+    }
+
+    /// **The probe is the real argv, minus the prompt, plus closed input.**
+    /// Anything less faithful would validate a combination Armada does not use,
+    /// which is how a check ends up green on a Drone that cannot start.
+    #[test]
+    fn the_doctor_probe_is_the_spawn_argv_with_nothing_to_say() {
+        let probe = probe_argv();
+        let real = spawn_argv(PROBE_SESSION, "go");
+
+        // Every flag of the real argv, in the same order.
+        let flags = |argv: &[String]| -> Vec<String> {
+            argv.iter()
+                .take_while(|word| *word != "--input-format")
+                .cloned()
+                .collect()
+        };
+        assert_eq!(flags(&probe), flags(&real)[..real.len() - 1]);
+
+        // And it says nothing: no prompt, and input it will never receive.
+        assert_eq!(&probe[probe.len() - 2..], ["--input-format", "stream-json"]);
+        assert!(
+            !probe.iter().any(|word| word == "go"),
+            "the probe carries a prompt, so it would run a turn: {probe:?}"
+        );
+    }
+
+    /// **A valid uuid, because an invalid one is checked first and masks the
+    /// answer.** Measured: `--session-id not-a-uuid` reports `Invalid session
+    /// ID` whether or not the flag combination is legal, so a probe built that
+    /// way proves nothing.
+    #[test]
+    fn the_probes_session_id_is_a_valid_uuid() {
+        let groups: Vec<&str> = PROBE_SESSION.split('-').collect();
+        assert_eq!(groups.len(), 5);
+        assert!(groups.iter().map(|g| g.len()).eq([8, 4, 4, 4, 12]));
+        assert!(groups
+            .iter()
+            .all(|g| g.chars().all(|c| c.is_ascii_hexdigit())));
+    }
+
+    /// Every flag the Drone argv uses is one `armada doctor` knows to check for.
+    /// A flag added to the argv and not to the list is one nothing would notice
+    /// disappearing.
+    #[test]
+    fn every_flag_the_drone_uses_is_one_doctor_checks_for() {
+        let used: Vec<String> = spawn_argv(UUID, "go")
+            .into_iter()
+            .chain(resume_argv(UUID, "go"))
+            .chain(super::super::classify::argv("go"))
+            .chain(probe_argv())
+            .filter(|word| word.starts_with("--"))
+            .collect();
+        for flag in &used {
+            assert!(
+                FLAGS.contains(&flag.as_str()),
+                "`{flag}` is in an argv and not in FLAGS, so doctor would not \
+                 notice it being removed"
+            );
+        }
+        for flag in FLAGS {
+            assert!(
+                used.iter().any(|word| word == flag),
+                "`{flag}` is checked for and used by nothing"
+            );
+        }
     }
 
     /// **`--resume`, never a second `--session-id`.** Minting where continuing
@@ -300,6 +480,7 @@ mod tests {
                 "--print",
                 "--output-format",
                 "stream-json",
+                "--verbose",
                 "yes, raise it to 90s",
             ]
         );
@@ -319,7 +500,7 @@ mod tests {
     fn the_prompt_is_one_argument_however_many_words_it_has() {
         let argv = spawn_argv(UUID, "add rate limiting to the API --json");
         assert_eq!(argv.last().unwrap(), "add rate limiting to the API --json");
-        assert_eq!(argv.len(), 7);
+        assert_eq!(argv.len(), 8);
     }
 
     /// **The measured values from the spike** (PHASES.md §9.1 F2), read back off

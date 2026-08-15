@@ -276,6 +276,46 @@ whose handle is dropped without `wait()` leaves a `<defunct>` entry until Armada
 **Rule: every spawned `Child` is waited on, or explicitly reaped.** A long-lived
 `armada manifest check --detach` accumulating zombies across a fifteen-minute run is the case that bites.
 
+## Claude Code CLI — the flags a headless turn needs
+
+### `--output-format stream-json` requires `--verbose`, and `--help` does not say so
+
+Measured 2026-08-14 against Claude Code as installed, by a real `armada fleet spawn` whose
+Drone died instantly:
+
+```
+claude --session-id <uuid> --print --output-format stream-json <prompt>
+-> exit 1
+   Error: When using --print, --output-format=stream-json requires --verbose
+```
+
+The requirement is enforced at argument-parse time — before any API call, so a wrong argv costs
+nothing but produces no turn at all. **It is not stated in `claude --help`**: the entry for
+`--output-format` lists the three formats and says only *"only works with --print"*, and
+`--verbose` is described as *"Override verbose mode setting from config"*, which reads as a
+preference rather than a precondition.
+
+**What this cost, and the rule it produced.** Fleet's entire Drone-argv suite passed — unit
+tests on the built vector, and an integration test running a stub that recorded what `execve`
+received — while **no Drone had ever run**. Every one of those assertions was about a string
+Armada built correctly and the binary rejects.
+
+> **Asserting on argv proves you built the argv you intended. It does not prove the argv is
+> accepted.** Those are different claims, and a suite that only makes the first one is green on
+> a program that never starts.
+
+Two answers, because neither is sufficient alone:
+
+- **The requirement is data, not a literal** — `fleet::drone::STREAM_JSON_NEEDS` — and a pure
+  test asserts every streaming argv carries it. That makes a future edit that drops the flag a
+  red test rather than a silent regression.
+- **`armada doctor` holds every flag the Drone uses against `claude --help`**, which is free and
+  spends no token. It catches a flag renamed or removed by a new version. **It cannot catch a
+  new *combination* rule**, because `--help` does not state this one — and `--help`
+  short-circuits before argument validation, so there is no free probe that would. That
+  limitation is stated rather than papered over: the check narrows the class, it does not close
+  it.
+
 ### `ps -o lstart=` answers for a zombie, so a start-time probe outlives the process
 
 Measured 2026-08-14 on darwin 27.0.0, by an assertion that failed: `armada-fleet`'s

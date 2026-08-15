@@ -26,12 +26,16 @@ name.
 
 ## How it works
 
-Three steps, **in this order**, and the order is the point:
+Four steps, **in this order**, and the order is the point:
 
-1. **`armada manifest clean`** in the worktree — releases containers, processes, networks,
+1. **Stop the Drone** — SIGTERM, a grace period, then SIGKILL, and only if the recorded process
+   group is provably still the one Armada started. It goes first because it is still working:
+   a live Drone mid-`docker compose up` would otherwise race the teardown of the very
+   resources it is creating, and lose.
+2. **`armada manifest clean`** in the worktree — releases containers, processes, networks,
    volumes and the port block.
-2. **Remove the worktree** (unless `--keep-worktree`).
-3. **Mark the Job ended** in the index.
+3. **Remove the worktree** (unless `--keep-worktree`).
+4. **Mark the Job ended** in the index.
 
 Cleaning before removing means resources are released while the config that describes them is
 still present. **If the order is ever reversed, or step 2 happens without step 1, nothing is

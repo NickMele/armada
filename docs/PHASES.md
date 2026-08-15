@@ -87,13 +87,21 @@ directory and deleting the privacy machinery touches every file and every golden
 Doing it before Guild and Fleet added surface area was the cheapest it was ever going to be —
 and the one row it did not carry (§8.3) gets no more expensive by waiting.
 
-**M4 is still blocked, but on something narrower than before.** The `check` engine has landed
-and dogfoods (§9.3), so a verdict can now carry evidence an external command produced — the
-thing M4 was originally waiting for. What it cannot do is `--detach` and `--status`, both still
-refused by name. That matters because a loop runs inside a Drone's turn: the `python-ml`
-fixture's checks take thirty minutes, and a Drone that blocks its whole turn on one is not
-viable. **A loop can run a check to completion; it cannot yet start one and poll it.** Stated
-here rather than discovered at integration time.
+**M4 is still blocked, but on something narrower than before, and the capability it was
+missing now exists.** The `check` engine has landed and dogfoods (§9.3), so a verdict can now
+carry evidence an external command produced — the thing M4 was originally waiting for. What
+`check` cannot do is `--detach` and `--status`, both still refused by name. That matters
+because a loop runs inside a Drone's turn: the `python-ml` fixture's checks take thirty
+minutes, and a Drone that blocks its whole turn on one is not viable. **A loop can run a check
+to completion; it cannot yet start one and poll it.**
+
+> **Fleet's detached Drone unblocks it, and the work left is wiring rather than design**
+> (§8.5). `--detach` needs exactly what a Drone needed: start a long-lived `setsid`'d process
+> group, record it as owned so `clean` reclaims it, and answer afterwards from what it wrote
+> to disk. All three are built and used — `ProcessGroup::spawn`, the `owned` row with its two
+> stamps, and a run directory `--status` can read the way `armada fleet ls` reads a
+> transcript. The missing piece was never the flag; it was a second caller proving the shape
+> works for something that outlives the command that started it.
 
 ### 8.2 M0 — the research spike ✓ done
 
@@ -271,6 +279,28 @@ Haiku 4.5, ceilings read off the turn's `result` event, and the append-only inbo
 layouts moved out of `tests/golden/render/pending/` into live byte comparisons **without either
 being renegotiated**, which is what that directory was for.
 
+**Drones run detached, and `spawn` returns.** A Job's Drone is started the way `armada manifest
+up` starts a `command` service — `setsid`, a log file rather than a pipe, the handle dropped
+without a wait, and the process group recorded as owned — so several Jobs run at once and
+`armada fleet kill` and `armada manifest clean` both reclaim them. **An orphaned Drone is reaped
+by the pass that already reaps an orphaned service**, and *"nothing is killed that Armada cannot
+prove is its own"* stays one rule with one implementation.
+
+> **This was got wrong first, and the correction is worth keeping.** `spawn` originally ran the
+> turn to completion, because the testing instruction — fake the harness at `ctx.run` and assert
+> the argv — pushed toward a Drone that `Run::call` could wait for. `Run::call` runs a child to
+> completion by definition, so the seam quietly decided the design, and a blocking `spawn` can
+> only run one Job at a time: the opposite of what Fleet is for. **A testing instruction is not
+> an architecture**, and the give-away was that the mechanism already existed one module down.
+> The suite did not have to get weaker to fix it — it got stronger, by running a stub `claude`
+> that records the vector `execve` actually received.
+
+**Nothing reports home, so the transcript is the ledger.** A detached Drone updates no record
+when its turn ends; `armada fleet ls` sums every `result` event in the Job's stream and asks the
+process table whether the group is still alive. That is also what keeps a Job's spend honest
+across `armada fleet answer`: a resumed session appends its own `result`, so continuing adds up
+rather than starting over.
+
 | Not built | Where it goes |
 |---|---|
 | The MCP server, Helm, the Bridge | the two agents after this one — the three-agent shape above |
@@ -282,7 +312,7 @@ being renegotiated**, which is what that directory was for.
 
 | | Decided | Why not the alternative |
 |---|---|---|
-| **Testing Fleet** | Fake the harness at `ctx.run`. Assert on the **argv** Fleet builds — `claude --session-id <uuid> --print --output-format stream-json` — and feed recorded `stream-json` back. **No test spawns a real session or spends tokens.** | Real sessions in the suite make a rate limit a red build and the API's latency a flaky one. Argv is where the bugs are anyway. |
+| **Testing Fleet** | Assert on the **argv** — `claude --session-id <uuid> --print --output-format stream-json` — and feed recorded `stream-json` back. **No test spawns a real session or spends tokens.** *Amended in flight: the Drone is not faked at all.* A detached Drone cannot be run through `ctx.run`, which waits by definition, so the suite starts a **stub `claude`** that records the vector it was given — what `execve` received, rather than what Armada meant to pass. Everything that is not the Drone is still faked at `ctx.run`. | Real sessions in the suite make a rate limit a red build and the API's latency a flaky one. Argv is where the bugs are anyway. The amendment was forced by the first version of `spawn` blocking, which is recorded above: **stating the fake before the design let the seam decide the design.** |
 | **The Bridge** | `ratatui`. | Hand-rolled ANSI over the existing render layer is ~300 lines, but then input handling and resize are also yours, and neither is interesting work. |
 | **Classification** | **Haiku 4.5** (`claude-haiku-4-5-20251001`). | It runs on every spawn, so its cost is the one that compounds; picking one of four labels with a confidence is exactly its shape. Keyword rules are free and wrong often enough that the override becomes the normal path. |
 | **Shape** | **Three sequential agents** — Fleet, then the MCP server, then Helm and the inbox. | One agent holding the whole milestone has no handoffs and no way to catch an early mistake before everything downstream is built on it. Fleet alone is already usable from the CLI. |
@@ -314,6 +344,12 @@ the one gap it leaves open in §9.3. What it still refuses by name is `--detach`
 so a loop can run a check to completion but cannot yet start one and poll it. `up` and `down` have since landed with them; Manifest's
 remaining verbs — `agents-md` and `explain` — are first-class Armada work and not background
 work.
+
+**The mechanism `--detach` needs is now built and in use.** Fleet's Drones are long-lived
+`setsid`'d process groups recorded as owned, and `armada fleet ls` answers about them from what
+they wrote to disk rather than from anything they reported (§8.5). `--detach` is the same shape
+against a run directory, and `--status` the same read. That is a wiring job on a proven
+mechanism rather than the open design question it was when this section was written.
 
 **Done when:** a bug workflow reproduces a failure, writes a test that fails first, fixes it,
 gets `check` green, and lands on a local branch, with no human turn in the middle and a hard

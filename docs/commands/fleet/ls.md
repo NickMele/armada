@@ -19,8 +19,20 @@ armada fleet ls [--all] [--needs-attention] [--json]
 
 ## How it works
 
-Reads the Job index in `~/.armada/jobs/`, and for each Job reads the tail of its
-transcript at `~/.claude/projects/<slug>/<uuid>.jsonl`.
+Reads the Job index in `~/.armada/jobs/`, and for each live Job reads its transcript at
+`~/.armada/jobs/<uuid>.stream.jsonl` and asks the process table whether its Drone is still
+running.
+
+**What it reports is an observation, not the record.** A Drone runs detached and updates nothing
+when its turn ends, so the state on disk is what a verb last wrote — and this is the verb that
+looks at the two things that can be looked at and says what is actually true. `STALLED` is the
+one that could only ever come from here: a Job is stalled when its Drone produced no transcript
+activity, which is the one condition a busy Drone cannot report about itself
+([`../../PLAN.md`](../../PLAN.md) §14.3).
+
+**It writes none of it back.** A read verb that persisted would make `armada fleet ls | head` a
+change to the fleet; [`kill.md`](kill.md) and [`answer.md`](answer.md) are the verbs that
+settle what they saw.
 
 **Every column comes from data Claude Code already emits** — the turn's `result` event carries
 `total_cost_usd`, `usage`, `num_turns` and `duration_api_ms` ([`PHASES.md`](../../PHASES.md) §9.1 F2).

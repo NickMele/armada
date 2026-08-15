@@ -31,7 +31,7 @@
 //! which is a warning. A `doctor` that failed on a train would be a `doctor`
 //! nobody runs on a train, which is where you most want it.
 
-use armada_core::ctx::Run;
+use armada_core::ctx::{Run, RunRequest};
 use armada_core::envelope::{DoctorData, Envelope, Finding, Problem, Settled};
 use armada_core::error::ArmadaError;
 use armada_guild::layout::{self, Guild, DIRECTORIES};
@@ -54,6 +54,7 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     // every fragment still as imported, and interleaving those with `manifest.db`
     // is what made a real reader ask which rows belonged together.
     let mut results = preflight::run(runner, &place.cwd, true).results;
+    results.push(drone_argv(runner, &place.cwd));
     results.push(directories(&place.armada_home));
     results.extend(drift(runner, &guild));
     results.extend(fragments(&guild));
@@ -71,6 +72,132 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
         },
     ))))
 }
+
+/// **Would a Drone actually start?**
+///
+/// This check exists because of a specific failure, and it is worth stating in
+/// full. Fleet's Drone argv was `claude --session-id <uuid> --print
+/// --output-format stream-json <prompt>`, which Claude Code rejects at
+/// argument-parse time: that combination requires `--verbose`. Every test passed
+/// — the unit tests on the built vector, and an integration test running a stub
+/// that recorded what `execve` received — while **no Drone had ever run**.
+///
+/// > **Asserting on argv proves you built the argv you intended. It does not
+/// > prove the argv is accepted.** A suite that only makes the first claim is
+/// > green on a program that never starts (`docs/traps.md`).
+///
+/// So this asks the binary, twice, and neither question costs a token:
+///
+/// 1. **Every flag the Drone uses is still offered**, read off `claude --help`.
+///    That catches a flag renamed or removed by a new version — the general
+///    shape of the failure this is a sample of.
+/// 2. **The real argument validator accepts the real combination.** The Drone's
+///    own argv is run with its prompt replaced by `--input-format stream-json`
+///    and nothing on stdin: Claude Code validates every flag, starts the
+///    session, gets EOF and exits **without making an API call**
+///    ([`armada_core::fleet::drone::probe_argv`]). A usage error there is the
+///    finding, verbatim.
+///
+/// **The residual, stated rather than hidden.** `claude --help` does not
+/// document the `--verbose` requirement, and `--help` short-circuits before
+/// validation — so nothing can enumerate combination rules in advance. Probe 2
+/// covers the combination Armada actually uses, which is the one that matters,
+/// and it would have caught the failure this check was written after.
+fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
+    use armada_core::fleet::drone as argv;
+
+    let help = runner.call(
+        &RunRequest::new(
+            vec![argv::CLAUDE.to_string(), "--help".to_string()],
+            cwd.to_path_buf(),
+        )
+        .timeout(PROBE),
+    );
+    let Ok(help) = help.and_then(|output| match output.ok() {
+        true => Ok(output),
+        false => Err(armada_core::ctx::SpawnError {
+            program: argv::CLAUDE.to_string(),
+            kind: armada_core::ctx::SpawnErrorKind::Other,
+            message: "`--help` exited non-zero".to_string(),
+        }),
+    }) else {
+        // A `claude` that will not answer `--help` is already reported by the
+        // tooling check above; saying it twice would be noise.
+        return Finding::needs(
+            "drone argv",
+            Problem::Offline,
+            "`claude --help` did not answer, so the argv was not checked",
+            "check `claude --help` runs",
+        );
+    };
+
+    let missing: Vec<&str> = argv::FLAGS
+        .iter()
+        .copied()
+        .filter(|flag| !help.stdout.contains(flag))
+        .collect();
+    if !missing.is_empty() {
+        return Finding::needs(
+            "drone argv",
+            Problem::Missing,
+            format!(
+                "`claude` no longer offers {}: a Drone would not start",
+                missing.join(", ")
+            ),
+            "pin an older claude, or report this to Armada",
+        );
+    }
+
+    // The real validator, on the real combination.
+    let Ok(output) =
+        runner.call(&RunRequest::new(argv::probe_argv(), cwd.to_path_buf()).timeout(PROBE))
+    else {
+        return Finding::needs(
+            "drone argv",
+            Problem::Offline,
+            "the argv probe would not run",
+            "check `claude` runs",
+        );
+    };
+
+    let said = format!("{}{}", output.stderr, output.stdout);
+    if let Some(complaint) = said
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with("Error:"))
+    {
+        return Finding::needs(
+            "drone argv",
+            Problem::Missing,
+            format!("`claude` refuses the Drone's argv: {complaint}"),
+            "armada cannot start a Drone until this is fixed",
+        );
+    }
+
+    // **A turn would mean the probe cost something, and it must never.** No
+    // `result` event is emitted when there is no input to answer; one appearing
+    // says a future version began answering an empty conversation, and that is
+    // reported rather than quietly paid for.
+    if said.contains("total_cost_usd") {
+        return Finding::needs(
+            "drone argv",
+            Problem::Partial,
+            "the argv probe started a turn; it is meant to cost nothing",
+            "report this to Armada: the doctor probe needs narrowing",
+        );
+    }
+
+    Finding::settled(
+        "drone argv",
+        Settled::Ok,
+        format!("{} flags accepted", argv::FLAGS.len()),
+    )
+}
+
+/// The deadline on either half of the argv probe. Both are local; the probe
+/// starts a session and exits at EOF, so anything approaching this is a wedged
+/// binary or a hook that hangs.
+const PROBE: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// `~/.armada/` and its three directories.
 ///
@@ -326,6 +453,203 @@ mod tests {
                 timed_out: false,
             })
         }
+    }
+
+    /// A `claude` that answers `--help` with `flags` and the argv probe with
+    /// `complaint`.
+    struct Claude {
+        flags: String,
+        complaint: &'static str,
+    }
+
+    impl Claude {
+        /// One that behaves the way the installed binary does.
+        fn healthy() -> Claude {
+            Claude {
+                flags: armada_core::fleet::drone::FLAGS.join(" "),
+                complaint: "",
+            }
+        }
+    }
+
+    impl Run for Claude {
+        fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+            let argv: Vec<&str> = request.argv.iter().map(String::as_str).collect();
+            match argv.as_slice() {
+                ["claude", "--help"] => Ok(RunOutput {
+                    code: Some(0),
+                    signal: None,
+                    stdout: self.flags.clone(),
+                    stderr: String::new(),
+                    timed_out: false,
+                }),
+                _ => Ok(RunOutput {
+                    code: Some(1),
+                    signal: None,
+                    stdout: String::new(),
+                    stderr: format!("{}\n", self.complaint),
+                    timed_out: false,
+                }),
+            }
+        }
+    }
+
+    /// A `claude` that records what it was asked and says nothing back.
+    struct Watching(std::cell::RefCell<Vec<Vec<String>>>);
+
+    impl Run for Watching {
+        fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+            self.0.borrow_mut().push(request.argv.clone());
+            Ok(RunOutput {
+                code: Some(0),
+                signal: None,
+                stdout: armada_core::fleet::drone::FLAGS.join(" "),
+                stderr: String::new(),
+                timed_out: false,
+            })
+        }
+    }
+
+    /// **The probe is what `doctor` runs, and it must be the Drone's own
+    /// argv.** A probe that validated an approximation is a probe that passes on
+    /// a combination Armada never uses — which is the failure this check exists
+    /// to catch, reintroduced one level up.
+    #[test]
+    fn the_probe_runs_the_drones_own_argv_and_not_an_approximation() {
+        let run = Watching(std::cell::RefCell::new(Vec::new()));
+        drone_argv(&run, Path::new("/tmp"));
+
+        let probe = run.0.borrow().last().cloned().expect("a probe ran");
+        assert_eq!(
+            probe,
+            armada_core::fleet::drone::probe_argv(),
+            "the probe drifted from the Drone's own argv"
+        );
+    }
+
+    /// **It carries no prompt, which is the whole reason it costs nothing.**
+    /// Claude Code is told to read messages from stdin and given none, so it
+    /// starts, gets EOF and exits without an API call.
+    #[test]
+    fn the_argv_probe_has_nothing_to_say_and_so_cannot_spend_a_token() {
+        let run = Watching(std::cell::RefCell::new(Vec::new()));
+        drone_argv(&run, Path::new("/tmp"));
+        let probe = run.0.borrow().last().cloned().unwrap();
+
+        assert_eq!(
+            &probe[probe.len() - 2..],
+            ["--input-format", "stream-json"],
+            "without stream-json input the probe would answer a prompt"
+        );
+        let real = armada_core::fleet::drone::spawn_argv(
+            armada_core::fleet::drone::PROBE_SESSION,
+            "a prompt",
+        );
+        assert!(
+            !probe.iter().any(|word| word == "a prompt"),
+            "the probe carries a prompt, so it would run a turn"
+        );
+        assert_eq!(
+            probe.len(),
+            real.len() + 1,
+            "the probe should be the real argv less its prompt, plus two words"
+        );
+    }
+
+    #[test]
+    fn a_claude_that_offers_every_flag_and_refuses_nothing_is_ok() {
+        let finding = drone_argv(&Claude::healthy(), Path::new("/tmp"));
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.remedy.is_none());
+    }
+
+    /// **The general shape of the failure**: a new version renames or drops a
+    /// flag, and every Job spawns into a Drone that dies on a usage error.
+    #[test]
+    fn a_flag_the_drone_needs_going_missing_is_a_finding() {
+        let finding = drone_argv(
+            &Claude {
+                flags: "--session-id --resume --print --output-format --model".to_string(),
+                ..Claude::healthy()
+            },
+            Path::new("/tmp"),
+        );
+        assert_eq!(finding.status, Health::Missing);
+        assert!(finding.detail.contains("--verbose"), "{}", finding.detail);
+        assert!(finding.remedy.is_some(), "a finding without a remedy");
+    }
+
+    /// **The specific failure this check was added after.** The flags all exist
+    /// and the combination is refused; only asking the validator finds it.
+    #[test]
+    fn a_combination_the_cli_refuses_is_a_finding_even_when_every_flag_exists() {
+        let finding = drone_argv(
+            &Claude {
+                complaint:
+                    "Error: When using --print, --output-format=stream-json requires --verbose",
+                ..Claude::healthy()
+            },
+            Path::new("/tmp"),
+        );
+        assert_eq!(finding.status, Health::Missing);
+        assert!(finding.detail.contains("--verbose"), "{}", finding.detail);
+    }
+
+    /// **A probe that ran a turn is a finding, because it must never cost
+    /// anything.** No `result` event is emitted when there is no input to
+    /// answer; one appearing means a future version began answering an empty
+    /// conversation, and a diagnostic that quietly started spending would be
+    /// worse than one that does not run.
+    #[test]
+    fn a_probe_that_started_a_turn_is_reported_rather_than_paid_for() {
+        struct Spending;
+        impl Run for Spending {
+            fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+                let helping = request.argv.iter().any(|word| word == "--help");
+                Ok(RunOutput {
+                    code: Some(0),
+                    signal: None,
+                    stdout: match helping {
+                        true => armada_core::fleet::drone::FLAGS.join(" "),
+                        false => r#"{"type":"result","total_cost_usd":0.02}"#.to_string(),
+                    },
+                    stderr: String::new(),
+                    timed_out: false,
+                })
+            }
+        }
+        let finding = drone_argv(&Spending, Path::new("/tmp"));
+        assert_eq!(finding.status, Health::Partial, "a spend was reported ok");
+        assert!(
+            finding.detail.contains("cost nothing"),
+            "{}",
+            finding.detail
+        );
+        // A warning rather than a failure: the flags are fine, and `doctor` has
+        // to stay safe to run in a shell prompt.
+        assert!(!finding.status.is_failure());
+    }
+
+    /// A `claude` that will not answer at all degrades to a warning: the tooling
+    /// check above already reports it, and saying it twice is noise.
+    #[test]
+    fn a_claude_that_will_not_answer_help_degrades_rather_than_failing() {
+        struct Absent;
+        impl Run for Absent {
+            fn call(&self, _: &RunRequest) -> Result<RunOutput, SpawnError> {
+                Err(SpawnError {
+                    program: "claude".to_string(),
+                    kind: armada_core::ctx::SpawnErrorKind::NotFound,
+                    message: "No such file or directory".to_string(),
+                })
+            }
+        }
+        let finding = drone_argv(&Absent, Path::new("/tmp"));
+        assert_eq!(finding.status, Health::Offline);
+        assert!(
+            !finding.status.is_failure(),
+            "a missing claude failed twice"
+        );
     }
 
     fn machine_with_a_guild() -> (tempfile::TempDir, Where) {

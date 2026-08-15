@@ -477,6 +477,7 @@ fn the_drone_is_executed_with_the_session_id_the_job_was_minted_with() {
             "--print",
             "--output-format",
             "stream-json",
+            "--verbose",
         ],
         "argv[0] is not recorded by `$@`, so the vector starts at the flags"
     );
@@ -1044,7 +1045,8 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
             &data.uuid,
             "--print",
             "--output-format",
-            "stream-json"
+            "stream-json",
+            "--verbose",
         ],
         "an answer minted a session instead of resuming one"
     );

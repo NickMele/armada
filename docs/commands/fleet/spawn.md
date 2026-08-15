@@ -34,9 +34,19 @@ armada fleet spawn "<task>" [--workflow <name>] [--name <name>] [--budget <k=v>.
    `git worktree`; Fleet adds policy, not a new concept.
 4. **`armada manifest init`** in it — claims a port block, runs setup. This is why parallel
    Jobs do not collide.
-5. **Start a bounded headless turn** with the workflow's first step and the guild's content.
-6. **Register the Job** in `~/.armada/jobs/` — uuid, name, worktree, branch, port block,
-   budget.
+5. **Start a Drone, detached**, on the workflow's first step — `setsid`, its `stream-json`
+   redirected to `~/.armada/jobs/<uuid>.stream.jsonl`, its process group recorded as owned.
+6. **Return.** `spawn` does not wait for the turn.
+
+**It returns while the Drone is still working, and that is the point of the verb.** A `spawn`
+that ran the turn to completion could only ever run one Job at a time, and running several is
+the whole of Fleet. What comes back is the handle; what the Job goes on to do is read afterwards
+from its transcript by [`ls.md`](ls.md).
+
+**A Drone is started exactly the way `armada manifest up` starts a `command` service**, and
+reusing that shape is deliberate: an orphaned Drone — Armada died, the Drone did not — is reaped
+by the pass that already reaps an orphaned service, so there is no second mechanism to maintain
+and no second answer to *is this pid still mine*.
 
 ## Output
 
@@ -63,7 +73,10 @@ questions ([`../../PLAN.md`](../../PLAN.md) §14.3). It is spelled in the payloa
 The layout is frozen by `tests/golden/render/fleet-spawn.plain` and its `.tty` twin.
 
 `--json` returns the Job record: `uuid`, `name`, `workflow`, `confidence`, `worktree`,
-`branch`, `port_block`, `budget`, `step` and `state`.
+`branch`, `port_block`, `budget`, `step`, `state` and `pgid`.
+
+**There is no spend in the payload**, because there has not been one yet. The transcript is the
+ledger and [`ls.md`](ls.md) reads it.
 
 ## Dependencies
 
