@@ -6004,4 +6004,134 @@ mod tests {
     fn fold(text: &str) -> String {
         text.replace(['—', '–'], "-").replace(" · ", ", ")
     }
+
+    fn entry(id: &str, origin: armada_core::failure::Origin, message: &str) -> FailureEntry {
+        FailureEntry {
+            id: id.to_string(),
+            state: armada_core::failure::State::Open,
+            origin,
+            class: None,
+            r#where: String::new(),
+            message: message.to_string(),
+            next: None,
+            argv: "armada task 'rename the port allocator'".to_string(),
+            cwd: "~/code/api".to_string(),
+            count: 1,
+            first_at: "2026-08-15T09:00:00Z".to_string(),
+            last_at: "2026-08-15T09:00:00Z".to_string(),
+            last_ms: 0,
+            age_s: 540,
+            job: None,
+            diagnostics: None,
+        }
+    }
+
+    fn listing(verb: &str, results: Vec<FailureEntry>) -> Envelope<FailuresData> {
+        let open = results.len();
+        Envelope {
+            schema_version: armada_core::envelope::SCHEMA_VERSION,
+            verb: verb.to_string(),
+            workspace: None,
+            status: Status::Ok,
+            error: None,
+            data: FailuresData { results, open },
+        }
+    }
+
+    /// **One renderer, two nouns, and the verb decides which.** The rows are
+    /// identical by construction; a tasks listing that counted its rows as
+    /// failures would tell a reader their own note was something Armada broke
+    /// on.
+    #[test]
+    fn a_tasks_listing_counts_tasks_and_names_its_own_show() {
+        let written = entry(
+            "a1b2c3d4",
+            armada_core::failure::Origin::Written,
+            "rename it",
+        );
+        let drawn = strip_ansi(&failures(
+            &listing("tasks", vec![written]),
+            Style::plain(),
+            100,
+        ));
+        assert!(drawn.contains("1 task"), "{drawn}");
+        assert!(!drawn.contains("failure"), "{drawn}");
+        assert!(drawn.contains("armada tasks show <id>"), "{drawn}");
+
+        // And the other lens is unchanged, which is the half that would break
+        // silently if the branch were on the rows instead of on the verb.
+        let observed = entry(
+            "ff001122",
+            armada_core::failure::Origin::Observed,
+            "the worktree was not there",
+        );
+        let drawn = strip_ansi(&failures(
+            &listing("failures", vec![observed]),
+            Style::plain(),
+            100,
+        ));
+        assert!(drawn.contains("1 failure"), "{drawn}");
+        assert!(drawn.contains("armada failures show <id>"), "{drawn}");
+    }
+
+    /// **An empty tasks listing says so in words.** A blank table under a verb
+    /// whose whole subject is a list reads as the verb being broken.
+    #[test]
+    fn an_empty_listing_says_which_kind_of_nothing_it_found() {
+        let drawn = strip_ansi(&failures(
+            &listing("tasks", Vec::new()),
+            Style::plain(),
+            100,
+        ));
+        assert!(drawn.contains("nothing written down"), "{drawn}");
+        let drawn = strip_ansi(&failures(
+            &listing("failures", Vec::new()),
+            Style::plain(),
+            100,
+        ));
+        assert!(drawn.contains("nothing recorded"), "{drawn}");
+    }
+
+    /// **`never` is spelled out and no status word is invented.** The status
+    /// vocabulary describes what Armada did; this column describes what you
+    /// did, and a tenth word in that column would be read as the former.
+    #[test]
+    fn the_coverage_table_says_never_and_borrows_no_status_word() {
+        let envelope = Envelope {
+            schema_version: armada_core::envelope::SCHEMA_VERSION,
+            verb: "coverage".to_string(),
+            workspace: None,
+            status: Status::Ok,
+            error: None,
+            data: armada_core::envelope::CoverageData {
+                results: vec![
+                    armada_core::coverage::Row {
+                        verb: "guild export".to_string(),
+                        count: 0,
+                        ok: false,
+                        age_s: None,
+                    },
+                    armada_core::coverage::Row {
+                        verb: "doctor".to_string(),
+                        count: 3,
+                        ok: false,
+                        age_s: Some(540),
+                    },
+                ],
+                tried: 1,
+                untried: 1,
+            },
+        };
+        let drawn = strip_ansi(&coverage(&envelope, Style::plain(), 100));
+        assert!(drawn.contains("armada guild export"), "{drawn}");
+        assert!(drawn.contains("never"), "{drawn}");
+        assert!(drawn.contains("not once"), "{drawn}");
+        assert!(drawn.contains("3 runs"), "{drawn}");
+        assert!(drawn.contains("9m, failed"), "{drawn}");
+        assert!(drawn.contains("1 never run"), "{drawn}");
+        assert!(drawn.contains("1 tried"), "{drawn}");
+        for word in ["OPEN", "PASS", "FAILED", "TRIED"] {
+            assert!(!drawn.contains(word), "{word} in {drawn}");
+        }
+    }
 }
