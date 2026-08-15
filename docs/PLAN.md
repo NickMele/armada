@@ -2159,6 +2159,28 @@ oversight rather than a decision.
 is also what lets the source repo keep `worktrees` / `tickets` / `design` while giving up
 `check` and `servers` (phase 6), so it is on the critical path rather than a nicety.
 
+#### Reserved, not built: `armada manifest commands`
+
+**`skills:` and `commands:` are the same kind of thing and only one of them is
+listable.** `armada manifest skills` shows what a repo declares; there is no
+`armada manifest commands`, so the only way to learn a repo's verbs is to read
+`armada.yml`. That is the question a newcomer — human or agent — asks first.
+
+It should exist, and it should look like `skills`: a table of name, what it runs,
+and its one-line `help:`. `--json` in the §3.1 envelope, so an agent can list a
+repo's capability without parsing YAML.
+
+**The consequence that has to land with it.** Adding `commands` to the built-in
+verb list means **no repo may declare a `commands:` entry named `commands`** —
+§4.5's shadow rule applies the moment the name is taken, and the schema rejects
+it at config-verify time rather than at run time. That is the same trade as the
+root-level aliases of §3: a name promoted into Armada's namespace is a name
+taken away from every repository. It is worth it here because "what can I run"
+is a question with no other answer.
+
+**Not scheduled.** It is small, and it belongs with whichever milestone next
+touches the dispatcher rather than on its own.
+
 ### 4.6 `workspaces:` — nested workspaces in one repo
 
 **The default stays "packages are components."** A monorepo is one workspace, one port block,
