@@ -300,9 +300,16 @@ an orchestrator persona from your guild, with Armada's MCP server as its toolbel
 interface work at all, which is why it lands here rather than after everything else. **No `helm`
 binary is installed** — Kubernetes owns that name ([`glossary.md`](glossary.md)).
 
-**The Bridge — the screen you watch.** `armada bridge` renders every Job, its state, its spend
-against its ceiling, and who needs an answer. It holds no state and adds no capability: every
-key maps to a Fleet verb that already works from a shell ([`helm/bridge.md`](commands/helm/bridge.md)).
+**The Bridge — the screen you watch. Built.** `armada bridge` renders every Job, its state, its
+spend against its ceiling, and who needs an answer. It holds no state and adds no capability:
+every key maps to a Fleet verb that already works from a shell
+([`helm/bridge.md`](commands/helm/bridge.md)), and the two whose verb does not exist yet — `p`
+and `c` — say so rather than growing one on the screen.
+
+Every frame is one call to the same function `armada fleet ls` calls, which is what makes it a
+renderer rather than a second reader of `~/.armada/`. `--once` prints one frame for a pipe or a
+terminal with no alternate screen and `--json` emits it as the envelope; both are golden pairs,
+so the screen's layout cannot drift from the CLI's.
 
 An earlier draft deferred the Bridge indefinitely, on the argument that cmux and the Claude app
 already list sessions. That was answered rather than overruled: a session list is not what the
@@ -357,7 +364,7 @@ rather than starting over.
 
 | Not built | Where it goes |
 |---|---|
-| The MCP server, Helm, the Bridge | the two agents after this one — the three-agent shape above |
+| The MCP server, Helm | the agents after this one — the three-agent shape above |
 | **The skills merge** of [`PLAN.md`](PLAN.md) §14.5 | Fleet projects no merged skill set into a Job's worktree yet, and `fleet ls --skills` does not exist. A Drone resolves a skill *name* in its own worktree, so the repo already wins a collision; what is missing is the guild half and the shadow report. |
 | **The workflow loop** | `spawn` runs one bounded turn and records what it spent. Advancing a step on its verdict is M4's, and the predicates are data the schema already validates. |
 | **`kill --all-finished`'s full lens** | it kills every Job that is over *or* paused; `check --status` is what would let it tell a stalled Drone from a finished one. |

@@ -229,9 +229,18 @@ pub fn watch<R: Run, C: Clock>(
             let Some(pressed) = key_of(key.code, key.modifiers) else {
                 continue;
             };
+            let showing = screen.filter.clone();
             match bridge::press(&mut screen, &frame.rows, pressed) {
                 Pressed::Leave(departure) => break Some(departure),
                 Pressed::Stay => draw(&mut view, &frame, &screen, style, terminal),
+            }
+            // **A changed filter re-reads now rather than at the next tick.**
+            // The frame in hand was built under the old expression, so drawing
+            // it again would show the rows the filter just excluded and a
+            // summary counting them — for up to a whole interval, which reads
+            // as the filter having been ignored.
+            if screen.filter != showing {
+                break None;
             }
         };
         if let Some(departure) = departure {
