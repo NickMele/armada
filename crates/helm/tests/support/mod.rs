@@ -13,10 +13,93 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
+use std::sync::OnceLock;
 
 /// The binary this workspace just built.
 pub fn armada_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_armada"))
+}
+
+/// Why a command failed, in the form a reader can act on.
+///
+/// **`stderr` alone is not the answer, and assuming it was is what left six
+/// tests failing in CI unread for a day.** Armada reports a refusal as an
+/// envelope on *stdout* — `--json` or not — and writes nothing to `stderr`, so
+/// an assertion message built from `stderr` renders as `export failed: ` with
+/// the reason sitting in the buffer next to it. This prints both, labelled, and
+/// the exit status, which is the third thing a reader wants and the one neither
+/// stream carries.
+pub fn why(output: &Output) -> String {
+    format!(
+        "exit {}\nstdout: {}\nstderr: {}",
+        output
+            .status
+            .code()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "signal".to_string()),
+        String::from_utf8_lossy(&output.stdout).trim(),
+        String::from_utf8_lossy(&output.stderr).trim(),
+    )
+}
+
+/// A directory holding a stub `claude`, prepended to every scratch machine's
+/// `PATH`.
+///
+/// **Armada refuses to `init` a machine with no `claude` on `PATH`** — a
+/// preflight failure by design, since everything Fleet and Helm do runs through
+/// it. So until this existed, the guild suite passed on a developer's machine
+/// for the sole reason that the developer had Claude Code installed, and failed
+/// on every CI runner, which does not. That is the `DOCKER_CONFIG` trap again:
+/// a test whose outcome is decided by the machine's global state rather than by
+/// anything the test set up (`docs/traps.md`).
+///
+/// **It is also the only way to honour "no test starts a real session".**
+/// `armada doctor` does not stop at `claude --version`: it runs `claude --help`
+/// and then [`armada_core::fleet::drone::probe_argv`], which *starts* a session
+/// and exits at EOF. On a developer's machine that was the real binary. Here it
+/// is nine lines of `sh` that talk to nothing.
+///
+/// The stub answers exactly the three probes Armada makes and nothing else:
+///
+/// | invocation | answer |
+/// |---|---|
+/// | `claude --version` | a fixed version banner |
+/// | `claude --help` | every flag in `drone::FLAGS` and `helm::FLAGS` |
+/// | `claude plugin validate <dir>` | exit 0, silent |
+/// | anything else | exit 0, silent — never a turn, never a token |
+fn stub_bin() -> &'static Path {
+    static STUB: OnceLock<tempfile::TempDir> = OnceLock::new();
+    let dir = STUB.get_or_init(|| {
+        let dir = tempfile::tempdir().expect("a scratch directory");
+        // Written from the constants rather than retyped, so a flag added to
+        // either list is offered by the stub on the next run instead of turning
+        // `doctor` red for a reason that has nothing to do with the test.
+        let flags: Vec<&str> = armada_core::fleet::drone::FLAGS
+            .iter()
+            .chain(armada_core::helm::FLAGS.iter())
+            .copied()
+            .collect();
+        write_script(
+            dir.path(),
+            "claude",
+            &format!(
+                "#!/bin/sh\n\
+                 # A stub. It answers Armada's probes and talks to nothing.\n\
+                 case \"$1\" in\n\
+                 --version) echo '2.0.14 (Claude Code)'; exit 0 ;;\n\
+                 --help) printf '%s\\n' {}; exit 0 ;;\n\
+                 esac\n\
+                 exit 0\n",
+                flags
+                    .iter()
+                    .map(|flag| format!("'{flag}'"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+        );
+        dir
+    });
+    dir.path()
 }
 
 /// The floor of the range scratch machines allocate from.
@@ -67,11 +150,46 @@ pub struct Machine {
 
 impl Machine {
     pub fn new() -> Self {
-        Machine {
+        let machine = Machine {
             home: tempfile::tempdir().unwrap(),
             root: tempfile::tempdir().unwrap(),
             port_base: scratch_port_base(),
-        }
+        };
+        machine.seed_git_identity();
+        machine
+    }
+
+    /// Give the scratch `$HOME` a git identity of its own.
+    ///
+    /// **Guild's verbs commit, and a commit needs an author.** With `$HOME`
+    /// pointed at an empty directory there is no `.gitconfig` to read, so git
+    /// falls back to guessing one from `getpwuid` and the hostname — and it
+    /// *refuses the guess* unless the hostname canonicalises to something with a
+    /// domain in it. A developer's laptop is `something.local` and the guess
+    /// stands; a container's hostname is a hex id and it does not, so every
+    /// guild verb fails with `Author identity unknown` and nothing about the
+    /// test says why.
+    ///
+    /// So the identity is written rather than inherited. The suite is not
+    /// testing git's fallback, and a test whose outcome depends on what the host
+    /// is called is not a test.
+    ///
+    /// **Not `--global` and not the developer's.** It lands in the scratch
+    /// `$HOME` this machine already owns and dies with it.
+    fn seed_git_identity(&self) {
+        std::fs::write(
+            self.home.path().join(".gitconfig"),
+            "[user]\n\
+             \tname = Armada\n\
+             \temail = armada@example.test\n\
+             [init]\n\
+             \tdefaultBranch = main\n\
+             [commit]\n\
+             \tgpgsign = false\n\
+             [tag]\n\
+             \tgpgsign = false\n",
+        )
+        .unwrap();
     }
 
     /// Put this machine's `port_base` in `machine.yml`, if nothing is there yet.
@@ -124,6 +242,19 @@ impl Machine {
         git(&path, &["init", "-q", "-b", "main"]);
         std::fs::write(path.join("armada.yml"), config).unwrap();
         write_script(&path, "exiter.sh", "#!/bin/sh\nexit \"$1\"\n");
+        // **A child that prints its argv and interprets none of it.**
+        //
+        // The dispatch suite needs one, and `echo` is not it. GNU coreutils'
+        // `/bin/echo` claims `--help` for itself when it is the only argument
+        // and prints its own usage; BSD's on macOS prints `--help`. So a
+        // fixture built on `echo` asserted that `armada manifest <name> --help`
+        // reaches the child by asking a program that *eats* `--help` — green on
+        // macOS, red on Linux, and the red one looked like Armada swallowing
+        // the flag when Armada had passed it through correctly.
+        //
+        // `printf '%s\n' "$*"` has no options of its own to claim: the format
+        // is a literal, and every argument is data.
+        write_script(&path, "echoer.sh", "#!/bin/sh\nprintf '%s\\n' \"$*\"\n");
         write_script(
             &path,
             "enver.sh",
@@ -177,7 +308,16 @@ impl Machine {
             // ran on.
             .env_clear()
             .env("HOME", self.home.path())
-            .env("PATH", std::env::var("PATH").unwrap_or_default());
+            // The stub `claude` goes first, so what Armada finds is the same
+            // program on a developer's machine and on a runner. See [`stub_bin`].
+            .env(
+                "PATH",
+                format!(
+                    "{}:{}",
+                    stub_bin().display(),
+                    std::env::var("PATH").unwrap_or_default()
+                ),
+            );
         // The one exception to the small environment, and it is not the
         // developer's: a coverage build writes its counters to the file named
         // by `LLVM_PROFILE_FILE`, and a binary that inherits no such variable

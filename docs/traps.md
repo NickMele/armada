@@ -1104,3 +1104,123 @@ diagnosis, and writing it down is what stops the next agent rediscovering it at 
 **If you assume otherwise:** you will either chase a phantom or, worse, "fix" a golden fixture
 to match a run that was wrong — and golden fixtures have no update flag precisely so that
 adopting one is a deliberate act.
+
+## `echo --help` prints usage on Linux and prints `--help` on darwin
+
+Measured 2026-08-15 against GNU coreutils 9.1 (`rust:1-bookworm`) and the `/bin/echo` shipped
+with darwin 27.0.
+
+```
+# Linux, coreutils 9.1
+/bin/echo --help        -> "Usage: /bin/echo [SHORT-OPTION]... [STRING]..." , exit 0
+/bin/echo --help foo    -> "--help foo"
+/bin/echo -n --help     -> "--help"
+dash builtin: echo --help -> "--help"
+
+# darwin 27.0, BSD echo
+/bin/echo --help        -> "--help"
+/bin/echo --version     -> "--version"
+```
+
+**Only the sole-argument case differs.** GNU's `echo` runs its long-option parser exactly when
+there is one argument and it is `--help` or `--version`; with anything else on the line every
+word is data, which is why `echo prune --dry-run -- -x` agrees on both platforms and `echo
+--help` does not. The shell builtins agree with BSD, so `sh -c 'echo --help'` hides the
+difference entirely — a probe that goes through a shell will report no problem.
+
+**What it cost.** `crates/helm/tests/e2e.rs` used `cmd: echo` for the `commands:` entry that
+proves `armada manifest <name> --help` reaches the child rather than Armada's help page — the
+rule `crates/helm/src/args.rs` exists to keep. The fixture chosen to demonstrate the
+pass-through was the one program that consumes `--help` itself. It passed on the author's Mac
+and failed on both Linux jobs with *"a commands: entry's --help was swallowed"*, which names
+Armada as the culprit; Armada was passing the flag through correctly and GNU `echo` was eating
+it. The fixture is now `./echoer.sh`, `printf '%s\n' "$*"`, which has no options of its own.
+
+**If you assume otherwise:** you will read a red Linux job as a parser regression and go
+looking for it in `args.rs`, where there is nothing to find. More generally: a test fixture
+must not be a program that claims the argument the test is about.
+
+## The e2e harness inherited the developer's `claude`, and CI has none
+
+Measured 2026-08-15 on darwin 27.0 and on `ubuntu-latest` / `macos-latest` runners.
+
+```
+# a scratch machine, with PATH stripped of every directory holding a claude
+armada init --defaults --json
+-> exit 6, envelope on STDOUT:
+   {"class":"environment","where":"claude","message":"`claude` is not on PATH"}
+-> ~/.armada is not created
+```
+
+`crates/helm/tests/support/mod.rs` clears the environment and pins `$HOME` to a scratch
+directory, so a reader reasonably concludes the suite is hermetic. It was not: `PATH` came
+from the developer's shell, and preflight makes a missing `claude` **fatal** by design. Six
+tests in `crates/helm/tests/guild.rs` passed locally for the sole reason that the author has
+Claude Code installed, and failed on every runner, which does not — the `DOCKER_CONFIG` entry
+above, in a different tool.
+
+**Worse than a red job**: `armada doctor` does not stop at `claude --version`. It runs `claude
+--help` and then `drone::probe_argv`, which *starts a session* and exits at EOF. On the
+author's machine that was the real binary, so the suite was violating "no test starts a real
+Claude session" every time it ran. Every scratch machine now finds a stub `claude` first on
+`PATH`, generated from `drone::FLAGS` and `helm::FLAGS`.
+
+**It looked platform-specific and was not.** `cargo test --workspace` stops at the first test
+binary that fails, and on Linux `tests/e2e.rs` sorts before `tests/guild.rs` and was failing
+for the unrelated `echo` reason above — so `tests/guild.rs` never ran there. The six failures
+were reported as macOS-only because Linux never reached them.
+
+**If you assume otherwise:** you will believe `env_clear()` makes a harness hermetic. It
+removes the environment; it does not remove the machine. `PATH` is still an input, and every
+program reachable through it is one the test did not write.
+
+## git refuses its own auto-detected identity when the hostname has no domain
+
+Measured 2026-08-15 against git 2.39.5 (`rust:1-bookworm`) and git 2.54.0 (darwin 27.0).
+
+```
+# $HOME points at an empty directory, so there is no .gitconfig to read.
+# darwin, hostname Nicks-MacBook-Pro.local
+env -i HOME=$scratch PATH=$PATH git commit -m x
+-> exit 0, author "Nick Mele <nickmele@Nicks-MacBook-Pro.local>"
+
+# Linux container, hostname a hex id that does not canonicalise
+-> exit 128, "Author identity unknown"
+```
+
+**Absence of a `user.email` is not the trigger; an unusable *guess* is.** git falls back to
+`getpwuid` for the name and `user@hostname` for the address, then discards the address unless
+the hostname already contains a `.` or `getaddrinfo` canonicalises it into something that does.
+Every developer machine satisfies that and a container generally does not, which is why this
+reads as a platform difference and is really a hostname difference — the same code fails on a
+Mac whose hostname has been set to a bare word.
+
+**What it cost.** `crates/helm/tests/support/mod.rs` clears the environment and points `$HOME`
+at a scratch directory, which removes the developer's identity without supplying one. Ten
+tests in `crates/helm/tests/guild.rs` — every verb that commits — failed on Linux with
+`Author identity unknown` while passing on the author's machine. The harness now writes a
+`.gitconfig` into the scratch `$HOME`.
+
+**If you assume otherwise:** you will conclude that pointing `$HOME` somewhere empty is enough
+to isolate git. It isolates the *config*; the identity then comes from the host's passwd file
+and hostname, which is a machine input by another route.
+
+## An assertion built from `stderr` alone reports nothing when Armada refuses
+
+Measured 2026-08-15, darwin 27.0.
+
+Armada reports a refusal as an envelope on **stdout**, `--json` or not, and writes nothing to
+`stderr`. So the conventional assertion message —
+
+```
+assert!(out.status.success(), "export failed: {}", String::from_utf8_lossy(&out.stderr));
+```
+
+— renders as `export failed: ` with the reason sitting unread in the buffer beside it. Six CI
+failures carried that empty message for a day and nobody could act on any of them.
+
+Use `support::why(&output)`, which prints the exit status and both streams. The first run after
+it was added named the cause in full on the first line.
+
+**If you assume otherwise:** you will write a test whose failure output is the word "failed",
+and the cost lands on whoever reads the job — usually not you, and usually much later.
