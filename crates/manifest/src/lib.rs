@@ -27,5 +27,6 @@ pub mod machine;
 pub mod net;
 pub mod posix;
 pub mod process;
+pub mod recent;
 pub mod runs;
 pub mod scan;

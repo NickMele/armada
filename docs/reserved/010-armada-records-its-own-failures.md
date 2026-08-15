@@ -181,6 +181,23 @@ Three consequences, each of which rules out an alternative:
   `bug` is the answer before the question is asked — and a named workflow makes no model call,
   which is what makes the path testable.
 
+## The store has a second half now, and this one only knows about half of it
+
+[014](014-report-what-you-know-went-wrong.md) put `armada report` into **this file**, as a fourth
+line shape. The reason it is here rather than beside it is [001](001-raised-items-need-identity.md)'s:
+one id space, one `show`, one `fix`. Three things about that a change to this design has to keep:
+
+- **The recorder above is untouched.** Everything in *What gets recorded* still describes the
+  `failed` line only. A filed report never reaches `records`, `Fault` or `scratch` — a person
+  typing `armada report` from a throwaway worktree is reporting deliberately, and the argument
+  that a worktree's row cannot survive its own subject is about a row nobody asked for.
+- **`class` is now optional, and a report's is `None`.** Armada attributed nothing because it
+  did not notice, and writing a class in anyway would seed the exact defect *What gets recorded*
+  argues against. The listing's DETAIL cell leads with the origin instead.
+- **Dedup is the failure half's alone.** A report's id carries the time it was filed, so two
+  filings are two entries word for word — see [014](014-report-what-you-know-went-wrong.md) for
+  why merging them would throw away the part that differs.
+
 ## What it is downstream of
 
 [001](001-raised-items-need-identity.md) is the argument for the three states: *done*, *not

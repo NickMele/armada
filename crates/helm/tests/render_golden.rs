@@ -2092,7 +2092,8 @@ fn recorded(
     armada_core::failure::Entry {
         id: id.to_string(),
         state,
-        class,
+        origin: armada_core::failure::Origin::Observed,
+        class: Some(class),
         r#where: r#where.to_string(),
         message: message.to_string(),
         next: Some("reinstall armada, then retry unchanged".to_string()),
@@ -2104,6 +2105,66 @@ fn recorded(
         last_ms: 1_754_748_000_000,
         age_s,
         job: None,
+        diagnostics: None,
+    }
+}
+
+/// A **filed** report, authored the same way and for the same reason.
+///
+/// **Every attachment is invented and none is realistic-looking on purpose.**
+/// This is the fixture for the feature whose whole subject is *attaching your
+/// machine to a record*, so it is the one place a real path, a real Job name or
+/// a real token would walk into a public repository. What it does have to be is
+/// the *shape* a real one takes — a version, a system, a doctor finding, and
+/// runs that lead up to the complaint.
+fn filed(id: &str, what: &str, age_s: u64) -> armada_core::failure::Entry {
+    let ran = |verb: &str, argv: &str, exit: u8, at_ms: u64| armada_core::recent::Ran {
+        at: "2026-08-09T14:58:11Z".to_string(),
+        at_ms,
+        verb: verb.to_string(),
+        argv: argv.to_string(),
+        cwd: "~/code/orders".to_string(),
+        exit,
+        envelope: None,
+    };
+    armada_core::failure::Entry {
+        id: id.to_string(),
+        state: armada_core::failure::State::Open,
+        origin: armada_core::failure::Origin::Reported,
+        // **No class, and the row still reads.** Armada did not notice, so it
+        // attributed nothing; the DETAIL cell leads with the origin instead.
+        class: None,
+        r#where: String::new(),
+        message: what.to_string(),
+        next: None,
+        argv: format!("armada report '{what}'"),
+        cwd: "~/code/orders".to_string(),
+        count: 1,
+        first_at: "2026-08-09T14:58:11Z".to_string(),
+        last_at: "2026-08-09T14:58:11Z".to_string(),
+        last_ms: 1_754_748_000_000,
+        age_s,
+        job: None,
+        diagnostics: Some(Box::new(armada_core::failure::Diagnostics {
+            armada: "0.1.0".to_string(),
+            claude: Some("2.0.14".to_string()),
+            system: "linux x86_64".to_string(),
+            cwd: "~/code/orders".to_string(),
+            workspace: Some("~/code/orders".to_string()),
+            manifest: true,
+            doctor: vec!["STALE guild: 3 commits behind origin".to_string()],
+            recent: vec![
+                ran(
+                    "fleet spawn",
+                    "armada fleet spawn 'add the report verb' --dry-run",
+                    0,
+                    1_754_748_000_000,
+                ),
+                ran("fleet ls", "armada fleet ls", 0, 1_754_747_940_000),
+            ],
+            failures: vec!["a1b2c3d4 could not be found to run".to_string()],
+            jobs: vec!["orders-fix-a1b2 RUNNING bug".to_string()],
+        })),
     }
 }
 
@@ -2197,6 +2258,70 @@ fn failure_show_matches_its_fixture() {
         },
     )));
     assert_render("failure-show", &output);
+}
+
+/// `armada report` — a filing, with everything Armada gathered so that nobody
+/// had to paste it.
+///
+/// **The layout this freezes is the answer to the ask.** The description is
+/// quoted rather than dressed up as an error Armada reported; the machine facts
+/// join the same facts table the entry already draws; and the runs get their own
+/// `STATUS · NAME · DETAIL · TIME` table, because whether each one said it
+/// worked is the column that makes them worth attaching at all.
+#[test]
+fn report_matches_its_fixture() {
+    let entry = filed(
+        "6d40b1e9",
+        "the dry-run said CREATED worktree and made nothing",
+        0,
+    );
+    let task = armada_core::failure::task(&entry);
+    let output = Output::Failure(Box::new(Envelope::ok(
+        "report",
+        None,
+        Status::Ok,
+        FailureData {
+            results: vec![entry],
+            task,
+        },
+    )));
+    assert_render("report", &output);
+}
+
+/// `armada failures` with **both origins in one listing** — the whole argument
+/// for one store rather than two.
+///
+/// A reader triaging on a Monday morning does not care which half of the machine
+/// noticed, so the two kinds are one table and the DETAIL cell's first word is
+/// what tells them apart: a class when Armada assigned one, `reported` when it
+/// did not.
+#[test]
+fn failures_with_a_filed_report_matches_its_fixture() {
+    let output = Output::Failures(Box::new(Envelope::ok(
+        "failures",
+        None,
+        Status::Ok,
+        FailuresData {
+            open: 2,
+            results: vec![
+                filed(
+                    "6d40b1e9",
+                    "the dry-run said CREATED worktree and made nothing",
+                    4 * 60,
+                ),
+                recorded(
+                    "a91f0c37",
+                    armada_core::failure::State::Open,
+                    ErrClass::Environment,
+                    "~/.cargo/bin/armada",
+                    "`armada manifest clean` could not be found to run",
+                    4,
+                    9 * 60,
+                ),
+            ],
+        },
+    )));
+    assert_render("failures-reported", &output);
 }
 
 /// `armada fleet spawn`, against the layout `render_pending.rs` held for M3.

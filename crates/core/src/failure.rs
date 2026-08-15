@@ -153,12 +153,118 @@ impl State {
     }
 }
 
+/// **Who noticed** — the one property that tells a recorded failure from a
+/// filed report, and the reason there is one store rather than two.
+///
+/// # The two sets are different, and neither contains the other
+///
+/// [`Origin::Observed`] is *what Armada thinks went wrong*: it is written by
+/// the recorder on the path where an [`ArmadaError`] reaches the terminal, so
+/// by construction it only ever holds failures Armada was able to notice.
+///
+/// [`Origin::Reported`] is *what the person knows went wrong*, and the run that
+/// prompted it proves the gap: `armada fleet spawn --dry-run` printed `CREATED
+/// worktree`, `STARTED drone` and `QUEUED` for work it had correctly not done.
+/// The render lied. Nothing failed, the exit code was `0`, and **no observed
+/// entry could ever exist for it**. Wrong output, missing output, misleading
+/// wording and anything that looks fine to the program all live only in this
+/// half.
+///
+/// # Why that is a field and not a second file
+///
+/// `docs/reserved/001-raised-items-need-identity.md` is the argument: a thing
+/// needing attention is useless until it has an id you can act on one at a
+/// time. A second store would mean a second id space, a second `show`, a second
+/// listing to remember to read, and a second `fix` — and a person triaging on a
+/// Monday morning does not care which half of the machine noticed. **One list,
+/// one id, one promotion path**; the origin is a column.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Origin {
+    /// Armada noticed and wrote it down. The default, because every entry
+    /// written before this field existed is one.
+    #[default]
+    Observed,
+    /// A person typed `armada report` about something Armada did not notice.
+    Reported,
+}
+
+impl Origin {
+    /// The word the DETAIL cell leads with when there is no class to lead with.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Origin::Observed => "observed",
+            Origin::Reported => "reported",
+        }
+    }
+}
+
+/// Everything `armada report` gathered so that nobody had to paste it.
+///
+/// **This is the whole of the ask.** *"It would be sweet if we just had a
+/// command like `armada report` that … included the logs and the output and any
+/// other diagnostics that would be helpful, but don't include secrets."* A
+/// description alone would have been a worse version of the chat message it
+/// replaces; what makes the record worth having is that it arrives with the
+/// evidence already attached.
+///
+/// # Every field is optional or empty-able, and that is the design
+///
+/// A report is filed **because something is wrong**, so every gatherer runs on a
+/// machine that may be broken in the way being reported. A diagnostic that could
+/// fail the report is a bad diagnostic: each one degrades to `None` or to an
+/// empty list and the report is still filed. The absence is itself evidence —
+/// "`claude --version` did not answer" is a finding.
+///
+/// # Redacted and tilde'd before it is constructed
+///
+/// Every string here has been through the caller's redactor and then
+/// [`tilde`], at [`reported`], which walks the whole structure. Adding a field
+/// to this struct without adding it to that walk is the one mistake that could
+/// leak, so the walk is exhaustive by pattern rather than by a list of names.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Diagnostics {
+    /// Armada's own version — the first question anybody asks about a bug.
+    pub armada: String,
+    /// What `claude --version` said, or `None` if it could not be asked.
+    /// **The absence is a finding**, since a Job that will not start and a
+    /// `claude` that is not there are the same report from two directions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claude: Option<String>,
+    /// The operating system and architecture, as `darwin arm64`.
+    pub system: String,
+    /// The directory the report was filed from, tilde'd.
+    pub cwd: String,
+    /// The workspace it belongs to, if it is one, and whether that workspace
+    /// has an `armada.yml`. **Both, because "no workspace" and "a workspace
+    /// with nothing claiming it" are different bugs** and they render
+    /// identically if only one is carried.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+    /// Whether an `armada.yml` was found for it.
+    pub manifest: bool,
+    /// `armada doctor`'s findings, one line each, as the doctor phrases them.
+    /// **Reused rather than re-derived**: `doctor` is already the verb whose
+    /// subject is what this machine is missing, and a report that asked the
+    /// same questions differently would eventually answer them differently.
+    pub doctor: Vec<String>,
+    /// The runs the ring buffer held, most recent first
+    /// ([`crate::recent`]). **The thing that just happened** — the reason the
+    /// buffer exists at all.
+    pub recent: Vec<crate::recent::Ran>,
+    /// The ids of failures still open on this machine, so a reader can go
+    /// straight to `armada failures show` for each.
+    pub failures: Vec<String>,
+    /// The Jobs in flight, as `name state`, so a report about a Job names it.
+    pub jobs: Vec<String>,
+}
+
 /// One line of the log.
 ///
-/// **Append-only, three shapes**, exactly as the inbox is: a failure happened, a
-/// Job was spawned for one, an entry was discarded. Nothing rewrites a line —
-/// which is what makes this survive the crash that produced the entry
-/// (PLAN.md §15.3).
+/// **Append-only, four shapes**, exactly as the inbox is: a failure happened, a
+/// person reported one, a Job was spawned for one, an entry was discarded.
+/// Nothing rewrites a line — which is what makes this survive the crash that
+/// produced the entry (PLAN.md §15.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Line {
@@ -185,6 +291,33 @@ pub enum Line {
         argv: String,
         /// Where it was typed, with `$HOME` abbreviated.
         cwd: String,
+    },
+    /// A person filed a report about something Armada did not notice.
+    ///
+    /// **The shape is deliberately close to [`Line::Failed`]** — an id, a time,
+    /// a sentence, the argv and the directory — because everything downstream
+    /// of the fold treats the two the same, and a shape that diverged here
+    /// would grow a second renderer, a second `show` and a second promotion
+    /// path within a release.
+    Reported {
+        /// The fingerprint. **Unique per filing**, unlike a failure's; see
+        /// [`reported`].
+        id: String,
+        /// When, wall clock, RFC 3339.
+        at: String,
+        /// Wall clock milliseconds.
+        at_ms: u64,
+        /// What the person said happened, in their words. **The message**, in
+        /// the same field position a failure's is, so the listing needs no
+        /// branch to draw a row.
+        what: String,
+        /// The `armada report` line that filed it, with `$HOME` abbreviated and
+        /// credentials removed.
+        argv: String,
+        /// Where it was filed, with `$HOME` abbreviated.
+        cwd: String,
+        /// Everything Armada gathered so that nobody had to paste it.
+        diagnostics: Box<Diagnostics>,
     },
     /// A Job was spawned to fix this entry.
     Promoted {
@@ -217,9 +350,21 @@ pub struct Entry {
     /// Where it stands with you.
     #[serde(serialize_with = "state_word")]
     pub state: State,
+    /// **Who noticed** — see [`Origin`]. Always present in `--json`, even
+    /// though `observed` is the default, because a consumer deciding how to
+    /// read `class` should not have to infer it from a missing field.
+    pub origin: Origin,
     /// The class Armada assigned, most recently.
-    pub class: ErrClass,
-    /// The `where`.
+    ///
+    /// **`None` for a filed report, and that is not a gap.** The class is
+    /// Armada's own attribution and Armada attributed nothing here — it did not
+    /// notice. Writing a class in anyway would be the log's one job done
+    /// wrongly: the whole reason the failure log records rather than trusts the
+    /// class is that a wrong class is a symptom, and inventing one for an entry
+    /// nobody classified would seed exactly that.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<ErrClass>,
+    /// The `where`. Empty for a filed report, which has no site.
     pub r#where: String,
     /// The message.
     pub message: String,
@@ -249,6 +394,15 @@ pub struct Entry {
     /// The Job spawned for it, if one was.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job: Option<String>,
+    /// What was gathered when this was filed. `None` for an observed failure,
+    /// which was recorded on the error path where gathering anything would have
+    /// meant running commands after something had already gone wrong.
+    ///
+    /// **Carried in the entry rather than beside it**, so `armada report
+    /// --json` and `armada failures show --json` hand an agent the same
+    /// payload: a report nobody has to relay is the point of the ask.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diagnostics: Option<Box<Diagnostics>>,
 }
 
 fn state_word<S: serde::Serializer>(state: &State, out: S) -> Result<S::Ok, S::Error> {
@@ -326,8 +480,104 @@ pub fn failed(
             r#where,
             message,
             next: error.next_action.as_deref().map(|next| tilde(next, home)),
-            argv: tilde(&format!("armada {}", argv.join(" ")), home),
+            argv: tilde(&argv_line(argv), home),
             cwd: tilde(&cwd.display().to_string(), home),
+        },
+    )
+}
+
+/// The line to append for a report a person has just filed.
+///
+/// # Redaction, then `$HOME`, over every string without exception
+///
+/// **The walk is here and it is exhaustive**, which is the whole safety
+/// argument. `armada report` attaches a command line, an environment-derived
+/// diagnostic set and captured output — all three of which routinely carry
+/// tokens — so a call site that remembered to scrub the description and forgot
+/// the attachments would publish one. Every string in [`Diagnostics`] and in
+/// every [`Ran`](crate::recent::Ran) it holds passes through `redact` and then
+/// [`tilde`] on the way in, and a field added to either struct has to be added
+/// to this function to be written at all.
+///
+/// `redact` is supplied by the caller for the reason [`crate::recent::note`]
+/// gives: the detector is `armada_guild::secrets`, Guild is above this crate,
+/// and the fix for that is to pass the rule in rather than to write a second
+/// one.
+///
+/// # A report is never deduplicated
+///
+/// A failure's id is a fingerprint precisely so that eight occurrences are one
+/// row. A report's is not: it takes the time it was filed, so **two reports are
+/// two entries even word for word.** Armada writes a failure down without being
+/// asked, so collapsing repeats is a kindness; a person typing `armada report`
+/// twice has done two deliberate things about two different runs, and merging
+/// them would silently discard the second one's diagnostics — which are the
+/// part that differs and the part that is worth having.
+#[allow(clippy::too_many_arguments)]
+pub fn reported(
+    what: &str,
+    home: &Path,
+    cwd: &Path,
+    argv: &[String],
+    diagnostics: &Diagnostics,
+    at: &str,
+    at_ms: u64,
+    redact: &dyn Fn(&str) -> String,
+) -> (String, Line) {
+    let clean = |text: &str| tilde(&redact(text), home);
+    let list = |items: &[String]| items.iter().map(|item| clean(item)).collect();
+    let what = clean(what);
+    let mut hex = blake3::hash(format!("report|{at_ms}|{what}").as_bytes())
+        .to_hex()
+        .to_string();
+    hex.truncate(ID_LEN);
+
+    let Diagnostics {
+        armada,
+        claude,
+        system,
+        cwd: filed_in,
+        workspace,
+        manifest,
+        doctor,
+        recent,
+        failures,
+        jobs,
+    } = diagnostics;
+    let diagnostics = Diagnostics {
+        armada: clean(armada),
+        claude: claude.as_deref().map(clean),
+        system: clean(system),
+        cwd: clean(filed_in),
+        workspace: workspace.as_deref().map(clean),
+        manifest: *manifest,
+        doctor: list(doctor),
+        recent: recent
+            .iter()
+            .map(|run| crate::recent::Ran {
+                at: run.at.clone(),
+                at_ms: run.at_ms,
+                verb: clean(&run.verb),
+                argv: clean(&run.argv),
+                cwd: clean(&run.cwd),
+                exit: run.exit,
+                envelope: run.envelope.as_deref().map(clean),
+            })
+            .collect(),
+        failures: list(failures),
+        jobs: list(jobs),
+    };
+
+    (
+        hex.clone(),
+        Line::Reported {
+            id: hex,
+            at: at.to_string(),
+            at_ms,
+            what,
+            argv: clean(&argv_line(argv)),
+            cwd: clean(&cwd.display().to_string()),
+            diagnostics: Box::new(diagnostics),
         },
     )
 }
@@ -360,6 +610,30 @@ pub fn fingerprint(class: ErrClass, r#where: &str, message: &str) -> String {
     let mut hex = blake3::hash(subject.as_bytes()).to_hex().to_string();
     hex.truncate(ID_LEN);
     hex
+}
+
+/// The command line as it would have to be retyped.
+///
+/// **Quoted where a word has whitespace in it**, because the two callers that
+/// matter both hold a sentence as one argument — `armada report "the dry-run
+/// said CREATED and made nothing"` and `armada fleet spawn "<task>"` — and a
+/// bare join turns the record of what was run into a line that would parse as
+/// something else entirely. A recorded command a reader cannot paste back is a
+/// record of the wrong thing.
+///
+/// Single quotes, and a `'` inside a word becomes `'\''`: the POSIX shell has
+/// no escape inside single quotes, so the quote is closed, escaped and reopened.
+pub fn argv_line(argv: &[String]) -> String {
+    let mut out = String::from("armada");
+    for word in argv {
+        out.push(' ');
+        if word.is_empty() || word.contains(char::is_whitespace) || word.contains('\'') {
+            out.push_str(&format!("'{}'", word.replace('\'', "'\\''")));
+        } else {
+            out.push_str(word);
+        }
+    }
+    out
 }
 
 /// A path as a person writes it, wherever it appears in a string.
@@ -422,7 +696,7 @@ pub fn fold(text: &str) -> Vec<Entry> {
                         entry.first_at = at.clone();
                     }
                     entry.count += 1;
-                    entry.class = class;
+                    entry.class = Some(class);
                     entry.r#where = r#where;
                     entry.message = message;
                     entry.next = next;
@@ -434,7 +708,8 @@ pub fn fold(text: &str) -> Vec<Entry> {
                 None => entries.push(Entry {
                     id,
                     state: State::Open,
-                    class,
+                    origin: Origin::Observed,
+                    class: Some(class),
                     r#where,
                     message,
                     next,
@@ -446,8 +721,39 @@ pub fn fold(text: &str) -> Vec<Entry> {
                     last_ms: at_ms,
                     age_s: 0,
                     job: None,
+                    diagnostics: None,
                 }),
             },
+            // **A report is always a new row.** Its id carries the time it was
+            // filed, so it cannot collide with an earlier one — and if it ever
+            // did, the later filing would be the mistake to keep, since it is
+            // the one the person just made.
+            Line::Reported {
+                id,
+                at,
+                at_ms,
+                what,
+                argv,
+                cwd,
+                diagnostics,
+            } => entries.push(Entry {
+                id,
+                state: State::Open,
+                origin: Origin::Reported,
+                class: None,
+                r#where: String::new(),
+                message: what,
+                next: None,
+                argv,
+                cwd,
+                count: 1,
+                first_at: at.clone(),
+                last_at: at,
+                last_ms: at_ms,
+                age_s: 0,
+                job: None,
+                diagnostics: Some(diagnostics),
+            }),
             // **A line about an id nobody recorded changes nothing.** The file
             // is a log, and a log may mention things that were never there.
             Line::Promoted { id, job, .. } => {
@@ -494,12 +800,20 @@ pub fn age(entries: &mut [Entry], now_ms: u64) {
 /// — which leaves this machine — cannot carry an absolute home path out of the
 /// log.
 pub fn task(entry: &Entry) -> String {
+    if entry.origin == Origin::Reported {
+        return report_task(entry);
+    }
     let mut out = format!(
         "Armada failed with this, and the failure was recorded as `{}`:\n\n\
          \x20   class: {}\n\
          \x20   where: {}\n\
          \x20   error: {}\n",
-        entry.id, entry.class, entry.r#where, entry.message
+        entry.id,
+        entry
+            .class
+            .map_or_else(|| "-".to_string(), |c| c.to_string()),
+        entry.r#where,
+        entry.message
     );
     if let Some(next) = &entry.next {
         out.push_str(&format!("    next:  {next}\n"));
@@ -516,6 +830,64 @@ pub fn task(entry: &Entry) -> String {
             n => format!("{n} times, most recently at {}", entry.last_at),
         }
     ));
+    out
+}
+
+/// The prompt a Job gets when a **filed report** is promoted.
+///
+/// **A different opening sentence and the same contract.** A recorded failure
+/// hands the Job an envelope Armada authored; a report hands it a person's
+/// sentence and the evidence around it, and the Job has to be told which it is
+/// holding — because the first thing to do with a report is *reproduce what the
+/// person saw*, and there may be no error to reproduce at all.
+///
+/// **It is also the shape a GitHub issue body would take**, which is deliberate
+/// and is the only concession to that being explored later: a heading, what
+/// happened, what was run, and the machine it was run on. Nothing here has to
+/// change for that path to exist, and everything in it has already been through
+/// [`reported`]'s redaction — which is the property that cannot be added
+/// afterwards, since a record that has already leaked a secret locally cannot
+/// be un-published once it is.
+fn report_task(entry: &Entry) -> String {
+    let mut out = format!(
+        "This was reported by hand rather than caught by Armada, and was recorded \
+         as `{}`. Armada did not fail: it did something wrong that it did not \
+         notice, so there may be no error to look for.\n\n\
+         What happened, in the words it was reported in:\n\n\
+         \x20   {}\n\n\
+         Filed by `{}`, in {}.\n",
+        entry.id, entry.message, entry.argv, entry.cwd
+    );
+
+    if let Some(diagnostics) = &entry.diagnostics {
+        out.push_str(&format!(
+            "\nArmada {} on {}{}.\n",
+            diagnostics.armada,
+            diagnostics.system,
+            match &diagnostics.claude {
+                Some(claude) => format!(", with claude {claude}"),
+                None => ", and `claude --version` did not answer".to_string(),
+            }
+        ));
+        if !diagnostics.recent.is_empty() {
+            out.push_str("\nThe runs leading up to it, most recent first:\n\n");
+            for run in &diagnostics.recent {
+                out.push_str(&format!("    {} {}\n", run.word(), run.argv));
+            }
+        }
+        if !diagnostics.doctor.is_empty() {
+            out.push_str("\n`armada doctor` on that machine said:\n\n");
+            for finding in &diagnostics.doctor {
+                out.push_str(&format!("    {finding}\n"));
+            }
+        }
+    }
+
+    out.push_str(
+        "\nReproduce what was described, then fix it. `armada failures show` on \
+         the id above carries the full diagnostics, including each run's \
+         envelope.",
+    );
     out
 }
 
@@ -569,7 +941,7 @@ mod tests {
         assert!(text.contains("~/.cargo/bin/armada"), "{text}");
 
         let folded = fold(&text);
-        assert_eq!(folded[0].class, ErrClass::Environment);
+        assert_eq!(folded[0].class, Some(ErrClass::Environment));
         assert_eq!(folded[0].r#where, "~/.cargo/bin/armada");
         assert_eq!(folded[0].cwd, "~/code/api");
     }

@@ -436,7 +436,8 @@ mod tests {
         Entry {
             id: id.to_string(),
             state: State::Open,
-            class: ErrClass::ArmadaBug,
+            origin: armada_core::failure::Origin::Observed,
+            class: Some(ErrClass::ArmadaBug),
             r#where: "spawn".to_string(),
             message: "the worktree was not there".to_string(),
             next: None,
@@ -448,6 +449,7 @@ mod tests {
             last_ms: 1_000,
             age_s: 0,
             job: None,
+            diagnostics: None,
         }
     }
 

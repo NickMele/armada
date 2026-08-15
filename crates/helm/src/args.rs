@@ -149,6 +149,20 @@ pub enum Invocation {
     Fleet(Box<FleetInvocation>),
     /// `armada failures [<verb>]` — Armada's record of its own failures.
     Failures(Box<FailuresInvocation>),
+    /// `armada report "<what happened>"` — **what you know went wrong**, when
+    /// Armada does not.
+    ///
+    /// **No sub-verbs, deliberately.** Filing is the only thing this does;
+    /// listing, showing, promoting and discarding a report are `armada
+    /// failures`' verbs, because a report and a recorded failure are one list
+    /// (`docs/reserved/014`). A `report ls` would be the second store the
+    /// design exists to avoid, spelled as a verb instead of as a file.
+    Report {
+        /// Emit the envelope.
+        json: bool,
+        /// What happened, in the words it is being reported in.
+        what: String,
+    },
     /// `armada mcp serve` — the toolbelt, over stdio.
     ///
     /// **No fields but `--json`.** `--stdio` is the only transport and the
@@ -714,7 +728,7 @@ pub const FLEET_VERBS: [&str; 10] = [
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 5] = ["init", "doctor", "bridge", "helm", "failures"];
+pub const TOP_LEVEL_VERBS: [&str; 6] = ["init", "doctor", "bridge", "helm", "failures", "report"];
 
 /// `armada failures`' sub-verbs.
 ///
@@ -892,6 +906,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "guild" => return guild(rest, json, color),
             "fleet" => return fleet(rest, json, color),
             "failures" => return failures(rest, json, color),
+            "report" => return report(rest, json, color),
             "mcp" => return mcp(rest, json, color),
             _ => {}
         }
@@ -1452,6 +1467,48 @@ fn doctor(
         json: parsed.json,
         fix: parsed.on("--fix"),
     })
+}
+
+/// `armada report "<what happened>"`.
+///
+/// **One quoted positional and nothing else.** The description is a sentence, so
+/// it arrives as one argument the way `armada fleet spawn`'s task does; several
+/// bare words are refused rather than joined, because joining them would make
+/// `armada report the dry run lied` succeed and `armada report the dry-run
+/// --json lied` mean something else entirely.
+///
+/// **Required, with no default.** Every other prompt in Armada has a default
+/// that leaves something working; the default here would be an empty report,
+/// which is a row that costs a reader a click and tells them nothing.
+fn report(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "report") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+    let parsed = flags(rest, json, color, "report", &[], &[])?;
+    let what = one_positional(
+        &parsed,
+        "report",
+        "one sentence saying what happened",
+        "quote the whole sentence: armada report \"the dry-run said CREATED and made nothing\"",
+    )?;
+    match what {
+        Some(what) => Ok(Invocation::Report {
+            json: parsed.json,
+            what,
+        }),
+        None => Err(needs_positional(
+            "report",
+            "`armada report` needs a sentence saying what happened",
+            "armada report \"the dry-run said CREATED and made nothing\"",
+            parsed.json,
+        )),
+    }
 }
 
 /// `armada mcp serve`.

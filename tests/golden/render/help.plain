@@ -49,6 +49,7 @@ THIS MACHINE
   init      set up this machine: checks, ~/.armada/, and your guild
   doctor    what this machine is missing, and what fixes it
   failures  what Armada broke on, and how to put a Job on one
+  report    tell Armada something went wrong that it did not notice
 
 GLOBAL FLAGS
   --json          answer as one JSON object, for a script or an agent

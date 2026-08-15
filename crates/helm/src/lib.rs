@@ -12,5 +12,6 @@ pub mod args;
 pub mod ask;
 pub mod bridge;
 pub mod mcp;
+pub mod redact;
 pub mod render;
 pub mod verbs;
