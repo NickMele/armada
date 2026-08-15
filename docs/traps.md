@@ -1205,6 +1205,41 @@ tests in `crates/helm/tests/guild.rs` — every verb that commits — failed on 
 to isolate git. It isolates the *config*; the identity then comes from the host's passwd file
 and hostname, which is a machine input by another route.
 
+## Reading a process's start time spawns `ps` on darwin and spawns nothing on Linux
+
+Measured 2026-08-15 against darwin 27.0 and `rust:1-bookworm`.
+
+`machine::process_start_at` is one function with two bodies:
+
+```
+#[cfg(target_os = "linux")]      read /proc/<pid>/stat, field 22   -> no subprocess
+#[cfg(not(target_os = "linux"))] run.call(["ps", "-o", "lstart=", "-p", pid]) -> one subprocess
+```
+
+Both answer the same question. Only Linux answers it without a fork, so **a `Run` harness that
+records what was spawned sees one call per liveness check on darwin and zero on Linux** — and
+the platform doing less work is the one that looks like it did nothing.
+
+**What it cost.** `reading_a_frame_resumes_nothing_and_writes_nothing` guarded against a
+vacuous pass by requiring at least one recorded call per redraw, and failed on Linux with *"a
+frame asked the machine nothing at all"*. It reads as a regression in
+`posix::stop_group`'s reaping — the change that had just merged — and is unrelated to it:
+`stop_group` is on `drone::stop`, which `fleet kill` calls, and liveness goes through
+`drone::alive` instead. Nothing was broken; the assertion was written in darwin's spelling.
+
+**It was not a container artefact**, unlike `net::tests::a_wildcard_holder…` below. The branch
+is `cfg(target_os = "linux")`, so it applies to any Linux, and it failed 3 times out of 3.
+Every ubuntu job would have hit it the moment CI got that far, which it never had.
+
+**The general rule this earned:** a test that proves something happened by counting spawned
+processes is asserting an implementation's spelling. Where the answer is visible in the output,
+assert the answer — `job::observe_state` reads a live Drone with no finished turn as `RUNNING`
+and a dead one as `STALLED`, which is the same assertion on both platforms. Where it is not
+visible, say which platform you are counting for.
+
+**If you assume otherwise:** you will read a call log as a portable record of what a function
+did, and conclude a platform is broken when it is merely cheaper.
+
 ## An assertion built from `stderr` alone reports nothing when Armada refuses
 
 Measured 2026-08-15, darwin 27.0.

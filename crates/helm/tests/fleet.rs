@@ -2285,30 +2285,65 @@ fn a_bridge_frame_is_exactly_the_listing_it_renders() {
 /// **Watching does not change what is watched** (PLAN.md §15.2). A frame reads
 /// the index, the transcript and the process table, and writes none of them —
 /// so a Bridge left open for an hour is an hour of reads and nothing else.
+///
+/// **How a process-table read is spelled is a platform detail, and this test
+/// used to assert darwin's spelling as though it were the rule.** It required at
+/// least one spawned call per redraw; on Linux the same read is
+/// `/proc/<pid>/stat` and there is no call, so the test failed there for doing
+/// less work. It had never run on a Linux job to say so — both CI runs that
+/// might have reached it aborted at an earlier binary (`docs/traps.md`).
 #[test]
 fn reading_a_frame_resumes_nothing_and_writes_nothing() {
     let scratch = Scratch::new();
     let run = scratch.harness();
     let data = spawn(&scratch, &run, &task("add rate limiting"));
     await_turn(&scratch, &data.uuid);
+    // **A second Job whose Drone is genuinely still running, and it is the one
+    // that makes this test mean anything.** Everything asserted below is a claim
+    // about what a redraw *did not* do, and every one of those claims would hold
+    // of a redraw that did nothing at all — so something has to prove the
+    // process table was actually consulted.
+    //
+    // A Job with no finished turn is the only place the answer is visible:
+    // `job::observe_state` reads a live Drone as `RUNNING` and a dead one with
+    // nothing produced as `STALLED`. The Job above, which finished a turn, reads
+    // `RUNNING` either way — which is why counting `ps` calls was reached for in
+    // the first place, and why counting them is not portable.
+    let live = spawn(
+        &scratch,
+        &run,
+        &task(&format!("keep watching {STAY_ALIVE}")),
+    );
 
     let before = scratch.store().load(&data.uuid).unwrap();
+    let before_live = scratch.store().load(&live.uuid).unwrap();
     let already = run.calls().len();
+    let mut rows = 0;
     for _ in 0..3 {
-        armada_helm::verbs::bridge::read(&run, &FrozenClock::new(), &scratch.place(), None)
-            .expect("a frame");
+        let frame =
+            armada_helm::verbs::bridge::read(&run, &FrozenClock::new(), &scratch.place(), None)
+                .expect("a frame");
+        let watched = frame
+            .rows
+            .iter()
+            .find(|row| row.name == live.name)
+            .expect("the live Job is on the frame");
+        assert_eq!(
+            watched.state,
+            JobState::Running,
+            "a redraw did not read the process table: a live Drone read as {:?}",
+            watched.state
+        );
+        rows = frame.rows.len();
     }
 
     assert_eq!(scratch.store().load(&data.uuid).unwrap(), before);
-    // **Three redraws is what six seconds of watching costs, and it is `ps`.**
-    // Asking the process table whether a Drone is alive is the one call a frame
-    // makes, and it is a question rather than a message — no `claude`, no
-    // `--resume`, no `git`, nothing that could reach a Drone or a repository.
+    assert_eq!(scratch.store().load(&live.uuid).unwrap(), before_live);
+    // **Whatever a redraw runs, it is a question and never a message** — no
+    // `claude`, no `--resume`, no `git`, nothing that could reach a Drone or a
+    // repository. Asking the process table whether a Drone is alive is the only
+    // thing a frame needs the machine for.
     let during: Vec<Vec<String>> = run.calls().into_iter().skip(already).collect();
-    assert!(
-        !during.is_empty(),
-        "a frame asked the machine nothing at all"
-    );
     for call in &during {
         assert_eq!(
             call.first().map(String::as_str),
@@ -2316,6 +2351,29 @@ fn reading_a_frame_resumes_nothing_and_writes_nothing() {
             "a redraw ran something other than a process-table read: {during:?}"
         );
     }
+
+    // **What watching costs is not the same number on both platforms, and the
+    // difference is a spawn rather than a behaviour.**
+    // `machine::process_start_at` reads `/proc/<pid>/stat` on Linux and shells
+    // out to `ps -o lstart=` everywhere else — the same question, asked without
+    // a fork. So darwin pays one call per unfinished Job per redraw and Linux
+    // pays none, and it is Linux that is doing less work.
+    //
+    // Asserted per platform rather than relaxed to "zero or more", because the
+    // count is the cost: a redraw that started spawning on Linux, or that asked
+    // twice per Job on darwin, is a regression this notices. The guard above is
+    // what stops the Linux arm being satisfied by a frame that does nothing.
+    #[cfg(target_os = "linux")]
+    assert!(
+        during.is_empty(),
+        "a redraw spawned something; /proc answers this without one: {during:?}"
+    );
+    #[cfg(not(target_os = "linux"))]
+    assert_eq!(
+        during.len(),
+        3 * rows,
+        "three redraws are one process-table read per live Job: {during:?}"
+    );
 }
 
 /// A filter narrows the rows and the counts together, and says what it hid.
