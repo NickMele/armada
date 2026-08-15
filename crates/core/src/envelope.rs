@@ -595,6 +595,19 @@ pub struct ScanData {
     pub results: Vec<ResultRow>,
     /// The facts themselves, uninterpreted and untruncated.
     pub evidence: crate::scan::Evidence,
+    /// What happens once the evidence has been printed: ask, tell, or neither.
+    ///
+    /// **In the payload rather than derived by the renderer**, and **beside
+    /// the evidence rather than inside it**. It is decided from facts only the
+    /// entrypoint has — whether each stream is a terminal, whether there is a
+    /// skill to hand over to — and none of those is a fact about the
+    /// repository, which is what `evidence` holds and all it holds.
+    ///
+    /// A renderer that worked it out for itself would give the two human
+    /// audiences different *content* rather than different styling, which is
+    /// the one way they may not differ (PLAN.md §3.1.1).
+    #[serde(default)]
+    pub handover: crate::scan::Handover,
 }
 
 /// `armada manifest config verify` — layer 3 of PLAN.md §5.

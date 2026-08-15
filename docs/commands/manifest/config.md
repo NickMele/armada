@@ -134,9 +134,31 @@ and it is the only place the renderer wraps anything. Both of the usual answers 
 a flexible column would drop the tail, and one line would run to seven hundred columns on a
 repository whose gate has a dozen steps.
 
-It ends by offering to hand over to an agent. `ARCHITECTURE.md` §1.9 permits that — the rule
-governs *inputs*, and printing a choice is an output. **Armada prints the choice and reads no
-answer**; whatever acts on one is a caller above Manifest.
+### Handing over
+
+It ends by handing over to an agent, and **how depends on who is reading** — the three-audiences
+rule of [`PLAN.md`](../../PLAN.md) §3.1.1 applied to *input* rather than output. That section
+reasons about what gets written; the same split decides what may be read.
+
+| Audience | What happens |
+|---|---|
+| **stdin and stdout are a terminal** | The choice is drawn and the answer is read. `1` execs `claude` on the guild's `onboard-repo` skill; `2` exits, having printed the evidence. |
+| **Either is not** | No menu. The command that would have been run is printed, so an agent reading stdout learns the next step. |
+| **`--json`** | The envelope alone. No menu, no prompt, and `data.handover` says `silent`. |
+
+**An agent running `config scan` inside a Job must never block on stdin that will never
+arrive.** That is the failure mode "always interactive" causes — the Job hangs until its ceiling
+expires and reports nothing — and it is why the terminal decides this rather than a flag, which
+can be forgotten. **Both** streams have to be a terminal: stdin decides whether an answer can
+arrive and stdout decides whether the question was seen.
+
+`ARCHITECTURE.md` §1.9 permits the handover. The rule governs what Manifest may *accept* — a Job
+id, a model name, a transcript — not whether it may hand a repository to an agent, which is the
+same shape as `fleet board` handing you `claude --resume`.
+
+**If the guild has no `onboard-repo` skill** — no guild yet, or it was removed — the command is
+printed with the reason rather than exec'd. Offering to launch something that is not there
+produces a failure at the moment the reader was expecting help.
 
 `--json` returns one result per finding in `data.results[]`, with the file it came from in
 `path` and the one-line detail in `reason`, plus the whole uninterpreted report in

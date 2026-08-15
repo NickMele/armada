@@ -412,9 +412,18 @@ fn scan_of(fixture: &str) -> String {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures")
         .join(fixture);
-    verbs::config::scan(&RealRun, &root)
-        .expect("a readable directory always answers")
-        .to_json()
+    // **Piped, and with no guild**, which is the snapshot a consumer of the
+    // envelope is in: `--json` is the third audience and gets no handover at
+    // all. The interactive form has its own render fixture.
+    verbs::config::scan(
+        &RealRun,
+        &root,
+        None,
+        armada_helm::render::term::Terminal::piped(),
+        true,
+    )
+    .expect("a readable directory always answers")
+    .to_json()
 }
 
 /// `armada manifest config verify`, **both passes**, against a scratch repo.

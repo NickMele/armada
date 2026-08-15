@@ -50,6 +50,7 @@ use armada_core::fleet::JobState;
 use armada_core::id::WorkspaceId;
 use armada_core::ports::PortState;
 use armada_core::reap::ReapPlan;
+use armada_core::scan::{Handover, TellWhy};
 
 use crate::verbs::Output;
 use palette::Role;
@@ -2076,29 +2077,56 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
             "Armada does not guess which of these you actually run."
         )
     ));
-    out.push_str(&handover(style, width));
+    out.push_str(&handover(style, width, &data.handover));
     out
 }
 
-/// The choice `scan` ends on.
+/// The choice `scan` ends on — or the command it would have run, for a reader
+/// who cannot answer one.
 ///
-/// **Printed and never read.** Manifest may emit anything an agent will read
-/// and may accept nothing an agent produced (`ARCHITECTURE.md` §1.9), so this
-/// is two lines of output and no prompt: whatever runs the first option is a
-/// caller above Manifest, not Manifest.
-fn handover(style: Style, width: usize) -> String {
-    Table::new(vec![Column::fixed(""), Column::flexible("")])
+/// **Which of the two is in the payload and is not decided here**
+/// ([`armada_core::scan::Handover`]). It follows from facts only the entrypoint
+/// has — whether each stream is a terminal, whether there is a skill to hand
+/// over to — and a renderer that worked it out for itself would give the two
+/// human audiences different *content*, which is the one thing they may not
+/// differ in.
+fn handover(style: Style, width: usize, choice: &Handover) -> String {
+    let mut table = Table::new(vec![Column::fixed(""), Column::flexible("")])
         .headerless()
-        .indent(2)
-        .row(vec![
-            Cell::plain("1 let an agent write it with me"),
-            Cell::muted("opens claude here"),
-        ])
-        .row(vec![
-            Cell::plain("2 print the evidence and stop"),
-            Cell::muted("I will write armada.yml myself"),
-        ])
-        .render(style, width)
+        .indent(2);
+    match choice {
+        // Nothing at all: `--json` is a parser waiting for one payload.
+        Handover::Silent => return String::new(),
+        Handover::Ask => {
+            table = table
+                .row(vec![
+                    Cell::plain("1 let an agent write it with me"),
+                    Cell::muted("opens claude here"),
+                ])
+                .row(vec![
+                    Cell::plain("2 print the evidence and stop"),
+                    Cell::muted("I will write armada.yml myself"),
+                ]);
+        }
+        // **The command, so a reader who cannot answer a menu still learns the
+        // next step.** A prompt drawn for an agent is worse than no prompt: it
+        // is a question it cannot satisfy, in the place an instruction belongs.
+        Handover::Tell(why) => {
+            table = table.row(vec![
+                Cell::painted("next", Role::SignalAmber),
+                Cell::muted(
+                    armada_guild::layout::skill_argv(armada_guild::layout::ONBOARD_REPO).join(" "),
+                ),
+            ]);
+            if *why == TellWhy::NoSkill {
+                table = table.row(vec![
+                    Cell::painted("missing", Role::FlareOrange),
+                    Cell::muted("that skill is not in your guild — `armada guild init` writes it"),
+                ]);
+            }
+        }
+    }
+    table.render(style, width)
 }
 
 /// A titled block of evidence, or nothing at all when there is none of it.

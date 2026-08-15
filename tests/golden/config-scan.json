@@ -156,6 +156,7 @@
           "independent": false
         }
       ]
-    }
+    },
+    "handover": "silent"
   }
 }

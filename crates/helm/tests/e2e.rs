@@ -962,13 +962,16 @@ fn config_scan_answers_in_a_directory_with_no_workspace() {
     assert_eq!(scripts[1]["name"], "lint");
 
     // The human render is the one an authoring agent actually reads, and it
-    // ends by offering to hand over (PLAN.md §5, ARCHITECTURE.md §1.9 — the
-    // rule governs inputs, and printing a choice is an output).
+    // ends by handing over (PLAN.md §5, ARCHITECTURE.md §1.9 — the rule governs
+    // inputs, and printing a choice is an output). This scratch machine has no
+    // guild, so the handover is the command plus the reason it cannot be run
+    // for you — not a menu, and not silence.
     let human = machine.run(&loose, &["manifest", "config", "scan"]);
     let text = String::from_utf8_lossy(&human.stdout);
     assert!(text.starts_with("no armada.yml here"), "{text}");
     assert!(text.contains("Evidence only."), "{text}");
-    assert!(text.contains("1 let an agent write it with me"), "{text}");
+    assert!(text.contains("claude /onboard-repo"), "{text}");
+    assert!(text.contains("not in your guild"), "{text}");
     assert!(!text.contains('\x1b'), "a pipe gets no escapes: {text}");
 }
 
@@ -1027,6 +1030,43 @@ fn config_verify_fails_pass_one_and_does_not_attempt_pass_two() {
         "{text}"
     );
     assert!(text.contains("\n  -> "), "no fix line: {text}");
+}
+
+/// **`config scan` must never block on stdin that will never arrive.**
+///
+/// That is the failure mode the whole handover design turns on: an agent
+/// running this inside a Job reads stdout and has nothing to type, so a menu
+/// there is a prompt that hangs until the Job's ceiling expires and reports
+/// nothing. Only an end-to-end run establishes it — the decision is unit-tested
+/// where it is made, and this is the half that proves the process actually
+/// exits.
+///
+/// `Machine::run` captures stdout, so stdin is not a terminal here, which is
+/// exactly the situation under test.
+#[test]
+fn config_scan_prints_the_next_command_instead_of_a_prompt_it_cannot_answer() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+
+    // No timeout wrapper and none needed: if this blocks, the suite hangs and
+    // that is the bug. It returns because nothing was ever asked.
+    let output = machine.run(&repo, &["manifest", "config", "scan"]);
+    assert_eq!(output.status.code(), Some(0));
+    let text = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        !text.contains("1 let an agent write it with me"),
+        "a menu was drawn for a reader with no stdin:\n{text}"
+    );
+    assert!(
+        text.contains("next") && text.contains("claude /onboard-repo"),
+        "the next step was not printed:\n{text}"
+    );
+
+    // `--json` is the third audience: the envelope, and no handover at all.
+    let piped = machine.run(&repo, &["manifest", "config", "scan", "--json"]);
+    let payload: Value = serde_json::from_slice(&piped.stdout).unwrap();
+    assert_eq!(payload["data"]["handover"], "silent", "{payload}");
 }
 
 /// **`config scan` on a monorepo, end to end.** The unit tests hand the parser

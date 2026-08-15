@@ -32,6 +32,7 @@ use std::path::Path;
 use crate::app::App;
 use crate::args::BUILTIN_VERBS;
 use crate::render::progress::Progress;
+use crate::render::term::Terminal;
 use crate::verbs::Output;
 
 /// `armada manifest config scan`, over one directory.
@@ -40,9 +41,29 @@ use crate::verbs::Output;
 /// (`docs/commands/manifest/config.md`): it reports rather than judges, so
 /// there is no outcome it could fail on. A file that does not parse contributes
 /// nothing and the other twelve pieces of evidence still print.
-pub fn scan(run: &impl Run, root: &Path) -> Result<Output, ArmadaError> {
+/// `home` is `~/`, for finding the guild that holds the onboarding skill;
+/// `terminal` says which audience is reading, which is what decides whether
+/// there is anything to ask. Both are the entrypoint's to know
+/// (`ARCHITECTURE.md` §1.4) and neither is looked up here.
+pub fn scan(
+    run: &impl Run,
+    root: &Path,
+    home: Option<&Path>,
+    terminal: Terminal,
+    json: bool,
+) -> Result<Output, ArmadaError> {
     let files = armada_manifest::scan::read(run, root);
     let evidence = scan::scan(&files);
+
+    // **Manifest hands over; it does not depend on what it hands over to.** The
+    // skill belongs to the guild and this is `helm`, the one crate permitted to
+    // name both (`ARCHITECTURE.md` §1.9). Nothing under `crates/manifest` learns
+    // that an agent exists.
+    let skill = home.is_some_and(|home| {
+        armada_guild::layout::Guild::at(&armada_manifest::machine::armada_home(home))
+            .has_skill(armada_guild::layout::ONBOARD_REPO)
+    });
+
     Ok(Output::Scan(Box::new(Envelope::ok(
         "config scan",
         // **No workspace id, deliberately.** A repository being scanned has not
@@ -53,6 +74,7 @@ pub fn scan(run: &impl Run, root: &Path) -> Result<Output, ArmadaError> {
         ScanData {
             results: scan::findings(&evidence),
             evidence,
+            handover: scan::handover(json, terminal.stdin_is_tty, terminal.stdout_is_tty, skill),
         },
     ))))
 }

@@ -250,6 +250,84 @@ pub struct Evidence {
     pub packages: Vec<Package>,
 }
 
+/// What `config scan` does once it has printed the evidence.
+///
+/// It has produced evidence, and evidence is not a config, so the last thing it
+/// does is hand over. **`ARCHITECTURE.md` §1.9 permits that**: the rule governs
+/// what Manifest may *accept* — a Job id, a model name, a transcript — not
+/// whether it may hand a repository to an agent, which is the same shape as
+/// `fleet board` handing you `claude --resume`.
+///
+/// # The three-audiences rule, applied to input
+///
+/// PLAN.md §3.1.1 splits three audiences by what gets *written* — colour,
+/// progress, the envelope. The same split decides what may be **read**, and the
+/// section does not say so because until now nothing here read anything:
+///
+/// | Audience | Handover |
+/// |---|---|
+/// | a person at a terminal | [`Handover::Ask`] — draw the choice, read the answer |
+/// | an agent reading stdout | [`Handover::Tell`] — print the command it would have run |
+/// | a parser (`--json`) | [`Handover::Silent`] — the envelope and nothing else |
+///
+/// **An agent running `config scan` inside a Job must never block on stdin that
+/// will never arrive.** That is the failure mode "always interactive" causes,
+/// and it is the whole reason the terminal decides this rather than a flag: a
+/// flag can be forgotten, and a Job that hangs on a prompt nobody can answer
+/// burns its ceiling and reports nothing.
+///
+/// **Both streams have to be a terminal, not either.** stdin decides whether an
+/// answer can arrive and stdout decides whether the question was seen, and a
+/// menu written to a pipe while stdin happens to be a tty is a prompt the
+/// reader never read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Handover {
+    /// Draw the choice and read an answer.
+    Ask,
+    /// Print the command that would have been run, and read nothing.
+    Tell(TellWhy),
+    /// Offer nothing: the caller asked for the envelope alone.
+    Silent,
+}
+
+/// Why `config scan` printed a command instead of asking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TellWhy {
+    /// Nobody is at a terminal to answer.
+    NotATerminal,
+    /// There is no onboarding skill to hand over to.
+    NoSkill,
+}
+
+impl Default for Handover {
+    /// The safe answer, and the one a caller that never asked gets: say what
+    /// would have happened and read nothing.
+    fn default() -> Self {
+        Handover::Tell(TellWhy::NotATerminal)
+    }
+}
+
+/// Which handover this invocation gets.
+///
+/// `skill` is whether there is an onboarding skill to hand over to. **A missing
+/// one is reported rather than exec'd**: offering to launch something that is
+/// not there produces a failure at the moment the reader was expecting help.
+pub fn handover(json: bool, stdin_is_tty: bool, stdout_is_tty: bool, skill: bool) -> Handover {
+    if json {
+        return Handover::Silent;
+    }
+    if !skill {
+        return Handover::Tell(TellWhy::NoSkill);
+    }
+    if stdin_is_tty && stdout_is_tty {
+        Handover::Ask
+    } else {
+        Handover::Tell(TellWhy::NotATerminal)
+    }
+}
+
 /// A directory that is a package in its own right.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Package {
@@ -1424,6 +1502,69 @@ mod tests {
         let evidence = scan(&files(&[("tools/uv.lock", "")]));
         assert_eq!(evidence.lockfiles[0].file, "tools/uv.lock");
         assert!(evidence.packages.is_empty());
+    }
+
+    // ------------------------------------------------------------ handover
+
+    /// **The failure mode that decided this.** An agent running `config scan`
+    /// inside a Job reads stdout and has no stdin to type into; a menu there is
+    /// a prompt that blocks until the Job's ceiling expires and reports
+    /// nothing.
+    #[test]
+    fn nothing_is_asked_of_an_audience_that_cannot_answer() {
+        assert_eq!(
+            handover(false, false, false, true),
+            Handover::Tell(TellWhy::NotATerminal)
+        );
+        // Both streams, not either: stdin decides whether an answer can
+        // arrive and stdout decides whether the question was seen.
+        assert_eq!(
+            handover(false, true, false, true),
+            Handover::Tell(TellWhy::NotATerminal),
+            "a menu written to a pipe is a question nobody read"
+        );
+        assert_eq!(
+            handover(false, false, true, true),
+            Handover::Tell(TellWhy::NotATerminal),
+            "a question nobody can answer"
+        );
+    }
+
+    #[test]
+    fn a_person_at_a_terminal_is_asked() {
+        assert_eq!(handover(false, true, true, true), Handover::Ask);
+    }
+
+    /// `--json` is a parser waiting for one payload, so it gets no menu and no
+    /// command — whatever the terminal happens to be.
+    #[test]
+    fn a_parser_is_offered_nothing_at_all() {
+        for (stdin, stdout) in [(true, true), (false, false)] {
+            assert_eq!(handover(true, stdin, stdout, true), Handover::Silent);
+        }
+    }
+
+    /// **Offering to launch something that is not there produces a failure at
+    /// the moment the reader was expecting help.** No skill means the command
+    /// is printed and its absence is said out loud, at a terminal as much as
+    /// through a pipe.
+    #[test]
+    fn a_missing_skill_is_reported_rather_than_launched() {
+        assert_eq!(
+            handover(false, true, true, false),
+            Handover::Tell(TellWhy::NoSkill)
+        );
+        assert_eq!(
+            handover(false, false, false, false),
+            Handover::Tell(TellWhy::NoSkill)
+        );
+    }
+
+    /// The default is the one that reads nothing, so a caller that never asked
+    /// cannot accidentally block.
+    #[test]
+    fn the_default_handover_reads_nothing() {
+        assert_eq!(Handover::default(), Handover::Tell(TellWhy::NotATerminal));
     }
 
     /// The order the agreed layout draws, and it does not move when a

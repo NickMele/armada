@@ -17,6 +17,9 @@ use std::io::IsTerminal;
 /// The terminal, as one answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Terminal {
+    /// Whether stdin comes from a terminal. Decides whether Armada may ask a
+    /// question — an answer can only arrive from a person.
+    pub stdin_is_tty: bool,
     /// Whether stdout goes to a terminal. Decides colour and truncation.
     pub stdout_is_tty: bool,
     /// Whether stderr goes to a terminal. Decides progress.
@@ -45,6 +48,7 @@ impl Terminal {
     /// Ask the operating system. **`main` only.**
     pub fn detect() -> Terminal {
         Terminal {
+            stdin_is_tty: std::io::stdin().is_terminal(),
             stdout_is_tty: std::io::stdout().is_terminal(),
             stderr_is_tty: std::io::stderr().is_terminal(),
             width: terminal_size::terminal_size()
@@ -58,6 +62,7 @@ impl Terminal {
     /// reading stdout all share. The default for a test.
     pub const fn piped() -> Terminal {
         Terminal {
+            stdin_is_tty: false,
             stdout_is_tty: false,
             stderr_is_tty: false,
             width: Terminal::FALLBACK_WIDTH,
@@ -68,6 +73,7 @@ impl Terminal {
     /// wants to see what a person sees.
     pub const fn at(width: usize) -> Terminal {
         Terminal {
+            stdin_is_tty: true,
             stdout_is_tty: true,
             stderr_is_tty: true,
             width,

@@ -41,6 +41,7 @@ use armada_core::fleet::JobState;
 use armada_core::id::WorkspaceId;
 use armada_core::ports::{PortBlock, PortState};
 use armada_core::reap::ReapPlan;
+use armada_core::scan::{Handover, TellWhy};
 use armada_helm::render::help::Topic;
 use armada_helm::render::style::Style;
 use armada_helm::render::term::Terminal;
@@ -486,7 +487,7 @@ fn a_refused_dispatch_matches_its_fixture() {
 /// are where this verb's mistakes live.
 #[test]
 fn config_scan_matches_its_fixture() {
-    assert_render("config-scan", &scan_of("next-prisma"));
+    assert_render("config-scan", &scan_of("next-prisma", Handover::Ask));
 }
 
 /// `armada manifest config scan` over a **monorepo**, which is the shape the
@@ -499,11 +500,45 @@ fn config_scan_matches_its_fixture() {
 /// comparison keeps it caught.
 #[test]
 fn config_scan_over_a_monorepo_matches_its_fixture() {
-    assert_render("config-scan-monorepo", &scan_of("polyglot-monorepo"));
+    assert_render(
+        "config-scan-monorepo",
+        &scan_of("polyglot-monorepo", Handover::Ask),
+    );
+}
+
+/// **The form an agent sees**, and the reason there are two fixtures.
+///
+/// A menu drawn for a reader with no stdin is a question it cannot satisfy, in
+/// the place an instruction belongs — so the same evidence ends with the
+/// command instead. This is the render that matters most in practice: agents
+/// call this CLI constantly and almost none of them are at a terminal.
+#[test]
+fn config_scan_for_a_reader_that_cannot_answer_matches_its_fixture() {
+    assert_render(
+        "config-scan-piped",
+        &scan_of("next-prisma", Handover::Tell(TellWhy::NotATerminal)),
+    );
+}
+
+/// **A skill that is not there is said out loud.** Offering to launch one
+/// produces a failure at the moment the reader was expecting help, so the
+/// absence is reported and the command is printed anyway — it is what
+/// `armada guild init` will make work.
+#[test]
+fn config_scan_without_the_onboarding_skill_matches_its_fixture() {
+    assert_render(
+        "config-scan-no-skill",
+        &scan_of("next-prisma", Handover::Tell(TellWhy::NoSkill)),
+    );
 }
 
 /// The evidence a real directory yields, as the verb would answer it.
-fn scan_of(fixture: &str) -> Output {
+///
+/// `handover` is a parameter rather than a detection, because it is the one
+/// thing about this payload that does not come from the directory — and it is
+/// what makes the interactive and the piped forms two fixtures rather than two
+/// renders of one.
+fn scan_of(fixture: &str, handover: Handover) -> Output {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures")
         .join(fixture);
@@ -516,6 +551,7 @@ fn scan_of(fixture: &str) -> Output {
         ScanData {
             results: armada_core::scan::findings(&evidence),
             evidence,
+            handover,
         },
     )))
 }

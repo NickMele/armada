@@ -80,6 +80,24 @@ pub const NEVER_SYNCS: [&str; 4] = ["manifest.db", "jobs", "workspaces", "machin
 /// The directories a guild is made of, under `guild/`.
 pub const GUILD_DIRECTORIES: [&str; 4] = ["hooks", "skills", "subagents", "workflows"];
 
+/// The starter skill that writes a repository's `armada.yml` with you — the
+/// guild's first real content (PLAN.md §13.4), and what `armada manifest config
+/// scan` hands over to once it has produced the evidence.
+pub const ONBOARD_REPO: &str = "onboard-repo";
+
+/// The argv that opens a session on a guild skill.
+///
+/// **Printed as often as it is run.** `config scan` execs this for a person at
+/// a terminal and prints it for everybody else, which is the same shape
+/// `fleet board` takes: the argv is the thing a reader can copy, and the exec
+/// is a convenience on top of it rather than the only way through.
+pub fn skill_argv(name: &str) -> Vec<String> {
+    vec![
+        armada_core::fleet::drone::CLAUDE.to_string(),
+        format!("/{name}"),
+    ]
+}
+
 /// Where a guild lives, and every path inside it.
 ///
 /// A value rather than a set of free functions so that a caller cannot
@@ -106,6 +124,17 @@ impl Guild {
     /// A path inside the guild.
     pub fn path(&self, relative: &str) -> PathBuf {
         self.root.join(relative)
+    }
+
+    /// Whether this guild carries a named skill.
+    ///
+    /// **The `SKILL.md` is the test, not the directory.** `guild init` creates
+    /// `skills/` before anything is in it, and a user who deleted the skill's
+    /// body left a directory behind — either way, offering to launch a skill
+    /// that is not there produces a failure at the moment the reader was
+    /// expecting help.
+    pub fn has_skill(&self, name: &str) -> bool {
+        self.path(&format!("skills/{name}/SKILL.md")).is_file()
     }
 
     /// Whether this machine has a guild at all.

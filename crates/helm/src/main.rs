@@ -33,6 +33,7 @@ use armada_manifest::{discovery, posix};
 use render::style::Style;
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -376,10 +377,10 @@ fn dispatch(
     // so it needs none of what `app::build` assembles.
     if let Invocation::Config {
         sub: args::ConfigSub::Scan,
-        ..
+        json,
     } = &invocation
     {
-        return verbs::config::scan(&run, cwd);
+        return verbs::config::scan(&run, cwd, Some(home), terminal, *json);
     }
 
     // Two invocations legitimately run outside any workspace: asking about
@@ -537,6 +538,50 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<Armad
     None
 }
 
+/// Read the answer to `config scan`'s choice, and act on it.
+///
+/// **Only ever reached for [`Handover::Ask`]**, which the core decides and
+/// which is only ever produced when both stdin and stdout are a terminal. That
+/// is the guarantee that matters: an agent running `config scan` inside a Job
+/// must never block on stdin that will never arrive, and the way it never does
+/// is that no code path here is reachable without a person on the other end.
+///
+/// **Option 1 execs rather than spawning.** Armada has produced the evidence
+/// and has nothing further to do, so it gets out of the way entirely — the same
+/// shape `armada fleet board --exec` takes handing over a session.
+fn hand_over(output: &Output) {
+    let Output::Scan(envelope) = output else {
+        return;
+    };
+    if envelope.data.handover != armada_core::scan::Handover::Ask {
+        return;
+    }
+
+    let mut answer = String::new();
+    // A read that fails is a stream that ended — Ctrl-D, or a terminal that
+    // went away. Nothing was chosen, so nothing happens, which is option 2.
+    if std::io::stdin().read_line(&mut answer).is_err() {
+        return;
+    }
+    if answer.trim() != "1" {
+        return;
+    }
+
+    let argv = armada_guild::layout::skill_argv(armada_guild::layout::ONBOARD_REPO);
+    let error = std::process::Command::new(&argv[0]).args(&argv[1..]).exec();
+    // `exec` returns only on failure. Reported rather than swallowed: the
+    // reader asked for a session and is owed the reason there is not one.
+    write_err(&render::error_lines(
+        &ArmadaError {
+            class: ErrClass::Environment,
+            r#where: argv.join(" "),
+            message: format!("could not start the onboarding session: {error}"),
+            next_action: Some("install claude, or put it on PATH".to_string()),
+        },
+        Style::plain(),
+    ));
+}
+
 fn emit(output: Output, json: bool, style: Style, terminal: render::term::Terminal) -> ExitCode {
     if json {
         write_out(&output.to_json());
@@ -557,6 +602,10 @@ fn emit(output: Output, json: bool, style: Style, terminal: render::term::Termin
         } else {
             write_err(&text);
         }
+        // **After the evidence is written and flushed, never before.** The
+        // question is about what the reader has just seen, and a prompt that
+        // arrives first is a prompt answered blind.
+        hand_over(&output);
     }
     // **A signal has no error class, so it does not get the class's code**
     // (`ARCHITECTURE.md` §1.6). The envelope above still says `aborted`,
