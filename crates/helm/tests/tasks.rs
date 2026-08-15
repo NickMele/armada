@@ -393,6 +393,53 @@ fn a_task_written_outside_any_workspace_is_reachable_by_default_and_under_all() 
     );
 }
 
+/// **A task written where capture finds an `armada.yml` records the workspace
+/// as a column, separate from `cwd`.** `capture` reuses
+/// `armada_manifest::discovery::resolve` — the same walk `armada manifest
+/// status` resolves against — so this is the wiring test: the entry the CLI
+/// actually writes carries what that resolver actually found, not a value a
+/// unit test on `armada_core::failure` constructed by hand.
+#[test]
+fn a_task_written_inside_a_workspace_records_it_as_a_column() {
+    let machine = Machine::new();
+    let repo = machine.repo("orders", "version: 1\nname: orders\n");
+    let id = capture(&machine, &repo, "rename the port allocator");
+
+    let shown: serde_json::Value = serde_json::from_str(&stdout(
+        &machine.run(&repo, &["tasks", "show", &id, "--json"]),
+    ))
+    .unwrap();
+    let row = &shown["data"]["results"][0];
+    assert!(
+        row["workspace"]
+            .as_str()
+            .is_some_and(|w| w.ends_with("orders")),
+        "the resolved workspace root is on the row: {row}"
+    );
+}
+
+/// **The column is empty rather than guessed when capture finds no
+/// `armada.yml`.** `machine.outside()` is a real directory with no config at
+/// all — a candidate, never a workspace — so `workspace` is absent from the
+/// `--json` payload entirely rather than holding a nearest directory that
+/// does not own it.
+#[test]
+fn a_task_written_outside_any_workspace_leaves_the_column_absent() {
+    let machine = Machine::new();
+    let outside = machine.outside();
+    let id = capture(&machine, &outside, "set this machine up properly");
+
+    let shown: serde_json::Value = serde_json::from_str(&stdout(
+        &machine.run(&outside, &["tasks", "show", &id, "--json"]),
+    ))
+    .unwrap();
+    let row = &shown["data"]["results"][0];
+    assert!(
+        row.get("workspace").is_none(),
+        "a candidate directory was recorded as a workspace: {row}"
+    );
+}
+
 /// **No absolute `$HOME` reaches disk**, the rule `docs/reserved/010` states for
 /// the failure log — and a task is a line in that same file.
 #[test]

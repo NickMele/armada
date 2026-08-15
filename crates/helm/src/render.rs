@@ -1989,6 +1989,21 @@ fn failure_state(state: FailureState) -> Cell {
     )
 }
 
+/// The `WORKSPACE` cell — muted text when capture found one, and **blank
+/// rather than a `-`** when it did not.
+///
+/// **[`Cell::empty`], deliberately not [`Cell::nothing`].** The placeholder
+/// glyph says "this could have been measured and was not" — the right claim
+/// for `TIME` on a run that has not happened yet. A task written outside any
+/// `armada.yml` was never going to have a workspace; there was nothing to
+/// measure, so the honest cell is empty, not a dash standing in for one.
+fn workspace_cell(workspace: Option<&str>) -> Cell {
+    match workspace {
+        Some(workspace) => Cell::muted(workspace),
+        None => Cell::empty(),
+    }
+}
+
 /// What a failure's row says, in the one place both listings read it from.
 ///
 /// **The class leads and the count is second**, because the column truncates
@@ -2022,20 +2037,39 @@ pub(crate) fn failure_detail(entry: &FailureEntry) -> String {
 /// `armada failures` and `armada tasks`, and each one's `clear`.
 ///
 /// **One renderer over one store, told apart by the verb it is answering.** The
-/// rows are identical by construction — same four cells, same order — because
+/// rows are identical by construction — same five cells, same order — because
 /// `armada_core::failure::Entry` is one type; what differs is the noun in the
 /// summary and the verb the hint names, and both would be wrong if they were
 /// guessed from the rows instead of read from the envelope. A listing that has
 /// nothing in it has no origin to infer from at all.
+///
+/// **`WORKSPACE` is a column, not a scope.** `entry.workspace` is set only on
+/// a written task and only when capture found an `armada.yml`
+/// (`armada_core::failure::Entry::workspace`), so `armada failures` — no row
+/// of which is ever a task — drops it by the table's own "empty in every row"
+/// rule (`render/table.rs`) and reads exactly as it did before this existed.
+/// A task written outside any workspace draws a blank cell rather than a `-`
+/// placeholder: [`Cell::empty`] is what tells the table an absence is not a
+/// value, same as [`Cell::nothing`] does for `TIME`, but without claiming the
+/// placeholder glyph for a fact nobody could have measured. What decides
+/// scope stays exactly what it was — the repository, never this column.
 fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> String {
     // `tasks` and `tasks clear` both, and neither `failures` nor anything else.
     let tasks = envelope.verb.starts_with("tasks");
     let data = &envelope.data;
-    let mut table = Table::new(columns("id", "detail", true)).indent(2);
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("id"),
+        Column::flexible("workspace"),
+        Column::flexible("detail"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
     for entry in &data.results {
         table = table.row(vec![
             failure_state(entry.state),
             Cell::painted(entry.id.clone(), Role::NavalBlue),
+            workspace_cell(entry.workspace.as_deref()),
             detail_cell(style, Some(&failure_detail(entry))),
             Cell::muted(format::elapsed(entry.age_s * 1_000)),
         ]);
@@ -6230,6 +6264,7 @@ mod tests {
             next: None,
             argv: "armada task 'rename the port allocator'".to_string(),
             cwd: "~/code/api".to_string(),
+            workspace: None,
             count: 1,
             first_at: "2026-08-15T09:00:00Z".to_string(),
             last_at: "2026-08-15T09:00:00Z".to_string(),
