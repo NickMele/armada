@@ -1577,6 +1577,23 @@ pub struct JobRow {
     /// say. Empty when there is nothing to add.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub detail: String,
+    /// The step it is on, **on its own rather than folded into `detail`**.
+    ///
+    /// [`Self::detail`] is already the fold of two different facts — an open
+    /// inbox entry's body when there is one, and the step when there is not — so
+    /// a surface wanting the step cannot get it back out of that cell. The
+    /// Bridge draws a `STEP` column and this is what fills it.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub step: String,
+    /// How long it has been on that step, in seconds.
+    ///
+    /// **`None` when nothing measured it.** A duration is a subtraction from the
+    /// boundary a Drone reported crossing (`fleet.report`), and a Job whose Drone
+    /// never reported one has no such boundary — so the column draws a dash, for
+    /// the reason `ls` draws one rather than a zero: a zero reads as a
+    /// measurement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_step_s: Option<u64>,
     /// The task, in the words it was given in.
     ///
     /// **The Job record's own field, carried rather than re-derived.** The
@@ -1678,7 +1695,26 @@ pub struct ShowData {
     /// The step it is on.
     pub step: String,
     /// How many times that step has been attempted.
+    ///
+    /// **Per-step, and never to be drawn against the iteration ceiling.** The
+    /// ceiling in [`Self::budget`] is Job-wide — it counts turns across every
+    /// step — so *"attempt 2 of 15"* silently answers a question nobody asked.
+    /// The two counts are separate fields here for exactly that reason.
     pub attempt: u32,
+    /// How long it has been on that step, in seconds. `None` when no boundary
+    /// was ever reported, in which case nothing was measured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_step_s: Option<u64>,
+    /// **What gates this step**, when the workflow document could be read.
+    ///
+    /// The one fact that says *why it is still here*: a step advances when its
+    /// predicate holds, and a reader who cannot see which predicate is holding
+    /// it up is reading a stuck Job with the cause missing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gate: Option<GateRow>,
+    /// Every step boundary this Job has crossed, **newest first**.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub transitions: Vec<TransitionRow>,
     /// The task, whole, in the words it was given in.
     ///
     /// **Never truncated at this width or any other.** The `TASK` column is a
@@ -1735,6 +1771,56 @@ pub struct NoteRow {
     pub step: String,
     /// What it said.
     pub body: String,
+}
+
+/// What a step is gated on, as `show` reports it.
+///
+/// **The predicate by its schema name, and what it named.** `failing_test_exists`
+/// with no test is the case its own comment warns about — *"without it a Drone
+/// 'fixes' a bug it never reproduced and closes green"* — so the test and the
+/// artifact travel beside the word rather than being dropped as detail.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GateRow {
+    /// The predicate, spelled as the workflow file spells it.
+    pub must: String,
+    /// The test `failing_test_exists` named.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test: Option<String>,
+    /// The artifact `artifact_exists` named.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact: Option<String>,
+    /// Whether the answer to this predicate is a person's — `human_approves`.
+    ///
+    /// **Reported so nothing has to invent a second word for it.** A step
+    /// waiting on you is the same *needs you* the inbox already raises and
+    /// [`ShowData::needs_attention`] already carries; this says which predicate
+    /// is the reason, and does not become a second signal (PLAN.md §15.4).
+    pub answered_by_a_person: bool,
+}
+
+/// One step boundary, as `show` reports it.
+///
+/// **What happened, what gated it, and when — never how far through.** Nothing
+/// emits percent-complete (PHASES.md §9.1 F2); a transition is a fact somebody
+/// recorded and a position in a step list is not a fraction of the work.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TransitionRow {
+    /// When, RFC 3339.
+    pub at: String,
+    /// How long ago, in seconds.
+    pub ago_s: u64,
+    /// Which step.
+    pub step: String,
+    /// What happened: `entered`, `restarted`, `attempted`, `completed`, `failed`.
+    pub event: String,
+    /// Which attempt at that step it belongs to, counting from one.
+    pub attempt: u32,
+    /// The predicate that settled it, on the two events a gate writes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub must: Option<String>,
+    /// What the verdict rested on.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<Evidence>,
 }
 
 /// `armada fleet board` — the two facts needed to enter a Job.
@@ -2179,6 +2265,17 @@ pub struct ReportData {
     pub step: String,
     /// How many notes the record now holds.
     pub notes: usize,
+    /// The boundary this note crossed, if it crossed one.
+    ///
+    /// **`entered` may come back as `restarted`**, which is the answer to a
+    /// question the caller did not ask and needs: Armada derives the word from
+    /// whether this step has been attempted before, so a Drone that reported
+    /// `entered` finds out here that it is going round again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub event: Option<String>,
+    /// Which attempt at that step the Job is on, counting from one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u32>,
 }
 
 /// `fleet.ask_human` — the entry raised, and the answer if one came.

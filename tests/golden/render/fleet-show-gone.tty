@@ -1,5 +1,5 @@
-  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mJOB[0m          [1m[38;2;156;163;175mWORKFLOW[0m  [1m[38;2;156;163;175mSTEP[0m       [1m[38;2;156;163;175mSPENT[0m  [1m[38;2;156;163;175mTIME[0m
-  [38;2;199;146;234mPAUSED[0m  [38;2;76;159;232mxlsx-report[0m  [38;2;156;163;175mbug[0m       [38;2;156;163;175mreproduce[0m  [38;2;156;163;175m$1.25[0m    [38;2;156;163;175m1h[0m
+  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mJOB[0m          [1m[38;2;156;163;175mWORKFLOW[0m  [1m[38;2;156;163;175mSTEP[0m                  [1m[38;2;156;163;175mSPENT[0m  [1m[38;2;156;163;175mTIME[0m
+  [38;2;199;146;234mPAUSED[0m  [38;2;76;159;232mxlsx-report[0m  [38;2;156;163;175mbug[0m       [38;2;156;163;175mreproduce, 36m on it[0m  [38;2;156;163;175m$1.25[0m    [38;2;156;163;175m1h[0m
 
   [1m[38;2;156;163;175mTASK[0m
   [38;2;230;232;235mthe nightly xlsx export writes an empty sheet about one run in five; reproduce[0m
@@ -8,6 +8,7 @@
   [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mFACT[0m      [1m[38;2;156;163;175mDETAIL[0m
   [38;2;156;163;175mRECORDED[0m  [38;2;156;163;175mstate[0m     [38;2;156;163;175mRUNNING, as a verb last wrote it[0m
   [38;2;255;92;92mGONE[0m      [38;2;156;163;175mdrone[0m     [38;2;156;163;175mprocess group 48122 is not Armada's any more[0m
+  [38;2;156;163;175mGATED[0m     [38;2;156;163;175mstep[0m      [38;2;156;163;175mreproduce advances on failing_test_exists: reports::xlsx:…[0m
   [38;2;156;163;175mSPENT[0m     [38;2;156;163;175mbudget[0m    [38;2;156;163;175m4 of 15 turns, 119k of 400k tokens, $1.25[0m
   [38;2;156;163;175mLEFT[0m      [38;2;156;163;175mbudget[0m    [38;2;156;163;175m11 turns, 280k tokens, 25m[0m
   [38;2;156;163;175mSINCE[0m     [38;2;156;163;175mstarted[0m   [38;2;156;163;175m2026-08-09T14:02:11Z[0m
@@ -15,6 +16,9 @@
   [38;2;92;225;230mHELD[0m      [38;2;156;163;175mworktree[0m  [38;2;156;163;175m~/.armada/workspaces/reports/xlsx-report[0m
   [38;2;92;225;230mHELD[0m      [38;2;156;163;175mbranch[0m    [38;2;156;163;175marmada/xlsx-report[0m
   [38;2;156;163;175mFROM[0m      [38;2;156;163;175mrepo[0m      [38;2;156;163;175mreports[0m
+
+  [1m[38;2;156;163;175mSTATUS[0m   [1m[38;2;156;163;175mSTEP[0m       [1m[38;2;156;163;175mDETAIL[0m     [1m[38;2;156;163;175mTIME[0m
+  [38;2;156;163;175mENTERED[0m  [38;2;156;163;175mreproduce[0m  [38;2;156;163;175mattempt 1[0m   [38;2;156;163;175m36m[0m
 
   [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mSTEP[0m       [1m[38;2;156;163;175mDETAIL[0m                                               [1m[38;2;156;163;175mTIME[0m
   [38;2;156;163;175mREPORTED[0m  [38;2;156;163;175mreproduce[0m  [38;2;156;163;175meleven runs, no empty sheet yet; widening the fixt…[0m   [38;2;156;163;175m36m[0m

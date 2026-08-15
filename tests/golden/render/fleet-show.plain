@@ -1,5 +1,5 @@
-  STATUS   JOB            WORKFLOW  STEP                        SPENT  TIME
-  BLOCKED  release-merge  feature   implement, attempt 2 of 15  $1.25    1h
+  STATUS   JOB            WORKFLOW  STEP                             SPENT  TIME
+  BLOCKED  release-merge  feature   implement, attempt 2, 18m on it  $1.25    1h
 
   STATUS    ASKED     TIME
   ANSWERED  e30b91aa   47m
@@ -17,6 +17,7 @@
   STATUS    FACT      DETAIL
   RECORDED  state     RUNNING, as a verb last wrote it
   ALIVE     drone     process group 48122
+  GATED     step      implement advances on check_passes
   SPENT     budget    4 of 15 turns, 119k of 400k tokens, $1.25
   LEFT      budget    11 turns, 280k tokens, 25m
   SINCE     started   2026-08-09T14:02:11Z
@@ -24,6 +25,14 @@
   HELD      worktree  ~/.armada/workspaces/orders/release-merge
   HELD      branch    armada/release-merge
   FROM      repo      orders
+
+  STATUS     STEP       DETAIL                                           TIME
+  RESTARTED  implement  attempt 2                                         18m
+  FAILED     implement  attempt 1, check_passes, orders:test exited 1     24m
+  ATTEMPTED  implement  attempt 1                                         26m
+  ENTERED    implement  attempt 1                                         41m
+  COMPLETED  plan       attempt 1, subjob_passed, release-plan exited 0   42m
+  ENTERED    plan       attempt 1                                          1h
 
   STATUS    STEP       DETAIL                                           TIME
   REPORTED  implement  rebased onto main, two migration conflicts left    6m

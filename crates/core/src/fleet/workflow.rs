@@ -62,6 +62,37 @@ pub enum Predicate {
     SubjobPassed,
 }
 
+impl Predicate {
+    /// The word, in both audiences and in the payload.
+    ///
+    /// **The schema's spelling, carried rather than prettified.** A reader who
+    /// sees `check_passes` on the screen can grep the workflow file for it; a
+    /// reader who sees *"the check passed"* has to guess which key that was.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Predicate::Always => "always",
+            Predicate::CheckPasses => "check_passes",
+            Predicate::FailingTestExists => "failing_test_exists",
+            Predicate::ArtifactExists => "artifact_exists",
+            Predicate::ReviewClean => "review_clean",
+            Predicate::HumanApproves => "human_approves",
+            Predicate::BranchExists => "branch_exists",
+            Predicate::SubjobPassed => "subjob_passed",
+        }
+    }
+
+    /// Whether the answer to this predicate is **a person's**.
+    ///
+    /// **One predicate is, and it is already surfaced.** `human_approves` is
+    /// the gate whose evidence is you saying yes, which is the same *needs you*
+    /// the inbox raises and the Bridge's `NEEDS YOU` column already draws. It is
+    /// named here so a future surface can ask the question rather than inventing
+    /// a second, differently-worded signal for the same fact (PLAN.md §15.4).
+    pub const fn answered_by_a_person(self) -> bool {
+        matches!(self, Predicate::HumanApproves)
+    }
+}
+
 /// A step's gate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Verify {

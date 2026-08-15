@@ -290,6 +290,7 @@ mod tests {
             task: "do the thing".to_string(),
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
+            transitions: Vec::new(),
         }
     }
 

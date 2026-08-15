@@ -105,6 +105,17 @@ pub struct Job {
     /// that `fleet.kill` may have truncated is a ceiling that quietly resets.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub attempts: std::collections::BTreeMap<String, u32>,
+    /// Every step boundary this Job has crossed, oldest first.
+    ///
+    /// **Append-only, and on disk for the reason the inbox is**: it has to
+    /// survive a crash, including the crash being the thing recorded. A history
+    /// re-derived from the transcript would be gone the moment
+    /// `armada fleet kill` took the worktree.
+    ///
+    /// Additive, so `schema_version` stays 1, and defaulted so every Job record
+    /// written before this field existed still parses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transitions: Vec<Transition>,
 }
 
 /// One thing a Drone said about its own progress.
@@ -118,6 +129,256 @@ pub struct Note {
     pub step: String,
     /// What it said.
     pub body: String,
+}
+
+// ------------------------------------------------------------ step boundaries
+
+/// What happened at a step boundary — and **who is allowed to say it**.
+///
+/// # Why a transition may be recorded at all
+///
+/// PHASES.md §9.1 F2 and the Bridge's own doc comment ban a progress column:
+/// *"Nothing emits percent-complete, and a bar computed from a turn count is a
+/// guess drawn as a measurement."* That rule is intact here, and the distinction
+/// is the reason this type exists.
+///
+/// **A step transition is not a guess — it is a fact somebody recorded.**
+/// *"Entered `implement` at 14:02"* is measured, exactly as spend and turn count
+/// are. What stays banned is inferring *how far through the work is* from it: a
+/// five-step workflow sitting on step three is not "60% done", nothing here may
+/// ever say so, and no surface drawing this data may render a percentage, a bar
+/// or an estimated completion. Report **what happened, what gated it, and
+/// when** — never how much is left.
+///
+/// # Who writes which word
+///
+/// **The three-layer sandwich, applied to a step** (PLAN.md §5): Armada reports
+/// facts, an agent authors, **Armada verifies**. A Drone may say it started a
+/// step and it may say it *believes* it has finished one; both are facts about
+/// the Drone. It may not say a step **completed**, because completion is the
+/// step's `verify: { must: … }` predicate holding, and
+/// [`super::workflow::Verify`] states the rule this enforces: *"an agent
+/// asserting that tests pass is not evidence, and an `armada manifest check`
+/// exit code is."*
+///
+/// So the words split by author, and [`StepEvent::is_a_drones_to_report`] is
+/// what makes the split structural rather than a sentence in a prompt:
+///
+/// | word | written by | means |
+/// |---|---|---|
+/// | `entered` | the Drone | an attempt at the step began |
+/// | `restarted` | **derived** | the same, on a step already attempted |
+/// | `attempted` | the Drone | *"I believe I am finished"* — an assertion |
+/// | `completed` | the gate | the predicate held, and [`Gate`] carries what it rested on |
+/// | `failed` | the gate | the predicate did not hold |
+///
+/// **`restarted` is derived rather than reported**, because Armada already
+/// holds the fact that decides it — whether this step has been entered before —
+/// and a word the Drone chooses is a word the Drone can choose wrongly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepEvent {
+    /// An attempt at the step began, for the first time.
+    Entered,
+    /// An attempt at a step that had been attempted before. Derived, never
+    /// reported: the Drone says `entered` and this is what a prior attempt makes
+    /// of it.
+    Restarted,
+    /// The Drone believes it has finished the step. **An assertion, not a
+    /// completion** — kept as a separate word precisely so a Drone saying *done*
+    /// and a gate saying otherwise are distinguishable in what is stored.
+    Attempted,
+    /// The step's predicate held. Only [`Gate`]-bearing writers produce this.
+    Completed,
+    /// The step's predicate did not hold.
+    Failed,
+}
+
+impl StepEvent {
+    /// Every event, so a `match` over them is checkable and a render can be
+    /// asserted over the set rather than over the ones that happen to occur.
+    pub const ALL: [StepEvent; 5] = [
+        StepEvent::Entered,
+        StepEvent::Restarted,
+        StepEvent::Attempted,
+        StepEvent::Completed,
+        StepEvent::Failed,
+    ];
+
+    /// The word, in both audiences and in the payload.
+    pub const fn word(self) -> &'static str {
+        match self {
+            StepEvent::Entered => "entered",
+            StepEvent::Restarted => "restarted",
+            StepEvent::Attempted => "attempted",
+            StepEvent::Completed => "completed",
+            StepEvent::Failed => "failed",
+        }
+    }
+
+    /// Whether a Drone may report this word through `fleet.report`.
+    ///
+    /// **`completed` and `failed` are refused, and that refusal is the feature.**
+    /// A step is done when its predicate holds, not when the worker says so —
+    /// so the two words a gate owns are unreachable from the Drone's toolbelt,
+    /// the same way `fleet.spawn` is absent from it rather than filtered out of
+    /// it (`mcp/drone.rs`). `restarted` is refused too, because it is derived.
+    pub const fn is_a_drones_to_report(self) -> bool {
+        matches!(self, StepEvent::Entered | StepEvent::Attempted)
+    }
+
+    /// Whether this event ends an attempt at the step.
+    pub const fn settles(self) -> bool {
+        matches!(self, StepEvent::Completed | StepEvent::Failed)
+    }
+
+    /// Whether this event begins an attempt at the step.
+    pub const fn opens(self) -> bool {
+        matches!(self, StepEvent::Entered | StepEvent::Restarted)
+    }
+
+    /// The word a caller writes, as [`StepEvent`] spells it.
+    ///
+    /// Accepted case-insensitively, for the reason `mcp/drone.rs` accepts a
+    /// lowercase verdict: a model writing `ENTERED` meant `entered`, and sending
+    /// an agent round a loop over capitalisation spends a budget on nothing. A
+    /// word outside the five is `None` rather than guessed at.
+    pub fn from_word(word: &str) -> Option<StepEvent> {
+        let word = word.trim().to_ascii_lowercase();
+        StepEvent::ALL
+            .into_iter()
+            .find(|event| event.word() == word)
+    }
+}
+
+/// What a settling transition rests on.
+///
+/// **The predicate and its evidence travel together, because either alone is
+/// misleading.** A `completed` with no predicate is the assertion §14.3 refuses;
+/// a predicate with no evidence is a gate nobody proved ran. `failing_test_exists`
+/// is the sharpest case — its own comment says *"without it a Drone 'fixes' a bug
+/// it never reproduced and closes green"* — so a surface that cannot show which
+/// predicate gated a step is hiding the most valuable thing on the screen.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Gate {
+    /// The step's predicate, when the workflow document could be read.
+    ///
+    /// **`None` is honest rather than defaulted.** The workflow lives in the
+    /// guild and a guild can be absent, half-synced or renamed; recording
+    /// `always` for a step nobody could look up would invent the one fact this
+    /// record exists to carry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub must: Option<super::workflow::Predicate>,
+    /// The test [`super::workflow::Predicate::FailingTestExists`] named.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test: Option<String>,
+    /// The artifact [`super::workflow::Predicate::ArtifactExists`] named.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact: Option<String>,
+    /// What the verdict carried — the ids and exit codes an external command
+    /// produced.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<crate::envelope::Evidence>,
+}
+
+/// One step boundary, as it is written to the Job record.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Transition {
+    /// When, wall clock, RFC 3339.
+    pub at: String,
+    /// Wall clock milliseconds, so "12m on it" is a subtraction.
+    pub at_ms: u64,
+    /// Which step.
+    pub step: String,
+    /// What happened.
+    pub event: StepEvent,
+    /// Which attempt at this step it belongs to, counting from one.
+    pub attempt: u32,
+    /// What settled it, on the two events a gate writes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate: Option<Gate>,
+}
+
+/// How many attempts at `step` have **begun**.
+///
+/// **Begun, not finished**, which is the count `armada fleet show` calls
+/// *attempt n*: a step being worked on for the third time is on attempt three
+/// before it produces anything, and a reader looking at a stuck Job wants that
+/// number then rather than afterwards.
+pub fn step_attempts(transitions: &[Transition], step: &str) -> u32 {
+    transitions
+        .iter()
+        .filter(|entry| entry.step == step && entry.event.opens())
+        .count()
+        .try_into()
+        .unwrap_or(u32::MAX)
+}
+
+/// Whether an attempt at `step` is under way — begun and not yet settled.
+///
+/// **This is what stops an attempt being counted twice.** `fleet.verdict` counts
+/// an attempt for a Drone that never reported entering one, because the count is
+/// what a ceiling is enforced against; when the Drone *did* report, the attempt
+/// was already counted at entry and counting it again on the way out would halve
+/// the rope a workflow declared.
+pub fn attempt_open(transitions: &[Transition], step: &str) -> bool {
+    transitions
+        .iter()
+        .rev()
+        .find(|entry| entry.step == step)
+        .is_some_and(|entry| !entry.event.settles())
+}
+
+/// When the current attempt at `step` began, in wall clock milliseconds.
+///
+/// `None` when no Drone ever reported entering it — in which case nothing was
+/// measured and no surface may draw a duration, for the reason `ls` draws a dash
+/// rather than a zero.
+pub fn on_step_since_ms(transitions: &[Transition], step: &str) -> Option<u64> {
+    transitions
+        .iter()
+        .rev()
+        .find(|entry| entry.step == step && entry.event.opens())
+        .map(|entry| entry.at_ms)
+}
+
+/// Append one transition, with the attempt number it belongs to worked out here.
+///
+/// **The attempt number is derived, never passed in.** A caller that computed it
+/// would be a second implementation of the count a ceiling is enforced against,
+/// and the two would disagree the first time either changed.
+///
+/// `entered` on a step that has been entered before is recorded as
+/// [`StepEvent::Restarted`] — the derivation the type's doc comment describes.
+pub fn record(
+    transitions: &mut Vec<Transition>,
+    at: String,
+    at_ms: u64,
+    step: &str,
+    event: StepEvent,
+    gate: Option<Gate>,
+) -> Transition {
+    let begun = step_attempts(transitions, step);
+    let event = match (event, begun) {
+        (StepEvent::Entered, 1..) => StepEvent::Restarted,
+        (event, _) => event,
+    };
+    let attempt = match event.opens() {
+        true => begun.saturating_add(1),
+        // A step settled or asserted without anyone reporting entry still
+        // belongs to an attempt: the first one.
+        false => begun.max(1),
+    };
+    let entry = Transition {
+        at,
+        at_ms,
+        step: step.to_string(),
+        event,
+        attempt,
+        gate,
+    };
+    transitions.push(entry.clone());
+    entry
 }
 
 impl Job {
@@ -609,6 +870,7 @@ mod tests {
             task: "add rate limiting".to_string(),
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
+            transitions: Vec::new(),
         }
     }
 
@@ -806,10 +1068,178 @@ mod tests {
             task: "add rate limiting to the API".to_string(),
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
+            transitions: Vec::new(),
         };
         assert_eq!(job.run_time_ms(1_840_000), 840_000);
         // A clock that stepped backwards costs a display value, never a panic.
         assert_eq!(job.run_time_ms(0), 0);
+    }
+
+    // -------------------------------------------------------- step boundaries
+
+    fn at(ms: u64) -> String {
+        format!("2026-08-09T14:{:02}:00Z", ms / 60_000)
+    }
+
+    /// Record one boundary against a fresh list, for the tests below.
+    fn crossed(transitions: &mut Vec<Transition>, ms: u64, step: &str, event: StepEvent) {
+        record(transitions, at(ms), ms, step, event, None);
+    }
+
+    /// **The two words a gate owns are unreachable from a Drone's toolbelt.**
+    /// A step is done when its predicate holds, not when the worker says so —
+    /// and `restarted` is refused too, because Armada derives it.
+    #[test]
+    fn a_drone_may_report_that_it_started_or_finished_trying_and_nothing_else() {
+        assert!(StepEvent::Entered.is_a_drones_to_report());
+        assert!(StepEvent::Attempted.is_a_drones_to_report());
+        for gated in [
+            StepEvent::Completed,
+            StepEvent::Failed,
+            StepEvent::Restarted,
+        ] {
+            assert!(
+                !gated.is_a_drones_to_report(),
+                "{} was a Drone's to assert",
+                gated.word()
+            );
+        }
+    }
+
+    #[test]
+    fn every_event_word_reads_back_as_itself_in_any_case() {
+        for event in StepEvent::ALL {
+            assert_eq!(StepEvent::from_word(event.word()), Some(event));
+            assert_eq!(
+                StepEvent::from_word(&event.word().to_ascii_uppercase()),
+                Some(event)
+            );
+        }
+        assert_eq!(StepEvent::from_word("done"), None);
+        assert_eq!(StepEvent::from_word(""), None);
+    }
+
+    /// **`restarted` is derived, not chosen.** A Drone reports `entered` both
+    /// times; the record knows which one is the second because it holds the
+    /// first.
+    #[test]
+    fn entering_a_step_twice_is_recorded_as_a_restart() {
+        let mut history = Vec::new();
+        crossed(&mut history, 0, "implement", StepEvent::Entered);
+        crossed(&mut history, 60_000, "implement", StepEvent::Attempted);
+        crossed(&mut history, 120_000, "implement", StepEvent::Failed);
+        crossed(&mut history, 180_000, "implement", StepEvent::Entered);
+
+        assert_eq!(history[0].event, StepEvent::Entered);
+        assert_eq!(history[3].event, StepEvent::Restarted);
+        assert_eq!(history[0].attempt, 1);
+        assert_eq!(history[3].attempt, 2);
+        assert_eq!(step_attempts(&history, "implement"), 2);
+    }
+
+    /// The number is the attempt the boundary **belongs to**, so an assertion
+    /// and the verdict that settles it carry the same one.
+    #[test]
+    fn an_attempts_boundaries_all_carry_its_own_number() {
+        let mut history = Vec::new();
+        crossed(&mut history, 0, "fix", StepEvent::Entered);
+        crossed(&mut history, 1_000, "fix", StepEvent::Attempted);
+        crossed(&mut history, 2_000, "fix", StepEvent::Completed);
+        assert_eq!(
+            history.iter().map(|e| e.attempt).collect::<Vec<_>>(),
+            [1, 1, 1]
+        );
+    }
+
+    /// A step settled by a Drone that never reported entering it still belongs
+    /// to an attempt — the first one — rather than to attempt zero.
+    #[test]
+    fn a_step_settled_without_anyone_reporting_entry_is_still_attempt_one() {
+        let mut history = Vec::new();
+        crossed(&mut history, 0, "land", StepEvent::Completed);
+        assert_eq!(history[0].attempt, 1);
+        assert_eq!(step_attempts(&history, "land"), 0, "nothing began");
+    }
+
+    /// **What stops an attempt being counted twice.** The count is what a
+    /// ceiling is enforced against, so it matters which boundary owns the bump.
+    #[test]
+    fn an_attempt_is_open_from_entry_until_a_gate_settles_it() {
+        let mut history = Vec::new();
+        assert!(!attempt_open(&history, "implement"));
+        crossed(&mut history, 0, "implement", StepEvent::Entered);
+        assert!(attempt_open(&history, "implement"));
+        // An assertion does not close it: the Drone saying *done* is not the
+        // gate agreeing.
+        crossed(&mut history, 1_000, "implement", StepEvent::Attempted);
+        assert!(attempt_open(&history, "implement"));
+        crossed(&mut history, 2_000, "implement", StepEvent::Failed);
+        assert!(!attempt_open(&history, "implement"));
+        // Another step's boundaries say nothing about this one.
+        crossed(&mut history, 3_000, "review", StepEvent::Entered);
+        assert!(!attempt_open(&history, "implement"));
+        assert!(attempt_open(&history, "review"));
+    }
+
+    /// **How long it has been on this step** — measured from the boundary that
+    /// began the *current* attempt, not from the first time it was ever entered.
+    #[test]
+    fn time_on_a_step_is_measured_from_the_current_attempts_entry() {
+        let mut history = Vec::new();
+        crossed(&mut history, 0, "implement", StepEvent::Entered);
+        crossed(&mut history, 120_000, "implement", StepEvent::Failed);
+        crossed(&mut history, 300_000, "implement", StepEvent::Entered);
+        assert_eq!(on_step_since_ms(&history, "implement"), Some(300_000));
+        // Nothing measured is a `None` rather than a zero, for the reason `ls`
+        // draws a dash instead of `0s`.
+        assert_eq!(on_step_since_ms(&history, "review"), None);
+    }
+
+    /// The whole reason this record is on disk: a crash must not take it, and
+    /// the crash itself is one of the things it records.
+    #[test]
+    fn a_transition_history_round_trips_through_the_record() {
+        let mut job = watching(JobState::Running);
+        record(
+            &mut job.transitions,
+            "2026-08-09T14:02:11Z".to_string(),
+            1_000,
+            "implement",
+            StepEvent::Entered,
+            None,
+        );
+        record(
+            &mut job.transitions,
+            "2026-08-09T14:12:11Z".to_string(),
+            601_000,
+            "implement",
+            StepEvent::Failed,
+            Some(Gate {
+                must: Some(super::super::workflow::Predicate::CheckPasses),
+                test: None,
+                artifact: None,
+                evidence: vec![crate::envelope::Evidence {
+                    kind: "check".to_string(),
+                    scope: "api:test".to_string(),
+                    exit: 1,
+                }],
+            }),
+        );
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(json.contains("\"check_passes\""), "{json}");
+        let back: Job = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, job);
+    }
+
+    /// **A record written before this field existed still parses.** Additive,
+    /// so `schema_version` stays 1.
+    #[test]
+    fn a_record_from_before_transitions_existed_still_reads() {
+        let mut job = watching(JobState::Running);
+        job.transitions.clear();
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(!json.contains("transitions"), "an absent field is absent");
+        assert_eq!(serde_json::from_str::<Job>(&json).unwrap(), job);
     }
 
     /// The record survives a reboot, so it has to survive a round trip through
@@ -845,6 +1275,7 @@ mod tests {
             task: "the nightly job is flaky".to_string(),
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
+            transitions: Vec::new(),
         };
         let json = serde_json::to_string(&job).unwrap();
         assert!(!json.contains("confidence"), "an absent field is absent");

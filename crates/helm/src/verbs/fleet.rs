@@ -21,9 +21,9 @@
 
 use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::{
-    AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, InboxData,
-    InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ReapCandidate, ReapPlanData,
-    ReportData, ResumeData, ShowData, SpawnData, VerdictData,
+    AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
+    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ReapCandidate,
+    ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -327,6 +327,7 @@ pub fn spawn<R: Run, C: Clock>(
         task: options.task.clone(),
         progress: Vec::new(),
         attempts: std::collections::BTreeMap::new(),
+        transitions: Vec::new(),
     };
 
     if options.dry_run {
@@ -610,6 +611,22 @@ fn describe(workflow: &str) -> &'static str {
     }
 }
 
+/// What gates one step, when the guild can be read.
+///
+/// **Best-effort, and the absence is recorded rather than defaulted.** A
+/// workflow lives in the guild and a guild can be absent, half-synced or
+/// renamed; answering `always` for a step nobody could look up would invent the
+/// one fact the caller wanted. Neither `show` nor `verdict` fails over this —
+/// a Job whose guild has gone is exactly the Job somebody is trying to read.
+fn gate_of(place: &Where, workflow: &str, step: &str) -> Option<workflow::Verify> {
+    read_workflow(place, workflow)
+        .ok()?
+        .steps
+        .iter()
+        .find(|candidate| candidate.id == step)
+        .map(|candidate| candidate.verify.clone())
+}
+
 /// Read one workflow out of the guild.
 fn read_workflow(place: &Where, name: &str) -> Result<Workflow, ArmadaError> {
     let guild = Guild::at(&place.armada_home);
@@ -800,6 +817,16 @@ pub fn ls<R: Run, C: Clock>(
             workflow: record.workflow.clone(),
             state: observed.state,
             detail: detail(&record, observed.state, waiting),
+            // **The step on its own, because `detail` is already a fold.** A
+            // Job with an open inbox entry shows the entry's body there, so a
+            // `STEP` column reading `detail` would go blank on exactly the rows
+            // somebody is looking at.
+            step: match observed.state {
+                JobState::Queued => String::new(),
+                _ => record.step.clone(),
+            },
+            on_step_s: job::on_step_since_ms(&record.transitions, &record.step)
+                .map(|since| wall.saturating_sub(since) / 1_000),
             // **Carried, never re-read.** The Bridge draws a `TASK` column and
             // is a renderer over this listing — a second pass over the Job index
             // to fill one column would be the second source
@@ -955,6 +982,41 @@ pub fn show<R: Run, C: Clock>(
             ),
             step: record.step.clone(),
             attempt: record.attempts.get(&record.step).copied().unwrap_or(0),
+            on_step_s: job::on_step_since_ms(&record.transitions, &record.step)
+                .map(|since| wall.saturating_sub(since) / 1_000),
+            // **Why it is still here**, which no other field answers: a step
+            // advances when its predicate holds, and a stuck Job read without
+            // its gate is a symptom with the cause missing.
+            gate: gate_of(place, &record.workflow, &record.step).map(|verify| GateRow {
+                must: verify.must.word().to_string(),
+                test: verify.test.clone(),
+                artifact: verify.artifact.clone(),
+                answered_by_a_person: verify.must.answered_by_a_person(),
+            }),
+            // **Newest first, the same way `progress` is** — both are logs, and
+            // the useful end of a log is the last thing that happened.
+            transitions: record
+                .transitions
+                .iter()
+                .rev()
+                .map(|entry| TransitionRow {
+                    at: entry.at.clone(),
+                    ago_s: wall.saturating_sub(entry.at_ms) / 1_000,
+                    step: entry.step.clone(),
+                    event: entry.event.word().to_string(),
+                    attempt: entry.attempt,
+                    must: entry
+                        .gate
+                        .as_ref()
+                        .and_then(|gate| gate.must)
+                        .map(|must| must.word().to_string()),
+                    evidence: entry
+                        .gate
+                        .as_ref()
+                        .map(|gate| gate.evidence.clone())
+                        .unwrap_or_default(),
+                })
+                .collect(),
             task: record.task.clone(),
             runtime_s: run_time / 1_000,
             created_at: record.created_at.clone(),
@@ -1705,18 +1767,34 @@ pub fn probe<R: Run>(run: &R, place: &Where, handle: &str) -> Result<Output, Arm
 
 // ---------------------------------------------------------------------- report
 
-/// `fleet.report` — a Drone appends progress to **its own** Job record.
+/// `fleet.report` — a Drone appends progress to **its own** Job record, and
+/// records the step boundary it just crossed.
 ///
 /// **Its own, and nothing else's.** The Job is named by `handle`, which the MCP
 /// layer fills from `ARMADA_JOB` — the variable [`armada_fleet::drone::job_env`]
 /// sets on every child of a Job and that a Drone therefore cannot choose. A
 /// worker able to write another worker's record is a worker that can rewrite the
 /// evidence a verdict rests on.
+///
+/// **A boundary at a time, and nothing polls.** *"It doesn't have to be in real
+/// time"* — so a report when a step starts and one when the Drone stops trying
+/// is enough, and nothing here messages a running Drone to ask how it is going.
+/// The probe never interrupts a Drone (PLAN.md §15.2) and this verb adds no
+/// second channel that would.
+///
+/// **What a Drone may say, and what it may not.** `entered` and `attempted` are
+/// facts about the Drone. `completed` and `failed` are the step's predicate
+/// holding or not — [`fleet.verdict`](verdict) writes those, and this verb
+/// refuses them rather than recording an assertion dressed as a gate. The
+/// refusal is the feature, not a validation detail:
+/// [`StepEvent::is_a_drones_to_report`] is where the rule lives.
 pub fn report<C: Clock>(
     now: &C,
     place: &Where,
     handle: &str,
     body: &str,
+    step: Option<&str>,
+    event: Option<&str>,
 ) -> Result<Output, ArmadaError> {
     let store = place.store();
     let mut record = store.find(handle)?;
@@ -1733,10 +1811,41 @@ pub fn report<C: Clock>(
         });
     }
 
+    let crossing = event.map(reportable).transpose()?;
+    let step = step.unwrap_or(&record.step).to_string();
+
+    // **Entering a step is what moves the Job onto it.** The record's `step` is
+    // what every other surface reads, and a boundary that left it pointing at
+    // the previous step would put the note, the attempt count and the `STEP`
+    // column each on a different step.
+    if crossing.is_some_and(job::StepEvent::opens) {
+        record.step.clone_from(&step);
+    }
+
+    let crossed = crossing.map(|event| {
+        let entry = job::record(
+            &mut record.transitions,
+            now.wall_rfc3339(),
+            now.wall_ms(),
+            &step,
+            event,
+            None,
+        );
+        // **An attempt is counted when it begins.** `verdict` counts one for a
+        // Drone that never reported entering; it must not count this one twice,
+        // which is what `attempt_open` decides there.
+        if entry.event.opens() {
+            record
+                .attempts
+                .insert(step.clone(), job::step_attempts(&record.transitions, &step));
+        }
+        entry
+    });
+
     record.progress.push(armada_core::fleet::job::Note {
         at: now.wall_rfc3339(),
         at_ms: now.wall_ms(),
-        step: record.step.clone(),
+        step: step.clone(),
         body: body.to_string(),
     });
     store.save(&record)?;
@@ -1747,10 +1856,49 @@ pub fn report<C: Clock>(
         Status::Ok,
         ReportData {
             job: record.name.clone(),
-            step: record.step.clone(),
+            step,
             notes: record.progress.len(),
+            event: crossed.as_ref().map(|entry| entry.event.word().to_string()),
+            attempt: crossed.as_ref().map(|entry| entry.attempt),
         },
     ))))
+}
+
+/// The boundary word a Drone wrote, or the refusal that says who owns it.
+///
+/// **Two different refusals, because they are two different mistakes.** A word
+/// outside the five is a typo; `completed` is a worker trying to grade its own
+/// work, and telling it *"one of entered, attempted"* would leave it hunting for
+/// a synonym. It is sent to `fleet.verdict` instead — the verb that already
+/// refuses a `PASS` carrying no evidence.
+fn reportable(word: &str) -> Result<job::StepEvent, ArmadaError> {
+    let refuse = |message: String, next: String| ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: "event".to_string(),
+        message,
+        next_action: Some(next),
+    };
+    let Some(event) = job::StepEvent::from_word(word) else {
+        return Err(refuse(
+            format!("`{word}` is not a step boundary"),
+            "one of `entered`, `attempted`".to_string(),
+        ));
+    };
+    if !event.is_a_drones_to_report() {
+        return Err(refuse(
+            format!("`{}` is not a Drone's to report", event.word()),
+            match event {
+                job::StepEvent::Restarted => {
+                    "report `entered`; Armada records the restart from the attempts it already has"
+                        .to_string()
+                }
+                _ => "a step is done when its `verify:` predicate holds — record it with \
+                      `fleet.verdict`, carrying the evidence"
+                    .to_string(),
+            },
+        ));
+    }
+    Ok(event)
 }
 
 // ------------------------------------------------------------------- ask_human
@@ -1860,9 +2008,38 @@ pub fn verdict<C: Clock>(
         });
     }
 
-    let attempts = record.attempts.entry(step.to_string()).or_insert(0);
-    *attempts += 1;
-    let attempts = *attempts;
+    // **Counted here only when nobody counted it at entry.** A Drone that
+    // reported entering the step already opened the attempt; bumping again on
+    // the way out would halve the rope the workflow declared.
+    if !job::attempt_open(&record.transitions, step) {
+        *record.attempts.entry(step.to_string()).or_insert(0) += 1;
+    }
+    let attempts = record.attempts.get(step).copied().unwrap_or(1);
+
+    // **The gate's own record of what settled the step.** `PASS` and `FAILED`
+    // are the predicate holding or not; `BLOCKED` and `NEEDS_HUMAN` are neither
+    // — the step is still open and the inbox is what says why, so no boundary is
+    // written for them and the attempt stays the one that was already under way.
+    if let Some(event) = match reached {
+        Verdict::Pass => Some(job::StepEvent::Completed),
+        Verdict::Failed => Some(job::StepEvent::Failed),
+        Verdict::Blocked | Verdict::NeedsHuman => None,
+    } {
+        let gated = gate_of(place, &record.workflow, step);
+        job::record(
+            &mut record.transitions,
+            now.wall_rfc3339(),
+            now.wall_ms(),
+            step,
+            event,
+            Some(job::Gate {
+                must: gated.as_ref().map(|verify| verify.must),
+                test: gated.as_ref().and_then(|verify| verify.test.clone()),
+                artifact: gated.as_ref().and_then(|verify| verify.artifact.clone()),
+                evidence: evidence.clone(),
+            }),
+        );
+    }
 
     record.step = step.to_string();
     record.verdict = Some(reached);

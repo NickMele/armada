@@ -18,7 +18,7 @@
 
 use armada_core::ctx::{Clock, Run, RunOutput, RunRequest, SpawnError};
 use armada_core::envelope::Evidence;
-use armada_core::fleet::job::{Handle, Job, Spend};
+use armada_core::fleet::job::{self as job, Handle, Job, Spend, StepEvent};
 use armada_core::fleet::workflow::{Budget, OnExhausted};
 use armada_core::fleet::{JobState, Verdict};
 use armada_fleet::inbox;
@@ -142,6 +142,7 @@ impl Machine {
             task: "make the flaky test stop being flaky".to_string(),
             progress: Vec::new(),
             attempts: BTreeMap::new(),
+            transitions: Vec::new(),
         };
         Store::at(&place.armada_home).save(&record).expect("saved");
         if !transcript.is_empty() {
@@ -253,6 +254,8 @@ fn a_report_appends_to_the_jobs_own_record_and_says_how_many() {
         &machine.place(),
         "tidy-otter",
         "reproduced the flake on the third run",
+        None,
+        None,
     )
     .expect("noted");
 
@@ -273,12 +276,303 @@ fn a_job_that_is_over_gains_no_more_notes() {
     let machine = Machine::new();
     machine.job("done-owl", JobState::Done, "");
 
-    let error = fleet::report(&FrozenClock, &machine.place(), "done-owl", "one more thing")
-        .expect_err("a refusal");
+    let error = fleet::report(
+        &FrozenClock,
+        &machine.place(),
+        "done-owl",
+        "one more thing",
+        None,
+        None,
+    )
+    .expect_err("a refusal");
 
     assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
     assert!(error.next_action.is_some());
     assert!(machine.reload("done-owl").progress.is_empty());
+}
+
+// ------------------------------------------------------------ step boundaries
+
+/// **The whole point of the record, driven through the tool a Drone actually
+/// calls.** A green test against the store would prove the store works; this
+/// goes through `fleet.report`'s own arguments, which is the only path a Drone
+/// has.
+#[test]
+fn reporting_entry_moves_the_job_onto_the_step_and_opens_an_attempt() {
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    let output = fleet::report(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        "starting the reproduction",
+        Some("reproduce"),
+        Some("entered"),
+    )
+    .expect("noted");
+
+    let record = machine.reload("tidy-otter");
+    assert_eq!(record.step, "reproduce", "entry did not move the Job");
+    assert_eq!(record.transitions.len(), 1);
+    assert_eq!(record.transitions[0].event, StepEvent::Entered);
+    assert_eq!(record.transitions[0].attempt, 1);
+    assert_eq!(record.attempts.get("reproduce"), Some(&1));
+    assert!(job::attempt_open(&record.transitions, "reproduce"));
+    let payload = json(&output);
+    assert!(payload.contains("\"event\": \"entered\""), "{payload}");
+    assert!(payload.contains("\"attempt\": 1"), "{payload}");
+}
+
+/// **`restarted` is derived, and the Drone finds out by being told.** It reports
+/// `entered` both times; Armada knows which one is the second because it holds
+/// the first.
+#[test]
+fn entering_a_step_a_second_time_comes_back_as_a_restart() {
+    let machine = Machine::new();
+    let place = machine.place();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    for _ in 0..2 {
+        fleet::report(
+            &FrozenClock,
+            &place,
+            "tidy-otter",
+            "going again",
+            Some("implement"),
+            Some("entered"),
+        )
+        .expect("noted");
+    }
+
+    let record = machine.reload("tidy-otter");
+    assert_eq!(record.transitions[0].event, StepEvent::Entered);
+    assert_eq!(record.transitions[1].event, StepEvent::Restarted);
+    assert_eq!(record.transitions[1].attempt, 2);
+    assert_eq!(record.attempts.get("implement"), Some(&2));
+}
+
+/// **The refusal this feature exists for.** A step is done when its `verify:`
+/// predicate holds — so a Drone cannot write the word, and the refusal says
+/// where the word lives rather than only that it is wrong.
+#[test]
+fn a_drone_cannot_report_a_step_completed_and_is_sent_to_the_verdict() {
+    let machine = Machine::new();
+    let place = machine.place();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    for word in ["completed", "failed"] {
+        let error = fleet::report(
+            &FrozenClock,
+            &place,
+            "tidy-otter",
+            "all done I think",
+            None,
+            Some(word),
+        )
+        .expect_err("a worker graded its own work");
+        assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
+        let next = error.next_action.expect("a next action");
+        assert!(next.contains("fleet.verdict"), "{next}");
+        assert!(next.contains("evidence"), "{next}");
+    }
+    // **Nothing was written.** A refusal that still appended the note would have
+    // left the assertion on the record with only the word missing.
+    assert!(machine.reload("tidy-otter").transitions.is_empty());
+    assert!(machine.reload("tidy-otter").progress.is_empty());
+}
+
+/// `restarted` is refused too, and for its own reason: Armada derives it.
+#[test]
+fn a_drone_cannot_report_a_restart_because_armada_works_it_out() {
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    let error = fleet::report(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        "going again",
+        None,
+        Some("restarted"),
+    )
+    .expect_err("a refusal");
+    assert!(error
+        .next_action
+        .expect("a next action")
+        .contains("`entered`"));
+}
+
+/// A word outside the five is a typo, and it gets the other refusal — the one
+/// that lists what a Drone may write.
+#[test]
+fn a_word_that_is_not_a_boundary_is_refused_with_the_two_that_are() {
+    let machine = Machine::new();
+    let error = {
+        machine.job("tidy-otter", JobState::Running, "");
+        fleet::report(
+            &FrozenClock,
+            &machine.place(),
+            "tidy-otter",
+            "note",
+            None,
+            Some("finished"),
+        )
+        .expect_err("a refusal")
+    };
+    let next = error.next_action.expect("a next action");
+    assert!(
+        next.contains("entered") && next.contains("attempted"),
+        "{next}"
+    );
+}
+
+/// **The Drone asserts, the gate settles, and both survive on the record.** A
+/// Drone that says it is done and a check that says otherwise must be
+/// distinguishable afterwards — which is the reason `attempted` and `failed` are
+/// two words rather than one.
+#[test]
+fn an_assertion_and_the_gate_that_disagreed_are_both_kept() {
+    let machine = Machine::new();
+    let place = machine.place();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    fleet::report(
+        &FrozenClock,
+        &place,
+        "tidy-otter",
+        "entering",
+        Some("implement"),
+        Some("entered"),
+    )
+    .expect("noted");
+    fleet::report(
+        &FrozenClock,
+        &place,
+        "tidy-otter",
+        "I believe the suite is green now",
+        None,
+        Some("attempted"),
+    )
+    .expect("noted");
+    fleet::verdict(
+        &FrozenClock,
+        &place,
+        "tidy-otter",
+        "implement",
+        Verdict::Failed,
+        vec![Evidence {
+            kind: "check".to_string(),
+            scope: "api:test".to_string(),
+            exit: 1,
+        }],
+    )
+    .expect("recorded");
+
+    let record = machine.reload("tidy-otter");
+    let walked: Vec<StepEvent> = record.transitions.iter().map(|e| e.event).collect();
+    assert_eq!(
+        walked,
+        [StepEvent::Entered, StepEvent::Attempted, StepEvent::Failed]
+    );
+    // The gate's own record: what the verdict rested on, kept beside the word.
+    let gate = record.transitions[2].gate.as_ref().expect("a gate");
+    assert_eq!(gate.evidence[0].scope, "api:test");
+    assert_eq!(gate.evidence[0].exit, 1);
+    // **One attempt, not two.** The Drone opened it and the verdict closed it;
+    // counting it at both ends would halve the rope the workflow declared.
+    assert_eq!(record.attempts.get("implement"), Some(&1));
+    assert!(!job::attempt_open(&record.transitions, "implement"));
+}
+
+/// **A verdict for a Drone that never reported entering still counts an
+/// attempt.** The count is what a ceiling is enforced against, and a Drone that
+/// forgets to report must not get unlimited retries for free.
+#[test]
+fn a_verdict_with_no_reported_entry_counts_the_attempt_as_it_always_did() {
+    let machine = Machine::new();
+    let place = machine.place();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    for expected in 1..=2 {
+        fleet::verdict(
+            &FrozenClock,
+            &place,
+            "tidy-otter",
+            "implement",
+            Verdict::Failed,
+            vec![Evidence {
+                kind: "check".to_string(),
+                scope: "api:test".to_string(),
+                exit: 1,
+            }],
+        )
+        .expect("recorded");
+        assert_eq!(
+            machine.reload("tidy-otter").attempts.get("implement"),
+            Some(&expected)
+        );
+    }
+}
+
+/// **`BLOCKED` and `NEEDS_HUMAN` settle nothing.** The step is still open and
+/// the inbox is what says why; writing `failed` for them would report a gate
+/// that never ran.
+#[test]
+fn a_verdict_that_stops_the_job_writes_no_boundary_and_leaves_the_attempt_open() {
+    let machine = Machine::new();
+    let place = machine.place();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    fleet::report(
+        &FrozenClock,
+        &place,
+        "tidy-otter",
+        "entering",
+        Some("implement"),
+        Some("entered"),
+    )
+    .expect("noted");
+    fleet::verdict(
+        &FrozenClock,
+        &place,
+        "tidy-otter",
+        "implement",
+        Verdict::Blocked,
+        Vec::new(),
+    )
+    .expect("recorded");
+
+    let record = machine.reload("tidy-otter");
+    assert_eq!(record.transitions.len(), 1, "a boundary was invented");
+    assert!(job::attempt_open(&record.transitions, "implement"));
+    assert_eq!(record.attempts.get("implement"), Some(&1));
+}
+
+/// **Nothing here polls a Drone.** Recording a boundary is a read of the index,
+/// an append and a write — the probe is the only verb that reaches a model, and
+/// it never resumes the Job it describes (PLAN.md §15.2).
+#[test]
+fn recording_a_boundary_starts_no_subprocess() {
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+    let run = Recorder::new("unused");
+
+    fleet::report(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        "entering",
+        Some("implement"),
+        Some("entered"),
+    )
+    .expect("noted");
+
+    assert!(
+        run.seen.borrow().is_empty(),
+        "reporting a boundary reached for a process: {:?}",
+        run.seen.borrow()
+    );
 }
 
 // -------------------------------------------------------------------- asking
