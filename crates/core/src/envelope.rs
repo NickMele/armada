@@ -653,6 +653,17 @@ pub struct ScanData {
     pub results: Vec<ResultRow>,
     /// The facts themselves, uninterpreted and untruncated.
     pub evidence: crate::scan::Evidence,
+    /// The lines Armada is prepared to write from those facts, each with the
+    /// file that proves it.
+    ///
+    /// **Proposals, not decisions.** Nothing is written until a reader has
+    /// ticked what is right (`docs/reserved/007-scanner-should-propose.md`), and
+    /// a consumer reading this list is reading what *could* be written rather
+    /// than what is. Empty is the ordinary answer for a repository whose
+    /// evidence settles nothing, and it is the case the agent hand-over exists
+    /// for.
+    #[serde(default)]
+    pub proposals: Vec<crate::propose::Proposal>,
     /// What happens once the evidence has been printed: ask, tell, or neither.
     ///
     /// **In the payload rather than derived by the renderer**, and **beside

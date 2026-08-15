@@ -1,7 +1,7 @@
 ---
 id: 007
 title: The scanner should propose, not only report
-status: RESERVED
+status: BUILT
 module: manifest
 raised: real use — scanner run against a real monorepo
 ---
@@ -41,10 +41,55 @@ proposing and guessing.
 authored by an agent costs a session. The agent hand-over stays for the repositories where the
 evidence genuinely does not settle it.
 
-#### Drift — the scanner run against a repository that already has one
+---
+
+## What was built
+
+`armada_core::propose` and the tick list in `armada manifest config scan`. The three bullets
+above became four proofs, and the exact shape each one takes was decided by what `config verify`
+will accept — a proposal that writes a document layer 3 rejects is worse than no proposal at all.
+
+| Proposal | The proof |
+|---|---|
+| `workspaces: [dir]` | `dir/armada.yml` is there |
+| `components.<name>` | `dir` carries a package manifest, and something in it is a check |
+| `setup: <pm> install` | the lockfile in that directory names `<pm>` |
+| `checks.<name>` | a script or `Makefile` target named **exactly** `<name>` |
+
+**One bullet came out differently from how it was written here, and the difference is the
+point.** *"A directory that resolves its own dependencies is a workspace candidate"* — true, and
+a candidate is not a workspace. `workspaces:` means *a separate product with a config of its
+own* ([`PLAN.md`](../PLAN.md) §4.6), and verify requires every path listed there to contain an
+`armada.yml`. Proposing a candidate would write a document that cannot verify, so the proof is
+the file rather than the dependency resolution, and every other candidate is proposed as a
+component instead. `packages[].name` and `nested` were added to the evidence to support it.
+
+**Three names are deliberately not check names**, each for its own reason: `fmt` / `format`,
+because a formatter's bare name rewrites the tree and `armada manifest check` must never mutate
+a working copy; `e2e`, because it always arrives with a `cost:` and often an `exclusive:`, and
+proposing it without either is proposing a scheduling decision; and `check`, because a
+repository's `check` script usually means *run everything*, which would nest a suite inside a
+suite.
+
+**Against the `polyglot-monorepo` fixture — which is the raising repository's shape — it
+proposes one component and three checks, and says nothing at all about `backend/` or
+`scripts/`.** Neither has a script or a target Armada can phrase a command from, so neither
+gets a component. The reader never has to untick `scripts`, which is a better outcome than the
+one this item asked for.
+
+#### Drift — the scanner run against a repository that already has one · **NOT BUILT**
 
 **Repositories change**: services appear, scripts are renamed, CI is rewritten. Today `scan` is
 the verb for a repository with no `armada.yml` and says so. It should also answer the second
 question: **is what this file claims still true, and is there anything real it does not
 mention?** Both halves matter — a check pointing at a deleted script and a new service nobody
 declared are different failures with the same cause.
+
+**Deferred deliberately, and half of the machinery is now here.** `data.proposals` is computed
+for a configured repository as well as an unconfigured one, so drift is the comparison of that
+list against the resolved config rather than a second scanner. What is not built is the
+comparison, the report and the verb surface for it. Until it is:
+
+- `config scan` computes proposals in a configured repository but never offers to write them.
+- `config::write` refuses over an existing `armada.yml` rather than merging into it, because a
+  merge without a drift report is a rewrite nobody reviewed.

@@ -30,6 +30,7 @@ pub mod id;
 pub mod lease;
 pub mod lifecycle;
 pub mod ports;
+pub mod propose;
 pub mod reap;
 pub mod recent;
 pub mod registry;

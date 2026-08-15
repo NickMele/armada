@@ -135,6 +135,13 @@ pub enum Press {
     Moved,
     /// Enter: this is the answer.
     Chose,
+    /// Space: the row under the cursor changed side.
+    ///
+    /// **One key table for both questions, not two widgets.** A closed question
+    /// has nothing to toggle and treats this as [`Press::Ignored`]; a tick list
+    /// acts on it. The alternative — a second selector with its own bindings —
+    /// is how `enter` ends up meaning two different things three months apart.
+    Toggled,
     /// Esc or ctrl-c: take the documented default.
     Cancelled,
     /// A key this widget has no meaning for.
@@ -150,6 +157,7 @@ pub fn apply(selection: &mut Selection, code: KeyCode, modifiers: KeyModifiers) 
         KeyCode::Char('c') if control => Press::Cancelled,
         KeyCode::Esc => Press::Cancelled,
         KeyCode::Enter => Press::Chose,
+        KeyCode::Char(' ') => Press::Toggled,
         KeyCode::Down | KeyCode::Tab | KeyCode::Char('j') => {
             selection.next();
             Press::Moved
@@ -212,7 +220,10 @@ pub fn ask(question: &str, options: &[Choice], default: usize, style: Style) -> 
                 match apply(&mut selection, key.code, key.modifiers) {
                     Press::Chose => break Some(selection.chosen()),
                     Press::Cancelled => break Some(default),
-                    Press::Moved | Press::Ignored => {}
+                    // A closed question has nothing to toggle: exactly one of
+                    // these is the answer, and space is a key with no meaning
+                    // here rather than a second way to choose.
+                    Press::Moved | Press::Toggled | Press::Ignored => {}
                 }
             }
             Ok(_) => {}
@@ -222,6 +233,89 @@ pub fn ask(question: &str, options: &[Choice], default: usize, style: Style) -> 
     // **Nothing to give back if nothing was ever drawn.** `area` is `None`
     // only when the very first `draw` failed, and a widget that never
     // appeared leaves nothing on screen to clear.
+    if let Some(area) = area {
+        super::terminal::clear_viewport(std::io::stderr(), area);
+    }
+    drop(restore);
+    answer
+}
+
+/// What a tick list came back with.
+///
+/// **Three outcomes and not two**, the same shape [`super::editor::Answer`]
+/// takes: a widget that could not be drawn is a different thing from a widget
+/// the reader walked away from, and collapsing them would either write a config
+/// nobody confirmed or refuse to ask a reader who could have answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Picked {
+    /// What is ticked, one flag per option in the order they were offered.
+    Ticked(Vec<bool>),
+    /// Esc or ctrl-c. **Nothing is ticked and nothing happens** — which is not
+    /// the same as an empty list of ticks the reader arrived at deliberately,
+    /// but is the same outcome, and the safe one either way.
+    Cancelled,
+    /// No raw mode, no backend, a stream that ended. The caller falls back to
+    /// printing the list.
+    Unavailable,
+}
+
+/// Put an open question: tick every one of these that is right.
+///
+/// **The same widget, the same keys and the same state as [`ask`]** — space
+/// toggles and enter confirms, which are the two bindings a closed question does
+/// not need. A second selector would be a second set of arrow keys to keep in
+/// agreement with this one.
+///
+/// `ticked` is what the list opens holding, one flag per option. Every proposal
+/// `config scan` puts here is provable, so it opens with all of them ticked and
+/// the reader's work is unticking the ones his repository disagrees with — which
+/// is the motion he asked for: *"check which ones it got correct and which ones
+/// it might not have gotten correct."*
+pub fn pick(question: &str, options: &[Choice], ticked: &[bool], style: Style) -> Picked {
+    if options.is_empty() || options.len() != ticked.len() {
+        return Picked::Unavailable;
+    }
+    let Ok(restore) = Restore::install() else {
+        return Picked::Unavailable;
+    };
+    let backend = ratatui::backend::CrosstermBackend::new(std::io::stderr());
+    let terminal = Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Inline(height(options.len())),
+        },
+    );
+    let Ok(mut terminal) = terminal else {
+        return Picked::Unavailable;
+    };
+
+    let mut ticked = ticked.to_vec();
+    let mut selection = Selection::new(options.len(), 1);
+    let mut area = None;
+    let answer = loop {
+        match terminal
+            .draw(|frame| draw_rows(frame, question, options, selection, Some(&ticked), style))
+        {
+            Ok(completed) => area = Some(completed.area),
+            Err(_) => break Picked::Unavailable,
+        }
+        match event::read() {
+            Err(_) => break Picked::Unavailable,
+            Ok(Event::Key(key)) if key.kind != KeyEventKind::Release => {
+                match apply(&mut selection, key.code, key.modifiers) {
+                    Press::Chose => break Picked::Ticked(ticked.clone()),
+                    Press::Cancelled => break Picked::Cancelled,
+                    Press::Toggled => {
+                        let at = selection.chosen() - 1;
+                        ticked[at] = !ticked[at];
+                    }
+                    Press::Moved | Press::Ignored => {}
+                }
+            }
+            Ok(_) => {}
+        }
+    };
+
     if let Some(area) = area {
         super::terminal::clear_viewport(std::io::stderr(), area);
     }
@@ -240,6 +334,19 @@ fn draw(
     question: &str,
     options: &[Choice],
     selection: Selection,
+    style: Style,
+) {
+    draw_rows(frame, question, options, selection, None, style)
+}
+
+/// One layout for both questions. `ticked` is `None` for a closed question,
+/// which is the only difference between them on screen and in the key line.
+fn draw_rows(
+    frame: &mut ratatui::Frame,
+    question: &str,
+    options: &[Choice],
+    selection: Selection,
+    ticked: Option<&[bool]>,
     style: Style,
 ) {
     let [head, _, rows, _, keys] = Layout::vertical([
@@ -276,26 +383,41 @@ fn draw(
         .map(|choice| choice.label.chars().count())
         .max()
         .unwrap_or(0)
-        .min(room_for_label(frame.area().width as usize, options));
+        .min(room_for_label(
+            frame.area().width as usize,
+            options,
+            ticked.is_some(),
+        ));
 
     // **The aside truncates now that it no longer owns the row.** It used to be
     // reserved whole and the label took what was left; that inverted which half
     // a reader needs (see `room_for_label`). Trimming it here rather than in
     // `row` keeps the width arithmetic in one place.
-    let aside = aside_room(frame.area().width as usize, options);
+    let aside = aside_room(frame.area().width as usize, options, ticked.is_some());
     let lines: Vec<Line> = options
         .iter()
         .enumerate()
-        .map(|(index, choice)| row(index, choice, selection, widest, aside, style))
+        .map(|(index, choice)| {
+            row(
+                index,
+                choice,
+                selection,
+                ticked.map(|ticked| ticked[index]),
+                widest,
+                aside,
+                style,
+            )
+        })
         .collect();
     frame.render_widget(Paragraph::new(lines), rows);
 
+    let last = match ticked {
+        Some(_) => "space tick · enter write these · esc write nothing",
+        None => "enter choose · esc keep the default",
+    };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            format!(
-                "  up/down move · 1-{} jump · enter choose · esc keep the default",
-                options.len()
-            ),
+            format!("  up/down move · 1-{} jump · {last}", options.len()),
             painted(style, Role::SteelGrey),
         ))),
         keys,
@@ -322,10 +444,15 @@ fn draw(
 /// is what gives way. The label gets what it asks for up to [`LABEL_CAP`], and
 /// never less than [`LABEL_FLOOR`] while the row has that much to give; the
 /// aside takes the remainder and truncates itself in [`aside_room`].
-fn room_for_label(width: usize, options: &[Choice]) -> usize {
+///
+/// `ticked` says whether every row also carries a `[x] ` box, which is four
+/// columns nobody else is spending — a tick list drawn against the closed
+/// question's budget overruns by exactly that much.
+fn room_for_label(width: usize, options: &[Choice], ticked: bool) -> usize {
     let digits = options.len().to_string().len();
-    // "  {caret} " (4) + the number and its space (digits + 1).
-    let furniture = 4 + digits + 1;
+    // "  {caret} " (4) + the number and its space (digits + 1) + "[x] " (4)
+    // when this is a tick list.
+    let furniture = 4 + digits + 1 + usize::from(ticked) * 4;
     let free = width.saturating_sub(furniture);
 
     let widest_label = options
@@ -345,9 +472,10 @@ fn room_for_label(width: usize, options: &[Choice]) -> usize {
 ///
 /// Zero when nothing is left, which drops the column rather than wrapping it —
 /// the same rule `render/table.rs` follows for an empty column.
-fn aside_room(width: usize, options: &[Choice]) -> usize {
+fn aside_room(width: usize, options: &[Choice], ticked: bool) -> usize {
     let digits = options.len().to_string().len();
-    let furniture = 4 + digits + 1 + room_for_label(width, options) + 2;
+    let furniture =
+        4 + digits + 1 + usize::from(ticked) * 4 + room_for_label(width, options, ticked) + 2;
     width.saturating_sub(furniture)
 }
 
@@ -365,6 +493,7 @@ fn row<'a>(
     index: usize,
     choice: &'a Choice,
     selection: Selection,
+    ticked: Option<bool>,
     widest: usize,
     aside: usize,
     style: Style,
@@ -386,15 +515,31 @@ fn row<'a>(
     let mut spans = vec![
         Span::styled(format!("  {caret} "), painted(style, Role::SignalAmber)),
         Span::styled(format!("{} ", index + 1), painted(style, Role::SteelGrey)),
-        Span::styled(
-            label,
-            if on {
-                painted(style, Role::SignalAmber)
-            } else {
-                painted(style, Role::Foreground)
-            },
-        ),
     ];
+    // **`[x]` and not a colour.** The same rule as the cursor: a row told apart
+    // only by being amber is a row a monochrome terminal cannot tell apart at
+    // all, and this one decides what gets written to a file.
+    if let Some(ticked) = ticked {
+        spans.push(Span::styled(
+            if ticked { "[x] " } else { "[ ] " },
+            painted(
+                style,
+                if ticked {
+                    Role::BeaconGreen
+                } else {
+                    Role::SteelGrey
+                },
+            ),
+        ));
+    }
+    spans.extend([Span::styled(
+        label,
+        if on {
+            painted(style, Role::SignalAmber)
+        } else {
+            painted(style, Role::Foreground)
+        },
+    )]);
     if !choice.aside.is_empty() && aside > 0 {
         spans.push(Span::styled(
             format!("  {}", crate::render::term::truncate(&choice.aside, aside)),
@@ -538,7 +683,7 @@ mod tests {
             Choice::new("done", "stop looking"),
         ];
         let width = 120;
-        let label = room_for_label(width, &options);
+        let label = room_for_label(width, &options, false);
         assert!(
             label >= "SUBAGENT  helm.md".len(),
             "the label was starved to {label} by an aside that should have given way"
@@ -555,8 +700,9 @@ mod tests {
                 index,
                 choice,
                 Selection::new(options.len(), 1),
+                None,
                 widest,
-                aside_room(width, &options),
+                aside_room(width, &options, false),
                 Style::plain(),
             );
             assert!(line.width() <= width, "row {index} overflowed");
@@ -572,7 +718,31 @@ mod tests {
         // that gives way (see `room_for_label`).
         let nine = vec![Choice::new("x", "aside"); 9];
         let ten = vec![Choice::new("x", "aside"); 10];
-        assert_eq!(aside_room(100, &nine), aside_room(100, &ten) + 1);
+        assert_eq!(
+            aside_room(100, &nine, false),
+            aside_room(100, &ten, false) + 1
+        );
+    }
+
+    /// A tick list spends four more columns per row on its box, and both budgets
+    /// have to know — this is the same overrun the two above were written for,
+    /// four columns wider.
+    ///
+    /// **The aside pays**, on the same rule: the label is the identity and the
+    /// aside is the explanation, so a row that has to find four columns takes
+    /// them from the half that can give way.
+    #[test]
+    fn a_tick_box_costs_the_row_four_columns() {
+        let options = vec![Choice::new("proposal", "what it writes"); 3];
+        assert_eq!(
+            aside_room(100, &options, true),
+            aside_room(100, &options, false) - 4
+        );
+        assert_eq!(
+            room_for_label(100, &options, true),
+            room_for_label(100, &options, false),
+            "the label gave way instead of the aside"
+        );
     }
 
     /// **The room accounts for the widest aside, not each row's own.** A row
@@ -583,10 +753,24 @@ mod tests {
         let short = vec![Choice::new("MEMORY  voice.md", "short")];
         let long = vec![Choice::new("MEMORY  voice.md", &"x".repeat(150))];
         assert_eq!(
-            room_for_label(120, &short),
-            room_for_label(120, &long),
+            room_for_label(120, &short, false),
+            room_for_label(120, &long, false),
             "a longer aside changed what the label was allowed, which is the \
              bug that drew `guild ls` as a column of descriptions with no names"
+        );
+    }
+
+    /// **Space is a tick and not a second `enter`.** A closed question has
+    /// nothing to toggle and ignores it; a tick list acts on it. One key table,
+    /// two questions — which is what keeps `enter` meaning one thing.
+    #[test]
+    fn space_toggles_and_never_chooses() {
+        let mut selection = three();
+        assert_eq!(press(&mut selection, KeyCode::Char(' ')), Press::Toggled);
+        assert_eq!(
+            selection.chosen(),
+            3,
+            "toggling moved the cursor, so a tick would land on the wrong row"
         );
     }
 
@@ -595,33 +779,40 @@ mod tests {
     /// `widest` computed without this bound used to violate: `armada
     /// failures`' `done` row, the day its list first reached ten entries,
     /// where `stop looking` came back `stop lookin`.
+    ///
+    /// **Both forms of the row**, because the tick list's box is four more
+    /// columns of furniture and the bug this test froze is exactly a row that
+    /// spends more than it was budgeted.
     #[test]
     fn a_row_never_draws_past_the_room_it_was_given() {
-        let width = 40;
-        let options = vec![
-            Choice::new(&"x".repeat(200), "stop looking"),
-            Choice::bare("done"),
-        ];
-        let widest = options
-            .iter()
-            .map(|choice| choice.label.chars().count())
-            .max()
-            .unwrap_or(0)
-            .min(room_for_label(width, &options));
-        for (index, choice) in options.iter().enumerate() {
-            let line = row(
-                index,
-                choice,
-                Selection::new(options.len(), 1),
-                widest,
-                aside_room(width, &options),
-                Style::plain(),
-            );
-            assert!(
-                line.width() <= width,
-                "row {index} drew {} at width {width}",
-                line.width()
-            );
+        for ticked in [false, true] {
+            let width = 40;
+            let options = vec![
+                Choice::new(&"x".repeat(200), "stop looking"),
+                Choice::bare("done"),
+            ];
+            let widest = options
+                .iter()
+                .map(|choice| choice.label.chars().count())
+                .max()
+                .unwrap_or(0)
+                .min(room_for_label(width, &options, ticked));
+            for (index, choice) in options.iter().enumerate() {
+                let line = row(
+                    index,
+                    choice,
+                    Selection::new(options.len(), 1),
+                    ticked.then_some(true),
+                    widest,
+                    aside_room(width, &options, ticked),
+                    Style::plain(),
+                );
+                assert!(
+                    line.width() <= width,
+                    "row {index} drew {} at width {width}",
+                    line.width()
+                );
+            }
         }
     }
 }

@@ -143,7 +143,7 @@ fn main() -> ExitCode {
                         output.exit_code(),
                         &output.to_json(),
                     );
-                    emit(output, json, style, terminal, home.as_deref())
+                    emit(output, json, style, terminal, home.as_deref(), &cwd)
                 }
                 // **A verb that could not answer is Armada's**, always. The
                 // refusals a verb authors — `armada failures show <a typo>` —
@@ -1527,14 +1527,22 @@ fn at_the_terminal(
 /// numbers in the middle of the output followed by a silent `read_line`, and the
 /// person it was put to could not tell it was waiting for him.
 ///
-/// **Option 1 execs rather than spawning.** Armada has produced the evidence
-/// and has nothing further to do, so it gets out of the way entirely — the same
-/// shape `armada fleet board --exec` takes handing over a session.
+/// **The hand-over execs rather than spawning.** Armada has produced the
+/// evidence and has nothing further to do, so it gets out of the way entirely —
+/// the same shape `armada fleet board --exec` takes handing over a session.
+///
+/// **Writing is the other answer, and it is two questions and not one.** The
+/// first asks what should happen; only then are the proposals put up to be
+/// ticked. A reader who wants an agent should not have to walk a tick list to
+/// say so, and a reader who wants the proposals is owed the chance to reject
+/// each one — *"we can even make it interactive before they even jump into
+/// anything on their own where they can check which ones it got correct."*
 fn hand_over(
     output: &Output,
     style: Style,
     terminal: render::term::Terminal,
     home: Option<&std::path::Path>,
+    cwd: &std::path::Path,
 ) {
     let Output::Scan(envelope) = output else {
         return;
@@ -1543,14 +1551,33 @@ fn hand_over(
         return;
     }
 
+    // **Nothing is offered to be written over a config that is already
+    // here.** `scan` is allowed to run in a configured repository and to report
+    // what it found; whether the file still agrees with the repository is drift,
+    // and drift is not built (`docs/reserved/007`).
+    let proposals: &[armada_core::propose::Proposal] = match envelope.data.evidence.config_present {
+        true => &[],
+        false => &envelope.data.proposals,
+    };
+
+    let mut ask = at_the_terminal(style, terminal);
     let chosen = armada_helm::ask::Ask::choose(
-        &mut at_the_terminal(style, terminal),
+        &mut ask,
         verbs::config::ONBOARD_QUESTION,
-        &verbs::config::onboarding_choices(),
-        verbs::config::STOP,
+        &verbs::config::onboarding_choices(proposals.len()),
+        verbs::config::stop(proposals.len()),
     );
-    if chosen != verbs::config::HAND_OVER {
-        return;
+    match verbs::config::next(chosen, proposals.len()) {
+        verbs::config::Next::Stop => return,
+        verbs::config::Next::Write => {
+            write_err(&match verbs::config::confirm(&mut ask, proposals, cwd) {
+                verbs::config::Wrote::Config(lines) => render::wrote_config(lines, style),
+                verbs::config::Wrote::Nothing => render::wrote_nothing(style),
+                verbs::config::Wrote::Failed(error) => render::error_lines(&error, style),
+            });
+            return;
+        }
+        verbs::config::Next::HandOver => {}
     }
 
     // **The skill's prose, not its name.** `Handover::Ask` is only produced when
@@ -1608,6 +1635,7 @@ fn emit(
     style: Style,
     terminal: render::term::Terminal,
     home: Option<&std::path::Path>,
+    cwd: &std::path::Path,
 ) -> ExitCode {
     // **`mcp serve` reports on stderr, and it is the one verb that must.**
     // stdout *is* the transport: it carried JSON-RPC frames until the moment
@@ -1648,7 +1676,7 @@ fn emit(
         // **After the evidence is written and flushed, never before.** The
         // question is about what the reader has just seen, and a prompt that
         // arrives first is a prompt answered blind.
-        hand_over(&output, style, terminal, home);
+        hand_over(&output, style, terminal, home, cwd);
     }
     // **A signal has no error class, so it does not get the class's code**
     // (`ARCHITECTURE.md` §1.6). The envelope above still says `aborted`,

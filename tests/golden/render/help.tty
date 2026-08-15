@@ -5,7 +5,7 @@
   armada helm                     [38;2;156;163;175menter Helm, the agent you talk to[0m
 
 [1m[38;2;255;169;64mMANIFEST — what a workspace is and how to operate it[0m
-  config <scan|verify>  [38;2;156;163;175mreport the evidence, then verify what was written[0m
+  config <scan|verify>  [38;2;156;163;175mpropose what the repository proves, then verify it[0m
   init                  [38;2;156;163;175mclaim this workspace: ports, .armada/, setup[0m
   up [<component>]      [38;2;156;163;175mstart this workspace's services; wait until they answer[0m
   down [<component>]    [38;2;156;163;175mstop this workspace's services; keep the port block[0m

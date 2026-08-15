@@ -248,6 +248,16 @@ pub struct Evidence {
     /// the single most important fact about a polyglot repository, and reading
     /// it off seven separate lists is work the author should not have to do.
     pub packages: Vec<Package>,
+    /// Directories below the root that carry an `armada.yml` of their own.
+    ///
+    /// **The one fact that makes a nested workspace provable.** `workspaces:`
+    /// means *a separate product sharing this repository, with a config of its
+    /// own* (PLAN.md §4.6), and `config verify` requires every path listed there
+    /// to contain that file. A directory that merely resolves its own
+    /// dependencies is a **candidate** and nothing more — proposing one as a
+    /// workspace would write a document that cannot verify. This asks the same
+    /// question of the filesystem instead of of a heuristic.
+    pub nested: Vec<String>,
 }
 
 /// What `config scan` does once it has printed the evidence.
@@ -357,6 +367,14 @@ pub fn handover(
 pub struct Package {
     /// Workspace-relative directory. Empty for the root.
     pub dir: String,
+    /// What the manifest calls this package, when it says.
+    ///
+    /// **Only `package.json` declares one Armada reads.** A `pyproject.toml`
+    /// has `[project] name` and a `Cargo.toml` has `[package] name`, and adding
+    /// either would be a third parser for a field used in one place — the root
+    /// component's name, where a directory segment does not exist to supply it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// The manifests that make it one, by name — `pyproject.toml`,
     /// `package.json`.
     pub manifests: Vec<String>,
@@ -570,6 +588,16 @@ pub fn scan(files: &[SourceFile]) -> Evidence {
         }
     }
 
+    // **The root's own `armada.yml` is not one of these.** `config_present`
+    // already says whether this directory is configured; `nested` is about the
+    // other workspaces sharing the repository, which is a different question
+    // with a different answer.
+    evidence.nested = files
+        .iter()
+        .filter(|file| base(&file.path) == "armada.yml" && !directory(&file.path).is_empty())
+        .map(|file| directory(&file.path).to_string())
+        .collect();
+
     evidence.packages = packages(&files, &evidence.workspace_globs);
     evidence
 }
@@ -600,6 +628,7 @@ fn packages(files: &[&SourceFile], globs: &[WorkspaceGlobs]) -> Vec<Package> {
         // dignified with a package of its own.
         .filter(|(_, (manifests, _))| !manifests.is_empty())
         .map(|(dir, (manifests, lockfiles))| {
+            let name = beside(files, dir, "package.json").and_then(|file| json_name(&file.text));
             let member = globs.iter().any(|declared| {
                 declared
                     .globs
@@ -608,6 +637,7 @@ fn packages(files: &[&SourceFile], globs: &[WorkspaceGlobs]) -> Vec<Package> {
             });
             Package {
                 dir: dir.to_string(),
+                name,
                 // **A directory that locks its own dependencies is a separate
                 // product**; one whose manifest is claimed by somebody else's
                 // glob is a member of theirs. The root is neither — it is the
@@ -774,6 +804,21 @@ fn plural(n: usize, noun: &str) -> String {
 
 // -------------------------------------------------------------------- parsers
 // Each is total and each reports only what its file already said.
+
+/// `package.json`'s `"name"`, verbatim.
+///
+/// **Read because a repository that is one package has no directory to be named
+/// after.** Every nested package is called what its directory is called, and the
+/// root's only written-down name is this one — without it, the component
+/// `armada manifest config scan` proposes for a single-package repository would
+/// have a name nobody chose.
+fn json_name(text: &str) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Manifest {
+        name: Option<String>,
+    }
+    serde_json::from_str::<Manifest>(text).ok()?.name
+}
 
 /// `packageManager: "pnpm@9.1.0"` → `pnpm@9`.
 ///

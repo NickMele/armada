@@ -21,7 +21,7 @@ usually asking which one applies.
 | [004](004-guild-inventory.md) | Seeing what is in your guild | BUILT | guild | `armada guild ls` / `show` — no verb showed you what you had |
 | [005](005-inbox-label-not-identity.md) | The inbox records a label, not an identity | FIXED | fleet | Inbox entries keyed by Job name collided; they carry the Job's uuid, close when it ends, and `ls` shows the id |
 | [006](006-guild-has-no-way-to-learn.md) | The guild has no way to learn | RESERVED | guild | No provenance means no path for Armada's own updates to reach an existing guild |
-| [007](007-scanner-should-propose.md) | The scanner should propose, not only report | RESERVED | manifest | Deterministic findings (package manager, workspaces, exact-name checks) should become proposals, not just report text |
+| [007](007-scanner-should-propose.md) | The scanner should propose, not only report | BUILT | manifest | `config scan` proposes what it can prove and a tick list writes it — **drift is deferred and is the one half not built** |
 | [008](008-armada-injects-its-own-skills.md) | Armada injects its own skills | RESERVED | cross-cutting | Drones need Armada's own tools and the standing to propose manifest/guild changes |
 | [009](009-smaller-things-raised-in-use.md) | Smaller things raised in use, each with its reason | RESERVED | cross-cutting | Five small gaps — `doctor` health, `config scan`'s missing middle option, guild remote status, sync prompts, `--help` drift |
 | [010](010-armada-records-its-own-failures.md) | Armada records its own failures | BUILT | cross-cutting | `armada failures` — a failure Armada reported was gone as soon as the scrollback was; navigable at a terminal, and a refusal Armada meant is not one |

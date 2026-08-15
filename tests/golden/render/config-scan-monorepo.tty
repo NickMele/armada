@@ -35,7 +35,15 @@
     [38;2;92;225;230mscripts[0m  [38;2;156;163;175mpyproject.toml, uv.lock[0m
     [38;2;92;225;230mweb[0m      [38;2;156;163;175mpackage.json, pnpm-lock.yaml[0m
 
-  [38;2;255;169;64mworkspaces: candidates[0m · [38;2;156;163;175meach resolves its own dependencies[0m
+  [38;2;255;169;64mworkspaces: candidates[0m · [38;2;156;163;175meach resolves its own dependencies; a workspace also has an armada.yml[0m
     [38;2;156;163;175mbackend · scripts · web[0m
 
-[1m[38;2;255;169;64mEvidence only.[0m [38;2;156;163;175mArmada does not guess which of these you actually run.[0m
+  [38;2;255;169;64mproposals[0m · [38;2;156;163;175mevery line read out of a file, none of it inferred[0m
+  [1m[38;2;156;163;175mWHAT[0m                         [1m[38;2;156;163;175mWRITES[0m          [1m[38;2;156;163;175mBECAUSE[0m
+  [38;2;92;225;230mcomponents.web[0m               root: web       [38;2;156;163;175mweb/package.json[0m
+  [38;2;92;225;230mcomponents.web.setup[0m         pnpm install    [38;2;156;163;175mweb/pnpm-lock.yaml[0m
+  [38;2;92;225;230mcomponents.web.checks.build[0m  pnpm run build  [38;2;156;163;175mweb/package.json[0m
+  [38;2;92;225;230mcomponents.web.checks.test[0m   pnpm run test   [38;2;156;163;175mweb/package.json[0m
+  [38;2;92;225;230mcomponents.web.checks.lint[0m   pnpm run lint   [38;2;156;163;175mweb/package.json[0m
+
+[1m[38;2;255;169;64mEvidence only.[0m [38;2;156;163;175mArmada proposes only what a file already said. Nothing is written yet.[0m
