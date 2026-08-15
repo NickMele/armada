@@ -177,15 +177,22 @@ That section reasons about what gets written; the same split decides what may be
 
 | Audience | What happens |
 |---|---|
-| **stdin and stdout are a terminal** | The choice is drawn and the answer is read: write the proposals, hand the repository to an agent, or stop having printed the evidence. |
+| **stdin and stdout are a terminal** | The choice is drawn and the answer is read: write (the proposals, or a blank scaffold when there is nothing to propose), hand the repository to an agent, or stop having printed the evidence. |
 | **Either is not** | No menu. The command that would have been run is printed, so an agent reading stdout learns the next step — with the proposals above it, already derived. |
 | **`--json`** | The envelope alone. No menu, no prompt, and `data.handover` says `silent`. |
 
-**The proposals option is offered only when there is something to propose**, and it is first
-because it is the cheap one: a proposal a reader corrects costs no tokens and the same file
-authored by an agent costs a session. The hand-over stays underneath it for the repositories
-where the evidence genuinely does not settle it — this reduces how many of those there are and
-does not replace them.
+**Writing is offered whenever there is no `armada.yml` yet, proposals or not**
+([`009`](../../reserved/009-smaller-things-raised-in-use.md) item 2). A repository the scan finds
+nothing provable in used to be offered only the agent hand-over or nothing — the answer a reader
+who knows his own repository actually wants, *start me a blank one and take me there*, did not
+exist. It is first on the list because, proposals or not, it is the cheap answer: a proposal a
+reader corrects costs no tokens and the same file authored by an agent costs a session. The
+hand-over stays underneath it for the repositories where the evidence genuinely does not settle
+it — this reduces how many of those there are and does not replace them.
+
+**Nothing is offered to write over a config that is already there.** A repository with an
+`armada.yml` sees only the hand-over and stop — `write` refuses to overwrite it, so offering the
+option would be offering a choice guaranteed to fail.
 
 #### The tick list
 
@@ -194,6 +201,10 @@ unticking what his repository disagrees with — *"they can check which ones it 
 which ones it might not have gotten correct."* It is the same selector every closed question
 uses with `space` bound: `↑`/`↓` move, `space` ticks, `enter` writes what survives, `esc` writes
 nothing.
+
+**A repository with nothing to propose skips the tick list entirely** — there is nothing on it —
+and writes the scaffold alone: the provenance comment and `manifest: version: 1`, a valid,
+parseable `armada.yml` with nothing in it yet.
 
 **Nothing reaches the disk until then.** Unticking a component takes its checks with it, because
 a check under a component nobody accepted is a document that does not parse. Unticking
@@ -204,6 +215,13 @@ repository is drift, and drift is not built.
 The written file carries the provenance of every line in a comment above it, and the report ends
 on `armada manifest config verify`: a proposed config is plausible, not correct, and layer 3 is
 what tells those apart.
+
+**Once the write actually happens, it opens in the reader's editor** — `$VISUAL`, then
+`$EDITOR`, the same order every other POSIX tool tries them in. There is no third fallback:
+guessing `vi` for a reader who set neither is choosing an editor for him, so a write with neither
+set reports plainly that the file is there and only the opening did not happen, and names the two
+variables to set. Nothing is opened when nothing was written — `esc`, an empty tick, or a refused
+overwrite all leave the reader exactly where the report left them.
 
 **An agent running `config scan` inside a Job must never block on stdin that will never
 arrive.** That is the failure mode "always interactive" causes — the Job hangs until its ceiling

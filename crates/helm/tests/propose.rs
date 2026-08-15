@@ -212,29 +212,115 @@ fn a_repository_with_nothing_provable_proposes_nothing() {
     assert!(proposals(dir.path()).is_empty());
 }
 
-/// The three answers `scan` ends on, and the one that is offered only when there
-/// is something to write.
+/// **The middle option `docs/reserved/009-smaller-things-raised-in-use.md`
+/// item 2 asks for**, exercised end to end: a repository with nothing
+/// provable still gets a real `armada.yml` — the header comment and
+/// `manifest: version: 1` alone — without a tick list being put to a reader
+/// who has nothing to tick.
+#[test]
+fn a_repository_with_no_proposals_still_gets_a_blank_config() {
+    let dir = tempfile::tempdir().expect("a scratch directory");
+    write(dir.path(), "README.md", "# nothing a scan can prove\n");
+    let mut ask = Scripted::default();
+
+    let wrote = verbs::config::confirm(&mut ask, &[], dir.path());
+    assert!(matches!(wrote, Wrote::Config(0)), "{wrote:?}");
+    assert!(
+        ask.picked.is_empty(),
+        "a tick list was put with nothing to tick"
+    );
+
+    let text = std::fs::read_to_string(dir.path().join("armada.yml")).expect("armada.yml");
+    armada_core::config::parse(&text, "armada.yml").expect("the blank scaffold still parses");
+}
+
+/// **`$EDITOR` opens the file that was just written, argv and all** — the
+/// assertion `AGENTS.md`'s *Testing* section asks for: proving the argv is
+/// what was intended, not merely that some string was built.
+#[test]
+fn open_in_editor_runs_the_configured_editor_on_the_written_file() {
+    use armada_core::ctx::{Run, RunOutput, RunRequest, SpawnError};
+    use std::cell::RefCell;
+
+    struct Watching(RefCell<Vec<RunRequest>>);
+    impl Run for Watching {
+        fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+            self.0.borrow_mut().push(request.clone());
+            Ok(RunOutput {
+                code: Some(0),
+                signal: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                timed_out: false,
+            })
+        }
+    }
+
+    let dir = tempfile::tempdir().expect("a scratch directory");
+    let run = Watching(RefCell::new(Vec::new()));
+    verbs::config::open_in_editor(&run, Some("nano"), dir.path()).expect("the editor ran");
+
+    let calls = run.0.borrow();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert_eq!(
+        calls[0].argv,
+        vec![
+            "nano".to_string(),
+            dir.path().join("armada.yml").display().to_string()
+        ],
+    );
+    assert_eq!(
+        calls[0].stdio,
+        armada_core::ctx::StdioMode::Inherit,
+        "an editor session needs the real terminal, not a captured pipe"
+    );
+}
+
+/// **A clear failure rather than a guessed editor.** The write already
+/// happened; this is the one place `docs/reserved/009-smaller-things-raised-in-use.md`
+/// item 2 asks to fail loudly instead of picking `vi` for a reader who set
+/// neither variable.
+#[test]
+fn open_in_editor_refuses_to_guess_when_neither_variable_is_set() {
+    let dir = tempfile::tempdir().expect("a scratch directory");
+    let error =
+        verbs::config::open_in_editor(&RealRun, None, dir.path()).expect_err("no editor is set");
+    assert!(error.message.contains("VISUAL"), "{error:?}");
+    assert!(error.message.contains("EDITOR"), "{error:?}");
+    assert_eq!(error.class, armada_core::error::ErrClass::Environment);
+}
+
+/// The three answers `scan` ends on, and the one that is withheld only when
+/// there is already an `armada.yml` to protect.
 ///
 /// **The numbers move and the meanings do not**, which is the whole reason the
-/// answer is an enum: `1` means *write* in a repository with proposals and
-/// *hand over* in one without, and a caller comparing against a literal would
-/// silently mean the wrong one in half of them.
+/// answer is an enum: `1` means *write* in a repository with no config yet —
+/// proposals or not — and *hand over* in one that already has one, and a
+/// caller comparing against a literal would silently mean the wrong one in
+/// half of them.
 #[test]
 fn the_answers_mean_the_same_thing_whichever_list_they_came_from() {
     use verbs::config::{next, onboarding_choices, stop, Next};
 
-    assert_eq!(onboarding_choices(0).len(), 2);
-    assert_eq!(onboarding_choices(6).len(), 3);
+    // A repository with nothing provable still gets three choices — the write
+    // option is offered blank rather than withheld
+    // (`docs/reserved/009-smaller-things-raised-in-use.md` item 2).
+    assert_eq!(onboarding_choices(0, false).len(), 3);
+    assert_eq!(onboarding_choices(6, false).len(), 3);
+    // A repository that already has `armada.yml` never sees the write option:
+    // `write` refuses to overwrite it, so offering it would be offering a
+    // choice guaranteed to fail.
+    assert_eq!(onboarding_choices(0, true).len(), 2);
 
-    assert_eq!(next(1, 6), Next::Write);
-    assert_eq!(next(2, 6), Next::HandOver);
-    assert_eq!(next(3, 6), Next::Stop);
+    assert_eq!(next(1, false), Next::Write);
+    assert_eq!(next(2, false), Next::HandOver);
+    assert_eq!(next(3, false), Next::Stop);
 
-    assert_eq!(next(1, 0), Next::HandOver);
-    assert_eq!(next(2, 0), Next::Stop);
+    assert_eq!(next(1, true), Next::HandOver);
+    assert_eq!(next(2, true), Next::Stop);
 
     // The default is always the last option, which is *stop*: doing nothing is
     // what an unanswered question gets.
-    assert_eq!(next(stop(6), 6), Next::Stop);
-    assert_eq!(next(stop(0), 0), Next::Stop);
+    assert_eq!(next(stop(6, false), false), Next::Stop);
+    assert_eq!(next(stop(0, true), true), Next::Stop);
 }

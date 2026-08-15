@@ -54,6 +54,17 @@ fn main() -> ExitCode {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let inherited: BTreeMap<String, String> = std::env::vars().collect();
 
+    // **`$VISUAL` then `$EDITOR`, read once here and passed down as a value** —
+    // the same rule that puts `$HOME` and the terminal at the entrypoint
+    // (`ARCHITECTURE.md` §1.4). Only `config scan`'s hand-over reads it, for
+    // the file it just wrote (`docs/reserved/009-smaller-things-raised-in-use.md`
+    // item 2).
+    let editor = inherited
+        .get("VISUAL")
+        .or_else(|| inherited.get("EDITOR"))
+        .filter(|value| !value.is_empty())
+        .cloned();
+
     // **The terminal is ambient state, so it is read here and passed down**
     // (`ARCHITECTURE.md` §1.4) — the same rule that puts cwd and `$HOME` on the
     // three lines above. `NO_COLOR` comes out of the environment map this
@@ -143,7 +154,15 @@ fn main() -> ExitCode {
                         output.exit_code(),
                         &output.to_json(),
                     );
-                    emit(output, json, style, terminal, home.as_deref(), &cwd)
+                    emit(
+                        output,
+                        json,
+                        style,
+                        terminal,
+                        home.as_deref(),
+                        &cwd,
+                        editor.as_deref(),
+                    )
                 }
                 // **A verb that could not answer is Armada's**, always. The
                 // refusals a verb authors — `armada failures show <a typo>` —
@@ -1592,6 +1611,7 @@ fn hand_over(
     terminal: render::term::Terminal,
     home: Option<&std::path::Path>,
     cwd: &std::path::Path,
+    editor: Option<&str>,
 ) {
     let Output::Scan(envelope) = output else {
         return;
@@ -1603,8 +1623,11 @@ fn hand_over(
     // **Nothing is offered to be written over a config that is already
     // here.** `scan` is allowed to run in a configured repository and to report
     // what it found; whether the file still agrees with the repository is drift,
-    // and drift is not built (`docs/reserved/007`).
-    let proposals: &[armada_core::propose::Proposal] = match envelope.data.evidence.config_present {
+    // and drift is not built (`docs/reserved/007`). `config_present` — not
+    // `proposals.is_empty()` — is what keeps the write option off the list:
+    // the two cases look the same by count and mean opposite things.
+    let config_present = envelope.data.evidence.config_present;
+    let proposals: &[armada_core::propose::Proposal] = match config_present {
         true => &[],
         false => &envelope.data.proposals,
     };
@@ -1613,17 +1636,28 @@ fn hand_over(
     let chosen = armada_helm::ask::Ask::choose(
         &mut ask,
         verbs::config::ONBOARD_QUESTION,
-        &verbs::config::onboarding_choices(proposals.len()),
-        verbs::config::stop(proposals.len()),
+        &verbs::config::onboarding_choices(proposals.len(), config_present),
+        verbs::config::stop(proposals.len(), config_present),
     );
-    match verbs::config::next(chosen, proposals.len()) {
+    match verbs::config::next(chosen, config_present) {
         verbs::config::Next::Stop => return,
         verbs::config::Next::Write => {
-            write_err(&match verbs::config::confirm(&mut ask, proposals, cwd) {
-                verbs::config::Wrote::Config(lines) => render::wrote_config(lines, style),
+            let wrote = verbs::config::confirm(&mut ask, proposals, cwd);
+            write_err(&match &wrote {
+                verbs::config::Wrote::Config(lines) => render::wrote_config(*lines, style),
                 verbs::config::Wrote::Nothing => render::wrote_nothing(style),
-                verbs::config::Wrote::Failed(error) => render::error_lines(&error, style),
+                verbs::config::Wrote::Failed(error) => render::error_lines(error, style),
             });
+            // **Only once the write actually happened.** `Nothing` and
+            // `Failed` both mean there is no `armada.yml` to open, and opening
+            // an editor on nothing is not the middle option anyone asked for.
+            if matches!(wrote, verbs::config::Wrote::Config(_)) {
+                if let Err(error) =
+                    verbs::config::open_in_editor(&armada_manifest::process::RealRun, editor, cwd)
+                {
+                    write_err(&render::error_lines(&error, style));
+                }
+            }
             return;
         }
         verbs::config::Next::HandOver => {}
@@ -1685,6 +1719,7 @@ fn emit(
     terminal: render::term::Terminal,
     home: Option<&std::path::Path>,
     cwd: &std::path::Path,
+    editor: Option<&str>,
 ) -> ExitCode {
     // **`mcp serve` reports on stderr, and it is the one verb that must.**
     // stdout *is* the transport: it carried JSON-RPC frames until the moment
@@ -1725,7 +1760,7 @@ fn emit(
         // **After the evidence is written and flushed, never before.** The
         // question is about what the reader has just seen, and a prompt that
         // arrives first is a prompt answered blind.
-        hand_over(&output, style, terminal, home, cwd);
+        hand_over(&output, style, terminal, home, cwd, editor);
     }
     // **A signal has no error class, so it does not get the class's code**
     // (`ARCHITECTURE.md` §1.6). The envelope above still says `aborted`,
