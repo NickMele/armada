@@ -873,6 +873,16 @@ fn collect_children(workspace: &Workspace, it: &mut Loop<'_>, queue: &mut Vec<Ev
 /// and the reading at spawn — and this only says when one has passed. Reading
 /// it out of `State` rather than keeping a second copy is what stops the two
 /// from disagreeing about when a check is late.
+///
+/// **A check gets two of these, not one**, which is the whole of the SIGKILL
+/// escalation: the first when its own deadline passes, and the second when
+/// `schedule::KILL_GRACE_MS` has elapsed on top of the SIGTERM that answered
+/// the first. The reducer escalates on the second and only on the second, so a
+/// shell that reported the deadline once and then fell silent — which is what
+/// this did while it guarded on `stopping.is_none()` — left a check that
+/// ignores SIGTERM running forever with a scheduler that had already decided
+/// to kill it. `schedule::due_at` is the same answer `next_wake` uses, so the
+/// turn the loop wakes for is the turn that finds the check late.
 fn collect_deadlines<R: Run, C: Clock, F: Fetch>(
     app: &App<R, C, F>,
     it: &Loop<'_>,
@@ -881,7 +891,7 @@ fn collect_deadlines<R: Run, C: Clock, F: Fetch>(
     let now = app.ctx.now.mono();
     for (check, entry) in &it.state.checks {
         if let Phase::Running(running) = &entry.phase {
-            if now >= running.deadline_mono && running.stopping.is_none() {
+            if schedule::due_at(running).is_some_and(|due| now >= due) {
                 queue.push(Event::Deadline {
                     check: check.clone(),
                 });

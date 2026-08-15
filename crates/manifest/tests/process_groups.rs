@@ -19,7 +19,7 @@
 
 use armada_core::ctx::{RunRequest, StdioMode};
 use armada_manifest::posix;
-use armada_manifest::process::ProcessGroup;
+use armada_manifest::process::{self, ProcessGroup};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -119,6 +119,24 @@ fn a_sigterm_ignoring_leader_immunises_its_whole_group() {
         "SIGKILL did not clear the group: {report:?}"
     );
     assert_eq!(processes_in_group(group.pgid()), 0);
+}
+
+/// The two graces are one number written twice, and this is what keeps them
+/// equal.
+///
+/// [`process::GRACE`] is waited out inside a blocking `stop_group` for the
+/// one-shot callers; `armada_core::schedule::KILL_GRACE_MS` is the same span
+/// held as a deadline, because a run under `check` has other children to poll
+/// and cannot block on any one of them. The core depends on no crate that owns
+/// a process, so it cannot import the constant — it can only be pinned from
+/// here.
+#[test]
+fn the_grace_matches_the_one_the_process_layer_waits_out() {
+    assert_eq!(
+        process::GRACE.as_millis() as u64,
+        armada_core::schedule::KILL_GRACE_MS,
+        "the blocking grace and the scheduler's have drifted apart"
+    );
 }
 
 /// A service that calls `setsid` itself — ordinary daemonizing — leaves the

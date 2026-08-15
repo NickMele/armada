@@ -49,6 +49,23 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 
+/// How long a check gets between SIGTERM and SIGKILL.
+///
+/// **Five seconds, because that is already the number** — it is
+/// `armada_manifest::process::GRACE` written in the unit the scheduler thinks
+/// in, and the two must not drift: the one-shot callers (`clean`, a `setup:`
+/// step) wait it out inside a blocking `stop_group`, while a run under `check`
+/// cannot block — it has other children to poll — so the same grace has to be
+/// expressed as a deadline the reducer holds. Duplicated as a millisecond
+/// literal rather than imported because the core depends on no crate that owns
+/// a process; `the_grace_matches_the_one_the_process_layer_waits_out` in
+/// `crates/manifest/tests/process_groups.rs` is what keeps them equal.
+///
+/// The size is the process layer's reasoning unchanged: long enough for a
+/// compose stack or a dev server to flush and exit, short enough that a wedged
+/// tree is not something an operator waits out.
+pub const KILL_GRACE_MS: u64 = 5_000;
+
 /// A check's derived id: `<component>:<check>` (PLAN.md §4.1).
 ///
 /// A newtype rather than a `String` for the same reason the two identities are
@@ -286,6 +303,20 @@ pub struct Running {
     pub bytes: usize,
     /// Whether Armada is stopping it, and why.
     pub stopping: Option<Stopping>,
+    /// When SIGTERM was proposed, so [`KILL_GRACE_MS`] can be measured from it.
+    ///
+    /// **This is the escalation's only clock**, and it lives here rather than in
+    /// the shell for the same reason `deadline_mono` does: the shell reads the
+    /// scheduler's reading instead of keeping one of its own, so the two cannot
+    /// disagree about when the grace ran out.
+    #[serde(default)]
+    pub stopping_mono: Option<u64>,
+    /// Whether SIGKILL has already gone out. Escalation happens **once** — a
+    /// second SIGKILL tells the operator nothing and the first one cannot be
+    /// caught, so repeating it would only spin the loop against a group the
+    /// kernel is already tearing down.
+    #[serde(default)]
+    pub escalated: bool,
 }
 
 /// Why Armada is killing a child.
@@ -798,11 +829,27 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
             conclude(&mut state, &check, outcome, &mut actions);
         }
 
+        // **Two visits, and the shell is required to make both.** The first is
+        // the check's own deadline and sends SIGTERM; the second is
+        // [`KILL_GRACE_MS`] elapsing on top of it and sends SIGKILL. The
+        // escalation is unconditional rather than a retry — a leader running
+        // `trap '' TERM` ignores the second SIGTERM exactly as it ignored the
+        // first — so the only thing that ends it is the signal that cannot be
+        // caught.
+        //
+        // `stopping` is not overwritten on the second visit: a run that is
+        // *ending* under the operator escalates through this same arm, and
+        // relabelling it `Deadline` would report a Ctrl-C as a timeout.
         Event::Deadline { check } => {
             if let Some(entry) = state.checks.get_mut(&check) {
                 if let Phase::Running(running) = &mut entry.phase {
                     let escalate = running.stopping.is_some();
-                    running.stopping = Some(Stopping::Deadline);
+                    if escalate {
+                        running.escalated = true;
+                    } else {
+                        running.stopping = Some(Stopping::Deadline);
+                        running.stopping_mono = Some(state.now_mono);
+                    }
                     actions.push(Action::Kill {
                         check: check.clone(),
                         escalate,
@@ -883,17 +930,37 @@ pub fn step(state: State, event: Event) -> (State, Vec<Action>) {
 ///
 /// A thirty-minute check does not stall the loop, because the wake-up is
 /// computed from state rather than from how long any child runs.
+///
+/// **A check already being stopped has a deadline too** — the moment its grace
+/// runs out and SIGTERM becomes SIGKILL. Reporting only the original deadline
+/// would let the loop sleep past the escalation.
 fn next_wake(state: &State) -> u64 {
     let renew_at = state.now_mono.saturating_add(RENEW_INTERVAL_MS);
     state
         .checks
         .values()
         .filter_map(|entry| match &entry.phase {
-            Phase::Running(running) => Some(running.deadline_mono),
+            Phase::Running(running) => due_at(running),
             Phase::Pending | Phase::Waiting(_) | Phase::Done(_) | Phase::Skipped => None,
         })
         .min()
         .map_or(renew_at, |deadline| deadline.min(renew_at))
+}
+
+/// When this running check is next owed an [`Event::Deadline`], if ever.
+///
+/// The single answer to "is this check late?", so the shell's observation and
+/// the scheduler's own wake-up cannot disagree about it. Three cases, and the
+/// third is a check whose SIGKILL has gone out: nothing is owed to it, because
+/// what remains is the kernel reaping and a `ChildExited` reporting it.
+pub fn due_at(running: &Running) -> Option<u64> {
+    match running.stopping {
+        None => Some(running.deadline_mono),
+        Some(_) if running.escalated => None,
+        Some(_) => running
+            .stopping_mono
+            .map(|since| since.saturating_add(KILL_GRACE_MS)),
+    }
 }
 
 /// The verdict a child's exit code produces, given how Armada was treating it.
@@ -1216,6 +1283,8 @@ fn start_ready(state: &mut State, actions: &mut Vec<Action>) {
                 deadline_mono: now.saturating_add(timeout_ms),
                 bytes: 0,
                 stopping: None,
+                stopping_mono: None,
+                escalated: false,
             });
         }
         actions.push(Action::Spawn {
@@ -1257,6 +1326,7 @@ fn prerequisites_met(state: &State, id: &CheckId) -> bool {
 
 /// Stop everything, because the run is ending under it.
 fn end_run(state: &mut State, actions: &mut Vec<Action>) {
+    let now = state.now_mono;
     let ids: Vec<CheckId> = state.checks.keys().cloned().collect();
     for id in ids {
         let Some(entry) = state.checks.get_mut(&id) else {
@@ -1266,6 +1336,11 @@ fn end_run(state: &mut State, actions: &mut Vec<Action>) {
             Phase::Running(running) => {
                 if running.stopping.is_none() {
                     running.stopping = Some(Stopping::Ending);
+                    // Starts the same grace the deadline path uses. A child
+                    // that ignores SIGTERM must not outlive the run that is
+                    // ending under it either, and the escalation arrives
+                    // through `Event::Deadline` for both reasons.
+                    running.stopping_mono = Some(now);
                     actions.push(Action::Kill {
                         check: id.clone(),
                         escalate: false,
@@ -1895,6 +1970,105 @@ mod tests {
                 escalate: true,
             }]
         );
+    }
+
+    /// **The half the reducer test above cannot reach: the second deadline has
+    /// to be askable for.**
+    ///
+    /// That test hands `step` two `Deadline` events and proves the reducer
+    /// escalates on the second. It says nothing about whether anything would
+    /// ever send a second one — and for a release it did not, because the shell
+    /// asked "is this check late?" in its own words and answered "no, it is
+    /// already stopping". So a check that ignored SIGTERM ran forever with a
+    /// scheduler that had already decided to kill it. [`due_at`] is now the
+    /// only place that question is answered, and this pins the answer.
+    #[test]
+    fn a_check_being_stopped_is_still_due_a_deadline_one_grace_later() {
+        let (state, _) = to_running(run(vec![plan("web:e2e")]), "web:e2e");
+        let (state, _) = step(state, Event::Tick { now_mono: 1_000 });
+
+        let running = |state: &State| match &state.checks[&id("web:e2e")].phase {
+            Phase::Running(running) => running.clone(),
+            other => panic!("expected a running check, found {other:?}"),
+        };
+
+        // Before anything stops it, the check's own deadline is what is owed —
+        // 900 s from the reading at spawn, which `to_running` took at zero.
+        assert_eq!(due_at(&running(&state)), Some(900_000));
+
+        let (state, _) = step(
+            state,
+            Event::Deadline {
+                check: id("web:e2e"),
+            },
+        );
+        // SIGTERM went out at the reading the scheduler held, and the SIGKILL
+        // is owed exactly one grace later — **not never**.
+        assert_eq!(due_at(&running(&state)), Some(1_000 + KILL_GRACE_MS));
+        // And the loop is told to wake for it, rather than sleeping through it.
+        // A second later, so the escalation at 6 s is strictly sooner than the
+        // heartbeat at 7 s and the assertion can tell the two apart.
+        let (_, actions) = step(state.clone(), Event::Tick { now_mono: 2_000 });
+        assert!(
+            actions.contains(&Action::Sleep {
+                until_mono: 1_000 + KILL_GRACE_MS
+            }),
+            "the wake-up must be the escalation, not the heartbeat: {actions:?}"
+        );
+
+        let (state, _) = step(
+            state,
+            Event::Deadline {
+                check: id("web:e2e"),
+            },
+        );
+        // SIGKILL cannot be caught, so nothing further is owed: what remains is
+        // the kernel reaping and a `ChildExited` reporting it.
+        assert_eq!(due_at(&running(&state)), None);
+    }
+
+    /// A run ending under the operator uses the same escalation, and **keeps
+    /// saying it was aborted**. Relabelling it `Deadline` on the second visit
+    /// would report a Ctrl-C as a timeout.
+    #[test]
+    fn an_ending_run_escalates_too_and_is_still_reported_as_aborted() {
+        let (state, _) = to_running(run(vec![plan("web:e2e")]), "web:e2e");
+        let (state, _) = step(state, Event::Tick { now_mono: 500 });
+        let (state, _) = step(state, Event::Interrupted);
+
+        let running = |state: &State| match &state.checks[&id("web:e2e")].phase {
+            Phase::Running(running) => running.clone(),
+            other => panic!("expected a running check, found {other:?}"),
+        };
+        assert_eq!(running(&state).stopping, Some(Stopping::Ending));
+        assert_eq!(due_at(&running(&state)), Some(500 + KILL_GRACE_MS));
+
+        let (state, actions) = step(
+            state,
+            Event::Deadline {
+                check: id("web:e2e"),
+            },
+        );
+        assert!(
+            actions.contains(&Action::Kill {
+                check: id("web:e2e"),
+                escalate: true,
+            }),
+            "a child that ignores SIGTERM must not outlive the run: {actions:?}"
+        );
+        assert_eq!(running(&state).stopping, Some(Stopping::Ending));
+
+        let (state, _) = step(
+            state,
+            Event::ChildExited {
+                check: id("web:e2e"),
+                code: 137,
+            },
+        );
+        let Phase::Done(outcome) = &state.checks[&id("web:e2e")].phase else {
+            panic!("the check should have concluded");
+        };
+        assert_eq!(outcome.status, Status::Aborted);
     }
 
     /// **The deadline is the verdict, not the exit code.** A killed child exits
