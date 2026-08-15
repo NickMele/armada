@@ -35,7 +35,7 @@ use std::io::Stderr;
 use armada_core::error::Status;
 
 use super::palette::Role;
-use super::progress::Progress;
+use super::progress::{Planned, Progress};
 use super::style::Style;
 use super::table::{Cell, Span, Table};
 use super::term::Terminal;
@@ -88,23 +88,35 @@ impl RowState {
 /// one.
 pub struct Run {
     /// In plan order, which is the order the final table uses.
-    rows: Vec<(String, RowState)>,
+    rows: Vec<Row>,
     index: BTreeMap<String, usize>,
     /// The last monotonic reading anyone handed in.
     now_mono: u64,
 }
 
+/// One check's row.
+struct Row {
+    id: String,
+    /// Its own deadline, carried so a running row can say what it is.
+    timeout_ms: u64,
+    state: RowState,
+}
+
 impl Run {
     /// A run of these checks, none of them started.
-    pub fn new(checks: &[&str], now_mono: u64) -> Run {
-        let rows: Vec<(String, RowState)> = checks
+    pub fn new(checks: &[Planned<'_>], now_mono: u64) -> Run {
+        let rows: Vec<Row> = checks
             .iter()
-            .map(|id| ((*id).to_string(), RowState::Waiting))
+            .map(|planned| Row {
+                id: planned.id.to_string(),
+                timeout_ms: planned.timeout_ms,
+                state: RowState::Waiting,
+            })
             .collect();
         let index = rows
             .iter()
             .enumerate()
-            .map(|(at, (id, _))| (id.clone(), at))
+            .map(|(at, row)| (row.id.clone(), at))
             .collect();
         Run {
             rows,
@@ -159,7 +171,7 @@ impl Run {
 
     fn row(&mut self, id: &str) -> Option<&mut RowState> {
         let at = *self.index.get(id)?;
-        self.rows.get_mut(at).map(|(_, state)| state)
+        self.rows.get_mut(at).map(|row| &mut row.state)
     }
 
     /// Which rows are drawn, in plan order.
@@ -181,11 +193,11 @@ impl Run {
         // Two passes over the same order, so what survives is still in plan
         // order and a row does not move under the reader's eye as others end.
         for pass in [false, true] {
-            for (at, (_, state)) in self.rows.iter().enumerate() {
+            for (at, row) in self.rows.iter().enumerate() {
                 if room == 0 {
                     break;
                 }
-                if keep[at] || state.is_done() != pass {
+                if keep[at] || row.state.is_done() != pass {
                     continue;
                 }
                 keep[at] = true;
@@ -203,21 +215,28 @@ impl Run {
     fn table(&self) -> Table {
         let mut table = Table::new(columns("check", "detail", true)).indent(2);
         for at in self.visible() {
-            let (id, state) = &self.rows[at];
-            let (detail, elapsed) = match state {
+            let row = &self.rows[at];
+            let (detail, elapsed) = match &row.state {
                 RowState::Waiting => (None, None),
-                RowState::Running { since_mono } => {
-                    (None, Some(self.now_mono.saturating_sub(*since_mono)))
-                }
+                // **A running row says what its own deadline is.** Elapsed
+                // alone cannot be read: seven minutes is alarming against a
+                // one-minute budget and unremarkable against fifteen, and the
+                // run that prompted this was the second and looked like the
+                // first. Nothing here is a hang nobody bounded, and now the row
+                // says so instead of leaving the reader to open `machine.yml`.
+                RowState::Running { since_mono } => (
+                    Some(format!("timeout {}", format::duration(row.timeout_ms))),
+                    Some(self.now_mono.saturating_sub(*since_mono)),
+                ),
                 RowState::Done {
                     elapsed_ms, detail, ..
-                } => (detail.as_deref(), Some(*elapsed_ms)),
+                } => (detail.clone(), Some(*elapsed_ms)),
             };
             table = table.row(vec![
-                verdict(state.status()),
-                Cell::plain(id.clone()),
+                verdict(row.state.status()),
+                Cell::plain(row.id.clone()),
                 match detail {
-                    Some(text) => Cell::muted(text.to_string()),
+                    Some(text) => Cell::muted(text),
                     None => Cell::nothing(),
                 },
                 match elapsed {
@@ -344,7 +363,7 @@ impl Watcher {
 }
 
 impl Progress for Watcher {
-    fn begin(&mut self, checks: &[&str], now_mono: u64) {
+    fn begin(&mut self, checks: &[Planned<'_>], now_mono: u64) {
         self.live = Live::start(Run::new(checks, now_mono), self.style, self.terminal);
     }
 
@@ -415,10 +434,19 @@ mod tests {
             .join("\n")
     }
 
+    /// The machine's documented default, which is what the reported run had.
+    const FIFTEEN_MINUTES: u64 = 900_000;
+
     fn run_of(n: usize) -> Run {
         let ids: Vec<String> = (0..n).map(|i| format!("api:check{i}")).collect();
-        let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
-        Run::new(&refs, 0)
+        let planned: Vec<Planned<'_>> = ids
+            .iter()
+            .map(|id| Planned {
+                id: id.as_str(),
+                timeout_ms: FIFTEEN_MINUTES,
+            })
+            .collect();
+        Run::new(&planned, 0)
     }
 
     /// **Every planned check has a row before anything has started**, which is
@@ -472,6 +500,26 @@ mod tests {
             .expect("a running row");
         assert!(running.contains("api:check1"), "{running}");
         assert!(running.contains("7m"), "{running}");
+    }
+
+    /// **A long-running row says what it is measured against.**
+    ///
+    /// The second half of the same report: seven minutes looked like a hang
+    /// nobody had bounded, and it was a check with thirteen minutes still to go.
+    /// The row carries its own deadline so the reader does not have to open
+    /// `machine.yml` to find out which of those two it is looking at.
+    #[test]
+    fn a_running_row_states_the_budget_it_is_measured_against() {
+        let mut run = run_of(1);
+        run.started("api:check0");
+        run.tick(423_000);
+        let frame = text(&run);
+        assert!(frame.contains("7m 03s"), "{frame}");
+        assert!(frame.contains("timeout 15m"), "{frame}");
+        // And it goes once there is a verdict — the budget mattered while the
+        // answer was still outstanding.
+        run.finished("api:check0", Status::Pass, None);
+        assert!(!text(&run).contains("timeout"), "{}", text(&run));
     }
 
     /// Elapsed runs from the spawn, not from the plan: a check that waited for
@@ -557,5 +605,28 @@ mod tests {
         run.finished("web:e2e", Status::Pass, None);
         assert!(!text(&run).contains("web:e2e"));
         assert_eq!(run.height(), 2);
+    }
+
+    /// A check with its own `timeout:` shows its own, not the machine's.
+    #[test]
+    fn a_check_that_declares_a_deadline_shows_the_one_it_declared() {
+        let mut run = Run::new(
+            &[
+                Planned {
+                    id: "api:quick",
+                    timeout_ms: 30_000,
+                },
+                Planned {
+                    id: "api:e2e",
+                    timeout_ms: FIFTEEN_MINUTES,
+                },
+            ],
+            0,
+        );
+        run.started("api:quick");
+        run.started("api:e2e");
+        let frame = text(&run);
+        assert!(frame.contains("timeout 30.0s"), "{frame}");
+        assert!(frame.contains("timeout 15m"), "{frame}");
     }
 }

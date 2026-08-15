@@ -1778,27 +1778,7 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
         out.push('\n');
     }
 
-    let passed = data
-        .results
-        .iter()
-        .filter(|r| r.status == Status::Pass)
-        .count();
-    let failed = data
-        .results
-        .iter()
-        .filter(|r| {
-            r.status.is_terminal() && r.status != Status::Pass && r.status != Status::Skipped
-        })
-        .count();
-    let skipped = data
-        .results
-        .iter()
-        .filter(|r| r.status == Status::Skipped)
-        .count();
-    let mut facts = vec![format!("{passed} passed"), format!("{failed} failed")];
-    if skipped > 0 {
-        facts.push(format!("{skipped} skipped"));
-    }
+    let facts = check_facts(&data.results);
     // **No aggregate time**, and that is the second place this render departs
     // from the drawing. The envelope carries one duration per check and no wall
     // clock for the run, so the only total available is the sum — which
@@ -1810,6 +1790,68 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
         out.push_str(&error_lines(error, style));
     }
     out
+}
+
+/// The summary line's facts: how many rows reached each state.
+///
+/// **A state that is not `FAILED` is not counted as failed.** The line used to
+/// read `ABORTED  3 passed · 2 failed` over a run whose second number included
+/// the check the operator had just interrupted — a check that reached no verdict
+/// at all. `implied_class` already draws that distinction in the core (an
+/// `ABORTED` row "implies nothing"), and the render contradicted it.
+///
+/// **One state, one word, and the word is the status.** Rather than a fixed
+/// vocabulary of buckets, every terminal state counts under its own name
+/// lowercased — `2 aborted`, `1 timeout` — which is the same rule the rest of
+/// the CLI follows: the human word is the enum's word. A state nobody reached
+/// contributes nothing, so an ordinary run still reads `4 passed · 0 failed`.
+///
+/// `passed` and `failed` are always shown, even at zero: they are the question
+/// the line is being read to answer, and a missing `0 failed` reads as an
+/// omission rather than as a zero.
+fn check_facts(results: &[ResultRow]) -> Vec<String> {
+    // The order a reader wants them: the verdict first, then the ways a run can
+    // end without one, then the rows that were never in question.
+    const ORDER: [Status; 6] = [
+        Status::Pass,
+        Status::Failed,
+        Status::Aborted,
+        Status::Timeout,
+        Status::Dead,
+        Status::Skipped,
+    ];
+    let count = |status: Status| results.iter().filter(|r| r.status == status).count();
+    let mut facts = Vec::new();
+    for status in ORDER {
+        let n = count(status);
+        if n == 0 && !matches!(status, Status::Pass | Status::Failed) {
+            continue;
+        }
+        let word = match status {
+            Status::Pass => "passed".to_string(),
+            Status::Failed => "failed".to_string(),
+            other => other.to_string().to_lowercase(),
+        };
+        facts.push(format!("{n} {word}"));
+    }
+    // Anything terminal that `ORDER` does not name — `PARTIAL`, or a state a
+    // later milestone adds. Counted rather than folded into `failed`, because
+    // being silently miscounted is the defect this function exists to fix.
+    let mut rest: Vec<Status> = results
+        .iter()
+        .map(|r| r.status)
+        .filter(|s| s.is_terminal() && !ORDER.contains(s))
+        .collect();
+    rest.sort_by_key(ToString::to_string);
+    rest.dedup();
+    for status in rest {
+        facts.push(format!(
+            "{} {}",
+            count(status),
+            status.to_string().to_lowercase()
+        ));
+    }
+    facts
 }
 
 fn check_dry(envelope: &Envelope<CheckDryRun>, style: Style, width: usize) -> String {

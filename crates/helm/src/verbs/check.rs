@@ -40,7 +40,7 @@ use std::path::PathBuf;
 
 use crate::app::{self, App};
 use crate::args::Check;
-use crate::render::progress::Progress;
+use crate::render::progress::{Planned, Progress};
 use crate::verbs::{load_config, Output};
 
 /// How long the loop sleeps between turns when it has nothing else to do.
@@ -409,9 +409,17 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     // **By name, before anything runs.** The live table has a row per check
     // from its first frame, so a run that is waiting on a lease still shows
     // what it is waiting to run rather than an empty count.
-    let ids: Vec<&str> = plans.iter().map(|plan| plan.id.as_str()).collect();
-    progress.begin(&ids, app.ctx.now.mono());
-    drop(ids);
+    // Each carries its own deadline, so a row that has been running a while can
+    // say whether that is close to its budget or nowhere near it.
+    let planned: Vec<Planned<'_>> = plans
+        .iter()
+        .map(|plan| Planned {
+            id: plan.id.as_str(),
+            timeout_ms: plan.timeout_ms,
+        })
+        .collect();
+    progress.begin(&planned, app.ctx.now.mono());
+    drop(planned);
 
     let mut loop_state = Loop {
         progress,

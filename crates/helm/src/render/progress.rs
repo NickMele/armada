@@ -22,6 +22,22 @@
 
 use armada_core::error::Status;
 
+/// One check the run is about to attempt, and the budget it has.
+///
+/// **The deadline travels with the name.** A row that shows only how long a
+/// check has been running cannot be read: seven minutes is alarming against a
+/// one-minute budget and unremarkable against fifteen, and the reader has no way
+/// to tell which without opening `machine.yml`. The reported run was the second
+/// case and looked like the first.
+#[derive(Debug, Clone, Copy)]
+pub struct Planned<'a> {
+    /// `<component>:<check>`.
+    pub id: &'a str,
+    /// What this check's own deadline is, in milliseconds — its `timeout:`, or
+    /// the machine's `check_timeout` when it declares none.
+    pub timeout_ms: u64,
+}
+
 /// A run reporting on itself as it goes.
 ///
 /// **Every method has a do-nothing default**, so the silent case is
@@ -34,7 +50,7 @@ pub trait Progress {
     /// **The ids rather than a count**, because the live table has a row per
     /// check from the first frame. A run that could only say `0/5` is the
     /// report that ended the thing this replaced.
-    fn begin(&mut self, _checks: &[&str], _now_mono: u64) {}
+    fn begin(&mut self, _checks: &[Planned<'_>], _now_mono: u64) {}
     /// A check was spawned.
     fn started(&mut self, _id: &str) {}
     /// A check reached a verdict, with the one line explaining it if there is
@@ -70,7 +86,13 @@ mod tests {
     #[test]
     fn the_silent_reporter_has_nowhere_to_write() {
         let mut silent = Silent;
-        silent.begin(&["api:lint"], 0);
+        silent.begin(
+            &[Planned {
+                id: "api:lint",
+                timeout_ms: 900_000,
+            }],
+            0,
+        );
         silent.started("api:lint");
         silent.finished("api:lint", Status::Pass, Some("exited 0"));
         silent.tick(20);

@@ -1,0 +1,15 @@
+run 01M00WRY00CYTZ44                                                    3 checks
+
+  STATUS   CHECK              DETAIL                 TIME
+  PASS     armada:boundaries  -                      1.3s
+  ABORTED  armada:docs        the run was stopped  7m 03s
+  FAILED   armada:test        exited 101            23.0s
+           .armada/run/01M00WRY00CYTZ44/logs/armada.test.log
+
+  STATUS  REAPED  DETAIL
+  reaped  1 run   01M014JQW2NDSDPP
+
+ABORTED  1 passed, 1 failed, 1 aborted
+error: the run was stopped
+  where: armada:docs
+  class: aborted

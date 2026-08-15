@@ -401,6 +401,41 @@ fn a_failing_check_matches_its_fixture() {
     assert_render("check-fail", &output);
 }
 
+/// **An interrupted run**, which is the case the summary line got wrong.
+///
+/// The report was `ABORTED  3 passed · 2 failed` over a run holding one failure
+/// and one check the operator had just stopped. An aborted check reached no
+/// verdict — the core says so in `implied_class` — so counting it as a failure
+/// told the reader a check had gone wrong when what had gone wrong was that they
+/// pressed ctrl-c. `1 failed · 1 aborted` is two facts, and both are true.
+///
+/// It also freezes the `ABORTED` row itself, which no fixture held: the reaped
+/// row and the interrupted row are both from the run that was reported.
+#[test]
+fn an_aborted_check_counts_the_abort_separately() {
+    let mut stopped = ResultRow::new("armada:docs", Status::Aborted);
+    stopped.duration_ms = Some(423_000);
+    stopped.reason = Some("the run was stopped".to_string());
+    let mut output = check_envelope(
+        Status::Aborted,
+        Some(ArmadaError {
+            class: ErrClass::Aborted,
+            r#where: "armada:docs".to_string(),
+            message: "the run was stopped".to_string(),
+            next_action: None,
+        }),
+        vec![
+            check_row("armada:boundaries", Status::Pass, 1_300, None),
+            stopped,
+            check_row("armada:test", Status::Failed, 23_000, Some("exited 101")),
+        ],
+    );
+    if let Output::Check(envelope) = &mut output {
+        envelope.data.reaped_runs = vec!["01M014JQW2NDSDPP".to_string()];
+    }
+    assert_render("check-aborted", &output);
+}
+
 /// `armada manifest clean` on a workspace that owned things.
 #[test]
 fn clean_matches_its_fixture() {
