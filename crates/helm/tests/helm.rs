@@ -1,14 +1,26 @@
 //! `armada helm` end to end, against a scratch `$HOME`.
 //!
 //! **No test here starts a Claude Code session, and none can.** The verb under
-//! test assembles a launch and reports it; `--exec` is refused by name, and
-//! there is no path in the binary that opens one. That refusal is asserted
-//! rather than assumed — see [`entering_is_refused_by_name_and_says_why`], which
-//! is the deliverable of this file and not a detail of it. A gate with no test
-//! is a comment, and the first thing anybody would learn about it silently
-//! coming back on is a bill.
+//! test assembles a launch and reports it; `--exec` is refused unless this
+//! machine has run `armada helm enable`, and a fresh scratch machine never
+//! has. That refusal is asserted rather than assumed — see
+//! [`entering_is_refused_by_name_and_says_why`], which is the deliverable of
+//! this file and not a detail of it. A gate with no test is a comment, and the
+//! first thing anybody would learn about it silently coming back on is a bill.
+//!
+//! **The suite proves the switch decides, and stops there — deliberately.**
+//! [`enable_and_disable_flip_the_switch_machine_yml_records`] proves `armada
+//! helm enable` turns [`armada_helm::verbs::helm::entering_allowed`] on and
+//! `disable` turns it back, and that every surface that reports the state —
+//! `armada helm`'s own envelope, `armada doctor`'s row — agrees with it. What
+//! it does not do, on purpose, is run `armada helm --exec` once the switch is
+//! on: that would attempt a real `exec` into whatever `claude` resolves to on
+//! this machine's `PATH`, which on a developer's own box is the real thing.
+//! Proving the *decision* — off refuses, on does not refuse before the verb
+//! even runs — is the whole of what a test may safely check.
 //!
 //! [`entering_is_refused_by_name_and_says_why`]: entering_is_refused_by_name_and_says_why
+//! [`enable_and_disable_flip_the_switch_machine_yml_records`]: enable_and_disable_flip_the_switch_machine_yml_records
 //!
 //! The scratch machine is [`support::Machine`]: its own `$HOME`, so the guild,
 //! the projection and `~/.armada/helm/` are all a `TempDir` and never the
@@ -440,13 +452,101 @@ fn entering_is_refused_by_name_and_says_why() {
         "the refusal reads as a typo rather than a decision: {said}"
     );
     assert!(said.contains("--exec"), "{said}");
-    // The reason, and that it is temporary.
+    // The reason, and the exact verb that lifts it — named, not paraphrased,
+    // so a caller can paste it rather than guess at the spelling.
+    assert!(said.contains("off on this machine"), "{said}");
+    assert!(said.contains("armada helm enable"), "{said}");
+}
+
+/// **A fresh install cannot exec, on the machine that has never asked.** This
+/// is the requirement the switch exists to satisfy, stated as a test on its
+/// own rather than folded into the refusal test above: `--json` and the
+/// exit code, not just the words on stderr.
+#[test]
+fn a_fresh_install_refuses_exec_by_default() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+
+    let out = machine.run(machine.root.path(), &["helm", "--exec", "--json"]);
+    assert_eq!(out.status.code(), Some(2));
+    let envelope: Value = serde_json::from_slice(&out.stdout).expect("an envelope");
+    assert_eq!(envelope["error"]["class"], "bad_invocation");
     assert!(
-        said.contains("switched off until the Bridge is fixed"),
-        "{said}"
+        !helm_home(&machine).exists(),
+        "a refused --exec on a fresh install wrote {:?}",
+        helm_home(&machine)
     );
-    // And a way forward, because `armada helm` has already printed the command.
-    assert!(said.contains("armada helm"), "{said}");
+}
+
+/// **The deliverable for the switch itself.** `armada helm enable` flips
+/// `helm.enter` in `~/.armada/machine.yml` and reports it; `armada helm
+/// disable` puts it back; every surface that answers "is entering on"
+/// agrees, including `armada helm`'s own envelope. This is as far as a test
+/// may safely go — see this file's header for why `--exec` itself is never
+/// run once the switch is on.
+#[test]
+fn enable_and_disable_flip_the_switch_machine_yml_records() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+    let armada_home = machine.home.path().join(".armada");
+
+    assert!(
+        !armada_helm::verbs::helm::entering_allowed(&armada_home),
+        "a fresh machine already allows entering"
+    );
+
+    let enabled = machine.run(machine.root.path(), &["helm", "enable", "--json"]);
+    assert!(enabled.status.success());
+    let envelope: Value = serde_json::from_slice(&enabled.stdout).expect("an envelope");
+    assert_eq!(envelope["data"]["entering"], true);
+    assert_eq!(envelope["data"]["changed"], true);
+    assert!(armada_helm::verbs::helm::entering_allowed(&armada_home));
+
+    // **A second `enable` changes nothing and says so** — the same rule
+    // every other idempotent write in this suite follows.
+    let again = machine.run(machine.root.path(), &["helm", "enable", "--json"]);
+    let envelope: Value = serde_json::from_slice(&again.stdout).expect("an envelope");
+    assert_eq!(envelope["data"]["changed"], false, "{envelope:#}");
+
+    // **`armada helm` itself now reports entering as on**, without having
+    // been asked to enter — the read side agrees with the write side.
+    let helm = machine.run(machine.root.path(), &["helm", "--json"]);
+    let envelope: Value = serde_json::from_slice(&helm.stdout).expect("an envelope");
+    assert_eq!(envelope["data"]["entering"], true, "{envelope:#}");
+    assert_eq!(
+        envelope["data"]["launched"], false,
+        "reporting the switch as on must not itself start anything"
+    );
+
+    let disabled = machine.run(machine.root.path(), &["helm", "disable", "--json"]);
+    let envelope: Value = serde_json::from_slice(&disabled.stdout).expect("an envelope");
+    assert_eq!(envelope["data"]["entering"], false);
+    assert_eq!(envelope["data"]["changed"], true);
+    assert!(!armada_helm::verbs::helm::entering_allowed(&armada_home));
+
+    // Refused again, now that it is back off.
+    let out = machine.run(machine.root.path(), &["helm", "--exec"]);
+    assert_eq!(out.status.code(), Some(2));
+}
+
+/// **`enable`/`disable` need none of Helm's own readiness.** A machine with
+/// no guild at all can still flip the switch — whether a session is *allowed*
+/// here and whether the guild and persona currently exist to run one are
+/// different questions, and this proves the first does not accidentally
+/// require the second.
+#[test]
+fn enabling_needs_no_guild_and_touches_nothing_helm_itself_writes() {
+    let machine = Machine::new();
+    let armada_home = machine.home.path().join(".armada");
+
+    let out = machine.run(machine.root.path(), &["helm", "enable", "--json"]);
+    assert!(out.status.success(), "{:?}", out.stderr);
+    assert!(armada_helm::verbs::helm::entering_allowed(&armada_home));
+    assert!(
+        !helm_home(&machine).exists(),
+        "enabling the switch wrote {:?}, which only `armada helm` should",
+        helm_home(&machine)
+    );
 }
 
 /// The same refusal in the envelope: a class an agent can branch on, a `where`
@@ -580,9 +680,10 @@ fn the_default_says_out_loud_that_it_started_nothing() {
 }
 
 /// `armada helm --help` tells the truth about all three: the launch is
-/// assembled, entering is off, and there is still no `helm` binary.
+/// assembled, entering is gated by a machine switch rather than always
+/// refused, and there is still no `helm` binary.
 #[test]
-fn the_page_says_the_launch_is_built_and_entering_is_off() {
+fn the_page_says_the_launch_is_built_and_entering_is_gated() {
     let machine = Machine::new();
     let out = machine.run(machine.root.path(), &["helm", "--help"]);
     assert!(out.status.success());
@@ -592,16 +693,34 @@ fn the_page_says_the_launch_is_built_and_entering_is_off() {
         "the flag is not on its own page: {page}"
     );
     assert!(page.contains("assembled and verified"), "{page}");
+    assert!(page.contains("armada helm enable"), "{page}");
+    assert!(page.contains("armada helm disable"), "{page}");
     assert!(
-        page.contains("switched off until the Bridge is fixed"),
-        "{page}"
-    );
-    assert!(
-        page.contains("no\n  path in this binary opens a session")
-            || page.contains("path in this binary opens a session"),
-        "{page}"
+        page.contains("off on a fresh install"),
+        "the page does not say what a caller who has never run enable gets: {page}"
     );
     assert!(page.contains("There is no `helm` binary"), "{page}");
+}
+
+/// `armada helm enable --help` and `armada helm disable --help` are their own
+/// pages, not the launch's — a caller asking about the switch must not be
+/// handed the unrelated `--agent`/`--new` page.
+#[test]
+fn enable_and_disable_answer_their_own_help() {
+    let machine = Machine::new();
+    for verb in ["enable", "disable"] {
+        let out = machine.run(machine.root.path(), &["helm", verb, "--help"]);
+        assert!(out.status.success());
+        let page = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            page.contains(&format!("armada helm {verb}")),
+            "`armada helm {verb} --help` did not draw its own page: {page}"
+        );
+        assert!(
+            !page.contains("--agent"),
+            "`armada helm {verb} --help` drew the launch's page: {page}"
+        );
+    }
 }
 
 /// **Bare `armada` is the orientation page and starts nothing.** PLAN.md §15.1

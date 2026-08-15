@@ -31,9 +31,10 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
-    GuildSyncData, HelmData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData,
-    PauseData, ProbeData, Projection, ReapPlanData, ReportData, ResumeData, ScanData, ServicesData,
-    ShowData, SkillsData, SpawnData, StatusData, TickData, UpDryRun, VerdictData, VerifyData,
+    GuildSyncData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun, KillData,
+    MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
+    ResumeData, ScanData, ServicesData, ShowData, SkillsData, SpawnData, StatusData, TickData,
+    UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -108,6 +109,9 @@ pub enum Output {
     /// `armada helm` — the assembled launch. **Nothing has been started**; the
     /// envelope reports the command that would start it.
     Helm(Box<Envelope<HelmData>>),
+    /// `armada helm enable` and `armada helm disable` — the machine switch
+    /// that gates `--exec`, flipped.
+    HelmSwitch(Box<Envelope<HelmSwitchData>>),
     /// `armada fleet show` — one Job, and why it wants you.
     Show(Box<Envelope<ShowData>>),
     /// `armada fleet board`.
@@ -175,6 +179,7 @@ impl Output {
             Output::FleetLs(e) => e.to_json(),
             Output::Bridge(e) => e.to_json(),
             Output::Helm(e) => e.to_json(),
+            Output::HelmSwitch(e) => e.to_json(),
             Output::Show(e) => e.to_json(),
             Output::Board(e) => e.to_json(),
             Output::Kill(e) => e.to_json(),
@@ -243,6 +248,7 @@ impl Output {
             Output::FleetLs(e) => e.exit_code(),
             Output::Bridge(e) => e.exit_code(),
             Output::Helm(e) => e.exit_code(),
+            Output::HelmSwitch(e) => e.exit_code(),
             Output::Show(e) => e.exit_code(),
             Output::Board(e) => e.exit_code(),
             Output::Kill(e) => e.exit_code(),

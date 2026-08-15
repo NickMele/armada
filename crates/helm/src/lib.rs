@@ -11,6 +11,7 @@ pub mod app;
 pub mod args;
 pub mod ask;
 pub mod bridge;
+pub mod machine;
 pub mod mcp;
 pub mod redact;
 pub mod render;

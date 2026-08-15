@@ -105,6 +105,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "serde_yaml_ng",
  "tempfile",
  "terminal_size",
  "tokio",

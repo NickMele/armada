@@ -273,8 +273,9 @@ fn helm_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
             "helm argv",
             Settled::Ok,
             format!(
-                "{} flags accepted; run `armada helm` to wire the inbox",
-                helm::FLAGS.len()
+                "{} flags accepted; run `armada helm` to wire the inbox; entering is {}",
+                helm::FLAGS.len(),
+                entering_word(armada_home)
             ),
         );
     }
@@ -295,21 +296,22 @@ fn helm_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
         Ok(output) if output.ok() => Finding::settled(
             "helm argv",
             Settled::Ok,
-            // **The row says what was checked and that entering is off**, in
-            // that order, because both are true and a reader who saw only the
-            // first would conclude `armada helm` opens a session.
+            // **The row says what was checked and whether entering is on**,
+            // in that order, because a reader who saw only the first would
+            // conclude `armada helm` opens a session either way.
             //
-            // **It gives the state and not the reason**, which is the one place
-            // that phrasing is not read from
+            // **It gives the state and not the reason**, which is the one
+            // place that phrasing is not read from
             // [`ENTER_IS_OFF`](crate::verbs::helm::ENTER_IS_OFF) — and
-            // deliberately. A `doctor` detail is a table cell about sixty-five
-            // columns wide; the full sentence truncates to *"entering switched
-            // off until t…"*, and half a reason mid-word is worse than a short
-            // one. The reason is on `armada helm --help` and in the refusal
-            // itself, which are the two surfaces a reader reaches for next.
+            // deliberately. A `doctor` detail is a table cell about
+            // sixty-five columns wide; the full refusal truncates mid-word,
+            // and half a reason is worse than a short state. `armada helm
+            // --help` and `armada helm enable --help` are the two surfaces a
+            // reader reaches for next.
             format!(
-                "{} flags accepted, monitor validates; entering is off",
-                helm::FLAGS.len()
+                "{} flags accepted, monitor validates; entering is {}",
+                helm::FLAGS.len(),
+                entering_word(armada_home)
             ),
         ),
         Ok(output) => Finding::needs(
@@ -327,6 +329,19 @@ fn helm_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
             "`claude plugin validate` would not run",
             "check `claude` runs",
         ),
+    }
+}
+
+/// `"on"` or `"off"` — the word this row's detail carries, read from the same
+/// switch [`crate::verbs::helm::entering_is_off`] refuses against.
+///
+/// **A word, never the full sentence.** [`helm_argv`]'s two call sites explain
+/// why: the column truncates a reason mid-word, and does not truncate a word
+/// this short.
+fn entering_word(armada_home: &Path) -> &'static str {
+    match crate::machine::read(armada_home).enter {
+        true => "on",
+        false => "off",
     }
 }
 
@@ -898,6 +913,25 @@ mod tests {
         // The `DETAIL` column a `doctor` row draws into. Measured against the
         // real render: the full reason truncates here, which is why this row
         // carries the state and sends the reader to `armada helm --help`.
+        assert!(
+            finding.detail.len() <= 64,
+            "the row truncates: {} columns — {finding:?}",
+            finding.detail.len()
+        );
+    }
+
+    /// **`doctor` tells the truth once this machine has said yes.** The same
+    /// row, the same column budget, and the one word that changed — which is
+    /// the whole of what `armada helm enable` is supposed to move.
+    #[test]
+    fn the_row_says_entering_is_on_once_this_machine_has_enabled_it() {
+        let home = a_wired_machine();
+        crate::machine::set_enter(home.path(), true).unwrap();
+        let run = Helm::healthy();
+        let finding = helm_argv(&run, Path::new("/tmp"), home.path());
+
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.detail.contains("entering is on"), "{finding:?}");
         assert!(
             finding.detail.len() <= 64,
             "the row truncates: {} columns — {finding:?}",
