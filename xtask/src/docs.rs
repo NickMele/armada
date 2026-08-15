@@ -1,6 +1,6 @@
 //! Shared loading of the documentation corpus.
 //!
-//! Every check works from the same six files and the same fenced-block
+//! Every check works from the same set of files and the same fenced-block
 //! extraction, so both live here rather than being reimplemented per check —
 //! two extractors that disagree would make a green lint meaningless.
 
@@ -8,8 +8,11 @@ use std::path::{Path, PathBuf};
 
 /// The corpus, by the short name a cross-reference uses to attribute a `§`.
 ///
-/// Ordered as `ARCHITECTURE.md` §2.8 orders precedence, so reports read in the
-/// order the documents actually rank.
+/// The first six are ordered as `ARCHITECTURE.md` §2.8 orders precedence, so
+/// reports read in the order the documents actually rank. `docs/reserved/*`
+/// follows: one reserved design per file (docs/PLAN.md §15.3), none of which
+/// define a `§`-numbered heading of their own, so their order does not matter
+/// to xref resolution — only that they are read at all.
 pub const FILES: &[(&str, &str)] = &[
     ("traps.md", "docs/traps.md"),
     ("ARCHITECTURE.md", "docs/ARCHITECTURE.md"),
@@ -17,6 +20,16 @@ pub const FILES: &[(&str, &str)] = &[
     ("PHASES.md", "docs/PHASES.md"),
     ("AGENTS.md", "AGENTS.md"),
     ("README.md", "README.md"),
+    ("reserved/README.md", "docs/reserved/README.md"),
+    ("001-raised-items-need-identity.md", "docs/reserved/001-raised-items-need-identity.md"),
+    ("002-tasks.md", "docs/reserved/002-tasks.md"),
+    ("003-bridge-command-centre.md", "docs/reserved/003-bridge-command-centre.md"),
+    ("004-guild-inventory.md", "docs/reserved/004-guild-inventory.md"),
+    ("005-inbox-label-not-identity.md", "docs/reserved/005-inbox-label-not-identity.md"),
+    ("006-guild-has-no-way-to-learn.md", "docs/reserved/006-guild-has-no-way-to-learn.md"),
+    ("007-scanner-should-propose.md", "docs/reserved/007-scanner-should-propose.md"),
+    ("008-armada-injects-its-own-skills.md", "docs/reserved/008-armada-injects-its-own-skills.md"),
+    ("009-smaller-things-raised-in-use.md", "docs/reserved/009-smaller-things-raised-in-use.md"),
 ];
 
 pub struct Doc {

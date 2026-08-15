@@ -1,0 +1,23 @@
+# Reserved designs
+
+Items Armada's own use has raised — a gap, a bug, a thing worth building next — recorded here
+one file per item so each can carry a status and be referenced by id instead of by a `§` that
+moves every time another is added. Formerly `PLAN.md`'s numbered subsections 15.3.1 through
+15.3.9; see [`PLAN.md`](../PLAN.md) §15.3 for the inbox mechanism these build on.
+
+Numbered in the order each was thought of. Numbers are never reused or reassigned.
+
+| id | title | status | module | hook |
+|---|---|---|---|---|
+| [001](001-raised-items-need-identity.md) | Raised items need identity | RESERVED | helm | An item Helm surfaces in prose has no id to acknowledge against |
+| [002](002-tasks.md) | Tasks | RESERVED | helm | Capture a thing to do without spending anything on it yet |
+| [003](003-bridge-command-centre.md) | The Bridge as the command centre | RESERVED | helm | One screen for Fleet, Manifest and Guild, not three |
+| [004](004-guild-inventory.md) | Seeing what is in your guild | BUILT | guild | `armada guild ls` / `show` — no verb showed you what you had |
+| [005](005-inbox-label-not-identity.md) | The inbox records a label, not an identity | BUG | fleet | Inbox entries keyed by Job name collide; should be uuid |
+| [006](006-guild-has-no-way-to-learn.md) | The guild has no way to learn | RESERVED | guild | No provenance means no path for Armada's own updates to reach an existing guild |
+| [007](007-scanner-should-propose.md) | The scanner should propose, not only report | RESERVED | manifest | Deterministic findings (package manager, workspaces, exact-name checks) should become proposals, not just report text |
+| [008](008-armada-injects-its-own-skills.md) | Armada injects its own skills | RESERVED | cross-cutting | Drones need Armada's own tools and the standing to propose manifest/guild changes |
+| [009](009-smaller-things-raised-in-use.md) | Smaller things raised in use, each with its reason | RESERVED | cross-cutting | Five small gaps — `doctor` health, `config scan`'s missing middle option, guild remote status, sync prompts, `--help` drift |
+
+**When Armada's task system exists** ([002](002-tasks.md)), these become its first rows — one
+file per row is what makes that a script rather than a rewrite.
