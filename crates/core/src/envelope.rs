@@ -2021,6 +2021,16 @@ pub struct HelmData {
     /// — including Armada's own `--exec`, which is the one consumer that must
     /// not.
     pub argv: Vec<String>,
+    /// The same launch as **one line a person can read and paste**.
+    ///
+    /// **Not a second source of truth — derived from [`Self::argv`]** by
+    /// `armada_core::helm::launch_line`, which replaces the appended system
+    /// prompt with `"$(cat ~/.armada/helm/guild-voice.md)"` and leaves every
+    /// other word alone. The reader's own `voice.md`, `expectations.md` and
+    /// `how-i-work.md` are inlined into the argv as bytes, which is what makes
+    /// them binding; joining that vector for the screen would print several
+    /// kilobytes of their own prose where the one pasteable line goes.
+    pub command: String,
     /// What was wired, one row each.
     pub results: Vec<Wired>,
     /// Whether this invocation entered the session. **Always false**: a

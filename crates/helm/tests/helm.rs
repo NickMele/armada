@@ -41,7 +41,13 @@ use std::path::{Path, PathBuf};
 use support::Machine;
 
 /// A machine with a guild, a Helm persona, and that persona projected onto
-/// Claude Code's load path — the three things `armada helm` refuses without.
+/// Claude Code's load path — the three things `armada helm` refuses without —
+/// **and three memory fragments their owner has actually written**.
+///
+/// The fragments are here rather than in one test because a guild whose owner
+/// has written it is the ordinary case, and the launch is different on such a
+/// machine: their words are in the argv. The other case — a guild still holding
+/// Armada's example text — is [`an_unwritten_guild_injects_nothing_and_says_so`].
 fn a_machine_ready_for_helm(machine: &Machine) {
     let home = machine.home.path();
     let guild = home.join(".armada/guild");
@@ -52,8 +58,30 @@ fn a_machine_ready_for_helm(machine: &Machine) {
         include_str!("../../../templates/guild/subagents/helm.md"),
     )
     .unwrap();
+    for (name, body) in FRAGMENTS {
+        std::fs::write(guild.join(name), body).unwrap();
+    }
     project(machine, "helm");
 }
+
+/// Three memory fragments as somebody who had written them would leave them:
+/// no `armada:unedited` marker, and a sentence each that appears nowhere else.
+///
+/// **Written for this suite and belonging to nobody.** This repository is
+/// public, and a fixture is the easiest place for a real person's own memory
+/// file to end up in it; a distinctive sentence is all a test needs to prove the
+/// prose travelled.
+const FRAGMENTS: [(&str, &str); 3] = [
+    ("voice.md", "# Voice\n\nOne line, then stop.\n"),
+    (
+        "expectations.md",
+        "# Expectations\n\nA green suite, or name the red test.\n",
+    ),
+    (
+        "how-i-work.md",
+        "# How I work\n\nNever on the default branch.\n",
+    ),
+];
 
 /// Put a persona where Claude Code reads it, which is what `armada guild
 /// project` does.
@@ -108,8 +136,27 @@ fn the_first_launch_is_assembled_and_nothing_is_started() {
     );
 
     let root = helm_home(&machine);
+    let argv = argv_of(&envelope);
+
+    // **The reader's own words, in the argv, as bytes.** This is the assertion
+    // the change exists for: the persona instructs Helm to read the three
+    // fragments and Helm has no `Read` tool, so until they were injected the
+    // instruction was inert and nothing said so.
+    assert_eq!(argv[3], "--append-system-prompt", "{argv:?}");
+    for (name, body) in FRAGMENTS {
+        let sentence = body.lines().last().unwrap();
+        assert!(
+            argv[4].contains(sentence),
+            "`{name}` did not reach the launch: {}",
+            argv[4]
+        );
+    }
+
+    // Everything else is the launch it always was, in the same order.
+    let mut without_voice = argv.clone();
+    without_voice.drain(3..5);
     assert_eq!(
-        argv_of(&envelope),
+        without_voice,
         [
             "claude".to_string(),
             "--agent".to_string(),
@@ -123,6 +170,122 @@ fn the_first_launch_is_assembled_and_nothing_is_started() {
             "--session-id".to_string(),
             data["uuid"].as_str().unwrap().to_string(),
         ]
+    );
+}
+
+/// **The printed line is the argv, and the file is what makes it so.**
+///
+/// `armada helm` prints one line for a person to paste. It cannot paste twenty
+/// kilobytes of their own prose, so the appended prompt is written to
+/// `~/.armada/helm/guild-voice.md` and the line reads it back with `"$(cat …)"`
+/// — which reproduces the argv byte for byte, or the two renderings of one
+/// hand-over disagree in the one place a reader has no way to check.
+#[test]
+fn the_line_a_reader_pastes_reproduces_the_launch_exactly() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+
+    let envelope = helm_json(&machine, &[]);
+    let argv = argv_of(&envelope);
+    let command = envelope["data"]["command"].as_str().expect("the line");
+    let document = helm_home(&machine).join("guild-voice.md");
+
+    assert!(
+        command.contains("--append-system-prompt \"$(cat ~/.armada/helm/guild-voice.md)\""),
+        "{command}"
+    );
+    assert!(
+        !command.contains("One line, then stop."),
+        "the prose was pasted into the line: {command}"
+    );
+    assert!(!command.contains('\n'), "{command}");
+
+    // `$(cat …)` strips the trailing newline every text file ends with, which
+    // is why the document is the prompt plus exactly one.
+    let on_disk = std::fs::read_to_string(&document).expect("the launch wrote it");
+    assert_eq!(on_disk.trim_end_matches('\n'), argv[4]);
+    assert_eq!(on_disk, format!("{}\n", argv[4]));
+    // And no absolute home in a line meant to be pasted and screen-shared.
+    assert!(!command.contains("/Users/"), "{command}");
+    assert!(!command.contains("/home/"), "{command}");
+}
+
+/// **A guild nobody has written yet injects nothing, and the launch says so.**
+///
+/// The three fragments ship holding Armada's example text, which `armada guild
+/// ls` reports as *still Armada's example text*. Appending it would make
+/// Armada's boilerplate binding in the reader's name, and the persona's own
+/// defaults already cover the same ground. The row is the half that matters: a
+/// launch that quietly appended nothing looks exactly like one that appended
+/// everything, and that is how the instruction sat unread in the persona for as
+/// long as it did.
+#[test]
+fn an_unwritten_guild_injects_nothing_and_says_so() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+    let guild = machine.home.path().join(".armada/guild");
+    for (name, _) in FRAGMENTS {
+        // What `armada guild init` leaves behind when import found nothing.
+        std::fs::write(
+            guild.join(name),
+            "<!-- armada:unedited example -->\n\n# Voice\n\n- Lead with the answer.\n",
+        )
+        .unwrap();
+    }
+
+    let envelope = helm_json(&machine, &[]);
+    let argv = argv_of(&envelope);
+    assert!(
+        !argv.iter().any(|word| word == "--append-system-prompt"),
+        "Armada's own example text was made binding: {argv:?}"
+    );
+    assert!(
+        !argv
+            .iter()
+            .any(|word| word.contains("Lead with the answer")),
+        "{argv:?}"
+    );
+
+    let row = envelope["data"]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["what"] == "voice")
+        .expect("a launch that appended nothing still says so");
+    let detail = row["detail"].as_str().unwrap();
+    assert!(detail.contains("none yet"), "{detail}");
+    assert!(detail.contains("armada guild edit voice.md"), "{detail}");
+    assert!(
+        !helm_home(&machine).join("guild-voice.md").exists(),
+        "a document was written for a voice that does not exist"
+    );
+}
+
+/// A fragment the reader deleted, or one that is nothing but whitespace, is
+/// skipped as quietly as one that is still Armada's — and the two that remain
+/// still travel. A missing file is not a reason to refuse a launch.
+#[test]
+fn the_fragments_that_exist_travel_and_the_missing_ones_are_skipped() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+    let guild = machine.home.path().join(".armada/guild");
+    std::fs::remove_file(guild.join("expectations.md")).unwrap();
+    std::fs::write(guild.join("how-i-work.md"), "   \n\n").unwrap();
+
+    let envelope = helm_json(&machine, &[]);
+    let argv = argv_of(&envelope);
+    assert!(argv[4].contains("One line, then stop."), "{}", argv[4]);
+    assert!(!argv[4].contains("how-i-work.md"), "{}", argv[4]);
+
+    let row = envelope["data"]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["what"] == "voice")
+        .expect("the row is always there");
+    assert_eq!(
+        row["detail"], "voice.md: your words, and they outrank the persona",
+        "{row:#}"
     );
 }
 

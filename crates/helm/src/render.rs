@@ -1018,10 +1018,17 @@ fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
     // **The command, whole, and never elided.** It is the one line here meant to
     // be copied, and a `…` in the middle of it produces an argv that starts an
     // unconfigured session rather than one that starts nothing.
+    //
+    // **`command`, not `argv.join(" ")`.** The reader's own `voice.md`,
+    // `expectations.md` and `how-i-work.md` are inlined into the argv as bytes,
+    // which is what makes them binding; joining that vector would print several
+    // kilobytes of their own prose where one pasteable line goes. `command` is
+    // the same launch with that one element written `"$(cat …)"`, which is what
+    // a person would type to produce exactly the argv above.
     out.push_str(&format!(
         "  {} {}\n\n",
         style.strong(Role::SignalAmber, "enter with"),
-        data.argv.join(" ")
+        data.command
     ));
     out.push_str(&summary(
         style,

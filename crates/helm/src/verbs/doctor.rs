@@ -802,6 +802,20 @@ mod tests {
                 seen: std::cell::RefCell::new(Vec::new()),
             }
         }
+
+        /// A later `claude` that has dropped one flag Armada's launch uses —
+        /// the failure the whole check exists for, one flag at a time.
+        fn without(flag: &str) -> Helm {
+            Helm {
+                flags: armada_core::helm::FLAGS
+                    .iter()
+                    .filter(|offered| **offered != flag)
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                ..Helm::healthy()
+            }
+        }
     }
 
     impl Run for Helm {
@@ -855,7 +869,32 @@ mod tests {
         let run = Helm::healthy();
         let finding = helm_argv(&run, Path::new("/tmp"), Path::new("/nonexistent"));
         assert_eq!(finding.status, Health::Ok);
-        assert!(finding.detail.contains("6 flags accepted"), "{finding:?}");
+        assert!(finding.detail.contains("7 flags accepted"), "{finding:?}");
+        // **`--append-system-prompt` is one of the seven, and this is the whole
+        // of the preflight for it.** It is what carries the reader's own
+        // `voice.md`, `expectations.md` and `how-i-work.md` into the session; a
+        // release that renamed it would otherwise surface as a Helm that will
+        // not start at all, in the one session the reader cannot ask Armada
+        // about — because Helm is how they ask.
+        assert!(
+            armada_core::helm::FLAGS.contains(&armada_core::helm::APPEND),
+            "the flag that carries the reader's voice is not checked at all"
+        );
+    }
+
+    /// **A `claude` that has dropped `--append-system-prompt` is reported by
+    /// name.** Asserting the argv proves Armada built the string it meant to;
+    /// this is the half that proves the binary still accepts it, and it is the
+    /// reason the flag was added to `helm::FLAGS` rather than only to the argv.
+    #[test]
+    fn a_claude_that_no_longer_appends_a_system_prompt_is_a_finding() {
+        let run = Helm::without(armada_core::helm::APPEND);
+        let finding = helm_argv(&run, Path::new("/tmp"), Path::new("/nonexistent"));
+        assert_eq!(finding.status, Health::Missing);
+        assert!(
+            finding.detail.contains(armada_core::helm::APPEND),
+            "{finding:?}"
+        );
     }
 
     /// **`doctor` never opens a Helm session, and this is the assertion that

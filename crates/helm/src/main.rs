@@ -936,11 +936,15 @@ fn helm_exec(place: &verbs::helm::Where, output: &Output) -> Result<(), ArmadaEr
         .args(&data.argv[1..])
         .exec();
 
+    // **The printed line, not the argv.** The argv carries the reader's own
+    // `voice.md` inline; an error that pasted it would answer a failed exec with
+    // several kilobytes of their prose, and the one thing they need — the
+    // command to run themselves — would be somewhere in the middle of it.
     Err(ArmadaError {
         class: ErrClass::Environment,
-        r#where: data.argv.join(" "),
+        r#where: data.command.clone(),
         message: format!("could not enter Helm: {error}"),
-        next_action: Some(format!("run it yourself: {}", data.argv.join(" "))),
+        next_action: Some(format!("run it yourself: {}", data.command)),
     })
 }
 
