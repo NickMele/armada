@@ -2350,7 +2350,12 @@ pub struct VerdictData {
 }
 
 /// One thing a verdict rests on.
-#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
+///
+/// `Eq` as well as `PartialEq`, because every field is a string or an integer
+/// and [`crate::fleet::gate`] compares whole outcomes in its tests — an
+/// assertion on *the evidence a predicate rested on* is the assertion worth
+/// making about a gate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct Evidence {
     /// What kind of thing produced it — `check`, `command`.
     pub kind: String,
