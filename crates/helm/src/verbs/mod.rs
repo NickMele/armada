@@ -13,6 +13,7 @@ pub mod components;
 pub mod config;
 pub mod dispatch;
 pub mod doctor;
+pub mod failures;
 pub mod fleet;
 pub mod guild;
 pub mod helm;
@@ -27,11 +28,11 @@ use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
-    CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
-    GuildChangeData, GuildInitData, GuildItemData, GuildListData, GuildSyncData, HelmData,
-    InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData,
-    Projection, ReapPlanData, ReportData, ResumeData, ScanData, ServicesData, ShowData, SkillsData,
-    SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
+    CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
+    FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
+    GuildSyncData, HelmData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData,
+    PauseData, ProbeData, Projection, ReapPlanData, ReportData, ResumeData, ScanData, ServicesData,
+    ShowData, SkillsData, SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -93,6 +94,10 @@ pub enum Output {
     GuildItem(Box<Envelope<GuildItemData>>),
     /// `armada guild edit` and `armada guild delete` — one item, changed.
     GuildChange(Box<Envelope<GuildChangeData>>),
+    /// `armada failures`, and `armada failures clear`.
+    Failures(Box<Envelope<FailuresData>>),
+    /// `armada failures show <id>` — one failure, whole.
+    Failure(Box<Envelope<FailureData>>),
     /// `armada fleet spawn`.
     Spawn(Box<Envelope<SpawnData>>),
     /// `armada fleet ls`.
@@ -161,6 +166,8 @@ impl Output {
             Output::GuildList(e) => e.to_json(),
             Output::GuildItem(e) => e.to_json(),
             Output::GuildChange(e) => e.to_json(),
+            Output::Failures(e) => e.to_json(),
+            Output::Failure(e) => e.to_json(),
             Output::Spawn(e) => e.to_json(),
             Output::FleetLs(e) => e.to_json(),
             Output::Bridge(e) => e.to_json(),
@@ -226,6 +233,8 @@ impl Output {
             Output::GuildList(e) => e.exit_code(),
             Output::GuildItem(e) => e.exit_code(),
             Output::GuildChange(e) => e.exit_code(),
+            Output::Failures(e) => e.exit_code(),
+            Output::Failure(e) => e.exit_code(),
             Output::Spawn(e) => e.exit_code(),
             Output::FleetLs(e) => e.exit_code(),
             Output::Bridge(e) => e.exit_code(),

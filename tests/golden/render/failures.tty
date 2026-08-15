@@ -1,0 +1,6 @@
+  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mID[0m        [1m[38;2;156;163;175mDETAIL[0m                                                  [1m[38;2;156;163;175mTIME[0m
+  [38;2;255;180;84mOPEN[0m    [38;2;76;159;232ma91f0c37[0m  [38;2;156;163;175menvironment x4, `armada manifest clean` could not be …[0m    [38;2;156;163;175m9m[0m
+  [38;2;76;159;232mFIXING[0m  [38;2;76;159;232m7c1e40aa[0m  [38;2;156;163;175marmada_bug, the worktree was already there and was no…[0m   [38;2;156;163;175m26m[0m
+  [38;2;255;180;84mOPEN[0m    [38;2;76;159;232m3bb27d15[0m  [38;2;156;163;175mbad_invocation, unknown command `brdige`[0m                  [38;2;156;163;175m3h[0m
+
+[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m3 failures · 2 open · armada failures show <id>[0m

@@ -18,6 +18,7 @@ Numbered in the order each was thought of. Numbers are never reused or reassigne
 | [007](007-scanner-should-propose.md) | The scanner should propose, not only report | RESERVED | manifest | Deterministic findings (package manager, workspaces, exact-name checks) should become proposals, not just report text |
 | [008](008-armada-injects-its-own-skills.md) | Armada injects its own skills | RESERVED | cross-cutting | Drones need Armada's own tools and the standing to propose manifest/guild changes |
 | [009](009-smaller-things-raised-in-use.md) | Smaller things raised in use, each with its reason | RESERVED | cross-cutting | Five small gaps — `doctor` health, `config scan`'s missing middle option, guild remote status, sync prompts, `--help` drift |
+| [010](010-armada-records-its-own-failures.md) | Armada records its own failures | BUILT | cross-cutting | `armada failures` — a failure Armada reported was gone as soon as the scrollback was |
 
 **When Armada's task system exists** ([002](002-tasks.md)), these become its first rows — one
 file per row is what makes that a script rather than a rewrite.

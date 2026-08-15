@@ -193,6 +193,20 @@ impl Scrub {
         }
     }
 
+    /// A scrubber for text that belongs to no workspace.
+    ///
+    /// **Armada's own failures are the caller** ([`crate::failure`]): one of them
+    /// is "there is no workspace here", so the normaliser they share cannot
+    /// require one. With no root to keep, every absolute path is foreign and is
+    /// elided — which is the correct reading of a string that is not about a
+    /// checkout.
+    pub fn anywhere() -> Self {
+        Scrub {
+            root: String::new(),
+            workspace: String::new(),
+        }
+    }
+
     /// Strip the run's particulars out of a failure's output.
     ///
     /// **A path inside the workspace keeps its filename, and a path outside it
@@ -211,7 +225,13 @@ impl Scrub {
     ///   the filename with it. A mutation that deleted the root substitution
     ///   changed no test, which is how it was found.
     pub fn normalise(&self, text: &str) -> String {
-        let mut out = text.replace(&self.root, ROOT);
+        // **An empty root is skipped rather than substituted.** `replace("")`
+        // matches between every character, so the guard is what stops
+        // [`Scrub::anywhere`] rewriting a message into markers.
+        let mut out = match self.root.is_empty() {
+            true => text.to_string(),
+            false => text.replace(&self.root, ROOT),
+        };
         if !self.workspace.is_empty() {
             out = out.replace(&self.workspace, "<workspace>");
         }

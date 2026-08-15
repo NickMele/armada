@@ -2002,6 +2002,35 @@ impl Disposition {
     }
 }
 
+/// `armada failures`, and `armada failures clear` — Armada's own failures
+/// ([`crate::failure`]).
+///
+/// **The row is [`crate::failure::Entry`] itself**, rather than a flattened view
+/// of it. Every other listing has a row type because the payload is a projection
+/// of something larger; this one *is* the record, and a second shape would be
+/// two vocabularies for one thing — the defect [`crate::error::ErrClass`]'s
+/// display exists to prevent.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct FailuresData {
+    /// One row per distinct failure, most recently seen first.
+    pub results: Vec<crate::failure::Entry>,
+    /// How many of them are still open — not cleared, and with no Job on them.
+    pub open: usize,
+}
+
+/// `armada failures show <id>` — one failure, whole.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct FailureData {
+    /// The one entry. **A list of one**, because `results[]` is plural in every
+    /// verb (PLAN.md §3.1) and a consumer that learned the shape once should not
+    /// meet a second one here.
+    pub results: Vec<crate::failure::Entry>,
+    /// The prompt `armada failures fix` would hand a Job. **Shown rather than
+    /// implied**: it is what would be sent off this machine, so the one place to
+    /// read it is before sending it.
+    pub task: String,
+}
+
 /// `armada fleet inbox` — what the fleet needs from you.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct InboxData {

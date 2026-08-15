@@ -52,14 +52,15 @@ pub mod term;
 
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
-    CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding,
-    FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
-    GuildSyncData, Headline, HelmData, InboxData, InitData, InitDryRun, KillData, MachineInitData,
-    McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData, ResultRow, ResumeData,
-    ScanData, ServicesData, ShowData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun,
-    VerdictData, VerifyData, Wiring,
+    CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, FailureData,
+    FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
+    GuildItemData, GuildListData, GuildSyncData, Headline, HelmData, InboxData, InitData,
+    InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData,
+    ReportData, ResultRow, ResumeData, ScanData, ServicesData, ShowData, SkillsData, SpawnData,
+    StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
+use armada_core::failure::{Entry as FailureEntry, State as FailureState};
 use armada_core::fleet::JobState;
 use armada_core::id::WorkspaceId;
 use armada_core::ports::{PortBlock, PortState};
@@ -107,6 +108,8 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::GuildList(envelope) => guild_list(envelope, style, width),
         Output::GuildItem(envelope) => guild_item(envelope, style, width),
         Output::GuildChange(envelope) => guild_change(envelope, style, width),
+        Output::Failures(envelope) => failures(envelope, style, width),
+        Output::Failure(envelope) => failure(envelope, style, width),
         Output::Spawn(envelope) => spawn(envelope, style, width),
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
         Output::Bridge(envelope) => bridge(envelope, style, width),
@@ -1642,6 +1645,184 @@ fn holding(style: Style, row: &armada_core::envelope::ReapCandidate) -> String {
     }
     parts.push(format!("branch {}", row.branch));
     parts.join(style.between())
+}
+
+// ---------------------------------------------------- M3: Armada's own failures
+
+/// The colour a recorded failure's state is drawn in.
+///
+/// **`FIXING` is not green.** A Job on a bug is work in flight, not a bug fixed,
+/// and green there would say the opposite of what the row means — the same
+/// reason `armada fleet show` paints a departed Drone grey once its Job is over
+/// and red while it is not.
+fn failure_state(state: FailureState) -> Cell {
+    token(
+        state.word(),
+        match state {
+            FailureState::Open => Role::FlareOrange,
+            FailureState::Fixing => Role::NavalBlue,
+            FailureState::Cleared => Role::SteelGrey,
+        },
+    )
+}
+
+/// What a failure's row says, in the one place both listings read it from.
+///
+/// **The class leads and the count is second**, because the column truncates
+/// from the right: the two facts a reader triages on have to survive a narrow
+/// terminal, and the message is the part they can widen the window for.
+///
+/// **`x4` rather than `×4`**, ASCII, so the agent reading stdout and the person
+/// at the terminal are given the same bytes in this cell (PLAN.md §3.1.1) — the
+/// pair may differ in styling and never in width.
+fn failure_detail(entry: &FailureEntry) -> String {
+    match entry.count {
+        0 | 1 => format!("{}, {}", entry.class, entry.message),
+        n => format!("{} x{n}, {}", entry.class, entry.message),
+    }
+}
+
+/// `armada failures`, and `armada failures clear` — Armada's own failures.
+fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("id", "detail", true)).indent(2);
+    for entry in &data.results {
+        table = table.row(vec![
+            failure_state(entry.state),
+            Cell::painted(entry.id.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&failure_detail(entry))),
+            Cell::muted(format::elapsed(entry.age_s * 1_000)),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    if table.is_empty() {
+        // **An empty log is what a machine looks like when nothing has gone
+        // wrong**, so it is said in words rather than left as a blank table.
+        out.push_str("  nothing recorded\n");
+    }
+    out.push('\n');
+
+    let mut facts = vec![format::count(data.results.len(), "failure")];
+    if data.open > 0 {
+        facts.push(format!("{} open", data.open));
+    }
+    if !data.results.is_empty() {
+        facts.push("armada failures show <id>".to_string());
+    }
+    out.push_str(&summary(style, envelope.status, &facts));
+    out
+}
+
+/// `armada failures show <id>` — one failure, whole.
+///
+/// **It reprints the failure exactly as the terminal printed it**, through the
+/// same [`error_lines`] every failing verb ends in. A second phrasing of one
+/// error is two vocabularies for one thing, and the whole promise of the record
+/// is that what you come back to is what you saw.
+fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> String {
+    let Some(entry) = envelope.data.results.first() else {
+        return summary(style, envelope.status, &[]);
+    };
+
+    let identity = Table::new(columns("id", "detail", true))
+        .indent(2)
+        .row(vec![
+            failure_state(entry.state),
+            Cell::painted(entry.id.clone(), Role::NavalBlue),
+            // **The row from the listing, unchanged.** The table put the reader
+            // here; opening with the same row in the same shape is what makes
+            // the rest of the page read as *more about this* rather than as a
+            // second report — the rule `armada fleet show` already follows.
+            detail_cell(style, Some(&failure_detail(entry))),
+            Cell::muted(format::elapsed(entry.age_s * 1_000)),
+        ]);
+    let mut out = identity.render(style, width);
+    out.push('\n');
+
+    out.push_str(&error_lines(
+        &ArmadaError {
+            class: entry.class,
+            r#where: entry.r#where.clone(),
+            message: entry.message.clone(),
+            next_action: entry.next.clone(),
+        },
+        style,
+    ));
+    out.push('\n');
+
+    let mut facts = Table::new(columns("fact", "detail", false)).indent(2);
+    facts = facts.row(vec![
+        token("seen", Role::SteelGrey),
+        Cell::muted("count"),
+        detail_cell(
+            style,
+            Some(&match entry.count {
+                0 | 1 => format!("once, at {}", entry.last_at),
+                n => format!("{n} times, {} to {}", entry.first_at, entry.last_at),
+            }),
+        ),
+    ]);
+    facts = facts.row(vec![
+        token("typed", Role::SteelGrey),
+        Cell::muted("command"),
+        detail_cell(style, Some(&entry.argv)),
+    ]);
+    facts = facts.row(vec![
+        token("in", Role::SteelGrey),
+        Cell::muted("directory"),
+        detail_cell(style, Some(&entry.cwd)),
+    ]);
+    if let Some(job) = &entry.job {
+        facts = facts.row(vec![
+            token("job", Role::NavalBlue),
+            Cell::muted("spawned"),
+            detail_cell(style, Some(job)),
+        ]);
+    }
+    out.push_str(&facts.render(style, width));
+    out.push('\n');
+
+    // **What would be sent, before it is sent.** The task leaves this machine
+    // when a Job is spawned on it, so the one place to read it is here.
+    out.push_str(&format!(
+        "{}\n",
+        style.paint(Role::SteelGrey, "  the task a Job would be given:")
+    ));
+    // **A line that fits is printed verbatim, and only a long one is wrapped.**
+    // The task is a block with an indented, column-aligned envelope in the middle
+    // of it, and [`wrap_prose`] splits on whitespace — so wrapping every line
+    // unconditionally would strip that indent and collapse that alignment. This
+    // is the one screen whose whole purpose is to show what will be sent, so what
+    // can be shown unaltered is.
+    let room = width.saturating_sub(4);
+    for paragraph in envelope.data.task.lines() {
+        if paragraph.trim().is_empty() {
+            out.push('\n');
+            continue;
+        }
+        if term::display_width(paragraph) <= room {
+            out.push_str(&format!("    {paragraph}\n"));
+            continue;
+        }
+        for line in wrap_prose(paragraph, room) {
+            out.push_str(&format!("    {line}\n"));
+        }
+    }
+    out.push('\n');
+
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            match &entry.job {
+                Some(job) => format!("armada fleet show {job}"),
+                None => format!("armada failures fix {}", entry.id),
+            },
+            format!("armada failures clear {}", entry.id),
+        ],
+    ));
+    out
 }
 
 // ------------------------------------------------------------- M2: the machine

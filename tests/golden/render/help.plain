@@ -46,8 +46,9 @@ HELM AND THE BRIDGE — where you talk, and what you watch
   bridge  the live screen: every Job, its state, its spend, who needs you
 
 THIS MACHINE
-  init    set up this machine: checks, ~/.armada/, and your guild
-  doctor  what this machine is missing, and what fixes it
+  init      set up this machine: checks, ~/.armada/, and your guild
+  doctor    what this machine is missing, and what fixes it
+  failures  what Armada broke on, and how to put a Job on one
 
 GLOBAL FLAGS
   --json          answer as one JSON object, for a script or an agent

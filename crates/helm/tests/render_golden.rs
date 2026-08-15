@@ -30,11 +30,12 @@
 
 use armada_core::envelope::{
     Asked, BridgeData, CheckData, CleanData, CommandView, CommandsData, ComponentView,
-    ComponentsData, DispatchData, DoctorData, Envelope, Finding, FleetLsData, GrantedCommand,
-    GuildChange, GuildChangeData, GuildChoice, GuildItemData, GuildItemRow, GuildListData,
-    GuildSyncData, Headline, InboxRow, InitData, JobRow, MachineInitData, NoteRow, PortReport,
-    Problem, Projection, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled,
-    ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
+    ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData, Finding,
+    FleetLsData, GrantedCommand, GuildChange, GuildChangeData, GuildChoice, GuildItemData,
+    GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData, JobRow,
+    MachineInitData, NoteRow, PortReport, Problem, Projection, Released, ResolvedSkillView,
+    ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync,
+    SyncItem, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -1817,6 +1818,134 @@ fn show_data() -> ShowData {
             },
         ],
     }
+}
+
+// ------------------------------------------------- Armada's own failures
+
+/// A recorded failure, authored rather than captured.
+///
+/// **No real content of anybody's**, here least of all: the fixture for a
+/// feature whose subject is local paths is the one place a home directory would
+/// walk into a public repository. Every path below is invented, and the log's
+/// own rule — nothing absolute under `$HOME` is ever written — is what makes
+/// `~/code/orders` the shape a real one takes too.
+fn recorded(
+    id: &str,
+    state: armada_core::failure::State,
+    class: ErrClass,
+    r#where: &str,
+    message: &str,
+    count: usize,
+    age_s: u64,
+) -> armada_core::failure::Entry {
+    armada_core::failure::Entry {
+        id: id.to_string(),
+        state,
+        class,
+        r#where: r#where.to_string(),
+        message: message.to_string(),
+        next: Some("reinstall armada, then retry unchanged".to_string()),
+        argv: "armada bridge".to_string(),
+        cwd: "~/code/orders".to_string(),
+        count,
+        first_at: "2026-08-09T13:02:11Z".to_string(),
+        last_at: "2026-08-09T14:58:11Z".to_string(),
+        last_ms: 1_754_748_000_000,
+        age_s,
+        job: None,
+    }
+}
+
+/// `armada failures` — one row per distinct failure, with a count and an age.
+///
+/// **The count is what makes this observability rather than a log.** Four
+/// occurrences of one bug and four different bugs are different facts, and the
+/// row that cannot tell them apart is the row nobody reads twice.
+#[test]
+fn failures_matches_its_fixture() {
+    let mut fixing = recorded(
+        "7c1e40aa",
+        armada_core::failure::State::Fixing,
+        ErrClass::ArmadaBug,
+        "spawn",
+        "the worktree was already there and was not Armada's",
+        1,
+        26 * 60,
+    );
+    fixing.job = Some("fix-7c1e40aa".to_string());
+
+    let output = Output::Failures(Box::new(Envelope::ok(
+        "failures",
+        None,
+        Status::Ok,
+        FailuresData {
+            results: vec![
+                recorded(
+                    "a91f0c37",
+                    armada_core::failure::State::Open,
+                    ErrClass::Environment,
+                    "~/.cargo/bin/armada",
+                    "`armada manifest clean` could not be found to run",
+                    4,
+                    9 * 60,
+                ),
+                fixing,
+                recorded(
+                    "3bb27d15",
+                    armada_core::failure::State::Open,
+                    ErrClass::BadInvocation,
+                    "brdige",
+                    "unknown command `brdige`",
+                    1,
+                    3 * 60 * 60,
+                ),
+            ],
+            open: 2,
+        },
+    )));
+    assert_render("failures", &output);
+}
+
+/// `armada failures` on a machine nothing has gone wrong on.
+///
+/// **Said in words rather than drawn as an empty table**, the same rule the
+/// inbox follows: "nothing recorded" and "nobody looked" read identically
+/// otherwise, and only one of them is good news.
+#[test]
+fn failures_empty_matches_its_fixture() {
+    let output = Output::Failures(Box::new(Envelope::ok(
+        "failures",
+        None,
+        Status::Ok,
+        FailuresData::default(),
+    )));
+    assert_render("failures-empty", &output);
+}
+
+/// `armada failures show <id>` — the failure as the terminal printed it, and
+/// then what a Job would be told about it.
+#[test]
+fn failure_show_matches_its_fixture() {
+    let entry = recorded(
+        "a91f0c37",
+        armada_core::failure::State::Open,
+        ErrClass::Environment,
+        "~/.cargo/bin/armada",
+        "`armada manifest clean` could not be found to run",
+        4,
+        9 * 60,
+    );
+    let task = armada_core::failure::task(&entry);
+    let output = Output::Failure(Box::new(Envelope::ok(
+        "failures show",
+        None,
+        Status::Ok,
+        FailureData {
+            results: vec![entry],
+            task,
+        },
+    )));
+    assert_render("failure-show", &output);
 }
 
 /// `armada fleet spawn`, against the layout `render_pending.rs` held for M3.
