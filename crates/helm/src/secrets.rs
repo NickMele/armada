@@ -508,7 +508,10 @@ mod tests {
         let vault = vault(&[("A", "value-a"), ("B", "value-b")]);
         assert!(vault.granted(&[]).is_empty(), "an ungranted entry got one");
         assert_eq!(
-            vault.granted(&["B".to_string()]).into_iter().collect::<Vec<_>>(),
+            vault
+                .granted(&["B".to_string()])
+                .into_iter()
+                .collect::<Vec<_>>(),
             vec![("B".to_string(), "value-b".to_string())]
         );
     }
@@ -526,7 +529,11 @@ mod tests {
         let vault = vault(&[("A", plain)]);
         let masked = vault.mask("logging in with hunter2 now\nhunter2 again\n");
         assert!(!masked.contains(plain), "{masked}");
-        assert_eq!(masked.lines().count(), 2, "line structure survives: {masked}");
+        assert_eq!(
+            masked.lines().count(),
+            2,
+            "line structure survives: {masked}"
+        );
         assert!(masked.contains(crate::redact::MASK), "{masked}");
     }
 

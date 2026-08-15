@@ -400,6 +400,14 @@ fn blocked_on_a_service(check: &ResolvedCheck) -> Option<ArmadaError> {
 /// and it is written as a branch rather than as a comment precisely because the
 /// wrong version passes every attached test.
 ///
+/// **Called before the run lease is taken, and that ordering is load-bearing.**
+/// A provider may wait two minutes for a person to find a hardware key
+/// ([`secrets::PROVIDER_TIMEOUT_MS`]); holding the workspace's run lease across
+/// that would block every other agent in the worktree on a prompt they cannot
+/// see, and a heartbeat renewed from a loop that is parked in `read` is the
+/// shape PLAN.md §4.3 exists to make impossible. Nothing is claimed until the
+/// answers are in hand.
+///
 /// **Only what this run wants.** `check --component api` resolves `api`'s
 /// grants and nothing else, so a repository with four providers does not
 /// produce four prompts to lint one component. Skipped checks are included:

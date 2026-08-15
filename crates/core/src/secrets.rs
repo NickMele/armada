@@ -221,10 +221,7 @@ pub fn wanted<'a>(grants: impl IntoIterator<Item = &'a [String]>) -> BTreeSet<St
 /// rule 5). The vault holds every value this run resolved; a check sees only
 /// the names its own `secrets:` listed, and a sibling with no grant sees none —
 /// which is the assertion §4.7 rule 5 asks for by name.
-pub fn granted(
-    vault: &BTreeMap<String, String>,
-    names: &[String],
-) -> BTreeMap<String, String> {
+pub fn granted(vault: &BTreeMap<String, String>, names: &[String]) -> BTreeMap<String, String> {
     names
         .iter()
         .filter_map(|name| vault.get(name).map(|value| (name.clone(), value.clone())))
@@ -277,7 +274,10 @@ manifest:
         // A `#` fragment and a second `://` are both part of the reference —
         // the split is on the *first* separator, because the scheme is the only
         // thing Armada reads.
-        assert_eq!(split("aws-sm://prod/db#password").unwrap().reference, "prod/db#password");
+        assert_eq!(
+            split("aws-sm://prod/db#password").unwrap().reference,
+            "prod/db#password"
+        );
         assert_eq!(split("x://https://y").unwrap().reference, "https://y");
     }
 
@@ -345,7 +345,10 @@ manifest:
         let given = granted(&vault, &["A".to_string()]);
         assert_eq!(given.len(), 1);
         assert_eq!(given.get("A").map(String::as_str), Some("value-a"));
-        assert!(given.get("B").is_none(), "an ungranted secret was handed over");
+        assert!(
+            !given.contains_key("B"),
+            "an ungranted secret was handed over"
+        );
     }
 
     /// A grant naming something undeclared resolves nothing rather than an
@@ -361,7 +364,12 @@ manifest:
     #[test]
     fn the_plan_names_the_provider_and_carries_the_argv() {
         let config = resolved(CONFIG);
-        let calls = plan(&config, &names(&["DB_PASSWORD", "GITHUB_TOKEN"]), "armada.yml").unwrap();
+        let calls = plan(
+            &config,
+            &names(&["DB_PASSWORD", "GITHUB_TOKEN"]),
+            "armada.yml",
+        )
+        .unwrap();
         assert_eq!(
             calls,
             vec![

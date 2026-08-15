@@ -188,7 +188,11 @@ fn assert_absent(root: &Path, needle: &str, what: &str) {
     // **The grep has to have looked at something.** A walk that found nothing
     // passes every assertion above it and proves nothing — which is exactly the
     // vacuous-assertion failure `AGENTS.md` says to invert and watch fail.
-    assert!(searched > 0, "nothing was searched under {}", root.display());
+    assert!(
+        searched > 0,
+        "nothing was searched under {}",
+        root.display()
+    );
 }
 
 /// Stop whatever a detached run left behind — `detach.rs`'s rule, and this
@@ -249,7 +253,11 @@ fn a_resolved_value_appears_nowhere_armada_wrote() {
     // value that never existed. The *masked* line proves both halves at once:
     // the variable reached the child, and what it printed did not reach the log.
     let log = std::fs::read_to_string(
-        repo.join(json["data"]["results"][0]["log"].as_str().expect("a log path")),
+        repo.join(
+            json["data"]["results"][0]["log"]
+                .as_str()
+                .expect("a log path"),
+        ),
     )
     .expect("the check's log");
     assert_eq!(
@@ -292,7 +300,12 @@ fn only_the_check_that_declared_the_grant_can_see_it() {
     scripts(&repo);
 
     let output = machine.run(&repo, &["manifest", "check", "--json"]);
-    assert_eq!(envelope(&output)["status"], "PASS", "{}", support::why(&output));
+    assert_eq!(
+        envelope(&output)["status"],
+        "PASS",
+        "{}",
+        support::why(&output)
+    );
 
     assert_eq!(
         std::fs::read_to_string(repo.join("saw.granted")).unwrap(),
@@ -326,7 +339,10 @@ fn a_detached_run_works_with_a_provider_only_the_parent_could_have_run() {
 
     let done = poll_until_done(&machine, &repo, &run);
     stop(&machine, &repo);
-    assert_eq!(done["status"], "PASS", "the detached run did not pass: {done}");
+    assert_eq!(
+        done["status"], "PASS",
+        "the detached run did not pass: {done}"
+    );
 
     assert_eq!(
         std::fs::read_to_string(repo.join("saw.granted")).unwrap(),
@@ -379,7 +395,10 @@ fn the_same_provider_fails_if_it_is_run_from_the_detached_child() {
     assert_eq!(json["status"], "FAILED", "{}", support::why(&output));
     let message = json["error"]["message"].as_str().unwrap_or_default();
     assert!(message.contains(NAME), "the error names no secret: {json}");
-    assert!(message.contains("stub"), "the error names no provider: {json}");
+    assert!(
+        message.contains("stub"),
+        "the error names no provider: {json}"
+    );
 }
 
 /// **Reporting what would run is not a reason to touch a hardware key.**
@@ -441,7 +460,12 @@ manifest:
         &repo,
         &["manifest", "check", "--component", "web", "--json"],
     );
-    assert_eq!(envelope(&output)["status"], "PASS", "{}", support::why(&output));
+    assert_eq!(
+        envelope(&output)["status"],
+        "PASS",
+        "{}",
+        support::why(&output)
+    );
     assert!(
         !repo.join("provider.calls").exists(),
         "linting `web` resolved `api`'s secret"
@@ -531,7 +555,12 @@ manifest:
     );
 
     let output = machine.run(&repo, &["manifest", "check", "--json"]);
-    assert_eq!(envelope(&output)["status"], "PASS", "{}", support::why(&output));
+    assert_eq!(
+        envelope(&output)["status"],
+        "PASS",
+        "{}",
+        support::why(&output)
+    );
     assert!(
         !repo.join("INJECTED").exists(),
         "the reference was interpreted by a shell"
@@ -540,5 +569,67 @@ manifest:
         std::fs::read_to_string(repo.join("saw.one")).unwrap(),
         "argc=1 arg=a; touch INJECTED; echo $(whoami)",
         "the reference was word-split or expanded"
+    );
+}
+
+/// **A `commands:` entry's grant resolves too**, and its output is scrubbed on
+/// the way to the terminal.
+///
+/// A grant that parses, verifies and then silently did nothing would be worse
+/// than no grant at all — the config would read as protecting something Armada
+/// never touched. `stdio:` already defaults to `pipe` for an entry that grants a
+/// secret (`PLAN.md` §4.5), precisely so Armada can see what it has to scrub;
+/// this is what that default was for.
+///
+/// **The terminal counts as a write** (`PLAN.md` §4.7): an agent runs this and
+/// whatever Armada relays lands in the transcript.
+#[test]
+fn a_commands_entry_gets_its_grant_and_its_output_is_scrubbed() {
+    let machine = Machine::new();
+    let repo = machine.repo(
+        "dispatch",
+        &format!(
+            "\
+manifest:
+  version: 1
+  secrets:
+    {NAME}: stub://one
+  secret_providers:
+    stub: {{ cmd: \"./provider.sh ${{ref}}\" }}
+  commands:
+    deploy: {{ cmd: ./printer.sh, secrets: [{NAME}] }}
+    plain: {{ cmd: ./reporter.sh }}
+"
+        ),
+    );
+    scripts(&repo);
+    // Prints its grant and exits 0, so the *relay* path is under test rather
+    // than a failure path.
+    write(
+        &repo,
+        "printer.sh",
+        &format!("#!/bin/sh\necho \"resolved {NAME}=${NAME}\"\n"),
+    );
+
+    let output = machine.run(&repo, &["manifest", "deploy"]);
+    let relayed = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        relayed.contains(&format!("resolved {NAME}={}", armada_helm::redact::MASK)),
+        "the child either never got the secret or Armada relayed it: {relayed}"
+    );
+    assert!(!relayed.contains(PLANTED), "the value reached the terminal");
+    assert_absent(machine.home.path(), PLANTED, "~/.armada");
+
+    // And an entry with no grant resolves nothing, so `armada manifest plain`
+    // does not prompt for a token `deploy` alone was given.
+    std::fs::remove_file(repo.join("provider.calls")).unwrap();
+    let _ = machine.run(&repo, &["manifest", "plain", "x"]);
+    assert!(
+        !repo.join("provider.calls").exists(),
+        "an entry with no `secrets:` resolved one anyway"
     );
 }

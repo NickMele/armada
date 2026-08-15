@@ -317,3 +317,51 @@ fn reap(pid: i32) {
         std::thread::sleep(Duration::from_millis(20));
     }
 }
+
+/// **The secret provider's stdio, which is the one shape a fake cannot check.**
+///
+/// [`StdioMode::CaptureStdout`] exists so a provider keeps the terminal it needs
+/// to prompt on and gives up only the stream carrying the secret (`PLAN.md`
+/// §4.7). A unit test can assert Armada *asked* for that mode; only a real
+/// process can show what the mode actually wires up, and this is the class of
+/// bug `AGENTS.md` names — *"asserting on argv proves you built the string you
+/// meant, not that it works."*
+///
+/// Two claims, and the first is the one `013` turns on: **stdin reaches the
+/// child**, so a provider that reads a passphrase gets one rather than the
+/// `Stdio::null()` that [`StdioMode::Capture`] would have given it. The second
+/// is §4.7 rule 3: **stderr is never Armada's**, so a chatty provider's output
+/// cannot be repeated back through a path incapable of redaction.
+#[test]
+fn capture_stdout_hands_the_child_stdin_and_keeps_none_of_its_stderr() {
+    let request = RunRequest::new(
+        vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            // Reads what a prompting provider would read, and complains the way
+            // one does when the vault is locked.
+            "read answer; echo 'a chatty diagnostic' >&2; printf 'got:%s' \"$answer\"".to_string(),
+        ],
+        PathBuf::from("/"),
+    )
+    .stdio(StdioMode::CaptureStdout)
+    .session(false)
+    .with_stdin("passphrase\n");
+
+    let mut group = ProcessGroup::spawn(&request).expect("/bin/sh exists");
+    let output = group.wait(Some(Duration::from_secs(10)), &mut || {});
+
+    assert_eq!(
+        output.stdout, "got:passphrase",
+        "the child could not read its stdin, so a provider could never prompt"
+    );
+    assert_eq!(
+        output.stderr, "",
+        "Armada captured the provider's stderr and could repeat it (§4.7 rule 3)"
+    );
+    assert_eq!(output.code, Some(0));
+    // **No session of its own**, which is what leaves the controlling terminal
+    // attached: `setsid` creates a session with none, and a provider that cannot
+    // open `/dev/tty` cannot prompt however its stdin is wired.
+    assert_eq!(group.pgid(), 0, "the provider was put in its own session");
+}
