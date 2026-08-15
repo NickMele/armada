@@ -29,12 +29,15 @@
 //! than a flag you reach for without reading.
 
 use armada_core::envelope::{
-    Asked, CheckData, CleanData, DispatchData, DoctorData, Envelope, Finding, GrantedCommand,
-    GuildChoice, GuildSyncData, Headline, Health, InitData, MachineInitData, PortReport, Released,
-    ResolvedSkillView, ResultRow, ScanData, ServicesData, SkillsData, StatusData, Sync, SyncItem,
-    Unreclaimed, UpDryRun, VerifyData,
+    Asked, CheckData, CleanData, DispatchData, DoctorData, Envelope, Finding, FleetLsData,
+    GrantedCommand, GuildChoice, GuildSyncData, Headline, Health, InitData, JobRow,
+    MachineInitData, PortReport, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData,
+    SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
+use armada_core::fleet::job::{Remaining, Spend};
+use armada_core::fleet::workflow::{Budget, OnExhausted};
+use armada_core::fleet::JobState;
 use armada_core::id::WorkspaceId;
 use armada_core::ports::{PortBlock, PortState};
 use armada_core::reap::ReapPlan;
@@ -786,6 +789,152 @@ fn the_help_pages_match_their_fixtures() {
         }
     }
     report(failures);
+}
+
+// --------------------------------------------------------------------- M3: the
+// two layouts that were agreed before anything existed to draw them
+
+/// `armada fleet ls`, against the layout `render_pending.rs` held for M3.
+///
+/// **Nothing about this was renegotiated when the verb shipped**, which is the
+/// entire purpose of having written the fixture first: the columns, their order,
+/// the `-` in a row that has not run, and the summary line were settled in
+/// `docs/reference-output/command-output.html` and this render follows them.
+#[test]
+fn fleet_ls_matches_its_fixture() {
+    fn row(
+        name: &str,
+        workflow: &str,
+        state: JobState,
+        detail: &str,
+        cost_usd: f64,
+        runtime_s: u64,
+        needs_attention: bool,
+    ) -> JobRow {
+        JobRow {
+            uuid: format!("{name}-uuid"),
+            name: name.to_string(),
+            workflow: workflow.to_string(),
+            state,
+            detail: detail.to_string(),
+            runtime_s,
+            cost_usd,
+            tokens: 120_000,
+            turns: 4,
+            budget_remaining: Remaining {
+                iterations: 8,
+                tokens: 280_000,
+                wall_clock_ms: 1_860_000,
+            },
+            needs_attention,
+        }
+    }
+
+    let results = vec![
+        row(
+            "rate-limit",
+            "feature",
+            JobState::Running,
+            "implement, check green",
+            2.10,
+            14 * 60,
+            false,
+        ),
+        row(
+            "carina-schema",
+            "feature",
+            JobState::Running,
+            "plan, awaiting you",
+            0.45,
+            3 * 60,
+            true,
+        ),
+        row(
+            "xlsx-report",
+            "bug",
+            JobState::Stalled,
+            "no output for 6m",
+            4.60,
+            22 * 60,
+            false,
+        ),
+        row(
+            "release-merge",
+            "feature",
+            JobState::Blocked,
+            "wants CI timeout raised",
+            1.25,
+            65 * 60,
+            true,
+        ),
+        // **The row that has not run yet**, and the one the layout was drawn to
+        // pin: a Job with no spend and no run time gets a placeholder in both
+        // columns rather than `$0.00` and `0s`, because a zero reads as a
+        // measurement and nothing has been measured.
+        row("nightly-flake", "bug", JobState::Queued, "", 0.0, 0, false),
+    ];
+
+    let output = Output::FleetLs(Box::new(Envelope::ok(
+        "fleet ls",
+        None,
+        // A progress state, which is what a read verb is allowed (PLAN.md §3.1).
+        Status::Running,
+        FleetLsData {
+            needs_you: results.iter().filter(|row| row.needs_attention).count(),
+            spent_usd: results.iter().map(|row| row.cost_usd).sum(),
+            results,
+        },
+    )));
+    assert_render("fleet-ls", &output);
+}
+
+/// `armada fleet spawn`, against the layout `render_pending.rs` held for M3.
+///
+/// **The confidence is on the screen**, which is the one thing PLAN.md §14.2
+/// asks of this verb beyond doing the work: a guess has to be visible as a
+/// guess, or nobody knows to override it.
+#[test]
+fn fleet_spawn_matches_its_fixture() {
+    let output = Output::Spawn(Box::new(Envelope::ok(
+        "fleet spawn",
+        None,
+        Status::Ready,
+        SpawnData {
+            uuid: "8f2a1c40-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
+            name: "rate-limit".to_string(),
+            workflow: "feature".to_string(),
+            confidence: Some(0.91),
+            // **The drawing's own path, kept verbatim.** The shipped policy puts
+            // a Job under `~/.armada/workspaces/<repo>/<name>`
+            // (`commands/fleet/spawn.md`), and this fixture froze the *layout*
+            // rather than the path — the cell holds whatever the envelope
+            // carries, so changing the string here would test nothing and
+            // changing the fixture would renegotiate a settled drawing.
+            worktree: "~/.armada/workspaces/rate-limit".to_string(),
+            branch: "armada/rate-limit".to_string(),
+            port_block: Some(PortBlock {
+                from: 5470,
+                to: 5479,
+            }),
+            budget: Budget {
+                iterations: 20,
+                tokens: 600_000,
+                wall_clock_ms: 90 * 60 * 1_000,
+                on_exhausted: OnExhausted::NeedsHuman,
+            },
+            step: "plan".to_string(),
+            state: JobState::Running,
+            classify_ms: Some(800),
+            prepare_ms: 300,
+            spend: Some(Spend {
+                cost_usd: 0.17,
+                tokens: 59_261,
+                turns: 2,
+                api_ms: 2_956,
+            }),
+        },
+    )));
+    assert_render("fleet-spawn", &output);
 }
 
 // ---------------------------------------------------------------- the property

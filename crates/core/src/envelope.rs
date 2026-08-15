@@ -1028,6 +1028,238 @@ pub struct GuildBundleData {
     pub conflicts: Vec<String>,
 }
 
+// ------------------------------------------------------------------ M3: Fleet
+//
+// **Fleet's bodies live here for the same reason Manifest's and Guild's do**:
+// `data` is the per-verb half of one envelope, and a second place to define one
+// is a second place for a key to be renamed without a golden snapshot noticing
+// (`ARCHITECTURE.md` §1.6).
+//
+// **Nothing here is a `Status`.** A Job's state and a step's verdict are Fleet's
+// own enums (PLAN.md §14.3), spelled SCREAMING in the payload exactly as they
+// are on the screen, and the envelope's top-level `status` stays Manifest's —
+// which is what keeps `exit = f(error.class)` true for a verb that reports
+// `BLOCKED` Jobs and exits 0.
+
+/// `armada fleet spawn` — the Job that now exists.
+///
+/// **Every field is minted before the Drone starts.** The uuid, the worktree,
+/// the branch and the budget are all facts about the Job, and a `spawn` that
+/// reported them only on success would leave a Job on disk that its own output
+/// never named (PLAN.md §14.1).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SpawnData {
+    /// The Claude Code session id, minted before anything ran.
+    pub uuid: String,
+    /// The handle a person types.
+    pub name: String,
+    /// Which workflow was chosen.
+    pub workflow: String,
+    /// How sure classification was. **Absent for an override**, because "you
+    /// said so" and "the model was certain" are different facts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f64>,
+    /// Where the worktree is, as a person writes it.
+    pub worktree: String,
+    /// The branch it is on.
+    pub branch: String,
+    /// The span `armada manifest init` claimed, when the repository has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port_block: Option<PortBlock>,
+    /// The ceilings this Job runs under.
+    pub budget: crate::fleet::workflow::Budget,
+    /// The step it starts on.
+    pub step: String,
+    /// What it is doing now.
+    pub state: crate::fleet::JobState,
+    /// How long classification took. `None` when a person named the workflow
+    /// and no call was made.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classify_ms: Option<u64>,
+    /// How long the worktree and `armada manifest init` took together.
+    pub prepare_ms: u64,
+    /// What the first turn spent, or nothing when `--dry-run` started none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spend: Option<crate::fleet::job::Spend>,
+}
+
+/// `armada fleet ls` — what is running, how long, what it has spent, and who
+/// needs you.
+///
+/// **Every column comes from data Claude Code already emits** (PHASES.md §9.1
+/// F2). Fleet builds no accounting layer and estimates nothing.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct FleetLsData {
+    /// One row per Job, oldest first.
+    pub results: Vec<JobRow>,
+    /// How many are waiting on you.
+    pub needs_you: usize,
+    /// What the listed Jobs have cost between them.
+    pub spent_usd: f64,
+}
+
+/// One Job, as `ls` reports it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct JobRow {
+    /// The session id.
+    pub uuid: String,
+    /// The handle.
+    pub name: String,
+    /// Which workflow.
+    pub workflow: String,
+    /// What it is doing.
+    pub state: crate::fleet::JobState,
+    /// The step, and what it is waiting on — the one thing a state word cannot
+    /// say. Empty when there is nothing to add.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub detail: String,
+    /// How long it has been alive, in seconds.
+    pub runtime_s: u64,
+    /// Dollars, summed off the turns' `total_cost_usd`.
+    pub cost_usd: f64,
+    /// Every kind of token, summed off the turns' `usage`.
+    pub tokens: u64,
+    /// Turns, summed off the turns' `num_turns`.
+    pub turns: u32,
+    /// What is left of each ceiling.
+    pub budget_remaining: crate::fleet::job::Remaining,
+    /// Whether it is waiting on you.
+    pub needs_attention: bool,
+}
+
+/// `armada fleet board` — the two facts needed to enter a Job.
+///
+/// **It does not attach, and it never will.** Boarding hands you the
+/// conversation to drive yourself; streaming a live Drone's output is the pty
+/// work withdrawn in PHASES.md §9.1 F1, and Armada owns no terminal.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BoardData {
+    /// The Job's handle.
+    pub job: String,
+    /// Where the worktree is.
+    pub worktree: String,
+    /// The session id.
+    pub uuid: String,
+    /// The branch.
+    pub branch: String,
+    /// The command, assembled — `claude --resume <uuid>`.
+    pub command: String,
+}
+
+/// `armada fleet kill` — what each Job released, and what became of its tree.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct KillData {
+    /// One entry per Job killed.
+    pub results: Vec<Killed>,
+}
+
+/// One Job, ended.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Killed {
+    /// The handle.
+    pub job: String,
+    /// The session id.
+    pub uuid: String,
+    /// What `armada manifest clean` reclaimed.
+    pub released: Released,
+    /// The span that went back, when there was one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port_block: Option<PortBlock>,
+    /// What became of the directory.
+    pub worktree: Disposition,
+    /// Where it was.
+    pub worktree_path: String,
+    /// What became of the branch.
+    pub branch: Disposition,
+    /// Which branch.
+    pub branch_name: String,
+    /// What would not release. **The Job is still marked ended** — a `kill` that
+    /// bailed out here would leave the worktree as well, and ownership is
+    /// recorded machine-globally so `armada manifest clean --all` reclaims the
+    /// remainder (`commands/fleet/kill.md`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ArmadaError>,
+}
+
+/// What became of a Job's directory or branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Disposition {
+    /// Armada removed it.
+    Removed,
+    /// Armada left it alone, because you asked.
+    Kept,
+    /// It was already gone. **Not a failure**: a Job whose worktree somebody
+    /// deleted by hand is exactly the Job the durable record exists for.
+    Gone,
+}
+
+impl Disposition {
+    /// The word, in both audiences.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Disposition::Removed => "removed",
+            Disposition::Kept => "kept",
+            Disposition::Gone => "gone",
+        }
+    }
+}
+
+/// `armada fleet inbox` — what the fleet needs from you.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct InboxData {
+    /// One row per entry, oldest first.
+    pub results: Vec<InboxRow>,
+    /// How many are still open.
+    pub open: usize,
+}
+
+/// One inbox entry.
+///
+/// **The id is the point** (PLAN.md §15.3.1): an item you cannot name is an item
+/// you cannot acknowledge one row at a time, which is what turns a list of
+/// things to do into a list nobody trusts after the first one.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct InboxRow {
+    /// The entry's own id.
+    pub uuid: String,
+    /// The Job that raised it.
+    pub job: String,
+    /// Why.
+    pub kind: String,
+    /// When, RFC 3339.
+    pub raised_at: String,
+    /// How long ago, in seconds.
+    pub waiting_s: u64,
+    /// What it wants to tell you.
+    pub body: String,
+    /// Your answer, once there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answered: Option<String>,
+}
+
+/// `armada fleet answer` — the entry you closed, and what the Job did next.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AnswerData {
+    /// The handle.
+    pub job: String,
+    /// The session id.
+    pub uuid: String,
+    /// The entry that was answered.
+    pub entry: String,
+    /// What you said.
+    pub answer: String,
+    /// What it is doing now.
+    pub state: crate::fleet::JobState,
+    /// **Not reset by an answer** (`commands/fleet/answer.md`). An answer is a
+    /// continuation rather than a new run, and resetting the ceiling here would
+    /// make budgets unenforceable for any Job that asks a question.
+    pub budget_remaining: crate::fleet::job::Remaining,
+    /// What the resumed turn spent, when one ran.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spend: Option<crate::fleet::job::Spend>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

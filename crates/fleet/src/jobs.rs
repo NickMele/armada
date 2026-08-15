@@ -218,6 +218,7 @@ mod tests {
             workflow: "feature".to_string(),
             confidence: Some(0.91),
             repo: "api".to_string(),
+            repo_root: "~/code/api".to_string(),
             worktree: format!("~/.armada/workspaces/api/{name}"),
             branch: format!("armada/{name}"),
             port_block: None,

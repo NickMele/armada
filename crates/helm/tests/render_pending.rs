@@ -53,17 +53,21 @@ fn pending_dir() -> PathBuf {
 /// The commands whose layout is agreed and unbuilt, and the milestone that owns
 /// each. Named here so a fixture cannot be quietly dropped, and so the list can
 /// be read against `PHASES.md` §8.
-/// **Five moved up, and only Fleet's two are left.** `config-scan` and
-/// `config-verify` shipped with `armada manifest config`; `init-machine`,
-/// `doctor` and `guild-pull` shipped with M2. Each is now an ordinary byte
-/// comparison in `render_golden.rs` with a `.tty` twin beside it, which is
-/// exactly what this file's header says happens when the milestone that owns a
-/// layout ships it — and that the list shrank to two without either milestone
-/// renegotiating a layout is the evidence the approach worked.
-const PENDING: [(&str, &str); 2] = [
-    ("fleet-ls", "M3 — `armada fleet ls`"),
-    ("fleet-spawn", "M3 — `armada fleet spawn`"),
-];
+/// **The list is now empty, and the machinery stays.**
+///
+/// Seven layouts passed through it. `config-scan` and `config-verify` shipped
+/// with `armada manifest config`; `init-machine`, `doctor` and `guild-pull`
+/// shipped with M2; `fleet-ls` and `fleet-spawn` shipped with M3's first third
+/// and are ordinary byte comparisons in `render_golden.rs` with `.tty` twins
+/// beside them. **Not one of the seven had its layout renegotiated by the
+/// milestone that built it**, which is the evidence this file was written to
+/// collect.
+///
+/// It is kept rather than deleted because the next reserved layout — the
+/// Bridge's, and whatever M4 draws — arrives the same way, and a mechanism
+/// deleted the moment its queue empties is a mechanism that gets reinvented
+/// worse. An empty list costs one test run of nothing.
+const PENDING: [(&str, &str); 0] = [];
 
 fn fixture(name: &str) -> String {
     let path = pending_dir().join(format!("{name}.plain"));
@@ -77,16 +81,23 @@ fn fixture(name: &str) -> String {
 
 /// Every agreed layout has a file, and every file is an agreed layout. A fixture
 /// with no entry here is one nobody will notice has gone stale.
+///
+/// **An absent directory is an empty set, not a failure.** git does not track an
+/// empty directory, so a queue that has drained leaves no `pending/` behind —
+/// and failing on that would mean the reward for shipping every reserved layout
+/// is a red build.
 #[test]
 fn the_pending_set_is_exactly_what_is_listed() {
-    let on_disk: BTreeSet<String> = std::fs::read_dir(pending_dir())
-        .expect("tests/golden/render/pending exists")
-        .filter_map(|entry| {
-            let path = entry.ok()?.path();
-            (path.extension()?.to_str()? == "plain")
-                .then(|| path.file_stem()?.to_str().map(str::to_string))?
-        })
-        .collect();
+    let on_disk: BTreeSet<String> = match std::fs::read_dir(pending_dir()) {
+        Ok(entries) => entries
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                (path.extension()?.to_str()? == "plain")
+                    .then(|| path.file_stem()?.to_str().map(str::to_string))?
+            })
+            .collect(),
+        Err(_) => BTreeSet::new(),
+    };
     let listed: BTreeSet<String> = PENDING.iter().map(|(name, _)| name.to_string()).collect();
     assert_eq!(on_disk, listed);
 }

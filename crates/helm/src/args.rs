@@ -121,6 +121,105 @@ pub enum Invocation {
     },
     /// `armada guild <verb>`.
     Guild(Box<GuildInvocation>),
+    /// `armada fleet <verb>`.
+    Fleet(Box<FleetInvocation>),
+}
+
+/// One of Fleet's verbs, and its own flags.
+///
+/// **Six variants rather than one with a mode field**, because they share
+/// almost nothing: `spawn` takes a task and four ways to override the plan,
+/// `board` takes one Job, and `ls` takes two lenses. A single struct would be
+/// twelve optional fields with a comment saying which combinations are legal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FleetInvocation {
+    /// `armada fleet spawn "<task>"`.
+    Spawn(Box<Spawn>),
+    /// `armada fleet ls`.
+    Ls {
+        /// Emit the envelope.
+        json: bool,
+        /// Include finished and killed Jobs, not just live ones.
+        all: bool,
+        /// Only Jobs waiting on you.
+        needs_attention: bool,
+    },
+    /// `armada fleet board <job>`.
+    Board {
+        /// Emit the envelope.
+        json: bool,
+        /// Which Job.
+        job: String,
+        /// Change directory and exec `claude --resume`, replacing this process.
+        exec: bool,
+    },
+    /// `armada fleet kill <job>`.
+    Kill {
+        /// Emit the envelope.
+        json: bool,
+        /// Which Job, or `None` under `--all-finished`.
+        job: Option<String>,
+        /// Do not delete the branch.
+        keep_branch: bool,
+        /// Release resources but leave the directory. Implies `--keep-branch`.
+        keep_worktree: bool,
+        /// Kill every Job whose workflow has terminated.
+        all_finished: bool,
+    },
+    /// `armada fleet answer <job> "<answer>"`.
+    Answer {
+        /// Emit the envelope.
+        json: bool,
+        /// Which Job.
+        job: String,
+        /// What to tell it.
+        answer: String,
+    },
+    /// `armada fleet inbox`.
+    Inbox {
+        /// Emit the envelope.
+        json: bool,
+        /// Only this Job's entries.
+        job: Option<String>,
+        /// Include entries already answered.
+        all: bool,
+    },
+}
+
+impl FleetInvocation {
+    /// Whether this invocation asked for the envelope.
+    pub fn json(&self) -> bool {
+        match self {
+            FleetInvocation::Spawn(spawn) => spawn.json,
+            FleetInvocation::Ls { json, .. }
+            | FleetInvocation::Board { json, .. }
+            | FleetInvocation::Kill { json, .. }
+            | FleetInvocation::Answer { json, .. }
+            | FleetInvocation::Inbox { json, .. } => *json,
+        }
+    }
+}
+
+/// `armada fleet spawn`, with the flags `commands/fleet/spawn.md` gives it.
+///
+/// A struct rather than variant fields, for the same reason [`Check`] is one.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Spawn {
+    /// Emit the envelope.
+    pub json: bool,
+    /// What to do, in your words.
+    pub task: String,
+    /// Override classification.
+    pub workflow: Option<String>,
+    /// The Job's handle. Derived from the task when absent.
+    pub name: Option<String>,
+    /// `--budget k=v`, repeatable.
+    pub budget: Vec<String>,
+    /// Which repository to branch from.
+    pub at: Option<String>,
+    /// Report the classification, worktree path, port block and budget. Starts
+    /// nothing.
+    pub dry_run: bool,
 }
 
 /// `armada init`, with the flags `docs/commands/init.md` gives it.
@@ -309,11 +408,34 @@ pub const BUILTIN_VERBS: [&str; 11] = [
 /// Each carries the milestone that builds it (PHASES.md §8).
 ///
 /// **M2 emptied three rows out of this table** — `init`, `doctor` and `guild`
-/// are built, and moved to [`TOP_LEVEL_VERBS`] and [`GUILD_VERBS`].
-pub const RESERVED_TOP_LEVEL: [(&str, &str); 3] = [
-    ("fleet", "M3 — the agents you do not talk to"),
+/// are built, and moved to [`TOP_LEVEL_VERBS`] and [`GUILD_VERBS`]. **M3's first
+/// third emptied a fourth**: `fleet` is built, and its verbs are in
+/// [`FLEET_VERBS`].
+pub const RESERVED_TOP_LEVEL: [(&str, &str); 2] = [
     ("helm", "M3 — the one agent you do talk to"),
     ("bridge", "M3 — the live screen"),
+];
+
+/// Fleet's verbs, and what each is for.
+///
+/// **All six are built.** Fleet is usable from a shell before the MCP server or
+/// Helm exists, which is the whole point of building it first (PHASES.md §8.5).
+pub const FLEET_VERBS: [(&str, &str); 6] = [
+    ("spawn", "start an isolated agent Job on a task"),
+    (
+        "ls",
+        "what is running, what it has spent, and who needs you",
+    ),
+    (
+        "board",
+        "take a Job over yourself: worktree and resume command",
+    ),
+    (
+        "answer",
+        "give a waiting Job your decision; let it continue",
+    ),
+    ("inbox", "what the fleet needs from you"),
+    ("kill", "end a Job and release everything it owns"),
 ];
 
 /// The top-level verbs that are built, and what each is for.
@@ -423,6 +545,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "init" => return machine_init(rest, json, color),
             "doctor" => return doctor(rest, json, color),
             "guild" => return guild(rest, json, color),
+            "fleet" => return fleet(rest, json, color),
             _ => {}
         }
         let json = json || rest.iter().any(|a| a == "--json");
@@ -680,6 +803,15 @@ impl Flags {
             .find(|(name, _)| name == flag)
             .map(|(_, value)| value.clone())
     }
+
+    /// Every occurrence, for a flag that repeats — `--budget k=v` is the one.
+    fn every(&self, flag: &str) -> Vec<String> {
+        self.values
+            .iter()
+            .filter(|(name, _)| name == flag)
+            .map(|(_, value)| value.clone())
+            .collect()
+    }
 }
 
 fn flags(
@@ -885,6 +1017,236 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
         }
     };
     Ok(Invocation::Guild(Box::new(invocation)))
+}
+
+/// `armada fleet <verb>`.
+///
+/// **The module name is a level of the grammar**, exactly as `manifest` and
+/// `guild` are, so a bare `armada fleet` is as incomplete as a bare `armada` and
+/// gets that module's page rather than an error.
+fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocation, ParseFailure> {
+    let Some(verb) = rest.first() else {
+        return Ok(Invocation::Help(Topic::Fleet));
+    };
+    if is_help(verb) {
+        return Ok(Invocation::Help(Topic::Fleet));
+    }
+    let tail = &rest[1..];
+    let name = verb.as_str();
+
+    if !FLEET_VERBS.iter().any(|(known, _)| *known == name) {
+        let json = json || tail.iter().any(|a| a == "--json");
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: format!("fleet {name}"),
+                message: format!("unknown verb `armada fleet {name}`"),
+                next_action: Some("`armada fleet --help` lists the six".to_string()),
+            },
+            json,
+        ));
+    }
+
+    let invocation = match name {
+        "spawn" => {
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "fleet spawn",
+                &["--dry-run"],
+                &["--workflow", "--name", "--budget", "-C"],
+            )?;
+            // **The task is required and is not defaulted.** A `spawn` with no
+            // task would classify an empty string and burn a worktree, a port
+            // block and a model call on a Job nobody described.
+            let Some(task) = one_positional(
+                &parsed,
+                "fleet spawn",
+                "the task to work on",
+                "`armada fleet spawn \"add rate limiting to the API\"`",
+            )?
+            else {
+                return Err(needs_positional(
+                    "fleet spawn",
+                    "`armada fleet spawn` needs a task",
+                    "`armada fleet spawn \"add rate limiting to the API\"`",
+                    parsed.json,
+                ));
+            };
+            FleetInvocation::Spawn(Box::new(Spawn {
+                json: parsed.json,
+                task,
+                workflow: parsed.value("--workflow"),
+                name: parsed.value("--name"),
+                budget: parsed.every("--budget"),
+                at: parsed.value("-C"),
+                dry_run: parsed.on("--dry-run"),
+            }))
+        }
+        "ls" => {
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "fleet ls",
+                &["--all", "--needs-attention"],
+                &[],
+            )?;
+            FleetInvocation::Ls {
+                json: parsed.json,
+                all: parsed.on("--all"),
+                needs_attention: parsed.on("--needs-attention"),
+            }
+        }
+        "board" => {
+            // `--print` is the default and is accepted so that writing it out
+            // is not an error — a caller being explicit about a default should
+            // never be refused.
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "fleet board",
+                &["--print", "--exec"],
+                &[],
+            )?;
+            let Some(job) = one_positional(
+                &parsed,
+                "fleet board",
+                "which Job",
+                "`armada fleet ls` lists them",
+            )?
+            else {
+                return Err(needs_positional(
+                    "fleet board",
+                    "`armada fleet board` needs a Job",
+                    "`armada fleet ls` lists them",
+                    parsed.json,
+                ));
+            };
+            FleetInvocation::Board {
+                json: parsed.json,
+                job,
+                exec: parsed.on("--exec"),
+            }
+        }
+        "kill" => {
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "fleet kill",
+                &["--keep-branch", "--keep-worktree", "--all-finished"],
+                &[],
+            )?;
+            let all_finished = parsed.on("--all-finished");
+            let job = one_positional(
+                &parsed,
+                "fleet kill",
+                "which Job",
+                "`armada fleet ls` lists them",
+            )?;
+            // **One or the other, and refused rather than ordered.** Naming a
+            // Job *and* `--all-finished` asks two different questions, and
+            // picking one for the caller could kill four Jobs they did not name.
+            if job.is_some() == all_finished {
+                return Err(failure(
+                    ArmadaError {
+                        class: ErrClass::BadInvocation,
+                        r#where: "fleet kill".to_string(),
+                        message: match all_finished {
+                            true => "`armada fleet kill` takes a Job or --all-finished, not both"
+                                .to_string(),
+                            false => {
+                                "`armada fleet kill` needs a Job, or --all-finished".to_string()
+                            }
+                        },
+                        next_action: Some("`armada fleet ls --all` lists them".to_string()),
+                    },
+                    parsed.json,
+                ));
+            }
+            FleetInvocation::Kill {
+                json: parsed.json,
+                job,
+                // **`--keep-worktree` implies `--keep-branch`.** A directory
+                // left behind whose branch was deleted is a worktree pointing
+                // at nothing, which is worse than either half on its own.
+                keep_branch: parsed.on("--keep-branch") || parsed.on("--keep-worktree"),
+                keep_worktree: parsed.on("--keep-worktree"),
+                all_finished,
+            }
+        }
+        "answer" => {
+            let parsed = flags(tail, json, color, "fleet answer", &[], &[])?;
+            match parsed.positionals.as_slice() {
+                [job, answer] => FleetInvocation::Answer {
+                    json: parsed.json,
+                    job: job.clone(),
+                    answer: answer.clone(),
+                },
+                _ => {
+                    return Err(needs_positional(
+                        "fleet answer",
+                        "`armada fleet answer` needs a Job and what to tell it",
+                        "`armada fleet answer nightly-flake \"yes, raise it to 90s\"`",
+                        parsed.json,
+                    ))
+                }
+            }
+        }
+        _ => {
+            let parsed = flags(tail, json, color, "fleet inbox", &["--all"], &["--job"])?;
+            FleetInvocation::Inbox {
+                json: parsed.json,
+                job: parsed.value("--job"),
+                all: parsed.on("--all"),
+            }
+        }
+    };
+    Ok(Invocation::Fleet(Box::new(invocation)))
+}
+
+/// The one bare word a Fleet verb takes, or `None`.
+///
+/// Two is refused rather than joined: `armada fleet answer` took a quoted string
+/// and lost its quotes is the failure this catches, and guessing that two words
+/// were meant as one sentence would make the refusal impossible.
+fn one_positional(
+    parsed: &Flags,
+    r#where: &str,
+    what: &str,
+    next_action: &str,
+) -> Result<Option<String>, ParseFailure> {
+    match parsed.positionals.as_slice() {
+        [] => Ok(None),
+        [only] => Ok(Some(only.clone())),
+        several => Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: r#where.to_string(),
+                message: format!(
+                    "`armada {where}` takes {what}, and was given {}",
+                    several.len()
+                ),
+                next_action: Some(next_action.to_string()),
+            },
+            parsed.json,
+        )),
+    }
+}
+
+fn needs_positional(r#where: &str, message: &str, next_action: &str, json: bool) -> ParseFailure {
+    failure(
+        ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: r#where.to_string(),
+            message: message.to_string(),
+            next_action: Some(next_action.to_string()),
+        },
+        json,
+    )
 }
 
 /// `armada manifest up [<selector>]` and `armada manifest down [<selector>]`.

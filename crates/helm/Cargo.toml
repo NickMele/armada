@@ -34,6 +34,10 @@ armada-manifest = { path = "../manifest" }
 # "Helm is the only crate that depends on both and wires them together" means
 # in practice.
 armada-guild = { path = "../guild" }
+# Fleet sits above both of them and is the only module that may name both
+# (ARCHITECTURE.md §1.9). Helm names all three, which is what "the only crate
+# that depends on both and wires them together" means as the stack grows.
+armada-fleet = { path = "../fleet" }
 armada-core = { path = "../core" }
 serde_json = { workspace = true }
 # **The whole of M1.5's rendering dependency budget** (`docs/commands/render.md`):

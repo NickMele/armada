@@ -163,6 +163,30 @@ impl Role {
         }
     }
 
+    /// The colour a Job state is spoken in.
+    ///
+    /// **This is the palette table read straight down** (`docs/commands/render.md`):
+    /// signal amber is `RUNNING`, flare orange is `STALLED`, radar cyan is
+    /// `QUEUED`, stasis purple is `PAUSED`, abort pink is `ABORTED` and distress
+    /// red is `BLOCKED`. Those five rows were written for the Bridge and are
+    /// spent here first, which is the point of one palette: the CLI and the
+    /// screen cannot disagree about what `RUNNING` looks like.
+    ///
+    /// `DONE` is the one the table does not name, and it takes beacon green for
+    /// the reason `PASS` does — it is the state that means the thing worked.
+    pub const fn for_job_state(state: armada_core::fleet::JobState) -> Role {
+        use armada_core::fleet::JobState;
+        match state {
+            JobState::Queued => Role::RadarCyan,
+            JobState::Running => Role::SignalAmber,
+            JobState::Paused => Role::StasisPurple,
+            JobState::Stalled => Role::FlareOrange,
+            JobState::Blocked => Role::DistressRed,
+            JobState::Aborted => Role::AbortPink,
+            JobState::Done => Role::BeaconGreen,
+        }
+    }
+
     /// The colour a probed port state is spoken in.
     pub const fn for_port(state: PortState) -> Role {
         match state {

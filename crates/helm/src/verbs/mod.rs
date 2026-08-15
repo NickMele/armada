@@ -10,6 +10,7 @@ pub mod clean;
 pub mod config;
 pub mod dispatch;
 pub mod doctor;
+pub mod fleet;
 pub mod guild;
 pub mod init;
 pub mod machine;
@@ -21,9 +22,10 @@ pub mod status;
 use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
-    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope,
-    GuildBundleData, GuildInitData, GuildSyncData, InitData, InitDryRun, MachineInitData, ScanData,
-    ServicesData, SkillsData, StatusData, UpDryRun, VerifyData,
+    AnswerData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData,
+    DoctorData, Envelope, FleetLsData, GuildBundleData, GuildInitData, GuildSyncData, InboxData,
+    InitData, InitDryRun, KillData, MachineInitData, ScanData, ServicesData, SkillsData, SpawnData,
+    StatusData, UpDryRun, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -72,6 +74,18 @@ pub enum Output {
     GuildInit(Box<Envelope<GuildInitData>>),
     /// `armada guild export` and `armada guild import`.
     GuildBundle(Box<Envelope<GuildBundleData>>),
+    /// `armada fleet spawn`.
+    Spawn(Box<Envelope<SpawnData>>),
+    /// `armada fleet ls`.
+    FleetLs(Box<Envelope<FleetLsData>>),
+    /// `armada fleet board`.
+    Board(Box<Envelope<BoardData>>),
+    /// `armada fleet kill`.
+    Kill(Box<Envelope<KillData>>),
+    /// `armada fleet inbox`.
+    Inbox(Box<Envelope<InboxData>>),
+    /// `armada fleet answer`.
+    Answer(Box<Envelope<AnswerData>>),
 }
 
 impl Output {
@@ -97,6 +111,12 @@ impl Output {
             Output::GuildSync(e) => e.to_json(),
             Output::GuildInit(e) => e.to_json(),
             Output::GuildBundle(e) => e.to_json(),
+            Output::Spawn(e) => e.to_json(),
+            Output::FleetLs(e) => e.to_json(),
+            Output::Board(e) => e.to_json(),
+            Output::Kill(e) => e.to_json(),
+            Output::Inbox(e) => e.to_json(),
+            Output::Answer(e) => e.to_json(),
         }
     }
 
@@ -139,6 +159,12 @@ impl Output {
             Output::GuildSync(e) => e.exit_code(),
             Output::GuildInit(e) => e.exit_code(),
             Output::GuildBundle(e) => e.exit_code(),
+            Output::Spawn(e) => e.exit_code(),
+            Output::FleetLs(e) => e.exit_code(),
+            Output::Board(e) => e.exit_code(),
+            Output::Kill(e) => e.exit_code(),
+            Output::Inbox(e) => e.exit_code(),
+            Output::Answer(e) => e.exit_code(),
         }
     }
 }

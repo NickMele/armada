@@ -145,6 +145,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::MachineInit(init) => init.json,
         Invocation::Doctor { json, .. } => *json,
         Invocation::Guild(guild) => guild.json(),
+        Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Version | Invocation::Help(_) => false,
     }
 }
@@ -275,6 +276,55 @@ fn dispatch(
 
     let run = RealRun;
 
+    // **Fleet is machine-scoped too, and for its own reason.** A Job's worktree
+    // is not the directory the command was typed in, and `armada fleet ls`
+    // "does not need the repository the Jobs branched from"
+    // (`commands/fleet/ls.md`) — so routing it through workspace resolution
+    // would refuse to list the fleet from anywhere but one of its worktrees.
+    if let Invocation::Fleet(fleet) = invocation {
+        let place = verbs::fleet::Where {
+            home: home.to_path_buf(),
+            armada_home: armada_manifest::machine::armada_home(home),
+            cwd: cwd.to_path_buf(),
+            // **Read once, at the entrypoint**, like `$HOME` and the cwd: Fleet
+            // runs `armada manifest init` in a worktree and has to know which
+            // binary it is (`ARCHITECTURE.md` §1.4).
+            exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
+        };
+        return match *fleet {
+            args::FleetInvocation::Spawn(spawn) => {
+                verbs::fleet::spawn(&run, &SystemClock, &place, &spawn)
+            }
+            args::FleetInvocation::Ls {
+                all,
+                needs_attention,
+                ..
+            } => verbs::fleet::ls(&SystemClock, &place, all, needs_attention),
+            args::FleetInvocation::Board { job, exec, .. } => {
+                let output = verbs::fleet::board(&place, &job)?;
+                if exec {
+                    // **The process is replaced**, so the exit code becomes
+                    // `claude`'s and Armada is no longer in the picture — which
+                    // is the whole of "Armada does not own a terminal".
+                    board_exec(&output)?;
+                }
+                Ok(output)
+            }
+            args::FleetInvocation::Kill {
+                job,
+                keep_branch,
+                keep_worktree,
+                ..
+            } => verbs::fleet::kill(&run, &place, job.as_deref(), keep_branch, keep_worktree),
+            args::FleetInvocation::Answer { job, answer, .. } => {
+                verbs::fleet::answer(&run, &SystemClock, &place, &job, &answer)
+            }
+            args::FleetInvocation::Inbox { job, all, .. } => {
+                verbs::fleet::inbox(&SystemClock, &place, job.as_deref(), all)
+            }
+        };
+    }
+
     // **This machine's own verbs run before anything of a workspace's is
     // opened.** See `machine_scoped` for why both halves of that matter.
     if matches!(
@@ -390,10 +440,42 @@ fn dispatch(
         },
         Invocation::Skills { show, .. } => verbs::skills::run(&mut app, show.as_deref()),
         Invocation::Version | Invocation::Help(_) => unreachable!("handled before dispatch"),
-        Invocation::MachineInit(_) | Invocation::Doctor { .. } | Invocation::Guild(_) => {
-            unreachable!("machine-scoped, and handled above")
-        }
+        Invocation::MachineInit(_)
+        | Invocation::Doctor { .. }
+        | Invocation::Guild(_)
+        | Invocation::Fleet(_) => unreachable!("machine-scoped, and handled above"),
     }
+}
+
+/// `armada fleet board --exec`: change directory and become `claude`.
+///
+/// **Replacing the process rather than spawning one is the point.** Armada owns
+/// no terminal (`commands/fleet/board.md`); with `--exec` it hands its own
+/// process over, so the exit code, the signals and the tty all belong to the
+/// session from that moment and Armada is not sitting in the middle of a
+/// conversation it has no part in.
+///
+/// It returns only if the exec **failed** — a successful one never comes back.
+fn board_exec(output: &Output) -> Result<(), ArmadaError> {
+    use std::os::unix::process::CommandExt;
+
+    let Output::Board(envelope) = output else {
+        return Ok(());
+    };
+    let data = &envelope.data;
+    let mut argv = data.command.split(' ');
+    let program = argv.next().unwrap_or("claude");
+    let error = std::process::Command::new(program)
+        .args(argv)
+        .current_dir(&data.worktree)
+        .exec();
+
+    Err(ArmadaError {
+        class: ErrClass::Environment,
+        r#where: data.command.clone(),
+        message: format!("could not board: {error}"),
+        next_action: Some(format!("cd {} && {}", data.worktree, data.command)),
+    })
 }
 
 /// The invocation `--force-rebuild` insists on, or `None` if this is it.

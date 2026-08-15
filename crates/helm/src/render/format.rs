@@ -35,6 +35,45 @@ pub fn duration(ms: u64) -> String {
     format!("{}h {:02}m", ms / HOUR, (ms % HOUR) / MINUTE)
 }
 
+/// How long a Job has been alive, to one unit.
+///
+/// **Coarser than [`duration`], deliberately**, and the agreed layout settles it:
+/// `armada fleet ls` draws `14m` and `1h` where `armada manifest check` draws
+/// `26.8s` and `1m 12s`. The two are answering different questions — a check's
+/// number is read to decide whether the suite got slow, and a Job's is read to
+/// decide whether it has been going long enough to look at. Seconds of precision
+/// on a Job that has been running for an hour is noise in a column being
+/// scanned.
+///
+/// | Range | Form |
+/// |---|---|
+/// | under a minute | `42s` |
+/// | under an hour | `14m` |
+/// | beyond | `1h` |
+pub fn elapsed(ms: u64) -> String {
+    const SECOND: u64 = 1_000;
+    const MINUTE: u64 = 60 * SECOND;
+    const HOUR: u64 = 60 * MINUTE;
+
+    if ms < MINUTE {
+        return format!("{}s", ms / SECOND);
+    }
+    if ms < HOUR {
+        return format!("{}m", ms / MINUTE);
+    }
+    format!("{}h", ms / HOUR)
+}
+
+/// Dollars, as the agreed layout writes them: `$2.10`.
+///
+/// **Two decimal places always**, so a column of them lines up on the point
+/// without the renderer having to align anything — `$0.45` and `$12.30` are the
+/// same shape. The unrounded figure stays in `--json`, where the reader is doing
+/// arithmetic rather than scanning.
+pub fn money(usd: f64) -> String {
+    format!("${usd:.2}")
+}
+
 /// `n` of something, pluralised by the only rule English is reliable about.
 ///
 /// Present because a summary line saying `1 checks` is the kind of thing a
@@ -93,6 +132,34 @@ mod tests {
         assert_eq!(duration(3_599_000), "59m 59s");
         assert_eq!(duration(3_600_000), "1h 00m");
         assert_eq!(duration(3_900_000), "1h 05m");
+    }
+
+    /// The values from the agreed layout for `armada fleet ls`, which is where
+    /// these came from (`tests/golden/render/fleet-ls.plain`).
+    #[test]
+    fn a_jobs_run_time_reads_back_the_way_it_was_drawn() {
+        assert_eq!(elapsed(840_000), "14m");
+        assert_eq!(elapsed(180_000), "3m");
+        assert_eq!(elapsed(1_320_000), "22m");
+        assert_eq!(elapsed(3_900_000), "1h");
+    }
+
+    /// The boundaries, where an off-by-one shows as `60m` or `0m`.
+    #[test]
+    fn a_run_time_carries_no_sixty_and_no_zero_of_the_wrong_unit() {
+        assert_eq!(elapsed(0), "0s");
+        assert_eq!(elapsed(59_999), "59s");
+        assert_eq!(elapsed(60_000), "1m");
+        assert_eq!(elapsed(3_599_999), "59m");
+        assert_eq!(elapsed(3_600_000), "1h");
+    }
+
+    #[test]
+    fn money_is_always_two_places_so_a_column_of_it_lines_up() {
+        assert_eq!(money(2.1), "$2.10");
+        assert_eq!(money(0.4499), "$0.45");
+        assert_eq!(money(0.0), "$0.00");
+        assert_eq!(money(8.4), "$8.40");
     }
 
     #[test]

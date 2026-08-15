@@ -40,11 +40,13 @@ pub mod table;
 pub mod term;
 
 use armada_core::envelope::{
-    CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData, DoctorData, Envelope, Finding,
-    GuildBundleData, GuildInitData, GuildSyncData, Headline, InitData, InitDryRun, MachineInitData,
-    ResultRow, ScanData, ServicesData, SkillsData, StatusData, Unreclaimed, UpDryRun, VerifyData,
+    AnswerData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, DispatchData,
+    Disposition, DoctorData, Envelope, Finding, FleetLsData, GuildBundleData, GuildInitData,
+    GuildSyncData, Headline, InboxData, InitData, InitDryRun, KillData, MachineInitData, ResultRow,
+    ScanData, ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
+use armada_core::fleet::JobState;
 use armada_core::id::WorkspaceId;
 use armada_core::ports::PortState;
 use armada_core::reap::ReapPlan;
@@ -83,7 +85,378 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::GuildSync(envelope) => guild_sync(envelope, style, width),
         Output::GuildInit(envelope) => guild_init(envelope, style, width),
         Output::GuildBundle(envelope) => guild_bundle(envelope, style, width),
+        Output::Spawn(envelope) => spawn(envelope, style, width),
+        Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
+        Output::Board(envelope) => board(envelope, style, width),
+        Output::Kill(envelope) => kill(envelope, style, width),
+        Output::Inbox(envelope) => inbox(envelope, style, width),
+        Output::Answer(envelope) => answer(envelope, style, width),
     }
+}
+
+// ---------------------------------------------------------------- M3: the fleet
+//
+// **The lead word on a Fleet summary line is a Job state, not a terminal
+// state.** `RUNNING` there says what the *Job* is doing; the envelope's own
+// `status` says how the *command* ended, and they are different questions
+// (PLAN.md §14.3). This module's uppercase rule is kept rather than bent: the
+// word is in the payload under `data.state`, spelled exactly as it is printed,
+// so a reader can still grep for anything they saw — the same argument
+// [`Headline`] carries for `NEEDS ATTENTION`.
+
+/// A Job state, spelled as the payload spells it and coloured to agree.
+fn job_state(state: JobState) -> Cell {
+    Cell::painted(state.word().to_string(), Role::for_job_state(state))
+}
+
+/// The summary line for a verb that reports one Job.
+fn job_summary(style: Style, state: JobState, facts: &[String]) -> String {
+    headlined(
+        style,
+        &style.strong(Role::for_job_state(state), state.word()),
+        facts,
+    )
+}
+
+/// `armada fleet spawn` — the four things it did, and how to take the Job over.
+///
+/// **The confidence is on the screen and not only in the payload** (PLAN.md
+/// §14.2): a guess has to be visible as a guess, and a classification nobody can
+/// see is one nobody can override.
+fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("step", "detail", true)).indent(2);
+
+    table = table.row(vec![
+        token(
+            "classified",
+            match data.confidence {
+                // A low confidence is the one row on this table worth looking
+                // twice at, so it is the one that is not green.
+                Some(c) if c < armada_core::fleet::classify::CONFIDENT => Role::FlareOrange,
+                _ => Role::BeaconGreen,
+            },
+        ),
+        Cell::plain("workflow"),
+        detail_cell(
+            style,
+            Some(&match data.confidence {
+                Some(c) => format!("{}, confidence {c:.2}", data.workflow),
+                // **An override reports that you named it, not a confidence of
+                // 1.0.** "You said so" and "the model was certain" are different
+                // facts and only one of them is a measurement.
+                None => format!("{}, you named it", data.workflow),
+            }),
+        ),
+        time_cell(style, data.classify_ms),
+    ]);
+    table = table.row(vec![
+        token("created", Role::BeaconGreen),
+        Cell::plain("worktree"),
+        detail_cell(style, Some(&data.worktree)),
+        time_cell(style, Some(data.prepare_ms)),
+    ]);
+    table = table.row(vec![
+        token(
+            "claimed",
+            match data.port_block {
+                Some(_) => Role::BeaconGreen,
+                None => Role::SteelGrey,
+            },
+        ),
+        Cell::plain("ports"),
+        detail_cell(
+            style,
+            data.port_block
+                .map(|block| style.span(block.from, block.to))
+                .as_deref(),
+        ),
+        time_cell(style, None),
+    ]);
+    table = table.row(vec![
+        token("started", Role::BeaconGreen),
+        Cell::plain("drone"),
+        detail_cell(
+            style,
+            Some(&format!(
+                "job {}, {} step",
+                armada_core::fleet::job::short(&data.uuid),
+                data.step
+            )),
+        ),
+        time_cell(style, None),
+    ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&job_summary(
+        style,
+        data.state,
+        &[
+            data.name.clone(),
+            format!("armada fleet board {} to take over", data.name),
+        ],
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// `armada fleet ls` — what is running, how long, what it has spent, and who
+/// needs you.
+///
+/// **Every column is read off data Claude Code already emits** (PHASES.md §9.1
+/// F2). The renderer rounds; it does not compute.
+fn fleet_ls(envelope: &Envelope<FleetLsData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("job"),
+        Column::fixed("workflow"),
+        Column::flexible("detail"),
+        // **Right, always**: a column of right-aligned numbers can be compared
+        // by eye without reading any of them (`render/table.rs`).
+        Column::fixed("spent").right(),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
+
+    for row in &data.results {
+        table = table.row(vec![
+            job_state(row.state),
+            // Naval blue is what the palette reserves for a Job identifier.
+            Cell::painted(row.name.clone(), Role::NavalBlue),
+            Cell::muted(row.workflow.clone()),
+            detail_cell(style, Some(row.detail.as_str())),
+            // **Nothing spent is a dash, not `$0.00`.** A zero in this column
+            // reads as a measurement; a Job that has not run yet has not been
+            // measured.
+            Cell::muted(if row.cost_usd > 0.0 {
+                format::money(row.cost_usd)
+            } else {
+                style.nothing().to_string()
+            }),
+            Cell::muted(if row.state == JobState::Queued {
+                style.nothing().to_string()
+            } else {
+                format::elapsed(row.runtime_s * 1_000)
+            }),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    if table.is_empty() {
+        // **An empty fleet says so.** A verb that printed nothing would be
+        // indistinguishable from one that failed to run.
+        out.push_str("  no Jobs\n");
+    }
+    out.push('\n');
+    out.push_str(&summary(style, envelope.status, &ls_facts(data)));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// What a fleet listing counts, in the order the agreed layout counts it.
+fn ls_facts(data: &FleetLsData) -> Vec<String> {
+    let mut facts = vec![format::count(data.results.len(), "job")];
+    // Omitted at zero rather than printed as `0 need you`: the whole value of
+    // this line is that "needs me" stays a signal (PLAN.md §15.4).
+    if data.needs_you > 0 {
+        facts.push(format!("{} need you", data.needs_you));
+    }
+    facts.push(format!("{} today", format::money(data.spent_usd)));
+    facts
+}
+
+/// `armada fleet board` — the two facts needed to enter a Job.
+///
+/// **The DETAIL column is fixed here and flexible everywhere else**, because a
+/// truncated resume command is not a shorter answer — it is the wrong one, and
+/// this whole verb exists to be pasted.
+fn board(envelope: &Envelope<BoardData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let table = Table::new(vec![Column::fixed("status"), Column::fixed("detail")])
+        .indent(2)
+        .row(vec![
+            token("worktree", Role::NavalBlue),
+            Cell::plain(data.worktree.clone()),
+        ])
+        .row(vec![
+            token("resume", Role::BeaconGreen),
+            Cell::plain(data.command.clone()),
+        ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[data.job.clone(), format!("branch {}", data.branch)],
+    ));
+    out
+}
+
+/// `armada fleet kill` — what each Job released, and what became of its tree.
+fn kill(envelope: &Envelope<KillData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("job", "detail", true)).indent(2);
+
+    for killed in &data.results {
+        table = table.row(vec![
+            token(
+                "cleaned",
+                match killed.error {
+                    Some(_) => Role::DistressRed,
+                    None => Role::BeaconGreen,
+                },
+            ),
+            Cell::painted(killed.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&released(style, killed))),
+            time_cell(style, None),
+        ]);
+        table = table.row(vec![
+            token(
+                killed.worktree.word(),
+                match killed.worktree {
+                    Disposition::Removed => Role::BeaconGreen,
+                    _ => Role::SteelGrey,
+                },
+            ),
+            Cell::painted(killed.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&format!("worktree {}", killed.worktree_path))),
+            time_cell(style, None),
+        ]);
+        table = table.row(vec![
+            token(
+                killed.branch.word(),
+                match killed.branch {
+                    Disposition::Kept => Role::FlareOrange,
+                    _ => Role::SteelGrey,
+                },
+            ),
+            Cell::painted(killed.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&format!("branch {}", killed.branch_name))),
+            time_cell(style, None),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    if table.is_empty() {
+        out.push_str("  no Jobs to kill\n");
+    }
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            format::count(data.results.len(), "job"),
+            // **The transcript is not deleted, and the line says so.** It lives
+            // under ~/.claude/projects/ and is the record of what happened
+            // (`commands/fleet/kill.md`).
+            "transcripts kept".to_string(),
+        ],
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
+}
+
+/// What one `kill` reclaimed, in one cell.
+fn released(style: Style, killed: &armada_core::envelope::Killed) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for (count, noun) in [
+        (killed.released.containers, "container"),
+        (killed.released.processes, "process"),
+        (killed.released.networks, "network"),
+        (killed.released.volumes, "volume"),
+        (killed.released.images, "image"),
+    ] {
+        if count > 0 {
+            parts.push(format::count(count, noun));
+        }
+    }
+    if let Some(block) = killed.port_block {
+        parts.push(format!("ports {}", style.span(block.from, block.to)));
+    }
+    if parts.is_empty() {
+        // Stated rather than left blank: "it owned nothing" and "nobody looked"
+        // read identically otherwise, and only one of them is a guarantee.
+        parts.push("owned nothing".to_string());
+    }
+    parts.join(", ")
+}
+
+/// `armada fleet inbox` — what the fleet needs from you.
+fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("job", "detail", true)).indent(2);
+
+    for row in &data.results {
+        table = table.row(vec![
+            token(
+                &row.kind,
+                match (row.answered.is_some(), row.kind.as_str()) {
+                    (true, _) => Role::SteelGrey,
+                    (false, "blocked") => Role::DistressRed,
+                    (false, _) => Role::FlareOrange,
+                },
+            ),
+            Cell::painted(row.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(row.body.as_str())),
+            Cell::muted(format::elapsed(row.waiting_s * 1_000)),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    if table.is_empty() {
+        // **An empty inbox is a normal state, not a failure**
+        // (`commands/fleet/inbox.md`), so it is said in words.
+        out.push_str("  nothing waiting\n");
+    }
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            format!("{} open", data.open),
+            "armada fleet answer <job> \"…\"".to_string(),
+        ],
+    ));
+    out
+}
+
+/// `armada fleet answer` — the entry you closed, and what the Job did next.
+fn answer(envelope: &Envelope<AnswerData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let table = Table::new(columns("job", "detail", true))
+        .indent(2)
+        .row(vec![
+            token("answered", Role::BeaconGreen),
+            Cell::painted(data.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&data.answer)),
+            time_cell(style, data.spend.map(|spend| spend.api_ms)),
+        ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&job_summary(
+        style,
+        data.state,
+        &[
+            data.job.clone(),
+            // **The budget was not reset**, and the line is where a reader sees
+            // that: an answer is a continuation rather than a new run.
+            format!(
+                "{} remaining",
+                format::count(data.budget_remaining.iterations as usize, "iteration")
+            ),
+        ],
+    ));
+    out
 }
 
 // ------------------------------------------------------------- M2: the machine

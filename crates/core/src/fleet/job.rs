@@ -40,8 +40,15 @@ pub struct Job {
     /// act on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<f64>,
-    /// The repository this Job branched from.
+    /// The repository this Job branched from, by name.
     pub repo: String,
+    /// Where that repository is, as a person writes it.
+    ///
+    /// **Carried rather than re-derived.** `armada fleet kill` runs `git
+    /// worktree remove` *from the repository*, and by then the only thing that
+    /// knows where the repository was is this record — the worktree it would
+    /// otherwise ask is the thing being removed.
+    pub repo_root: String,
     /// Where the worktree is, as a person writes it.
     pub worktree: String,
     /// The branch the worktree is on.
@@ -417,6 +424,7 @@ mod tests {
             workflow: "feature".to_string(),
             confidence: Some(0.94),
             repo: "api".to_string(),
+            repo_root: "~/code/api".to_string(),
             worktree: "~/.armada/workspaces/api/rate-limit".to_string(),
             branch: "armada/rate-limit".to_string(),
             port_block: None,
@@ -444,6 +452,7 @@ mod tests {
             workflow: "bug".to_string(),
             confidence: None,
             repo: "api".to_string(),
+            repo_root: "~/code/api".to_string(),
             worktree: "~/.armada/workspaces/api/nightly-flake".to_string(),
             branch: "armada/nightly-flake".to_string(),
             port_block: Some(PortBlock {

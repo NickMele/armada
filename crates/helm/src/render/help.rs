@@ -22,7 +22,7 @@
 //! from `args.rs`'s own constants rather than being retyped here, so a verb
 //! cannot ship without appearing on this page — there is a test.
 
-use crate::args::{BUILTIN_VERBS, GUILD_VERBS, RESERVED_TOP_LEVEL, TOP_LEVEL_VERBS};
+use crate::args::{BUILTIN_VERBS, FLEET_VERBS, GUILD_VERBS, RESERVED_TOP_LEVEL, TOP_LEVEL_VERBS};
 
 use super::palette::Role;
 use super::style::Style;
@@ -42,6 +42,8 @@ pub enum Topic {
     Manifest,
     /// `armada guild`, or `armada guild --help`.
     Guild,
+    /// `armada fleet`, or `armada fleet --help`.
+    Fleet,
     /// `armada manifest <verb> --help`.
     Verb(&'static str),
 }
@@ -224,6 +226,7 @@ pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
         Topic::Root => root(style, terminal),
         Topic::Manifest => manifest(style, terminal),
         Topic::Guild => guild(style, terminal),
+        Topic::Fleet => fleet(style, terminal),
         Topic::Verb(name) => match MANIFEST.iter().find(|page| page.name == name) {
             Some(page) => verb(page, style, terminal),
             // Unreachable through `args::parse`, which only produces a
@@ -280,6 +283,13 @@ fn root(style: Style, terminal: Terminal) -> String {
         )
         .render(style, width),
     );
+
+    out.push('\n');
+    out.push_str(&heading(
+        style,
+        "FLEET — the agents you do not talk to: Jobs, worktrees, budgets",
+    ));
+    out.push_str(&two_column(&FLEET_VERBS).render(style, width));
 
     out.push('\n');
     out.push_str(&heading(style, "THIS MACHINE"));
@@ -351,6 +361,32 @@ fn guild(style: Style, terminal: Terminal) -> String {
         "Nothing in ~/.armada/guild/ is repository content, and no part of it is ever\n\
          committed to a project. machine.yml, manifest.db, jobs/ and workspaces/ never\n\
          sync (PLAN.md \u{a7}13.1).\n",
+    );
+    out
+}
+
+/// `armada fleet`, the module page.
+fn fleet(style: Style, terminal: Terminal) -> String {
+    let width = terminal.usable_width();
+    let mut out = format!(
+        "{}\n\n",
+        style.strong(
+            Role::SignalAmber,
+            "armada fleet \u{2014} the agents you do not talk to: Jobs, Drones, worktrees"
+        )
+    );
+    out.push_str(&heading(style, "VERBS"));
+    out.push_str(&two_column(&FLEET_VERBS).render(style, width));
+    out.push('\n');
+    // **The one thing a reader has to know before the verbs make sense**
+    // (`glossary.md`): the durable thing and the running thing are not the same
+    // thing, and every verb here acts on the durable one.
+    out.push_str(
+        "A Job is durable: a uuid, a worktree, a port block, a transcript and a budget.\n\
+         A Drone is the process running it. Killing a Drone does not end its Job, and a\n\
+         Job with nothing running is the ordinary resting state (PLAN.md \u{a7}14.1).\n\n\
+         Board does not attach. It hands you the conversation to drive yourself, in the\n\
+         Job's own worktree \u{2014} Armada owns no terminal.\n",
     );
     out
 }
