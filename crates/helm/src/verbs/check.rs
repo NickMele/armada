@@ -721,8 +721,14 @@ fn unknown_run(run: &RunId, workspace: &armada_core::id::WorkspaceId) -> ArmadaE
         class: ErrClass::BadInvocation,
         r#where: run.to_string(),
         message: format!("no run `{run}` in workspace {workspace}"),
+        // **Not "list them", because nothing lists them.** `armada manifest
+        // status` answers about ports, leases and what is owned; run
+        // directories are reaped on a retention count and are not among what it
+        // reports. The one thing that is true and actionable is that `--status`
+        // with no id reads the most recent run there is.
         next_action: Some(
-            "`armada manifest status` lists the runs this workspace has kept".to_string(),
+            "`armada manifest check --status` reads the most recent run this workspace kept"
+                .to_string(),
         ),
     }
 }

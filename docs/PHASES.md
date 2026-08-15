@@ -64,7 +64,7 @@ that matters when the whole thing is built in evenings.
 | **M1.5** | Manifest | The render layer: palette, tables, help, progress. Three audiences, one envelope | next |
 | **M2** | Guild | `armada init`, the interview, import from `~/.claude/`, sync | |
 | **M3** | Fleet + Helm | Jobs and Drones, budgets, inbox — **and Helm and the Bridge on top** | the product |
-| **M4** | Fleet | Workflow loops with real verification | blocked on `check --detach` / `--status` |
+| **M4** | Fleet | Workflow loops with real verification | unblocked — `check --detach` / `--status` shipped; the loop is what is left |
 
 ### 8.1 Why this order, and the one thing that reordered it
 
@@ -87,21 +87,20 @@ directory and deleting the privacy machinery touches every file and every golden
 Doing it before Guild and Fleet added surface area was the cheapest it was ever going to be —
 and the one row it did not carry (§8.3) gets no more expensive by waiting.
 
-**M4 is still blocked, but on something narrower than before, and the capability it was
-missing now exists.** The `check` engine has landed and dogfoods (§9.3), so a verdict can now
-carry evidence an external command produced — the thing M4 was originally waiting for. What
-`check` cannot do is `--detach` and `--status`, both still refused by name. That matters
-because a loop runs inside a Drone's turn: the `python-ml` fixture's checks take thirty
-minutes, and a Drone that blocks its whole turn on one is not viable. **A loop can run a check
-to completion; it cannot yet start one and poll it.**
+**M4 is no longer blocked.** The `check` engine landed and dogfoods (§9.3), so a verdict can
+carry evidence an external command produced — the thing M4 was originally waiting for — and
+`--detach` and `--status` have now landed on top of it. That mattered because a loop runs
+inside a Drone's turn: the `python-ml` fixture's checks take thirty minutes, and a Drone that
+blocks its whole turn on one is not viable. **A loop can now start a check, walk away, and ask
+what it decided.**
 
-> **Fleet's detached Drone unblocks it, and the work left is wiring rather than design**
-> (§8.5). `--detach` needs exactly what a Drone needed: start a long-lived `setsid`'d process
+> **Fleet's detached Drone is what unblocked it, and the work was wiring rather than design**
+> (§8.5). `--detach` needed exactly what a Drone needed: start a long-lived `setsid`'d process
 > group, record it as owned so `clean` reclaims it, and answer afterwards from what it wrote
-> to disk. All three are built and used — `ProcessGroup::spawn`, the `owned` row with its two
-> stamps, and a run directory `--status` can read the way `armada fleet ls` reads a
-> transcript. The missing piece was never the flag; it was a second caller proving the shape
-> works for something that outlives the command that started it.
+> to disk. All three were built and used — `ProcessGroup::spawn`, the `owned` row with its two
+> stamps, and a run directory `--status` reads the way `armada fleet ls` reads a transcript.
+> The missing piece was never the flag; it was a second caller proving the shape works for
+> something that outlives the command that started it, and it now has one.
 
 ### 8.2 M0 — the research spike ✓ done
 
@@ -397,20 +396,33 @@ that is yours — without you naming a workflow, a worktree or a port.
 The loop that runs until a task is complete, terminating on a verdict or a ceiling.
 [`PLAN.md`](PLAN.md) §14.3 has the envelope and the four verdicts.
 
-**`check` has landed; two of its flags have not.** A verdict is only `PASS` if it carries
-evidence an external command produced; an agent asserting "tests pass" is not evidence and an
-exit code is. The engine that produces that exit code is built and dogfooded — scope
-resolution, the scheduler, the run directory and verdict aggregation, with what it settled and
-the one gap it leaves open in §9.3. What it still refuses by name is `--detach` and `--status`,
-so a loop can run a check to completion but cannot yet start one and poll it. `up` and `down` have since landed with them; Manifest's
-remaining verbs — `agents-md` and `explain` — are first-class Armada work and not background
-work.
+**`check` has landed, and so have the two flags that were the last thing blocking this
+milestone.** A verdict is only `PASS` if it carries evidence an external command produced; an
+agent asserting "tests pass" is not evidence and an exit code is. The engine that produces that
+exit code is built and dogfooded — scope resolution, the scheduler, the run directory and
+verdict aggregation, with what it settled and the one gap it leaves open in §9.3. `up` and
+`down` have since landed with it; Manifest's remaining verbs — `agents-md` and `explain` — are
+first-class Armada work and not background work.
 
-**The mechanism `--detach` needs is now built and in use.** Fleet's Drones are long-lived
-`setsid`'d process groups recorded as owned, and `armada fleet ls` answers about them from what
-they wrote to disk rather than from anything they reported (§8.5). `--detach` is the same shape
-against a run directory, and `--status` the same read. That is a wiring job on a proven
-mechanism rather than the open design question it was when this section was written.
+**`--detach` and `--status` were wiring on a proven mechanism, and that is how they were
+built.** Fleet's Drones are long-lived `setsid`'d process groups recorded as owned, and
+`armada fleet ls` answers about them from what they wrote to disk rather than from anything
+they reported (§8.5). `--detach` is that shape against a run directory: everything that can
+fail synchronously — selection, the diff, the port block, every argv — is resolved in the
+caller's terminal, then the run is handed to a `setsid`'d child that adopts the run id its
+parent already opened and takes the run lease itself. `--status` is the same read
+([`commands/manifest/check.md`](commands/manifest/check.md)).
+
+**Three things were decided in the building, each because the alternative was wrong:**
+
+| | |
+|---|---|
+| **The detached child takes the lease, not its parent.** | The parent exits at once, and a lease held by a process that is gone is one the cold-heartbeat path reclaims. So a detached run is protected exactly as an attached one: a second `check` fails fast, and `clean` refuses while it is in flight. |
+| **The record is rewritten whenever a check changes phase.** | It used to be written once, at the end. A `--status` mid-run then reported a check that had been running for two minutes as *waiting* — the record was the source of truth and was stale about the only thing a poll asks. |
+| **The record wins over the process probe.** | A run that has written its verdict has finished deciding whether or not its process has got as far as exiting. Re-deciding on the strength of a `ps` is exactly how a detached run would come to disagree with an attached one over the same rows, which is worse than having no detach at all. |
+
+**What is left of M4 is the loop itself**, which is Fleet's and Guild's rather than Manifest's:
+the workflow steps, the ceiling, and the branch it lands on.
 
 **Done when:** a bug workflow reproduces a failure, writes a test that fails first, fixes it,
 gets `check` green, and lands on a local branch, with no human turn in the middle and a hard

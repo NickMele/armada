@@ -11,8 +11,9 @@
 > The **Manifest** module — formerly charkit — has landed its config contract, six fixtures and
 > the ownership layer behind `init`, `up`, `down`, `clean`, `status`, `check`, `config`,
 > `skills` and `commands:`. The three seams, the reducer's shape for the claim loop and the
-> `--json` envelope are code rather than sketches. **Guild** and **Fleet** have landed too;
-> `render`, `agents-md`, `explain`, `check --detach`/`--status`, `guild edit`/`verify`, the MCP
+> `--json` envelope are code rather than sketches, and `check --detach`/`--status` have landed
+> on top of them — the pair M4 was blocked on ([`PHASES.md`](PHASES.md) §8.6). **Guild** and
+> **Fleet** have landed too; `render`, `agents-md`, `explain`, `guild edit`/`verify`, the MCP
 > server, Helm and the Bridge are not built.
 >
 > This document records **principles and the reasoning behind them**. The reasoning is the

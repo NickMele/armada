@@ -32,7 +32,7 @@ and the three status enums. These pages use them without re-explaining them.
 | [`manifest/components.md`](manifest/components.md) | `armada manifest components` | shipped |
 | [`manifest/up.md`](manifest/up.md) | `armada manifest up` | shipped |
 | [`manifest/down.md`](manifest/down.md) | `armada manifest down` | shipped |
-| [`manifest/check.md`](manifest/check.md) | `armada manifest check` | shipped, less `--detach` / `--status` |
+| [`manifest/check.md`](manifest/check.md) | `armada manifest check` | shipped, `--detach` / `--status` included |
 | [`manifest/config.md`](manifest/config.md) | `armada manifest config scan\|verify` | shipped |
 | [`manifest/explain.md`](manifest/explain.md) | `armada manifest explain` | not built |
 

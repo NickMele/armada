@@ -1176,6 +1176,17 @@ fn incoherent(parsed: &Check) -> Option<ArmadaError> {
     // silently filter somebody else's verdicts, and both are worse than saying
     // no.
     if parsed.status {
+        // **The bare word is answered before the flags**, because it is the
+        // mistake that is actually made: a caller reaching for a run id and
+        // mistyping it lands here, and *"it takes no <selector>"* would send
+        // them to look for a flag they did not type.
+        if let Some(word) = &parsed.selector {
+            return refuse(
+                &format!("`--status` reads a run, and `{word}` is not a run id"),
+                "a run id is 16 characters of upper-case Crockford base32; `--status` with none \
+                 reads the most recent run",
+            );
+        }
         let scope = [
             ("--dry-run", parsed.dry_run),
             ("--all-files", parsed.all_files),
@@ -1184,7 +1195,6 @@ fn incoherent(parsed: &Check) -> Option<ArmadaError> {
             ("--files", !parsed.files.is_empty()),
             ("--component", parsed.component.is_some()),
             ("--concurrency", parsed.jobs.is_some()),
-            ("<selector>", parsed.selector.is_some()),
         ];
         if let Some((named, _)) = scope.iter().find(|(_, given)| *given) {
             return refuse(
@@ -3488,11 +3498,12 @@ mod tests {
         assert_eq!(named.run.as_deref(), Some("01M00WRY00CYTZ44"));
         assert_eq!(named.selector, None, "the id was read twice");
 
-        // Not an id: left alone, so the ordinary refusal below sees it.
+        // Not an id: left alone, and the refusal names the word rather than
+        // sending the caller to look for a flag they did not type.
         let failure = parse(&args(&["manifest", "check", "--status", "api:lint"])).unwrap_err();
         assert_eq!(failure.error.class, ErrClass::BadInvocation);
         assert!(
-            failure.error.message.contains("no <selector>"),
+            failure.error.message.contains("`api:lint` is not a run id"),
             "{}",
             failure.error.message
         );
