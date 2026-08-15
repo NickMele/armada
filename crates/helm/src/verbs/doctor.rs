@@ -642,13 +642,21 @@ fn a_few(items: &[&str]) -> String {
     format!("{}, +{}", items[..KEEP].join(", "), items.len() - KEEP)
 }
 
-/// `manifest.db`, and what Guild is allowed to know about it — which is only
-/// that it is there.
+/// `manifest.db` — its size, table by table, and how much of it is
+/// reclaimable.
 ///
 /// **Guild may not name Manifest** (`ARCHITECTURE.md` §1.9), and `doctor` is
-/// Helm's, so this is the one place the two are looked at together. It reports
-/// the file's presence and nothing about its contents: reading it here would be
-/// Helm reimplementing a store that has an owner.
+/// Helm's, so this is the one place the two are looked at together. It reads
+/// through [`armada_manifest::db::Db::peek_stats`] rather than opening its own
+/// connection: the store has an owner, and this asks it a question rather than
+/// reimplementing it.
+///
+/// **Presence is not health** (`docs/reserved/009-smaller-things-raised-in-use.md`
+/// item 1). A store that exists and holds four thousand dead rows used to read
+/// the same as an empty one: both said `present`. The table breakdown comes off
+/// `sqlite_master`, so a table `db.rs::migrate` adds shows up here without this
+/// function changing — the same fix item 5 made for `armada --help`'s drifted
+/// list.
 fn store(armada_home: &Path) -> Finding {
     let path = armada_home.join("manifest.db");
     let withheld = machine::read(armada_home).withheld.len();
@@ -659,17 +667,32 @@ fn store(armada_home: &Path) -> Finding {
             "not created yet: `armada manifest init` makes it",
         );
     }
-    Finding::settled(
-        "manifest.db",
-        Settled::Ok,
-        match withheld {
-            0 => "present".to_string(),
-            n => format!(
-                "present, {} withheld from the guild",
-                crate::render::format::count(n, "value")
-            ),
-        },
-    )
+
+    let Some(stats) = armada_manifest::db::Db::peek_stats(&path) else {
+        // Present but unreadable — the same failure `peek_namespace` already
+        // tolerates. `armada manifest` reports a broken store when it actually
+        // opens one; doctor says only that this could not be read from outside.
+        return Finding::settled("manifest.db", Settled::Ok, "present, could not be read");
+    };
+
+    let tables = stats
+        .tables
+        .iter()
+        .map(|(name, n)| format!("{name} {n}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let reclaimable = stats.reclaimable_workspaces + stats.reclaimable_owned;
+    let mut detail = format!(
+        "{tables}; {}",
+        crate::render::format::count(reclaimable, "reclaimable row")
+    );
+    if withheld > 0 {
+        detail.push_str(&format!(
+            ", {} withheld from the guild",
+            crate::render::format::count(withheld, "value")
+        ));
+    }
+    Finding::settled("manifest.db", Settled::Ok, detail)
 }
 
 #[cfg(test)]
@@ -1412,6 +1435,67 @@ mod tests {
         let row = find(&data, "~/.armada", "all present").expect("no directories row");
         assert_eq!(row.detail, "guild/, jobs/ and workspaces/, all present");
         let _ = PathBuf::new();
+    }
+
+    /// **Presence is not health.** A fresh `manifest.db` used to read as
+    /// `present`, indistinguishable from a store nobody had looked inside. Now
+    /// the row names every table `sqlite_master` has, so a table added later
+    /// shows up without this file changing.
+    #[test]
+    fn manifest_db_present_reports_a_table_by_table_count() {
+        let home = tempfile::tempdir().unwrap();
+        armada_manifest::db::Db::open(home.path()).unwrap();
+
+        let finding = store(home.path());
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.detail.contains("meta 1"), "{}", finding.detail);
+        assert!(
+            finding.detail.contains("workspaces 0"),
+            "{}",
+            finding.detail
+        );
+        assert!(finding.detail.contains("owned 0"), "{}", finding.detail);
+        assert!(finding.detail.contains("leases 0"), "{}", finding.detail);
+        assert!(
+            finding.detail.contains("0 reclaimable rows"),
+            "{}",
+            finding.detail
+        );
+    }
+
+    /// **The fact worth surfacing**: the ownership store's whole purpose is
+    /// reclaiming what is no longer owned, and this is what tells a reader how
+    /// much of it is stale. A workspace whose directory is gone, and what it
+    /// owns, both count.
+    #[test]
+    fn manifest_db_counts_a_gone_workspace_and_what_it_owns_as_reclaimable() {
+        let home = tempfile::tempdir().unwrap();
+        let mut db = armada_manifest::db::Db::open(home.path()).unwrap();
+        db.claim_block(
+            &armada_core::id::WorkspaceId::from_stored("aaaaaaaa"),
+            &home.path().join("gone"),
+            None,
+            None,
+            armada_core::ports::PORT_BASE,
+            "t",
+        )
+        .unwrap();
+        db.record_owned(&armada_core::registry::OwnedRow {
+            workspace: armada_core::id::WorkspaceId::from_stored("aaaaaaaa"),
+            kind: armada_core::registry::OwnedKind::Container,
+            reference: "c1".to_string(),
+            boot_id: None,
+            pid_started_at: None,
+            component: None,
+        })
+        .unwrap();
+
+        let finding = store(home.path());
+        assert!(
+            finding.detail.contains("2 reclaimable rows"),
+            "{}",
+            finding.detail
+        );
     }
 
     /// `a`, `a and b`, `a, b and c` — the shape every detail here is built from.

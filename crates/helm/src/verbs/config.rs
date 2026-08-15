@@ -115,13 +115,13 @@ pub const CONFIRM_QUESTION: &str = "Which of these did it get right?";
 /// What the reader chose to happen next.
 ///
 /// **An enum rather than three numbered constants**, because the numbers move:
-/// a repository whose evidence proves nothing is offered two options and one
-/// whose evidence proves something is offered three, and a caller comparing
-/// against a `1` would silently mean *write* in one repository and *hand over*
-/// in the other.
+/// a repository that already has an `armada.yml` is offered two options and one
+/// without is offered three, and a caller comparing against a `1` would
+/// silently mean *write* in one repository and *hand over* in the other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Next {
-    /// Put the proposals up to be ticked, and write what survives.
+    /// Write what survives — the proposals a reader ticks, or, when there are
+    /// none, the blank scaffold [`write`] produces on its own.
     Write,
     /// Hand the repository to an agent.
     HandOver,
@@ -131,18 +131,34 @@ pub enum Next {
 
 /// The answers, in the order they are offered.
 ///
-/// **The proposals come first when there are any**, because they are the cheap
-/// answer: a proposal a reader corrects costs no tokens and the same file
-/// authored by an agent costs a session. The hand-over stays underneath it, for
-/// the repositories where the evidence genuinely does not settle it — which this
-/// reduces the number of and does not replace.
-pub fn onboarding_choices(proposals: usize) -> Vec<Choice> {
+/// **Writing is offered whenever there is no `armada.yml` yet, proposals or
+/// not** (`docs/reserved/009-smaller-things-raised-in-use.md` item 2). A
+/// repository whose evidence proves nothing used to be offered only the agent
+/// hand-over or nothing — the middle answer a reader who knows his own
+/// repository wants, "just start me a blank one and take me there", did not
+/// exist. It does now: the wording changes with what there is to write, and
+/// either way the file it produces is opened in the reader's editor
+/// ([`crate::verbs::config`]'s caller does the opening, once the write has
+/// actually happened).
+///
+/// **Nothing is offered to write over a config that is already there.**
+/// [`write`] refuses to overwrite one, so offering the option would be
+/// offering a choice that is guaranteed to fail — `config_present` is what
+/// keeps it off the list rather than `proposals == 0`, which cannot tell "an
+/// unconfigured repository with nothing provable" from "a configured one".
+pub fn onboarding_choices(proposals: usize, config_present: bool) -> Vec<Choice> {
     let mut out = Vec::new();
-    if proposals > 0 {
-        out.push(Choice::new(
-            "write what the scan can prove",
-            &format!("{proposals} proposed lines, yours to tick"),
-        ));
+    if !config_present {
+        out.push(match proposals {
+            0 => Choice::new(
+                "start armada.yml myself",
+                "blank, then opens in your editor",
+            ),
+            n => Choice::new(
+                "write what the scan can prove",
+                &format!("{n} proposed lines, then opens in your editor"),
+            ),
+        });
     }
     out.push(Choice::new(
         "let an agent write it with me",
@@ -156,10 +172,10 @@ pub fn onboarding_choices(proposals: usize) -> Vec<Choice> {
 }
 
 /// What a one-based answer to [`onboarding_choices`] means.
-pub fn next(chosen: usize, proposals: usize) -> Next {
-    match (chosen, proposals > 0) {
-        (1, true) => Next::Write,
-        (1, false) | (2, true) => Next::HandOver,
+pub fn next(chosen: usize, config_present: bool) -> Next {
+    match (chosen, config_present) {
+        (1, false) => Next::Write,
+        (1, true) | (2, false) => Next::HandOver,
         _ => Next::Stop,
     }
 }
@@ -168,8 +184,8 @@ pub fn next(chosen: usize, proposals: usize) -> Next {
 ///
 /// **Doing nothing is the default**, because the two alternatives are launching
 /// a session nobody asked for and writing a file nobody confirmed.
-pub fn stop(proposals: usize) -> usize {
-    onboarding_choices(proposals).len()
+pub fn stop(proposals: usize, config_present: bool) -> usize {
+    onboarding_choices(proposals, config_present).len()
 }
 
 /// One tickable line per proposal: what it would write, and the file that proves
@@ -211,6 +227,19 @@ pub fn confirm(
     proposals: &[armada_core::propose::Proposal],
     root: &Path,
 ) -> Wrote {
+    if proposals.is_empty() {
+        // **Nothing to tick, so nothing is asked.** This is the blank scaffold
+        // `docs/reserved/009-smaller-things-raised-in-use.md` item 2's middle
+        // option wants: [`write`] with nothing accepted still produces a
+        // parseable `armada.yml` — the header comment and `manifest: version:
+        // 1` — for a reader who knows his own repository better than a scan of
+        // it does.
+        return match write(root, &[]) {
+            Ok(()) => Wrote::Config(0),
+            Err(error) => Wrote::Failed(Box::new(error)),
+        };
+    }
+
     // Everything offered here is provable, so the list opens with all of it
     // ticked: the reader's work is taking off what his repository disagrees
     // with, which is the shorter half of the job.
@@ -258,6 +287,54 @@ pub fn write(root: &Path, accepted: &[armada_core::propose::Proposal]) -> Result
         r#where: path.display().to_string(),
         message: format!("could not write armada.yml: {error}"),
         next_action: None,
+    })
+}
+
+/// Open a freshly written `armada.yml` in the reader's editor.
+///
+/// **`$VISUAL` then `$EDITOR`, and nothing third.** Every other POSIX tool
+/// that opens an editor tries them in that order, and there is deliberately no
+/// further fallback: guessing `vi` for a reader who set neither is choosing an
+/// editor for him, and `docs/reserved/009-smaller-things-raised-in-use.md`
+/// item 2 asks for a clear failure instead — the write already happened, so
+/// this can say plainly that the file is there and only the opening did not
+/// work.
+///
+/// **Through `ctx.run`, `StdioMode::Inherit`, and no timeout** — the same
+/// choice `dispatch.rs` makes for a `commands:` entry with no `stdio: pipe`:
+/// an editor session is interactive and how long the reader takes with it is
+/// his business, not a deadline Armada invents.
+pub fn open_in_editor(
+    run: &impl Run,
+    editor: Option<&str>,
+    root: &Path,
+) -> Result<(), ArmadaError> {
+    let path = root.join("armada.yml");
+    let Some(editor) = editor else {
+        return Err(ArmadaError {
+            class: armada_core::error::ErrClass::Environment,
+            r#where: "$VISUAL / $EDITOR".to_string(),
+            message: format!(
+                "{} was written, but neither $VISUAL nor $EDITOR is set",
+                path.display()
+            ),
+            next_action: Some(format!("open {} yourself, or set $EDITOR", path.display())),
+        });
+    };
+
+    let request = armada_core::ctx::RunRequest::new(
+        vec![editor.to_string(), path.display().to_string()],
+        root.to_path_buf(),
+    )
+    .stdio(armada_core::ctx::StdioMode::Inherit);
+    run.call(&request).map(|_| ()).map_err(|error| ArmadaError {
+        class: armada_core::error::ErrClass::Environment,
+        r#where: editor.to_string(),
+        message: format!("could not start the editor: {}", error.message),
+        next_action: Some(format!(
+            "check $EDITOR names a program on PATH, or open {} yourself",
+            path.display()
+        )),
     })
 }
 

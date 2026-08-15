@@ -2558,16 +2558,21 @@ pub fn ticked_line(kept: usize, of: usize, style: Style) -> String {
 /// (PLAN.md §5), and a report that stopped at *written* would leave the reader
 /// to discover the difference on his first real run.
 pub fn wrote_config(lines: usize, style: Style) -> String {
+    // **Zero is the blank scaffold**, `docs/reserved/009-smaller-things-raised-in-use.md`
+    // item 2's middle option for a repository whose evidence proved nothing:
+    // "N lines from evidence" would be true and misleading when N is zero,
+    // since there was no evidence to draw a line from at all.
+    let detail = match lines {
+        0 => "blank; nothing here was provable, so it is yours to fill in.".to_string(),
+        n => format!(
+            "{} from evidence, none of it guessed.",
+            format::count(n, "line")
+        ),
+    };
     format!(
         "{} {}\n{} {}\n",
         style.strong(Role::BeaconGreen, "armada.yml written."),
-        style.paint(
-            Role::SteelGrey,
-            &format!(
-                "{} from evidence, none of it guessed.",
-                format::count(lines, "line")
-            ),
-        ),
+        style.paint(Role::SteelGrey, &detail),
         style.paint(Role::SteelGrey, "->"),
         style.paint(
             Role::RadarCyan,
