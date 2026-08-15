@@ -128,6 +128,33 @@ pub fn paint(
         return lines;
     }
 
+    // **Every binding, because the line could not carry them all.** The line
+    // drops its lowest-priority pairs rather than wrapping — wrapping would make
+    // the frame one row taller — and this is where the ones it dropped are.
+    if screen.mode == Mode::Keys {
+        let selected = screen.cursor.selected(&frame.rows).map(|row| row.state);
+        let mut table = crate::render::table::Table::new(vec![
+            crate::render::table::Column::fixed("key"),
+            crate::render::table::Column::flexible("does"),
+        ])
+        .indent(2);
+        for (key, does) in render::bridge_every_key(selected) {
+            table = table.row(vec![
+                crate::render::table::Cell::painted(key, Role::SignalAmber),
+                crate::render::table::Cell::muted(does),
+            ]);
+        }
+        lines.push(vec![plain("  "), bold("KEYS", Role::SignalAmber)]);
+        lines.push(Vec::new());
+        lines.extend(table.spans(style, width));
+        lines.push(Vec::new());
+        lines.push(vec![
+            plain("  "),
+            piece("any key returns to the fleet", Role::SteelGrey),
+        ]);
+        return lines;
+    }
+
     lines.extend(render::bridge_table(&data, style, Some(screen.cursor.at())).spans(style, width));
     if frame.rows.is_empty() {
         lines.push(vec![
@@ -166,7 +193,10 @@ pub fn paint(
     lines.push(vec![
         plain("  "),
         piece(
-            render::bridge_keys(screen.cursor.selected(&frame.rows).map(|row| row.state)),
+            render::bridge_keys(
+                screen.cursor.selected(&frame.rows).map(|row| row.state),
+                width,
+            ),
             Role::SteelGrey,
         ),
     ]);
@@ -183,6 +213,11 @@ fn preview(reap: &bridge::Reap, style: Style, width: usize) -> Vec<Vec<Span>> {
         crate::render::table::Column::fixed(""),
         crate::render::table::Column::fixed("status"),
         crate::render::table::Column::fixed("job"),
+        // **The uuid is on the row, because a name is not unique.** Two Jobs can
+        // share one — `name_is_taken` only refuses to reuse a *live* Job's name
+        // — and a preview of what is about to be deleted that cannot tell two
+        // rows apart is a preview that cannot be read.
+        crate::render::table::Column::fixed("uuid"),
         crate::render::table::Column::fixed("state"),
         crate::render::table::Column::flexible("holding"),
     ])
@@ -199,6 +234,7 @@ fn preview(reap: &bridge::Reap, style: Style, width: usize) -> Vec<Vec<Span>> {
                 false => crate::render::table::Cell::painted("keep", Role::SteelGrey),
             },
             crate::render::table::Cell::painted(row.target.job.clone(), Role::NavalBlue),
+            crate::render::table::Cell::muted(row.target.short().to_string()),
             crate::render::table::Cell::painted(
                 row.state.word(),
                 render::palette::Role::for_job_state(row.state),
@@ -583,6 +619,144 @@ mod tests {
             let line = render::bridge_summary(&data, Status::Running, style);
             assert_eq!(pieces, strip(&line).trim_end_matches('\n'));
         }
+    }
+
+    /// **The key line reads the row the cursor is on.** A line that always said
+    /// `pause` over a `PAUSED` Job advertised the one thing that key would not
+    /// do, and left the reader with no way at all to start a held Job again.
+    #[test]
+    fn the_key_line_says_resume_over_a_paused_job_and_pause_over_a_running_one() {
+        let frame = Frame {
+            rows: vec![
+                row("rate-limit", JobState::Running, false),
+                row("xlsx-report", JobState::Paused, false),
+            ],
+            ..frame()
+        };
+        let line = |screen: &Screen| {
+            let drawn = text(&paint(&frame, screen, Status::Running, Style::plain(), 80));
+            drawn
+                .iter()
+                .find(|line| line.contains("q quit"))
+                .cloned()
+                .expect("a key line")
+        };
+
+        let mut screen = Screen::default();
+        let running = line(&screen);
+        assert!(running.contains("p pause"), "{running}");
+        assert!(!running.contains("p resume"), "{running}");
+
+        screen.cursor.next(2);
+        let held = line(&screen);
+        assert!(
+            held.contains("p resume"),
+            "a paused Job is still offered `pause`: {held}"
+        );
+        assert!(!held.contains("p pause"), "{held}");
+    }
+
+    /// **The key line stays one line and never wraps**, at every width the
+    /// two audiences meet — which is what keeps the frame's height constant.
+    /// What does not fit drops, in the priority order `render.rs` states, and
+    /// `q quit` is never what drops: a full-screen program that does not say how
+    /// to leave is a trap.
+    #[test]
+    fn the_key_line_fits_its_width_at_every_width_and_never_loses_quit() {
+        for width in [40, 60, 72, 74, 80, 100, 120] {
+            for state in [None, Some(JobState::Paused)] {
+                let line = render::bridge_keys(state, width);
+                assert!(
+                    line.chars().count() + 2 <= width,
+                    "the key line is {} wide at {width}: {line}",
+                    line.chars().count() + 2
+                );
+                assert!(line.contains("q quit"), "quit fell off at {width}: {line}");
+                // Anything it could not carry is reachable, and the line says so.
+                let hidden = render::bridge_keys_hidden(state, width);
+                assert_eq!(
+                    line.contains("? keys"),
+                    !hidden.is_empty(),
+                    "at {width} the line and the overflow disagree: {line}"
+                );
+            }
+        }
+    }
+
+    /// **Every binding is on the page `?` opens**, including the ones the line
+    /// dropped and the one that has no verb behind it. An overflow key that did
+    /// not list what overflowed would be worse than no overflow key.
+    #[test]
+    fn the_keys_page_lists_every_binding_the_line_could_not_carry() {
+        let drawn = drawn(&Screen {
+            mode: Mode::Keys,
+            ..Screen::default()
+        });
+        let all = drawn.join("\n");
+        for word in ["board", "new", "pause", "abort", "answer", "filter", "reap"] {
+            assert!(
+                all.contains(word),
+                "`{word}` is not on the keys page:\n{all}"
+            );
+        }
+        assert!(all.contains("chat"), "an unbound-looking key is unlisted");
+        assert!(all.contains("quit"), "{all}");
+        // The fleet table is not underneath it: it is a page, not a pane.
+        assert!(!all.contains("rate-limit"), "{all}");
+    }
+
+    /// **The reap preview says what each Job is holding**, which is the whole
+    /// point of previewing: the cost of reaping and the cost of *not* reaping
+    /// have to be on the same row. And `take`/`keep` are words rather than a
+    /// tick and a cross, so both audiences read the same shape.
+    #[test]
+    fn the_reap_preview_shows_what_each_job_holds_and_which_rows_are_ticked() {
+        let screen = Screen {
+            mode: Mode::Reaping(bridge::Reap {
+                rows: vec![
+                    bridge::ReapRow {
+                        target: bridge::Target {
+                            job: "rate-limit".to_string(),
+                            uuid: "rate-limit-uuid".to_string(),
+                        },
+                        state: JobState::Done,
+                        selected: true,
+                        holding: "ports 5470-5479, worktree".to_string(),
+                    },
+                    bridge::ReapRow {
+                        target: bridge::Target {
+                            job: "xlsx-report".to_string(),
+                            uuid: "xlsx-report-uuid".to_string(),
+                        },
+                        state: JobState::Paused,
+                        selected: false,
+                        holding: "branch armada/xlsx-report".to_string(),
+                    },
+                ],
+                cursor: Default::default(),
+            }),
+            ..Screen::default()
+        };
+        let drawn = drawn(&screen);
+        let all = drawn.join("\n");
+        assert!(all.contains("REAP"), "{all}");
+        assert!(all.contains("1 of 2 ticked"), "{all}");
+        // **The uuid is on every row**, because two Jobs can share a name and a
+        // preview of what is about to be deleted has to be readable when they
+        // do.
+        assert!(all.contains("rate-lim"), "no uuid column:\n{all}");
+        assert!(all.contains("xlsx-rep"), "no uuid column:\n{all}");
+        assert!(all.contains("ports 5470-5479"), "{all}");
+        assert!(all.contains("take"), "{all}");
+        assert!(all.contains("keep"), "{all}");
+        // No tick and no cross: a glyph that only appears at a terminal gives
+        // the two audiences different shapes.
+        assert!(
+            !all.contains('\u{2713}') && !all.contains('\u{2717}'),
+            "{all}"
+        );
+        assert!(all.contains("space toggle"), "{all}");
+        assert!(all.contains("esc cancel"), "{all}");
     }
 
     /// An empty fleet says so rather than drawing nothing, and says which of the

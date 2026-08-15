@@ -58,6 +58,9 @@ and the three status enums. These pages use them without re-explaining them.
 | [`fleet/answer.md`](fleet/answer.md) | `armada fleet answer` | shipped |
 | [`fleet/board.md`](fleet/board.md) | `armada fleet board` | shipped |
 | [`fleet/kill.md`](fleet/kill.md) | `armada fleet kill` | shipped |
+| [`fleet/pause.md`](fleet/pause.md) | `armada fleet pause` | shipped |
+| [`fleet/resume.md`](fleet/resume.md) | `armada fleet resume` | shipped |
+| [`fleet/reap.md`](fleet/reap.md) | `armada fleet reap` | shipped |
 
 ## Helm — the one agent you do talk to
 

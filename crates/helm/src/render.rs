@@ -461,7 +461,7 @@ fn ls_facts(data: &FleetLsData) -> Vec<String> {
     facts
 }
 
-/// The Bridge's key line, in the order `commands/helm/bridge.md` lists them.
+/// The Bridge's keys, **in priority order: the last ones drop first.**
 ///
 /// **Named rather than glyphed.** The page draws `↵`; this writes `enter`,
 /// because a key line is read by both audiences and a glyph that folds to ASCII
@@ -475,24 +475,49 @@ fn ls_facts(data: &FleetLsData) -> Vec<String> {
 /// [`armada_core::fleet::bridge::pause_key`], which is why this is a function
 /// and not a `const`.
 ///
-/// **`c chat` is not on this line and `r reap` is.** The line must stay one line
-/// — `bridge.rs`'s tests assert the frame does not change height — so a key
-/// added is a key removed. `c` still answers; it is bound, and it says `armada
-/// helm` is not built. But a line has room to advertise the keys that *do*
-/// something, and reaping a fleet's worth of finished Jobs is one of them while
-/// dropping into a module that does not exist is not.
-fn bridge_key_pairs(selected: Option<JobState>) -> [(&'static str, &'static str); 8] {
+/// **`c chat` is not here.** The line must stay one line — `bridge.rs`'s tests
+/// assert the frame does not change height — so space on it is the scarcest
+/// thing the Bridge has, and an unbuilt verb does not get any of it while a
+/// built one goes unadvertised. `c` is still bound and still answers.
+///
+/// **Order is priority and not importance-of-verb.** `enter` is first because it
+/// is what a person tries on a table with a cursor; `r reap` is last because it
+/// is occasional housekeeping rather than something done while watching. What
+/// falls off the end at a given width falls off in that order, and [`QUIT`] is
+/// never one of them.
+fn bridge_key_pairs(selected: Option<JobState>) -> [(&'static str, &'static str); 7] {
     [
         ("enter", "board"),
         ("n", "new"),
         ("p", armada_core::fleet::bridge::pause_key(selected)),
         ("x", "abort"),
         ("a", "answer"),
-        ("r", "reap"),
         ("/", "filter"),
-        ("q", "quit"),
+        ("r", "reap"),
     ]
 }
+
+/// The one key that never drops off the line.
+///
+/// **Because a full-screen program that does not say how to leave is a trap.**
+/// Everything else on the line is a convenience; this one is the exit.
+const QUIT: (&str, &str) = ("q", "quit");
+
+/// What the line says when it could not carry everything.
+///
+/// **The honest overflow.** Nine pairs is eighty-two columns against a budget of
+/// seventy-eight, so at some point a key line either wraps — changing the frame's
+/// height, which the tests forbid — or stops listing everything. This is the
+/// third option: it names itself, and `?` shows the rest.
+const MORE: (&str, &str) = ("?", "keys");
+
+/// Two spaces per gap, which is the one separator on this screen that is the
+/// same for both audiences (see [`bridge_keys`]).
+const KEY_GAP: usize = 2;
+
+/// The two columns every table on this screen is indented by, which the key line
+/// shares and therefore has to pay for out of its own budget.
+const KEY_INDENT: usize = 2;
 
 /// The reap preview's own keys, for the mode that has its own.
 ///
@@ -553,7 +578,7 @@ fn bridge(envelope: &Envelope<BridgeData>, style: Style, width: usize) -> String
     // about a cursor that does not exist.
     out.push_str(&format!(
         "  {}\n",
-        style.paint(Role::SteelGrey, &bridge_keys(None))
+        style.paint(Role::SteelGrey, &bridge_keys(None, width))
     ));
     out
 }
@@ -660,8 +685,61 @@ pub fn bridge_summary_pieces(data: &BridgeData, status: Status, style: Style) ->
 /// at a standard terminal would read a wrapped key line while an agent read a
 /// straight one. The drawing on `commands/helm/bridge.md` spaces them the same
 /// way, for the same reason.
-pub fn bridge_keys(selected: Option<JobState>) -> String {
-    spelled(&bridge_key_pairs(selected))
+pub fn bridge_keys(selected: Option<JobState>, width: usize) -> String {
+    spelled(&shown_keys(selected, width))
+}
+
+/// The keys the line could not carry, for the page `?` opens.
+///
+/// **Asked of the same function that trims the line**, so the overlay and the
+/// line cannot disagree about which keys are hidden — which is the only way an
+/// overflow key is worth having at all.
+pub fn bridge_keys_hidden(selected: Option<JobState>, width: usize) -> Vec<(String, String)> {
+    let shown = shown_keys(selected, width);
+    bridge_key_pairs(selected)
+        .iter()
+        .filter(|pair| !shown.contains(pair))
+        .map(|(key, does)| ((*key).to_string(), (*does).to_string()))
+        .collect()
+}
+
+/// Every binding the Bridge has, for the page `?` opens — including the ones
+/// that were never on the line because they have no verb behind them.
+pub fn bridge_every_key(selected: Option<JobState>) -> Vec<(String, String)> {
+    let mut all: Vec<(String, String)> = bridge_key_pairs(selected)
+        .iter()
+        .chain(std::iter::once(&QUIT))
+        .map(|(key, does)| ((*key).to_string(), (*does).to_string()))
+        .collect();
+    all.push(("c".to_string(), "chat — not built yet".to_string()));
+    all.push(("arrows, j k".to_string(), "move the cursor".to_string()));
+    all.push((
+        "esc".to_string(),
+        "clear the filter, then leave".to_string(),
+    ));
+    all
+}
+
+/// The pairs that fit, with [`QUIT`] pinned last and [`MORE`] when any were cut.
+///
+/// **It drops rather than wraps.** A key line that wrapped would make the frame
+/// one row taller, which moves everything above it — and the Bridge's own tests
+/// assert the frame does not change height between redraws.
+fn shown_keys(selected: Option<JobState>, width: usize) -> Vec<(&'static str, &'static str)> {
+    let all = bridge_key_pairs(selected);
+    let budget = width.saturating_sub(KEY_INDENT);
+    let mut taken = all.len();
+    loop {
+        let mut line: Vec<(&str, &str)> = all[..taken].to_vec();
+        if taken < all.len() {
+            line.push(MORE);
+        }
+        line.push(QUIT);
+        if spelled(&line).chars().count() <= budget || taken == 0 {
+            return line;
+        }
+        taken -= 1;
+    }
 }
 
 /// The reap preview's key line, in the same shape.
@@ -674,7 +752,7 @@ fn spelled(pairs: &[(&str, &str)]) -> String {
         .iter()
         .map(|(key, does)| format!("{key} {does}"))
         .collect::<Vec<_>>()
-        .join("  ")
+        .join(&" ".repeat(KEY_GAP))
 }
 
 /// What a frame counts, in the order the drawing counts it.
@@ -968,6 +1046,11 @@ fn reap_plan(envelope: &Envelope<ReapPlanData>, style: Style, width: usize) -> S
     let mut table = Table::new(vec![
         Column::fixed("status"),
         Column::fixed("job"),
+        // **The uuid, because a name is not unique.** Two Jobs can share one —
+        // `name_is_taken` only refuses to reuse a *live* Job's name — and it is
+        // also what `--job` takes, so the row carries the handle the next
+        // command needs.
+        Column::fixed("uuid"),
         Column::fixed("state"),
         Column::flexible("holding"),
         Column::fixed("spent").right(),
@@ -984,6 +1067,7 @@ fn reap_plan(envelope: &Envelope<ReapPlanData>, style: Style, width: usize) -> S
                 false => token("keep", Role::SteelGrey),
             },
             Cell::painted(row.job.clone(), Role::NavalBlue),
+            Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
             job_state(row.state),
             detail_cell(style, Some(&holding(style, row))),
             Cell::muted(match row.cost_usd > 0.0 {

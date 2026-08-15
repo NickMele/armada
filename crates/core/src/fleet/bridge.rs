@@ -319,6 +319,18 @@ impl Target {
             uuid: row.uuid.clone(),
         }
     }
+
+    /// The uuid as a handle a person can retype: the first eight characters.
+    ///
+    /// **Because a name is not enough to tell two rows apart.** Two Jobs may
+    /// share one, and on a screen that is about to delete things the row has to
+    /// carry the thing that is actually unique.
+    pub fn short(&self) -> &str {
+        match self.uuid.char_indices().nth(8) {
+            Some((at, _)) => &self.uuid[..at],
+            None => &self.uuid,
+        }
+    }
 }
 
 /// One row of the reap preview.
@@ -386,6 +398,18 @@ pub enum Mode {
     /// safe to open out of curiosity — and being safe to open is what makes it
     /// get read.
     Reaping(Reap),
+    /// `?` was pressed: every binding, including the ones the key line could
+    /// not carry.
+    ///
+    /// **The honest answer to a line that is one line.** Nine key/word pairs is
+    /// eighty-two columns against a budget of seventy-eight, so a key line
+    /// either wraps — which changes the frame's height, and the tests forbid
+    /// that — or stops listing everything. This is what "stops listing
+    /// everything" is allowed to cost: one keystroke, and the rest are there.
+    ///
+    /// **Any key closes it**, because it is a thing you glanced at rather than
+    /// a mode you work in.
+    Keys,
 }
 
 /// Leaving the screen, and what to do on the way out.
@@ -502,6 +526,10 @@ pub fn press(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         Mode::Filtering(typed) => filtering(screen, typed, key),
         Mode::Confirming(target) => confirming(screen, target, key),
         Mode::Reaping(reap) => reaping(screen, reap, key),
+        // **Any key closes it.** It is a thing you glanced at rather than a
+        // mode you work in, and a page that took a second deliberate keystroke
+        // to leave would be one nobody opens twice.
+        Mode::Keys => Pressed::Stay,
         Mode::Watching => watching(screen, rows, key),
     }
 }
@@ -580,6 +608,11 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         // taken is the whole feature, so the key that starts it must be safe to
         // press out of curiosity.
         Key::Char('r') => return Pressed::Act(Action::Preview),
+
+        // **`?` is what a one-line key line costs.** The line drops its lowest
+        // -priority pairs rather than wrapping, because wrapping would change
+        // the frame's height; this is where the ones it dropped are.
+        Key::Char('?') => screen.mode = Mode::Keys,
 
         Key::Backspace | Key::Char(_) => {}
     }

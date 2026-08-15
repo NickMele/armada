@@ -146,6 +146,8 @@ struct Harness {
     repo: PathBuf,
     classified: String,
     refuse: RefCell<Vec<(String, String)>>,
+    /// Prefixes that answer `ENOENT` instead of running at all.
+    unspawnable: RefCell<Vec<String>>,
 }
 
 impl Harness {
@@ -157,6 +159,7 @@ impl Harness {
                 r#"{"type":"result","result":"{\"workflow\":\"feature\",\"confidence\":0.94}"}"#
                     .to_string(),
             refuse: RefCell::new(Vec::new()),
+            unspawnable: RefCell::new(Vec::new()),
         }
     }
 
@@ -174,6 +177,16 @@ impl Harness {
         self.refuse
             .borrow_mut()
             .push((prefix.to_string(), stderr.to_string()));
+        self
+    }
+
+    /// A call that never starts at all, the way a missing program answers.
+    ///
+    /// **Different from [`Harness::refusing`], which runs and exits non-zero.**
+    /// The two are different failures with different remedies, and a `kill` that
+    /// bailed out on the second was the bug.
+    fn refusing_to_spawn(self, prefix: &str) -> Harness {
+        self.unspawnable.borrow_mut().push(prefix.to_string());
         self
     }
 
@@ -199,6 +212,21 @@ impl Run for Harness {
     fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
         self.seen.borrow_mut().push(request.argv.clone());
         let spelled = request.argv.join(" ");
+
+        // **A working directory that is not there is `ENOENT`, exactly as the
+        // kernel answers it — and it is the same errno a missing program gets.**
+        // A harness that spawned happily into a directory it had just been told
+        // to delete would let the whole class of failure this suite exists for
+        // pass unnoticed: `armada fleet kill` on a Job whose worktree was gone
+        // raised "`armada manifest clean` could not be found to run — reinstall
+        // armada", and no fake could have caught it.
+        if !request.cwd.is_dir() {
+            return Err(SpawnError {
+                program: request.argv.first().cloned().unwrap_or_default(),
+                kind: SpawnErrorKind::NotFound,
+                message: "No such file or directory (os error 2)".to_string(),
+            });
+        }
         let ok = |stdout: &str| {
             Ok(RunOutput {
                 code: Some(0),
@@ -208,6 +236,16 @@ impl Run for Harness {
                 timed_out: false,
             })
         };
+
+        for prefix in self.unspawnable.borrow().iter() {
+            if spelled.contains(prefix.as_str()) {
+                return Err(SpawnError {
+                    program: request.argv.first().cloned().unwrap_or_default(),
+                    kind: SpawnErrorKind::NotFound,
+                    message: "No such file or directory (os error 2)".to_string(),
+                });
+            }
+        }
 
         for (prefix, stderr) in self.refuse.borrow().iter() {
             if spelled.contains(prefix.as_str()) {
@@ -1189,6 +1227,447 @@ fn a_killed_job_records_the_spend_its_transcript_holds() {
     let record = scratch.store().load(&data.uuid).unwrap();
     assert_eq!(record.spend.turns, 2);
     assert!((record.spend.cost_usd - 0.1724735).abs() < 1e-9);
+}
+
+/// **A Job whose worktree is gone is still abortable, and this is the failure a
+/// person actually hit.**
+///
+/// `x` on the Bridge answered:
+///
+/// ```text
+/// error: `armada manifest clean` could not be found to run
+///   next:  reinstall armada, then retry unchanged
+/// ```
+///
+/// Reinstalling could not have helped: the binary was never missing, the
+/// *worktree* was — `Run::call` is handed a program and a working directory, and
+/// a kernel that cannot find either answers with the same errno. Worse, the
+/// error was raised, so the Job stayed `RUNNING` on disk with nothing left that
+/// could end it. `kill`'s own doc comment says the Job is marked ended either
+/// way; this is that contract, asserted.
+#[test]
+fn killing_a_job_whose_worktree_is_gone_still_ends_it() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+
+    // Deleted the way a person deletes one: from underneath, with no record
+    // updated. That is exactly the state the durable record exists for.
+    let worktree = scratch.place().expand(&data.worktree);
+    std::fs::remove_dir_all(&worktree).unwrap();
+    assert!(!worktree.exists());
+
+    let output = fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&data.name),
+        false,
+        false,
+    )
+    .expect("a worktree that is already gone is not a failure");
+
+    match &output {
+        Output::Kill(envelope) => {
+            let killed = &envelope.data.results[0];
+            assert_eq!(killed.worktree, Disposition::Gone);
+            assert!(
+                killed.error.is_none(),
+                "a directory that was already gone was reported as a failure: {:?}",
+                killed.error
+            );
+        }
+        other => panic!("not a kill: {other:?}"),
+    }
+    assert_eq!(output.exit_code(), 0);
+
+    // **A directory that is not there is not asked to clean itself.** There is
+    // no `armada.yml` to resolve and nothing to release from inside it; what it
+    // owned is recorded machine-globally and `armada manifest clean --all`
+    // reclaims it.
+    assert!(
+        run.at_index(&["manifest", "clean"]).is_none(),
+        "a clean was spawned into a directory that is gone: {:#?}",
+        run.calls()
+    );
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(
+        record.state,
+        JobState::Aborted,
+        "the Job is still live after an abort that reported success"
+    );
+}
+
+/// **A `clean` that will not run is carried on the row, not raised.** The
+/// worktree is there and Armada's own binary is not, which is the other half of
+/// the same errno — and the Job still ends.
+#[test]
+fn a_clean_that_would_not_start_is_reported_and_the_job_still_ends() {
+    let scratch = Scratch::new();
+    let data = spawn(&scratch, &scratch.harness(), &task("add rate limiting"));
+    let run = scratch.harness().refusing_to_spawn("manifest clean");
+
+    let output = fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&data.name),
+        false,
+        false,
+    )
+    .expect("a clean that would not start does not stop the kill");
+
+    match &output {
+        Output::Kill(envelope) => {
+            let error = envelope.data.results[0]
+                .error
+                .as_ref()
+                .expect("the failure is reported");
+            assert!(
+                error.message.contains("could not be found to run"),
+                "{}",
+                error.message
+            );
+        }
+        other => panic!("not a kill: {other:?}"),
+    }
+    assert_eq!(
+        scratch.store().load(&data.uuid).unwrap().state,
+        JobState::Aborted,
+        "the Job is ended anyway"
+    );
+}
+
+/// **Two records, one name: the abort is refused rather than aimed.**
+///
+/// This is the shape a person actually had on disk — two Jobs both called
+/// `this-test`, one `ABORTED` and one still `RUNNING` with a worktree that had
+/// been deleted. `kill` by name took the first match over a list sorted by
+/// creation, ended the Job that had already ended, and reported success.
+///
+/// **A live Job does not win the tie either.** That is the same coin flip with
+/// better odds, and a kill is not undoable — so both are named and the uuid is
+/// what aims it. The Bridge is unaffected: every key already carries the uuid.
+#[test]
+fn a_name_two_jobs_share_is_refused_and_the_uuid_aborts_the_right_one() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let first = spawn(&scratch, &run, &task("add rate limiting"));
+
+    // The second takes the same name, which is only possible once the first is
+    // over — a name is a handle, not a key.
+    let mut ended = scratch.store().load(&first.uuid).unwrap();
+    ended.state = JobState::Done;
+    scratch.store().save(&ended).unwrap();
+
+    // Spawned a minute later, because a uuid is minted from the wall clock and
+    // two Jobs of one name in one millisecond would be the same uuid.
+    let later = FrozenClock::new();
+    *later.0.borrow_mut() += 60_000;
+    let second = spawned(
+        &fleet::spawn(
+            &run,
+            &later,
+            &scratch.place(),
+            &Spawn {
+                name: Some(first.name.clone()),
+                ..task("add rate limiting again")
+            },
+            None,
+            &mut armada_helm::render::progress::Silent,
+        )
+        .expect("the second Job spawns"),
+    );
+    scratch.watch(&second.uuid);
+    assert_eq!(second.name, first.name, "the second Job took a new name");
+    assert_ne!(second.uuid, first.uuid);
+    std::fs::remove_dir_all(scratch.place().expand(&second.worktree)).unwrap();
+
+    // The name alone aims at nothing, and says which two it could have meant.
+    let error = fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&first.name),
+        false,
+        false,
+    )
+    .expect_err("an ambiguous name was resolved to one of them");
+    assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
+    for uuid in [&first.uuid, &second.uuid] {
+        assert!(
+            error.message.contains(&uuid[..8]),
+            "the refusal does not name {uuid}: {}",
+            error.message
+        );
+    }
+    assert_eq!(
+        scratch.store().load(&second.uuid).unwrap().state,
+        JobState::Running,
+        "an ambiguous kill touched a Job anyway"
+    );
+
+    // The uuid aims it, and the worktree being gone does not stop it.
+    fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&second.uuid),
+        false,
+        false,
+    )
+    .expect("the abort succeeds");
+    assert_eq!(
+        scratch.store().load(&second.uuid).unwrap().state,
+        JobState::Aborted
+    );
+    assert_eq!(
+        scratch.store().load(&first.uuid).unwrap().state,
+        JobState::Done,
+        "the finished Job was ended a second time"
+    );
+}
+
+// --------------------------------------------------------------- pause/resume
+
+/// **Pausing stops the Drone and keeps everything else.** A Job is durable and a
+/// Drone is not, which is what makes this reversible: the worktree, the branch
+/// and the port block are all exactly where they were.
+#[test]
+fn pausing_a_job_stops_its_drone_and_keeps_everything_else() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &task(&format!("add rate limiting {STAY_ALIVE}")),
+    );
+    let handle = scratch.store().load(&data.uuid).unwrap().drone.unwrap();
+
+    let output = fleet::pause(&run, &FrozenClock::new(), &scratch.place(), &data.name)
+        .expect("a running Job pauses");
+    match &output {
+        Output::Pause(envelope) => {
+            assert_eq!(envelope.data.state, JobState::Paused);
+            assert_eq!(envelope.data.stopped, Some(handle.pgid));
+        }
+        other => panic!("not a pause: {other:?}"),
+    }
+
+    assert_eq!(
+        armada_fleet::drone::stop(
+            &RealRun,
+            scratch.home.path(),
+            Some(&handle),
+            &scratch.boot_id
+        ),
+        armada_fleet::drone::Stopped::NothingToStop,
+        "the Drone was still running after pause"
+    );
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.state, JobState::Paused);
+    assert!(record.drone.is_none(), "a dead Drone is still recorded");
+    // The three things a kill would have taken are all still there.
+    assert!(scratch.place().expand(&record.worktree).is_dir());
+    assert!(record.port_block.is_some(), "the port block went back");
+    assert!(
+        run.at_index(&["worktree", "remove"]).is_none(),
+        "pause removed the worktree: {:#?}",
+        run.calls()
+    );
+}
+
+/// **Resuming starts a new Drone on the same session.** `--resume`, never
+/// `--session-id`: a resume that minted would start the Job's second turn as its
+/// first, and the transcript is the ledger.
+#[test]
+fn resuming_a_paused_job_continues_the_same_session_detached() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &task(&format!("add rate limiting {STAY_ALIVE}")),
+    );
+    fleet::pause(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+
+    let output = fleet::resume(&run, &FrozenClock::new(), &scratch.place(), &data.name)
+        .expect("a paused Job resumes");
+    scratch.watch(&data.uuid);
+    match &output {
+        Output::Resume(envelope) => assert_eq!(envelope.data.state, JobState::Running),
+        other => panic!("not a resume: {other:?}"),
+    }
+
+    // The stub records `"$@"`, so the program itself is not in this vector.
+    let argv = recorded_argv(&data.uuid);
+    assert_eq!(argv[0], "--resume", "a resume minted a session: {argv:?}");
+    assert_eq!(argv[1], data.uuid);
+    assert_eq!(
+        argv.last().map(String::as_str),
+        Some(armada_core::fleet::drone::CONTINUE),
+        "{argv:?}"
+    );
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.state, JobState::Running);
+    assert!(record.drone.is_some(), "no Drone was started");
+}
+
+/// **A Job that is not paused is not resumed, and one that is paused is not
+/// paused again.** Both refusals point at the verb that would have worked.
+#[test]
+fn pause_and_resume_each_refuse_the_state_the_other_owns() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &task(&format!("add rate limiting {STAY_ALIVE}")),
+    );
+
+    let error = fleet::resume(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap_err();
+    assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
+    assert!(error.message.contains("is not paused"), "{}", error.message);
+
+    fleet::pause(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+    let error = fleet::pause(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap_err();
+    assert!(
+        error.message.contains("already paused"),
+        "{}",
+        error.message
+    );
+    assert!(
+        error.next_action.unwrap().contains("armada fleet resume"),
+        "the refusal does not name the verb that would work"
+    );
+}
+
+// ----------------------------------------------------------------------- reap
+
+/// **A state you might still act on is not garbage.** `DONE` and `ABORTED` are
+/// taken; `PAUSED` is listed and left, because it *means* needs-you — and the
+/// person who asked for a bulk reap asked in the same breath to be able to
+/// resume a paused Job.
+#[test]
+fn a_reap_plan_takes_the_finished_and_only_offers_the_rest() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let live = spawn(&scratch, &run, &task(&format!("keep running {STAY_ALIVE}")));
+    let held = spawn(
+        &scratch,
+        &run,
+        &task(&format!("hold this one {STAY_ALIVE}")),
+    );
+    let over = spawn(&scratch, &run, &task("finish this one"));
+
+    fleet::pause(&run, &FrozenClock::new(), &scratch.place(), &held.name).unwrap();
+    let mut done = scratch.store().load(&over.uuid).unwrap();
+    done.state = JobState::Done;
+    scratch.store().save(&done).unwrap();
+
+    let Output::ReapPlan(plan) =
+        fleet::reap_plan(&run, &FrozenClock::new(), &scratch.place()).expect("the plan reads")
+    else {
+        panic!("not a plan");
+    };
+
+    let row = |name: &str| {
+        plan.data
+            .results
+            .iter()
+            .find(|row| row.job == name)
+            .unwrap_or_else(|| panic!("`{name}` is not in the plan: {:#?}", plan.data.results))
+    };
+    assert!(
+        !plan.data.results.iter().any(|row| row.job == live.name),
+        "a running Job was offered for reaping"
+    );
+    assert!(row(&over.name).selected, "a DONE Job was not taken");
+    assert!(
+        !row(&held.name).selected,
+        "a PAUSED Job was taken by default"
+    );
+    assert_eq!(plan.data.selected, 1);
+
+    // **What it is holding is the half that makes the answer possible.** A port
+    // block held by a Job nobody noticed had died is invisible everywhere else.
+    assert!(row(&held.name).port_block.is_some());
+    assert!(row(&held.name).worktree_exists);
+    // And the preview reaped nothing.
+    assert_eq!(
+        scratch.store().load(&held.uuid).unwrap().state,
+        JobState::Paused
+    );
+}
+
+/// **A reap releases what it takes.** Dropping a record and stranding its port
+/// block would be worse than no reap at all.
+#[test]
+fn a_reap_ends_exactly_what_it_was_given_and_releases_it() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let taken = spawn(&scratch, &run, &task("finish this one"));
+    let kept = spawn(&scratch, &run, &task(&format!("keep running {STAY_ALIVE}")));
+    let mut done = scratch.store().load(&taken.uuid).unwrap();
+    done.state = JobState::Done;
+    scratch.store().save(&done).unwrap();
+
+    let output = fleet::reap(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        std::slice::from_ref(&taken.uuid),
+    )
+    .expect("the reap runs");
+
+    match &output {
+        Output::Kill(envelope) => {
+            assert_eq!(envelope.data.results.len(), 1);
+            assert_eq!(envelope.data.results[0].job, taken.name);
+            assert_eq!(envelope.data.results[0].released.containers, 3);
+            assert_eq!(envelope.data.results[0].worktree, Disposition::Removed);
+        }
+        other => panic!("not a kill: {other:?}"),
+    }
+
+    let record = scratch.store().load(&taken.uuid).unwrap();
+    assert_eq!(record.state, JobState::Aborted);
+    assert!(record.port_block.is_none(), "the port block was stranded");
+    assert_eq!(
+        scratch.store().load(&kept.uuid).unwrap().state,
+        JobState::Running,
+        "a reap took a Job it was not given"
+    );
+}
+
+/// **A Job that came back to life between the preview and the `enter` is refused
+/// rather than killed.** The preview a person read is a list, so what is taken
+/// cannot drift with the fleet.
+#[test]
+fn a_reap_refuses_a_job_that_is_working() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let live = spawn(&scratch, &run, &task(&format!("keep running {STAY_ALIVE}")));
+
+    let error = fleet::reap(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        std::slice::from_ref(&live.uuid),
+    )
+    .unwrap_err();
+    assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
+    assert!(
+        error.next_action.unwrap().contains("armada fleet kill"),
+        "the refusal does not name the verb that ends it deliberately"
+    );
+    assert_eq!(
+        scratch.store().load(&live.uuid).unwrap().state,
+        JobState::Running
+    );
 }
 
 // ---------------------------------------------------------------- inbox/answer
