@@ -2206,3 +2206,124 @@ fn once_answers_with_the_frame_it_read() {
         other => panic!("not a frame: {other:?}"),
     }
 }
+
+// ---------------------------------- Promoting a recorded failure into a Job
+
+/// Put one failure in the log, and answer with the id it was given.
+fn record_failure(scratch: &Scratch, message: &str) -> String {
+    let (id, line) = armada_core::failure::failed(
+        &armada_core::error::ArmadaError {
+            class: armada_core::error::ErrClass::Environment,
+            r#where: "~/.cargo/bin/armada".to_string(),
+            message: message.to_string(),
+            next_action: Some("reinstall armada, then retry unchanged".to_string()),
+        },
+        scratch.home.path(),
+        scratch.repo.path(),
+        &["bridge".to_string()],
+        "2026-08-09T14:02:11Z",
+        1_786_284_131_000,
+    );
+    assert!(armada_manifest::failures::append(
+        &armada_manifest::failures::path(&scratch.place().armada_home),
+        &line,
+    ));
+    id
+}
+
+/// The log, folded, as the verbs read it.
+fn folded(scratch: &Scratch) -> Vec<armada_core::failure::Entry> {
+    armada_manifest::failures::read(&armada_manifest::failures::path(
+        &scratch.place().armada_home,
+    ))
+    .expect("the log reads")
+}
+
+/// **`armada failures fix` is the whole point of recording anything**, and this
+/// is the wiring nothing else covers: the spawn happens, the Job is given the
+/// recorded failure verbatim, and the log gets the line that links the two.
+///
+/// **No token is spent, and that is asserted rather than assumed.** The workflow
+/// is named `bug` rather than classified, so the classifier — the one call that
+/// would reach a model — is never made. The assertion below is what keeps that
+/// true: a later change that reintroduced classification here would fail this
+/// test rather than quietly start charging for triage.
+#[test]
+fn promoting_a_failure_spawns_a_bug_job_and_records_the_link() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let id = record_failure(
+        &scratch,
+        "`armada manifest clean` could not be found to run",
+    );
+
+    // A prefix, because that is what a person retypes off the table.
+    let output = armada_helm::verbs::failures::fix(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &id[..4],
+        false,
+        None,
+        &mut armada_helm::render::progress::Silent,
+    )
+    .expect("the Job spawns");
+    let data = spawned(&output);
+    scratch.watch(&data.uuid);
+
+    assert_eq!(data.workflow, "bug", "a recorded failure is a bug");
+    assert!(
+        run.at_index(&["--model"]).is_none(),
+        "promotion classified something, which is a model call and a token:\n{:#?}",
+        run.calls()
+    );
+
+    // The Job was told the failure, not a description of one.
+    let argv = recorded_argv(&data.uuid).join(" ");
+    assert!(
+        argv.contains(&id),
+        "the Job is told which entry it is:\n{argv}"
+    );
+    assert!(
+        argv.contains("could not be found to run"),
+        "the recorded failure is the task:\n{argv}"
+    );
+    assert!(
+        argv.contains("may itself be wrong"),
+        "the class is handed over as a claim, not a diagnosis:\n{argv}"
+    );
+
+    // And the log now says who is on it.
+    let entry = folded(&scratch)
+        .into_iter()
+        .find(|entry| entry.id == id)
+        .expect("the entry survives being promoted");
+    assert_eq!(entry.state, armada_core::failure::State::Fixing);
+    assert_eq!(entry.job.as_deref(), Some(data.name.as_str()));
+}
+
+/// **A dry run spawns nothing and writes nothing.** A promotion line for a Job
+/// that was never started would put `FIXING` on a row nobody is fixing, which is
+/// the one state worse than `OPEN`.
+#[test]
+fn a_dry_run_promotion_leaves_the_entry_open() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let id = record_failure(&scratch, "the worktree was already there");
+
+    let output = armada_helm::verbs::failures::fix(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &id,
+        true,
+        None,
+        &mut armada_helm::render::progress::Silent,
+    )
+    .expect("a dry run answers");
+    assert_eq!(output.exit_code(), 0);
+
+    let entry = folded(&scratch).into_iter().find(|e| e.id == id).unwrap();
+    assert_eq!(entry.state, armada_core::failure::State::Open);
+    assert_eq!(entry.job, None, "nothing was started, so nothing is named");
+}
