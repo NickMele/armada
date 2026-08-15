@@ -1424,3 +1424,129 @@ fn an_empty_inbox_succeeds_and_reports_nothing() {
         other => panic!("not an inbox: {other:?}"),
     }
 }
+
+// ---------------------------------------------------------------- the Bridge
+//
+// **The Bridge is a renderer over these verbs, so it is tested against them.**
+// Nothing below drives a terminal — a TUI is not byte-comparable and the
+// keyboard is unit-tested where the decisions live (`armada_core::fleet::bridge`
+// and `armada_helm::bridge`). What is asserted here is the property the whole
+// screen rests on: a frame is `armada fleet ls`'s listing, and reading one
+// changes nothing.
+
+/// **A frame is the listing, not a second read of the same files.** Every number
+/// on the screen comes from `ls`, which is what makes "the Bridge renders the
+/// same data" a fact rather than an intention — and what stops the two of them
+/// ever disagreeing about what a Job is doing.
+#[test]
+fn a_bridge_frame_is_exactly_the_listing_it_renders() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting to the API"));
+    await_turn(&scratch, &data.uuid);
+
+    let listing =
+        match fleet::ls(&run, &FrozenClock::new(), &scratch.place(), false, false).unwrap() {
+            Output::FleetLs(envelope) => envelope.data,
+            other => panic!("not a listing: {other:?}"),
+        };
+    let frame = armada_helm::verbs::bridge::read(&run, &FrozenClock::new(), &scratch.place(), None)
+        .expect("a frame");
+
+    assert_eq!(frame.rows, listing.results);
+    assert_eq!(frame.needs_you, listing.needs_you);
+    assert!((frame.spent_usd - listing.spent_usd).abs() < 1e-9);
+    assert_eq!(frame.hidden, 0);
+    assert!(frame.filter.is_none());
+    // The task travels with the listing, which is what fills the `TASK` column
+    // without a second pass over `~/.armada/jobs/`.
+    assert_eq!(frame.rows[0].task, "add rate limiting to the API");
+}
+
+/// **Watching does not change what is watched** (PLAN.md §15.2). A frame reads
+/// the index, the transcript and the process table, and writes none of them —
+/// so a Bridge left open for an hour is an hour of reads and nothing else.
+#[test]
+fn reading_a_frame_resumes_nothing_and_writes_nothing() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    await_turn(&scratch, &data.uuid);
+
+    let before = scratch.store().load(&data.uuid).unwrap();
+    let already = run.calls().len();
+    for _ in 0..3 {
+        armada_helm::verbs::bridge::read(&run, &FrozenClock::new(), &scratch.place(), None)
+            .expect("a frame");
+    }
+
+    assert_eq!(scratch.store().load(&data.uuid).unwrap(), before);
+    // **Three redraws is what six seconds of watching costs, and it is `ps`.**
+    // Asking the process table whether a Drone is alive is the one call a frame
+    // makes, and it is a question rather than a message — no `claude`, no
+    // `--resume`, no `git`, nothing that could reach a Drone or a repository.
+    let during: Vec<Vec<String>> = run.calls().into_iter().skip(already).collect();
+    assert!(
+        !during.is_empty(),
+        "a frame asked the machine nothing at all"
+    );
+    for call in &during {
+        assert_eq!(
+            call.first().map(String::as_str),
+            Some("ps"),
+            "a redraw ran something other than a process-table read: {during:?}"
+        );
+    }
+}
+
+/// A filter narrows the rows and the counts together, and says what it hid.
+#[test]
+fn a_filtered_frame_counts_what_it_shows_and_reports_what_it_hid() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let kept = spawn(&scratch, &run, &task("add rate limiting to the API"));
+    let hidden = spawn(&scratch, &run, &task("migrate the carina schema"));
+    await_turn(&scratch, &kept.uuid);
+    await_turn(&scratch, &hidden.uuid);
+
+    let filter = armada_core::fleet::bridge::parse_filter("job=rate-limiting")
+        .expect("parses")
+        .expect("a filter");
+    let frame = armada_helm::verbs::bridge::read(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&filter),
+    )
+    .expect("a frame");
+
+    assert_eq!(frame.rows.len(), 1);
+    assert_eq!(frame.rows[0].name, kept.name);
+    assert_eq!(frame.hidden, 1);
+    assert_eq!(frame.filter.as_deref(), Some("job=rate-limiting"));
+}
+
+/// **`--once` and `--json` are one read.** The frame a pipe parses is the frame a
+/// terminal with no alternate screen prints, which is the whole reason both flags
+/// exist rather than one.
+#[test]
+fn once_answers_with_the_frame_it_read() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    await_turn(&scratch, &data.uuid);
+
+    let output =
+        armada_helm::verbs::bridge::once(&run, &FrozenClock::new(), &scratch.place(), None)
+            .expect("a frame");
+    assert_eq!(output.exit_code(), 0);
+    match output {
+        Output::Bridge(envelope) => {
+            assert_eq!(envelope.verb, "bridge");
+            assert_eq!(envelope.data.results.len(), 1);
+            assert_eq!(envelope.data.running, 1);
+            assert_eq!(envelope.data.hidden, 0);
+        }
+        other => panic!("not a frame: {other:?}"),
+    }
+}
