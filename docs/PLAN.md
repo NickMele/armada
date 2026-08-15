@@ -3206,12 +3206,56 @@ follows (`ARCHITECTURE.md` §2.4).
 ### 13.5 Sync
 
 `~/.armada/guild/` is a git repository Armada manages: it commits on change and pushes to a
-private remote named once during the interview. `export` and `import` produce a single bundle
-for a machine that will never hold your credentials. Conflicts surface as conflicts.
+remote named once during the interview. `export` and `import` produce a single bundle for a
+machine that will never hold your credentials. Conflicts surface as conflicts.
 
 The import step **refuses to adopt credential-shaped values**; those belong in `machine.yml`,
 which never syncs. This is built with the importer rather than retrofitted, because a secret
 that has already reached a remote cannot be un-pushed.
+
+#### A remote is a git URL **or a folder**
+
+Question 5 takes either. The honest answer to *do you have a private git remote?* is, for most
+people, no — and nobody is going to create one to finish setting a tool up. A folder that is
+already on every machine they own is another matter: iCloud Drive, Dropbox, a NAS mount, a drive
+they plug in.
+
+**Git speaks a filesystem remote natively**, so this is not a lesser mode with a file copy behind
+it. Given a path, Armada runs `git init --bare` in it and uses it as the remote; `fetch`, `push`,
+`merge --ff-only` and the divergence counts then work exactly as they do against a server. Real
+merges, real history, and conflicts that surface as conflicts.
+
+Two details are Armada's rather than the person's, and both are the difference between "point git
+at a Dropbox folder" working and being the story it usually is. The repository is created
+**bare** — a non-bare one refuses a push to its checked-out branch, and knowing to type one flag
+is the entire difficulty. And a folder that is *already* a repository is adopted rather than
+re-initialised, because the second machine names the same folder and `git init` over your history
+would be the one unrecoverable outcome here.
+
+#### Two honest caveats, handled rather than hidden
+
+Both come from a file syncing service sitting between the two machines, and neither can be
+argued away.
+
+**iCloud evicts files.** It removes the contents of files it thinks you are not using and leaves
+a `.name.icloud` placeholder behind. A bare repository whose pack files have been evicted is one
+`git fetch` reports as *corrupt* — for a repository that is intact and merely elsewhere. So
+`guild pull` **materialises before it reads**: it walks a folder remote for placeholders, opens
+the file each one stands for (which is what asks for it back), and waits. The wait is bounded at
+thirty seconds — a guild is a few hundred kilobytes, so a download that has not happened by then
+is not happening — and a timeout says so in those words rather than reporting damage.
+
+**A partly replicated push leaves a torn repository.** A push writes several files and the sync
+service replicates them in its own order and its own time; a machine that reads the remote in
+between sees refs pointing at objects that have not arrived. Git reports that in the same words
+it uses for a repository somebody has damaged, because from where it is standing the two are
+identical. Armada recognises the phrases and reports a **conflict** — `wait for the sync to
+finish, then armada guild pull again` — rather than crashing or claiming corruption. Nothing on
+the reading machine is touched.
+
+Matching on git's words is a knowing trade, the same one the empty-remote check already makes:
+there is no exit code for either. Getting it wrong reports a torn remote as a plain failure,
+which is loud rather than silent.
 
 ---
 

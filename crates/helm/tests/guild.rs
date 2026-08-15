@@ -310,6 +310,81 @@ fn a_diverged_guild_is_reported_and_nothing_is_changed() {
     );
 }
 
+/// **A folder is a remote, and it is the same remote a URL is.**
+///
+/// The honest answer to *do you have a private git remote?* is, for most
+/// people, no — and they are not going to make one to finish setting a tool up.
+/// A folder that is already on every machine they own is: iCloud Drive, a NAS,
+/// a stick. Git speaks a filesystem remote natively, so this is not a lesser
+/// mode, and this test proves it by running the whole two-machine path through
+/// a plain directory that was never a repository: init it, push, clone from it,
+/// edit on the second machine, push, pull on the first.
+///
+/// Run against a `TempDir` rather than an actual iCloud folder for the obvious
+/// reason. What is iCloud-specific — eviction and a half-replicated push — is
+/// `armada_guild::remote`'s, and is tested there.
+#[test]
+fn a_plain_folder_works_as_a_sync_remote_end_to_end() {
+    let first = Machine::new();
+    a_claude_setup(&first);
+    let outside = first.outside();
+
+    // **Not a repository, and not even created.** Naming a folder that does not
+    // exist yet is what somebody typing a path into the interview does.
+    let folder = first.root.path().join("Drive/guild");
+    let named = folder.display().to_string();
+    assert!(!folder.exists());
+
+    let built = first.run(
+        &outside,
+        &["guild", "init", "--defaults", "--remote", &named, "--json"],
+    );
+    assert!(
+        built.status.success(),
+        "guild init against a folder failed: {}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(
+        folder.join("HEAD").is_file() && folder.join("objects").is_dir(),
+        "the folder was not made a bare repository"
+    );
+
+    let pushed = first.run(&outside, &["guild", "push", "--json"]);
+    assert!(
+        pushed.status.success(),
+        "push to a folder failed: {}",
+        String::from_utf8_lossy(&pushed.stderr)
+    );
+
+    // A second machine treats it as any other remote.
+    let second = Machine::new();
+    let elsewhere = second.outside();
+    let cloned = second.run(&elsewhere, &["init", "--guild", &named, "--json"]);
+    assert!(
+        cloned.status.success(),
+        "the second machine could not pull from a folder: {}",
+        String::from_utf8_lossy(&cloned.stderr)
+    );
+    assert_eq!(files(&guild_of(&first)), files(&guild_of(&second)));
+
+    // **Real merges and real history**, which is the whole argument for a git
+    // remote over a file copy: the second machine's edit fast-forwards onto the
+    // first rather than replacing it.
+    std::fs::write(guild_of(&second).join("voice.md"), "answer first\n").unwrap();
+    second.run(&elsewhere, &["guild", "push", "--json"]);
+    let pulled = first.run(&outside, &["guild", "pull", "--json"]);
+    assert!(
+        pulled.status.success(),
+        "pull from a folder failed: {}",
+        String::from_utf8_lossy(&pulled.stderr)
+    );
+    assert_eq!(envelope(&pulled)["data"]["applied"], true);
+    assert_eq!(
+        std::fs::read_to_string(guild_of(&first).join("voice.md")).unwrap(),
+        "answer first\n"
+    );
+}
+
 /// A bundle, for a machine that will never hold your credentials — and the
 /// rule that `machine.yml` does not travel unless it is asked for by name.
 #[test]

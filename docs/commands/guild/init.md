@@ -19,7 +19,7 @@ armada guild init [--from <path>] [--no-import] [--remote <url>] [--defaults] [-
 |---|---|---|---|
 | `--from <path>` | directory | `~/.claude` | Where to import an existing setup from. |
 | `--no-import` | flag | off | Start empty. Skips step 1 entirely. |
-| `--remote <url>` | git remote | — | Set the sync remote without being asked. |
+| `--remote <url\|path>` | git remote or folder | — | Set the sync remote without being asked. A folder is made a bare repository and used as one. |
 | `--defaults` | flag | off | Take every default answer. Leaves a working guild, reported incomplete by `armada doctor`. |
 | `--force` | flag | off | Overwrite an existing guild. Refuses without it. |
 
@@ -86,6 +86,14 @@ fragments are still whatever import produced.
 
 `~/.armada/guild/` becomes a git repository with an initial commit. If `--remote` was given or
 answered, it is set and pushed.
+
+**A folder is a remote.** Question 5 takes a git URL or a filesystem path — iCloud Drive, a NAS
+mount, a drive you plug in. Given a path, Armada creates it if needed, runs `git init --bare` in
+it, and uses it as the remote; git speaks a filesystem remote natively, so everything after that
+is ordinary. A folder that is already a repository is adopted rather than re-initialised, which
+is what makes the second machine naming the same folder work. Two caveats that come with a sync
+service rather than with git — eviction and a half-replicated push — are handled and explained in
+[`PLAN.md`](../../PLAN.md) §13.5.
 
 **Everything the interview writes is a plain file you can edit afterwards.** The interview is a
 convenience and never the only way in — a tool that can only be configured through a wizard is

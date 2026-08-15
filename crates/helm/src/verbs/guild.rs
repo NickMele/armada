@@ -17,7 +17,7 @@ use armada_core::envelope::{
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_guild::interview::{self, Answers, Question, QUESTIONS};
 use armada_guild::layout::Guild;
-use armada_guild::{bundle, import, inventory, machine, repo, starters};
+use armada_guild::{bundle, import, inventory, machine, remote, repo, starters};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -37,6 +37,18 @@ pub struct Where {
     pub cwd: PathBuf,
     /// Where an import reads from, when the caller did not say.
     pub claude_home: PathBuf,
+}
+
+/// `~`, for the one answer that may be typed with one in it.
+///
+/// **Derived from `armada_home` rather than read**, which is `ARCHITECTURE.md`
+/// §1.4 — nothing below the entrypoint reads `$HOME` — and also what keeps every
+/// test in this file pointing at a `TempDir`.
+fn home_of(armada_home: &Path) -> PathBuf {
+    armada_home
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| armada_home.to_path_buf())
 }
 
 impl Where {
@@ -94,6 +106,18 @@ pub fn init(
     let mut answers = interview(ask, Some(&guild));
     if let Some(remote) = &options.remote {
         answers.remote = Some(remote.clone());
+    }
+    // **A folder is made into a remote here, before anything is committed.**
+    // Question 5 takes either, and a folder becomes a bare repository git can
+    // push to — see `armada_guild::remote`. Done before the first commit so a
+    // folder that cannot be written fails the verb rather than leaving a guild
+    // whose remote points at nothing.
+    if let Some(answer) = answers.remote.clone() {
+        answers.remote = Some(remote::prepare(
+            run,
+            &remote::classify(&answer),
+            &home_of(&place.armada_home),
+        )?);
     }
 
     // Your answer wins over the import where the two overlap (PLAN.md §13.4).
@@ -234,7 +258,28 @@ fn record(answers: &mut Answers, question: Question, given: &str) {
 pub fn pull(run: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     let guild = place.guild();
     let remote = require_remote(run, &guild)?;
-    let apart = repo::fetch(run, guild.root())?;
+
+    // **A folder remote is asked for before it is read.** iCloud Drive evicts
+    // the contents of files it thinks are unused; a bare repository in that
+    // state is one git reports as corrupt for a repository that is intact and
+    // merely elsewhere (`armada_guild::remote`).
+    if let remote::Destination::Folder(folder) = remote::classify(&remote) {
+        remote::materialise(
+            &remote::expand(&folder, &home_of(&place.armada_home)),
+            std::time::Instant::now,
+        )?;
+    }
+
+    let apart = match repo::fetch(run, guild.root()) {
+        Ok(apart) => apart,
+        // **A remote mid-sync is a conflict, not a crash.** A push writes
+        // several files and a sync service replicates them in its own order, so
+        // a machine reading in between sees refs pointing at objects that have
+        // not arrived. It resolves itself; what the reader needs is to be told
+        // to wait rather than to be shown a broken repository.
+        Err(error) if remote::is_torn(&error.message) => return Ok(torn(&remote, &error)),
+        Err(error) => return Err(error),
+    };
     let incoming = repo::incoming(run, guild.root())?;
     let outgoing = repo::outgoing(run, guild.root())?;
 
@@ -276,6 +321,39 @@ pub fn pull(run: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     } else {
         Envelope::ok("guild pull", None, Status::Ready, data)
     })))
+}
+
+/// A remote a sync service has half-replicated, reported as a conflict.
+///
+/// **Nothing was applied and nothing on this machine was touched.** The counts
+/// are unknown — the fetch that would have measured them is the call that failed
+/// — so the row says what happened rather than pretending to a number, and the
+/// remedy is the only one there is.
+fn torn(remote: &str, error: &ArmadaError) -> Output {
+    Output::GuildSync(Box::new(Envelope::failed(
+        "guild pull",
+        None,
+        ArmadaError {
+            class: ErrClass::ToolFailed,
+            r#where: remote.to_string(),
+            message: format!("the remote is part-way through syncing: {}", error.message),
+            next_action: Some(
+                "wait for the sync to finish, then `armada guild pull` again".to_string(),
+            ),
+        },
+        GuildSyncData {
+            remote: Some(remote.to_string()),
+            ahead: 0,
+            behind: 0,
+            results: vec![SyncItem {
+                status: Sync::Conflict,
+                item: "origin".to_string(),
+                detail: "part-way through syncing, nothing read".to_string(),
+            }],
+            applied: false,
+            headline: Some(Headline::NeedsAttention),
+        },
+    )))
 }
 
 /// `armada guild push` — send local changes.
@@ -725,6 +803,41 @@ mod tests {
             None,
         );
         assert_eq!(rows[0].status, Sync::Changed);
+    }
+
+    /// **A torn remote is a conflict, and nothing on this machine moves.** A
+    /// sync service replicates a push in its own order; a machine reading in
+    /// between sees refs pointing at objects that have not arrived. The remedy
+    /// is to wait, which is a remedy and not a crash.
+    #[test]
+    fn a_remote_part_way_through_syncing_is_reported_as_a_conflict() {
+        let output = torn(
+            "/scratch/Drive/guild",
+            &ArmadaError {
+                class: ErrClass::ToolFailed,
+                r#where: "git fetch origin main".to_string(),
+                message: "error: unable to read sha1 file".to_string(),
+                next_action: None,
+            },
+        );
+        let Output::GuildSync(envelope) = &output else {
+            panic!("not a sync");
+        };
+        assert!(!envelope.data.applied, "a torn remote applied something");
+        assert_eq!(envelope.data.results[0].status, Sync::Conflict);
+        assert_eq!(envelope.data.headline, Some(Headline::NeedsAttention));
+        let error = envelope.error.as_ref().expect("no error");
+        assert!(error.next_action.as_deref().unwrap().contains("wait"));
+    }
+
+    /// `~` comes from the `~/.armada` the entrypoint passed down, never from a
+    /// `$HOME` this file went and read.
+    #[test]
+    fn the_home_a_tilde_expands_against_is_the_one_armada_home_sits_in() {
+        assert_eq!(
+            home_of(Path::new("/scratch/agent/.armada")),
+            PathBuf::from("/scratch/agent")
+        );
     }
 
     #[test]

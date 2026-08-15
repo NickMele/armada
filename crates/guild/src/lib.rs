@@ -17,7 +17,7 @@
 //!
 //! | Pure — decisions over data | Shell — the outside world |
 //! |---|---|
-//! | [`secrets`] · [`memory`] · [`layout`] · [`interview`] | [`import`] · [`repo`] · [`bundle`] · [`inventory`] · [`machine`] · [`starters`] |
+//! | [`secrets`] · [`memory`] · [`layout`] · [`interview`] | [`import`] · [`repo`] · [`remote`] · [`bundle`] · [`inventory`] · [`machine`] · [`starters`] |
 //!
 //! Every subprocess in the shell half goes through `ctx.run` (§1.1), so `git`
 //! and `tar` are argv a test can assert rather than behaviour a test has to
@@ -43,6 +43,7 @@ pub mod inventory;
 pub mod layout;
 pub mod machine;
 pub mod memory;
+pub mod remote;
 pub mod repo;
 pub mod secrets;
 pub mod starters;
