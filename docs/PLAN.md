@@ -3895,6 +3895,145 @@ drifted between machines.
 **Not scheduled**, but this is the strongest candidate of the reserved items: it is small, it
 is self-contained, and the user hit it in ordinary use rather than in the abstract.
 
+### 15.3.5 The inbox records a label, not an identity — a bug, not a reservation
+
+**Found in ordinary use, 2026-08-15.** `armada fleet ls` reported `no Jobs` while `armada fleet
+inbox` reported five open entries, all naming `this-test`. Both are telling the truth, and the
+gap between them is the defect.
+
+**What is actually wrong.** Jobs are keyed by uuid; **every inbox entry is keyed by the Job's
+name**. A name is a label and labels are not unique — there were two Jobs called `this-test` —
+so an inbox entry cannot be resolved to the Job that raised it. `armada fleet show this-test`
+correctly refused as ambiguous while `armada fleet show c19d0a34` worked, which is the same
+fact seen from the other side.
+
+Two consequences, and the second is worse:
+
+1. **Entries outlive their Jobs.** Both Jobs reached `ABORTED`, a terminal state that `ls` does
+   not re-observe. The five entries remained "open" against Jobs that no longer exist.
+2. **The footer offers an action that cannot work.** `armada fleet answer <job> "…"` on an
+   entry whose Job is terminal has nothing to answer, and the reader is told to try anyway.
+
+**This is §15.3.1 arriving as a bug rather than a design note.** That section reserved the
+problem that *"items Helm raises in prose have no identity"* — and the inbox turns out to have
+the same defect one level down: it raises items against a **name**, which is prose with a
+narrower grammar. The fix is that an inbox entry carries the Job's **uuid** and is closed when
+its Job reaches a terminal state.
+
+**And `ls` should show the uuid.** The user's own conclusion: *"having legible IDs is really
+nice, but maybe when we do ls, we should also see the real ID."* A short prefix is enough — the
+ambiguity error already prints eight characters and they are what he successfully typed.
+
+### 15.3.6 Reserved, not built: the guild has no way to learn
+
+**The problem.** `templates/guild/subagents/helm.md` says *"it is yours from that moment, and
+nothing here is updated by a later Armada release."* That sentence is correct for `voice.md`
+and **wrong for the persona**: operating knowledge Armada learns — how to delegate, what to
+verify — is exactly what should reach an existing guild, and today nothing can.
+
+**The blocker is more basic than merging: a guild records no provenance.** Nothing anywhere
+says which Armada template version any file came from. Without a base there is no three-way
+merge — only overwrite or keep, and both are wrong.
+
+**The shape of the fix, in three parts:**
+
+1. **Stamp the template version at `init`**, so a later upgrade has a base to merge from.
+2. **Ship Armada's templates as an upstream branch inside the guild's own git repo.** The guild
+   is already a git worktree. The user's edits live on `main`, releases advance `armada`, and
+   `armada guild upgrade` is a `git merge` — git tracks the base, merges untouched files
+   silently, and conflicts only where both sides changed the same lines. **No merge engine gets
+   written**; the repository already contains one.
+3. **A per-file update policy**, because not everything should update:
+
+| File | Takes updates? |
+|---|---|
+| `workflows/workflow.schema.json` | Always — it is Armada's |
+| `subagents/helm.md` | Yes — operating knowledge, not personal |
+| `skills/onboard-repo/` | Offer — it may have been customised |
+| `voice.md`, `how-i-work.md`, `expectations.md` | **Never** — these are the user |
+
+**Cheap now, expensive later.** The guild had no remotes when this was found; once it is syncing
+between machines, adding provenance means reconciling histories rather than writing one field.
+
+### 15.3.7 Reserved, not built: the scanner should propose, not only report
+
+**The user's assessment, and it is the right one.** *"I am quite impressed with what the scanner
+was able to find. And now that I see what it was able to find, I do think that it can take it a
+little bit further … these are the type of things that are deterministic and should be
+identified via script."*
+
+**This does not reverse §5.** *"Do not write a stack-detection engine"* stands. The distinction
+that keeps it standing: the scanner may **propose what it can prove**, and must not guess.
+Everything below is an exact match on evidence already in the report, and every proposal is
+rejectable before anything is written.
+
+Run against a real monorepo, the scan found three workspace candidates, fifteen packages, a
+`pnpm-lock.yaml`, sixteen compose services and twenty-two CI steps — and then proposed nothing.
+
+**What is deterministic enough to propose:**
+
+- **The package manager.** A `pnpm-lock.yaml` is proof of pnpm, not evidence of it. Same for
+  `uv.lock`, `package-lock.json`, `yarn.lock`, `bun.lockb`.
+- **Workspaces.** A directory that resolves its own dependencies is a workspace candidate, and
+  the packages nested beneath it belong to it. The scan already computes this.
+- **Checks, on an exact name match only.** A workspace whose `package.json` has a script
+  literally named `test` may propose it as the test check. `test:changed` and `test:coverage`
+  may not — a near-match is a guess wearing a fact's clothes.
+
+**The judgement calls stay the user's**, which is what the interactive pass is for: the scan
+proposes, the reader ticks what is right, and what survives is written. In the example, three
+workspace candidates were found and only two were real — `scripts` was a toolset, not a
+workspace. **No amount of evidence would have settled that**, and that is the line between
+proposing and guessing.
+
+**The saving is the point.** A proposal a reader corrects costs no tokens; the same file
+authored by an agent costs a session. The agent hand-over stays for the repositories where the
+evidence genuinely does not settle it.
+
+#### Drift — the scanner run against a repository that already has one
+
+**Repositories change**: services appear, scripts are renamed, CI is rewritten. Today `scan` is
+the verb for a repository with no `armada.yml` and says so. It should also answer the second
+question: **is what this file claims still true, and is there anything real it does not
+mention?** Both halves matter — a check pointing at a deleted script and a new service nobody
+declared are different failures with the same cause.
+
+### 15.3.8 Reserved, not built: Armada injects its own skills
+
+**The ask, and it generalises past where it started.** *"Armada should inject custom skills into
+Helm and the subagents that are dispatched so that they can properly use Armada if needed,
+including the manifest, and propose changes to the manifest or propose changes to the guild."*
+
+**Why this is the missing half of the three-layer sandwich (§5).** Armada reports facts, an
+agent authors, Armada verifies — and the middle layer is currently expected to know how to hold
+the tools. A Drone that changes what a repository runs has learned something the `armada.yml`
+does not say, and it has no instruction telling it that saying so is part of the job.
+
+The natural home is the projection Guild already performs (§4.8, and
+[`PHASES.md`](PHASES.md) §8.4): the same mechanism that
+puts a guild's skills where Claude Code reads them can put Armada's own there too. The open
+questions are which skills exist, whether a Drone may propose a guild change or only a manifest
+one, and how a proposal is carried back — an inbox entry with an id is the obvious answer, which
+puts this downstream of §15.3.5 and §15.3.1.
+
+### 15.3.9 Smaller things raised in use, each with its reason
+
+Recorded together because each is small; kept because each came from real use rather than
+from reading the plan.
+
+| # | Raised | What it wants |
+|---|---|---|
+| 1 | `doctor` says `manifest.db` is present and nothing else | Presence is not health. Row counts per table, and how much of it is stale — a store that exists and holds four thousand dead rows is a different answer from one that exists |
+| 2 | `config scan` offers the agent hand-over or nothing | Three options: build it with an agent, **write a blank `armada.yml` and open it in `$EDITOR`**, or stop. The middle one is missing and is what a reader who knows their own repository wants |
+| 3 | The guild has a remote and nothing reports on it | Whether there is anything to pull, and anything local worth pushing. Same shape as `git status` and it is the same question |
+| 4 | Sync is manual and easy to forget | An occasional offer to pull when the guild is behind — `oh-my-zsh`'s prompt is the reference. **Never automatic**: a `pull` that runs unasked can change how an agent behaves mid-session |
+| 5 | `armada --help`'s `NOT BUILT YET` list has drifted from this plan | It lists `guild edit, verify`, `manifest render, agents-md, explain`, `check --detach/--status` — and nothing reserved in §15.3.x. Reconciling them is a chore with a test behind it, and the test is what stops it drifting again |
+
+**Two of these are the same rule.** #1 and #5 are both a report that has stopped tracking what
+it describes. `doctor` describes a file it does not look inside; `--help` describes a plan it
+does not read. Wherever a listing is derived rather than retyped — `args.rs`'s own constants
+already feed the help page — it cannot drift, and that is the fix in both cases.
+
 ### 15.4 The persona, and the four things it decides
 
 Helm *is* a persona plus a toolbelt. The persona is guild content — yours, editable, synced
