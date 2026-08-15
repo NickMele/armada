@@ -1,0 +1,6 @@
+  STATUS  ID        DETAIL                                                  TIME
+  OPEN    a91f0c37  environment x4, `armada manifest clean` could not be …    9m
+  FIXING  7c1e40aa  armada_bug, the worktree was already there and was no…   26m
+  OPEN    3bb27d15  bad_invocation, unknown command `brdige`                  3h
+
+OK  3 failures, 2 open, armada failures show <id>

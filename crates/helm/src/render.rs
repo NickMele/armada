@@ -1789,16 +1789,23 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
         "{}\n",
         style.paint(Role::SteelGrey, "  the task a Job would be given:")
     ));
-    // **Wrapped line by line, so the task keeps its own shape.** It is a block
-    // with an indented envelope in the middle of it, and reflowing the whole
-    // string as one paragraph would show the reader something other than what
-    // the Job is going to be sent.
+    // **A line that fits is printed verbatim, and only a long one is wrapped.**
+    // The task is a block with an indented, column-aligned envelope in the middle
+    // of it, and [`wrap_prose`] splits on whitespace — so wrapping every line
+    // unconditionally would strip that indent and collapse that alignment. This
+    // is the one screen whose whole purpose is to show what will be sent, so what
+    // can be shown unaltered is.
+    let room = width.saturating_sub(4);
     for paragraph in envelope.data.task.lines() {
         if paragraph.trim().is_empty() {
             out.push('\n');
             continue;
         }
-        for line in wrap_prose(paragraph, width.saturating_sub(4)) {
+        if term::display_width(paragraph) <= room {
+            out.push_str(&format!("    {paragraph}\n"));
+            continue;
+        }
+        for line in wrap_prose(paragraph, room) {
             out.push_str(&format!("    {line}\n"));
         }
     }
