@@ -33,9 +33,44 @@ situation it exists for.
 
 **`scan`** reads evidence and reports it. Roughly a dozen independent parsers — package
 manifests, lockfiles, compose files, CI workflows, test and lint configuration — each
-contributing what it found. It **emits evidence, not a finished config**: the author (you, or
-an agent) turns evidence into a config, because a scanner that guesses produces a file nobody
-can trust and everybody has to re-read.
+contributing what it found. Then it **proposes the lines it can prove**, and proposes nothing
+else: a scanner that guesses produces a file nobody can trust and everybody has to re-read, and
+the judgement calls stay the author's.
+
+### What it proposes, and what it will not
+
+Run against a real monorepo the first version found three workspace candidates, fifteen
+packages, a `pnpm-lock.yaml`, sixteen compose services and twenty-two CI steps — and then
+proposed nothing. [`docs/reserved/007`](../../reserved/007-scanner-should-propose.md) is the
+argument for the layer that changed that, and the rule it turns on: **propose what you can
+prove, never guess.**
+
+| Proposal | The proof |
+|---|---|
+| `workspaces: [dir]` | `dir/armada.yml` is there — the file `verify` requires |
+| `components.<name>` | `dir` carries a package manifest, and something in it is a check |
+| `setup: <pm> install` | the lockfile in that directory names `<pm>` |
+| `checks.<name>` | a script or `Makefile` target named **exactly** `<name>` |
+
+**A near-match is a guess wearing a fact's clothes.** A `package.json` with a script literally
+named `test` proposes the `test` check; `test:changed` and `test:coverage` propose nothing, and
+the schema agrees by accident of grammar — a check id must match `^[a-z0-9][a-z0-9_-]*$` and a
+colon is not in it. Five names qualify: `build`, `lint`, `test`, `typecheck`, `types`. `fmt` and
+`format` are excluded because a formatter's bare name rewrites the tree; `e2e` because it always
+arrives with a `cost:` decision; `check` because it usually means *run everything*.
+
+**A lockfile is proof of a package manager**, so a check is phrased `pnpm run test` rather than
+guessed at — and only for the four managers that spell a script runner that way (`pnpm`, `npm`,
+`yarn`, `bun`). A `uv.lock` or a `Cargo.lock` proves its manager and proves nothing about how to
+run a named script, so those repositories get their `Makefile` targets and nothing else.
+
+**A directory with no provable check proposes no component.** That is the `scripts/` case from
+the raising repository: a toolset with a `pyproject.toml`, a `uv.lock` and nothing Armada can
+phrase a command from. It resolves its own dependencies and is still not a unit of work, and no
+amount of evidence would have settled that — so it produces no row rather than a row to untick.
+
+`--json` carries `data.proposals[]` whether or not anyone is at a terminal, each with `kind`,
+`at`, `writes` and the `because` that names the file it was read out of.
 
 ### Where it looks
 
@@ -136,15 +171,39 @@ repository whose gate has a dozen steps.
 
 ### Handing over
 
-It ends by handing over to an agent, and **how depends on who is reading** — the three-audiences
-rule of [`PLAN.md`](../../PLAN.md) §3.1.1 applied to *input* rather than output. That section
-reasons about what gets written; the same split decides what may be read.
+It ends by asking what should happen next, and **how depends on who is reading** — the
+three-audiences rule of [`PLAN.md`](../../PLAN.md) §3.1.1 applied to *input* rather than output.
+That section reasons about what gets written; the same split decides what may be read.
 
 | Audience | What happens |
 |---|---|
-| **stdin and stdout are a terminal** | The choice is drawn and the answer is read. `1` execs `claude` on the guild's `onboard-repo` skill; `2` exits, having printed the evidence. |
-| **Either is not** | No menu. The command that would have been run is printed, so an agent reading stdout learns the next step. |
+| **stdin and stdout are a terminal** | The choice is drawn and the answer is read: write the proposals, hand the repository to an agent, or stop having printed the evidence. |
+| **Either is not** | No menu. The command that would have been run is printed, so an agent reading stdout learns the next step — with the proposals above it, already derived. |
 | **`--json`** | The envelope alone. No menu, no prompt, and `data.handover` says `silent`. |
+
+**The proposals option is offered only when there is something to propose**, and it is first
+because it is the cheap one: a proposal a reader corrects costs no tokens and the same file
+authored by an agent costs a session. The hand-over stays underneath it for the repositories
+where the evidence genuinely does not settle it — this reduces how many of those there are and
+does not replace them.
+
+#### The tick list
+
+Choosing to write puts every proposal up as a list, all ticked, and the reader's work is
+unticking what his repository disagrees with — *"they can check which ones it got correct and
+which ones it might not have gotten correct."* It is the same selector every closed question
+uses with `space` bound: `↑`/`↓` move, `space` ticks, `enter` writes what survives, `esc` writes
+nothing.
+
+**Nothing reaches the disk until then.** Unticking a component takes its checks with it, because
+a check under a component nobody accepted is a document that does not parse. Unticking
+everything and pressing `esc` have the same outcome, and neither is an error. An `armada.yml`
+that is already there is **never** overwritten — whether the file still agrees with the
+repository is drift, and drift is not built.
+
+The written file carries the provenance of every line in a comment above it, and the report ends
+on `armada manifest config verify`: a proposed config is plausible, not correct, and layer 3 is
+what tells those apart.
 
 **An agent running `config scan` inside a Job must never block on stdin that will never
 arrive.** That is the failure mode "always interactive" causes — the Job hangs until its ceiling
@@ -187,10 +246,10 @@ is written outside the table for that reason, and overhangs rather than being cu
 what the rest of the envelope does and for the same underlying reason: here the *kinds are the
 report*, so `"makefiles": []` is how the payload says Armada looked and found none.
 
-Two things `scan` deliberately does not report. **Confidence**, because a confidence is a
-judgement and this layer has none — every value is copied out of a file the repository already
-had. And **anything below the root**, apart from `.github/workflows/`: a recursive walk of a
-repository nobody has configured yet is a promise about `node_modules` that nobody made.
+**`scan` deliberately does not report confidence**, because a confidence is a judgement and this
+layer has none — every value is copied out of a file the repository already had, and the
+`because` column names that file instead. A proposal is either provable or absent; there is no
+*probably*.
 
 `verify` prints its pass-1 table, then pass 2's if it ran, then a verdict — and under the
 verdict **one `->` line per problem, each naming what would fix it.** Those lines are the point:

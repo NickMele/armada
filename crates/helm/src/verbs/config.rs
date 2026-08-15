@@ -7,10 +7,16 @@
 //! 3. verify   Armada    pass/fail, with the key path and the fix
 //! ```
 //!
-//! Layer 2 is not here, and its absence is the design. Armada reports facts and
-//! validates a written file; deciding which of four test scripts is canonical
-//! is judgement, and a scanner that supplies judgement produces a file nobody
-//! can trust and everybody has to re-read.
+//! Layer 2 is still not here, and its absence is still the design: deciding
+//! which of four test scripts is canonical is judgement, and a scanner that
+//! supplies judgement produces a file nobody can trust and everybody has to
+//! re-read.
+//!
+//! **What `scan` now does between 1 and 2 is propose what it can prove**
+//! (`docs/reserved/007`) — a `pnpm-lock.yaml` is proof of pnpm and a script
+//! named exactly `test` is proof of a test check, while `test:changed` is proof
+//! of nothing. A reader ticks what is right and Armada writes only that, so the
+//! judgement stays his and the transcription stops being his.
 //!
 //! **`scan` is the one verb that runs with no `armada.yml` at all** (PLAN.md
 //! §2.1), which is why it takes a directory rather than an [`App`]: there is no
