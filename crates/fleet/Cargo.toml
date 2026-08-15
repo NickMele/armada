@@ -1,0 +1,24 @@
+[package]
+name = "armada-fleet"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The Fleet module's imperative shell: Jobs on disk, worktrees, Drones and the inbox."
+
+# Fleet sits above Guild and Manifest and may name both (ARCHITECTURE.md §1.9),
+# and it is the **lowest** module that can see them together — which is why
+# merging a Job's skills is structurally Fleet's job and not Helm's (PLAN.md
+# §14.5). Nothing may name Fleet except Helm; `cargo xtask boundaries` enforces
+# that, and if it fails the design is wrong rather than the check.
+[dependencies]
+armada-core = { path = "../core" }
+armada-guild = { path = "../guild" }
+armada-manifest = { path = "../manifest" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

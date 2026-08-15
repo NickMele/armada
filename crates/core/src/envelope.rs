@@ -363,7 +363,12 @@ pub struct PortReport {
 }
 
 /// What `clean` actually released for one workspace.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+///
+/// `Deserialize` because `armada fleet kill` runs `armada manifest clean --json`
+/// in the Job's worktree and reads its answer back (`crates/fleet`'s `manifest`
+/// module). The envelope is a contract in both directions, and this is the one
+/// place Armada is its own consumer.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct Released {
     /// Process groups killed.
     pub processes: usize,

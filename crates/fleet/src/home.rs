@@ -1,0 +1,111 @@
+//! Where Fleet's three directories are, and how a path is written for a person.
+//!
+//! `~/.armada/jobs/`, `~/.armada/workspaces/` and `~/.armada/inbox.jsonl` all
+//! **never sync** (`armada_guild::layout`): they describe this machine and the
+//! processes on it, and a Job index copied to another machine would name
+//! worktrees that do not exist there.
+//!
+//! **Worktrees live outside the repository**, under `~/.armada/workspaces/`, so
+//! a stray delete in the parent cannot take out live work (PLAN.md §14.1).
+
+use std::path::{Path, PathBuf};
+
+/// The Job index — one file per Job, named for its uuid.
+///
+/// **A directory of small files rather than one index**, because the failure
+/// mode of a single file is that a crash mid-write loses every Job rather than
+/// one, and because two `spawn`s racing would have to agree on a lock. The same
+/// reasoning that put Manifest's ownership store in SQLite applies inverted
+/// here: there is no query to run across Jobs that a directory listing cannot
+/// answer.
+pub fn jobs(armada_home: &Path) -> PathBuf {
+    armada_home.join("jobs")
+}
+
+/// Where a Job's git worktree goes: `~/.armada/workspaces/<repo>/<name>`.
+///
+/// The repository's name is a level of the path because two repositories may
+/// each have a Job called `rate-limit`, and a flat directory would make the
+/// second one collide with the first.
+pub fn worktree(armada_home: &Path, repo: &str, name: &str) -> PathBuf {
+    armada_home.join("workspaces").join(repo).join(name)
+}
+
+/// `~/.armada/inbox.jsonl` — **append-only, so it survives every kind of
+/// crash** (PLAN.md §15.3). The same reasoning that put the ownership store on
+/// disk rather than in a process.
+pub fn inbox(armada_home: &Path) -> PathBuf {
+    armada_home.join("inbox.jsonl")
+}
+
+/// A path as a person writes it: `~/…` when it is under `$HOME`.
+///
+/// **The payload carries this form, not the absolute one**, which is the
+/// convention `armada guild init`'s `guild_path` already set. A `~` path is
+/// still a path a shell will `cd` to, and `armada fleet board`'s whole output is
+/// two lines somebody pastes.
+pub fn tilde(path: &Path, home: &Path) -> String {
+    match path.strip_prefix(home) {
+        Ok(rest) => format!("~/{}", rest.display()),
+        Err(_) => path.display().to_string(),
+    }
+}
+
+/// The repository's name, for the worktree path and the Job record.
+///
+/// The last component of the root, which is what a person calls the repository
+/// whatever the remote is named.
+pub fn repo_name(repo_root: &Path) -> String {
+    repo_root
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| "repo".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_three_directories_hang_off_the_armada_home_they_were_given() {
+        let home = Path::new("/scratch/.armada");
+        assert_eq!(jobs(home), PathBuf::from("/scratch/.armada/jobs"));
+        assert_eq!(
+            inbox(home),
+            PathBuf::from("/scratch/.armada/inbox.jsonl"),
+            "the inbox is a file, not a directory"
+        );
+    }
+
+    /// **Two repositories may each have a `rate-limit`.** The repository is a
+    /// level of the path so the second one does not land on the first.
+    #[test]
+    fn a_worktree_is_named_for_its_repository_and_its_job() {
+        assert_eq!(
+            worktree(Path::new("/scratch/.armada"), "api", "rate-limit"),
+            PathBuf::from("/scratch/.armada/workspaces/api/rate-limit")
+        );
+        assert_ne!(
+            worktree(Path::new("/s"), "api", "rate-limit"),
+            worktree(Path::new("/s"), "web", "rate-limit")
+        );
+    }
+
+    #[test]
+    fn a_path_under_home_is_written_the_way_a_person_writes_it() {
+        let home = Path::new("/scratch/home");
+        assert_eq!(
+            tilde(Path::new("/scratch/home/.armada/workspaces/api"), home),
+            "~/.armada/workspaces/api"
+        );
+        // Somewhere else is left alone: abbreviating a path that is not under
+        // `$HOME` would produce one that does not exist.
+        assert_eq!(tilde(Path::new("/opt/work"), home), "/opt/work");
+    }
+
+    #[test]
+    fn a_repository_is_named_by_its_last_component() {
+        assert_eq!(repo_name(Path::new("/code/api")), "api");
+        assert_eq!(repo_name(Path::new("/")), "repo");
+    }
+}

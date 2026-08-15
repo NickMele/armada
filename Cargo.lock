@@ -44,6 +44,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "armada-fleet"
+version = "0.1.0"
+dependencies = [
+ "armada-core",
+ "armada-guild",
+ "armada-manifest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "armada-guild"
 version = "0.1.0"
 dependencies = [

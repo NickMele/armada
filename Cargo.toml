@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/manifest", "crates/guild", "crates/helm", "xtask"]
+members = [
+    "crates/core",
+    "crates/manifest",
+    "crates/guild",
+    "crates/fleet",
+    "crates/helm",
+    "xtask",
+]
 
 # Dependencies point inward (ARCHITECTURE.md §1.5) and nothing points upward
 # (§1.9): `core` is pure; `manifest` and `guild` — two modules' imperative
