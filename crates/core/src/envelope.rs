@@ -2049,7 +2049,16 @@ pub struct InboxData {
 pub struct InboxRow {
     /// The entry's own id.
     pub uuid: String,
-    /// The Job that raised it.
+    /// **The Job that raised it, by uuid — the identity.**
+    ///
+    /// `None` only for an entry written before
+    /// `docs/reserved/005-inbox-label-not-identity.md` was fixed and not yet
+    /// migrated. A caller resolves on this and never on [`Self::job`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub job_uuid: Option<String>,
+    /// The Job's name when it was raised — **a label.** Names are handed out
+    /// again once the Job holding one is over, so two rows carrying one name
+    /// may belong to two different Jobs.
     pub job: String,
     /// Why.
     pub kind: String,
@@ -2062,6 +2071,23 @@ pub struct InboxRow {
     /// Your answer, once there is one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub answered: Option<String>,
+    /// Why it stopped waiting on you without an answer, if it did — `ENDED`
+    /// when its Job reached a terminal state, `UNRESOLVABLE` when it was a
+    /// legacy entry whose name meant no Job or several.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closed: Option<String>,
+}
+
+impl InboxRow {
+    /// Whether this entry is still waiting on you.
+    ///
+    /// **Three conditions, not one.** An unanswered row whose Job has ended is
+    /// not an open question, and neither is one that never had a Job to answer
+    /// — offering the action anyway is the second consequence
+    /// `docs/reserved/005-inbox-label-not-identity.md` records.
+    pub fn is_open(&self) -> bool {
+        self.answered.is_none() && self.closed.is_none() && self.job_uuid.is_some()
+    }
 }
 
 /// `armada fleet answer` — the entry you closed, and what the Job did next.

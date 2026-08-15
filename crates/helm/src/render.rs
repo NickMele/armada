@@ -408,11 +408,21 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
 ///
 /// **Every column is read off data Claude Code already emits** (PHASES.md §9.1
 /// F2). The renderer rounds; it does not compute.
+///
+/// **`ID` is here because a name is not one** (`docs/reserved/005-inbox-label-
+/// not-identity.md`). A name is a handle
+/// [`armada_fleet::jobs::Store::free_name`] hands out again once the Job
+/// holding it is over, so a listing of names alone cannot tell two Jobs called
+/// `this-test` apart — and `armada fleet show this-test` then refuses as
+/// ambiguous with no way, from this table, to see what to type instead. Eight
+/// characters is what the refusal already prints and what a person successfully
+/// types back, so it is what the column shows.
 fn fleet_ls(envelope: &Envelope<FleetLsData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
     let mut table = Table::new(vec![
         Column::fixed("status"),
         Column::fixed("job"),
+        Column::fixed("id"),
         Column::fixed("workflow"),
         Column::flexible("detail"),
         // **Right, always**: a column of right-aligned numbers can be compared
@@ -427,6 +437,10 @@ fn fleet_ls(envelope: &Envelope<FleetLsData>, style: Style, width: usize) -> Str
             job_state(row.state),
             // Naval blue is what the palette reserves for a Job identifier.
             Cell::painted(row.name.clone(), Role::NavalBlue),
+            // **Muted, because it is the fallback and not the handle.** A name
+            // is what a person types on an ordinary day; the id is what they
+            // type on the day two Jobs share one.
+            Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
             Cell::muted(row.workflow.clone()),
             detail_cell(style, Some(row.detail.as_str())),
             // **Nothing spent is a dash, not `$0.00`.** A zero in this column

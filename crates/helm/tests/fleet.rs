@@ -1686,6 +1686,7 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
     armada_fleet::inbox::raise(
         &scratch.inbox(),
         "e1",
+        &data.uuid,
         &data.name,
         armada_fleet::inbox::Kind::NeedsHuman,
         "2026-08-09T14:02:11Z",
@@ -1755,6 +1756,7 @@ fn answering_a_job_twice_adds_up_rather_than_starting_over() {
         armada_fleet::inbox::raise(
             &scratch.inbox(),
             id,
+            &data.uuid,
             &data.name,
             armada_fleet::inbox::Kind::NeedsHuman,
             "t",
@@ -1816,6 +1818,7 @@ fn answering_a_job_that_has_run_out_of_rope_is_refused_and_raised() {
     armada_fleet::inbox::raise(
         &scratch.inbox(),
         "e1",
+        &data.uuid,
         &data.name,
         armada_fleet::inbox::Kind::NeedsHuman,
         "t",
@@ -1873,6 +1876,7 @@ fn the_inbox_reports_what_is_open_and_changes_nothing() {
     armada_fleet::inbox::raise(
         &scratch.inbox(),
         "e1",
+        "c19d0a34-3069",
         "flake",
         armada_fleet::inbox::Kind::NeedsHuman,
         "t",
@@ -1928,6 +1932,7 @@ fn show_reports_the_inbox_entry_that_raised_needs_you_in_full() {
     armada_fleet::inbox::raise(
         &scratch.inbox(),
         "e1",
+        &data.uuid,
         &data.name,
         armada_fleet::inbox::Kind::NeedsHuman,
         "2026-08-09T14:02:11Z",
@@ -1972,31 +1977,41 @@ fn show_reports_the_inbox_entry_that_raised_needs_you_in_full() {
 }
 
 /// **A handle is reusable, and a new Job does not inherit its namesake's
-/// questions.** Without the cut at `created_ms` a fresh Job would open with a
-/// week-old question against it, which is the worst possible answer to "why does
-/// this need me".
+/// questions.**
+///
+/// **This used to be a cut at `created_ms`, and the cut was the bug.** `show`
+/// filtered entries by name and then dropped anything raised before the Job
+/// was minted — an approximation that only works while two Jobs of one name
+/// never overlap, which is precisely the case
+/// `docs/reserved/005-inbox-label-not-identity.md` was raised about. So the
+/// entry raised here is *newer* than the Job that must not see it: a timestamp
+/// window would hand it over, and the uuid does not.
 #[test]
-fn show_leaves_out_entries_raised_before_this_job_existed() {
+fn show_leaves_out_the_entries_another_job_of_the_same_name_raised() {
     let scratch = Scratch::new();
     let run = scratch.harness();
     let data = spawn(&scratch, &run, &task("add rate limiting"));
     await_turn(&scratch, &data.uuid);
 
-    armada_fleet::inbox::raise(
-        &scratch.inbox(),
-        "older",
-        &data.name,
-        armada_fleet::inbox::Kind::NeedsHuman,
-        "2026-08-01T09:00:00Z",
-        1,
-        "a question the last Job of this name asked",
-    )
-    .unwrap();
-
     let record = scratch.store().load(&data.uuid).unwrap();
     armada_fleet::inbox::raise(
         &scratch.inbox(),
+        "someone-elses",
+        // A different Job, the same name, and raised *after* this Job was
+        // minted — the case no timestamp can separate.
+        "3d9cc7ba-1f40-4a6e-9c21-5b8e0d2a7f13",
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "2026-08-09T14:03:11Z",
+        record.created_ms + 60_000,
+        "a question the other Job of this name asked",
+    )
+    .unwrap();
+
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
         "mine",
+        &data.uuid,
         &data.name,
         armada_fleet::inbox::Kind::NeedsHuman,
         "2026-08-09T14:02:11Z",

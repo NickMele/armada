@@ -1359,10 +1359,30 @@ fn the_help_pages_match_their_fixtures() {
 /// entire purpose of having written the fixture first: the columns, their order,
 /// the `-` in a row that has not run, and the summary line were settled in
 /// `docs/reference-output/command-output.html` and this render follows them.
+///
+/// **One column was added afterwards, deliberately and for a reason on the
+/// record**: `ID`, the Job's uuid cut to eight characters
+/// (`docs/reserved/005-inbox-label-not-identity.md`). A listing of names alone
+/// cannot tell two Jobs of one name apart, and the ambiguity refusal that
+/// results prints exactly these eight characters as what to type instead — so
+/// the table shows them rather than making a reader run a second command to
+/// learn them.
+///
+/// **The rows carry uuid-shaped uuids now.** They were `<name>-uuid`, which
+/// was invisible while nothing drew them and would render as `rate-lim` in a
+/// column that is meant to be recognisably an id.
+///
+/// **The cost is ten columns off `DETAIL`, and at eighty two of these rows
+/// truncate.** That is the trade taken knowingly: `DETAIL` is the flexible
+/// column, so a fixed one is paid for out of it, and the alternative on offer
+/// was a table from which the disambiguating fact is simply absent. The
+/// truncated half is recoverable — `armada fleet show <id>` prints the entry
+/// body whole — while a Job you cannot name is not recoverable from anywhere.
 #[test]
 fn fleet_ls_matches_its_fixture() {
     fn row(
         name: &str,
+        uuid: &str,
         workflow: &str,
         state: JobState,
         detail: &str,
@@ -1371,7 +1391,7 @@ fn fleet_ls_matches_its_fixture() {
         needs_attention: bool,
     ) -> JobRow {
         JobRow {
-            uuid: format!("{name}-uuid"),
+            uuid: uuid.to_string(),
             name: name.to_string(),
             workflow: workflow.to_string(),
             state,
@@ -1396,6 +1416,7 @@ fn fleet_ls_matches_its_fixture() {
     let results = vec![
         row(
             "rate-limit",
+            "c19d0a34-3069-4115-ad92-e81f486ce8b9",
             "feature",
             JobState::Running,
             "implement, check green",
@@ -1405,6 +1426,7 @@ fn fleet_ls_matches_its_fixture() {
         ),
         row(
             "carina-schema",
+            "94b1fd2e-6288-46f8-83f0-0d7d857e64cd",
             "feature",
             JobState::Running,
             "plan, awaiting you",
@@ -1414,6 +1436,7 @@ fn fleet_ls_matches_its_fixture() {
         ),
         row(
             "xlsx-report",
+            "3d9cc7ba-1f40-4a6e-9c21-5b8e0d2a7f13",
             "bug",
             JobState::Stalled,
             "no output for 6m",
@@ -1423,6 +1446,7 @@ fn fleet_ls_matches_its_fixture() {
         ),
         row(
             "release-merge",
+            "7f2ab618-58d3-4c07-b9e4-1a6c39fd80ae",
             "feature",
             JobState::Blocked,
             "wants CI timeout raised",
@@ -1434,7 +1458,20 @@ fn fleet_ls_matches_its_fixture() {
         // pin: a Job with no spend and no run time gets a placeholder in both
         // columns rather than `$0.00` and `0s`, because a zero reads as a
         // measurement and nothing has been measured.
-        row("nightly-flake", "bug", JobState::Queued, "", 0.0, 0, false),
+        //
+        // **Its `ID` is not a placeholder.** A uuid is minted before anything
+        // runs (PLAN.md §14.1), so a queued Job has one — that is the point of
+        // minting it first.
+        row(
+            "nightly-flake",
+            "e52eaad5-d231-4067-ac5b-6a083c3897d6",
+            "bug",
+            JobState::Queued,
+            "",
+            0.0,
+            0,
+            false,
+        ),
     ];
 
     let output = Output::FleetLs(Box::new(Envelope::ok(
@@ -1783,15 +1820,18 @@ fn show_data() -> ShowData {
         asked: vec![
             InboxRow {
                 uuid: "e30b91aa".to_string(),
+                job_uuid: Some("7f2ab618-58d3-4c07-b9e4-1a6c39fd80ae".to_string()),
                 job: "release-merge".to_string(),
                 kind: "NEEDS_HUMAN".to_string(),
                 raised_at: "2026-08-09T14:20:11Z".to_string(),
                 waiting_s: 47 * 60,
                 body: "should the 4.2 tag be signed with the release key?".to_string(),
                 answered: Some("yes, and push the tag once check is green".to_string()),
+                closed: None,
             },
             InboxRow {
                 uuid: "e4f1a2c9".to_string(),
+                job_uuid: Some("7f2ab618-58d3-4c07-b9e4-1a6c39fd80ae".to_string()),
                 job: "release-merge".to_string(),
                 kind: "BLOCKED".to_string(),
                 raised_at: "2026-08-09T14:58:11Z".to_string(),
@@ -1801,6 +1841,7 @@ fn show_data() -> ShowData {
                        re-cut it? Both are safe; the second loses the rename."
                     .to_string(),
                 answered: None,
+                closed: None,
             },
         ],
         progress: vec![

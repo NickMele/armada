@@ -1,8 +1,8 @@
-  STATUS   JOB            WORKFLOW  DETAIL                   SPENT  TIME
-  RUNNING  rate-limit     feature   implement, check green   $2.10   14m
-  RUNNING  carina-schema  feature   plan, awaiting you       $0.45    3m
-  STALLED  xlsx-report    bug       no output for 6m         $4.60   22m
-  BLOCKED  release-merge  feature   wants CI timeout raised  $1.25    1h
-  QUEUED   nightly-flake  bug       -                            -     -
+  STATUS   JOB            ID        WORKFLOW  DETAIL                 SPENT  TIME
+  RUNNING  rate-limit     c19d0a34  feature   implement, check gre…  $2.10   14m
+  RUNNING  carina-schema  94b1fd2e  feature   plan, awaiting you     $0.45    3m
+  STALLED  xlsx-report    3d9cc7ba  bug       no output for 6m       $4.60   22m
+  BLOCKED  release-merge  7f2ab618  feature   wants CI timeout rai…  $1.25    1h
+  QUEUED   nightly-flake  e52eaad5  bug       -                          -     -
 
 RUNNING  5 jobs, 2 need you, $8.40 today

@@ -363,6 +363,11 @@ pub fn spawn<R: Run, C: Clock>(
         record.state = JobState::Aborted;
         record.verdict = Some(Verdict::Failed);
         store.save(&record)?;
+        // Nothing has been raised this early, but the close travels with every
+        // terminal write rather than with the ones that happen to need it —
+        // an entry that outlives its Job is the defect, and remembering by
+        // hand at each site is how it comes back.
+        close_entries(place, &record)?;
         return Err(error);
     }
     progress.tick(now.mono());
@@ -644,12 +649,56 @@ fn raise<C: Clock>(
     inbox::raise(
         &place.inbox(),
         &job::mint_uuid(&format!("{}|{at_ms}|{body}", record.uuid)),
+        // **The uuid is the identity and the name only travels beside it**
+        // (`docs/reserved/005-inbox-label-not-identity.md`). Raising against
+        // the name was the defect: `free_name` hands a name out again once the
+        // Job holding it is over, so two Jobs called `this-test` produced five
+        // entries that belonged to neither.
+        &record.uuid,
         &record.name,
         kind,
         &now.wall_rfc3339(),
         at_ms,
         body,
     )
+}
+
+/// Every inbox entry, with any legacy one given the identity it was written
+/// without.
+///
+/// **The migration is here rather than in a verb of its own**, because an
+/// inbox full of name-keyed entries is on a real machine right now and a fix
+/// that needed a command run first is a fix most machines never get. It is
+/// append-only, idempotent, and triggered only while a legacy entry remains —
+/// so it converges after one read and every read after that is a read.
+///
+/// **The Job index is loaded only when there is something to migrate.** A
+/// machine already migrated pays a `read_to_string` and nothing else, which is
+/// what keeps `armada fleet inbox` as cheap as it was.
+fn entries(place: &Where) -> Result<Vec<inbox::Entry>, ArmadaError> {
+    let entries = inbox::read(&place.inbox())?;
+    if !entries.iter().any(inbox::Entry::is_legacy) {
+        return Ok(entries);
+    }
+    let jobs: Vec<(String, String, bool)> = place
+        .store()
+        .all()?
+        .into_iter()
+        .map(|record| (record.name, record.uuid, record.state.is_over()))
+        .collect();
+    inbox::migrate(&place.inbox(), &jobs)?;
+    inbox::read(&place.inbox())
+}
+
+/// Close everything a Job had open, because the Job has ended.
+///
+/// **Called beside the write that ends it, never from a read.** `DONE` and
+/// `ABORTED` are the two states a verb writes deliberately —
+/// [`armada_core::fleet::job::observe`] never invents either — so this is
+/// complete, and `armada fleet ls` stays a read that changes nothing.
+fn close_entries(place: &Where, record: &Job) -> Result<(), ArmadaError> {
+    inbox::close(&place.inbox(), &record.uuid, inbox::Closed::Ended)?;
+    Ok(())
 }
 
 fn envelope(
@@ -702,7 +751,7 @@ pub fn ls<R: Run, C: Clock>(
     all: bool,
     needs_attention: bool,
 ) -> Result<Output, ArmadaError> {
-    let entries = inbox::read(&place.inbox())?;
+    let entries = entries(place)?;
     let wall = now.wall_ms();
 
     let mut rows: Vec<JobRow> = Vec::new();
@@ -711,7 +760,15 @@ pub fn ls<R: Run, C: Clock>(
             continue;
         }
         let (observed, _) = look(run, place, &record, wall);
-        let waiting = inbox::open_for(&entries, &record.name);
+        // **By uuid, and never for a Job that is over.** The first is the
+        // defect `005` records; the second is its first consequence, and it is
+        // asserted here as well as written at the close because `--all` draws
+        // finished Jobs and an ended Job must not still be advertising a
+        // question nobody can answer.
+        let waiting = match observed.state.is_over() {
+            true => None,
+            false => inbox::open_for(&entries, &record.uuid),
+        };
         let wants_you = observed.state.needs_a_person() || waiting.is_some();
         if needs_attention && !wants_you {
             continue;
@@ -827,21 +884,16 @@ pub fn show<R: Run, C: Clock>(
     // asking why a Job wants them is often looking at the second question, and
     // an answered one is the record of what was already decided.
     //
-    // **Cut to entries raised after this Job was minted**, because a handle is
-    // reusable once a Job is over: without it, a fresh `nightly-flake` would
-    // inherit the questions its namesake asked last week.
-    let asked: Vec<InboxRow> = inbox::read(&place.inbox())?
+    // **Selected by uuid, which is what makes the cut exact.** It used to
+    // filter on the name and then on `raised_ms >= created_ms` to keep a fresh
+    // `nightly-flake` from inheriting its namesake's questions — an
+    // approximation that fails the moment two Jobs of one name overlap, which
+    // is exactly what `docs/reserved/005-inbox-label-not-identity.md` was
+    // raised about. The uuid needs no window.
+    let asked: Vec<InboxRow> = entries(place)?
         .into_iter()
-        .filter(|entry| entry.job == record.name && entry.raised_ms >= record.created_ms)
-        .map(|entry| InboxRow {
-            uuid: entry.uuid,
-            job: entry.job,
-            kind: entry.kind.word().to_string(),
-            raised_at: entry.raised_at,
-            waiting_s: wall.saturating_sub(entry.raised_ms) / 1_000,
-            body: entry.body,
-            answered: entry.answered,
-        })
+        .filter(|entry| entry.job_uuid.as_deref() == Some(record.uuid.as_str()))
+        .map(|entry| row(&entry, wall))
         .collect();
 
     // **Newest first, which is the opposite of the inbox's order and is meant
@@ -859,8 +911,7 @@ pub fn show<R: Run, C: Clock>(
         .collect();
     progress.reverse();
 
-    let waiting_on_you =
-        observed.state.needs_a_person() || asked.iter().any(|row| row.answered.is_none());
+    let waiting_on_you = observed.state.needs_a_person() || asked.iter().any(InboxRow::is_open);
 
     Ok(Output::Show(Box::new(Envelope::ok(
         "fleet show",
@@ -1083,6 +1134,17 @@ fn end<R: Run, C: Clock>(
         record.state = JobState::Aborted;
         record.port_block = None;
         store.save(&record)?;
+
+        // **Its inbox entries end with it.** Both of the user's Jobs reached
+        // `ABORTED` and five entries stayed open against Jobs that no longer
+        // existed, still advertising `armada fleet answer` — the two
+        // consequences `docs/reserved/005-inbox-label-not-identity.md`
+        // records, and this line is where the first of them is closed.
+        //
+        // **After the save, and never instead of it.** A `kill` that failed
+        // here must still have ended the Job; an entry left open is a stale
+        // row, an unsaved record is a Job nothing can end.
+        close_entries(place, &record)?;
     }
 
     let error = results.iter().find_map(|killed| killed.error.clone());
@@ -1240,8 +1302,8 @@ pub fn resume<R: Run, C: Clock>(
         });
     }
 
-    let entries = inbox::read(&place.inbox())?;
-    if inbox::open_for(&entries, &record.name).is_some() {
+    let entries = entries(place)?;
+    if inbox::open_for(&entries, &record.uuid).is_some() {
         return Err(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: record.name.clone(),
@@ -1405,22 +1467,23 @@ pub fn inbox<C: Clock>(
     all: bool,
 ) -> Result<Output, ArmadaError> {
     let wall = now.wall_ms();
-    let rows: Vec<InboxRow> = inbox::read(&place.inbox())?
+    // **`--job` resolves through the Job index rather than matching the entry's
+    // label.** Typing a name that means two Jobs is refused here exactly as
+    // `armada fleet show` refuses it, instead of quietly returning both Jobs'
+    // entries in one undifferentiated list — which is what it did, and is the
+    // reading half of `docs/reserved/005-inbox-label-not-identity.md`.
+    let only = match job {
+        Some(handle) => Some(place.store().find(handle)?.uuid),
+        None => None,
+    };
+    let rows: Vec<InboxRow> = entries(place)?
         .into_iter()
-        .filter(|entry| job.is_none_or(|name| entry.job == name))
+        .filter(|entry| only.as_deref().is_none_or(|uuid| entry.job_uuid.as_deref() == Some(uuid)))
         .filter(|entry| all || entry.is_open())
-        .map(|entry| InboxRow {
-            uuid: entry.uuid,
-            job: entry.job,
-            kind: entry.kind.word().to_string(),
-            raised_at: entry.raised_at,
-            waiting_s: wall.saturating_sub(entry.raised_ms) / 1_000,
-            body: entry.body,
-            answered: entry.answered,
-        })
+        .map(|entry| row(&entry, wall))
         .collect();
 
-    let open = rows.iter().filter(|row| row.answered.is_none()).count();
+    let open = rows.iter().filter(|row| row.is_open()).count();
     Ok(Output::Inbox(Box::new(Envelope::ok(
         "fleet inbox",
         None,
@@ -1432,6 +1495,26 @@ pub fn inbox<C: Clock>(
             open,
         },
     ))))
+}
+
+/// One entry, as every view reports it.
+///
+/// **One conversion, so `inbox` and `show` cannot describe one entry
+/// differently.** They already promise to carry [`InboxRow`] unchanged
+/// (`envelope.rs`), and two copies of this mapping is how that promise stops
+/// being true.
+fn row(entry: &inbox::Entry, wall: u64) -> InboxRow {
+    InboxRow {
+        uuid: entry.uuid.clone(),
+        job_uuid: entry.job_uuid.clone(),
+        job: entry.job.clone(),
+        kind: entry.kind.word().to_string(),
+        raised_at: entry.raised_at.clone(),
+        waiting_s: wall.saturating_sub(entry.raised_ms) / 1_000,
+        body: entry.body.clone(),
+        answered: entry.answered.clone(),
+        closed: entry.closed.map(|why| why.word().to_string()),
+    }
 }
 
 /// `armada fleet answer` — close the entry, and resume the Job with it.
@@ -1454,8 +1537,27 @@ pub fn answer<R: Run, C: Clock>(
 ) -> Result<Output, ArmadaError> {
     let store = place.store();
     let mut record = store.find(handle)?;
-    let entries = inbox::read(&place.inbox())?;
-    let Some(entry) = inbox::open_for(&entries, &record.name) else {
+
+    // **A Job that has ended is refused before anything is read.** Its entries
+    // were closed when it ended, so there is nothing to find — but the message
+    // a reader gets should name the reason rather than say "nothing open",
+    // which is the misleading half of
+    // `docs/reserved/005-inbox-label-not-identity.md`'s second consequence.
+    if record.state.is_over() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!(
+                "`{}` has ended — it is {}, and a finished Job has nothing to answer",
+                record.name,
+                record.state.word()
+            ),
+            next_action: Some("`armada fleet inbox --all` shows what it asked".to_string()),
+        });
+    }
+
+    let entries = entries(place)?;
+    let Some(entry) = inbox::open_for(&entries, &record.uuid) else {
         return Err(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: record.name.clone(),

@@ -854,12 +854,14 @@ mod tests {
             needs_attention: true,
             asked: vec![armada_core::envelope::InboxRow {
                 uuid: "e1".to_string(),
+                job_uuid: Some("7f2ab618-58d3-4c07-b9e4-1a6c39fd80ae".to_string()),
                 job: "release-merge".to_string(),
                 kind: "NEEDS_HUMAN".to_string(),
                 raised_at: "2026-08-09T14:12:11Z".to_string(),
                 waiting_s: 9 * 60,
                 body: "the CI timeout is 30s and the flake needs 90s. Raise it?".to_string(),
                 answered: None,
+                closed: None,
             }],
             progress: Vec::new(),
         }
