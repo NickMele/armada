@@ -5,28 +5,28 @@
   armada manifest check --files <path>…
 
 [1m[38;2;255;169;64mFLAGS[0m
-  --dry-run           [38;2;107;114;128mreport what would run; run nothing[0m
-  --all-files         [38;2;107;114;128mscope from each component's match: globs, not the diff[0m
-  --fix               [38;2;107;114;128mrun fix: instead of cmd:; skips checks with no fix:[0m
-  --wait              [38;2;107;114;128mqueue for the run lease instead of failing fast[0m
-  --files <path>…     [38;2;107;114;128mrun only the checks these paths belong to[0m
-  --component <name>  [38;2;107;114;128mevery check on one component[0m
-  --concurrency <n>   [38;2;107;114;128mthis run's CPU budget, overriding the machine's[0m
-  --json              [38;2;107;114;128manswer as one JSON object, for a script or an agent[0m
-  --color <when>      [38;2;107;114;128mauto (default), always, never; NO_COLOR wins[0m
+  --dry-run           [38;2;156;163;175mreport what would run; run nothing[0m
+  --all-files         [38;2;156;163;175mscope from each component's match: globs, not the diff[0m
+  --fix               [38;2;156;163;175mrun fix: instead of cmd:; skips checks with no fix:[0m
+  --wait              [38;2;156;163;175mqueue for the run lease instead of failing fast[0m
+  --files <path>…     [38;2;156;163;175mrun only the checks these paths belong to[0m
+  --component <name>  [38;2;156;163;175mevery check on one component[0m
+  --concurrency <n>   [38;2;156;163;175mthis run's CPU budget, overriding the machine's[0m
+  --json              [38;2;156;163;175manswer as one JSON object, for a script or an agent[0m
+  --color <when>      [38;2;156;163;175mauto (default), always, never; NO_COLOR wins[0m
 
 [1m[38;2;255;169;64mEXAMPLES[0m
   armada manifest check
-    [38;2;107;114;128mevery check whose component the working diff touched[0m
+    [38;2;156;163;175mevery check whose component the working diff touched[0m
 
   armada manifest check api:lint
-    [38;2;107;114;128mone check on one component, by <component>:<check>[0m
+    [38;2;156;163;175mone check on one component, by <component>:<check>[0m
 
   armada manifest check --files src/main.rs src/args.rs
-    [38;2;107;114;128monly the checks those two paths belong to[0m
+    [38;2;156;163;175monly the checks those two paths belong to[0m
 
   armada manifest check --component api --all-files --fix
-    [38;2;107;114;128mevery check on api, over its match: globs, applying fix:[0m
+    [38;2;156;163;175mevery check on api, over its match: globs, applying fix:[0m
 
 A selector is <component>:<check>, a component, or a check name.
 One selector, or several paths — never both, so nothing is guessed.

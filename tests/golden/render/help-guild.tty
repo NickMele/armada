@@ -1,15 +1,15 @@
 [1m[38;2;255;169;64marmada guild — you, portable: machine-global, and synced between your machines[0m
 
 [1m[38;2;255;169;64mVERBS[0m
-  init             [38;2;107;114;128mbuild your guild by interviewing you[0m
-  pull             [38;2;107;114;128mbring this machine's guild up to date[0m
-  push             [38;2;107;114;128msend local guild changes to the remote[0m
-  export           [38;2;107;114;128mwrite the whole guild to one portable file[0m
-  import <bundle>  [38;2;107;114;128mrestore a guild from a bundle[0m
+  init             [38;2;156;163;175mbuild your guild by interviewing you[0m
+  pull             [38;2;156;163;175mbring this machine's guild up to date[0m
+  push             [38;2;156;163;175msend local guild changes to the remote[0m
+  export           [38;2;156;163;175mwrite the whole guild to one portable file[0m
+  import <bundle>  [38;2;156;163;175mrestore a guild from a bundle[0m
 
 [1m[38;2;255;169;64mNOT BUILT YET[0m
-  edit    [38;2;107;114;128mopen a guild file, validate it, commit it[0m
-  verify  [38;2;107;114;128mcross-check every workflow, skill and scope[0m
+  edit    [38;2;156;163;175mopen a guild file, validate it, commit it[0m
+  verify  [38;2;156;163;175mcross-check every workflow, skill and scope[0m
 
 `armada guild <verb> --help` for one verb's usage and flags.
 

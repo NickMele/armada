@@ -1,14 +1,14 @@
-[1m[38;2;255;169;64marmada[0m  [38;2;107;114;128m3d9cc7ba[0m
+[1m[38;2;255;169;64marmada[0m  [38;2;156;163;175m3d9cc7ba[0m
 
-  [1m[38;2;107;114;128mSTATUS[0m    [1m[38;2;107;114;128mSKILL[0m         [1m[38;2;107;114;128mDETAIL[0m
-  [38;2;61;220;132mdeclared[0m  add-endpoint  [38;2;107;114;128mAdd an API endpoint, OpenAPI first, then the generate…[0m
+  [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mSKILL[0m         [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;61;220;132mdeclared[0m  add-endpoint  [38;2;156;163;175mAdd an API endpoint, OpenAPI first, then the generate…[0m
 
-  [1m[38;2;107;114;128mSTATUS[0m    [1m[38;2;107;114;128mNAME[0m     [1m[38;2;107;114;128mDETAIL[0m
-  [38;2;92;225;230mgrants[0m    tickets  [38;2;107;114;128muv run scripts/tickets.py[0m
-  [38;2;61;220;132mverifies[0m  check    [38;2;107;114;128mapi:types[0m
-  [38;2;61;220;132mverifies[0m  check    [38;2;107;114;128mweb:lint[0m
-  [38;2;107;114;128mreads[0m     doc      [38;2;107;114;128mdocs/skills/add-endpoint.md[0m
-  [38;2;255;180;84mtouches[0m   glob     [38;2;107;114;128mbackend/openapi.yaml[0m
-  [38;2;255;180;84mtouches[0m   glob     [38;2;107;114;128mfrontend/src/generated/**[0m
+  [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mNAME[0m     [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;92;225;230mgrants[0m    tickets  [38;2;156;163;175muv run scripts/tickets.py[0m
+  [38;2;61;220;132mverifies[0m  check    [38;2;156;163;175mapi:types[0m
+  [38;2;61;220;132mverifies[0m  check    [38;2;156;163;175mweb:lint[0m
+  [38;2;156;163;175mreads[0m     doc      [38;2;156;163;175mdocs/skills/add-endpoint.md[0m
+  [38;2;255;180;84mtouches[0m   glob     [38;2;156;163;175mbackend/openapi.yaml[0m
+  [38;2;255;180;84mtouches[0m   glob     [38;2;156;163;175mfrontend/src/generated/**[0m
 
-[1m[38;2;61;220;132mOK[0m  [38;2;107;114;128m1 skill · 0 unresolved references[0m
+[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m1 skill · 0 unresolved references[0m

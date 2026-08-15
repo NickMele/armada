@@ -1,7 +1,7 @@
-  [1m[38;2;107;114;128mSTATUS[0m     [1m[38;2;107;114;128mITEM[0m       [1m[38;2;107;114;128mDETAIL[0m
-  [38;2;61;220;132madded[0m      skills     [38;2;107;114;128madd-migration, triage-flake[0m
-  [38;2;255;180;84mchanged[0m    hooks      [38;2;107;114;128mstop-notify.sh[0m
-  [38;2;255;92;92mconflict[0m   voice.md   [38;2;107;114;128medited here and on origin[0m
-  [38;2;107;114;128munchanged[0m  workflows  [38;2;107;114;128m4[0m
+  [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mITEM[0m       [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;61;220;132madded[0m      skills     [38;2;156;163;175madd-migration, triage-flake[0m
+  [38;2;255;180;84mchanged[0m    hooks      [38;2;156;163;175mstop-notify.sh[0m
+  [38;2;255;92;92mconflict[0m   voice.md   [38;2;156;163;175medited here and on origin[0m
+  [38;2;156;163;175munchanged[0m  workflows  [38;2;156;163;175m4[0m
 
-[1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;107;114;128m1 conflict · resolve in ~/.armada/guild · then armada guild push[0m
+[1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;156;163;175m1 conflict · resolve in ~/.armada/guild · then armada guild push[0m

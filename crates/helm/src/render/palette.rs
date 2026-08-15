@@ -52,7 +52,21 @@ pub enum Role {
     StasisPurple,
     /// `#FF7AB6` — `ABORTED`.
     AbortPink,
-    /// `#6B7280` — box drawing, muted text.
+    /// `#9CA3AF` — box drawing, muted text.
+    ///
+    /// **Raised from `#6B7280`, which was not readable.** Against the `Void`
+    /// background that value is a 4.0:1 contrast ratio, under WCAG AA's 4.5:1
+    /// floor for body text — and this is not a decorative role: it paints every
+    /// table header, every `DETAIL` cell, every duration, every `—`, and the
+    /// gloss under every line of `--help`. Most of the words on a screen of
+    /// Armada output are this colour, and they were being reported as hard to
+    /// read because they were.
+    ///
+    /// `#9CA3AF` is 7.6:1, which clears AAA, while [`Role::Foreground`] is
+    /// 15.8:1 — so muted is still visibly half as loud as body text and the
+    /// hierarchy the role exists for survives. Quiet has to stay legible;
+    /// `SKIPPED` being unmistakably not-green is what keeps it from reading as
+    /// approval, and that is a matter of hue rather than of dimness.
     SteelGrey,
     /// `#1E2530` — borders, fills.
     DeepSlate,
@@ -72,7 +86,7 @@ impl Role {
             Role::RadarCyan => "#5CE1E6",
             Role::StasisPurple => "#C792EA",
             Role::AbortPink => "#FF7AB6",
-            Role::SteelGrey => "#6B7280",
+            Role::SteelGrey => "#9CA3AF",
             Role::DeepSlate => "#1E2530",
         }
     }
@@ -93,7 +107,7 @@ impl Role {
             Role::RadarCyan => "\x1b[38;2;92;225;230m",
             Role::StasisPurple => "\x1b[38;2;199;146;234m",
             Role::AbortPink => "\x1b[38;2;255;122;182m",
-            Role::SteelGrey => "\x1b[38;2;107;114;128m",
+            Role::SteelGrey => "\x1b[38;2;156;163;175m",
             Role::DeepSlate => "\x1b[38;2;30;37;48m",
         }
     }
@@ -118,7 +132,7 @@ impl Role {
             Role::RadarCyan => (92, 225, 230),
             Role::StasisPurple => (199, 146, 234),
             Role::AbortPink => (255, 122, 182),
-            Role::SteelGrey => (107, 114, 128),
+            Role::SteelGrey => (156, 163, 175),
             Role::DeepSlate => (30, 37, 48),
         }
     }
@@ -262,6 +276,62 @@ mod tests {
                 "{hex} has a different value as channels than as an escape"
             );
         }
+    }
+
+    /// **Every colour Armada writes text in is readable on the background it
+    /// writes it against.**
+    ///
+    /// `SteelGrey` was `#6B7280`, a 4.0:1 ratio, and the report was simply that
+    /// it could not be read — which is what 4.0 means. WCAG AA asks 4.5:1 of
+    /// body text and that is the floor asserted here, so the next quiet colour
+    /// someone reaches for cannot land under it by eye.
+    ///
+    /// `Void` and `DeepSlate` are exempt because they are surfaces rather than
+    /// text: the CLI never paints a word in either, and a background is supposed
+    /// to disappear against itself.
+    #[test]
+    fn every_colour_text_is_written_in_is_readable_on_the_background() {
+        /// sRGB channel to linear, per WCAG 2.
+        fn linear(channel: u8) -> f64 {
+            let c = f64::from(channel) / 255.0;
+            if c <= 0.03928 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
+        }
+        fn luminance(role: Role) -> f64 {
+            let (r, g, b) = role.rgb();
+            0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+        }
+
+        let background = luminance(Role::Void);
+        for role in EVERY_ROLE {
+            if matches!(role, Role::Void | Role::DeepSlate) {
+                continue;
+            }
+            let text = luminance(role);
+            let ratio = (text.max(background) + 0.05) / (text.min(background) + 0.05);
+            assert!(
+                ratio >= 4.5,
+                "{} is {ratio:.2}:1 on {} — under AA, which is the report that \
+                 raised steel grey",
+                role.hex(),
+                Role::Void.hex()
+            );
+        }
+    }
+
+    /// Muted is quieter than body text, which is the only thing the role is for.
+    /// Raising it for legibility must not raise it to the point where nothing on
+    /// the screen is emphasised.
+    #[test]
+    fn muted_is_still_quieter_than_the_foreground() {
+        let brightness = |role: Role| {
+            let (r, g, b) = role.rgb();
+            u32::from(r) + u32::from(g) + u32::from(b)
+        };
+        assert!(brightness(Role::SteelGrey) < brightness(Role::Foreground));
     }
 
     /// Signal amber and flare orange are one step apart at 16 colours, which is

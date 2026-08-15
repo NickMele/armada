@@ -1,15 +1,15 @@
-[38;2;107;114;128mrun[0m [38;2;76;159;232m01M00WRY00CYTZ44[0m                                                    [38;2;107;114;128m3 checks[0m
+[38;2;156;163;175mrun[0m [38;2;76;159;232m01M00WRY00CYTZ44[0m                                                    [38;2;156;163;175m3 checks[0m
 
-  [1m[38;2;107;114;128mSTATUS[0m   [1m[38;2;107;114;128mCHECK[0m              [1m[38;2;107;114;128mDETAIL[0m                 [1m[38;2;107;114;128mTIME[0m
-  [38;2;61;220;132mPASS[0m     armada:boundaries  [38;2;107;114;128m—[0m                      [38;2;107;114;128m1.3s[0m
-  [38;2;255;122;182mABORTED[0m  armada:docs        [38;2;107;114;128mthe run was stopped[0m  [38;2;107;114;128m7m 03s[0m
-  [38;2;255;92;92mFAILED[0m   armada:test        [38;2;107;114;128mexited 101[0m            [38;2;107;114;128m23.0s[0m
-           [38;2;107;114;128m.armada/run/01M00WRY00CYTZ44/logs/armada.test.log[0m
+  [1m[38;2;156;163;175mSTATUS[0m   [1m[38;2;156;163;175mCHECK[0m              [1m[38;2;156;163;175mDETAIL[0m                 [1m[38;2;156;163;175mTIME[0m
+  [38;2;61;220;132mPASS[0m     armada:boundaries  [38;2;156;163;175m—[0m                      [38;2;156;163;175m1.3s[0m
+  [38;2;255;122;182mABORTED[0m  armada:docs        [38;2;156;163;175mthe run was stopped[0m  [38;2;156;163;175m7m 03s[0m
+  [38;2;255;92;92mFAILED[0m   armada:test        [38;2;156;163;175mexited 101[0m            [38;2;156;163;175m23.0s[0m
+           [38;2;156;163;175m.armada/run/01M00WRY00CYTZ44/logs/armada.test.log[0m
 
-  [1m[38;2;107;114;128mSTATUS[0m  [1m[38;2;107;114;128mREAPED[0m  [1m[38;2;107;114;128mDETAIL[0m
-  [38;2;107;114;128mreaped[0m  1 run   [38;2;107;114;128m01M014JQW2NDSDPP[0m
+  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mREAPED[0m  [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;156;163;175mreaped[0m  1 run   [38;2;156;163;175m01M014JQW2NDSDPP[0m
 
-[1m[38;2;255;122;182mABORTED[0m  [38;2;107;114;128m1 passed · 1 failed · 1 aborted[0m
+[1m[38;2;255;122;182mABORTED[0m  [38;2;156;163;175m1 passed · 1 failed · 1 aborted[0m
 [1m[38;2;255;92;92merror:[0m the run was stopped
   where: armada:docs
   class: aborted

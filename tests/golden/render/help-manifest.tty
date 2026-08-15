@@ -1,17 +1,17 @@
 [1m[38;2;255;169;64marmada manifest — one repository's stack: ports, services, checks[0m
 
 [1m[38;2;255;169;64mVERBS[0m
-  config <scan|verify>  [38;2;107;114;128mreport the evidence, then verify what was written[0m
-  init                  [38;2;107;114;128mclaim this workspace: ports, .armada/, setup[0m
-  up [<component>]      [38;2;107;114;128mstart this workspace's services; wait until they answer[0m
-  down [<component>]    [38;2;107;114;128mstop this workspace's services; keep the port block[0m
-  status                [38;2;107;114;128mwhat is running, what is mine, what is stale[0m
-  check [<selector>]    [38;2;107;114;128mlint, format and test — the verb a gate calls[0m
-  skills [show <name>]  [38;2;107;114;128mwhat this repository knows about itself[0m
-  clean                 [38;2;107;114;128mrelease what this workspace owns[0m
+  config <scan|verify>  [38;2;156;163;175mreport the evidence, then verify what was written[0m
+  init                  [38;2;156;163;175mclaim this workspace: ports, .armada/, setup[0m
+  up [<component>]      [38;2;156;163;175mstart this workspace's services; wait until they answer[0m
+  down [<component>]    [38;2;156;163;175mstop this workspace's services; keep the port block[0m
+  status                [38;2;156;163;175mwhat is running, what is mine, what is stale[0m
+  check [<selector>]    [38;2;156;163;175mlint, format and test — the verb a gate calls[0m
+  skills [show <name>]  [38;2;156;163;175mwhat this repository knows about itself[0m
+  clean                 [38;2;156;163;175mrelease what this workspace owns[0m
 
 [1m[38;2;255;169;64mNOT BUILT YET[0m
-  render, agents-md, explain  [38;2;107;114;128mclaimed; each answers `not built yet`[0m
+  render, agents-md, explain  [38;2;156;163;175mclaimed; each answers `not built yet`[0m
 
 `armada manifest <verb> --help` for one verb's usage and flags.
 

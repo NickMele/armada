@@ -5,22 +5,22 @@
   armada guild init --no-import [--force]
 
 [1m[38;2;255;169;64mFLAGS[0m
-  --from <path>   [38;2;107;114;128mimport an existing setup from here[0m
-  --no-import     [38;2;107;114;128mstart empty; import nothing[0m
-  --remote <url>  [38;2;107;114;128mset the sync remote without being asked[0m
-  --defaults      [38;2;107;114;128mtake the default answer to every question[0m
-  --force         [38;2;107;114;128moverwrite an existing guild[0m
-  --json          [38;2;107;114;128manswer as one JSON object, for a script or an agent[0m
-  --color <when>  [38;2;107;114;128mauto (default), always, never; NO_COLOR wins[0m
+  --from <path>   [38;2;156;163;175mimport an existing setup from here[0m
+  --no-import     [38;2;156;163;175mstart empty; import nothing[0m
+  --remote <url>  [38;2;156;163;175mset the sync remote without being asked[0m
+  --defaults      [38;2;156;163;175mtake the default answer to every question[0m
+  --force         [38;2;156;163;175moverwrite an existing guild[0m
+  --json          [38;2;156;163;175manswer as one JSON object, for a script or an agent[0m
+  --color <when>  [38;2;156;163;175mauto (default), always, never; NO_COLOR wins[0m
 
 [1m[38;2;255;169;64mEXAMPLES[0m
   armada guild init
-    [38;2;107;114;128minterview you, then write ~/.armada/guild/[0m
+    [38;2;156;163;175minterview you, then write ~/.armada/guild/[0m
 
   armada guild init --from ~/.claude --remote git@host:you/guild
-    [38;2;107;114;128mimport what you already have, and say where it syncs[0m
+    [38;2;156;163;175mimport what you already have, and say where it syncs[0m
 
   armada guild init --no-import --defaults
-    [38;2;107;114;128man empty guild on every default answer; asks nothing[0m
+    [38;2;156;163;175man empty guild on every default answer; asks nothing[0m
 
 Your guild is yours, not this repository's. It never lands in a project.

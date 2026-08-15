@@ -1,50 +1,50 @@
 [1m[38;2;255;169;64marmada — one vocabulary for a repo's stack, and the agents working in it[0m
 
 [1m[38;2;255;169;64mUSAGE[0m
-  armada <module> <verb> [flags]  [38;2;107;114;128mthe verbs Armada owns[0m
-  armada                          [38;2;107;114;128menter Helm, the agent you talk to[0m
+  armada <module> <verb> [flags]  [38;2;156;163;175mthe verbs Armada owns[0m
+  armada                          [38;2;156;163;175menter Helm, the agent you talk to[0m
 
 [1m[38;2;255;169;64mMANIFEST — what a workspace is and how to operate it[0m
-  config <scan|verify>  [38;2;107;114;128mreport the evidence, then verify what was written[0m
-  init                  [38;2;107;114;128mclaim this workspace: ports, .armada/, setup[0m
-  up [<component>]      [38;2;107;114;128mstart this workspace's services; wait until they answer[0m
-  down [<component>]    [38;2;107;114;128mstop this workspace's services; keep the port block[0m
-  status                [38;2;107;114;128mwhat is running, what is mine, what is stale[0m
-  check [<selector>]    [38;2;107;114;128mlint, format and test — the verb a gate calls[0m
-  skills [show <name>]  [38;2;107;114;128mwhat this repository knows about itself[0m
-  clean                 [38;2;107;114;128mrelease what this workspace owns[0m
-  <name>                [38;2;107;114;128ma commands: entry from this repo's armada.yml[0m
+  config <scan|verify>  [38;2;156;163;175mreport the evidence, then verify what was written[0m
+  init                  [38;2;156;163;175mclaim this workspace: ports, .armada/, setup[0m
+  up [<component>]      [38;2;156;163;175mstart this workspace's services; wait until they answer[0m
+  down [<component>]    [38;2;156;163;175mstop this workspace's services; keep the port block[0m
+  status                [38;2;156;163;175mwhat is running, what is mine, what is stale[0m
+  check [<selector>]    [38;2;156;163;175mlint, format and test — the verb a gate calls[0m
+  skills [show <name>]  [38;2;156;163;175mwhat this repository knows about itself[0m
+  clean                 [38;2;156;163;175mrelease what this workspace owns[0m
+  <name>                [38;2;156;163;175ma commands: entry from this repo's armada.yml[0m
 
 [1m[38;2;255;169;64mGUILD — you, portable: voice, skills, hooks, workflows[0m
-  init             [38;2;107;114;128mbuild your guild by interviewing you[0m
-  pull             [38;2;107;114;128mbring this machine's guild up to date[0m
-  push             [38;2;107;114;128msend local guild changes to the remote[0m
-  export           [38;2;107;114;128mwrite the whole guild to one portable file[0m
-  import <bundle>  [38;2;107;114;128mrestore a guild from a bundle[0m
+  init             [38;2;156;163;175mbuild your guild by interviewing you[0m
+  pull             [38;2;156;163;175mbring this machine's guild up to date[0m
+  push             [38;2;156;163;175msend local guild changes to the remote[0m
+  export           [38;2;156;163;175mwrite the whole guild to one portable file[0m
+  import <bundle>  [38;2;156;163;175mrestore a guild from a bundle[0m
 
 [1m[38;2;255;169;64mFLEET — the agents you do not talk to: Jobs, worktrees, budgets[0m
-  spawn <task>           [38;2;107;114;128mstart an isolated agent Job on a task[0m
-  ls                     [38;2;107;114;128mwhat is running, what it has spent, and who needs you[0m
-  board <job>            [38;2;107;114;128mtake a Job over yourself: worktree and resume command[0m
-  answer <job> <answer>  [38;2;107;114;128mgive a waiting Job your decision; let it continue[0m
-  inbox                  [38;2;107;114;128mwhat the fleet needs from you[0m
-  kill [<job>]           [38;2;107;114;128mend a Job and release everything it owns[0m
+  spawn <task>           [38;2;156;163;175mstart an isolated agent Job on a task[0m
+  ls                     [38;2;156;163;175mwhat is running, what it has spent, and who needs you[0m
+  board <job>            [38;2;156;163;175mtake a Job over yourself: worktree and resume command[0m
+  answer <job> <answer>  [38;2;156;163;175mgive a waiting Job your decision; let it continue[0m
+  inbox                  [38;2;156;163;175mwhat the fleet needs from you[0m
+  kill [<job>]           [38;2;156;163;175mend a Job and release everything it owns[0m
 
 [1m[38;2;255;169;64mTHIS MACHINE[0m
-  init    [38;2;107;114;128mset up this machine: checks, ~/.armada/, and your guild[0m
-  doctor  [38;2;107;114;128mwhat this machine is missing, and what fixes it[0m
+  init    [38;2;156;163;175mset up this machine: checks, ~/.armada/, and your guild[0m
+  doctor  [38;2;156;163;175mwhat this machine is missing, and what fixes it[0m
 
 [1m[38;2;255;169;64mGLOBAL FLAGS[0m
-  --json          [38;2;107;114;128manswer as one JSON object, for a script or an agent[0m
-  --color <when>  [38;2;107;114;128mauto (default), always, never; NO_COLOR wins[0m
-  -h, --help      [38;2;107;114;128mthis page, or a verb's own flags[0m
-  -V, --version   [38;2;107;114;128mthe version[0m
+  --json          [38;2;156;163;175manswer as one JSON object, for a script or an agent[0m
+  --color <when>  [38;2;156;163;175mauto (default), always, never; NO_COLOR wins[0m
+  -h, --help      [38;2;156;163;175mthis page, or a verb's own flags[0m
+  -V, --version   [38;2;156;163;175mthe version[0m
 
 [1m[38;2;255;169;64mNOT BUILT YET[0m
-  armada helm, bridge                         [38;2;107;114;128mM3[0m
-  armada guild edit, verify                   [38;2;107;114;128mM2[0m
-  armada manifest render, agents-md, explain  [38;2;107;114;128mreserved[0m
-  armada manifest check --detach, --status    [38;2;107;114;128mreserved[0m
+  armada helm, bridge                         [38;2;156;163;175mM3[0m
+  armada guild edit, verify                   [38;2;156;163;175mM2[0m
+  armada manifest render, agents-md, explain  [38;2;156;163;175mreserved[0m
+  armada manifest check --detach, --status    [38;2;156;163;175mreserved[0m
 
   Each is claimed and answers `not built yet`, so that a name which is
   going to mean one thing never means something else first.

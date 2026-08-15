@@ -91,7 +91,7 @@ learn to skip. Same rule as progress: anything decorative is for the person, not
 | radar cyan | `#5CE1E6` | `QUEUED`, tool calls |
 | stasis purple | `#C792EA` | `PAUSED` |
 | abort pink | `#FF7AB6` | `ABORTED` |
-| steel grey | `#6B7280` | box drawing, muted text |
+| steel grey | `#9CA3AF` | box drawing, muted text |
 | deep slate | `#1E2530` | borders, fills |
 
 **Truecolor is the target and there is no 16-colour fallback.** Signal amber and flare orange

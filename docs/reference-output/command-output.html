@@ -6,7 +6,7 @@
 <title>Armada — command output review</title>
 <style>
   :root{
-    --bg:#0A0E14; --fg:#E6E8EB; --muted:#6B7280; --amber:#FFA940; --blue:#4C9FE8;
+    --bg:#0A0E14; --fg:#E6E8EB; --muted:#9CA3AF; --amber:#FFA940; --blue:#4C9FE8;
     --border:#1E2530; --green:#3DDC84; --red:#FF5C5C; --warn:#FFB454; --cyan:#5CE1E6;
     --purple:#C792EA; --pink:#FF7AB6;
   }
@@ -55,7 +55,7 @@ pure proposal, which is the point of reviewing them before an agent writes them.
 Same columns, same words, no colour. Agents call this CLI constantly and mostly do not pass
 <code>--json</code>.</p>
 <div class="rule"></div>
-<h2>Day one, new machine · armada init <span style="color:#6B7280">M2, unbuilt</span></h2>
+<h2>Day one, new machine · armada init <span style="color:var(--muted)">M2, unbuilt</span></h2>
 <p class="note">Nothing exists yet. This is the only command that runs before anything is set up — and one of two places the banner appears.</p>
 <p class="note">Sets up <i>this machine</i>. Not to be confused with <code>manifest init</code>, which sets up a workspace.
 This is one of the two places the banner appears.</p>
@@ -88,7 +88,7 @@ three questions feel like a form.</div>
 
 
 <div class="rule"></div>
-<h2>Still day one · armada doctor <span style="color:#6B7280">M2, unbuilt</span></h2>
+<h2>Still day one · armada doctor <span style="color:var(--muted)">M2, unbuilt</span></h2>
 <p class="note">Ran when something feels wrong, and after a pull. It is the command that tells you what is missing rather than failing later.</p>
 <div class="term"><div class="bar"><span class="dot" style="background:#C792EA"></span><span>armada doctor</span></div>
 <pre>  <span class="m">STATUS    CHECK          DETAIL                              TIME</span>
@@ -107,7 +107,7 @@ the command that fixes it makes you go and look it up. Worth confirming you want
 
 
 <div class="rule"></div>
-<h2>First repo, before anything else · armada manifest config <span style="color:#6B7280">(not built)</span></h2>
+<h2>First repo, before anything else · armada manifest config <span style="color:var(--muted)">(not built)</span></h2>
 <p class="note">A repo has no <code>armada.yml</code>. This is how it gets one, and it is deliberately three
 steps and not a wizard: <b>Armada reports facts, an agent authors, Armada verifies</b> (<code>PLAN.md</code> §5).
 Nothing here infers your stack — <i>"do not write a stack-detection engine"</i> is the first line of that section.</p>
@@ -238,7 +238,7 @@ passing them. Worth seeing, which is why it has a row rather than a footnote.
 would, which for a big repo is a real build. Only pass 1 is seconds.</div>
 
 <div class="rule"></div>
-<h2>Then, and only then · armada manifest init <span style="color:#6B7280">shipped</span></h2>
+<h2>Then, and only then · armada manifest init <span style="color:var(--muted)">shipped</span></h2>
 <p class="note">With an <code>armada.yml</code> that verifies, this claims the workspace — ports, <code>.armada/</code>, whatever setup the repo declares.</p>
 <div class="cols">
   <div>
@@ -266,7 +266,7 @@ banner line above it, rather than a different shape. One layout is one thing to 
 
 
 <div class="rule"></div>
-<h2>Getting oriented · armada manifest status <span style="color:#6B7280">shipped</span></h2>
+<h2>Getting oriented · armada manifest status <span style="color:var(--muted)">shipped</span></h2>
 <p class="note">The command you run most, and the worst one today — it prints two words.</p>
 <p class="note">The worst one today. It prints two words.</p>
 <div class="cols">
@@ -303,7 +303,7 @@ last check  PASS  30s ago  run 01M00WRY</pre></div>
 
 
 <div class="rule"></div>
-<h2>Doing the work · armada manifest check <span style="color:#6B7280">shipped</span></h2>
+<h2>Doing the work · armada manifest check <span style="color:var(--muted)">shipped</span></h2>
 <p class="note">The gate. Closest to right today; the problems are alignment, colour, and a log path under every check rather than the ones you need.</p>
 <p class="note">Closest to right today. The problems are alignment, no colour, and a log path under
 <i>every</i> check rather than the ones you need.</p>
@@ -360,7 +360,7 @@ shape is the point.</div>
 
 
 <div class="rule"></div>
-<h2>Finished with it · armada manifest clean <span style="color:#6B7280">shipped</span></h2>
+<h2>Finished with it · armada manifest clean <span style="color:var(--muted)">shipped</span></h2>
 <p class="note">Releases everything this workspace owns. The one command that must be legible when it does nothing.</p>
 <div class="cols">
   <div>
@@ -392,7 +392,7 @@ with no way to tell "deliberately not run" from "went wrong".
 
 
 <div class="rule"></div>
-<h2>Handing work off · armada — entering Helm <span style="color:#6B7280">M3, unbuilt</span></h2>
+<h2>Handing work off · armada — entering Helm <span style="color:var(--muted)">M3, unbuilt</span></h2>
 <p class="note">Typing <code>armada</code> with no arguments. The second and last place the banner appears.</p>
 <div class="term"><div class="bar"><span class="dot" style="background:#C792EA"></span><span>armada</span></div>
 <pre><span class="a"> █████╗ ██████╗ ███╗   ███╗ █████╗ ██████╗  █████╗
@@ -419,7 +419,7 @@ the tables belong to the verbs it calls. <b>Decide:</b> is the <code>helm · 5 j
 line above the prompt useful, or noise you would rather ask for?</div>
 
 <div class="rule"></div>
-<h2>Delegating · armada fleet spawn <span style="color:#6B7280">M3, unbuilt</span></h2>
+<h2>Delegating · armada fleet spawn <span style="color:var(--muted)">M3, unbuilt</span></h2>
 
 <div class="term"><div class="bar"><span class="dot" style="background:#C792EA"></span><span>armada fleet spawn "add a rate limiter to the gateway"</span></div>
 <pre>  <span class="m">STATUS     STEP           DETAIL                              TIME</span>
@@ -432,7 +432,7 @@ line above the prompt useful, or noise you would rather ask for?</div>
 
 
 <div class="rule"></div>
-<h2>Watching · armada fleet ls <span style="color:#6B7280">M3, unbuilt</span></h2>
+<h2>Watching · armada fleet ls <span style="color:var(--muted)">M3, unbuilt</span></h2>
 
 <div class="term"><div class="bar"><span class="dot" style="background:#C792EA"></span><span>armada fleet ls</span></div>
 <pre>  <span class="m">STATUS    JOB              WORKFLOW  DETAIL                  SPENT   TIME</span>
@@ -449,7 +449,7 @@ you rather see the task text you typed?</div>
 
 
 <div class="rule"></div>
-<h2>Second machine · armada guild pull <span style="color:#6B7280">M2, unbuilt</span></h2>
+<h2>Second machine · armada guild pull <span style="color:var(--muted)">M2, unbuilt</span></h2>
 <p class="note">A week later, on the laptop. This is the payoff for the guild being global rather than per-repo.</p>
 <div class="term"><div class="bar"><span class="dot" style="background:#C792EA"></span><span>armada guild pull</span></div>
 <pre>  <span class="m">STATUS    ITEM              DETAIL                        TIME</span>
