@@ -286,7 +286,15 @@ pub enum Handover {
     /// Draw the choice and read an answer.
     Ask,
     /// Print the command that would have been run, and read nothing.
-    Tell(TellWhy),
+    Tell {
+        /// Why there was nothing to ask.
+        why: TellWhy,
+        /// The line a reader can paste. **Carried rather than composed by the
+        /// renderer**, because the command belongs to the guild and the core
+        /// does not know what a guild is — it copies a string somebody above it
+        /// built, which is what keeps this enum module-agnostic.
+        command: String,
+    },
     /// Offer nothing: the caller asked for the envelope alone.
     Silent,
 }
@@ -305,7 +313,10 @@ impl Default for Handover {
     /// The safe answer, and the one a caller that never asked gets: say what
     /// would have happened and read nothing.
     fn default() -> Self {
-        Handover::Tell(TellWhy::NotATerminal)
+        Handover::Tell {
+            why: TellWhy::NotATerminal,
+            command: String::new(),
+        }
     }
 }
 
@@ -314,17 +325,30 @@ impl Default for Handover {
 /// `skill` is whether there is an onboarding skill to hand over to. **A missing
 /// one is reported rather than exec'd**: offering to launch something that is
 /// not there produces a failure at the moment the reader was expecting help.
-pub fn handover(json: bool, stdin_is_tty: bool, stdout_is_tty: bool, skill: bool) -> Handover {
+pub fn handover(
+    json: bool,
+    stdin_is_tty: bool,
+    stdout_is_tty: bool,
+    skill: bool,
+    command: &str,
+) -> Handover {
+    let tell = |why| Handover::Tell {
+        why,
+        command: command.to_string(),
+    };
     if json {
         return Handover::Silent;
     }
     if !skill {
-        return Handover::Tell(TellWhy::NoSkill);
+        // **Printed even though it will not work yet**, because it is what
+        // `armada guild init` makes work — and a reader told only "no" learns
+        // nothing about how to get to yes.
+        return tell(TellWhy::NoSkill);
     }
     if stdin_is_tty && stdout_is_tty {
         Handover::Ask
     } else {
-        Handover::Tell(TellWhy::NotATerminal)
+        tell(TellWhy::NotATerminal)
     }
 }
 
@@ -1510,29 +1534,39 @@ mod tests {
     /// inside a Job reads stdout and has no stdin to type into; a menu there is
     /// a prompt that blocks until the Job's ceiling expires and reports
     /// nothing.
+    /// The command a scan would print, as the tests spell it.
+    const NEXT: &str = "claude --append-system-prompt \"$(cat ~/.armada/…)\"";
+
+    fn tell(why: TellWhy) -> Handover {
+        Handover::Tell {
+            why,
+            command: NEXT.to_string(),
+        }
+    }
+
     #[test]
     fn nothing_is_asked_of_an_audience_that_cannot_answer() {
         assert_eq!(
-            handover(false, false, false, true),
-            Handover::Tell(TellWhy::NotATerminal)
+            handover(false, false, false, true, NEXT),
+            tell(TellWhy::NotATerminal)
         );
         // Both streams, not either: stdin decides whether an answer can
         // arrive and stdout decides whether the question was seen.
         assert_eq!(
-            handover(false, true, false, true),
-            Handover::Tell(TellWhy::NotATerminal),
+            handover(false, true, false, true, NEXT),
+            tell(TellWhy::NotATerminal),
             "a menu written to a pipe is a question nobody read"
         );
         assert_eq!(
-            handover(false, false, true, true),
-            Handover::Tell(TellWhy::NotATerminal),
+            handover(false, false, true, true, NEXT),
+            tell(TellWhy::NotATerminal),
             "a question nobody can answer"
         );
     }
 
     #[test]
     fn a_person_at_a_terminal_is_asked() {
-        assert_eq!(handover(false, true, true, true), Handover::Ask);
+        assert_eq!(handover(false, true, true, true, NEXT), Handover::Ask);
     }
 
     /// `--json` is a parser waiting for one payload, so it gets no menu and no
@@ -1540,31 +1574,38 @@ mod tests {
     #[test]
     fn a_parser_is_offered_nothing_at_all() {
         for (stdin, stdout) in [(true, true), (false, false)] {
-            assert_eq!(handover(true, stdin, stdout, true), Handover::Silent);
+            assert_eq!(handover(true, stdin, stdout, true, NEXT), Handover::Silent);
         }
     }
 
     /// **Offering to launch something that is not there produces a failure at
     /// the moment the reader was expecting help.** No skill means the command
     /// is printed and its absence is said out loud, at a terminal as much as
-    /// through a pipe.
+    /// through a pipe — and the command is still printed, because it is what
+    /// `armada guild init` makes work.
     #[test]
     fn a_missing_skill_is_reported_rather_than_launched() {
-        assert_eq!(
-            handover(false, true, true, false),
-            Handover::Tell(TellWhy::NoSkill)
-        );
-        assert_eq!(
-            handover(false, false, false, false),
-            Handover::Tell(TellWhy::NoSkill)
-        );
+        for (stdin, stdout) in [(true, true), (false, false)] {
+            let answer = handover(false, stdin, stdout, false, NEXT);
+            assert_eq!(answer, tell(TellWhy::NoSkill));
+            let Handover::Tell { command, .. } = answer else {
+                unreachable!()
+            };
+            assert_eq!(command, NEXT, "the way to make it work was withheld");
+        }
     }
 
     /// The default is the one that reads nothing, so a caller that never asked
     /// cannot accidentally block.
     #[test]
     fn the_default_handover_reads_nothing() {
-        assert_eq!(Handover::default(), Handover::Tell(TellWhy::NotATerminal));
+        assert!(matches!(
+            Handover::default(),
+            Handover::Tell {
+                why: TellWhy::NotATerminal,
+                ..
+            }
+        ));
     }
 
     /// The order the agreed layout draws, and it does not move when a

@@ -64,6 +64,7 @@ pub fn scan(
         armada_guild::layout::Guild::at(&armada_manifest::machine::armada_home(home))
             .has_skill(armada_guild::layout::ONBOARD_REPO)
     });
+    let command = armada_guild::layout::skill_command_line(armada_guild::layout::ONBOARD_REPO);
 
     Ok(Output::Scan(Box::new(Envelope::ok(
         "config scan",
@@ -75,7 +76,13 @@ pub fn scan(
         ScanData {
             results: scan::findings(&evidence),
             evidence,
-            handover: scan::handover(json, terminal.stdin_is_tty, terminal.stdout_is_tty, skill),
+            handover: scan::handover(
+                json,
+                terminal.stdin_is_tty,
+                terminal.stdout_is_tty,
+                skill,
+                &command,
+            ),
         },
     ))))
 }

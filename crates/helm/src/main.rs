@@ -103,7 +103,7 @@ fn main() -> ExitCode {
                 style,
                 terminal,
             ) {
-                Ok(output) => emit(output, json, style, terminal),
+                Ok(output) => emit(output, json, style, terminal, home.as_deref()),
                 Err(error) => fail(error, json, style),
             }
         }
@@ -612,7 +612,12 @@ fn at_the_terminal(
 /// **Option 1 execs rather than spawning.** Armada has produced the evidence
 /// and has nothing further to do, so it gets out of the way entirely — the same
 /// shape `armada fleet board --exec` takes handing over a session.
-fn hand_over(output: &Output, style: Style, terminal: render::term::Terminal) {
+fn hand_over(
+    output: &Output,
+    style: Style,
+    terminal: render::term::Terminal,
+    home: Option<&std::path::Path>,
+) {
     let Output::Scan(envelope) = output else {
         return;
     };
@@ -630,14 +635,48 @@ fn hand_over(output: &Output, style: Style, terminal: render::term::Terminal) {
         return;
     }
 
-    let argv = armada_guild::layout::skill_argv(armada_guild::layout::ONBOARD_REPO);
+    // **The skill's prose, not its name.** `Handover::Ask` is only produced when
+    // the guild has the file, so a failure to read it here is a race or a
+    // permission problem rather than the ordinary absence — reported either way,
+    // because handing over without the instructions is the failure this exists
+    // to remove.
+    let skill = home.map(|home| {
+        armada_guild::layout::Guild::at(&armada_manifest::machine::armada_home(home))
+            .skill(armada_guild::layout::ONBOARD_REPO)
+    });
+    let body = match skill.as_ref().map(std::fs::read_to_string) {
+        Some(Ok(body)) => body,
+        other => {
+            let why = match other {
+                Some(Err(error)) => error.to_string(),
+                _ => "$HOME is not set, so Armada cannot find the guild".to_string(),
+            };
+            write_err(&render::error_lines(
+                &ArmadaError {
+                    class: ErrClass::Environment,
+                    r#where: skill
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_else(|| armada_guild::layout::ONBOARD_REPO.to_string()),
+                    message: format!("cannot read the onboarding skill: {why}"),
+                    next_action: Some("`armada guild init` writes it".to_string()),
+                },
+                Style::plain(),
+            ));
+            return;
+        }
+    };
+
+    let argv = armada_guild::layout::skill_argv(&body);
     let error = std::process::Command::new(&argv[0]).args(&argv[1..]).exec();
     // `exec` returns only on failure. Reported rather than swallowed: the
     // reader asked for a session and is owed the reason there is not one.
     write_err(&render::error_lines(
         &ArmadaError {
             class: ErrClass::Environment,
-            r#where: argv.join(" "),
+            // The argv carries the whole skill, so the *command* is what is
+            // named here — an error report is not the place to repeat a
+            // kilobyte of prose the reader just asked to be given.
+            r#where: armada_guild::layout::skill_command_line(armada_guild::layout::ONBOARD_REPO),
             message: format!("could not start the onboarding session: {error}"),
             next_action: Some("install claude, or put it on PATH".to_string()),
         },
@@ -645,7 +684,13 @@ fn hand_over(output: &Output, style: Style, terminal: render::term::Terminal) {
     ));
 }
 
-fn emit(output: Output, json: bool, style: Style, terminal: render::term::Terminal) -> ExitCode {
+fn emit(
+    output: Output,
+    json: bool,
+    style: Style,
+    terminal: render::term::Terminal,
+    home: Option<&std::path::Path>,
+) -> ExitCode {
     if json {
         write_out(&output.to_json());
     } else {
@@ -668,7 +713,7 @@ fn emit(output: Output, json: bool, style: Style, terminal: render::term::Termin
         // **After the evidence is written and flushed, never before.** The
         // question is about what the reader has just seen, and a prompt that
         // arrives first is a prompt answered blind.
-        hand_over(&output, style, terminal);
+        hand_over(&output, style, terminal, home);
     }
     // **A signal has no error class, so it does not get the class's code**
     // (`ARCHITECTURE.md` §1.6). The envelope above still says `aborted`,

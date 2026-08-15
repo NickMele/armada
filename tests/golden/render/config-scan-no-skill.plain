@@ -34,5 +34,5 @@ no armada.yml here, this is evidence and not a config
 
 Evidence only. Armada does not guess which of these you actually run.
 
-  next     claude /onboard-repo
-  missing  that skill is not in your guild — `armada guild init` writes it
+  next, no onboarding skill in your guild — `armada guild init`
+    claude --append-system-prompt "$(cat ~/.armada/guild/skills/onboard-repo/SKILL.md)"

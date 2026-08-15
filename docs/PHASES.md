@@ -231,10 +231,29 @@ rather than a gap:
 
 | Not built | Why |
 |---|---|
-| **Projection** | `guild pull` and `import` update the guild; nothing yet re-writes the managed regions of `~/.claude/` from it, and `armada doctor`'s fourth group has nothing to compare against until something does ([`PLAN.md`](PLAN.md) §13.2). A `doctor` reporting `ok` for a check that ran nothing would be worse than one that does not report it at all. |
+| **Projection** | `guild pull` and `import` update the guild; nothing yet re-writes the managed regions of `~/.claude/` from it, and `armada doctor`'s fourth group has nothing to compare against until something does ([`PLAN.md`](PLAN.md) §13.2). A `doctor` reporting `ok` for a check that ran nothing would be worse than one that does not report it at all. **It is also a broken path, not only a missing feature — see below.** |
 | **`manifest render`** | Listed in the table above because its managed-region bookkeeping is the same machinery projection needs. It is the same milestone as projection, and neither is half-useful without the other. |
 | **`armada guild edit` and `guild verify`** | Reserved by name and refused by name. `edit` is `$EDITOR` plus the validation `verify` performs, so building it first would mean building half of `verify` twice. |
 | **`armada doctor --fix`** | Refused by name rather than half-implemented: every finding already carries the command that fixes it, so `--fix` is a convenience over a surface that already works, and one that silently did half of what it promised would be worse than one that says it is not built. |
+
+#### Projection being unbuilt is a broken path, not only a missing feature
+
+**A guild skill is invisible to the tool Armada hands you to**, and that has already produced a
+user-visible failure. Guild skills live in `~/.armada/guild/skills/`; Claude Code loads
+`~/.claude/skills/`. Nothing copies between them, so a skill Armada ships and `guild init`
+installs cannot be invoked as `/its-name` in a session — the session answers
+`Unknown command: /onboard-repo`, which is exactly what `armada manifest config scan`'s
+hand-over did until it stopped passing the name.
+
+It passes the skill's **prose** now, as an appended system prompt
+([`commands/manifest/config.md`](commands/manifest/config.md)), which needs no projection and
+works today. **That is a way around this row, not a reason to close it.** Anything else that
+wants to reach a guild skill by name has the same problem and will need the same workaround
+until projection lands — so whoever builds it should expect to delete a workaround as well as
+add a feature.
+
+The general rule this is an instance of: **a guild is not on any tool's load path until
+something puts it there.** Until then, content is the interface and names are not.
 
 ### 8.5 M3 — Fleet, Helm and the Bridge
 

@@ -85,17 +85,58 @@ pub const GUILD_DIRECTORIES: [&str; 4] = ["hooks", "skills", "subagents", "workf
 /// scan` hands over to once it has produced the evidence.
 pub const ONBOARD_REPO: &str = "onboard-repo";
 
-/// The argv that opens a session on a guild skill.
+/// Where a skill's prose lives inside a guild, written the way a person types
+/// it.
 ///
-/// **Printed as often as it is run.** `config scan` execs this for a person at
-/// a terminal and prints it for everybody else, which is the same shape
-/// `fleet board` takes: the argv is the thing a reader can copy, and the exec
-/// is a convenience on top of it rather than the only way through.
-pub fn skill_argv(name: &str) -> Vec<String> {
+/// **`~` rather than an absolute path**, because this string is printed and
+/// pasted rather than opened: a shell expands it, it is shorter to read, and it
+/// keeps somebody's home directory out of a terminal they are about to screen
+/// -share. The code that *reads* the file uses [`Guild::skill`], which has the
+/// real root.
+pub fn skill_home_path(name: &str) -> String {
+    format!("~/.armada/guild/skills/{name}/SKILL.md")
+}
+
+/// The argv that opens a session **carrying a guild skill's instructions**.
+///
+/// **The body, not the name, and that is the whole point.** The first version
+/// built `claude /onboard-repo`, which invokes the skill as a slash command —
+/// and a slash command only exists if Claude Code can find the skill.
+/// Guild skills live in `~/.armada/guild/skills/`, Claude Code reads
+/// `~/.claude/skills/`, and projection between the two is not built
+/// ([`PHASES.md`](../../../docs/PHASES.md) §8.4). So the session opened with
+/// `unknown command /onboard-repo`: Armada handed the user to a tool that could
+/// not see the skill Armada ships.
+///
+/// Passing the prose as an appended system prompt needs no projection and no
+/// discovery. It works today, and it keeps working if skill loading changes.
+///
+/// **`--append-system-prompt` rather than `--system-prompt`**: the session
+/// keeps everything Claude Code normally is and gains the repository's
+/// onboarding instructions, rather than being reduced to them. Verified against
+/// the installed CLI's own option list rather than assumed — which is how the
+/// Drone once shipped without `--verbose` (`docs/traps.md`).
+pub fn skill_argv(body: &str) -> Vec<String> {
     vec![
         armada_core::fleet::drone::CLAUDE.to_string(),
-        format!("/{name}"),
+        "--append-system-prompt".to_string(),
+        body.to_string(),
     ]
+}
+
+/// The same hand-over, written as a line a person can paste.
+///
+/// **Two renderings of one thing, and both have to work.** [`skill_argv`] is
+/// what Armada execs, with the prose already read; this is what it *prints*
+/// for a reader who is not at a terminal, and inlining a multi-kilobyte
+/// `SKILL.md` into that line would make it unreadable and unpasteable. `$(cat
+/// …)` is what a person would type to achieve exactly the argv above.
+pub fn skill_command_line(name: &str) -> String {
+    format!(
+        "{} --append-system-prompt \"$(cat {})\"",
+        armada_core::fleet::drone::CLAUDE,
+        skill_home_path(name)
+    )
 }
 
 /// Where a guild lives, and every path inside it.
@@ -134,7 +175,15 @@ impl Guild {
     /// that is not there produces a failure at the moment the reader was
     /// expecting help.
     pub fn has_skill(&self, name: &str) -> bool {
-        self.path(&format!("skills/{name}/SKILL.md")).is_file()
+        self.skill(name).is_file()
+    }
+
+    /// Where a skill's prose actually is, for the code that reads it.
+    ///
+    /// The counterpart of [`skill_home_path`], which is the same location
+    /// written for a person to paste rather than for a process to open.
+    pub fn skill(&self, name: &str) -> PathBuf {
+        self.path(&format!("skills/{name}/SKILL.md"))
     }
 
     /// Whether this machine has a guild at all.
@@ -170,6 +219,72 @@ pub fn sync_of(entry: &str) -> Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **The bug, as an assertion.** The first version passed the skill's
+    /// *name* as a slash command, and the session it opened answered `Unknown
+    /// command: /onboard-repo` — because guild skills live in
+    /// `~/.armada/guild/skills/` and Claude Code reads `~/.claude/skills/`, and
+    /// nothing projects between them (`PHASES.md` §8.4).
+    ///
+    /// Asserting on the argv is the same rule Fleet's Drone follows and for the
+    /// same reason: **no test spawns a real session or spends a token**
+    /// (`PHASES.md` §8), and argv is where this class of bug lives.
+    #[test]
+    fn the_session_is_handed_the_skills_prose_and_not_its_name() {
+        let argv = skill_argv("# Onboard a repository\n\nWrite it with them.\n");
+        assert_eq!(argv[0], "claude");
+        assert_eq!(
+            argv[1], "--append-system-prompt",
+            "verified against the installed CLI's own option list — the Drone \
+             once shipped a flag that did not exist"
+        );
+        assert!(
+            argv[2].contains("Onboard a repository"),
+            "the instructions did not reach the session: {:?}",
+            argv[2]
+        );
+        assert_eq!(argv.len(), 3);
+        assert!(
+            !argv.iter().any(|word| word.starts_with('/')),
+            "a slash command is what did not work: {argv:?}"
+        );
+    }
+
+    /// The printed form and the exec'd form are two renderings of one
+    /// hand-over, so they have to name the same flag and the same file. A
+    /// printed command that does something else is worse than none — it is
+    /// wrong in the one place a reader has no way to check.
+    #[test]
+    fn the_printed_command_and_the_argv_agree() {
+        let printed = skill_command_line(ONBOARD_REPO);
+        assert!(
+            printed.starts_with("claude --append-system-prompt "),
+            "{printed}"
+        );
+        assert!(
+            printed.contains(&skill_home_path(ONBOARD_REPO)),
+            "{printed}"
+        );
+        // `$(cat …)` is what produces the argv above when a person pastes it.
+        assert!(printed.contains("\"$(cat "), "{printed}");
+        // **No absolute home in a printed line**, which is both a privacy
+        // matter and a readability one — and `~` is what a person would type.
+        assert!(!printed.contains("/Users/"), "{printed}");
+        assert!(!printed.contains("/home/"), "{printed}");
+    }
+
+    /// `has_skill` and the path that reads it must never disagree: the check
+    /// that decides whether to offer the hand-over is the check that finds the
+    /// file it hands over.
+    #[test]
+    fn the_skill_that_is_tested_for_is_the_skill_that_is_read() {
+        let guild = Guild::at(Path::new("/scratch/.armada"));
+        assert_eq!(
+            guild.skill(ONBOARD_REPO),
+            Path::new("/scratch/.armada/guild/skills/onboard-repo/SKILL.md")
+        );
+        assert!(!guild.has_skill(ONBOARD_REPO), "nothing is on disk there");
+    }
 
     #[test]
     fn the_guild_hangs_off_the_armada_home_it_was_given() {

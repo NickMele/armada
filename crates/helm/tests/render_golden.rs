@@ -559,7 +559,7 @@ fn config_scan_over_a_monorepo_matches_its_fixture() {
 fn config_scan_for_a_reader_that_cannot_answer_matches_its_fixture() {
     assert_render(
         "config-scan-piped",
-        &scan_of("next-prisma", Handover::Tell(TellWhy::NotATerminal)),
+        &scan_of("next-prisma", tell(TellWhy::NotATerminal)),
     );
 }
 
@@ -571,8 +571,22 @@ fn config_scan_for_a_reader_that_cannot_answer_matches_its_fixture() {
 fn config_scan_without_the_onboarding_skill_matches_its_fixture() {
     assert_render(
         "config-scan-no-skill",
-        &scan_of("next-prisma", Handover::Tell(TellWhy::NoSkill)),
+        &scan_of("next-prisma", tell(TellWhy::NoSkill)),
     );
+}
+
+/// The hand-over as the verb builds it: the pasteable line, and why it is being
+/// printed rather than put as a question.
+///
+/// **The command is the guild's, not this test's.** A fixture that spelled it
+/// out would keep passing after the invocation changed, which is exactly what
+/// happened: `claude /onboard-repo` was frozen in a golden and the session it
+/// opened answered `unknown command /onboard-repo`.
+fn tell(why: TellWhy) -> Handover {
+    Handover::Tell {
+        why,
+        command: armada_guild::layout::skill_command_line(armada_guild::layout::ONBOARD_REPO),
+    }
 }
 
 /// The evidence a real directory yields, as the verb would answer it.

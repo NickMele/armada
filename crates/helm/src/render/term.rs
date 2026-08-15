@@ -185,7 +185,7 @@ mod tests {
                     stderr_is_tty: true,
                     width: 80,
                 };
-                let scan = armada_core::scan::handover(false, stdin, stdout, true);
+                let scan = armada_core::scan::handover(false, stdin, stdout, true, "claude …");
                 assert_eq!(
                     terminal.can_ask(),
                     scan == armada_core::scan::Handover::Ask,

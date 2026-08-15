@@ -160,6 +160,27 @@ same shape as `fleet board` handing you `claude --resume`.
 printed with the reason rather than exec'd. Offering to launch something that is not there
 produces a failure at the moment the reader was expecting help.
 
+#### The session is handed the skill's prose, not its name
+
+```sh
+claude --append-system-prompt "$(cat ~/.armada/guild/skills/onboard-repo/SKILL.md)"
+```
+
+**The first version passed the name, as `claude /onboard-repo`, and it did not work.** Guild
+skills live in `~/.armada/guild/skills/`; Claude Code loads `~/.claude/skills/`. Projection
+between the two is not built ([`PHASES.md`](../../PHASES.md) §8.4), so the skill Armada ships is
+invisible to the tool Armada hands you to — the session opened and answered `Unknown command:
+/onboard-repo`.
+
+Passing the prose needs no projection and no skill discovery. It works today and keeps working
+if either changes.
+
+**The printed line is the one that runs.** What a non-TTY reader sees is a command that
+genuinely does the same thing when pasted — `$(cat …)` produces exactly the argv Armada execs.
+It is printed rather than inlined because a multi-kilobyte `SKILL.md` in the middle of an
+evidence report would be unreadable, and because a truncated command is not a command: the line
+is written outside the table for that reason, and overhangs rather than being cut.
+
 `--json` returns one result per finding in `data.results[]`, with the file it came from in
 `path` and the one-line detail in `reason`, plus the whole uninterpreted report in
 `data.evidence`. An evidence list is emitted even when it is empty, which is the opposite of

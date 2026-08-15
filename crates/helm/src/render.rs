@@ -2299,7 +2299,7 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
     // Two of the three hand-overs now draw nothing — one is a selector on
     // stderr, the other is `--json` — and a report that ended in a blank line
     // whenever nothing followed it would be a trailing newline nobody asked for.
-    let next = handover(style, width, &data.handover);
+    let next = handover(style, &data.handover);
     if !next.is_empty() {
         out.push('\n');
         out.push_str(&next);
@@ -2316,13 +2316,10 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
 /// over to — and a renderer that worked it out for itself would give the two
 /// human audiences different *content*, which is the one thing they may not
 /// differ in.
-fn handover(style: Style, width: usize, choice: &Handover) -> String {
-    let mut table = Table::new(vec![Column::fixed(""), Column::flexible("")])
-        .headerless()
-        .indent(2);
+fn handover(style: Style, choice: &Handover) -> String {
     match choice {
         // Nothing at all: `--json` is a parser waiting for one payload.
-        Handover::Silent => return String::new(),
+        Handover::Silent => String::new(),
         // **Nothing here either, and that is the change.** The choice used to be
         // printed as part of this report — a list of numbers that then waited
         // silently on stdin, which is the thing a real reader could not
@@ -2331,26 +2328,30 @@ fn handover(style: Style, width: usize, choice: &Handover) -> String {
         // screen, and echoed afterwards so the scrollback records what he
         // picked. `Ask` is only ever produced when a person is at a terminal, so
         // there is no audience left for a printed menu here.
-        Handover::Ask => return String::new(),
+        Handover::Ask => String::new(),
         // **The command, so a reader who cannot answer a menu still learns the
         // next step.** A prompt drawn for an agent is worse than no prompt: it
         // is a question it cannot satisfy, in the place an instruction belongs.
-        Handover::Tell(why) => {
-            table = table.row(vec![
-                Cell::painted("next", Role::SignalAmber),
-                Cell::muted(
-                    armada_guild::layout::skill_argv(armada_guild::layout::ONBOARD_REPO).join(" "),
-                ),
-            ]);
-            if *why == TellWhy::NoSkill {
-                table = table.row(vec![
-                    Cell::painted("missing", Role::FlareOrange),
-                    Cell::muted("that skill is not in your guild — `armada guild init` writes it"),
-                ]);
-            }
+        //
+        // **Not a table cell, for the same reason the CI steps are not one.** A
+        // flexible column truncates, and a truncated command is not a command —
+        // the one promise this line makes is that pasting it works. A long line
+        // overhangs, which is honest, and every terminal will still select it
+        // whole.
+        Handover::Tell { why, command } => {
+            let aside = match why {
+                TellWhy::NotATerminal => "paste this to hand the repository to an agent",
+                // Printed anyway: it is what `armada guild init` makes work, and
+                // a reader told only "no" learns nothing about reaching yes.
+                TellWhy::NoSkill => "no onboarding skill in your guild — `armada guild init`",
+            };
+            format!(
+                "{}    {}\n",
+                heading(style, "next", Some(aside)),
+                style.paint(Role::SteelGrey, command)
+            )
         }
     }
-    table.render(style, width)
 }
 
 /// A titled block of evidence, or nothing at all when there is none of it.

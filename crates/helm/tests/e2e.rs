@@ -1047,8 +1047,8 @@ fn config_scan_answers_in_a_directory_with_no_workspace() {
     let text = String::from_utf8_lossy(&human.stdout);
     assert!(text.starts_with("no armada.yml here"), "{text}");
     assert!(text.contains("Evidence only."), "{text}");
-    assert!(text.contains("claude /onboard-repo"), "{text}");
-    assert!(text.contains("not in your guild"), "{text}");
+    assert!(text.contains("--append-system-prompt"), "{text}");
+    assert!(text.contains("no onboarding skill in your guild"), "{text}");
     assert!(!text.contains('\x1b'), "a pipe gets no escapes: {text}");
 }
 
@@ -1136,7 +1136,7 @@ fn config_scan_prints_the_next_command_instead_of_a_prompt_it_cannot_answer() {
         "a menu was drawn for a reader with no stdin:\n{text}"
     );
     assert!(
-        text.contains("next") && text.contains("claude /onboard-repo"),
+        text.contains("next") && text.contains("--append-system-prompt"),
         "the next step was not printed:\n{text}"
     );
 
