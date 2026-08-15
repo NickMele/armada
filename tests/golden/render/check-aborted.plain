@@ -7,7 +7,7 @@ run 01M00WRY00CYTZ44                                                    3 checks
            .armada/run/01M00WRY00CYTZ44/logs/armada.test.log
 
   STATUS  REAPED  DETAIL
-  reaped  1 run   01M014JQW2NDSDPP
+  REAPED  1 run   01M014JQW2NDSDPP
 
 ABORTED  1 passed, 1 failed, 1 aborted
 error: the run was stopped

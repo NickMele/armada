@@ -300,7 +300,7 @@ fn a_diverged_guild_is_reported_and_nothing_is_changed() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|row| row["status"] == "conflict"),
+            .any(|row| row["status"] == "CONFLICT"),
         "the conflict was not reported: {envelope}"
     );
     assert_eq!(
@@ -445,7 +445,7 @@ fn doctor_names_the_fragments_a_skipped_interview_left_alone() {
     for fragment in ["voice.md", "expectations.md", "how-i-work.md"] {
         assert!(
             rows.iter().any(|row| {
-                row["status"] == "partial"
+                row["status"] == "PARTIAL"
                     && row["detail"].as_str().is_some_and(|d| d.contains(fragment))
             }),
             "`{fragment}` was not reported as still imported: {envelope}"

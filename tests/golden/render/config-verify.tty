@@ -4,7 +4,7 @@
   [38;2;61;220;132mPASS[0m       schema         [38;2;156;163;175m—[0m                                [38;2;156;163;175m0.1s[0m
   [38;2;61;220;132mPASS[0m       references     [38;2;156;163;175mneeds:, match:, ports fit block[0m  [38;2;156;163;175m0.1s[0m
   [38;2;255;92;92mFAILED[0m     argv[0]        [38;2;156;163;175m`vitest` not on PATH or in root[0m  [38;2;156;163;175m0.2s[0m
-  [38;2;255;180;84munchecked[0m  shell entries  [38;2;156;163;175m3, no argv[0] to resolve[0m            [38;2;156;163;175m—[0m
+  [38;2;255;180;84mUNCHECKED[0m  shell entries  [38;2;156;163;175m3, no argv[0] to resolve[0m            [38;2;156;163;175m—[0m
 
 [1m[38;2;255;92;92mFAILED[0m  [38;2;156;163;175mpass 2 not attempted · fix pass 1 first[0m
   [38;2;156;163;175m→[0m [38;2;156;163;175mweb:test declares `vitest run`; did you mean `pnpm exec vitest run`?[0m

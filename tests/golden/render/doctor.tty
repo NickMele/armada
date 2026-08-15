@@ -1,24 +1,24 @@
   [1m[38;2;255;169;64mgit[0m
-    [38;2;61;220;132mok[0m       [38;2;156;163;175m2.51.0[0m
+    [38;2;61;220;132mOK[0m       [38;2;156;163;175m2.51.0[0m
 
   [1m[38;2;255;169;64mclaude[0m
-    [38;2;61;220;132mok[0m       [38;2;156;163;175m2.0.14[0m
+    [38;2;61;220;132mOK[0m       [38;2;156;163;175m2.0.14[0m
 
   [1m[38;2;255;169;64mdocker[0m
-    [38;2;255;92;92mmissing[0m  [38;2;156;163;175mcompose driver unavailable[0m
+    [38;2;255;92;92mMISSING[0m  [38;2;156;163;175mcompose driver unavailable[0m
              [38;2;156;163;175m→ install docker, or accept that compose repos will not start[0m
 
   [1m[38;2;255;169;64m~/.armada[0m
-    [38;2;255;92;92mmissing[0m  [38;2;156;163;175mjobs/ and workspaces/ are missing; Jobs and worktrees go there[0m
+    [38;2;255;92;92mMISSING[0m  [38;2;156;163;175mjobs/ and workspaces/ are missing; Jobs and worktrees go there[0m
              [38;2;156;163;175m→ armada init --force[0m
 
   [1m[38;2;255;169;64mguild[0m
-    [38;2;255;180;84mstale[0m    [38;2;156;163;175m3 commits behind origin[0m
+    [38;2;255;180;84mSTALE[0m    [38;2;156;163;175m3 commits behind origin[0m
              [38;2;156;163;175m→ armada guild pull[0m
-    [38;2;255;180;84mpartial[0m  [38;2;156;163;175mvoice.md still as imported[0m
+    [38;2;255;180;84mPARTIAL[0m  [38;2;156;163;175mvoice.md still as imported[0m
              [38;2;156;163;175m→ write ~/.armada/guild/voice.md in your own words[0m
 
   [1m[38;2;255;169;64mmanifest.db[0m
-    [38;2;61;220;132mok[0m       [38;2;156;163;175m2 workspaces, 0 orphans[0m
+    [38;2;61;220;132mOK[0m       [38;2;156;163;175m2 workspaces, 0 orphans[0m
 
 [1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;156;163;175m3 ok · 2 missing · 2 warnings[0m

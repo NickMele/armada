@@ -38,9 +38,9 @@ impl Kind {
     /// The word, in both audiences.
     pub const fn word(self) -> &'static str {
         match self {
-            Kind::NeedsHuman => "needs_human",
-            Kind::Blocked => "blocked",
-            Kind::Idle => "idle",
+            Kind::NeedsHuman => "NEEDS_HUMAN",
+            Kind::Blocked => "BLOCKED",
+            Kind::Idle => "IDLE",
         }
     }
 }
@@ -330,15 +330,35 @@ mod tests {
         assert!(entries[0].is_open());
     }
 
+    /// **The reported word screams; the file on disk does not, and they are two
+    /// different contracts.**
+    ///
+    /// [`Kind::word`] is what the envelope's `results[].kind` carries and what
+    /// the STATUS column prints, so it obeys the one-spelling rule with every
+    /// other status word. The `Serialize`/`Deserialize` pair is the inbox
+    /// *file*, which is Armada's own state under `~/.armada/` and is read back
+    /// by later runs — changing it would make every inbox already on a machine
+    /// unreadable, to no reader's benefit, since nobody is shown it.
+    ///
+    /// Both halves are asserted here so the distinction is deliberate rather
+    /// than something that drifted.
     #[test]
-    fn every_kind_is_spelled_the_same_in_both_audiences() {
-        for (kind, word) in [
-            (Kind::NeedsHuman, "needs_human"),
-            (Kind::Blocked, "blocked"),
-            (Kind::Idle, "idle"),
+    fn the_reported_kind_screams_and_the_file_on_disk_is_unchanged() {
+        for (kind, shown, stored) in [
+            (Kind::NeedsHuman, "NEEDS_HUMAN", "needs_human"),
+            (Kind::Blocked, "BLOCKED", "blocked"),
+            (Kind::Idle, "IDLE", "idle"),
         ] {
-            assert_eq!(kind.word(), word);
-            assert_eq!(serde_json::to_string(&kind).unwrap(), format!("\"{word}\""));
+            assert_eq!(kind.word(), shown);
+            assert_eq!(
+                serde_json::to_string(&kind).unwrap(),
+                format!("\"{stored}\"")
+            );
+            assert_eq!(
+                serde_json::from_str::<Kind>(&format!("\"{stored}\"")).unwrap(),
+                kind,
+                "an inbox written by an earlier run stopped being readable"
+            );
         }
     }
 }

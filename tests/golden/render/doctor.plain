@@ -1,24 +1,24 @@
   git
-    ok       2.51.0
+    OK       2.51.0
 
   claude
-    ok       2.0.14
+    OK       2.0.14
 
   docker
-    missing  compose driver unavailable
+    MISSING  compose driver unavailable
              -> install docker, or accept that compose repos will not start
 
   ~/.armada
-    missing  jobs/ and workspaces/ are missing; Jobs and worktrees go there
+    MISSING  jobs/ and workspaces/ are missing; Jobs and worktrees go there
              -> armada init --force
 
   guild
-    stale    3 commits behind origin
+    STALE    3 commits behind origin
              -> armada guild pull
-    partial  voice.md still as imported
+    PARTIAL  voice.md still as imported
              -> write ~/.armada/guild/voice.md in your own words
 
   manifest.db
-    ok       2 workspaces, 0 orphans
+    OK       2 workspaces, 0 orphans
 
 NEEDS ATTENTION  3 ok, 2 missing, 2 warnings

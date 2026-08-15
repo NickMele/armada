@@ -10,7 +10,7 @@ armada  3d9cc7ba                                                 ports 5460-5469
   DOWN    web   5461
 
   STATUS  RESOURCE  DETAIL
-  kept    ports     5460-5469
+  KEPT    ports     5460-5469
 
 PARTIAL  2 services, 1 up
 error: 1 of 2 services did not succeed

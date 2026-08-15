@@ -1,15 +1,15 @@
 no armada.yml here, this is evidence and not a config
 
   STATUS  KIND             DETAIL
-  found   lockfile         backend/uv.lock, uv
-  found   lockfile         scripts/uv.lock, uv
-  found   lockfile         web/pnpm-lock.yaml, pnpm@9
-  found   package scripts  4 in web/package.json
-  found   compose          docker-compose.yml, 3 services
-  found   ci               .github/workflows/ci.yml, 5 steps
-  found   pyproject        backend/pyproject.toml, 3 tool sections
-  found   pyproject        scripts/pyproject.toml, 1 tool section
-  absent  makefile         -
+  FOUND   lockfile         backend/uv.lock, uv
+  FOUND   lockfile         scripts/uv.lock, uv
+  FOUND   lockfile         web/pnpm-lock.yaml, pnpm@9
+  FOUND   package scripts  4 in web/package.json
+  FOUND   compose          docker-compose.yml, 3 services
+  FOUND   ci               .github/workflows/ci.yml, 5 steps
+  FOUND   pyproject        backend/pyproject.toml, 3 tool sections
+  FOUND   pyproject        scripts/pyproject.toml, 1 tool section
+  ABSENT  makefile         -
 
   web/package.json scripts, verbatim and not interpreted
     dev    next dev

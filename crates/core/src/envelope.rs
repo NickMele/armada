@@ -1008,7 +1008,7 @@ impl Problem {
 /// have meant deciding twice what `missing` looks like, and getting two
 /// answers — which is what the mockups did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Health {
     /// Present and current — `doctor`'s word.
     Ok,
@@ -1034,13 +1034,13 @@ impl Health {
     /// The word, in both audiences.
     pub const fn word(self) -> &'static str {
         match self {
-            Health::Ok => "ok",
-            Health::Found => "found",
-            Health::Created => "created",
-            Health::Missing => "missing",
-            Health::Stale => "stale",
-            Health::Partial => "partial",
-            Health::Offline => "offline",
+            Health::Ok => "OK",
+            Health::Found => "FOUND",
+            Health::Created => "CREATED",
+            Health::Missing => "MISSING",
+            Health::Stale => "STALE",
+            Health::Partial => "PARTIAL",
+            Health::Offline => "OFFLINE",
         }
     }
 
@@ -1101,7 +1101,7 @@ pub struct SyncItem {
 
 /// What a sync does to one area.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Sync {
     /// The remote has it and this machine does not.
     Added,
@@ -1121,11 +1121,11 @@ impl Sync {
     /// The word, in both audiences.
     pub const fn word(self) -> &'static str {
         match self {
-            Sync::Added => "added",
-            Sync::Changed => "changed",
-            Sync::Removed => "removed",
-            Sync::Conflict => "conflict",
-            Sync::Unchanged => "unchanged",
+            Sync::Added => "ADDED",
+            Sync::Changed => "CHANGED",
+            Sync::Removed => "REMOVED",
+            Sync::Conflict => "CONFLICT",
+            Sync::Unchanged => "UNCHANGED",
         }
     }
 }
@@ -1340,7 +1340,7 @@ pub struct Killed {
 
 /// What became of a Job's directory or branch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Disposition {
     /// Armada removed it.
     Removed,
@@ -1355,9 +1355,9 @@ impl Disposition {
     /// The word, in both audiences.
     pub const fn word(self) -> &'static str {
         match self {
-            Disposition::Removed => "removed",
-            Disposition::Kept => "kept",
-            Disposition::Gone => "gone",
+            Disposition::Removed => "REMOVED",
+            Disposition::Kept => "KEPT",
+            Disposition::Gone => "GONE",
         }
     }
 }
@@ -1771,18 +1771,23 @@ mod tests {
         assert_eq!(Headline::NeedsAttention.to_string(), "NEEDS ATTENTION");
     }
 
-    /// The same rule, on `doctor`'s own words: lowercase on the screen and
-    /// lowercase in the payload.
+    /// The same rule, on `doctor`'s own words: **SCREAMING on the screen and
+    /// SCREAMING in the payload.**
+    ///
+    /// These serialised lowercase until a reader pointed out that a status
+    /// column holding `PASS` next to `ok` reads as two kinds of thing. §3.1 has
+    /// always said one spelling in both audiences and SCREAMING in both; this
+    /// enum was the exception, and the exception is what changed.
     #[test]
     fn a_doctor_finding_is_spelled_the_same_in_both_audiences() {
         for (health, word) in [
-            (Health::Ok, "ok"),
-            (Health::Found, "found"),
-            (Health::Created, "created"),
-            (Health::Missing, "missing"),
-            (Health::Stale, "stale"),
-            (Health::Partial, "partial"),
-            (Health::Offline, "offline"),
+            (Health::Ok, "OK"),
+            (Health::Found, "FOUND"),
+            (Health::Created, "CREATED"),
+            (Health::Missing, "MISSING"),
+            (Health::Stale, "STALE"),
+            (Health::Partial, "PARTIAL"),
+            (Health::Offline, "OFFLINE"),
         ] {
             assert_eq!(health.word(), word);
             assert_eq!(
@@ -1821,7 +1826,7 @@ mod tests {
         let json = serde_json::to_string(&finding).unwrap();
         assert_eq!(
             json,
-            r#"{"check":"guild","status":"stale","detail":"3 commits behind origin","remedy":"armada guild pull"}"#
+            r#"{"check":"guild","status":"STALE","detail":"3 commits behind origin","remedy":"armada guild pull"}"#
         );
 
         // A passing check has nothing to fix, and the key is absent rather
@@ -1854,18 +1859,18 @@ mod tests {
         };
         let json = serde_json::to_string(&data).unwrap();
         assert!(json.contains(r#""applied":false"#), "{json}");
-        assert!(json.contains(r#""status":"conflict""#), "{json}");
+        assert!(json.contains(r#""status":"CONFLICT""#), "{json}");
         assert!(json.contains(r#""headline":"NEEDS ATTENTION""#), "{json}");
     }
 
     #[test]
     fn every_sync_word_is_the_word_the_layout_prints() {
         for (sync, word) in [
-            (Sync::Added, "added"),
-            (Sync::Changed, "changed"),
-            (Sync::Removed, "removed"),
-            (Sync::Conflict, "conflict"),
-            (Sync::Unchanged, "unchanged"),
+            (Sync::Added, "ADDED"),
+            (Sync::Changed, "CHANGED"),
+            (Sync::Removed, "REMOVED"),
+            (Sync::Conflict, "CONFLICT"),
+            (Sync::Unchanged, "UNCHANGED"),
         ] {
             assert_eq!(sync.word(), word);
             assert_eq!(serde_json::to_string(&sync).unwrap(), format!("\"{word}\""));

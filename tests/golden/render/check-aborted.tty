@@ -7,7 +7,7 @@
            [38;2;156;163;175m.armada/run/01M00WRY00CYTZ44/logs/armada.test.log[0m
 
   [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mREAPED[0m  [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;156;163;175mreaped[0m  1 run   [38;2;156;163;175m01M014JQW2NDSDPP[0m
+  [38;2;156;163;175mREAPED[0m  1 run   [38;2;156;163;175m01M014JQW2NDSDPP[0m
 
 [1m[38;2;255;122;182mABORTED[0m  [38;2;156;163;175m1 passed · 1 failed · 1 aborted[0m
 [1m[38;2;255;92;92merror:[0m the run was stopped

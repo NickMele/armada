@@ -104,11 +104,12 @@ armada  3d9cc7ba
 OK  2 skills, 0 unresolved references
 ```
 
-`declared` is a **render-only word**, lowercase for the reason
-[`render.md`](../render.md) gives: the envelope has no status that means it. Listing a skill
+`DECLARED` is a **render-only word**: the envelope has no status that means it. Listing a skill
 says the repository declares it, not that anything about it passed — whether its `uses:` and
 `verify.check` resolve is `config verify`'s answer, on a different command, so a word here
-that read as a verdict would claim something this one never checked.
+that read as a verdict would claim something this one never checked. It is spelled like every
+other word a `STATUS` column holds; the column has one meaning and one spelling
+([`render.md`](../render.md)).
 
 `show` adds a second table, the same shape `status` draws its holdings with:
 

@@ -1,7 +1,7 @@
   STATUS     ITEM       DETAIL
-  added      skills     add-migration, triage-flake
-  changed    hooks      stop-notify.sh
-  conflict   voice.md   edited here and on origin
-  unchanged  workflows  4
+  ADDED      skills     add-migration, triage-flake
+  CHANGED    hooks      stop-notify.sh
+  CONFLICT   voice.md   edited here and on origin
+  UNCHANGED  workflows  4
 
 NEEDS ATTENTION  1 conflict, resolve in ~/.armada/guild, then armada guild push

@@ -22,13 +22,23 @@
 //! audiences have different shapes, and one shape is the entire point
 //! (PLAN.md §3.1.1). Colour agrees with the word and never replaces it.
 //!
-//! **Two spellings of a status, and the case says which.** `UPPERCASE` is the
-//! envelope's own `Status` — `PASS`, `FAILED`, `READY` — so the human spelling
-//! is the JSON spelling (`ARCHITECTURE.md` §1.6). `lowercase` is a render-only
-//! word for something the envelope states structurally rather than as a status:
-//! `claimed` for a port in `data.ports`, `removed` for a non-zero count in
-//! `released`. A reader can tell which is which, and nothing lowercase can be
-//! mistaken for a field they could have grepped from `--json`.
+//! **A status column has one spelling, and it is SCREAMING.** `PASS`, `FAILED`,
+//! `REAPED`, `CLAIMED`, `OWNS`. That is PLAN.md §3.1's rule stated once and
+//! applied everywhere — one spelling, in the payload and in the human render —
+//! and it now holds for the four enums that were serialising lowercase
+//! (`Health`, `Sync`, `Disposition`, the inbox's `kind`) as well as for the ones
+//! that already screamed.
+//!
+//! **This replaced a rule where the case carried a meaning**, and it is worth
+//! recording what was given up. `lowercase` used to mark a render-only word —
+//! something the envelope states structurally rather than as a status — so a
+//! reader could tell at a glance which words they could have grepped out of
+//! `--json`. It was a real distinction, and it cost more than it bought: the
+//! column it was drawn in has one meaning, a reader scanning it reads
+//! `ABORTED` and `reaped` as two kinds of thing when they are one, and the
+//! question the case answered is one almost nobody was asking. The question
+//! everyone *is* asking — did this go well — is answered by the word and the
+//! colour, which is where it always belonged.
 
 pub mod banner;
 pub mod format;
@@ -1194,10 +1204,16 @@ fn verdict_strong(style: Style, status: Status) -> String {
     style.strong(Role::for_status(status), &status.to_string())
 }
 
-/// A render-only status word: lowercase, because the envelope has no field
-/// spelling it. See this module's header for why the case carries that.
+/// A status word that is not an envelope `Status` — `REAPED`, `CLAIMED`,
+/// `OWNS`, `WOULD`.
+///
+/// **The chokepoint that makes "one spelling" true rather than intended.**
+/// Every status cell in the CLI that is not a `Status` or a `JobState` is built
+/// here, so upper-casing is one line instead of fifty-three call sites each
+/// remembering. A caller writes the word in whatever case reads best in the
+/// source; the column decides how it is spelled.
 fn token(word: &str, role: Role) -> Cell {
-    Cell::painted(word.to_string(), role)
+    Cell::painted(word.to_uppercase(), role)
 }
 
 /// The four columns, named for this verb.
@@ -2882,10 +2898,10 @@ mod tests {
             Style::plain(),
         );
         assert!(
-            has_row(&text, &["owns", "container", "armada-a3f91c02-api"]),
+            has_row(&text, &["OWNS", "container", "armada-a3f91c02-api"]),
             "{text}"
         );
-        assert!(has_row(&text, &["owns", "volume", "pgdata"]), "{text}");
+        assert!(has_row(&text, &["OWNS", "volume", "pgdata"]), "{text}");
         assert!(
             !text.contains("2 resources"),
             "a count is not an id: {text}"
@@ -2899,7 +2915,7 @@ mod tests {
     fn a_workspace_that_owns_nothing_says_so_rather_than_leaving_a_gap() {
         let text = rendered(&Output::Status(Box::new(owning(&[]))), Style::plain());
         assert!(
-            has_row(&text, &["owns", "resources", "-"]),
+            has_row(&text, &["OWNS", "resources", "-"]),
             "the placeholder row is absent, so a reader cannot tell \
              `nothing is owned` from `nobody looked`:\n{text}"
         );
@@ -2926,10 +2942,10 @@ mod tests {
             Style::plain(),
         );
         assert!(
-            has_row(&text, &["owns", "resources", "+2", "more"]),
+            has_row(&text, &["OWNS", "resources", "+2", "more"]),
             "{text}"
         );
-        assert!(has_row(&text, &["owns", "container", "one"]), "{text}");
+        assert!(has_row(&text, &["OWNS", "container", "one"]), "{text}");
         assert!(
             !text.contains("four"),
             "past the cap, only the count: {text}"
@@ -3194,7 +3210,7 @@ mod tests {
         let without = rendered(&a_bundle(false, &[]), Style::plain());
         assert!(has_row(
             &without,
-            &["secrets", "excluded", "machine.yml", "stays", "here"]
+            &["SECRETS", "excluded", "machine.yml", "stays", "here"]
         ));
         assert!(without.contains("412 KB"), "{without}");
 

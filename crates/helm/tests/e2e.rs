@@ -444,7 +444,7 @@ fn init_dry_run_previews_the_claim_and_claims_nothing() {
     // of the same table a real run draws (docs/reference-output).
     let human = machine.run(&repo, &["manifest", "init", "--dry-run"]);
     let text = String::from_utf8_lossy(&human.stdout);
-    assert!(text.contains("would"), "{text}");
+    assert!(text.contains("WOULD"), "{text}");
     assert!(text.contains("nothing was changed"), "{text}");
 }
 
@@ -1024,7 +1024,7 @@ fn config_verify_fails_pass_one_and_does_not_attempt_pass_two() {
         text.starts_with("pass 1, static, nothing is executed"),
         "{text}"
     );
-    assert!(text.contains("unchecked  shell entries"), "{text}");
+    assert!(text.contains("UNCHECKED  shell entries"), "{text}");
     assert!(
         text.contains("pass 2 not attempted, fix pass 1 first"),
         "{text}"
@@ -1195,9 +1195,9 @@ fn a_skill_can_be_listed_and_resolved_and_never_run() {
         text.lines()
             .any(|line| line.split_whitespace().collect::<Vec<_>>() == words)
     };
-    assert!(row(&["grants", "tickets", "./exiter.sh", "0"]), "{text}");
+    assert!(row(&["GRANTS", "tickets", "./exiter.sh", "0"]), "{text}");
     assert!(
-        row(&["reads", "doc", "docs/skills/add-endpoint.md"]),
+        row(&["READS", "doc", "docs/skills/add-endpoint.md"]),
         "{text}"
     );
 

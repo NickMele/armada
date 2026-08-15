@@ -6,11 +6,11 @@
   [38;2;156;163;175mDOWN[0m      web       [38;2;76;159;232m5461[0m
 
   [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mRESOURCE[0m   [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;61;220;132mowns[0m      container  [38;2;156;163;175marmada-3d9cc7ba-api[0m
-  [38;2;61;220;132mowns[0m      container  [38;2;156;163;175marmada-3d9cc7ba-db[0m
-  [38;2;61;220;132mowns[0m      network    [38;2;156;163;175marmada-3d9cc7ba[0m
-  [38;2;61;220;132mowns[0m      resources  [38;2;156;163;175m+2 more[0m
-  [38;2;61;220;132mheld[0m      lease      [38;2;156;163;175mrun:3d9cc7ba[0m
-  [38;2;255;180;84mreported[0m  release    [38;2;156;163;175mpsql -c 'DROP DATABASE app_3d9cc7ba'[0m
+  [38;2;61;220;132mOWNS[0m      container  [38;2;156;163;175marmada-3d9cc7ba-api[0m
+  [38;2;61;220;132mOWNS[0m      container  [38;2;156;163;175marmada-3d9cc7ba-db[0m
+  [38;2;61;220;132mOWNS[0m      network    [38;2;156;163;175marmada-3d9cc7ba[0m
+  [38;2;61;220;132mOWNS[0m      resources  [38;2;156;163;175m+2 more[0m
+  [38;2;61;220;132mHELD[0m      lease      [38;2;156;163;175mrun:3d9cc7ba[0m
+  [38;2;255;180;84mREPORTED[0m  release    [38;2;156;163;175mpsql -c 'DROP DATABASE app_3d9cc7ba'[0m
 
 [1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m1 workspace · scope workspace[0m

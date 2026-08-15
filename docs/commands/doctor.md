@@ -85,11 +85,12 @@ this sentence.** A check reports a problem through a constructor whose remedy is
 compile. It is a command where one exists and a sentence where none does — *write
 `~/.armada/guild/voice.md` in your own words* is a fix; *out of date* is not.
 
-The status words are `ok`, `found`, `created`, `missing`, `stale`, `partial` and `offline` —
-lowercase on the screen and lowercase in the payload, because nothing here ends a run and none
-of them maps to an exit code. `NEEDS ATTENTION` is the one uppercase word in Armada's output
-that is not a `Status`; it is in the payload under `data.headline`, spelled exactly as it is
-printed.
+The status words are `OK`, `FOUND`, `CREATED`, `MISSING`, `STALE`, `PARTIAL` and `OFFLINE` —
+SCREAMING on the screen and SCREAMING in the payload, like every other word a `STATUS` column
+holds. None of them ends a run or maps to an exit code, and they used to be lowercase to say
+so; that distinction cost more than it bought, because a reader scanning one column read `PASS`
+and `ok` as two kinds of thing when they are one ([`render.md`](render.md)).
+`NEEDS ATTENTION` sits in the payload under `data.headline`, spelled exactly as it is printed.
 
 `--json` returns one result per check with `status`, `detail`, and `remedy` — the exact command
 that would fix it, or the sentence that says how. A check that passed carries no `remedy`;

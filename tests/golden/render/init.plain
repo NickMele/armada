@@ -4,7 +4,7 @@ armada  3d9cc7ba                                                 ports 5460-5469
   READY   api        -       1.2s
 
   STATUS   PORT  DETAIL
-  claimed  api   5460
-  claimed  web   5461
+  CLAIMED  api   5460
+  CLAIMED  web   5461
 
 READY  2 ports

@@ -27,13 +27,24 @@ columns, same order, same words, minus the styling.
 | `--color never` | Never. Same output a non-TTY gets. |
 | `NO_COLOR` | Honoured whatever its value, per the standard. |
 
-**Progress goes to stderr, always.** A spinner on stdout means `armada manifest check | jq`
+**Progress goes to stderr, always.** A live table on stdout means `armada manifest check | jq`
 receives frames of animation, and the one consumer the envelope exists for is the one that
-breaks.
+breaks. A run redraws its table in an **inline viewport**, never the alternate screen: the
+run's own output has to stay in the scrollback, which is where anyone looks for it.
 
 ## Tables
 
 Every table is `STATUS · NAME · DETAIL · TIME`, status first and always a word.
+
+**Every word a `STATUS` column holds is SCREAMING**, whether or not the envelope has a field
+spelling it — `PASS`, `FAILED`, `REAPED`, `CLAIMED`, `OWNS`, `WOULD`. One column, one meaning,
+one spelling, in the payload and on the screen alike.
+
+Case used to carry a second meaning: lowercase marked a render-only word, so a reader could
+tell which words they could have grepped out of `--json`. It was a real distinction and it was
+dropped, because the column reads worse than the distinction was worth — `ABORTED` beside
+`reaped` looks like two kinds of thing when it is one, and the question a reader is actually
+asking is answered by the word and its colour.
 
 **A column no row filled is dropped, header and all.** A verb declares the four columns; the
 renderer decides which of them earned their width. `armada doctor` times nothing, so its `TIME`

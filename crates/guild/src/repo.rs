@@ -91,9 +91,9 @@ impl Change {
     /// The word the agreed layout puts in the STATUS column.
     pub fn word(self) -> &'static str {
         match self {
-            Change::Added => "added",
-            Change::Changed => "changed",
-            Change::Removed => "removed",
+            Change::Added => "ADDED",
+            Change::Changed => "CHANGED",
+            Change::Removed => "REMOVED",
         }
     }
 }
@@ -582,7 +582,8 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(Change::Added.word(), "added");
+        // SCREAMING, like every other word a STATUS column holds.
+        assert_eq!(Change::Added.word(), "ADDED");
     }
 
     /// `git` missing is the **machine** being broken, whose documented response

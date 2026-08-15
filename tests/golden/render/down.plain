@@ -8,6 +8,6 @@ armada  3d9cc7ba                                                 ports 5460-5469
   DOWN    pg    5460
 
   STATUS  RESOURCE  DETAIL
-  kept    ports     5460-5469
+  KEPT    ports     5460-5469
 
 DOWN  2 services, 2 down
