@@ -73,20 +73,21 @@ impl Classification {
 
 /// The prompt, which is the whole of the model's instruction.
 ///
-/// **Short, and it names the four labels.** A prompt that described the
-/// workflows would drift from `templates/guild/workflows/` the first time one
-/// was edited; the labels are the contract and the descriptions are the guild's.
+/// **Short, and it names each label once.** A prompt that described the
+/// workflows at length would drift from `templates/guild/workflows/` the first
+/// time one was edited; the labels are the contract and the descriptions are the
+/// guild's. One clause each is what makes the four distinguishable, and nothing
+/// beyond that earns its tokens on a call that runs on every spawn.
 pub fn prompt(task: &str) -> String {
     format!(
-        "Classify this software task as exactly one of: {}.\n\n\
+        "Classify this software task as exactly one of:\n\
          design = deciding an approach, no code.\n\
          plan = writing down how, before building.\n\
          feature = building something new.\n\
          bug = something is broken and must be reproduced first.\n\n\
          Answer with one line of JSON and nothing else: \
          {{\"workflow\": \"<one of the four>\", \"confidence\": <0.0-1.0>}}\n\n\
-         Task: {task}",
-        STARTERS.join(", ")
+         Task: {task}"
     )
 }
 
@@ -95,6 +96,18 @@ pub fn prompt(task: &str) -> String {
 /// `--output-format json` rather than `stream-json`: there is one answer and no
 /// stream worth watching, and the ceiling this call runs under is that it is one
 /// turn of the cheapest model.
+///
+/// **A classifier is given nothing to work with, deliberately.** It picks one of
+/// four labels from one line of text; it has no use for the caller's MCP
+/// servers or their skills, and handing an unattended model a toolbelt it does
+/// not need is capability granted for no reason. `--strict-mcp-config` with no
+/// `--mcp-config` loads no MCP servers at all, and `--disable-slash-commands`
+/// loads no skills.
+///
+/// **Not loading them is also most of what this call spends its time on** — a
+/// measured 20.6s for a one-line task, on the path of every spawn. That is the
+/// expected effect rather than a measured one: verifying it needs a real call,
+/// and no test in this repository may make one.
 pub fn argv(task: &str) -> Vec<String> {
     vec![
         super::drone::CLAUDE.to_string(),
@@ -103,6 +116,9 @@ pub fn argv(task: &str) -> Vec<String> {
         "--print".to_string(),
         "--output-format".to_string(),
         "json".to_string(),
+        // Least privilege, and it happens to be the cheap path too.
+        "--strict-mcp-config".to_string(),
+        "--disable-slash-commands".to_string(),
         prompt(task),
     ]
 }
@@ -208,15 +224,39 @@ mod tests {
         assert_eq!(argv[1], "--model");
         assert_eq!(argv[2], "claude-haiku-4-5-20251001");
         assert_eq!(&argv[3..6], ["--print", "--output-format", "json"]);
-        assert!(argv[6].contains("add rate limiting to the API"));
-        assert_eq!(argv.len(), 7);
+        assert!(argv
+            .last()
+            .unwrap()
+            .contains("add rate limiting to the API"));
+    }
+
+    /// **A classifier is handed no capability it does not need.** It picks one
+    /// of four labels from one line of text; an unattended model given the
+    /// caller's MCP servers and skills has been granted a toolbelt for no
+    /// reason, and paid for loading it on every spawn.
+    #[test]
+    fn the_classifier_is_given_neither_mcp_servers_nor_skills() {
+        let argv = argv("anything");
+        for denied in ["--strict-mcp-config", "--disable-slash-commands"] {
+            assert!(
+                argv.iter().any(|word| word == denied),
+                "{argv:?} does not carry {denied}"
+            );
+        }
+        // And no `--mcp-config`, which is what makes `--strict-mcp-config` mean
+        // *none* rather than *only these*.
+        assert!(!argv.iter().any(|word| word == "--mcp-config"));
     }
 
     #[test]
-    fn the_prompt_names_all_four_labels() {
+    fn the_prompt_names_all_four_labels_exactly_once() {
         let prompt = prompt("anything");
         for label in STARTERS {
-            assert!(prompt.contains(label), "`{label}` is not offered");
+            let named = prompt.matches(label).count();
+            assert_eq!(
+                named, 1,
+                "`{label}` appears {named} times; this prompt runs on every spawn"
+            );
         }
     }
 

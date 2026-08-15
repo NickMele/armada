@@ -1028,6 +1028,70 @@ fn fleet_spawn_matches_its_fixture() {
     assert_render("fleet-spawn", &output);
 }
 
+/// **A guess is said in words, not left as a decimal in a column.**
+///
+/// A real spawn classified a task as `design` at `0.10` and proceeded silently.
+/// A tenth is a coin flip, and `0.10` printed as one column among five tells a
+/// reader nothing unless they already know the threshold — which is the opposite
+/// of PLAN.md §14.2's *"the confidence surfaced so a guess is visible as a
+/// guess"*.
+///
+/// **No fixture, deliberately.** The agreed layout covers the confident case and
+/// is unchanged by this; inventing a second drawing for the warning would be
+/// renegotiating a settled one. What is pinned here is that the warning appears,
+/// that it names the flag that replaces it, and that a confident spawn is left
+/// exactly as it was.
+#[test]
+fn a_low_confidence_spawn_says_so_in_words_and_names_the_override() {
+    let render = |confidence: Option<f64>| {
+        let output = Output::Spawn(Box::new(Envelope::ok(
+            "fleet spawn",
+            None,
+            Status::Ready,
+            SpawnData {
+                uuid: "8f2a1c40-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
+                name: "this-test".to_string(),
+                workflow: "design".to_string(),
+                confidence,
+                worktree: "~/.armada/workspaces/api/this-test".to_string(),
+                branch: "armada/this-test".to_string(),
+                port_block: None,
+                budget: Budget {
+                    iterations: 15,
+                    tokens: 500_000,
+                    wall_clock_ms: 90 * 60 * 1_000,
+                    on_exhausted: OnExhausted::NeedsHuman,
+                },
+                step: "explore".to_string(),
+                state: JobState::Running,
+                classify_ms: Some(20_600),
+                prepare_ms: 300,
+                pgid: Some(4212),
+            },
+        )));
+        render::human(&output, Style::plain(), Terminal::piped())
+    };
+
+    let guessed = render(Some(0.10));
+    assert!(guessed.contains("a guess"), "{guessed}");
+    assert!(guessed.contains("low confidence"), "{guessed}");
+    assert!(
+        guessed.contains("--workflow design|plan|feature|bug"),
+        "the warning does not say how to fix it:\n{guessed}"
+    );
+
+    // **The confident case is untouched**, which is what keeps the agreed layout
+    // agreed.
+    let confident = render(Some(0.94));
+    assert!(!confident.contains("a guess"), "{confident}");
+    assert!(!confident.contains("low confidence"), "{confident}");
+
+    // An override is neither: you named it, so there is nothing to warn about.
+    let named = render(None);
+    assert!(named.contains("you named it"), "{named}");
+    assert!(!named.contains("low confidence"), "{named}");
+}
+
 // ---------------------------------------------------------------- the property
 // the pair of files exists to prove
 

@@ -153,7 +153,7 @@ pub const PROBE_SESSION: &str = "00000000-0000-4000-8000-0000000a2ada";
 /// added after: a Job that spawns, records a worktree and a port block, and
 /// whose Drone dies on a usage error nobody sees until `fleet ls` says
 /// `STALLED`.
-pub const FLAGS: [&str; 7] = [
+pub const FLAGS: [&str; 9] = [
     "--session-id",
     "--resume",
     "--print",
@@ -161,6 +161,11 @@ pub const FLAGS: [&str; 7] = [
     "--verbose",
     "--model",
     "--input-format",
+    // The classifier's two, which withhold capability rather than granting it —
+    // and are therefore the two whose disappearance would silently hand an
+    // unattended model the caller's whole toolbelt.
+    "--strict-mcp-config",
+    "--disable-slash-commands",
 ];
 
 /// What one turn reported.

@@ -124,29 +124,48 @@ fn job_summary(style: Style, state: JobState, facts: &[String]) -> String {
 /// **The confidence is on the screen and not only in the payload** (PLAN.md
 /// §14.2): a guess has to be visible as a guess, and a classification nobody can
 /// see is one nobody can override.
+///
+/// **And a low one is said in words, not left as a number in a column.** A real
+/// spawn classified a task as `design` at `0.10` and proceeded silently. A tenth
+/// is a coin flip, and nothing about printing `0.10` as one column among five
+/// tells a reader that — they would have to know the threshold to know they had
+/// been warned. So a guess gets a line of its own, naming the flag that replaces
+/// it, on the same reasoning that gives `armada doctor` its fix lines: a report
+/// that names a problem without the command that fixes it sends the reader to
+/// the documentation.
 fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
     let mut table = Table::new(columns("step", "detail", true)).indent(2);
 
+    // Below the threshold Helm confirms at (PLAN.md §15.4). Fleet at the CLI has
+    // nobody to ask, so it says so loudly instead.
+    let guessed = data
+        .confidence
+        .is_some_and(|c| c < armada_core::fleet::classify::CONFIDENT);
+
     table = table.row(vec![
         token(
             "classified",
-            match data.confidence {
-                // A low confidence is the one row on this table worth looking
-                // twice at, so it is the one that is not green.
-                Some(c) if c < armada_core::fleet::classify::CONFIDENT => Role::FlareOrange,
-                _ => Role::BeaconGreen,
+            // A low confidence is the one row on this table worth looking twice
+            // at, so it is the one that is not green.
+            match guessed {
+                true => Role::FlareOrange,
+                false => Role::BeaconGreen,
             },
         ),
         Cell::plain("workflow"),
         detail_cell(
             style,
-            Some(&match data.confidence {
-                Some(c) => format!("{}, confidence {c:.2}", data.workflow),
+            Some(&match (data.confidence, guessed) {
+                // **Said in the cell as well as below it.** A reader scanning the
+                // table should not have to reach the summary to learn that the
+                // number beside them is a coin flip.
+                (Some(c), true) => format!("{}, confidence {c:.2}, a guess", data.workflow),
+                (Some(c), false) => format!("{}, confidence {c:.2}", data.workflow),
                 // **An override reports that you named it, not a confidence of
                 // 1.0.** "You said so" and "the model was certain" are different
                 // facts and only one of them is a measurement.
-                None => format!("{}, you named it", data.workflow),
+                (None, _) => format!("{}, you named it", data.workflow),
             }),
         ),
         time_cell(data.classify_ms),
@@ -198,6 +217,23 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
             format!("armada fleet board {} to take over", data.name),
         ],
     ));
+    // **The warning goes under the verdict, where a fix line goes.** A guess is
+    // the one thing about a spawn a reader has to act on, and it is worth a line
+    // rather than a decimal in a column.
+    if guessed {
+        out.push_str(&format!(
+            "  {} {}\n",
+            style.paint(Role::FlareOrange, style.arrow()),
+            style.paint(
+                Role::SteelGrey,
+                &format!(
+                    "low confidence: this may be the wrong workflow. \
+                     --workflow {} respawns it",
+                    armada_core::fleet::workflow::STARTERS.join("|")
+                )
+            )
+        ));
+    }
     if let Some(error) = &envelope.error {
         out.push_str(&error_lines(error, style));
     }
