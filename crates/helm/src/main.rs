@@ -26,6 +26,7 @@ use args::Invocation;
 use armada_core::ctx::{Clock, Ctx};
 use armada_core::envelope::{Envelope, NoData};
 use armada_core::error::{ArmadaError, ErrClass, Status};
+use armada_core::failure::Fault;
 use armada_manifest::clock::SystemClock;
 use armada_manifest::net::RealFetch;
 use armada_manifest::process::RealRun;
@@ -78,7 +79,11 @@ fn main() -> ExitCode {
         // probing a verb that does not exist yet still reads an envelope.
         Err(failure) => {
             let style = Style::decide(failure.color, terminal.stdout_is_tty, no_color);
-            return fail(failure.error, failure.json, style, &ambient);
+            // **The parser says whose mistake it was**, and it is the only
+            // thing that can: a reserved flag refusing by name and a real
+            // failure are the same class and the same shape by the time they
+            // reach here (`armada_core::failure::Fault`).
+            return fail(failure.error, failure.json, style, &ambient, failure.fault);
         }
     };
     let style = Style::decide(parsed.color, terminal.stdout_is_tty, no_color);
@@ -125,7 +130,12 @@ fn main() -> ExitCode {
             progress.finish();
             match answered {
                 Ok(output) => emit(output, json, style, terminal, home.as_deref()),
-                Err(error) => fail(error, json, style, &ambient),
+                // **A verb that could not answer is Armada's**, always. The
+                // refusals a verb authors — `armada failures show <a typo>` —
+                // stay recorded on purpose: a prefix that resolved to nothing
+                // could equally be Armada mis-resolving one, which is a real
+                // bug shape (`docs/reserved/010`, *Known rough edge*).
+                Err(error) => fail(error, json, style, &ambient, Fault::Armadas),
             }
         }
     }
@@ -405,8 +415,25 @@ fn dispatch(
             Invocation::Bridge(options) => return bridge(&run, &place, &options, style, terminal),
             Invocation::Failures(failures) => {
                 return match *failures {
-                    args::FailuresInvocation::Ls { all, .. } => {
-                        verbs::failures::ls(&SystemClock, &place, all)
+                    // **A terminal is the flag.** At one, the listing is
+                    // navigable; through a pipe, and under `--json` even at a
+                    // terminal, it is the same listing printed once. Decided
+                    // here rather than in the verb, like every other terminal
+                    // question (`ARCHITECTURE.md` §1.4) — which is what lets
+                    // the suite drive the navigating against a `TempDir`.
+                    args::FailuresInvocation::Ls { all, json } => {
+                        let interactive = terminal.can_ask() && !json;
+                        let mut asking = at_the_terminal(style, terminal);
+                        verbs::failures::ls(
+                            &run,
+                            &SystemClock,
+                            &place,
+                            all,
+                            &mut asking,
+                            interactive,
+                            look(style, terminal),
+                            progress,
+                        )
                     }
                     args::FailuresInvocation::Show { id, .. } => {
                         verbs::failures::show(&SystemClock, &place, &id)
@@ -1349,12 +1376,22 @@ struct Ambient<'a> {
 /// cannot do its job simply does not do it — a logger that turned a bug into a
 /// different bug would be worse than no logger at all.
 ///
-/// **Every failure, and no filtering by class.** The reasoning is in
+/// **Every failure, and still no filtering by class.** The reasoning is in
 /// [`armada_core::failure`]: a wrong class is itself a symptom, so a filter that
 /// trusted the class would discard exactly the reports worth keeping. The site
 /// is the filter — this is the path taken when Armada could not answer, and a
 /// check whose tests failed *did* answer and leaves through [`emit`].
-fn record(error: &ArmadaError, ambient: &Ambient) {
+///
+/// **The one thing the site could not filter is `fault`.** A reserved verb or
+/// flag refusing by name reaches this function exactly as a panic does, and it
+/// is not a failure — it is the answer that was asked for. Whose mistake it was
+/// is carried here from the line that refused
+/// ([`armada_core::failure::records`]), because nothing downstream of that line
+/// can still tell.
+fn record(error: &ArmadaError, ambient: &Ambient, fault: Fault) {
+    if !armada_core::failure::records(fault, ambient.cwd) {
+        return;
+    }
     let Some(home) = ambient.home else {
         return;
     };
@@ -1373,8 +1410,8 @@ fn record(error: &ArmadaError, ambient: &Ambient) {
     );
 }
 
-fn fail(error: ArmadaError, json: bool, style: Style, ambient: &Ambient) -> ExitCode {
-    record(&error, ambient);
+fn fail(error: ArmadaError, json: bool, style: Style, ambient: &Ambient, fault: Fault) -> ExitCode {
+    record(&error, ambient, fault);
     let code = error.class.exit_code();
     if json {
         // The envelope shape never varies. `workspace` is `null` when

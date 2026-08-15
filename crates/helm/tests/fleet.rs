@@ -2491,6 +2491,191 @@ fn a_dry_run_promotion_leaves_the_entry_open() {
     assert_eq!(entry.job, None, "nothing was started, so nothing is named");
 }
 
+// ------------------------------- Navigating the listing, as `guild ls` already is
+
+/// `armada failures` at a terminal, driven by a script instead of a keyboard.
+///
+/// **No token, no `claude`, no terminal.** The selector's key handling is unit
+/// tested where it lives; what this exercises is the wiring above it — that a
+/// selection carries an id into a verb — through the same `Ask` every other
+/// navigating test uses.
+fn browse(
+    scratch: &Scratch,
+    run: &Harness,
+    choices: Vec<usize>,
+) -> (armada_helm::ask::Scripted, Output) {
+    let mut ask = armada_helm::ask::Scripted {
+        choices,
+        ..armada_helm::ask::Scripted::default()
+    };
+    let output = armada_helm::verbs::failures::ls(
+        run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        false,
+        &mut ask,
+        true,
+        armada_helm::verbs::failures::Look::default(),
+        &mut armada_helm::render::progress::Silent,
+    )
+    .expect("the listing answers");
+    (ask, output)
+}
+
+/// **The whole reason the verb is interactive**, in the words it was asked for
+/// in: *"so that I can navigate the list and quickly dispatch a job rather than
+/// having to remember the ID and copy it and then run fix with the ID."* The
+/// script picks a row and picks `fix`; no id is typed anywhere.
+///
+/// **And it spends nothing.** Promotion names the `bug` workflow rather than
+/// classifying it, so the one call that would reach a model is never made —
+/// asserted here for the same reason it is asserted on `fix` itself, because
+/// this is now a second path into it.
+#[test]
+fn picking_a_row_and_picking_fix_puts_a_job_on_it_without_the_id_being_typed() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let id = record_failure(&scratch, "the worktree was already there");
+
+    // 1: the only row. 2: `fix`. Then the queue is empty and the default —
+    // `done` — ends the loop, which is what `esc` does at a terminal.
+    let (ask, output) = browse(&scratch, &run, vec![1, 2]);
+
+    assert!(
+        run.at_index(&["--model"]).is_none(),
+        "navigating to a fix classified something, which is a token:\n{:#?}",
+        run.calls()
+    );
+    let entry = folded(&scratch)
+        .into_iter()
+        .find(|entry| entry.id == id)
+        .expect("the entry survives");
+    assert_eq!(entry.state, armada_core::failure::State::Fixing);
+    let job = entry.job.expect("a Job is named on the row");
+    scratch.watch(&scratch.store().find(&job).expect("the Job exists").uuid);
+
+    // The two questions that were put, and the four things the second offered.
+    let (listing, rows) = &ask.chosen[0];
+    assert!(listing.contains("broken on"), "{listing}");
+    assert!(
+        rows[0].starts_with("OPEN "),
+        "status first, as a word: {rows:?}"
+    );
+    assert!(rows[0].contains(&id), "the row names the entry: {rows:?}");
+    assert_eq!(rows.last().map(String::as_str), Some("done"));
+    let (question, actions) = &ask.chosen[1];
+    assert!(question.contains(&id), "{question}");
+    assert_eq!(
+        actions,
+        &vec![
+            "show".to_string(),
+            "fix".to_string(),
+            "discard".to_string(),
+            "back".to_string(),
+        ]
+    );
+
+    // And the listing that comes back is the one the log says now, not the one
+    // the session opened with.
+    let Output::Failures(envelope) = output else {
+        panic!("a listing answers as one");
+    };
+    assert_eq!(envelope.data.open, 0, "the row is being fixed, not waiting");
+}
+
+/// **Discard is the third thing he named**, and it is the same `clear` the verb
+/// already has rather than a fourth code path.
+#[test]
+fn picking_discard_clears_the_entry_and_the_listing_forgets_it() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let id = record_failure(&scratch, "the lease was held by nobody");
+
+    // 1: the row. 3: `discard`.
+    let (ask, output) = browse(&scratch, &run, vec![1, 3]);
+
+    let entry = folded(&scratch).into_iter().find(|e| e.id == id).unwrap();
+    assert_eq!(entry.state, armada_core::failure::State::Cleared);
+    let Output::Failures(envelope) = output else {
+        panic!("a listing answers as one");
+    };
+    assert!(
+        envelope.data.results.is_empty(),
+        "a cleared entry is hidden unless asked for"
+    );
+    assert!(!ask.shown.is_empty(), "the session said what it had done");
+}
+
+/// **`show` is the same envelope `armada failures show` returns**, drawn
+/// through the same renderer, on stderr where every mid-session report goes.
+#[test]
+fn picking_show_prints_the_entry_whole_and_changes_nothing() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let id = record_failure(&scratch, "`armada manifest clean` could not be found");
+
+    let (ask, _) = browse(&scratch, &run, vec![1, 1]);
+
+    let drawn = ask.shown.join("\n");
+    assert!(drawn.contains(&id), "{drawn}");
+    assert!(drawn.contains("could not be found"), "{drawn}");
+    let entry = folded(&scratch).into_iter().find(|e| e.id == id).unwrap();
+    assert_eq!(entry.state, armada_core::failure::State::Open);
+}
+
+/// **The escape hatch acts on nothing on the way out.** `done` is the default,
+/// so `esc` and a stream that ended both leave the log exactly as it was.
+#[test]
+fn taking_the_default_leaves_without_touching_the_log() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let id = record_failure(&scratch, "the worktree was not there");
+
+    let (ask, output) = browse(&scratch, &run, Vec::new());
+
+    assert_eq!(ask.chosen.len(), 1, "it asked once and left");
+    assert!(
+        ask.shown.is_empty(),
+        "nothing happened, so nothing was said"
+    );
+    let entry = folded(&scratch).into_iter().find(|e| e.id == id).unwrap();
+    assert_eq!(entry.state, armada_core::failure::State::Open);
+    let Output::Failures(envelope) = output else {
+        panic!("a listing answers as one");
+    };
+    assert_eq!(envelope.data.results.len(), 1);
+}
+
+/// **The interaction is layered on an answer that stands without it** (PLAN.md
+/// §3.1.1): the same verb through a pipe asks nothing and carries the same
+/// facts. An interactive-only verb would be a bug rather than a feature.
+#[test]
+fn without_a_terminal_the_same_verb_asks_nothing_and_lists_the_same_rows() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let id = record_failure(&scratch, "the worktree was not there");
+
+    let mut ask = armada_helm::ask::Scripted::default();
+    let output = armada_helm::verbs::failures::ls(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        false,
+        &mut ask,
+        false,
+        armada_helm::verbs::failures::Look::default(),
+        &mut armada_helm::render::progress::Silent,
+    )
+    .expect("the listing answers");
+
+    assert!(ask.chosen.is_empty(), "a pipe was asked a question");
+    let Output::Failures(envelope) = output else {
+        panic!("a listing answers as one");
+    };
+    assert_eq!(envelope.data.results.len(), 1);
+    assert_eq!(envelope.data.results[0].id, id);
+}
+
 // ------------------------------------------- 005: the inbox records an identity
 //
 // **These drive the real path and not a store.** A green unit test on

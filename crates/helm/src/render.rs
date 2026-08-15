@@ -1696,7 +1696,11 @@ fn failure_state(state: FailureState) -> Cell {
 /// **`x4` rather than `×4`**, ASCII, so the agent reading stdout and the person
 /// at the terminal are given the same bytes in this cell (PLAN.md §3.1.1) — the
 /// pair may differ in styling and never in width.
-fn failure_detail(entry: &FailureEntry) -> String {
+/// **Shared with the navigable listing**, which is why it is not private: a
+/// person picking a row off `armada failures` at a terminal and the same person
+/// reading it through a pipe are looking at one sentence, not two that agree
+/// today.
+pub(crate) fn failure_detail(entry: &FailureEntry) -> String {
     match entry.count {
         0 | 1 => format!("{}, {}", entry.class, entry.message),
         n => format!("{} x{n}, {}", entry.class, entry.message),
