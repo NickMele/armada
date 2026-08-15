@@ -16,7 +16,7 @@ usually asking which one applies.
 | id | title | status | module | hook |
 |---|---|---|---|---|
 | [001](001-raised-items-need-identity.md) | Raised items need identity | RESERVED | helm | An item Helm surfaces in prose has no id to acknowledge against |
-| [002](002-tasks.md) | Tasks | RESERVED | helm | Capture a thing to do without spending anything on it yet |
+| [002](002-tasks.md) | Tasks | BUILT | helm | `armada task` / `armada tasks` — capture a thing to do without spending anything on it yet, then start it as a Job |
 | [003](003-bridge-command-centre.md) | The Bridge as the command centre | RESERVED | helm | One screen for Fleet, Manifest and Guild, not three |
 | [004](004-guild-inventory.md) | Seeing what is in your guild | BUILT | guild | `armada guild ls` / `show` — no verb showed you what you had |
 | [005](005-inbox-label-not-identity.md) | The inbox records a label, not an identity | FIXED | fleet | Inbox entries keyed by Job name collided; they carry the Job's uuid, close when it ends, and `ls` shows the id |
@@ -32,5 +32,7 @@ usually asking which one applies.
 | [014](014-report-what-you-know-went-wrong.md) | Reporting what you know went wrong | BUILT | cross-cutting | `armada report` — a dry-run printed `CREATED` for work it had correctly not done and exited 0, so [010](010-armada-records-its-own-failures.md) could never hold it |
 | [016](016-what-the-gate-cannot-prove.md) | What the gate cannot prove | RESERVED | fleet | M4's evaluator decides five of the eight predicates, asks you one, and refuses two — `review_clean` and `subjob_passed` both need a Job that Fleet does not spawn |
 
-**When Armada's task system exists** ([002](002-tasks.md)), these become its first rows — one
-file per row is what makes that a script rather than a rewrite.
+**Armada's task system exists** ([002](002-tasks.md)), so these can become its first rows — one
+file per row is what makes that a script rather than a rewrite. It is not run automatically:
+`armada task` writes down what *you* decided, and a backlog that fills itself is one nobody
+trusts.
