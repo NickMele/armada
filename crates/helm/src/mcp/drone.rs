@@ -81,6 +81,18 @@ impl Toolbelt {
 pub struct ReportArgs {
     /// What was finished, tried, or found. One or two sentences.
     pub body: String,
+    /// The step boundary this note crosses, if it crosses one: `entered` when
+    /// you begin a step, `attempted` when you have stopped working on it.
+    ///
+    /// **`completed` and `failed` are refused here**, and the refusal says where
+    /// they go: a step is done when its `verify:` predicate holds, which is
+    /// `fleet.verdict`'s to record with the evidence.
+    #[serde(default)]
+    pub event: Option<String>,
+    /// Which step, when it is not the one the Job is already on — as it is
+    /// spelled in the workflow file.
+    #[serde(default)]
+    pub step: Option<String>,
 }
 
 /// `fleet.ask_human`.
@@ -122,9 +134,13 @@ impl Toolbelt {
     /// Append progress to this Job's own record.
     #[tool(
         name = "fleet.report",
-        description = "Append a progress note to your own Job record. Use it when you finish \
-                       something worth an orchestrator knowing about; it does not interrupt \
-                       anyone and does not need an answer."
+        description = "Append a progress note to your own Job record, and say which step \
+                       boundary it crosses. Report `entered` when you start a step and \
+                       `attempted` when you stop working on it — that is what makes the step \
+                       you are on, and how long you have been on it, visible to the person \
+                       running the fleet. It does not interrupt anyone and does not need an \
+                       answer. You cannot report a step `completed`: a step is done when its \
+                       workflow predicate holds, which is fleet.verdict's to record."
     )]
     async fn fleet_report(&self, Parameters(args): Parameters<ReportArgs>) -> CallToolResult {
         let world = self.world.clone();
@@ -133,7 +149,14 @@ impl Toolbelt {
             Err(error) => return super::answer::from("fleet report", Err(error)),
         };
         run("fleet report", move || {
-            fleet::report(&SystemClock, &world.place(), &job, &args.body)
+            fleet::report(
+                &SystemClock,
+                &world.place(),
+                &job,
+                &args.body,
+                args.step.as_deref(),
+                args.event.as_deref(),
+            )
         })
         .await
     }

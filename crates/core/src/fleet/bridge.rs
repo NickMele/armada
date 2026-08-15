@@ -792,6 +792,8 @@ mod tests {
             workflow: "feature".to_string(),
             state,
             detail: "implement".to_string(),
+            step: "implement".to_string(),
+            on_step_s: Some(720),
             task: format!("do the {name} thing"),
             runtime_s: 840,
             cost_usd: 2.10,

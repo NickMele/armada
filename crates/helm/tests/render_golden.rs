@@ -30,12 +30,12 @@
 
 use armada_core::envelope::{
     Asked, BridgeData, CheckData, CleanData, CommandView, CommandsData, ComponentView,
-    ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData, Finding,
-    FleetLsData, GrantedCommand, GuildChange, GuildChangeData, GuildChoice, GuildItemData,
+    ComponentsData, DispatchData, DoctorData, Envelope, Evidence, FailureData, FailuresData,
+    Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice, GuildItemData,
     GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData, JobRow,
     MachineInitData, NoteRow, PortReport, Problem, Projection, Released, ResolvedSkillView,
     ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync,
-    SyncItem, Unreclaimed, UpDryRun, VerifyData,
+    SyncItem, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -1407,6 +1407,8 @@ fn fleet_ls_matches_its_fixture() {
             workflow: workflow.to_string(),
             state,
             detail: detail.to_string(),
+            step: detail.to_string(),
+            on_step_s: None,
             // Carried by the listing and drawn by the Bridge, never by `ls` —
             // `DETAIL` answers what a Job is doing now, the task answers what it
             // was asked to do.
@@ -1519,6 +1521,8 @@ fn bridge_matches_its_fixture() {
     fn row(
         name: &str,
         state: JobState,
+        step: &str,
+        on_step_s: Option<u64>,
         task: &str,
         cost_usd: f64,
         runtime_s: u64,
@@ -1529,7 +1533,9 @@ fn bridge_matches_its_fixture() {
             name: name.to_string(),
             workflow: "feature".to_string(),
             state,
-            detail: "implement".to_string(),
+            detail: step.to_string(),
+            step: step.to_string(),
+            on_step_s,
             task: task.to_string(),
             runtime_s,
             cost_usd,
@@ -1548,6 +1554,8 @@ fn bridge_matches_its_fixture() {
         row(
             "rate-limit",
             JobState::Running,
+            "implement",
+            Some(12 * 60),
             "add gateway limiter",
             2.10,
             14 * 60,
@@ -1556,14 +1564,22 @@ fn bridge_matches_its_fixture() {
         row(
             "carina-schema",
             JobState::Running,
+            "plan",
+            Some(3 * 60),
             "migrate schema",
             0.45,
             3 * 60,
             false,
         ),
+        // **A step with no duration beside it**, which is the ordinary case for
+        // a Drone that never reported crossing a boundary: the step is what the
+        // record says and nothing measured how long it has been there, so
+        // nothing is drawn rather than a `0s` that reads as a measurement.
         row(
             "xlsx-report",
             JobState::Stalled,
+            "reproduce",
+            None,
             "generate report",
             4.60,
             22 * 60,
@@ -1572,6 +1588,8 @@ fn bridge_matches_its_fixture() {
         row(
             "release-merge",
             JobState::Blocked,
+            "implement",
+            Some(18 * 60),
             "merge release",
             1.25,
             65 * 60,
@@ -1615,6 +1633,8 @@ fn bridge_filtered_matches_its_fixture() {
         workflow: "feature".to_string(),
         state: JobState::Running,
         detail: "implement".to_string(),
+        step: "implement".to_string(),
+        on_step_s: Some(3 * 60),
         task: "migrate schema".to_string(),
         runtime_s: 3 * 60,
         cost_usd: 0.45,
@@ -1779,6 +1799,26 @@ fn fleet_show_with_a_dead_drone_matches_its_fixture() {
     }];
     data.step = "reproduce".to_string();
     data.attempt = 1;
+    data.on_step_s = Some(36 * 60);
+    // **The sharpest predicate, with the test it names.** `failing_test_exists`
+    // is what stops a Drone "fixing" a bug it never reproduced and closing
+    // green, and a pane that showed the word without the test would be hiding
+    // the half that makes it a gate.
+    data.gate = Some(GateRow {
+        must: "failing_test_exists".to_string(),
+        test: Some("reports::xlsx::empty_sheet".to_string()),
+        artifact: None,
+        answered_by_a_person: false,
+    });
+    data.transitions = vec![TransitionRow {
+        at: "2026-08-09T14:31:11Z".to_string(),
+        ago_s: 36 * 60,
+        step: "reproduce".to_string(),
+        event: "entered".to_string(),
+        attempt: 1,
+        must: None,
+        evidence: Vec::new(),
+    }];
     data.task = "the nightly xlsx export writes an empty sheet about one run in \
                  five; reproduce it, then fix it"
         .to_string();
@@ -1801,6 +1841,86 @@ fn show_data() -> ShowData {
         drone_alive: true,
         step: "implement".to_string(),
         attempt: 2,
+        on_step_s: Some(18 * 60),
+        // The `feature` starter's own predicate for this step. It is what says
+        // *why it is still here*, and it is the fact the pane had no way to draw
+        // before: a step advances when its predicate holds.
+        gate: Some(GateRow {
+            must: "check_passes".to_string(),
+            test: None,
+            artifact: None,
+            answered_by_a_person: false,
+        }),
+        // **A step entered, a step completed, a step restarted** — and the two
+        // words that must not collapse into one: `ATTEMPTED` is the Drone
+        // saying it believes it is finished, `FAILED` is the gate disagreeing
+        // with it four minutes later, carrying the exit code that decided it.
+        //
+        // Newest first, the same way `progress` is.
+        transitions: vec![
+            TransitionRow {
+                at: "2026-08-09T14:49:11Z".to_string(),
+                ago_s: 18 * 60,
+                step: "implement".to_string(),
+                event: "restarted".to_string(),
+                attempt: 2,
+                must: None,
+                evidence: Vec::new(),
+            },
+            TransitionRow {
+                at: "2026-08-09T14:43:11Z".to_string(),
+                ago_s: 24 * 60,
+                step: "implement".to_string(),
+                event: "failed".to_string(),
+                attempt: 1,
+                must: Some("check_passes".to_string()),
+                evidence: vec![Evidence {
+                    kind: "check".to_string(),
+                    scope: "orders:test".to_string(),
+                    exit: 1,
+                }],
+            },
+            TransitionRow {
+                at: "2026-08-09T14:41:11Z".to_string(),
+                ago_s: 26 * 60,
+                step: "implement".to_string(),
+                event: "attempted".to_string(),
+                attempt: 1,
+                must: None,
+                evidence: Vec::new(),
+            },
+            TransitionRow {
+                at: "2026-08-09T14:26:11Z".to_string(),
+                ago_s: 41 * 60,
+                step: "implement".to_string(),
+                event: "entered".to_string(),
+                attempt: 1,
+                must: None,
+                evidence: Vec::new(),
+            },
+            TransitionRow {
+                at: "2026-08-09T14:25:11Z".to_string(),
+                ago_s: 42 * 60,
+                step: "plan".to_string(),
+                event: "completed".to_string(),
+                attempt: 1,
+                must: Some("subjob_passed".to_string()),
+                evidence: vec![Evidence {
+                    kind: "subjob".to_string(),
+                    scope: "release-plan".to_string(),
+                    exit: 0,
+                }],
+            },
+            TransitionRow {
+                at: "2026-08-09T14:02:11Z".to_string(),
+                ago_s: 65 * 60,
+                step: "plan".to_string(),
+                event: "entered".to_string(),
+                attempt: 1,
+                must: None,
+                evidence: Vec::new(),
+            },
+        ],
         task: "merge the release branch and cut 4.2, resolving the migration \
                conflict in orders before the tag goes out"
             .to_string(),

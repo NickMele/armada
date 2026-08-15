@@ -636,6 +636,17 @@ pub fn bridge_table(data: &BridgeData, style: Style, cursor: Option<usize>) -> T
         Column::fixed(""),
         Column::fixed("status"),
         Column::fixed("job"),
+        // **The step, and how long it has been on it.** One column rather than
+        // two, and the width for it comes out of `TASK` — which is the trade,
+        // stated: the task is already a truncation of a sentence the detail pane
+        // carries whole, and the step is the fact no other column can be read
+        // for. `DETAIL` in `fleet ls` folds the step together with an open
+        // inbox body, so it is not a substitute.
+        //
+        // **A step and an elapsed time, and never a fraction.** *"On `implement`
+        // for 12m"* is measured; *"three of five steps"* would be the progress
+        // bar PHASES.md §9.1 F2 bans, drawn in words.
+        Column::fixed("step"),
         Column::flexible("task"),
         Column::fixed("run").right(),
         Column::fixed("spent").right(),
@@ -654,6 +665,7 @@ pub fn bridge_table(data: &BridgeData, style: Style, cursor: Option<usize>) -> T
             },
             job_state(row.state),
             Cell::painted(row.name.clone(), Role::NavalBlue),
+            step_cell(row),
             detail_cell(style, Some(row.task.as_str())),
             // A Job that has not run yet is a dash in both number columns, for
             // the reason `fleet ls` gives: a zero reads as a measurement, and
@@ -676,6 +688,26 @@ pub fn bridge_table(data: &BridgeData, style: Style, cursor: Option<usize>) -> T
         ]);
     }
     table
+}
+
+/// The step a Job is on, and how long it has been on it.
+///
+/// **Empty when there is no step, so the whole column goes with it.** A fleet of
+/// queued Jobs draws no `STEP` header at all — the generalisation `render.md`
+/// states, and the same one that drops the caret in `--once`.
+///
+/// **The time is omitted rather than zeroed when nothing measured it.** The
+/// duration is a subtraction from a boundary a Drone reported crossing; a Job
+/// whose Drone never reported one has no boundary, and `implement 0s` would be a
+/// measurement nobody took.
+fn step_cell(row: &armada_core::envelope::JobRow) -> Cell {
+    match (row.step.as_str(), row.on_step_s) {
+        ("", _) => Cell::empty(),
+        (step, None) => Cell::muted(step.to_string()),
+        (step, Some(on_step_s)) => {
+            Cell::muted(format!("{step} {}", format::elapsed(on_step_s * 1_000)))
+        }
+    }
 }
 
 /// The Bridge's summary line, painted, for `--once`.
@@ -960,6 +992,7 @@ pub fn show_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>>
     lines.push(Vec::new());
     lines.extend(facts_table(data, style).spans(style, width));
 
+    lines.extend(transition_lines(data, style, width));
     lines.extend(progress_lines(data, style, width));
 
     lines.push(Vec::new());
@@ -967,18 +1000,30 @@ pub fn show_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>>
     lines
 }
 
-/// The step, and how many times it has been tried.
+/// The step, how many times it has been tried, and how long it has been on it.
 ///
-/// **An attempt against the ceiling that governs it**, not a position in the
-/// workflow: the step *index* would mean reading the workflow document, which is
-/// a second source, and the number that decides anything is the iteration
-/// ceiling (PLAN.md §14.3) rather than how many steps remain.
+/// **Never a position in the workflow.** The step *index* would mean reading the
+/// workflow document for a number that decides nothing, and "step 3 of 5" is the
+/// percentage PHASES.md §9.1 F2 bans wearing a different notation.
+///
+/// **The attempt count is per-step and is no longer drawn against the iteration
+/// ceiling.** This used to read `implement, attempt 2 of 15`, pairing a per-step
+/// count with a Job-wide ceiling that counts turns across every step — two
+/// different quantities in one phrase, and the phrase answered neither question.
+/// The ceiling is on the `budget` row below, as `4 of 15 turns`, where it is
+/// beside the thing it actually bounds.
 fn step_and_attempt(data: &ShowData) -> String {
-    match (data.step.is_empty(), data.attempt) {
-        (true, _) => String::new(),
-        (false, 0 | 1) => data.step.clone(),
-        (false, n) => format!("{}, attempt {n} of {}", data.step, data.budget.iterations),
+    if data.step.is_empty() {
+        return String::new();
     }
+    let mut said = data.step.clone();
+    if data.attempt > 1 {
+        said.push_str(&format!(", attempt {}", data.attempt));
+    }
+    if let Some(on_step_s) = data.on_step_s {
+        said.push_str(&format!(", {} on it", format::elapsed(on_step_s * 1_000)));
+    }
+    said
 }
 
 /// **Why it wants you** — the entries, each with its own words underneath.
@@ -1104,6 +1149,35 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
         ],
     });
 
+    // **What the step advances on** — the one fact that says *why it is still
+    // here*. A step advances when its `verify: { must: … }` predicate holds, so
+    // a reader looking at a Job that has not moved in an hour is otherwise
+    // reading a symptom with the cause missing.
+    //
+    // **Drawn only when the workflow could be read**, because a guild can be
+    // absent or half-synced and a defaulted `always` would invent the answer.
+    if let Some(gate) = &data.gate {
+        let mut said = format!("{} advances on {}", data.step, gate.must);
+        if let Some(named) = gate.test.as_ref().or(gate.artifact.as_ref()) {
+            // **`failing_test_exists` without its test is the case the
+            // predicate exists to prevent** — *"a Drone 'fixes' a bug it never
+            // reproduced and closes green"* — so what it names is drawn beside
+            // it rather than dropped as detail.
+            said.push_str(&format!(": {named}"));
+        }
+        if gate.answered_by_a_person {
+            // **Said, not signalled.** `NEEDS YOU` and the inbox already carry
+            // that somebody is waiting; this names which predicate is the reason
+            // and does not become a second, differently-worded claim about it.
+            said.push_str(", which is yours to answer");
+        }
+        table = table.row(vec![
+            token("gated", Role::SteelGrey),
+            Cell::muted("step"),
+            detail_cell(style, Some(&said)),
+        ]);
+    }
+
     table = table
         .row(vec![
             token("spent", Role::SteelGrey),
@@ -1168,6 +1242,73 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
             Cell::muted("repo"),
             detail_cell(style, Some(&data.repo)),
         ])
+}
+
+/// **The workflow, as it was actually walked** — every step boundary this Job
+/// crossed, newest first.
+///
+/// **The detail pane is where the history belongs**, and it is why the Bridge's
+/// `STEP` column can be one cell wide: eighty columns hold a step and a duration
+/// and nothing more, and this has the room for the attempt number, the predicate
+/// that settled each boundary and the exit codes it rested on.
+///
+/// **What happened and when — never how far through.** A workflow with five
+/// steps sitting on step three is not "60% done" and nothing here says so; there
+/// is no bar, no percentage and no estimated completion, for the reason
+/// [`show_lines`] gives and [`armada_core::fleet::job::StepEvent`] states in
+/// full. The rows are facts with timestamps, and the last one is where it is.
+///
+/// **The status word says who wrote the row**, which is the distinction the
+/// whole record exists to keep: `ATTEMPTED` is the Drone saying it believes it
+/// is finished, `COMPLETED` is the step's predicate holding. A Job whose last
+/// two rows are `ATTEMPTED` then `FAILED` is a Drone that thought it was done
+/// and a gate that disagreed — and that is unreadable from any view that stores
+/// one word for both.
+fn transition_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    if data.transitions.is_empty() {
+        return Vec::new();
+    }
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("step"),
+        Column::flexible("detail"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
+    for crossing in &data.transitions {
+        let mut said = format!("attempt {}", crossing.attempt);
+        if let Some(must) = &crossing.must {
+            said.push_str(&format!(", {must}"));
+        }
+        for evidence in &crossing.evidence {
+            // **The exit code, not a sentence about it** (PLAN.md §14.3). The
+            // number is the fact a verdict rests on, and a summary of it is the
+            // assertion the rule refuses.
+            said.push_str(&format!(
+                ", {} exited {}",
+                evidence.scope, evidence.exit
+            ));
+        }
+        table = table.row(vec![
+            token(
+                &crossing.event,
+                match crossing.event.as_str() {
+                    "completed" => Role::BeaconGreen,
+                    "failed" => Role::DistressRed,
+                    // **An assertion is not painted as an outcome.** A Drone
+                    // saying it is finished in green would be the screen
+                    // agreeing with it before anything checked.
+                    _ => Role::SteelGrey,
+                },
+            ),
+            Cell::muted(crossing.step.clone()),
+            detail_cell(style, Some(&said)),
+            Cell::muted(format::elapsed(crossing.ago_s * 1_000)),
+        ]);
+    }
+    let mut lines = vec![Vec::new()];
+    lines.extend(table.spans(style, width));
+    lines
 }
 
 /// **Recent activity — the Drone's own notes, and never its transcript.**
