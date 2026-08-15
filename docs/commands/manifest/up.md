@@ -7,16 +7,19 @@ Bring this workspace's services up and ready-checked.
 ## Synopsis
 
 ```sh
-armada manifest up [<selector>] [-C <path>] [--dry-run] [--json]
+armada manifest up [<component>] [--dry-run] [--json]
 ```
 
 ## Arguments
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `<selector>` | component names | all | Which components to start. Selector grammar in [`PLAN.md`](../../PLAN.md) §3.2. |
-| `-C <path>` | directory | cwd | Operate on this workspace. |
+| `<component>` | component name | all | Which component to start — one, or none for all of them. Selector grammar in [`PLAN.md`](../../PLAN.md) §3.2. |
 | `--dry-run` | flag | off | Report the argv that would run and the ready-checks that would be waited on. |
+
+> **`-C <path>` is reserved and not built.** A verb takes its workspace from where you are
+> standing, and `cd` is the interface until something needs otherwise
+> ([`config.md`](config.md)).
 
 ## How it works
 

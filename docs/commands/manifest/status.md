@@ -7,16 +7,23 @@ What is running, what is mine, what is stale.
 ## Synopsis
 
 ```sh
-armada manifest status [-C <path>] [--all] [--stale] [--json]
+armada manifest status [--project|--all] [--json]
 ```
 
 ## Arguments
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `-C <path>` | directory | cwd | Report on this workspace. |
-| `--all` | flag | off | Every workspace on the machine, not just this one. |
-| `--stale` | flag | off | Only workspaces whose directory no longer exists. The input to `clean --all`. |
+| `--project` | flag | off | Every workspace of this repository, not just this one. |
+| `--all` | flag | off | Every workspace on this machine. |
+
+`--project` and `--all` are two different scopes; pass one. **There is no `--stale`** — stale
+resources are reported in every mode, and the flags are lenses on how wide to look, not on what
+to report.
+
+> **`-C <path>` is reserved and not built.** A verb takes its workspace from where you are
+> standing, and `cd` is the interface until something needs otherwise
+> ([`config.md`](config.md)).
 
 ## How it works
 

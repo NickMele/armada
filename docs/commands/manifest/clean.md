@@ -11,17 +11,29 @@ needs the file; this does not.
 ## Synopsis
 
 ```sh
-armada manifest clean [-C <path>] [--workspace <id>] [--all] [--dry-run] [--json]
+armada manifest clean [--dry-run] [--artifacts] [--force] [--project|--all] [--json]
+armada manifest clean --orphaned [--force-rebuild] [--dry-run] [--json]
 ```
 
 ## Arguments
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `-C <path>` | directory | cwd | Clean this workspace. |
-| `--workspace <id>` | workspace id | — | Clean by id, for a workspace whose directory no longer exists. Get ids from [`status.md`](status.md). |
-| `--all` | flag | off | Clean every workspace on this machine whose directory is gone. Does not touch live workspaces. |
 | `--dry-run` | flag | off | List what would be released. Changes nothing. |
+| `--artifacts` | flag | off | Also remove the files declared under `owns.files`. |
+| `--orphaned` | flag | off | Only workspaces whose directory no longer exists. Does not touch live ones. |
+| `--force` | flag | off | Override the liveness guard. |
+| `--force-rebuild` | flag | off | Rebuild an unreadable `~/.armada/manifest.db` from labels alone. Needs `--orphaned`. |
+| `--project` | flag | off | Every workspace of this repository. |
+| `--all` | flag | off | Every workspace on this machine. |
+
+`--project` and `--all` are two different scopes; pass one. **There is no `--workspace <id>`** —
+a workspace whose directory is gone is reached with `--orphaned`, which names the set rather
+than one member of it.
+
+> **`-C <path>` is reserved and not built.** A verb takes its workspace from where you are
+> standing, and `cd` is the interface until something needs otherwise
+> ([`config.md`](config.md)).
 
 ## How it works
 
@@ -36,8 +48,9 @@ Releases, in this order, everything stamped with this workspace:
 Every resource carries the workspace stamp that `init` applied, so each step is a query against
 the store rather than an inference from the filesystem.
 
-`--all` is the garbage collector: it releases only workspaces whose directories no longer
-exist, which is exactly the set nothing else on the machine can attribute.
+`--orphaned` is the garbage collector: it releases only workspaces whose directories no longer
+exist, which is exactly the set nothing else on the machine can attribute. `--project` and
+`--all` widen how far it reaches.
 
 ## Output
 

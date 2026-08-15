@@ -13,21 +13,26 @@ column may not become nullable without a two-release plan.
 ## Synopsis
 
 ```sh
-armada manifest skills [-C <path>] [--json]
-armada manifest skills show <name> [-C <path>] [--json]
+armada manifest skills [--json]
+armada manifest skills show <name> [--json]
 armada manifest render --harness <name> [--out <dir>] [--verify] [--remove] [--json]
 ```
 
 ## Arguments
 
+`skills` takes nothing but `show <name>`. The rest belong to `render`, which is not built.
+
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
 | `<name>` | declared skill name | — | Must appear under `skills:` in `armada.yml`. |
-| `--harness <name>` | harness id | — | Which format to render. `claude` is the only one today. |
-| `--out <dir>` | directory | harness default | Where to write. Defaults to `.claude/skills/` for `claude`. |
-| `--verify` | flag | off | Exit non-zero if the rendered output is stale. Writes nothing. |
-| `--remove` | flag | off | Delete exactly what a previous render wrote, and nothing else. |
-| `-C <path>` | directory | cwd | Run in this workspace. |
+| `--harness <name>` | harness id | — | `render` only. Which format to render; `claude` is the only one today. |
+| `--out <dir>` | directory | harness default | `render` only. Where to write. Defaults to `.claude/skills/` for `claude`. |
+| `--verify` | flag | off | `render` only. Exit non-zero if the rendered output is stale. Writes nothing. |
+| `--remove` | flag | off | `render` only. Delete exactly what a previous render wrote, and nothing else. |
+
+> **`-C <path>` is reserved and not built.** A verb takes its workspace from where you are
+> standing, and `cd` is the interface until something needs otherwise
+> ([`config.md`](config.md)).
 
 ## How it works
 

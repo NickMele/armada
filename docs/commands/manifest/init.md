@@ -7,17 +7,20 @@ Make a workspace ready to work in. Idempotent.
 ## Synopsis
 
 ```sh
-armada manifest init [-C <path>] [--dry-run] [--json]
+armada manifest init [--dry-run] [--json]
 ```
 
 ## Arguments
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `-C <path>` | directory | cwd | Operate on this workspace instead of the current directory. |
 | `--dry-run` | flag | off | Report what would be claimed and run. Changes nothing. |
 
 Takes no selector: init is whole-workspace by definition.
+
+> **`-C <path>` is reserved and not built.** A verb takes its workspace from where you are
+> standing, and `cd` is the interface until something needs otherwise
+> ([`config.md`](config.md)).
 
 ## How it works
 

@@ -11,15 +11,22 @@ ports, which keeps URLs, bookmarks and `.env` files valid across a restart.
 ## Synopsis
 
 ```sh
-armada manifest down [<selector>] [-C <path>] [--json]
+armada manifest down [<component>] [--json]
 ```
 
 ## Arguments
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `<selector>` | component names | all | Which components to stop. |
-| `-C <path>` | directory | cwd | Operate on this workspace. |
+| `<component>` | component name | all | Which component to stop — one, or none for all of them. |
+
+**Takes no `--dry-run`.** Its preview would be the services this workspace declares, which
+[`status.md`](status.md) already answers and answers better, because it probes the ports rather
+than reading the config.
+
+> **`-C <path>` is reserved and not built.** A verb takes its workspace from where you are
+> standing, and `cd` is the interface until something needs otherwise
+> ([`config.md`](config.md)).
 
 ## How it works
 

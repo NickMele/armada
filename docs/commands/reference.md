@@ -29,8 +29,8 @@ and the three status enums. These pages use them without re-explaining them.
 | [`manifest/clean.md`](manifest/clean.md) | `armada manifest clean` | shipped |
 | [`manifest/commands.md`](manifest/commands.md) | `armada manifest <repo-command>` | shipped |
 | [`manifest/skills.md`](manifest/skills.md) | `armada manifest skills` · `render` | `skills` shipped · `render` not built |
-| [`manifest/up.md`](manifest/up.md) | `armada manifest up` | not built |
-| [`manifest/down.md`](manifest/down.md) | `armada manifest down` | not built |
+| [`manifest/up.md`](manifest/up.md) | `armada manifest up` | shipped |
+| [`manifest/down.md`](manifest/down.md) | `armada manifest down` | shipped |
 | [`manifest/check.md`](manifest/check.md) | `armada manifest check` | shipped, less `--detach` / `--status` |
 | [`manifest/config.md`](manifest/config.md) | `armada manifest config scan\|verify` | shipped |
 | [`manifest/explain.md`](manifest/explain.md) | `armada manifest explain` | not built |
@@ -71,7 +71,8 @@ and the three status enums. These pages use them without re-explaining them.
 | | |
 |---|---|
 | `--json` | Every command accepts it and answers in the envelope of [`PLAN.md`](../PLAN.md) §3.1. Arguments tables omit it. |
-| `-C <path>` | Run against another workspace instead of the current directory. Manifest commands only. |
+| `--color <when>` | `auto` (default), `always`, `never`; `NO_COLOR` wins. Every command accepts it, and Arguments tables omit it for the same reason ([`render.md`](render.md)). |
+| `-C <path>` | Which repository to branch from. **[`fleet/spawn.md`](fleet/spawn.md) alone accepts it.** Every other verb takes its workspace from where you are standing, and `cd` is the interface until something needs otherwise ([`manifest/config.md`](manifest/config.md)). |
 | Paths | Written relative to the repo or as `~/`. Never absolute. |
 
 ### Exit codes are a function of `error.class`

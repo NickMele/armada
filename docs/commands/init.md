@@ -10,7 +10,8 @@ This sets up *you, here*.
 ## Synopsis
 
 ```sh
-armada init [--guild <remote>] [--bundle <path>] [--defaults] [--json]
+armada init [--guild <remote>] [--defaults] [--force] [--json]
+armada init --bundle <path> [--defaults] [--force] [--json]
 ```
 
 ## Arguments

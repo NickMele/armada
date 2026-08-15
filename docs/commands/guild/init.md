@@ -10,7 +10,8 @@ rebuild a guild from scratch.
 ## Synopsis
 
 ```sh
-armada guild init [--from <path>] [--no-import] [--remote <url>] [--defaults] [--json]
+armada guild init [--from <path>] [--no-import] [--remote <url>] [--defaults] [--force]
+                  [--json]
 ```
 
 ## Arguments

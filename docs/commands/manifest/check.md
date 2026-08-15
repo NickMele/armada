@@ -13,20 +13,35 @@ carries evidence an external command produced, and this is that command
 ## Synopsis
 
 ```sh
-armada manifest check [<selector>] [--scope <lens>] [-C <path>] [--dry-run] [--json]
+armada manifest check [<selector>] [--component <name>] [--all-files] [--fix]
+                      [--wait] [--concurrency <n>] [--dry-run] [--json]
+armada manifest check --files <path>… [--fix] [--json]
 ```
 
 ## Arguments
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `<selector>` | check ids or components | all | Which checks to run. |
-| `--scope <lens>` | `changed` \| `all` | `all` | `changed` restricts to what the working tree touched. [`PLAN.md`](../../PLAN.md) §3.3. |
+| `<selector>` | `<component>:<check>`, a component, or a check name | the working diff | Which checks to run. One selector, or several paths — never both, so nothing is guessed. |
+| `--component <name>` | component name | — | Every check on one component. |
+| `--files <path>…` | paths | — | Run only the checks these paths belong to. Exists for names a shell would mangle as positionals. |
+| `--all-files` | flag | off | Scope from each component's `match:` globs rather than from the working diff. |
+| `--fix` | flag | off | Run `fix:` instead of `cmd:`. Checks with no `fix:` are skipped. |
+| `--wait` | flag | off | Queue for the run lease instead of failing fast when another run holds it. |
+| `--concurrency <n>` | positive integer | the machine's | This run's CPU budget, overriding the machine's. |
 | `--dry-run` | flag | off | Print the schedule and each argv without running anything. |
+
+**There is no `--scope <lens>`.** A run's default scope is the working diff, and `--all-files`
+is what widens it — a lens naming both would be a second way to say one thing.
+
+> **`-C <path>` is reserved and not built.** A verb takes its workspace from where you are
+> standing, and `cd` is the interface until something needs otherwise
+> ([`config.md`](config.md)).
 
 ## How it works
 
-1. **Resolves the check set** from the selector and scope lens.
+1. **Resolves the check set** from the selector, over the working diff unless `--all-files`
+   widens it to each component's `match:` globs.
 2. **Schedules them** — checks with no ordering constraint run concurrently; `needs:` on a
    check takes both component names and other check ids ([`PLAN.md`](../../PLAN.md) §4.1).
 3. **Takes a lock.** One check run at a time per workspace ([`PLAN.md`](../../PLAN.md) §3.2.1). Two
