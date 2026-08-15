@@ -102,18 +102,22 @@ Full sequencing in [`docs/PHASES.md`](docs/PHASES.md) §8. Short version:
 - **M0 is complete** — the research spike. Its findings are `PHASES.md` §9.1 and they are
   **evidence, not recollection**: resumable sessions, budget telemetry, the inbox mechanisms and
   plugin coverage were all measured. If one turns out to be wrong, fix the finding and say which.
-- **Manifest is partly built.** The config contract is frozen: the JSON Schema is authoritative,
+- **Manifest is nearly built.** The config contract is frozen: the JSON Schema is authoritative,
   the structs mirroring it are in `crates/core`, and six fixtures have a golden resolved snapshot
   each. **What phase 1 decided and the fixtures forced is `PLAN.md` §4.1.1** — read it before
-  adding a config key. The ownership layer exists behind `init` / `clean` / `status` and the
-  `commands:` dispatcher, and **`check` is built** — its scheduler, scope resolution, run
-  directory and verdict aggregation, with what it settled and the gap it leaves open in
-  `PHASES.md` §9.3. `check --detach` and `check --status` are refused by name as not built.
-  `up`, `down`, `config` and `explain` are **not built**.
+  adding a config key. The ownership layer exists behind `init` / `up` / `down` / `clean` /
+  `status` and the `commands:` dispatcher, and **`check` is built** — its scheduler, scope
+  resolution, run directory and verdict aggregation, with what it settled and the gap it leaves
+  open in `PHASES.md` §9.3. `check --detach` and `check --status` are refused by name as not
+  built, and so are `render`, `agents-md` and `explain`.
 - **M1 has landed**, less one row: `skills:` was not built, because M1 adds no capability.
   Tracked in `PHASES.md` §8.3.
-- **Guild, Fleet and Helm do not exist.** Their specification is `PLAN.md` §13–§15 and their
-  usage is [`docs/commands/reference.md`](docs/commands/reference.md).
+- **Guild has landed** — `init`, `pull`, `push`, `export`, `import`, plus `armada init` and
+  `armada doctor`. `guild edit` and `guild verify` are not built.
+- **Fleet has landed** — `spawn`, `ls`, `board`, `answer`, `inbox`, `kill`, with the Job index
+  in `~/.armada/jobs/` and worktrees under `~/.armada/workspaces/`. **Helm and the Bridge do
+  not exist**, and neither does the MCP server. Their specification is `PLAN.md` §14–§15 and
+  their usage is [`docs/commands/reference.md`](docs/commands/reference.md).
 
 **M4's loop needs `check` detached.** A verdict is only `PASS` if it carries evidence an
 external command produced, and `check` now produces it — but `--detach` and `--status` are

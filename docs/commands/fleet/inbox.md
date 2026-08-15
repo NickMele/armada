@@ -2,7 +2,7 @@
 
 What the fleet needs from you.
 
-> **Status: not built — M3.**
+> **Status: built — M3.**
 
 The CLI view of the same file the orchestrator watches
 ([`../helm/inbox.md`](../helm/inbox.md)).
@@ -39,12 +39,18 @@ ownership store on disk rather than in a process. Reading does not mark entries 
 ## Output
 
 ```
-nightly-flake  9m ago  needs_human
-  Reproduced 3/5 runs. Wants to raise the CI timeout 30s → 90s.
+  STATUS       JOB            DETAIL                              TIME
+  needs_human  nightly-flake  Wants the CI timeout raised to 90s    9m
+
+OK  1 open, armada fleet answer <job> "…"
 ```
 
-`--json` returns one result per entry with `job`, `uuid`, `kind`, `raised_at`, `body` and
-`answered`.
+**Every entry has an id**, which is the half [`../../PLAN.md`](../../PLAN.md) §15.3.1 says is
+missing from anything raised in prose: an item you cannot name is an item you cannot
+acknowledge one row at a time.
+
+`--json` returns one result per entry with `uuid`, `job`, `kind`, `raised_at`, `waiting_s`,
+`body` and `answered`.
 
 ## Dependencies
 

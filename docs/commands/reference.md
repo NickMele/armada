@@ -39,23 +39,23 @@ and the three status enums. These pages use them without re-explaining them.
 
 | Page | Command | Status |
 |---|---|---|
-| [`guild/init.md`](guild/init.md) | `armada guild init` | M2 |
-| [`guild/edit.md`](guild/edit.md) | `armada guild edit` | M2 |
-| [`guild/push.md`](guild/push.md) | `armada guild push` | M2 |
-| [`guild/pull.md`](guild/pull.md) | `armada guild pull` | M2 |
-| [`guild/export.md`](guild/export.md) | `armada guild export` | M2 |
-| [`guild/import.md`](guild/import.md) | `armada guild import` | M2 |
+| [`guild/init.md`](guild/init.md) | `armada guild init` | shipped |
+| [`guild/edit.md`](guild/edit.md) | `armada guild edit` | not built |
+| [`guild/push.md`](guild/push.md) | `armada guild push` | shipped |
+| [`guild/pull.md`](guild/pull.md) | `armada guild pull` | shipped |
+| [`guild/export.md`](guild/export.md) | `armada guild export` | shipped |
+| [`guild/import.md`](guild/import.md) | `armada guild import` | shipped |
 
 ## Fleet — the agents you do not talk to
 
 | Page | Command | Status |
 |---|---|---|
-| [`fleet/spawn.md`](fleet/spawn.md) | `armada fleet spawn` | M3 |
-| [`fleet/ls.md`](fleet/ls.md) | `armada fleet ls` | M3 |
-| [`fleet/inbox.md`](fleet/inbox.md) | `armada fleet inbox` | M3 |
-| [`fleet/answer.md`](fleet/answer.md) | `armada fleet answer` | M3 |
-| [`fleet/board.md`](fleet/board.md) | `armada fleet board` | M3 |
-| [`fleet/kill.md`](fleet/kill.md) | `armada fleet kill` | M3 |
+| [`fleet/spawn.md`](fleet/spawn.md) | `armada fleet spawn` | shipped |
+| [`fleet/ls.md`](fleet/ls.md) | `armada fleet ls` | shipped |
+| [`fleet/inbox.md`](fleet/inbox.md) | `armada fleet inbox` | shipped |
+| [`fleet/answer.md`](fleet/answer.md) | `armada fleet answer` | shipped |
+| [`fleet/board.md`](fleet/board.md) | `armada fleet board` | shipped |
+| [`fleet/kill.md`](fleet/kill.md) | `armada fleet kill` | shipped |
 
 ## Helm — the one agent you do talk to
 

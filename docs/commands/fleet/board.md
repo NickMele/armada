@@ -2,7 +2,7 @@
 
 Board a Job — take it over yourself.
 
-> **Status: not built — M3.**
+> **Status: built — M3.**
 
 **Armada does not own a terminal.** A Job's conversation is an ordinary resumable Claude Code
 session in a git worktree, so cmux, the Claude app, or a plain shell enters it. This command
@@ -44,11 +44,18 @@ finished its turn and exited.
 ## Output
 
 ```
-worktree  ~/.armada/workspaces/api/rate-limit
-resume    claude --resume 15bfa340-33b1-4f81-bd7f-688f0f01dbb0
+  STATUS    DETAIL
+  worktree  ~/.armada/workspaces/api/rate-limit
+  resume    claude --resume 15bfa340-33b1-4f81-bd7f-688f0f01dbb0
+
+OK  rate-limit, branch armada/rate-limit
 ```
 
-`--json` returns `worktree`, `uuid`, `branch` and the assembled command.
+**The DETAIL column is fixed here and flexible on every other verb.** A truncated resume
+command is not a shorter answer, it is the wrong one — and this whole verb exists to be
+pasted.
+
+`--json` returns `job`, `worktree`, `uuid`, `branch` and the assembled command.
 
 ## Dependencies
 

@@ -2,7 +2,7 @@
 
 Start an isolated agent Job on a task.
 
-> **Status: not built — M3.** ([`PHASES.md`](../../PHASES.md) §8.5)
+> **Status: built — M3.** ([`PHASES.md`](../../PHASES.md) §8.5)
 
 ## Synopsis
 
@@ -41,13 +41,29 @@ armada fleet spawn "<task>" [--workflow <name>] [--name <name>] [--budget <k=v>.
 ## Output
 
 ```
-feature (0.94)                    override with --workflow
-rate-limit  → ~/.armada/workspaces/api/rate-limit  ports 41210–41219
-            → budget 12 iterations · 400k tokens · 45m
+  STATUS      STEP      DETAIL                           TIME
+  classified  workflow  feature, confidence 0.91         0.8s
+  created     worktree  ~/.armada/workspaces/rate-limit  0.3s
+  claimed     ports     5470-5479                           -
+  started     drone     job 8f2a, plan step                 -
+
+RUNNING  rate-limit, armada fleet board rate-limit to take over
 ```
 
+**The confidence is on the screen and not only in the payload.** A guess has to be visible as
+a guess, or nobody knows to override it. An override reports *you named it* rather than a
+confidence of `1.0`: "you said so" and "the model was certain" are different facts and only
+one of them is a measurement.
+
+**The lead word on the summary line is the Job's state, not the command's.** `RUNNING` says
+what the Job is doing; the envelope's `status` says how `spawn` ended, and they are different
+questions ([`../../PLAN.md`](../../PLAN.md) §14.3). It is spelled in the payload under
+`data.state` exactly as it is printed.
+
+The layout is frozen by `tests/golden/render/fleet-spawn.plain` and its `.tty` twin.
+
 `--json` returns the Job record: `uuid`, `name`, `workflow`, `confidence`, `worktree`,
-`branch`, `port_block`, `budget`.
+`branch`, `port_block`, `budget`, `step` and `state`.
 
 ## Dependencies
 

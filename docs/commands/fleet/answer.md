@@ -2,7 +2,7 @@
 
 Give a waiting Job your decision and let it continue.
 
-> **Status: not built — M3.**
+> **Status: built — M3.**
 
 ## Synopsis
 
@@ -29,10 +29,17 @@ armada fleet answer <job> "<answer>" [--json]
 ## Output
 
 ```
-answered  nightly-flake — resumed, 7 iterations remaining
+  STATUS    JOB            DETAIL                TIME
+  answered  nightly-flake  yes, raise it to 90s  2.9s
+
+RUNNING  nightly-flake, 7 iterations remaining
 ```
 
-`--json` returns the Job record with the answered entry and remaining budget.
+**The summary line is where a reader sees that the budget was not reset.** An answer is a
+continuation, not a new run.
+
+`--json` returns `job`, `uuid`, `entry`, `answer`, `state`, `budget_remaining` and what the
+resumed turn spent.
 
 ## Dependencies
 

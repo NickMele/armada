@@ -2,7 +2,7 @@
 
 What is running, how long, what it has spent, and who needs you.
 
-> **Status: not built — M3.**
+> **Status: built — M3.**
 
 ## Synopsis
 
@@ -31,10 +31,22 @@ Read-only. Never resumes or interrupts a Job.
 ## Output
 
 ```
-NAME           WORKFLOW   STATE     RUN    SPENT   NEEDS YOU
-rate-limit     feature    RUNNING   14m    $2.10   —
-nightly-flake  bug        BLOCKED    9m    $1.35   ● timeout call
+  STATUS   JOB            WORKFLOW  DETAIL                   SPENT  TIME
+  RUNNING  rate-limit     feature   implement, check green   $2.10   14m
+  STALLED  xlsx-report    bug       no output for 6m         $4.60   22m
+  BLOCKED  release-merge  feature   wants CI timeout raised  $1.25    1h
+  QUEUED   nightly-flake  bug       -                            -     -
+
+RUNNING  4 jobs, 1 need you, $8.40 today
 ```
+
+**Status first and always a word**, like every other table Armada draws
+([`../render.md`](../render.md)). The layout is frozen by
+`tests/golden/render/fleet-ls.plain` and its `.tty` twin — the fixture is the specification
+and the renderer follows it.
+
+**A Job that has not run yet gets a placeholder in both number columns**, not `$0.00` and
+`0s`: a zero reads as a measurement, and nothing has been measured.
 
 `--json` returns one result per Job with `uuid`, `name`, `workflow`, `state`, `runtime_s`,
 `cost_usd`, `tokens`, `turns`, `budget_remaining` and `needs_attention`.

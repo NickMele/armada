@@ -263,6 +263,21 @@ because only Armada mints the Jobs — so deferring the view meant deferring the
 anything Armada knows and nothing else does. Helm still works with the Bridge unbuilt, which is
 what keeps it a rendering choice rather than an architectural one ([`PLAN.md`](PLAN.md) §15.1).
 
+#### What landed, and what did not
+
+**Fleet is built and is usable from a shell.** All six verbs ship, with the Job index in
+`~/.armada/jobs/`, worktrees under `~/.armada/workspaces/<repo>/<name>`, classification on
+Haiku 4.5, ceilings read off the turn's `result` event, and the append-only inbox. Both agreed
+layouts moved out of `tests/golden/render/pending/` into live byte comparisons **without either
+being renegotiated**, which is what that directory was for.
+
+| Not built | Where it goes |
+|---|---|
+| The MCP server, Helm, the Bridge | the two agents after this one — the three-agent shape above |
+| **The skills merge** of [`PLAN.md`](PLAN.md) §14.5 | Fleet projects no merged skill set into a Job's worktree yet, and `fleet ls --skills` does not exist. A Drone resolves a skill *name* in its own worktree, so the repo already wins a collision; what is missing is the guild half and the shadow report. |
+| **The workflow loop** | `spawn` runs one bounded turn and records what it spent. Advancing a step on its verdict is M4's, and the predicates are data the schema already validates. |
+| **`kill --all-finished`'s full lens** | it kills every Job that is over *or* paused; `check --status` is what would let it tell a stalled Drone from a finished one. |
+
 #### Four decisions taken before M3 was dispatched
 
 | | Decided | Why not the alternative |

@@ -4,10 +4,12 @@ One suite for working with coding agents across every repo and every machine you
 modules under one binary. **POSIX only — macOS and Linux. Not Windows**, because process groups,
 signals and file locks are load-bearing here rather than incidental.
 
-> **Status: one module built, three to go.** **Manifest** — the workspace layer, formerly
-> called charkit — has `init`, `clean`, `status`, `check` and repo `commands:` working over a
-> machine-global store. `up`, `down`, `config` and `explain` are not built. **Guild**, **Fleet** and
-> **Helm** do not exist yet. The M0 research spike is **done** and its findings are recorded
+> **Status: three modules built, one to go.** **Manifest** — the workspace layer, formerly
+> called charkit — has `init`, `up`, `down`, `clean`, `status`, `check`, `config`, `skills` and
+> repo `commands:` working over a machine-global store; `render`, `agents-md` and `explain` are
+> not built. **Guild** syncs your voice, skills and workflows between machines. **Fleet** mints
+> Jobs: `spawn`, `ls`, `board`, `answer`, `inbox` and `kill`. **Helm** and the **Bridge** do not
+> exist yet. The M0 research spike is **done** and its findings are recorded
 > in [`docs/PHASES.md`](docs/PHASES.md) §9.1. See [`docs/commands/reference.md`](docs/commands/reference.md) for
 > what each command does and whether it exists.
 

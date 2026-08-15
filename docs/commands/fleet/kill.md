@@ -2,7 +2,7 @@
 
 End a Job and release everything it owns.
 
-> **Status: not built — M3.**
+> **Status: built — M3.**
 
 ## Synopsis
 
@@ -40,11 +40,20 @@ what happened.
 ## Output
 
 ```
-killed  rate-limit
-  cleaned   3 containers · ports 41210–41219
-  worktree  removed
-  branch    feat/rate-limit kept
+  STATUS   JOB         DETAIL                                        TIME
+  cleaned  rate-limit  3 containers, ports 5470-5479                    -
+  removed  rate-limit  worktree ~/.armada/workspaces/api/rate-limit     -
+  removed  rate-limit  branch armada/rate-limit                         -
+
+CLEAN  1 job, transcripts kept
 ```
+
+**A Job's branch is namespaced `armada/<name>`**, which is what makes deleting it safe: a Job
+given a bare `rate-limit` could delete a branch a person was working on.
+
+**A worktree that is already gone reports `gone`, not a failure.** A Job whose directory
+somebody deleted by hand is exactly the Job the durable record exists for
+([`../../PLAN.md`](../../PLAN.md) §14.1).
 
 `--json` returns the clean results plus the worktree and branch disposition.
 

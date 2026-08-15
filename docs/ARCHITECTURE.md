@@ -9,9 +9,11 @@
 > are recorded rather than deleted. The privacy gate is permanent.
 >
 > The **Manifest** module — formerly charkit — has landed its config contract, six fixtures and
-> the ownership layer behind `init`, `clean`, `status` and `commands:`. The three seams, the
-> reducer's shape for the claim loop and the `--json` envelope are code rather than sketches.
-> `up`, `down` and `check` are not built, and neither are Guild, Fleet or Helm.
+> the ownership layer behind `init`, `up`, `down`, `clean`, `status`, `check`, `config`,
+> `skills` and `commands:`. The three seams, the reducer's shape for the claim loop and the
+> `--json` envelope are code rather than sketches. **Guild** and **Fleet** have landed too;
+> `render`, `agents-md`, `explain`, `check --detach`/`--status`, `guild edit`/`verify`, the MCP
+> server, Helm and the Bridge are not built.
 >
 > This document records **principles and the reasoning behind them**. The reasoning is the
 > load-bearing part: a rule without its reason gets discarded the first time it is
