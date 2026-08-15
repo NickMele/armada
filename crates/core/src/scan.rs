@@ -564,6 +564,7 @@ fn beside<'a>(files: &[&'a SourceFile], dir: &str, name: &str) -> Option<&'a Sou
 /// (`docs/reference-output/command-output.html`) and is not sorted by outcome:
 /// a table whose rows move when a repository gains a `Makefile` is a table
 /// nobody can diff.
+///
 /// **`package scripts` and not `scripts`**, because the first spelling was
 /// read as a path. A repository with a `scripts/` directory that is a Python
 /// package had its `absent scripts —` row understood as a statement about that
@@ -905,39 +906,22 @@ fn compose_services(text: &str) -> Vec<ComposeService> {
         .collect()
 }
 
-/// The published port of one compose `ports:` entry, in either syntax.
+/// The host side of one compose `ports:` entry, as the file wrote it.
 ///
-/// Short syntax is `[[IP:]HOST:]CONTAINER[/PROTO]`, so the published port is
-/// the last numeric segment before the container port — or the only segment,
-/// when a service publishes on the same number it listens on. Long syntax names
-/// it outright.
+/// **The grammar is [`crate::compose::parse_port`]'s and not this module's.**
+/// There were two parsers for one small grammar, and each was wrong in a way
+/// the other was not: this one split on every `:` and cut
+/// `${POSTGRES_PORT:-5432}` in half at the colon inside the variable's default,
+/// reporting a host port of `-5432}`. Scan reports what it finds and refuses
+/// nothing; the transform rewrites or refuses. Same parse, different consumers.
+///
+/// A bare `"6379"` reports `6379`, which is what the file says. Compose will
+/// publish it on an ephemeral port and `armada manifest up` will rewrite it
+/// into the claimed block — but neither of those has happened yet, and a scan
+/// reports the repository as it is.
 fn published_port(entry: &serde_yaml_ng::Value) -> Option<String> {
-    if let Some(mapping) = entry.as_mapping() {
-        let published = mapping
-            .get("published")
-            .or_else(|| mapping.get("target"))?
-            .clone();
-        return scalar(&published);
-    }
-    let text = scalar(entry)?;
-    let text = text.split('/').next().unwrap_or(&text).to_string();
-    let segments: Vec<&str> = text.split(':').collect();
-    let published = match segments.as_slice() {
-        [single] => *single,
-        // `IP:HOST:CONTAINER` and `HOST:CONTAINER` both publish the
-        // second-to-last segment.
-        [.., host, _container] => *host,
-        [] => return None,
-    };
-    (!published.is_empty()).then(|| published.to_string())
-}
-
-fn scalar(value: &serde_yaml_ng::Value) -> Option<String> {
-    match value {
-        serde_yaml_ng::Value::String(text) => Some(text.clone()),
-        serde_yaml_ng::Value::Number(number) => Some(number.to_string()),
-        _ => None,
-    }
+    let parsed = crate::compose::parse_port(entry)?;
+    Some(parsed.published.unwrap_or(parsed.target).text())
 }
 
 /// How many steps a workflow declares, and what each `run:` step runs.
@@ -1048,6 +1032,43 @@ mod tests {
         assert_eq!(services[1].ports, ["6379"]);
         assert_eq!(services[2].ports, ["1025", "8025"]);
         assert!(services[3].ports.is_empty());
+    }
+
+    /// **The reported bug, on the verb that reported it.** A compose file with
+    /// `ports: ["${POSTGRES_PORT:-5432}:5432"]` rendered as `db  -5432}`: the
+    /// scanner split on every `:` and cut inside the variable's default, then
+    /// kept the tail. `${VAR:-default}` is how a compose file supports both a
+    /// fixed port and a per-worktree override, so it is not an exotic spelling.
+    #[test]
+    fn a_variable_port_is_reported_whole_rather_than_cut_at_its_default() {
+        let evidence = scan(&files(&[(
+            "docker-compose.yml",
+            "services:\n  db:\n    ports: [\"${POSTGRES_PORT:-5432}:5432\"]\n  \
+             api:\n    ports: [\"${API_PORT:-8000}:8000\"]\n",
+        )]));
+        let services = &evidence.compose[0].services;
+        assert_eq!(services[0].name, "db");
+        assert_eq!(services[0].ports, ["${POSTGRES_PORT:-5432}"]);
+        assert_eq!(services[1].ports, ["${API_PORT:-8000}"]);
+    }
+
+    /// The grammar is `compose::parse_port`'s, so every spelling it reads
+    /// reaches the report — including the ones the old scan-side parser had
+    /// never met.
+    #[test]
+    fn the_evidence_carries_every_spelling_the_grammar_reads() {
+        let evidence = scan(&files(&[(
+            "docker-compose.yml",
+            "services:\n  a:\n    ports: [\"6379-6380:6379-6380\"]\n  \
+             b:\n    ports: [\"[::1]:6379:6379\"]\n  \
+             c:\n    ports: [\"53:53/udp\"]\n  \
+             d:\n    ports:\n      - target: 6379\n        published: \"5432\"\n",
+        )]));
+        let ports = |n: usize| evidence.compose[0].services[n].ports.clone();
+        assert_eq!(ports(0), ["6379-6380"]);
+        assert_eq!(ports(1), ["6379"], "the bind address is not the host port");
+        assert_eq!(ports(2), ["53"], "the protocol is not part of the port");
+        assert_eq!(ports(3), ["5432"]);
     }
 
     #[test]

@@ -34,7 +34,7 @@
         "id": "compose",
         "status": "OK",
         "path": "docker-compose.yml",
-        "reason": "docker-compose.yml, 2 services"
+        "reason": "docker-compose.yml, 3 services"
       },
       {
         "id": "ci",
@@ -118,13 +118,19 @@
             {
               "name": "postgres",
               "ports": [
-                "5432"
+                "${POSTGRES_PORT:-5432}"
               ]
             },
             {
               "name": "redis",
               "ports": [
                 "6379"
+              ]
+            },
+            {
+              "name": "search",
+              "ports": [
+                "9200"
               ]
             }
           ]

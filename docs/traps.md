@@ -501,7 +501,7 @@ failure the label exists to prevent.
 
 ## Docker Compose
 
-Measured on darwin against **Docker Compose v5.3.1**, 2026-08-09. Eleven entries. All but two
+Measured on darwin against **Docker Compose v5.3.1**, 2026-08-09. Thirteen entries. All but two
 are `docker compose config` or CLI-surface behaviour, which is resolved client-side and is
 therefore the compose CLI's rather than the host's; the exceptions are the `${files}` entry,
 which is a shell's behaviour, and the service-labels entry, which is the daemon's, and each
@@ -524,6 +524,43 @@ docker compose -f docker-compose.yml -f override.yml config
 every workspace still binds the base port, and concurrent workspaces collide — the exact
 failure Armada exists to prevent. It looks like it worked, because the new port is also
 published.
+
+### A bare `ports:` entry publishes on an *ephemeral* host port — `published` absent means random, not none
+
+```sh
+# docker-compose.yml:  ports: ["6379"]
+docker compose config
+# → {mode: ingress, target: 6379, protocol: tcp}     ← no `published` key
+docker compose up -d && docker port <container> 6379/tcp
+# → 0.0.0.0:55918
+```
+
+Measured against Docker 29.6.2 and Compose v5.3.1 while fixing this in `compose.rs`; recorded
+here because two code comments cited this file for it and it was never written down.
+
+**If you assume otherwise:** you read "no `published` key" as "this entry does not publish" and
+skip it, which is what an earlier version of the transform did. The key that exposes a container
+port *without* binding a host one is `expose:`, which is a different key. The consequence is the
+exact failure the port block exists to prevent, arriving silently: the service comes up outside
+the claimed block, and a `tcp:` ready-check waits on the claimed port until it times out.
+
+**Every entry under `ports:` publishes, so every entry is rewritten or refused** — including one
+Armada cannot parse, because skipping that one leaves compose to place the port.
+
+### `${VAR:-default}` in a `ports:` entry contains a colon, and splitting on every colon cuts inside it
+
+`ports: ["${POSTGRES_PORT:-5432}:5432"]` is not `IP:HOST:CONTAINER`. A naive `split(':')` yields
+`["${POSTGRES_PORT", "-5432}", "5432"]`, and taking the second-to-last segment as the host port
+reports `-5432}`. `${VAR:?err}` and `${VAR:+alt}` have the same shape, and so does a bracketed
+IPv6 bind address, `[::1]:6379:6379`.
+
+**If you assume otherwise:** the report is wrong in a way that looks like a rendering glitch
+rather than a parse error, so it survives review. It is not an exotic spelling — a variable with
+a default is how a compose file supports both a fixed port and a per-worktree override, which is
+precisely the shape a repository adopting Armada already has.
+
+**A `:` splitter for a compose port entry has to step over `${…}` and `[…]`**, and there is one
+of them: [`compose::parse_port`](../crates/core/src/compose.rs).
 
 ### The `!override` tag is version-dependent — and that is why Armada does not rely on it
 

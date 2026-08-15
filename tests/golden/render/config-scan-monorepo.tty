@@ -5,7 +5,7 @@
   [38;2;61;220;132mfound[0m   lockfile         [38;2;107;114;128mscripts/uv.lock, uv[0m
   [38;2;61;220;132mfound[0m   lockfile         [38;2;107;114;128mweb/pnpm-lock.yaml, pnpm@9[0m
   [38;2;61;220;132mfound[0m   package scripts  [38;2;107;114;128m4 in web/package.json[0m
-  [38;2;61;220;132mfound[0m   compose          [38;2;107;114;128mdocker-compose.yml, 2 services[0m
+  [38;2;61;220;132mfound[0m   compose          [38;2;107;114;128mdocker-compose.yml, 3 services[0m
   [38;2;61;220;132mfound[0m   ci               [38;2;107;114;128m.github/workflows/ci.yml, 5 steps[0m
   [38;2;61;220;132mfound[0m   pyproject        [38;2;107;114;128mbackend/pyproject.toml, 3 tool sections[0m
   [38;2;61;220;132mfound[0m   pyproject        [38;2;107;114;128mscripts/pyproject.toml, 1 tool section[0m
@@ -22,8 +22,9 @@
     [38;2;92;225;230mscripts/pyproject.toml[0m  [38;2;107;114;128mruff[0m
 
   [38;2;255;169;64mdocker-compose.yml services[0m
-    [38;2;92;225;230mpostgres[0m  [38;2;107;114;128m5432[0m
+    [38;2;92;225;230mpostgres[0m  [38;2;107;114;128m${POSTGRES_PORT:-5432}[0m
     [38;2;92;225;230mredis[0m     [38;2;107;114;128m6379[0m
+    [38;2;92;225;230msearch[0m    [38;2;107;114;128m9200[0m
 
   [38;2;255;169;64mci steps[0m · [38;2;107;114;128mthe best existing evidence of what you actually run[0m
     [38;2;107;114;128mpnpm --dir web install --frozen-lockfile · uv sync --project backend[0m

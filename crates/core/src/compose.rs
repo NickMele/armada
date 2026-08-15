@@ -283,6 +283,8 @@ fn as_labels(value: &Value) -> Option<Vec<(String, String)>> {
     }
 }
 
+/// A scalar as text, so `published: 5432` and `published: "5432"` are one case
+/// wherever this module reads one.
 fn scalar_text(value: &Value) -> Option<String> {
     match value {
         Value::String(text) => Some(text.clone()),
@@ -310,7 +312,7 @@ fn republish(
         // skipped, for the same reason an undeclared one is: skipping it leaves
         // compose to publish it, and a port Armada did not place is a port
         // outside the claimed block.
-        let target = target_of(entry).ok_or_else(|| {
+        let unreadable = || {
             ArmadaError::bad_config(
                 ConfigWhere::Path {
                     file: config_label.to_string(),
@@ -322,7 +324,14 @@ fn republish(
                 ),
                 "write the entry as `\"<container-port>\"` or `\"<host>:<container>\"`",
             )
-        })?;
+        };
+        let parsed = parse_port(entry).ok_or_else(unreadable)?;
+        // **A container side Armada cannot resolve to one number is refused for
+        // the same reason an unreadable entry is.** A range needs a block of
+        // claimed ports and a `${VAR}` needs an interpolation Armada does not
+        // perform, so neither can be mapped to the single port a declared name
+        // was assigned — and skipping either leaves compose to place it.
+        let target = parsed.target.fixed().ok_or_else(unreadable)?;
         let name = names.get(&target).ok_or_else(|| {
             ArmadaError::bad_config(
                 ConfigWhere::Path {
@@ -343,49 +352,220 @@ fn republish(
             message: format!("`{name}` is declared and was never assigned a port"),
             next_action: None,
         })?;
-        set_published(entry, *port);
+        set_published(entry, &parsed, *port);
     }
     Ok(())
 }
 
-/// The container port an entry publishes, or `None` when Armada cannot read it.
+// ------------------------------------------------------------- the port grammar
+
+/// One entry under a compose service's `ports:`, parsed.
 ///
-/// **Every entry under `ports:` publishes something — `published` being absent
-/// means *ephemeral*, not *none*.** Measured on darwin against Docker 29.6.2 and
-/// Compose v5.3.1: `ports: ["6379"]` resolves to `{mode: ingress, target: 6379,
-/// protocol: tcp}` with no `published` key, and the container comes up on a
-/// random host port (`docs/traps.md`). The key that exposes without publishing
-/// is `expose:`, which is a different key and never reaches here.
+/// **One parser, two consumers, and that is the point.** There were two: this
+/// module's, which read the container side to rewrite it, and
+/// [`crate::scan`]'s, which read the host side to report it. Each was wrong in
+/// a way the other was not — the transform refused a legal range and silently
+/// widened a loopback publish, the scanner cut `${POSTGRES_PORT:-5432}` in half
+/// at the `:` inside the variable's default and reported `-5432}` — and neither
+/// knew what the other had learned. A compose port entry is a small grammar
+/// with a handful of spellings, and it deserves one implementation with one
+/// test suite.
 ///
-/// An earlier version required `published` to be present and skipped the entry
-/// when it was not, on the reasoning that a bare port "exposes a container port
-/// without binding a host one". That was wrong, and it was wrong in the
-/// direction this whole module exists to prevent: the claimed block was
-/// silently bypassed, the service came up on an ephemeral port, and a `tcp:`
-/// ready-check waited on the claimed one until it timed out.
-fn target_of(entry: &Value) -> Option<u16> {
-    match entry {
-        // The long form `docker compose config` emits. `target` is the
-        // container port whether or not `published` is there.
-        Value::Mapping(map) => map.get("target").and_then(port_of),
-        // `"5460:5432"`, `"127.0.0.1:5460:5432"`, or a bare `"5432"` — the
-        // container port is last in every one of them.
-        Value::String(text) => {
-            let container = text.rsplit(':').next()?;
-            container.split('/').next()?.parse().ok()
+/// ```text
+/// "6379"                      target only — publishes on an ephemeral host port
+/// "6379:6379"                 published:target
+/// "127.0.0.1:6379:6379"       host_ip:published:target
+/// "[::1]:6379:6379"           an IPv6 bind address, bracketed
+/// "127.0.0.1::6379"           an interface, and an ephemeral host port
+/// "${VAR:-5432}:5432"         a variable with a default, on either side
+/// "6379-6380:6379-6380"       ranges
+/// "6379/udp"                  a protocol
+/// { target: 6379, published: 5432, host_ip: …, protocol: …, mode: … }
+/// ```
+///
+/// **The two consumers differ in what they do with it, not in how they read
+/// it.** `scan` reports what it finds and refuses nothing; the transform
+/// rewrites the published side or refuses the entry, because an entry it leaves
+/// alone is a port compose places outside the claimed block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortEntry {
+    /// The bind address, when the entry names one. `127.0.0.1`, `[::1]`.
+    pub host_ip: Option<String>,
+    /// The host side, when the entry names one. **`None` means ephemeral, not
+    /// none** — every entry under `ports:` publishes.
+    pub published: Option<PortSide>,
+    /// The container side, which every entry has.
+    pub target: PortSide,
+    /// `/udp`, when the entry carries one.
+    pub protocol: Option<String>,
+}
+
+/// One side of a port entry.
+///
+/// **`Variable` is not a failure.** `${POSTGRES_PORT:-5432}` is how a compose
+/// file supports both a fixed port and a per-worktree override, and it is
+/// extremely common. Armada does not evaluate it — step 1 hands interpolation
+/// to compose — so it is carried as the text it is, which is exactly what a
+/// scan wants to print and exactly what tells the transform it cannot map this
+/// side to a claimed port.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PortSide {
+    /// A literal port.
+    Fixed(u16),
+    /// An inclusive range, `6379-6380`.
+    Range(u16, u16),
+    /// Text Armada does not evaluate.
+    Variable(String),
+}
+
+impl PortSide {
+    /// The port, when this side is one number and not a range or a variable.
+    pub fn fixed(&self) -> Option<u16> {
+        match self {
+            PortSide::Fixed(port) => Some(*port),
+            PortSide::Range(..) | PortSide::Variable(_) => None,
         }
+    }
+
+    /// The side as the file wrote it.
+    pub fn text(&self) -> String {
+        match self {
+            PortSide::Fixed(port) => port.to_string(),
+            PortSide::Range(from, to) => format!("{from}-{to}"),
+            PortSide::Variable(text) => text.clone(),
+        }
+    }
+}
+
+impl PortEntry {
+    /// The short form, rewritten to publish on `port`.
+    ///
+    /// Everything the file said that is still true is kept: the interface it
+    /// asked for, the container side exactly as written — a variable stays a
+    /// variable — and the protocol.
+    fn published_at(&self, port: u16) -> String {
+        let mut out = String::new();
+        if let Some(ip) = &self.host_ip {
+            out.push_str(ip);
+            out.push(':');
+        }
+        out.push_str(&port.to_string());
+        out.push(':');
+        out.push_str(&self.target.text());
+        if let Some(protocol) = &self.protocol {
+            out.push('/');
+            out.push_str(protocol);
+        }
+        out
+    }
+}
+
+/// Read one `ports:` entry, in any spelling compose accepts.
+///
+/// `None` is reserved for a value that is not a port entry at all — a list, a
+/// boolean, a mapping with no `target` — and is what makes the transform refuse
+/// rather than leave compose to place a port Armada cannot see.
+pub fn parse_port(entry: &Value) -> Option<PortEntry> {
+    match entry {
+        // The long form `docker compose config` emits.
+        Value::Mapping(map) => Some(PortEntry {
+            host_ip: map.get("host_ip").and_then(scalar_text),
+            published: map.get("published").and_then(|v| side(&scalar_text(v)?)),
+            target: side(&scalar_text(map.get("target")?)?)?,
+            protocol: map.get("protocol").and_then(scalar_text),
+        }),
+        Value::String(text) => short_form(text),
         // `ports: [5432]`, which YAML reads as an integer.
-        Value::Number(number) => number.as_u64().and_then(|n| u16::try_from(n).ok()),
+        Value::Number(number) => Some(PortEntry {
+            host_ip: None,
+            published: None,
+            target: PortSide::Fixed(u16::try_from(number.as_u64()?).ok()?),
+            protocol: None,
+        }),
         _ => None,
     }
 }
 
-fn port_of(value: &Value) -> Option<u16> {
-    match value {
-        Value::Number(number) => number.as_u64().and_then(|n| u16::try_from(n).ok()),
-        Value::String(text) => text.parse().ok(),
-        _ => None,
+/// `[[IP:]HOST:]CONTAINER[/PROTOCOL]`.
+fn short_form(text: &str) -> Option<PortEntry> {
+    let segments = split_top_level(text);
+    // The protocol rides on the container side, which is the last segment
+    // whichever spelling this is.
+    let (last, protocol) = match segments.last()?.split_once('/') {
+        Some((port, protocol)) => (port, Some(protocol.to_string())),
+        None => (*segments.last()?, None),
+    };
+
+    let (host_ip, published) = match segments.as_slice() {
+        [_] => (None, None),
+        [published, _] => (None, side(published)),
+        // An empty middle is `"127.0.0.1::6379"`: an interface, and a host port
+        // compose picks. `None` is the same answer a bare entry gives, and it
+        // means the same thing.
+        [ip, published, _] => (Some((*ip).to_string()), side(published)),
+        _ => return None,
+    };
+
+    Some(PortEntry {
+        host_ip,
+        published,
+        target: side(last)?,
+        protocol,
+    })
+}
+
+/// One side: a port, a range, or text Armada does not evaluate.
+fn side(text: &str) -> Option<PortSide> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
     }
+    // **Checked before anything is parsed as a number**, because the whole bug
+    // was treating `${POSTGRES_PORT:-5432}` as though it had numeric parts.
+    if text.contains('$') {
+        return Some(PortSide::Variable(text.to_string()));
+    }
+    if let Some((from, to)) = text.split_once('-') {
+        return Some(PortSide::Range(
+            from.trim().parse().ok()?,
+            to.trim().parse().ok()?,
+        ));
+    }
+    text.parse().ok().map(PortSide::Fixed)
+}
+
+/// Split on `:`, stepping over `${…}` and over a bracketed IPv6 address.
+///
+/// **This is the bug, as a function.** `${VAR:-default}` contains a colon, and
+/// splitting on every colon cuts inside it — which is how
+/// `"${POSTGRES_PORT:-5432}:5432"` came back as a host port of `-5432}`. So do
+/// `${VAR:?err}` and `${VAR:+alt}`, and so does `[::1]`.
+fn split_top_level(text: &str) -> Vec<&str> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'$' if bytes.get(index + 1) == Some(&b'{') => {
+                depth += 1;
+                index += 2;
+                continue;
+            }
+            b'[' => depth += 1,
+            b'}' | b']' if depth > 0 => depth -= 1,
+            b':' if depth == 0 => {
+                out.push(&text[start..index]);
+                start = index + 1;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    out.push(&text[start..]);
+    out
 }
 
 /// Write the claimed port back, keeping whatever shape the entry arrived in.
@@ -394,23 +574,23 @@ fn port_of(value: &Value) -> Option<u16> {
 /// case**, and it is the same operation as replacing one that was there: the
 /// entry either names its host port or gets one at random, and Armada's job is
 /// to make sure it is the claimed one either way.
-fn set_published(entry: &mut Value, port: u16) {
+///
+/// **A declared interface survives the rewrite.** The long form kept `host_ip:`
+/// for free, because it is a separate key nothing here touches; the short form
+/// was rebuilt with `rsplit(':')` and quietly dropped it, so
+/// `"127.0.0.1:5432:5432"` — a deliberate loopback-only publish — came back as
+/// `"5460:5432"` and bound every interface on the machine. One parser answers
+/// both, so the two spellings now behave the same way.
+fn set_published(entry: &mut Value, parsed: &PortEntry, port: u16) {
     match entry {
         Value::Mapping(map) => {
             // A string, because that is what `docker compose config` emits and
             // the document goes straight back to compose.
             map.insert(Value::from("published"), Value::from(port.to_string()));
         }
-        Value::String(text) => {
-            let container = text.rsplit(':').next().unwrap_or_default().to_string();
-            *text = format!("{port}:{container}");
-        }
-        // An integer entry, `ports: [5432]`, becomes the string form: there is
-        // nowhere in a scalar to put a second number.
-        Value::Number(number) => {
-            let container = number.as_u64().unwrap_or_default();
-            *entry = Value::from(format!("{port}:{container}"));
-        }
+        // An integer entry, `ports: [5432]`, has nowhere in a scalar to put a
+        // second number, so it becomes the string form.
+        Value::String(_) | Value::Number(_) => *entry = Value::from(parsed.published_at(port)),
         _ => {}
     }
 }
@@ -610,6 +790,214 @@ volumes:
         assert_eq!(
             doc["services"]["db"]["ports"][0].as_str(),
             Some("5460:5432")
+        );
+    }
+
+    // ------------------------------------------------------- the port grammar
+    // One parser, one test suite. There were two parsers, each wrong in a way
+    // the other was not, and neither knew what the other had learned.
+
+    fn parse(entry: &str) -> PortEntry {
+        let value: Value = serde_yaml_ng::from_str(entry).expect("the entry is YAML");
+        parse_port(&value).unwrap_or_else(|| panic!("`{entry}` did not parse"))
+    }
+
+    /// The published side, as the file wrote it — which is the string `scan`
+    /// prints and the one the old scanner mangled.
+    fn host(entry: &str) -> String {
+        let parsed = parse(entry);
+        parsed.published.unwrap_or(parsed.target).text()
+    }
+
+    /// **The bug.** `${VAR:-default}` contains a colon, and splitting on every
+    /// colon cuts inside it: `"${POSTGRES_PORT:-5432}:5432"` was reported as a
+    /// host port of `-5432}`. `${VAR:?err}` and `${VAR:+alt}` are the same
+    /// shape, and so is a bracketed IPv6 address.
+    #[test]
+    fn a_variable_with_a_default_is_not_split_at_the_colon_inside_it() {
+        assert_eq!(
+            host("\"${POSTGRES_PORT:-5432}:5432\""),
+            "${POSTGRES_PORT:-5432}"
+        );
+        assert_eq!(host("\"${API_PORT:-8000}:8000\""), "${API_PORT:-8000}");
+        assert_eq!(host("\"${PORT:?required}:5432\""), "${PORT:?required}");
+        assert_eq!(host("\"${PORT:+override}:5432\""), "${PORT:+override}");
+
+        // On the container side too, where it decides whether the transform can
+        // map the entry at all.
+        let parsed = parse("\"5432:${CONTAINER_PORT:-5432}\"");
+        assert_eq!(
+            parsed.target,
+            PortSide::Variable("${CONTAINER_PORT:-5432}".to_string())
+        );
+        assert_eq!(parsed.published, Some(PortSide::Fixed(5432)));
+    }
+
+    /// Every spelling of the short form, read as the same shape.
+    #[test]
+    fn the_short_form_is_read_in_each_of_its_spellings() {
+        // A bare entry publishes on an ephemeral host port. `None` is
+        // *ephemeral*, not *none* — the key that exposes without publishing is
+        // `expose:`, which never reaches here.
+        let bare = parse("\"6379\"");
+        assert_eq!(bare.target, PortSide::Fixed(6379));
+        assert_eq!(bare.published, None);
+        assert_eq!(bare.host_ip, None);
+
+        let pair = parse("\"6379:6379\"");
+        assert_eq!(pair.published, Some(PortSide::Fixed(6379)));
+        assert_eq!(pair.host_ip, None);
+
+        let bound = parse("\"127.0.0.1:6379:6379\"");
+        assert_eq!(bound.host_ip.as_deref(), Some("127.0.0.1"));
+        assert_eq!(bound.published, Some(PortSide::Fixed(6379)));
+        assert_eq!(bound.target, PortSide::Fixed(6379));
+
+        // An interface plus an ephemeral host port.
+        let ephemeral = parse("\"127.0.0.1::6379\"");
+        assert_eq!(ephemeral.host_ip.as_deref(), Some("127.0.0.1"));
+        assert_eq!(ephemeral.published, None);
+
+        let v6 = parse("\"[::1]:6379:6379\"");
+        assert_eq!(v6.host_ip.as_deref(), Some("[::1]"), "an IPv6 bind address");
+        assert_eq!(v6.published, Some(PortSide::Fixed(6379)));
+
+        let ranged = parse("\"6379-6380:6379-6380\"");
+        assert_eq!(ranged.published, Some(PortSide::Range(6379, 6380)));
+        assert_eq!(ranged.target, PortSide::Range(6379, 6380));
+
+        let udp = parse("\"6379/udp\"");
+        assert_eq!(udp.target, PortSide::Fixed(6379));
+        assert_eq!(udp.protocol.as_deref(), Some("udp"));
+
+        // A protocol on the two- and three-segment forms too.
+        assert_eq!(parse("\"53:53/udp\"").protocol.as_deref(), Some("udp"));
+        assert_eq!(
+            parse("\"127.0.0.1:53:53/udp\"").protocol.as_deref(),
+            Some("udp")
+        );
+
+        // `ports: [5432]`, which YAML reads as an integer.
+        let number = parse("5432");
+        assert_eq!(number.target, PortSide::Fixed(5432));
+        assert_eq!(number.published, None);
+    }
+
+    /// The long form `docker compose config` emits, in the shapes it emits.
+    #[test]
+    fn the_long_form_is_read_from_its_own_keys() {
+        let full = parse(
+            "{ target: 6379, published: 5432, protocol: udp, mode: ingress, host_ip: 127.0.0.1 }",
+        );
+        assert_eq!(full.target, PortSide::Fixed(6379));
+        assert_eq!(full.published, Some(PortSide::Fixed(5432)));
+        assert_eq!(full.protocol.as_deref(), Some("udp"));
+        assert_eq!(full.host_ip.as_deref(), Some("127.0.0.1"));
+
+        // `published` as a string is the same case, which is how `config`
+        // writes it.
+        assert_eq!(
+            parse("{ target: 6379, published: \"5432\" }").published,
+            Some(PortSide::Fixed(5432))
+        );
+        // And a variable there survives, for a document that did not come
+        // through `config`.
+        assert_eq!(
+            parse("{ target: 5432, published: \"${PG_PORT:-5432}\" }").published,
+            Some(PortSide::Variable("${PG_PORT:-5432}".to_string()))
+        );
+        // No `published` is a bare entry by another spelling.
+        assert_eq!(parse("{ target: 6379, mode: ingress }").published, None);
+    }
+
+    /// `None` is reserved for a value that is not a port entry at all, and it
+    /// is what makes the transform refuse rather than leave compose to place a
+    /// port Armada cannot see.
+    #[test]
+    fn a_value_that_is_not_a_port_entry_does_not_parse() {
+        for entry in [
+            "[5432]",
+            "true",
+            "{ mode: ingress }",
+            "\"\"",
+            "\"a:b:c:d\"",
+            "\"nonsense\"",
+        ] {
+            let value: Value = serde_yaml_ng::from_str(entry).expect("YAML");
+            assert!(parse_port(&value).is_none(), "`{entry}` parsed");
+        }
+    }
+
+    /// The rewrite keeps everything the file said that is still true.
+    #[test]
+    fn the_rewrite_keeps_the_interface_the_container_side_and_the_protocol() {
+        assert_eq!(parse("\"6379\"").published_at(5461), "5461:6379");
+        assert_eq!(parse("\"6379:6379\"").published_at(5461), "5461:6379");
+        assert_eq!(parse("\"6379/udp\"").published_at(5461), "5461:6379/udp");
+        assert_eq!(
+            parse("\"127.0.0.1:6379:6379\"").published_at(5461),
+            "127.0.0.1:5461:6379"
+        );
+        assert_eq!(
+            parse("\"[::1]:6379:6379\"").published_at(5461),
+            "[::1]:5461:6379"
+        );
+        // A variable on the *container* side is carried through untouched;
+        // Armada does not interpolate, compose does.
+        assert_eq!(
+            parse("\"5432:${CONTAINER_PORT:-5432}\"").published_at(5460),
+            "5460:${CONTAINER_PORT:-5432}"
+        );
+    }
+
+    /// **A deliberate loopback publish is not widened to every interface.** The
+    /// long form kept `host_ip:` for free and the short form dropped it, so
+    /// `"127.0.0.1:5432:5432"` came back as `"5460:5432"` — a database the
+    /// author had bound to loopback, published on the network.
+    #[test]
+    fn a_short_form_bind_address_survives_the_transform() {
+        let doc = run(
+            "services:\n  db:\n    image: postgres:16\n    ports:\n    - \"127.0.0.1:5432:5432\"\n",
+        );
+        assert_eq!(
+            doc["services"]["db"]["ports"][0].as_str(),
+            Some("127.0.0.1:5460:5432")
+        );
+    }
+
+    /// A container side that is a range or a variable cannot be mapped to the
+    /// one port a declared name was assigned, so it is refused — the same
+    /// answer, and the same reason, as an entry Armada cannot read at all.
+    #[test]
+    fn a_container_side_that_is_not_one_number_is_refused() {
+        for entry in [
+            "\"6379-6380:6379-6380\"",
+            "\"5432:${CONTAINER_PORT:-5432}\"",
+        ] {
+            let error = transform(
+                &format!("services:\n  db:\n    image: postgres:16\n    ports:\n    - {entry}\n"),
+                &names(),
+                &assigned(),
+                &labels(),
+                "armada.yml",
+            )
+            .unwrap_err();
+            assert_eq!(error.class, ErrClass::BadConfig, "{entry}");
+            assert!(error.message.contains("cannot read"), "{entry}");
+        }
+    }
+
+    /// A published side that is a variable is still rewritten: the entry names
+    /// the container port, which is all the transform needs, and the claimed
+    /// port replaces whatever the variable would have evaluated to.
+    #[test]
+    fn a_variable_host_port_is_replaced_by_the_claimed_one() {
+        let doc = run("services:\n  db:\n    image: postgres:16\n    ports:\n    \
+             - \"${POSTGRES_PORT:-5432}:5432\"\n");
+        assert_eq!(
+            doc["services"]["db"]["ports"][0].as_str(),
+            Some("5460:5432"),
+            "the whole point of the block is that the workspace decides the host port"
         );
     }
 
