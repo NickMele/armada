@@ -376,6 +376,57 @@ Two answers, because neither is sufficient alone:
   limitation is stated rather than papered over: the check narrows the class, it does not close
   it.
 
+### A headless session with no permission posture stalls rather than failing
+
+Diagnosed 2026-08-15, from a day of Jobs that spawned, recorded a worktree and a port block, and
+then sat at `STALLED` until their wall-clock ceiling filed an inbox entry.
+
+**Nothing in the Drone's argv ever granted a capability.** `--strict-mcp-config` and
+`--disable-slash-commands` *withhold*; every other flag described the output or named the
+session. So the Drone reached its first state-mutating tool call, Claude Code asked a person for
+permission, and there was no person — `--print` has no terminal to prompt on.
+
+> **A missing capability does not fail. It waits.** That is what makes it worse than a usage
+> error: a rejected argv dies in a second and shows up in the log, and this one burns the whole
+> ceiling and then reports a timeout, which is a symptom of nothing.
+
+**The mode is what decides between the two.** Read off `claude --help`, measured 2026-08-15:
+
+```
+claude --permission-mode bogus
+-> error: option '--permission-mode <mode>' argument 'bogus' is invalid.
+   Allowed choices are acceptEdits, auto, bypassPermissions, manual, dontAsk, plan.
+```
+
+`dontAsk` denies what the allow list does not cover and carries on. `acceptEdits` and `manual`
+prompt for it — which is the same stall one flag later, and the reason the fix is not "grant
+edits". `bypassPermissions` and `--dangerously-skip-permissions` are never the answer for an
+unattended session; see `fleet::drone::Posture`.
+
+### `--allowedTools` is variadic, so what follows it must be a flag and not the prompt
+
+Measured 2026-08-15:
+
+```
+claude --allowedTools Edit --unknown-xyz
+-> error: unknown option '--unknown-xyz'
+```
+
+The list ends at the next `--` word, and at nothing else. **A bare word after it is consumed as
+one more tool name** — so an argv that appended the posture to the end of the flags would have
+handed a Job's task to `--allowedTools` and started a turn with an empty prompt.
+
+The answer is ordering rather than quoting: `fleet::drone::headless` emits the posture *before*
+`--print`, so there is always a flag between the last rule and the prompt, and an empty list
+emits no flag at all. `the_prompt_never_follows_a_variadic_list` holds it there for every shape
+of posture including the two where a list is empty.
+
+**A rule may contain a space; a list entry may not.** `--allowedTools` is documented as a
+*"comma or space-separated list"*, and its own example — `"Bash(git *) Edit"` — is one argument
+holding two rules, one of which contains a space. So the separator is paren-aware:
+`Bash(git push:*)` is a single rule, and `Edit Write` written as one entry is two.
+`Posture::wrong` refuses the second before a Drone is started.
+
 ### There is no `--mcp` flag. The corpus specified one, and it does not exist
 
 Read off `claude --help` on 2026-08-15, while building [`armada helm`](commands/helm/helm.md).

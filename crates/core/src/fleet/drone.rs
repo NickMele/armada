@@ -693,7 +693,10 @@ mod tests {
         );
         // Editing and committing are the job; both are granted.
         for granted in ["Edit", "Write", "Bash"] {
-            assert!(argv.iter().any(|word| word == granted), "{granted} ungranted");
+            assert!(
+                argv.iter().any(|word| word == granted),
+                "{granted} ungranted"
+            );
         }
         // Pushing is not; and neither is the user's own `~/.armada/`.
         for refused in ["Bash(git push:*)", "Bash(armada:*)"] {

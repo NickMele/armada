@@ -206,6 +206,9 @@ mod tests {
     #[test]
     fn the_template_this_repository_ships_is_the_compiled_in_default() {
         let template = include_str!("../../../templates/guild/permissions.yml");
-        assert_eq!(parse(template).expect("the template parses"), Posture::default());
+        assert_eq!(
+            parse(template).expect("the template parses"),
+            Posture::default()
+        );
     }
 }

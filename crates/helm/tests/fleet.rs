@@ -128,7 +128,7 @@ fn stub_home() -> &'static Path {
 /// The Drone is detached, so this polls rather than sleeping a fixed span: a
 /// fixed one is either flaky or slow.
 fn recorded_argv(uuid: &str) -> Vec<String> {
-    let path = stub_home().join("argv").join(format!("{uuid}.argv"));
+    let path = argv_path(uuid);
     for _ in 0..300 {
         if let Ok(bytes) = std::fs::read(&path) {
             if !bytes.is_empty() {
@@ -145,6 +145,26 @@ fn recorded_argv(uuid: &str) -> Vec<String> {
         "the stub Drone never recorded an argv at {}",
         path.display()
     );
+}
+
+/// Where a Job's recorded argv lands. One file per Job, so each turn overwrites
+/// the last.
+fn argv_path(uuid: &str) -> PathBuf {
+    stub_home().join("argv").join(format!("{uuid}.argv"))
+}
+
+/// Forget the turn a Job has already recorded, so the next [`recorded_argv`] is
+/// about the **next** turn.
+///
+/// **Required before observing a resumed turn, and it is not politeness.** Every
+/// turn of one Job writes the same path, and the Drone is detached — so a reader
+/// that polls "until the file is non-empty" is answered instantly by the turn
+/// before the one it is asking about. That was survivable while the stub
+/// truncated the file in place and left a window of emptiness to lose the race
+/// in; it is a wrong answer rather than a flake now that the file appears whole
+/// or not at all.
+fn forget_argv(uuid: &str) {
+    let _ = std::fs::remove_file(argv_path(uuid));
 }
 
 /// The permission words a Drone on a machine with no `permissions.yml` carries.
@@ -1602,6 +1622,9 @@ fn resuming_a_paused_job_continues_the_same_session_detached() {
         &task(&format!("add rate limiting {STAY_ALIVE}")),
     );
     fleet::pause(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+    // The spawn's turn is already on disk under this uuid; drop it, so what is
+    // read below is the resumed turn and not the one before it.
+    forget_argv(&data.uuid);
 
     let output = fleet::resume(&run, &FrozenClock::new(), &scratch.place(), &data.name)
         .expect("a paused Job resumes");
@@ -1803,6 +1826,10 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
         "raise the CI timeout?",
     )
     .unwrap();
+
+    // The spawn's turn is already on disk under this uuid; drop it, so what is
+    // read below is the answer's turn and not the one before it.
+    forget_argv(&data.uuid);
 
     let began = Instant::now();
     let output = fleet::answer(
