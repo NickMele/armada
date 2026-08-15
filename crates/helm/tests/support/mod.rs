@@ -19,12 +19,50 @@ pub fn armada_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_armada"))
 }
 
+/// The floor of the range scratch machines allocate from.
+///
+/// **High, and deliberately nowhere near the default.** The suite must not
+/// reach for the ports a developer's own stack is using, and 5460 is exactly
+/// where a developer's Armada puts its first workspace.
+const SCRATCH_FLOOR: u16 = 20_000;
+
+/// How many distinct bases the scratch range holds, at one block apart.
+///
+/// `20000 + 1200 * 10 = 32000`, which is under
+/// [`armada_core::ports::PORT_CEILING`] with room for a block above every slot.
+const SCRATCH_SLOTS: u32 = 1_200;
+
+/// A base no other Armada on this machine is reaching for.
+///
+/// **The suite asserted on global machine state and called the failures
+/// flakiness.** A golden snapshot says a probed port is `RESERVED`; anything
+/// else on the machine holding 5460 makes it `CONFLICT`, and the thing most
+/// likely to be holding it is another Armada — every one of them claimed the
+/// same first block, because the base was a constant. Three agents hit it and
+/// two wrote it off.
+///
+/// The pid spreads concurrent test binaries and the counter spreads the scratch
+/// machines inside one, so neither two runs nor two `Machine`s share a floor.
+/// This is a mitigation and not a proof: two processes whose pids land on the
+/// same slot still collide, at roughly one in [`SCRATCH_SLOTS`]. What it removes
+/// is the *systematic* collision, where sharing was the guaranteed outcome
+/// rather than the unlucky one.
+fn scratch_port_base() -> u16 {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let slot = NEXT.fetch_add(1, Ordering::Relaxed);
+    let spread = (std::process::id().wrapping_mul(7).wrapping_add(slot)) % SCRATCH_SLOTS;
+    SCRATCH_FLOOR + (spread * 10) as u16
+}
+
 /// A scratch machine: one `$HOME`, one `manifest.db`, and repos under it.
 pub struct Machine {
     /// The fake `$HOME`.
     pub home: tempfile::TempDir,
     /// Where scratch repositories live.
     pub root: tempfile::TempDir,
+    /// The first port this machine hands out. See [`scratch_port_base`].
+    pub port_base: u16,
 }
 
 impl Machine {
@@ -32,7 +70,46 @@ impl Machine {
         Machine {
             home: tempfile::tempdir().unwrap(),
             root: tempfile::tempdir().unwrap(),
+            port_base: scratch_port_base(),
         }
+    }
+
+    /// Put this machine's `port_base` in `machine.yml`, if nothing is there yet.
+    ///
+    /// **Written just before a command rather than at construction, and the
+    /// reason is `armada init`.** That verb refuses a `~/.armada/` that already
+    /// exists — the whole of its first-run contract — so a harness that created
+    /// the directory up front would make every test of it assert against a
+    /// machine that had been here before. So the seeding waits, and skips the
+    /// one verb whose subject is the directory's absence.
+    ///
+    /// **Never overwrites.** Several tests write a `machine.yml` of their own to
+    /// exercise `cpu_slots` or the pre-namespace layout, and clobbering one
+    /// would be the harness quietly answering the question the test is asking.
+    /// Those tests claim no port block, so the default base is correct for
+    /// them.
+    fn seed_machine_yml(&self, args: &[&str]) {
+        if args.first() == Some(&"init") {
+            return;
+        }
+        self.seed_port_base();
+    }
+
+    /// The same seeding, for a test that builds an `App` itself rather than
+    /// running the binary — `golden.rs` does, and it is the suite that most
+    /// needs its own floor.
+    pub fn seed_port_base(&self) {
+        let armada = self.home.path().join(".armada");
+        let path = armada.join("machine.yml");
+        if path.exists() {
+            return;
+        }
+        std::fs::create_dir_all(&armada).unwrap();
+        std::fs::write(
+            &path,
+            format!("manifest:\n  port_base: {}\n", self.port_base),
+        )
+        .unwrap();
     }
 
     /// A git repository with a committed `armada.yml` and the helper scripts the
@@ -89,6 +166,7 @@ impl Machine {
     }
 
     fn command(&self, cwd: &Path, args: &[&str]) -> Command {
+        self.seed_machine_yml(args);
         let mut command = Command::new(armada_binary());
         command
             .args(args)

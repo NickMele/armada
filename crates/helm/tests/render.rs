@@ -19,9 +19,15 @@ fn has_ansi(bytes: &[u8]) -> bool {
 }
 
 /// Serialised for the reason `golden.rs` records: **a bind probe is itself a
-/// bind**, so two `status` calls probing 5460 at the same moment make one of
-/// them report `CONFLICT` (`docs/traps.md`). This file compares two renders of
-/// one query byte for byte, where that flake would read as a colour bug.
+/// bind** (`docs/traps.md`). This file compares two renders of one query byte
+/// for byte, where that flake would read as a colour bug.
+///
+/// **Kept where `golden.rs`'s was removed, and the difference is what each
+/// `Machine` is doing.** Every scratch machine now has its own `port_base`, so
+/// two machines cannot collide — but several of these tests run the binary
+/// twice against *the same* `Machine` and compare the two answers, and a probe
+/// this file makes concurrently with one of those is a probe of the very port
+/// that comparison is about.
 static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn serialised() -> std::sync::MutexGuard<'static, ()> {

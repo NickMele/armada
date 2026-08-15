@@ -672,7 +672,13 @@ fn status_renders_for_a_terminal_on_stdout() {
     assert!(output.status.success());
     let text = String::from_utf8_lossy(&output.stdout);
     assert!(text.starts_with("armada  "), "{text}");
-    assert!(text.contains("ports 54"), "{text}");
+    // **This machine's own floor, not the default one.** A scratch machine sets
+    // its own `port_base` so two concurrent suites cannot fight over 5460, and
+    // an assertion spelling `54` was reading the constant rather than the run.
+    assert!(
+        text.contains(&format!("ports {}", machine.port_base)),
+        "{text}"
+    );
     assert!(text.contains("scope workspace"), "{text}");
     assert!(
         // `status` speaks a probed port as the state of the component behind it,

@@ -191,8 +191,24 @@ becomes flaky in exactly the way that looks like a real conflict, and
 `armada manifest status --all` run twice at once can report a `CONFLICT` that does not
 exist. It is inherent to bind-probing rather than a bug to fix — `connect()`
 answers a different question — so the rule is that a probe's answer is a
-point-in-time reading and nothing may be serialised against it. Armada's own
-suite serialises the runs that snapshot a port state, for this reason.
+point-in-time reading and nothing may be serialised against it.
+
+**A mutex was the wrong half of the answer, and it took three agents to see
+it.** Armada's own suite used to serialise the runs that snapshot a port state,
+which fixes two threads and cannot fix two *processes* — and two processes is
+the case that kept failing, because every Armada on a machine claimed its first
+block from the same hardcoded base. So a developer's own stack, a second agent's
+suite, or a container left running from the last one made a golden snapshot
+report `CONFLICT`, intermittently, from a machine that was behaving correctly.
+Three separate agents hit it and two recorded it as flakiness.
+
+**The suite was asserting on global machine state, and the fix is to stop.**
+`port_base` is a `machine.yml` key (PLAN.md §4.3.1), each scratch machine takes
+its own high one, and the golden redaction maps the claimed ports back onto the
+documented `5460` so the snapshots keep their offsets and lose only the floor.
+The intra-process mutex went with the reason for it. **A test that fails when
+something unrelated is running on the machine is not flaky — it is asserting on
+something it does not own.**
 
 So a probe must bind **both** `127.0.0.1` and `[::1]` and treat either `EADDRINUSE` as taken,
 and `armada manifest status` must connect on both families before reporting `RESERVED`. `SO_REUSEPORT` on

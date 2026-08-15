@@ -14,13 +14,21 @@ use crate::error::{ArmadaError, ConfigWhere, ErrClass};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-/// The first port Armada hands out.
+/// The first port Armada hands out **by default**.
 ///
 /// **PLAN.md does not state a base and this is therefore a phase-2 decision.**
 /// It is taken from §3.1's own payload, which shows `5460-5469` and
 /// `5470-5479` — so the documented example and the implementation agree rather
 /// than each picking a number. It sits above the registered range a repo's own
 /// services conventionally use and well below the ephemeral range.
+///
+/// **Overridable per machine, as `port_base` in `~/.armada/machine.yml`**
+/// (PLAN.md §4.3.1), which is why nothing below reads this constant: it is the
+/// default a machine starts from, not the base an allocation uses. A default is
+/// a good guess about a machine, and a machine that already has something on
+/// 5460 had no way to say so — every Armada on it reached for the same first
+/// port, so two concurrent workspaces collided on a port neither of them owned
+/// and the failure looked like flakiness.
 pub const PORT_BASE: u16 = 5460;
 
 /// The last port Armada will hand out.
@@ -59,18 +67,28 @@ impl PortBlock {
     }
 }
 
-/// The lowest free block of `size` ports, or `None` when the machine has run
-/// out.
+/// The lowest free block of `size` ports at or above `base`, or `None` when the
+/// machine has run out.
 ///
 /// Lowest-first rather than random or next-fit: a machine that repeatedly
 /// creates and destroys worktrees then reuses the same low numbers instead of
 /// walking upward forever, and a human reading `docker ps` sees stable,
 /// small numbers.
-pub fn choose_block(taken: &[PortBlock], size: u16) -> Option<PortBlock> {
+///
+/// **`base` is a parameter and [`PORT_BASE`] is only its default.** Reading the
+/// constant here would put the machine's one configurable floor inside a pure
+/// function, which is the ambient state `ARCHITECTURE.md` §1.4 forbids — and it
+/// is what left a user whose 5460 was taken with nothing to change.
+///
+/// A `taken` block *below* `base` is simply not overlapped and so does not move
+/// the answer: `manifest.db` is machine-global and two Armadas on one machine
+/// may sit on different floors, so one's rows must not push the other off its
+/// own.
+pub fn choose_block(taken: &[PortBlock], size: u16, base: u16) -> Option<PortBlock> {
     if size == 0 {
         return None;
     }
-    let mut from = PORT_BASE;
+    let mut from = base;
     loop {
         let to = from.checked_add(size - 1)?;
         if to > PORT_CEILING {
@@ -194,10 +212,50 @@ mod tests {
     #[test]
     fn the_first_block_starts_at_the_base() {
         assert_eq!(
-            choose_block(&[], 10),
+            choose_block(&[], 10, PORT_BASE),
             Some(PortBlock {
                 from: PORT_BASE,
                 to: PORT_BASE + 9
+            })
+        );
+    }
+
+    /// **The base is the caller's, not this module's.** A machine whose 5460 is
+    /// already spoken for had no way out, and every Armada on one machine
+    /// reaching for the same first port is exactly how two concurrent
+    /// workspaces collide on a port neither of them owns.
+    ///
+    /// Inverted — asserting the block still starts at [`PORT_BASE`] — this
+    /// fails, which is the point: before it, the argument had nowhere to go.
+    #[test]
+    fn a_machine_that_moved_its_base_gets_its_blocks_from_there() {
+        assert_eq!(
+            choose_block(&[], 10, 21_000),
+            Some(PortBlock {
+                from: 21_000,
+                to: 21_009
+            })
+        );
+        assert_ne!(
+            choose_block(&[], 10, 21_000).map(|b| b.from),
+            Some(PORT_BASE)
+        );
+    }
+
+    /// **A block already taken below the base is not a reason to move up.**
+    /// Two Armadas on one machine share `manifest.db` but need not share a
+    /// base, so the rows of one must not push the other off its own floor.
+    #[test]
+    fn a_block_below_the_base_does_not_push_the_first_one_up() {
+        let taken = [PortBlock {
+            from: PORT_BASE,
+            to: PORT_BASE + 9,
+        }];
+        assert_eq!(
+            choose_block(&taken, 10, 21_000),
+            Some(PortBlock {
+                from: 21_000,
+                to: 21_009
             })
         );
     }
@@ -209,7 +267,7 @@ mod tests {
             to: 5469,
         }];
         assert_eq!(
-            choose_block(&taken, 10),
+            choose_block(&taken, 10, PORT_BASE),
             Some(PortBlock {
                 from: 5470,
                 to: 5479
@@ -230,7 +288,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            choose_block(&taken, 10),
+            choose_block(&taken, 10, PORT_BASE),
             Some(PortBlock {
                 from: 5470,
                 to: 5479
@@ -251,7 +309,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            choose_block(&taken, 10),
+            choose_block(&taken, 10, PORT_BASE),
             Some(PortBlock {
                 from: 5485,
                 to: 5494
@@ -265,7 +323,7 @@ mod tests {
             from: PORT_BASE,
             to: PORT_CEILING - 3,
         }];
-        assert_eq!(choose_block(&taken, 10), None);
+        assert_eq!(choose_block(&taken, 10, PORT_BASE), None);
     }
 
     #[test]

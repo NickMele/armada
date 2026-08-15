@@ -340,12 +340,18 @@ impl Db {
     /// components declare no `ports:` ([`armada_core::ports::needs_block`]).
     /// The row is still written: it is what makes the workspace reclaimable
     /// after its directory is gone, and that has nothing to do with ports.
+    ///
+    /// **`base` is the machine's `port_base`**, travelling with `size` because
+    /// the two describe one pool and neither is this layer's to decide. The
+    /// store is machine-global while the base is per-machine-configuration, so
+    /// a row written from a different floor is data here and not a default.
     pub fn claim_block(
         &mut self,
         workspace: &WorkspaceId,
         path: &Path,
         project: Option<&ProjectId>,
         size: Option<u16>,
+        base: u16,
         claimed_at: &str,
     ) -> Result<ClaimOutcome, ArmadaError> {
         let tx = self
@@ -400,7 +406,7 @@ impl Db {
                         .collect()
                 };
 
-                let Some(block) = choose_block(&taken, size) else {
+                let Some(block) = choose_block(&taken, size, base) else {
                     tx.rollback().map_err(|e| map_sqlite(&self.path, e))?;
                     return Ok(ClaimOutcome::Exhausted);
                 };
@@ -971,8 +977,9 @@ fn parse_kind(text: &str) -> LeaseKind {
 /// rule**: changes are additive for the whole 0.x line — a new column, never a
 /// dropped or retyped one — because an older binary reading a `NULL` out of an
 /// `INTEGER NOT NULL` column would fail at the `row.get` rather than at the
-/// version check. `0` is not a port any workspace can be given: the pool starts
-/// at [`armada_core::ports::PORT_BASE`], which is 5460.
+/// version check. `0` is not a port any workspace can be given whatever the
+/// machine's `port_base` is — the floor is configurable, and `0` is below every
+/// value of it that a `u16` port can name.
 ///
 /// **It is translated in exactly these two functions and nowhere else.** Every
 /// caller above the store sees `Option<PortBlock>`, so nothing outside this file
@@ -1160,10 +1167,24 @@ mod tests {
     fn two_workspaces_get_non_overlapping_blocks() {
         let (_home, mut db) = open();
         let a = db
-            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, Some(10), "t")
+            .claim_block(
+                &ws("aaaaaaaa"),
+                Path::new("/a"),
+                None,
+                Some(10),
+                armada_core::ports::PORT_BASE,
+                "t",
+            )
             .unwrap();
         let b = db
-            .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, Some(10), "t")
+            .claim_block(
+                &ws("bbbbbbbb"),
+                Path::new("/b"),
+                None,
+                Some(10),
+                armada_core::ports::PORT_BASE,
+                "t",
+            )
             .unwrap();
         let (ClaimOutcome::Claimed(a), ClaimOutcome::Claimed(b)) = (a, b) else {
             panic!("both claims should have succeeded");
@@ -1176,10 +1197,24 @@ mod tests {
     fn claiming_twice_is_idempotent_by_workspace_id() {
         let (_home, mut db) = open();
         let first = db
-            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, Some(10), "t")
+            .claim_block(
+                &ws("aaaaaaaa"),
+                Path::new("/a"),
+                None,
+                Some(10),
+                armada_core::ports::PORT_BASE,
+                "t",
+            )
             .unwrap();
         let second = db
-            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, Some(10), "t")
+            .claim_block(
+                &ws("aaaaaaaa"),
+                Path::new("/a"),
+                None,
+                Some(10),
+                armada_core::ports::PORT_BASE,
+                "t",
+            )
             .unwrap();
         match (first, second) {
             (ClaimOutcome::Claimed(a), ClaimOutcome::AlreadyHeld(b)) => assert_eq!(a, b),
@@ -1192,14 +1227,28 @@ mod tests {
     fn a_released_block_is_reused_by_the_next_claimant() {
         let (_home, mut db) = open();
         let ClaimOutcome::Claimed(first) = db
-            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, Some(10), "t")
+            .claim_block(
+                &ws("aaaaaaaa"),
+                Path::new("/a"),
+                None,
+                Some(10),
+                armada_core::ports::PORT_BASE,
+                "t",
+            )
             .unwrap()
         else {
             panic!()
         };
         db.release_workspace(&ws("aaaaaaaa"), &[]).unwrap();
         let ClaimOutcome::Claimed(second) = db
-            .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, Some(10), "t")
+            .claim_block(
+                &ws("bbbbbbbb"),
+                Path::new("/b"),
+                None,
+                Some(10),
+                armada_core::ports::PORT_BASE,
+                "t",
+            )
             .unwrap()
         else {
             panic!()

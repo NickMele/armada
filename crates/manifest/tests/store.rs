@@ -159,7 +159,14 @@ fn concurrent_claimants_never_receive_overlapping_blocks() {
             // read and the write, so the answer has changed.
             for _ in 0..64 {
                 match db
-                    .claim_block(&id, Path::new(&format!("/w/{index}")), None, Some(10), "t")
+                    .claim_block(
+                        &id,
+                        Path::new(&format!("/w/{index}")),
+                        None,
+                        Some(10),
+                        armada_core::ports::PORT_BASE,
+                        "t",
+                    )
                     .unwrap()
                 {
                     ClaimOutcome::Claimed(block) | ClaimOutcome::AlreadyHeld(block) => {

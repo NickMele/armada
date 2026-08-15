@@ -1942,6 +1942,7 @@ it — that shape genuinely needs a daemon. Armada's does not.)
 manifest:                 # Manifest's section; every other module gets its own
   cpu_slots: 6            # default: max(1, num_cpus - 2)
   port_block_size: 10
+  port_base: 5460         # the first port handed out
   run_retention: 10       # runs kept; see the 10 MB per-check log cap (§3.1)
   check_timeout: 900      # per-check default, overridable per check (§4.1)
   acquire_timeout: 2400   # cumulative wait for leases before FAILED/aborted (§4.3)
@@ -1950,6 +1951,15 @@ manifest:                 # Manifest's section; every other module gets its own
 guild:                    # §13.1: the remote, and what the importer withheld
   withheld: []
 ```
+
+**`port_base` is the eighth key, and it is the pair of one that was already here.**
+`port_block_size` said how wide a workspace's span is; nothing said where the spans start,
+so the one number a machine might actually need to change was a constant in the source. A
+machine that already runs something on 5460 had no way to say so — and worse, *every* Armada
+on a machine reached for the same first port, so two concurrent workspaces collided on a port
+neither of them owned. That reads as flakiness rather than as a setting with no key, which is
+how it survived being hit three times. The default is unchanged, so a machine that never had
+the problem never learns the key exists.
 
 **`up_timeout` is the seventh key, and it was specified with a value and no home.**
 §6's deadline table names it and gives it a default — 600s on `compose up`, `build`, `pull`,
@@ -2002,7 +2012,9 @@ naming it.
 **What the failure says.** A `machine.yml` a module cannot read is `environment`, exit 6 — the
 repo is fine and the machine's configuration is not — and the remedy **names the section that
 failed, not the leaf keys**. It used to list the seven keys by hand, which is a list that goes
-stale the first time an eighth is added and then sends the reader to fix the wrong thing.
+stale the first time an eighth is added and then sends the reader to fix the wrong thing. An
+eighth has since been added — `port_base` — and the remedy needed no edit, which is the whole
+of the argument.
 
 **`cpu_slots` defaults to `num_cpus - 2`, not `num_cpus`.** A budget that permits full
 saturation makes the machine feel dead even while the work is correctly bounded, because the

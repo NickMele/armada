@@ -156,12 +156,18 @@ pub fn verify<R: Run, C: Clock, F: Fetch>(
     let at = app.ctx.now.mono();
     let answers = look(app, &workspace, &config)?;
     let block = app.machine.port_block_size;
+    // **A representative block from this machine's own floor.** `verify` asks
+    // whether every `${port.NAME}` resolves inside a block of this width, which
+    // is a question about the count and not about the numbers — but reporting
+    // it against a range the machine will never claim would make a reader chase
+    // a discrepancy that is only this line's.
+    let base = app.machine.port_base;
     let report = verify::pass_one(
         &config,
         &answers,
         ports::PortBlock {
-            from: ports::PORT_BASE,
-            to: ports::PORT_BASE + block.saturating_sub(1),
+            from: base,
+            to: base + block.saturating_sub(1),
         },
         &BUILTIN_VERBS,
         &label,

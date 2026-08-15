@@ -84,9 +84,9 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// The seven documented keys, and no others.
+/// The eight documented keys, and no others.
 ///
-/// Adding an eighth is a contract change: PLAN.md §4.3.1 is the owner of this
+/// Adding a ninth is a contract change: PLAN.md §4.3.1 is the owner of this
 /// list, and this crate codes against it rather than extending it.
 ///
 /// **`up_timeout` is the seventh, and it arrived as a reconciliation rather
@@ -94,12 +94,26 @@ use std::time::Duration;
 /// `compose up`, `build`, `pull`, `down` and `rm` — while §4.3.1 listed six
 /// keys and did not carry it, so the setting was specified with a value and no
 /// home. §4.3.1 is where machine capacity lives, so that is where it went.
+///
+/// **`port_base` is the eighth, and it is the pair of a key that was already
+/// here.** `port_block_size` said how wide a workspace's span is and nothing
+/// said where the spans start, so the one number a machine might actually need
+/// to change was the one that was a constant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MachineConfig {
     /// The machine's CPU budget, in slots.
     pub cpu_slots: u32,
     /// How many ports one workspace's block holds.
     pub port_block_size: u16,
+    /// The first port this machine hands out.
+    ///
+    /// **The machine says where its pool starts, because only the machine
+    /// knows.** [`armada_core::ports::PORT_BASE`] is a good guess and nothing
+    /// more: a machine that already runs something on 5460 had no way to say
+    /// so, and every Armada on it reached for the same first port — so two
+    /// concurrent workspaces collided on a port neither of them owned, which
+    /// reads as flakiness rather than as a configuration that has no key.
+    pub port_base: u16,
     /// How many run directories `.armada/run/` keeps.
     pub run_retention: u32,
     /// Seconds a check gets when it declares no `timeout:`.
@@ -120,12 +134,13 @@ pub struct MachineConfig {
 pub const SECTION: &str = "manifest";
 
 /// The section, as written. Every key optional: a `machine.yml` that sets one
-/// thing takes the documented default for the other six.
+/// thing takes the documented default for the others.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct MachineConfigFile {
     cpu_slots: Option<u32>,
     port_block_size: Option<u16>,
+    port_base: Option<u16>,
     run_retention: Option<u32>,
     check_timeout: Option<u32>,
     acquire_timeout: Option<u32>,
@@ -144,6 +159,7 @@ impl MachineConfig {
         MachineConfig {
             cpu_slots: default_cpu_slots(),
             port_block_size: 10,
+            port_base: armada_core::ports::PORT_BASE,
             run_retention: 10,
             check_timeout: 900,
             // Sized against the longest legitimate exclusive hold in the
@@ -186,6 +202,7 @@ impl MachineConfig {
         Ok(MachineConfig {
             cpu_slots: file.cpu_slots.unwrap_or(defaults.cpu_slots),
             port_block_size: file.port_block_size.unwrap_or(defaults.port_block_size),
+            port_base: file.port_base.unwrap_or(defaults.port_base),
             run_retention: file.run_retention.unwrap_or(defaults.run_retention),
             check_timeout: file.check_timeout.unwrap_or(defaults.check_timeout),
             acquire_timeout: file.acquire_timeout.unwrap_or(defaults.acquire_timeout),
@@ -570,8 +587,9 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         std::fs::write(
             home.path().join("machine.yml"),
-            "manifest:\n  cpu_slots: 6\n  port_block_size: 20\n  run_retention: 4\n  \
-             check_timeout: 60\n  acquire_timeout: 3000\n  docker_timeout: 15\n  up_timeout: 900\n",
+            "manifest:\n  cpu_slots: 6\n  port_block_size: 20\n  port_base: 21000\n  \
+             run_retention: 4\n  check_timeout: 60\n  acquire_timeout: 3000\n  \
+             docker_timeout: 15\n  up_timeout: 900\n",
         )
         .unwrap();
         let config = MachineConfig::read(home.path()).unwrap();
@@ -580,6 +598,7 @@ mod tests {
             MachineConfig {
                 cpu_slots: 6,
                 port_block_size: 20,
+                port_base: 21_000,
                 run_retention: 4,
                 check_timeout: 60,
                 acquire_timeout: 3000,
@@ -588,6 +607,47 @@ mod tests {
             }
         );
         assert_eq!(config.config_defaults().check_timeout, 60);
+    }
+
+    /// **A file that does not mention `port_base` keeps the documented one.**
+    /// The key exists for the machine that needs it, and every machine that
+    /// does not must be unaffected — inverted, expecting anything but
+    /// [`armada_core::ports::PORT_BASE`], this fails.
+    #[test]
+    fn a_machine_that_says_nothing_about_its_base_keeps_the_default() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("machine.yml"),
+            "manifest:\n  cpu_slots: 6\n",
+        )
+        .unwrap();
+        assert_eq!(
+            MachineConfig::read(home.path()).unwrap().port_base,
+            armada_core::ports::PORT_BASE
+        );
+        // …and so does a machine with no file at all.
+        let empty = tempfile::tempdir().unwrap();
+        assert_eq!(
+            MachineConfig::read(empty.path()).unwrap().port_base,
+            armada_core::ports::PORT_BASE
+        );
+    }
+
+    /// **The pre-namespace layout reads it too, for free.** A bare `port_base`
+    /// at the top level is a scalar, and a top-level scalar is this module's
+    /// key — which is the rule that lets the flat branch carry a key it has
+    /// never heard of (PLAN.md §4.3.1).
+    #[test]
+    fn a_flat_file_carries_the_base_like_every_other_key() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("machine.yml"),
+            "cpu_slots: 4\nport_base: 22000\nguild:\n  withheld: []\n",
+        )
+        .unwrap();
+        let config = MachineConfig::read(home.path()).unwrap();
+        assert_eq!(config.port_base, 22_000);
+        assert_eq!(config.cpu_slots, 4);
     }
 
     /// **The two docker deadlines are separate, and the gap is the point.**

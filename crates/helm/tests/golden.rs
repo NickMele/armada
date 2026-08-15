@@ -86,13 +86,19 @@ impl Run for NoDocker {
     }
 }
 
-/// Golden runs are serialised, and the reason is a measurement rather than
-/// caution: **a bind probe is itself a bind.** Two of these tests probing port
-/// 5460 at the same moment — each with its own `$HOME`, so each claiming the
-/// same first block — make one of them see the other's probe and report
-/// `CONFLICT`. Observed, and it is a property of the probe rather than of the
-/// test: `docs/traps.md` records it.
-static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+// **These runs used to be serialised, and the lock is gone rather than kept for
+// safety.** Its reason was a measurement — a bind probe is itself a bind, so two
+// tests probing port 5460 at the same moment made one of them report `CONFLICT`
+// (`docs/traps.md`). They both probed 5460 because every scratch machine claimed
+// the same first block, and every scratch machine claimed it because the base
+// was a constant. `support::Machine` now gives each one its own `port_base`, so
+// two of these tests no longer share a port to fight over — and a mutex kept
+// past its reason is one nobody can safely remove later, because its comment no
+// longer says what it is for.
+//
+// It never protected against a *second process* in any case, which is the case
+// that actually failed here: a developer's own stack, or another agent's suite,
+// on 5460.
 
 fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -121,6 +127,8 @@ struct Redactions {
     root: PathBuf,
     workspace: String,
     project: Option<String>,
+    /// The floor this scratch machine allocates from.
+    port_base: u16,
 }
 
 impl Redactions {
@@ -131,6 +139,7 @@ impl Redactions {
         if let Some(project) = &self.project {
             out = out.replace(project, "<project>");
         }
+        out = self.canonical_ports(&out);
         // **The run id, and only the run id.** It carries a wall reading —
         // frozen here — mixed with this process's entropy, which is not, so it
         // differs between two correct runs. A `duration_ms` does *not*: every
@@ -148,6 +157,67 @@ impl Redactions {
         out = redact_run_paths(&out);
         out
     }
+
+    /// Map this machine's own ports back onto the documented ones.
+    ///
+    /// **A snapshot must not assert where a machine's pool starts.** That is a
+    /// `machine.yml` setting, and the suite now gives every scratch machine its
+    /// own so two concurrent runs cannot fight over 5460 — which makes the
+    /// numbers vary between two *correct* runs, exactly the nondeterminism
+    /// `ARCHITECTURE.md` §1.6 names ports for and answers with a redaction.
+    ///
+    /// **Mapped rather than blanked, because the offsets are the assertion.**
+    /// `init`'s snapshot says the block is ten wide and that `api` gets the
+    /// first port of it; replacing the numbers with `<port>` would throw both
+    /// facts away. Rewriting `base + n` to `5460 + n` keeps every relationship
+    /// and drops only the floor.
+    ///
+    /// Substitution is by whole token — the only integers of four digits or
+    /// more in these payloads are ports, and a bare `5460` in the file is what
+    /// the reader is meant to compare against.
+    fn canonical_ports(&self, json: &str) -> String {
+        let default = armada_core::ports::PORT_BASE;
+        if self.port_base == default {
+            return json.to_string();
+        }
+        let mut out = json.to_string();
+        // Wide enough for any block this suite claims, and walked downward so
+        // a rewritten low port can never be rewritten a second time as a high
+        // one — `5460` is below the scratch floor, so the ranges never meet,
+        // and the direction makes that independent of the floor.
+        for offset in (0..64_u16).rev() {
+            let Some(actual) = self.port_base.checked_add(offset) else {
+                continue;
+            };
+            let canonical = default + offset;
+            out = replace_number(&out, actual, canonical);
+        }
+        out
+    }
+}
+
+/// Replace an integer wherever it stands as a whole JSON number.
+///
+/// Guarded on both sides so `21000` never rewrites the `21000` inside `210001`.
+fn replace_number(json: &str, from: u16, to: u16) -> String {
+    let needle = from.to_string();
+    let with = to.to_string();
+    let mut out = String::with_capacity(json.len());
+    let mut rest = json;
+    while let Some(at) = rest.find(&needle) {
+        let before_ok = rest[..at].ends_with(|c: char| !c.is_ascii_digit() && c != '.');
+        let after = &rest[at + needle.len()..];
+        let after_ok = !after.starts_with(|c: char| c.is_ascii_digit() || c == '.');
+        out.push_str(&rest[..at]);
+        if before_ok && after_ok {
+            out.push_str(&with);
+        } else {
+            out.push_str(&needle);
+        }
+        rest = after;
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Replace what sits between a prefix and the next terminator.
@@ -202,12 +272,16 @@ struct Scenario {
 
 fn scenario(config: &str) -> Scenario {
     let machine = Machine::new();
+    // This suite builds its own `App` rather than running the binary, so it
+    // seeds the file the binary's harness seeds for itself.
+    machine.seed_port_base();
     let repo = machine.repo("main", config);
     let workspace = discovery::resolve(&RealRun, &repo).expect("the scratch repo resolves");
     let redactions = Redactions {
         root: repo.clone(),
         workspace: workspace.id.to_string(),
         project: workspace.project.as_ref().map(|p| p.to_string()),
+        port_base: machine.port_base,
     };
     Scenario {
         machine,
@@ -220,7 +294,6 @@ fn run_verb(
     scenario: &Scenario,
     verb: impl FnOnce(&mut app::App<NoDocker, FrozenClock, RealFetch>) -> Result<Output, ArmadaError>,
 ) -> String {
-    let _serialised = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let run = NoDocker;
     let workspace = discovery::resolve(&run, &scenario.repo).unwrap();
     let ctx = Ctx {

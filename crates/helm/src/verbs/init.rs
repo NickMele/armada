@@ -120,6 +120,7 @@ fn claim<R: Run, C: Clock, F: Fetch>(
             &workspace.root,
             workspace.project.as_ref(),
             size,
+            app.machine.port_base,
             claimed_at,
         )?;
         match outcome {
@@ -129,17 +130,20 @@ fn claim<R: Run, C: Clock, F: Fetch>(
                 return Err(ArmadaError {
                     class: ErrClass::Environment,
                     r#where: "ports".to_string(),
+                    // **The machine's own floor, not the default one.** A
+                    // report naming 5460 on a machine configured to start at
+                    // 21000 sends the reader to look at the wrong range, and
+                    // this message exists to say which range ran out.
                     message: format!(
                         "no free block of {} ports between {} and {}",
-                        app.machine.port_block_size,
-                        ports::PORT_BASE,
-                        ports::PORT_CEILING
+                        app.machine.port_block_size, app.machine.port_base, ports::PORT_CEILING
                     ),
                     next_action: Some(
-                        "`armada manifest clean --all --orphaned` releases blocks whose workspaces are gone"
+                        "`armada manifest clean --all --orphaned` releases blocks whose workspaces are gone, \
+                         or lower `port_base` in ~/.armada/machine.yml"
                             .to_string(),
                     ),
-                })
+                });
             }
         }
     }
@@ -361,7 +365,9 @@ fn dry<R: Run, C: Clock, F: Fetch>(
     let would_claim = match (held, ports::needs_block(config)) {
         (_, false) => None,
         (Some(row), true) => row.ports,
-        (None, true) => ports::choose_block(&taken, app.machine.port_block_size),
+        (None, true) => {
+            ports::choose_block(&taken, app.machine.port_block_size, app.machine.port_base)
+        }
     };
 
     // Decided, not executed: listing and stat-ing change nothing, so the
