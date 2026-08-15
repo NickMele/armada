@@ -32,7 +32,16 @@ no armada.yml here, this is evidence and not a config
   ci steps, the best existing evidence of what you actually run
     pnpm install --frozen-lockfile, pnpm lint, pnpm test, pnpm build
 
-Evidence only. Armada does not guess which of these you actually run.
+  proposals, every line read out of a file, none of it inferred
+  WHAT                                     WRITES                 BECAUSE
+  components.next-prisma                   the repository itself  package.json
+  components.next-prisma.setup             pnpm install           pnpm-lock.yaml
+  components.next-prisma.checks.build      pnpm run build         package.json
+  components.next-prisma.checks.test       pnpm run test          package.json
+  components.next-prisma.checks.lint       pnpm run lint          package.json
+  components.next-prisma.checks.typecheck  pnpm run typecheck     package.json
+
+Evidence only. Armada proposes only what a file already said. Nothing is written yet.
 
   next, no onboarding skill in your guild — `armada guild init`
     claude --append-system-prompt "$(cat ~/.armada/guild/skills/onboard-repo/SKILL.md)" "Onboard this repository for Armada."

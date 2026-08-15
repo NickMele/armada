@@ -2441,6 +2441,106 @@ pub fn choice_list(question: &str, options: &[Choice], default: usize, style: St
     out
 }
 
+/// A tick list **printed rather than drawn**, for a terminal that refuses raw
+/// mode.
+///
+/// **`enter` accepts what is on the screen and a list of numbers removes from
+/// it**, which is the same shape the widget has: everything opens ticked and the
+/// reader's work is taking off what his repository disagrees with. The
+/// alternative — typing in the ones to keep — makes an empty answer mean *write
+/// nothing*, and an empty answer is what a mis-keyed line and an ended stream
+/// both produce.
+///
+/// Ends at the caret, where the cursor sits.
+pub fn tick_list(question: &str, options: &[Choice], ticked: &[bool], style: Style) -> String {
+    let mut out = format!("{}\n", style.paint(Role::SignalAmber, question));
+    let mut table = Table::new(vec![
+        Column::fixed(""),
+        Column::fixed(""),
+        Column::fixed(""),
+        Column::flexible(""),
+    ])
+    .headerless()
+    .indent(2);
+    for (index, choice) in options.iter().enumerate() {
+        let on = ticked.get(index).copied().unwrap_or(false);
+        table = table.row(vec![
+            Cell::painted((index + 1).to_string(), Role::NavalBlue),
+            token(
+                if on { "[x]" } else { "[ ]" },
+                if on {
+                    Role::BeaconGreen
+                } else {
+                    Role::SteelGrey
+                },
+            ),
+            Cell::plain(choice.label.clone()),
+            Cell::muted(choice.aside.clone()),
+        ]);
+    }
+    out.push_str(&table.render(style, Terminal::FALLBACK_WIDTH));
+    out.push_str("  ");
+    out.push_str(&style.paint(
+        Role::SteelGrey,
+        "enter writes all of them, or numbers to leave out",
+    ));
+    out.push_str("  ");
+    out.push_str(&style.paint(Role::SteelGrey, style.caret()));
+    out.push(' ');
+    out
+}
+
+/// What was ticked, on one line, for the scrollback.
+///
+/// **The same reason [`chosen_line`] exists**: the widget's viewport is gone the
+/// moment it closes, and what got written to a file has to be recoverable from
+/// the scrollback afterwards.
+pub fn ticked_line(kept: usize, of: usize, style: Style) -> String {
+    format!(
+        "{}  {} {}\n",
+        style.paint(Role::SignalAmber, "proposals confirmed"),
+        style.paint(Role::SteelGrey, style.caret()),
+        style.paint(Role::RadarCyan, &format!("{kept} of {of}")),
+    )
+}
+
+/// What `config scan` wrote, and the one command that says whether it works.
+///
+/// **`verify` is named because a proposed config is a config nobody has run.**
+/// Every line in it was copied out of a file this repository already had, which
+/// makes it plausible and not correct — layer 3 is what tells those apart
+/// (PLAN.md §5), and a report that stopped at *written* would leave the reader
+/// to discover the difference on his first real run.
+pub fn wrote_config(lines: usize, style: Style) -> String {
+    format!(
+        "{} {}\n{} {}\n",
+        style.strong(Role::BeaconGreen, "armada.yml written."),
+        style.paint(
+            Role::SteelGrey,
+            &format!(
+                "{} from evidence, none of it guessed.",
+                format::count(lines, "line")
+            ),
+        ),
+        style.paint(Role::SteelGrey, "->"),
+        style.paint(
+            Role::RadarCyan,
+            "armada manifest config verify   says whether it actually runs"
+        ),
+    )
+}
+
+/// Nothing was ticked, or the list was left. **Not an error**: the reader was
+/// asked and answered, and the evidence he was answering about is still on the
+/// screen above.
+pub fn wrote_nothing(style: Style) -> String {
+    format!(
+        "{} {}\n",
+        style.strong(Role::SignalAmber, "Nothing written."),
+        style.paint(Role::SteelGrey, "the evidence above is unchanged"),
+    )
+}
+
 /// What was picked, on one line, for the scrollback.
 ///
 /// **A selector that clears itself leaves no record of the decision.** The
@@ -4601,12 +4701,47 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
         out.push_str(&wrapped(style, &candidates, width));
     }
 
+    // **Drawn last, under everything it was derived from.** A proposal is an
+    // argument about the evidence above it, and a reader deciding whether one is
+    // right has just read the file it names — which is why the third column is
+    // that file rather than a confidence.
+    if !data.proposals.is_empty() {
+        let mut table = Table::new(vec![
+            Column::fixed("what"),
+            Column::fixed("writes"),
+            Column::flexible("because"),
+        ])
+        .indent(2);
+        for proposal in &data.proposals {
+            table = table.row(vec![
+                Cell::painted(proposal.at.clone(), Role::RadarCyan),
+                Cell::plain(proposal.writes.clone()),
+                Cell::muted(proposal.because.clone()),
+            ]);
+        }
+        out.push('\n');
+        out.push_str(&heading(
+            style,
+            "proposals",
+            Some("every line read out of a file, none of it inferred"),
+        ));
+        out.push_str(&table.render(style, width));
+    }
+
     out.push_str(&format!(
         "\n{} {}\n",
         style.strong(Role::SignalAmber, "Evidence only."),
         style.paint(
             Role::SteelGrey,
-            "Armada does not guess which of these you actually run."
+            match data.proposals.is_empty() {
+                true => "Armada does not guess which of these you actually run.",
+                // **The sentence has to change when there are proposals**, or it
+                // contradicts the table directly above it. What it must keep
+                // saying is the part that is still true and still the point:
+                // the judgement calls are the reader's, and nothing is written
+                // until he says so.
+                false => "Armada proposes only what a file already said. Nothing is written yet.",
+            }
         )
     ));
     // **The blank line belongs to the hand-over, not to the sentence above it.**

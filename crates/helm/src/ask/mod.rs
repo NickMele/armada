@@ -44,6 +44,28 @@ pub trait Ask {
     /// stdin, and fixing one of them would have left the other.
     fn choose(&mut self, question: &str, options: &[Choice], default: usize) -> usize;
 
+    /// Put an open question: tick every one of these that is right.
+    ///
+    /// **The question `config scan`'s proposals need, and the one `choose`
+    /// cannot ask.** Fifteen provable lines are not fifteen closed questions —
+    /// asking them one at a time is fifteen prompts for one decision — and they
+    /// are not one closed question either, because more than one of them is
+    /// right. It is the same selector with space bound (`ask::select`), not a
+    /// second widget.
+    ///
+    /// `ticked` is what the list opens holding. The answer is one flag per
+    /// option, in the order they were offered; **`None` means nothing was
+    /// confirmed**, which is what a reader who pressed esc gets and what
+    /// anything with nobody at a terminal gets.
+    fn pick(
+        &mut self,
+        _question: &str,
+        _options: &[Choice],
+        _ticked: &[bool],
+    ) -> Option<Vec<bool>> {
+        None
+    }
+
     /// Put something in front of the person, mid-conversation.
     ///
     /// **The half of asking that is not a question.** `armada guild ls` has
@@ -116,6 +138,14 @@ pub struct Scripted {
     pub shown: Vec<String>,
     /// One body per edit, in order. An empty queue leaves every file as it was.
     pub edits: Vec<String>,
+    /// One answer per tick list, in order.
+    ///
+    /// **An empty queue confirms nothing**, which is the same default the trait
+    /// takes and the same one a run with no terminal gets: a test that forgot to
+    /// script an answer must not write a config by accident.
+    pub picks: Vec<Vec<bool>>,
+    /// Every tick list that was put, and the options it offered.
+    pub picked: Vec<(String, Vec<String>)>,
 }
 
 impl Ask for Scripted {
@@ -136,6 +166,17 @@ impl Ask for Scripted {
             return self.choice.unwrap_or(default);
         }
         self.choices.remove(0)
+    }
+
+    fn pick(&mut self, question: &str, options: &[Choice], _: &[bool]) -> Option<Vec<bool>> {
+        self.picked.push((
+            question.to_string(),
+            options.iter().map(|option| option.label.clone()).collect(),
+        ));
+        match self.picks.is_empty() {
+            true => None,
+            false => Some(self.picks.remove(0)),
+        }
     }
 
     fn show(&mut self, text: &str) {
@@ -322,6 +363,47 @@ impl<W: std::io::Write, R: std::io::BufRead> Ask for AtTheTerminal<W, R> {
         chosen
     }
 
+    /// **The tick list when a person is here; the printed list otherwise.**
+    ///
+    /// The same two surfaces `choose` has, and the same rule about which. What
+    /// differs is the answer to an unreadable line: a closed question falls back
+    /// to a documented default, and there is no default here that is safe to
+    /// take on someone's behalf — every one of these writes a file. So an
+    /// unreadable answer confirms nothing.
+    fn pick(&mut self, question: &str, options: &[Choice], ticked: &[bool]) -> Option<Vec<bool>> {
+        if self.surface == Surface::Widgets {
+            match select::pick(question, options, ticked, self.style) {
+                select::Picked::Ticked(ticked) => {
+                    self.echo_ticks(&ticked);
+                    return Some(ticked);
+                }
+                select::Picked::Cancelled => return None,
+                // A widget that never opened falls through to a line, exactly as
+                // the selector and the text area do.
+                select::Picked::Unavailable => {}
+            }
+        }
+
+        let prompt = crate::render::tick_list(question, options, ticked, self.style);
+        // **Numbers name what to leave out.** Everything is ticked when the list
+        // opens, so an empty line is *write all of these* — and a line nobody
+        // could read is the same as no line, which is why the whole answer is
+        // discarded rather than defaulted when the stream has ended.
+        let answer = self.put(&prompt)?;
+        let mut ticked = ticked.to_vec();
+        for word in answer.split(|c: char| !c.is_ascii_digit()) {
+            if let Some(at) = word
+                .parse::<usize>()
+                .ok()
+                .filter(|n| *n >= 1 && *n <= ticked.len())
+            {
+                ticked[at - 1] = false;
+            }
+        }
+        self.echo_ticks(&ticked);
+        Some(ticked)
+    }
+
     /// Straight to the prompt stream, which is stderr.
     fn show(&mut self, text: &str) {
         self.write(text);
@@ -370,6 +452,23 @@ impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
             return;
         };
         let line = crate::render::chosen_line(question, &choice.label, chosen, self.style);
+        let _ = self.prompt.write_all(line.as_bytes());
+        let _ = self.prompt.flush();
+        self.gap();
+    }
+
+    /// The same record for a tick list: how many of the proposals survived.
+    ///
+    /// **A count and not the list.** The proposals are already on the screen
+    /// above, and what the reader needs recorded is that the number he confirmed
+    /// is the number that got written — which is the half a cleared viewport
+    /// takes with it.
+    fn echo_ticks(&mut self, ticked: &[bool]) {
+        let line = crate::render::ticked_line(
+            ticked.iter().filter(|on| **on).count(),
+            ticked.len(),
+            self.style,
+        );
         let _ = self.prompt.write_all(line.as_bytes());
         let _ = self.prompt.flush();
         self.gap();

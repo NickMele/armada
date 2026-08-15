@@ -32,7 +32,16 @@
   [38;2;255;169;64mci steps[0m · [38;2;156;163;175mthe best existing evidence of what you actually run[0m
     [38;2;156;163;175mpnpm install --frozen-lockfile · pnpm lint · pnpm test · pnpm build[0m
 
-[1m[38;2;255;169;64mEvidence only.[0m [38;2;156;163;175mArmada does not guess which of these you actually run.[0m
+  [38;2;255;169;64mproposals[0m · [38;2;156;163;175mevery line read out of a file, none of it inferred[0m
+  [1m[38;2;156;163;175mWHAT[0m                                     [1m[38;2;156;163;175mWRITES[0m                 [1m[38;2;156;163;175mBECAUSE[0m
+  [38;2;92;225;230mcomponents.next-prisma[0m                   the repository itself  [38;2;156;163;175mpackage.json[0m
+  [38;2;92;225;230mcomponents.next-prisma.setup[0m             pnpm install           [38;2;156;163;175mpnpm-lock.yaml[0m
+  [38;2;92;225;230mcomponents.next-prisma.checks.build[0m      pnpm run build         [38;2;156;163;175mpackage.json[0m
+  [38;2;92;225;230mcomponents.next-prisma.checks.test[0m       pnpm run test          [38;2;156;163;175mpackage.json[0m
+  [38;2;92;225;230mcomponents.next-prisma.checks.lint[0m       pnpm run lint          [38;2;156;163;175mpackage.json[0m
+  [38;2;92;225;230mcomponents.next-prisma.checks.typecheck[0m  pnpm run typecheck     [38;2;156;163;175mpackage.json[0m
+
+[1m[38;2;255;169;64mEvidence only.[0m [38;2;156;163;175mArmada proposes only what a file already said. Nothing is written yet.[0m
 
   [38;2;255;169;64mnext[0m · [38;2;156;163;175mpaste this to hand the repository to an agent[0m
     [38;2;156;163;175mclaude --append-system-prompt "$(cat ~/.armada/guild/skills/onboard-repo/SKILL.md)" "Onboard this repository for Armada."[0m

@@ -193,7 +193,7 @@ pub fn propose(evidence: &Evidence) -> Vec<Proposal> {
             } else {
                 format!("root: {}", package.dir)
             },
-            because: format!("{} in {}", package.manifests.join(", "), here(&package.dir)),
+            because: under(&package.dir, &package.manifests),
             component: name.clone(),
             root: package.dir.clone(),
         });
@@ -208,7 +208,7 @@ pub fn propose(evidence: &Evidence) -> Vec<Proposal> {
                     kind: Kind::Setup,
                     at: format!("{at}.setup"),
                     writes: format!("{manager} install"),
-                    because: format!("{} in {}", package.lockfiles.join(", "), here(&package.dir)),
+                    because: under(&package.dir, &package.lockfiles),
                     component: name.clone(),
                     root: package.dir.clone(),
                 });
@@ -351,12 +351,22 @@ fn checks_in(
     out
 }
 
-/// A directory as a reader would say it: `.` for the root.
-fn here(dir: &str) -> String {
-    match dir.is_empty() {
-        true => ".".to_string(),
-        false => dir.to_string(),
-    }
+/// Files in a directory, named the way every other path in the report is named:
+/// **workspace-relative and complete**.
+///
+/// `package.json in web` and `web/package.json` are the same fact, and the
+/// second is the one a reader can paste. Location is evidence
+/// (`docs/commands/manifest/config.md`), and a proposal's whole claim on the
+/// reader's trust is that he can open the file it names.
+fn under(dir: &str, files: &[String]) -> String {
+    files
+        .iter()
+        .map(|file| match dir.is_empty() {
+            true => file.clone(),
+            false => format!("{dir}/{file}"),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The `armada.yml` that the accepted proposals add up to.

@@ -75,6 +75,13 @@ pub fn scan(
         Status::Ok,
         ScanData {
             results: scan::findings(&evidence),
+            // **Computed even for a repository that already has an
+            // `armada.yml`.** They are not offered to be written there — that is
+            // drift, and drift is not built — but a consumer asking `--json`
+            // what this repository proves gets the same answer whichever state
+            // it is in, and an agent comparing the two lists is exactly what
+            // drift will be built out of.
+            proposals: armada_core::propose::propose(&evidence),
             evidence,
             handover: scan::handover(
                 json,
@@ -87,32 +94,122 @@ pub fn scan(
     ))))
 }
 
-/// The question `config scan` ends on, and its two answers.
+/// The question `config scan` ends on, and its answers.
 ///
-/// **Here rather than in the renderer**, which is where the two options used to
-/// be spelled: they are now put by a selector on stderr, printed as a list when
+/// **Here rather than in the renderer**, which is where the options used to be
+/// spelled: they are now put by a selector on stderr, printed as a list when
 /// there is no selector to draw, and echoed afterwards — three call sites, so
 /// the words live once, next to the verb that means them.
 pub const ONBOARD_QUESTION: &str = "Write armada.yml now?";
 
-/// Which answer means "hand this repository to an agent". **One-based**, like
-/// everything the selector returns.
-pub const HAND_OVER: usize = 1;
+/// The question the tick list puts, once the reader has said he wants the
+/// proposals written.
+pub const CONFIRM_QUESTION: &str = "Which of these did it get right?";
 
-/// The default: print the evidence and stop. **Doing nothing is what an
-/// unanswered question gets**, because the alternative is launching a session
-/// somebody did not ask for.
-pub const STOP: usize = 2;
+/// What the reader chose to happen next.
+///
+/// **An enum rather than three numbered constants**, because the numbers move:
+/// a repository whose evidence proves nothing is offered two options and one
+/// whose evidence proves something is offered three, and a caller comparing
+/// against a `1` would silently mean *write* in one repository and *hand over*
+/// in the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Next {
+    /// Put the proposals up to be ticked, and write what survives.
+    Write,
+    /// Hand the repository to an agent.
+    HandOver,
+    /// Print the evidence and do nothing.
+    Stop,
+}
 
-/// The two answers, in the order they are offered.
-pub fn onboarding_choices() -> Vec<Choice> {
-    vec![
-        Choice::new("let an agent write it with me", "opens claude here"),
-        Choice::new(
-            "print the evidence and stop",
-            "I will write armada.yml myself",
-        ),
-    ]
+/// The answers, in the order they are offered.
+///
+/// **The proposals come first when there are any**, because they are the cheap
+/// answer: a proposal a reader corrects costs no tokens and the same file
+/// authored by an agent costs a session. The hand-over stays underneath it, for
+/// the repositories where the evidence genuinely does not settle it — which this
+/// reduces the number of and does not replace.
+pub fn onboarding_choices(proposals: usize) -> Vec<Choice> {
+    let mut out = Vec::new();
+    if proposals > 0 {
+        out.push(Choice::new(
+            "write what the scan can prove",
+            &format!("{proposals} proposed lines, yours to tick"),
+        ));
+    }
+    out.push(Choice::new(
+        "let an agent write it with me",
+        "opens claude here",
+    ));
+    out.push(Choice::new(
+        "print the evidence and stop",
+        "I will write armada.yml myself",
+    ));
+    out
+}
+
+/// What a one-based answer to [`onboarding_choices`] means.
+pub fn next(chosen: usize, proposals: usize) -> Next {
+    match (chosen, proposals > 0) {
+        (1, true) => Next::Write,
+        (1, false) | (2, true) => Next::HandOver,
+        _ => Next::Stop,
+    }
+}
+
+/// The answer an unanswered question takes: print the evidence and stop.
+///
+/// **Doing nothing is the default**, because the two alternatives are launching
+/// a session nobody asked for and writing a file nobody confirmed.
+pub fn stop(proposals: usize) -> usize {
+    onboarding_choices(proposals).len()
+}
+
+/// One tickable line per proposal: what it would write, and the file that proves
+/// it.
+///
+/// **The key path is the label and the value is the aside.** A reader deciding
+/// whether `components.web.checks.test` is right is deciding about `pnpm run
+/// test`, and a list that showed him only one of the two would be a list he had
+/// to cross-reference against the report above it.
+pub fn proposal_choices(proposals: &[armada_core::propose::Proposal]) -> Vec<Choice> {
+    proposals
+        .iter()
+        .map(|proposal| Choice::new(&proposal.at, &proposal.writes))
+        .collect()
+}
+
+/// Write the confirmed proposals as this repository's `armada.yml`.
+///
+/// **The one thing `config scan` writes, and only after a person has ticked
+/// it.** `scan` is the verb that runs in a repository with no config and it
+/// decides nothing on its own; this is reached from one place, behind a selector
+/// that is only ever drawn when both streams are a terminal.
+///
+/// **It refuses rather than overwrites.** A repository that gained an
+/// `armada.yml` between the scan and the answer — another agent, another
+/// terminal, a `git pull` — is one where the file in front of Armada is not the
+/// one it was proposing against. Whether the two agree is drift, and drift is
+/// not built.
+pub fn write(root: &Path, accepted: &[armada_core::propose::Proposal]) -> Result<(), ArmadaError> {
+    let path = root.join("armada.yml");
+    if path.exists() {
+        return Err(ArmadaError {
+            class: armada_core::error::ErrClass::BadConfig,
+            r#where: "armada.yml".to_string(),
+            message: "armada.yml is already here, so nothing was written".to_string(),
+            next_action: Some(
+                "read it, or move it aside and run `armada manifest config scan` again".to_string(),
+            ),
+        });
+    }
+    std::fs::write(&path, armada_core::propose::write(accepted)).map_err(|error| ArmadaError {
+        class: armada_core::error::ErrClass::Environment,
+        r#where: path.display().to_string(),
+        message: format!("could not write armada.yml: {error}"),
+        next_action: None,
+    })
 }
 
 /// `armada manifest config verify`, in the two passes PLAN.md §5 specifies.

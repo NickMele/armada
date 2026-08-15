@@ -146,6 +146,7 @@
       "packages": [
         {
           "dir": "",
+          "name": "next-prisma",
           "manifests": [
             "package.json"
           ],
@@ -155,8 +156,59 @@
           "member": false,
           "independent": false
         }
-      ]
+      ],
+      "nested": []
     },
+    "proposals": [
+      {
+        "kind": "component",
+        "at": "components.next-prisma",
+        "writes": "the repository itself",
+        "because": "package.json",
+        "component": "next-prisma",
+        "root": ""
+      },
+      {
+        "kind": "setup",
+        "at": "components.next-prisma.setup",
+        "writes": "pnpm install",
+        "because": "pnpm-lock.yaml",
+        "component": "next-prisma",
+        "root": ""
+      },
+      {
+        "kind": "check",
+        "at": "components.next-prisma.checks.build",
+        "writes": "pnpm run build",
+        "because": "package.json",
+        "component": "next-prisma",
+        "root": ""
+      },
+      {
+        "kind": "check",
+        "at": "components.next-prisma.checks.test",
+        "writes": "pnpm run test",
+        "because": "package.json",
+        "component": "next-prisma",
+        "root": ""
+      },
+      {
+        "kind": "check",
+        "at": "components.next-prisma.checks.lint",
+        "writes": "pnpm run lint",
+        "because": "package.json",
+        "component": "next-prisma",
+        "root": ""
+      },
+      {
+        "kind": "check",
+        "at": "components.next-prisma.checks.typecheck",
+        "writes": "pnpm run typecheck",
+        "because": "package.json",
+        "component": "next-prisma",
+        "root": ""
+      }
+    ],
     "handover": "silent"
   }
 }

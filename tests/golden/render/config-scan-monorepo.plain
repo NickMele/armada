@@ -38,4 +38,12 @@ no armada.yml here, this is evidence and not a config
   workspaces: candidates, each resolves its own dependencies
     backend, scripts, web
 
-Evidence only. Armada does not guess which of these you actually run.
+  proposals, every line read out of a file, none of it inferred
+  WHAT                         WRITES          BECAUSE
+  components.web               root: web       web/package.json
+  components.web.setup         pnpm install    web/pnpm-lock.yaml
+  components.web.checks.build  pnpm run build  web/package.json
+  components.web.checks.test   pnpm run test   web/package.json
+  components.web.checks.lint   pnpm run lint   web/package.json
+
+Evidence only. Armada proposes only what a file already said. Nothing is written yet.

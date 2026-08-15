@@ -691,6 +691,7 @@ fn scan_of(fixture: &str, handover: Handover) -> Output {
         Status::Ok,
         ScanData {
             results: armada_core::scan::findings(&evidence),
+            proposals: armada_core::propose::propose(&evidence),
             evidence,
             handover,
         },
