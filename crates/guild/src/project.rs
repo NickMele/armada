@@ -144,13 +144,23 @@ pub fn verdict(desired: &str, present: Option<&str>, recorded: Option<&str>) -> 
         // truth for what should exist. Removing a skill is done by removing it
         // from the guild, not by deleting the copy Armada placed.
         (None, _) => Sync::Added,
-        // There, and Armada never put it there. It is the reader's file and it
-        // keeps its name.
+        // **Already byte-identical, so it is adopted whether or not Armada put
+        // it there.** This is the ordinary state of the machine the guild was
+        // imported *from*: `guild init` reads `~/.claude/skills/`, and
+        // projecting it back finds the same bytes at the same path with no
+        // record of having written them.
+        //
+        // Treating that as the reader's file would be technically true and
+        // useless — a fresh `guild init` would report every adopted skill as a
+        // conflict, and the guild could never update one of them again. Nothing
+        // can be lost by claiming it: the bytes are identical, and the copy in
+        // the guild is in a git repository with history.
+        (Some(present), _) if present == desired => Sync::Unchanged,
+        // There, different, and Armada never put it there. It is the reader's
+        // file and it keeps its name.
         (Some(_), None) => Sync::Conflict,
         // There, and changed since Armada wrote it. It is the reader's now.
         (Some(present), Some(recorded)) if present != recorded => Sync::Conflict,
-        // There, untouched, and already what the guild says.
-        (Some(present), _) if present == desired => Sync::Unchanged,
         // There, untouched, and out of date.
         _ => Sync::Changed,
     }
@@ -381,6 +391,31 @@ mod tests {
     #[test]
     fn a_file_armada_never_placed_is_yours_even_when_the_guild_holds_its_name() {
         assert_eq!(verdict(MINE, Some(YOURS), None), Sync::Conflict);
+    }
+
+    /// **Unless it is already byte-identical**, which is the ordinary state of
+    /// the machine the guild was imported from: `guild init` read
+    /// `~/.claude/skills/`, and projecting it back finds the same bytes at the
+    /// same path with no record of having written them.
+    ///
+    /// Calling that a conflict would make a fresh `guild init` report every
+    /// adopted skill as one, and would mean the guild could never update one of
+    /// them again. Nothing can be lost by adopting it — the bytes are the same,
+    /// and the guild's copy is in a repository with history.
+    #[test]
+    fn a_file_that_is_already_what_the_guild_says_is_adopted_rather_than_disputed() {
+        assert_eq!(verdict(MINE, Some(MINE), None), Sync::Unchanged);
+        let want = desired(&[("skills/adopted/SKILL.md", "skills/adopted/SKILL.md", MINE)]);
+        let steps = plan(
+            &want,
+            &present(&[("skills/adopted/SKILL.md", MINE)]),
+            &Placed::default(),
+        );
+        assert_eq!(
+            manifest(&steps, &want, &Placed::default()).hash_of("skills/adopted/SKILL.md"),
+            Some(MINE),
+            "an identical file was not adopted, so the guild could never update it"
+        );
     }
 
     /// The ordinary first projection: nothing there, so it lands.

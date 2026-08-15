@@ -25,8 +25,9 @@ use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
     DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData, GuildInitData, GuildSyncData,
-    InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, ProbeData, ReportData,
-    ScanData, ServicesData, SkillsData, SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
+    InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, ProbeData, Projection,
+    ReportData, ScanData, ServicesData, SkillsData, SpawnData, StatusData, UpDryRun, VerdictData,
+    VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -77,6 +78,8 @@ pub enum Output {
     GuildInit(Box<Envelope<GuildInitData>>),
     /// `armada guild export` and `armada guild import`.
     GuildBundle(Box<Envelope<GuildBundleData>>),
+    /// `armada guild project`, with or without `--remove`.
+    GuildProject(Box<Envelope<Projection>>),
     /// `armada fleet spawn`.
     Spawn(Box<Envelope<SpawnData>>),
     /// `armada fleet ls`.
@@ -127,6 +130,7 @@ impl Output {
             Output::GuildSync(e) => e.to_json(),
             Output::GuildInit(e) => e.to_json(),
             Output::GuildBundle(e) => e.to_json(),
+            Output::GuildProject(e) => e.to_json(),
             Output::Spawn(e) => e.to_json(),
             Output::FleetLs(e) => e.to_json(),
             Output::Board(e) => e.to_json(),
@@ -181,6 +185,7 @@ impl Output {
             Output::GuildSync(e) => e.exit_code(),
             Output::GuildInit(e) => e.exit_code(),
             Output::GuildBundle(e) => e.exit_code(),
+            Output::GuildProject(e) => e.exit_code(),
             Output::Spawn(e) => e.exit_code(),
             Output::FleetLs(e) => e.exit_code(),
             Output::Board(e) => e.exit_code(),

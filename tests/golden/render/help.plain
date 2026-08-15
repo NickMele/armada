@@ -18,6 +18,7 @@ MANIFEST — what a workspace is and how to operate it
 
 GUILD — you, portable: voice, skills, hooks, workflows
   init             build your guild by interviewing you
+  project          put your guild where Claude Code will read it
   pull             bring this machine's guild up to date
   push             send local guild changes to the remote
   export           write the whole guild to one portable file

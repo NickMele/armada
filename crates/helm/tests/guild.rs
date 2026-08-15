@@ -112,6 +112,137 @@ fn files(root: &Path) -> Vec<String> {
     out
 }
 
+/// **The failure `PHASES.md` §8.4 records, closed end to end.** A guild skill
+/// used to be invisible to the tool Armada hands you to: guild skills live in
+/// `~/.armada/guild/skills/` and Claude Code reads `~/.claude/skills/`, and
+/// nothing copied between them — so `/onboard-repo` answered `Unknown command`.
+///
+/// Run against the real binary and a scratch `$HOME`, because the whole of this
+/// is filesystem layout and a fake that answers `0` proves only that the code
+/// path was entered.
+#[test]
+fn a_guild_init_leaves_the_guild_where_claude_code_reads_it() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+
+    let built = machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+    assert!(
+        built.status.success(),
+        "guild init failed: {}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+
+    let claude = machine.home.path().join(".claude");
+    // The starter skill `guild init` copies, now on the load path under the
+    // name `armada manifest config scan` hands over by.
+    assert!(
+        claude.join("skills/onboard-repo/SKILL.md").is_file(),
+        "the starter skill is not where Claude Code reads skills: {:?}",
+        files(&claude)
+    );
+    // And the orchestrator persona, under Claude Code's word for it.
+    assert!(
+        claude.join("agents/helm.md").is_file(),
+        "`subagents/` did not land in `agents/`: {:?}",
+        files(&claude)
+    );
+    // **What Claude Code has no load path for stays out of it.** Workflows are
+    // Armada's own to read, and a `voice.md` in `~/.claude/` is read by nothing.
+    assert!(!claude.join("workflows").exists());
+    assert!(!claude.join("voice.md").exists());
+
+    let envelope = envelope(&built);
+    assert_eq!(envelope["data"]["projected"]["at"], "~/.claude/");
+    assert_eq!(envelope["data"]["projected"]["kept"], 0);
+}
+
+/// **The rule that must not break.** Place, edit by hand, project again: the
+/// edit survives, and it is reported rather than silently kept.
+///
+/// Getting this wrong destroys work somebody did by hand, silently, on a
+/// machine they were not looking at — which is why `PLAN.md` §13.2 specifies a
+/// hash of each file rather than a copy.
+#[test]
+fn a_file_you_edited_survives_a_re_projection_and_is_reported() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+
+    let claude = machine.home.path().join(".claude");
+    let skill = claude.join("skills/onboard-repo/SKILL.md");
+    let mine = "# onboard\n\nAnd always ask about the database.\n";
+    std::fs::write(&skill, mine).unwrap();
+    // The guild moves on underneath it, exactly as a `guild pull` would leave
+    // it.
+    std::fs::write(
+        guild_of(&machine).join("skills/onboard-repo/SKILL.md"),
+        "# onboard\n\nSomebody else's version.\n",
+    )
+    .unwrap();
+
+    let again = machine.run(&outside, &["guild", "project", "--json"]);
+    assert!(
+        again.status.success(),
+        "guild project failed: {}",
+        String::from_utf8_lossy(&again.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&skill).unwrap(),
+        mine,
+        "the edit was overwritten — this is the failure the manifest exists to prevent"
+    );
+    let envelope = envelope(&again);
+    assert_eq!(
+        envelope["data"]["kept"], 1,
+        "the file that was left alone was not reported: {envelope}"
+    );
+    let rows = envelope["data"]["results"].as_array().unwrap();
+    assert!(
+        rows.iter()
+            .any(|row| row["status"] == "CONFLICT" && row["item"] == "skills"),
+        "no conflict row: {envelope}"
+    );
+}
+
+/// **`--remove` reverses exactly what was placed, and nothing else.** A skill
+/// the reader had before Armada ever ran is still there afterwards.
+#[test]
+fn removing_a_projection_takes_back_only_what_it_placed() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+
+    let claude = machine.home.path().join(".claude");
+    // `a_claude_setup` already put `skills/add-migration` here, and `guild
+    // init` adopts it — so a projection would legitimately claim it. This one
+    // is written after the import and is therefore never the guild's.
+    std::fs::create_dir_all(claude.join("skills/only-mine")).unwrap();
+    machine.run(&outside, &["guild", "init", "--defaults", "--json"]);
+    std::fs::write(claude.join("skills/only-mine/SKILL.md"), "mine\n").unwrap();
+
+    let removed = machine.run(&outside, &["guild", "project", "--remove", "--json"]);
+    assert!(
+        removed.status.success(),
+        "guild project --remove failed: {}",
+        String::from_utf8_lossy(&removed.stderr)
+    );
+    assert!(
+        !claude.join("skills/onboard-repo/SKILL.md").exists(),
+        "what was placed was not taken back"
+    );
+    assert_eq!(
+        std::fs::read_to_string(claude.join("skills/only-mine/SKILL.md")).unwrap(),
+        "mine\n",
+        "--remove reached a file it never placed"
+    );
+    // The reader's own `settings.json` and `CLAUDE.md` are not projection's to
+    // touch in either direction.
+    assert!(claude.join("settings.json").is_file());
+    assert!(claude.join("CLAUDE.md").is_file());
+}
+
 /// **The first half of the done-when**, and the constraint the milestone would
 /// not be allowed to ship without: a machine that has never seen Armada gets a
 /// working setup, and no credential-shaped value reaches the guild.

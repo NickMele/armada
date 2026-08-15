@@ -31,9 +31,9 @@
 use armada_core::envelope::{
     Asked, CheckData, CleanData, ComponentView, ComponentsData, DispatchData, DoctorData, Envelope,
     Finding, FleetLsData, GrantedCommand, GuildChoice, GuildSyncData, Headline, InitData, JobRow,
-    MachineInitData, PortReport, Problem, Released, ResolvedSkillView, ResultRow, ScanData,
-    ServicesData, Settled, SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed,
-    UpDryRun, VerifyData,
+    MachineInitData, PortReport, Problem, Projection, Released, ResolvedSkillView, ResultRow,
+    ScanData, ServicesData, Settled, SkillsData, SpawnData, StatusData, Sync, SyncItem,
+    Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -945,9 +945,54 @@ fn guild_pull_matches_its_fixture() {
             ],
             applied: false,
             headline: Some(Headline::NeedsAttention),
+            // A divergence applied nothing, so there was nothing new to
+            // project — `guild-project` is the fixture that freezes that half.
+            projected: None,
         },
     )));
     assert_render("guild-pull", &output);
+}
+
+/// `armada guild project` — the verb that puts the guild on Claude Code's load
+/// path, and the one row a reader has to act on.
+///
+/// **`CONFLICT` is the load-bearing row.** A file left exactly as it was because
+/// somebody edited it by hand is the whole reason `PLAN.md` §13.2 specifies a
+/// hash rather than a copy, and a layout that buried it among the files that did
+/// move would be a layout that lost it.
+#[test]
+fn guild_project_matches_its_fixture() {
+    let item = |status: Sync, item: &str, detail: &str| SyncItem {
+        status,
+        item: item.to_string(),
+        detail: detail.to_string(),
+    };
+    let output = Output::GuildProject(Box::new(Envelope::ok(
+        "guild project",
+        None,
+        Status::Partial,
+        Projection {
+            at: "~/.claude/".to_string(),
+            results: vec![
+                item(Sync::Added, "skills", "add-migration, onboard-repo"),
+                item(Sync::Changed, "agents", "helm.md"),
+                item(
+                    Sync::Conflict,
+                    "hooks",
+                    "edited here; delete it to take the guild's",
+                ),
+                item(Sync::Unchanged, "skills", "triage-flake"),
+            ],
+            facts: vec![
+                "2 placed".to_string(),
+                "1 updated".to_string(),
+                "1 left as yours".to_string(),
+            ],
+            kept: 1,
+            headline: Some(Headline::NeedsAttention),
+        },
+    )));
+    assert_render("guild-project", &output);
 }
 
 /// `armada --help`, which is the page the milestone was opened for.

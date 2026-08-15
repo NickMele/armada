@@ -1155,6 +1155,42 @@ pub struct GuildSyncData {
     /// `NEEDS ATTENTION`, when a conflict or a divergence needs a person.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub headline: Option<Headline>,
+    /// What re-projecting the pulled guild onto Claude Code's load path did.
+    ///
+    /// **Absent when nothing was projected**, which is the divergence case —
+    /// nothing was applied, so there is nothing new to project. A pulled guild
+    /// that has not been projected is a guild that has not taken effect, and the
+    /// gap between the two is a confusing hour (`guild/pull.md`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub projected: Option<Projection>,
+}
+
+/// What a projection did — `armada guild project`, and the step `guild init`
+/// and `guild pull` both end on.
+///
+/// The guild's mechanical half, written into the directories Claude Code reads,
+/// tracked by a manifest of what was placed and a hash of each file
+/// ([`PLAN.md`](../../../docs/PLAN.md) §13.2).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Projection {
+    /// Where it was written, as a person writes it — `~/.claude/`.
+    pub at: String,
+    /// One row per area, in the order the `STATUS` column reads.
+    pub results: Vec<SyncItem>,
+    /// The summary line's facts: `2 placed`, `1 left as yours`.
+    pub facts: Vec<String>,
+    /// **How many files were left exactly as they were because you had edited
+    /// them.** The count that earns the manifest: without it, a projection that
+    /// declined to overwrite your work would look identical to one that had
+    /// nothing to do.
+    pub kept: usize,
+    /// `NEEDS ATTENTION`, when something was left as yours.
+    ///
+    /// **Absent when this projection is carried by another verb.** `guild init`
+    /// and `guild pull` draw their own summary line and speak for themselves;
+    /// two headlines on one run is one too many.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headline: Option<Headline>,
 }
 
 /// One area of the guild, and what the change set does to it.
@@ -1232,6 +1268,14 @@ pub struct GuildInitData {
     /// count that used to be called `skipped` told someone who followed the
     /// instructions that he had done nothing.
     pub answered: usize,
+    /// What projecting the new guild onto Claude Code's load path did.
+    ///
+    /// **A `guild init` that stopped before this would leave a guild nothing
+    /// reads** — the failure `PHASES.md` §8.4 records, where a skill Armada
+    /// ships and `guild init` installs answers `Unknown command` in the session
+    /// Armada hands you to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub projected: Option<Projection>,
 }
 
 /// `armada guild export` and `armada guild import`.
@@ -2056,6 +2100,7 @@ mod tests {
             }],
             applied: false,
             headline: Some(Headline::NeedsAttention),
+            projected: None,
         };
         let json = serde_json::to_string(&data).unwrap();
         assert!(json.contains(r#""applied":false"#), "{json}");
@@ -2140,6 +2185,7 @@ mod tests {
             remote: None,
             questions: 5,
             answered: 0,
+            projected: None,
         };
         let json = serde_json::to_string(&data).unwrap();
         assert!(json.contains("env.GITHUB_TOKEN"), "{json}");

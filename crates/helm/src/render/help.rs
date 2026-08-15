@@ -355,6 +355,22 @@ const PAGES: [Page; 23] = [
         notes: &["Your guild is yours, not this repository's. It never lands in a project."],
     },
     Page {
+        path: "guild project",
+        synopsis: "project",
+        summary: "put your guild where Claude Code will read it",
+        usage: &["armada guild project [--remove] [--json]"],
+        flags: &[(
+            "--remove",
+            "take back exactly what was placed, and nothing else",
+        )],
+        examples: &[],
+        notes: &[
+            "guild init and guild pull both end here, so this is for a guild",
+            "you edited by hand. A file you changed under ~/.claude is never",
+            "overwritten: it is left alone and reported.",
+        ],
+    },
+    Page {
         path: "guild pull",
         synopsis: "pull",
         summary: "bring this machine's guild up to date",

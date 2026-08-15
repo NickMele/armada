@@ -12,12 +12,12 @@
 
 use armada_core::ctx::Run;
 use armada_core::envelope::{
-    Envelope, GuildBundleData, GuildInitData, GuildSyncData, Headline, Sync, SyncItem,
+    Envelope, GuildBundleData, GuildInitData, GuildSyncData, Headline, Projection, Sync, SyncItem,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_guild::interview::{self, Answers, Question, QUESTIONS};
 use armada_guild::layout::Guild;
-use armada_guild::{bundle, import, inventory, machine, memory, remote, repo, starters};
+use armada_guild::{bundle, import, inventory, machine, memory, projector, remote, repo, starters};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -161,6 +161,12 @@ pub fn init(
     machine::record(&place.armada_home, &answers, &imported.withheld)
         .map_err(|e| unwritable(&place.armada_home, &e))?;
 
+    // 4. **Put it where Claude Code will read it.** A `guild init` that stopped
+    //    at step 3 left a guild nothing reads — the failure `PHASES.md` §8.4
+    //    records, where a skill this verb has just installed answers `Unknown
+    //    command` in the session Armada hands you to.
+    let projected = projected(place);
+
     Ok(Output::GuildInit(Box::new(Envelope::ok(
         "guild init",
         None,
@@ -174,6 +180,7 @@ pub fn init(
             remote: answers.remote.clone(),
             questions: QUESTIONS.len(),
             answered: answers.answered(),
+            projected,
         },
     ))))
 }
@@ -358,13 +365,22 @@ pub fn pull(run: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
         .count();
     let applied = !diverged;
 
+    // **Re-project what changed.** A pulled guild that has not been projected
+    // is a guild that has not taken effect, and the gap between the two is a
+    // confusing hour (`guild/pull.md`). Nothing was applied on a divergence, so
+    // there is nothing new to project and the step is skipped rather than run
+    // over a working tree the reader is about to resolve by hand.
+    let projected = applied.then(|| projected(place)).flatten();
+    let kept = projected.as_ref().map_or(0, |done| done.kept);
+
     let data = GuildSyncData {
         remote: Some(remote),
         ahead: apart.ahead,
         behind: apart.behind,
         results,
         applied,
-        headline: (conflicts > 0).then_some(Headline::NeedsAttention),
+        headline: (conflicts > 0 || kept > 0).then_some(Headline::NeedsAttention),
+        projected,
     };
 
     Ok(Output::GuildSync(Box::new(if diverged {
@@ -415,8 +431,93 @@ fn torn(remote: &str, error: &ArmadaError) -> Output {
             }],
             applied: false,
             headline: Some(Headline::NeedsAttention),
+            projected: None,
         },
     )))
+}
+
+/// `armada guild project` — put the guild where Claude Code will read it, or
+/// `--remove` to take back exactly what was put there.
+///
+/// Every rule is `armada_guild::project`'s. What is here is the two calls and
+/// the envelope, which is `ARCHITECTURE.md` §1.3.
+pub fn project(place: &Where, remove: bool) -> Result<Output, ArmadaError> {
+    let guild = place.guild();
+    if !remove && !guild.exists() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: shown(guild.root()),
+            message: "there is no guild here, so there is nothing to project".to_string(),
+            next_action: Some("`armada init`, or `armada guild init`".to_string()),
+        });
+    }
+
+    let projected = if remove {
+        projector::remove(&place.claude_home, &place.armada_home)
+    } else {
+        projector::project(&guild, &place.claude_home, &place.armada_home)
+    }
+    .map_err(|e| unwritable(&place.claude_home, &e))?;
+
+    let data = projection(place, &projected);
+    let attention = data.kept > 0;
+    Ok(Output::GuildProject(Box::new(Envelope::ok(
+        if remove {
+            "guild project --remove"
+        } else {
+            "guild project"
+        },
+        None,
+        if attention {
+            Status::Partial
+        } else {
+            Status::Ready
+        },
+        Projection {
+            headline: attention.then_some(Headline::NeedsAttention),
+            ..data
+        },
+    ))))
+}
+
+/// A projection, as the envelope carries it.
+///
+/// **The rows are grouped by area exactly as `guild pull`'s are**, and for the
+/// same reason: a guild with forty skills would otherwise print forty rows on a
+/// verb whose whole job is to be glanced at. The files left as yours are the
+/// exception a reader has to act on, so their count is its own field rather
+/// than something to be counted off the table.
+fn projection(place: &Where, projected: &projector::Projected) -> Projection {
+    Projection {
+        at: place.claude_shown(),
+        results: grouped(
+            projected
+                .steps
+                .iter()
+                .map(|step| (step.at.clone(), step.outcome)),
+            "edited here; delete it to take the guild's",
+        ),
+        facts: armada_guild::project::facts(&projected.steps),
+        kept: projected.yours().len(),
+        headline: None,
+    }
+}
+
+/// Put the guild on Claude Code's load path, on a verb whose main job is
+/// something else.
+///
+/// **A failure here does not fail the verb.** `guild init` has just written a
+/// guild and `guild pull` has just fast-forwarded one; losing that outcome
+/// because `~/.claude/` is read-only would be reporting the wrong failure. It
+/// comes back as `None`, and `armada doctor` is the check that says the guild
+/// is not projected.
+fn projected(place: &Where) -> Option<Projection> {
+    let guild = place.guild();
+    if !guild.exists() {
+        return None;
+    }
+    let done = projector::project(&guild, &place.claude_home, &place.armada_home).ok()?;
+    Some(projection(place, &done))
 }
 
 /// `armada guild push` — send local changes.
@@ -448,6 +549,7 @@ pub fn push(run: &impl Run, place: &Where, force: bool) -> Result<Output, Armada
                 results,
                 applied: false,
                 headline: Some(Headline::NeedsAttention),
+                projected: None,
             },
         ))));
     }
@@ -480,6 +582,9 @@ pub fn push(run: &impl Run, place: &Where, force: bool) -> Result<Output, Armada
             results: change_set(&outgoing, &[], false, None),
             applied: true,
             headline: None,
+            // **A push does not project.** Nothing arrived; what is on this
+            // machine's load path is already what this machine's guild says.
+            projected: None,
         },
     ))))
 }
@@ -665,6 +770,41 @@ fn change_set(
     guild: Option<&Guild>,
 ) -> Vec<SyncItem> {
     let local: Vec<&str> = outgoing.iter().map(|t| t.path.as_str()).collect();
+    let mut rows = grouped(
+        incoming.iter().map(|touched| {
+            let status = if diverged && local.contains(&touched.path.as_str()) {
+                Sync::Conflict
+            } else {
+                match touched.change {
+                    repo::Change::Added => Sync::Added,
+                    repo::Change::Changed => Sync::Changed,
+                    repo::Change::Removed => Sync::Removed,
+                }
+            };
+            (touched.path.clone(), status)
+        }),
+        "edited here and on origin",
+    );
+
+    // **What did not move is reported too.** A pull that lists three areas and
+    // says nothing about the fourth leaves a reader wondering whether it was
+    // checked — the same reasoning `clean` keeps its table for.
+    if let Some(guild) = guild {
+        let touched: Vec<&str> = rows.iter().map(|row| row.item.as_str()).collect();
+        rows.extend(unchanged(guild, &touched));
+    }
+    rows
+}
+
+/// One row per area, from any set of paths that each had something happen to
+/// them.
+///
+/// Shared by the change set and by projection, because both answer the same
+/// question about a different tree, and the reader is scanning the same column
+/// in both. `conflict` is the one sentence they do not share: a change set's
+/// conflict was edited on two machines, and a projection's was edited by hand
+/// here.
+fn grouped(rows: impl IntoIterator<Item = (String, Sync)>, conflict: &str) -> Vec<SyncItem> {
     // Keyed on **the outcome first and the area second**, which is also the
     // order the rows come out in (`tests/golden/render/guild-pull.plain`):
     // everything that arrived, then everything that changed, then the conflicts,
@@ -674,27 +814,17 @@ fn change_set(
     // The pair is the key rather than the area alone, so one area can appear
     // once as `added` and once as `conflict` — which is what happens when a
     // skill arrives and another is edited on both sides.
-    let mut grouped: BTreeMap<(usize, String), (Sync, Vec<String>)> = BTreeMap::new();
-
-    for touched in incoming {
-        let (area, name) = area_of(&touched.path);
-        let status = if diverged && local.contains(&touched.path.as_str()) {
-            Sync::Conflict
-        } else {
-            match touched.change {
-                repo::Change::Added => Sync::Added,
-                repo::Change::Changed => Sync::Changed,
-                repo::Change::Removed => Sync::Removed,
-            }
-        };
-        grouped
+    let mut by_area: BTreeMap<(usize, String), (Sync, Vec<String>)> = BTreeMap::new();
+    for (path, status) in rows {
+        let (area, name) = area_of(&path);
+        by_area
             .entry((rank(status), area))
             .or_insert((status, Vec::new()))
             .1
             .push(name);
     }
 
-    let mut rows: Vec<SyncItem> = grouped
+    by_area
         .into_iter()
         .map(|((_, area), (status, mut names))| {
             names.sort();
@@ -706,7 +836,7 @@ fn change_set(
                 // are already in the ITEM column for a fragment, and for an
                 // area the useful fact is that both sides moved.
                 detail: if status == Sync::Conflict {
-                    "edited here and on origin".to_string()
+                    conflict.to_string()
                 } else if names.len() == 1 && names[0] == *area {
                     // A file at the guild's root is its own area, so naming it
                     // twice — `changed  voice.md  voice.md` — says nothing the
@@ -717,16 +847,7 @@ fn change_set(
                 },
             }
         })
-        .collect();
-
-    // **What did not move is reported too.** A pull that lists three areas and
-    // says nothing about the fourth leaves a reader wondering whether it was
-    // checked — the same reasoning `clean` keeps its table for.
-    if let Some(guild) = guild {
-        let touched: Vec<&str> = rows.iter().map(|row| row.item.as_str()).collect();
-        rows.extend(unchanged(guild, &touched));
-    }
-    rows
+        .collect()
 }
 
 /// Where each outcome sits in the STATUS column's reading order.

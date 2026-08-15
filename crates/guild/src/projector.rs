@@ -573,14 +573,13 @@ mod tests {
         assert_eq!(machine.read("agents/helm.md").as_deref(), Some(mine));
         assert_eq!(
             again.yours(),
-            vec![
-                "agents/helm.md",
-                "hooks/stop-notify.sh",
-                "skills/onboard-repo/SKILL.md"
-            ],
-            "with no record, everything already there is the reader's"
+            vec!["agents/helm.md"],
+            "with no record, a file that differs from the guild is the reader's"
         );
-        assert!(!again.changed_anything());
+        assert!(
+            !again.changed_anything(),
+            "the other two are byte-identical, so they are adopted rather than rewritten"
+        );
     }
 
     /// The manifest lands outside the git repository that syncs, so it cannot

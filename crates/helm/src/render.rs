@@ -54,8 +54,8 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, CheckData, CheckDryRun, CleanData, CleanDryRun, ComponentsData,
     DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData, GuildBundleData,
     GuildInitData, GuildSyncData, Headline, InboxData, InitData, InitDryRun, KillData,
-    MachineInitData, McpData, ProbeData, ReportData, ResultRow, ScanData, ServicesData, SkillsData,
-    SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData,
+    MachineInitData, McpData, ProbeData, Projection, ReportData, ResultRow, ScanData, ServicesData,
+    SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -100,6 +100,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::GuildSync(envelope) => guild_sync(envelope, style, width),
         Output::GuildInit(envelope) => guild_init(envelope, style, width),
         Output::GuildBundle(envelope) => guild_bundle(envelope, style, width),
+        Output::GuildProject(envelope) => guild_project(envelope, style, width),
         Output::Spawn(envelope) => spawn(envelope, style, width),
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
         Output::Board(envelope) => board(envelope, style, width),
@@ -1059,7 +1060,11 @@ fn guild_sync(envelope: &Envelope<GuildSyncData>, style: Style, width: usize) ->
             // is the one place this differs from `doctor`: there is exactly one
             // thing to do about a conflicted guild, and a `→` line under a
             // one-item summary is a second line saying the same thing.
-            let mut facts = vec![format::count(conflicts, "conflict")];
+            let mut facts = Vec::new();
+            if conflicts > 0 {
+                facts.push(format::count(conflicts, "conflict"));
+            }
+            facts.extend(kept_facts(data.projected.as_ref()));
             if !data.applied {
                 facts.push("resolve in ~/.armada/guild".to_string());
                 facts.push("then armada guild push".to_string());
@@ -1092,7 +1097,76 @@ fn sync_facts(data: &GuildSyncData) -> Vec<String> {
         // stated rather than left as an absence a reader has to notice.
         None => facts.push("no remote, export still works".to_string()),
     }
+    // **A pulled guild that has not been projected is a guild that has not
+    // taken effect**, and the gap between the two is a confusing hour
+    // (`guild/pull.md`). The fact is stated on the line a reader is already
+    // reading rather than left to `armada doctor` to discover later.
+    if let Some(projected) = &data.projected {
+        facts.push(format!("projected {}", projected.facts.join(", ")));
+    }
     facts
+}
+
+/// What a projection that left something alone has to say on a summary line it
+/// is sharing with another verb.
+///
+/// **The file is not named here.** One file is a name; a guild's worth is a
+/// paragraph, and the verb that exists to list them is one word long.
+fn kept_facts(projected: Option<&Projection>) -> Vec<String> {
+    let Some(projected) = projected.filter(|done| done.kept > 0) else {
+        return Vec::new();
+    };
+    vec![
+        format!(
+            "{} left as yours in {}",
+            format::count(projected.kept, "file"),
+            projected.at
+        ),
+        "armada guild project shows which".to_string(),
+    ]
+}
+
+/// `armada guild project`, with or without `--remove`.
+///
+/// The same table `guild pull` draws, over a different tree — one row per area
+/// of `~/.claude/`, in the order the `STATUS` column reads. **The reason it is
+/// the same table is that it is the same question**: what moved, and what did
+/// not.
+fn guild_project(envelope: &Envelope<Projection>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("item", "detail", true)).indent(2);
+    for row in &data.results {
+        table = table.row(vec![
+            token(row.status.word(), Role::for_sync(row.status)),
+            Cell::plain(row.item.clone()),
+            detail_cell(style, Some(row.detail.as_str())),
+            time_cell(None),
+        ]);
+    }
+    let mut out = table.render(style, width);
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    // **Where, then what** — the same shape `guild init`'s summary has, because
+    // a reader arriving at either wants the place before the count.
+    let mut facts = vec![data.at.clone()];
+    facts.extend(data.facts.clone());
+    out.push_str(&match data.headline {
+        // **A file left as yours is not a failure and it does need a person.**
+        // It is the one outcome of this verb a reader has to decide about: the
+        // guild has moved on and this machine's copy has not, and only he
+        // knows which he wants. **The remedy is on the row rather than on this
+        // line**, because it is the row that names the area it applies to —
+        // unlike a conflicted pull, where there is one thing to do about the
+        // whole guild.
+        Some(word) => headline(style, word, &facts),
+        None => summary(style, envelope.status, &facts),
+    });
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
 }
 
 /// `armada guild init`.
@@ -1163,6 +1237,24 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
         ),
         time_cell(None),
     ]);
+    // **The row that says the guild is in effect and not merely written.**
+    // Amber when something was left alone, because that is the only outcome of
+    // the step a reader has to decide about.
+    if let Some(projected) = &data.projected {
+        table = table.row(vec![
+            token(
+                "projected",
+                if projected.kept > 0 {
+                    Role::FlareOrange
+                } else {
+                    Role::BeaconGreen
+                },
+            ),
+            Cell::plain(projected.at.clone()),
+            detail_cell(style, Some(&projected.facts.join(", "))),
+            time_cell(None),
+        ]);
+    }
 
     let mut out = table.render(style, width);
     out.push('\n');
@@ -3432,8 +3524,50 @@ mod tests {
                 remote: remote.map(str::to_string),
                 questions: 5,
                 answered,
+                projected: None,
             },
         )))
+    }
+
+    /// **The row that says the guild is in effect and not merely written.**
+    /// Without it, `guild init` reports a guild nothing reads — which is what it
+    /// did, and what `PHASES.md` §8.4 records as the milestone's broken path.
+    #[test]
+    fn guild_init_says_where_the_guild_was_projected() {
+        let quiet = rendered(&a_guild_init(&[], None, 0), Style::plain());
+        assert!(!quiet.to_lowercase().contains("projected"), "{quiet}");
+
+        let mut output = a_guild_init(&[], None, 0);
+        if let Output::GuildInit(envelope) = &mut output {
+            envelope.data.projected = Some(Projection {
+                at: "~/.claude/".to_string(),
+                results: Vec::new(),
+                facts: vec!["20 placed".to_string()],
+                kept: 0,
+                headline: None,
+            });
+        }
+        let text = rendered(&output, Style::plain());
+        assert!(text.to_lowercase().contains("projected"), "{text}");
+        assert!(text.contains("~/.claude/"), "{text}");
+        assert!(text.contains("20 placed"), "{text}");
+    }
+
+    /// **A file left alone is a fact the summary line carries**, because a
+    /// reader who did not scroll back to the table would otherwise be told the
+    /// pull worked and never learn that his own copy is the one still in effect.
+    #[test]
+    fn a_pull_that_left_a_file_alone_says_so_on_the_line_it_reports_on() {
+        assert!(kept_facts(None).is_empty());
+        let facts = kept_facts(Some(&Projection {
+            at: "~/.claude/".to_string(),
+            results: Vec::new(),
+            facts: Vec::new(),
+            kept: 2,
+            headline: None,
+        }));
+        assert_eq!(facts[0], "2 files left as yours in ~/.claude/");
+        assert!(facts[1].contains("armada guild project"));
     }
 
     /// **The migration row appears only when there was a migration**, and it
@@ -3576,6 +3710,7 @@ mod tests {
             results: Vec::new(),
             applied: true,
             headline: None,
+            projected: None,
         });
         assert_eq!(
             facts,

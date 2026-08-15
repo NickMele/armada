@@ -245,6 +245,7 @@ fn machine_scoped(
                 )
             }
             args::GuildInvocation::Pull { .. } => verbs::guild::pull(&run, place),
+            args::GuildInvocation::Project { remove, .. } => verbs::guild::project(place, remove),
             args::GuildInvocation::Push { force, .. } => verbs::guild::push(&run, place, force),
             args::GuildInvocation::Export {
                 out,

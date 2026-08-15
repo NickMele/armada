@@ -315,6 +315,17 @@ pub enum GuildInvocation {
         /// file is that it does not travel.
         include_secrets: bool,
     },
+    /// `armada guild project`.
+    ///
+    /// **The one verb whose whole job is the load path.** `init` and `pull`
+    /// both end on a projection, so this exists for the two cases they cannot
+    /// cover: re-running one after editing the guild by hand, and `--remove`.
+    Project {
+        /// Emit the envelope.
+        json: bool,
+        /// Take back exactly what was placed, and nothing else.
+        remove: bool,
+    },
     /// `armada guild import`.
     Import {
         /// Emit the envelope.
@@ -335,6 +346,7 @@ impl GuildInvocation {
             GuildInvocation::Init { json, .. }
             | GuildInvocation::Push { json, .. }
             | GuildInvocation::Pull { json }
+            | GuildInvocation::Project { json, .. }
             | GuildInvocation::Export { json, .. }
             | GuildInvocation::Import { json, .. } => *json,
         }
@@ -464,7 +476,7 @@ pub const FLEET_VERBS: [&str; 6] = ["spawn", "ls", "board", "answer", "inbox", "
 pub const TOP_LEVEL_VERBS: [&str; 2] = ["init", "doctor"];
 
 /// The Guild verbs this milestone built. The rest answer "not built yet".
-pub const GUILD_BUILT: [&str; 5] = ["init", "pull", "push", "export", "import"];
+pub const GUILD_BUILT: [&str; 6] = ["init", "project", "pull", "push", "export", "import"];
 
 /// The Guild verbs that are claimed and not built.
 ///
@@ -1080,6 +1092,13 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
         "pull" => {
             let parsed = flags(tail, json, color, "guild pull", &[], &[])?;
             GuildInvocation::Pull { json: parsed.json }
+        }
+        "project" => {
+            let parsed = flags(tail, json, color, "guild project", &["--remove"], &[])?;
+            GuildInvocation::Project {
+                json: parsed.json,
+                remove: parsed.on("--remove"),
+            }
         }
         "push" => {
             let parsed = flags(tail, json, color, "guild push", &["--force"], &[])?;

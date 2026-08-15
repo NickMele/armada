@@ -2,6 +2,7 @@ armada guild — you, portable: machine-global, and synced between your machines
 
 VERBS
   init             build your guild by interviewing you
+  project          put your guild where Claude Code will read it
   pull             bring this machine's guild up to date
   push             send local guild changes to the remote
   export           write the whole guild to one portable file
