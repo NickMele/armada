@@ -66,9 +66,10 @@ const ID_LEN: usize = 8;
 
 /// Where an entry stands with you.
 ///
-/// **Three words rather than a tick**, and the reason is PLAN.md §15.3.1's:
-/// *done*, *not doing it* and *being worked on* are different answers, and a
-/// list that collapses them stops being trustworthy after the first row.
+/// **Three words rather than a tick**, and the reason is
+/// `docs/reserved/001-raised-items-need-identity.md`'s: *done*, *not doing it*
+/// and *being worked on* are different answers, and a list that collapses them
+/// stops being trustworthy after the first row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
     /// Recorded, and nothing has been done about it.
@@ -541,7 +542,7 @@ mod tests {
     }
 
     /// Promotion is the third line shape, and it is what puts a Job's name on
-    /// the row (PLAN.md §15.3.2's "links the two").
+    /// the row (`docs/reserved/002-tasks.md`'s "links the two").
     #[test]
     fn a_promoted_entry_names_the_job_and_says_fixing() {
         let mut text = String::new();

@@ -87,7 +87,12 @@ impl Repo {
     /// command's own exit status alongside its stderr (the hook writes there
     /// exclusively), since the whole point of rule 6 is that the git
     /// operation must succeed regardless of what the hook found.
-    fn git_hooked(&self, args: &[&str], fake_cargo: &Path, extra_env: &[(&str, &str)]) -> (Output, String) {
+    fn git_hooked(
+        &self,
+        args: &[&str],
+        fake_cargo: &Path,
+        extra_env: &[(&str, &str)],
+    ) -> (Output, String) {
         let mut cmd = Command::new("git");
         cmd.arg("-C").arg(&self.dir).args(args);
         cmd.env("REINSTALL_HOOK_CARGO", fake_cargo);
@@ -191,7 +196,10 @@ fn rust_change_merged_into_main_reinstalls() {
         &[],
     );
 
-    assert!(out.status.success(), "the merge itself must succeed: {stderr}");
+    assert!(
+        out.status.success(),
+        "the merge itself must succeed: {stderr}"
+    );
     assert!(
         stderr.contains("main moved and touched the binary's sources"),
         "expected the loud start line, got: {stderr}"
@@ -216,9 +224,16 @@ fn docs_only_merge_is_quiet() {
     repo.git(&["commit", "-q", "-m", "docs only"]);
     repo.git(&["checkout", "-q", "main"]);
 
-    let (out, stderr) = repo.git_hooked(&["merge", "--no-ff", "-m", "merge docs", "docs"], &cargo, &[]);
+    let (out, stderr) = repo.git_hooked(
+        &["merge", "--no-ff", "-m", "merge docs", "docs"],
+        &cargo,
+        &[],
+    );
 
-    assert!(out.status.success(), "the merge itself must succeed: {stderr}");
+    assert!(
+        out.status.success(),
+        "the merge itself must succeed: {stderr}"
+    );
     assert!(
         stderr.trim().is_empty(),
         "a docs-only merge must produce no hook output, got: {stderr}"
@@ -273,12 +288,21 @@ fn merge_into_non_main_branch_is_quiet() {
     repo.git(&["checkout", "-q", "dev"]);
 
     let (out, stderr) = repo.git_hooked(
-        &["merge", "--no-ff", "-m", "merge into dev", "feature-off-dev"],
+        &[
+            "merge",
+            "--no-ff",
+            "-m",
+            "merge into dev",
+            "feature-off-dev",
+        ],
         &cargo,
         &[],
     );
 
-    assert!(out.status.success(), "the merge itself must succeed: {stderr}");
+    assert!(
+        out.status.success(),
+        "the merge itself must succeed: {stderr}"
+    );
     assert!(
         stderr.trim().is_empty(),
         "a merge landing on a branch other than main must produce no hook output, got: {stderr}"

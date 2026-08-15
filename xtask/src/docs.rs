@@ -21,15 +21,43 @@ pub const FILES: &[(&str, &str)] = &[
     ("AGENTS.md", "AGENTS.md"),
     ("README.md", "README.md"),
     ("reserved/README.md", "docs/reserved/README.md"),
-    ("001-raised-items-need-identity.md", "docs/reserved/001-raised-items-need-identity.md"),
+    (
+        "001-raised-items-need-identity.md",
+        "docs/reserved/001-raised-items-need-identity.md",
+    ),
     ("002-tasks.md", "docs/reserved/002-tasks.md"),
-    ("003-bridge-command-centre.md", "docs/reserved/003-bridge-command-centre.md"),
-    ("004-guild-inventory.md", "docs/reserved/004-guild-inventory.md"),
-    ("005-inbox-label-not-identity.md", "docs/reserved/005-inbox-label-not-identity.md"),
-    ("006-guild-has-no-way-to-learn.md", "docs/reserved/006-guild-has-no-way-to-learn.md"),
-    ("007-scanner-should-propose.md", "docs/reserved/007-scanner-should-propose.md"),
-    ("008-armada-injects-its-own-skills.md", "docs/reserved/008-armada-injects-its-own-skills.md"),
-    ("009-smaller-things-raised-in-use.md", "docs/reserved/009-smaller-things-raised-in-use.md"),
+    (
+        "003-bridge-command-centre.md",
+        "docs/reserved/003-bridge-command-centre.md",
+    ),
+    (
+        "004-guild-inventory.md",
+        "docs/reserved/004-guild-inventory.md",
+    ),
+    (
+        "005-inbox-label-not-identity.md",
+        "docs/reserved/005-inbox-label-not-identity.md",
+    ),
+    (
+        "006-guild-has-no-way-to-learn.md",
+        "docs/reserved/006-guild-has-no-way-to-learn.md",
+    ),
+    (
+        "007-scanner-should-propose.md",
+        "docs/reserved/007-scanner-should-propose.md",
+    ),
+    (
+        "008-armada-injects-its-own-skills.md",
+        "docs/reserved/008-armada-injects-its-own-skills.md",
+    ),
+    (
+        "009-smaller-things-raised-in-use.md",
+        "docs/reserved/009-smaller-things-raised-in-use.md",
+    ),
+    (
+        "010-armada-records-its-own-failures.md",
+        "docs/reserved/010-armada-records-its-own-failures.md",
+    ),
 ];
 
 pub struct Doc {

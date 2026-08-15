@@ -12,8 +12,8 @@
 //!
 //! **`fix` invents no mechanism.** It is a `fleet spawn` on the `bug` workflow
 //! (PLAN.md §14.6) whose task is the recorded failure, and the only thing this
-//! module adds is the line that links the two — the same link PLAN.md §15.3.2
-//! wants between a task and the Job that does it.
+//! module adds is the line that links the two — the same link
+//! `docs/reserved/002-tasks.md` wants between a task and the Job that does it.
 //!
 //! **The workflow is named rather than classified**, and that is a decision, not
 //! a shortcut. Classification costs a model call, and every entry here is by
