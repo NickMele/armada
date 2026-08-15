@@ -672,6 +672,38 @@ mod tests {
         }
     }
 
+    /// **Each lens shows its own half and nothing of the other**, asserted in
+    /// both directions: a filter tested only from the side it keeps is a filter
+    /// that passes when it does nothing.
+    #[test]
+    fn each_lens_shows_one_half_of_the_store() {
+        let mut task = entry("11112222");
+        task.origin = armada_core::failure::Origin::Written;
+        task.class = None;
+        let mut reported = entry("33334444");
+        reported.origin = armada_core::failure::Origin::Reported;
+        reported.class = None;
+        let all = vec![entry("a1b2c3d4"), reported, task];
+
+        let failures = shown(all.clone(), false, Lens::Failures);
+        let tasks = shown(all, false, Lens::Tasks);
+        assert_eq!(failures.len(), 2, "{failures:?}");
+        assert_eq!(tasks.len(), 1, "{tasks:?}");
+        assert_eq!(tasks[0].id, "11112222");
+        assert!(failures.iter().all(|entry| entry.origin.is_fault()));
+    }
+
+    /// **`start` and `fix` are not synonyms**, and the listing says the right
+    /// one — a task offered `fix` reads as Armada calling the thought a defect.
+    #[test]
+    fn the_two_lenses_name_promotion_differently_and_ask_different_questions() {
+        assert_eq!(Lens::Failures.promote().0, "fix");
+        assert_eq!(Lens::Tasks.promote().0, "start");
+        assert_eq!(Lens::Failures.verb(), "failures");
+        assert_eq!(Lens::Tasks.verb(), "tasks");
+        assert_ne!(Lens::Failures.question(), Lens::Tasks.question());
+    }
+
     #[test]
     fn a_prefix_that_names_one_entry_resolves_to_it() {
         let entries = [entry("a1b2c3d4"), entry("ff001122")];
