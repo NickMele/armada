@@ -18,7 +18,13 @@
     [38;2;255;180;84mPARTIAL[0m  [38;2;156;163;175mvoice.md still as imported[0m
              [38;2;156;163;175m→ write ~/.armada/guild/voice.md in your own words[0m
 
+  [1m[38;2;255;169;64m~/.claude[0m
+    [38;2;255;180;84mPARTIAL[0m  [38;2;156;163;175m1 file yours rather than the guild's: hooks/stop-notify.sh[0m
+             [38;2;156;163;175m→ delete yours and run armada guild project, or keep it[0m
+    [38;2;255;180;84mSTALE[0m    [38;2;156;163;175m2 files not what the guild says[0m
+             [38;2;156;163;175m→ armada guild project[0m
+
   [1m[38;2;255;169;64mmanifest.db[0m
     [38;2;61;220;132mOK[0m       [38;2;156;163;175m2 workspaces, 0 orphans[0m
 
-[1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;156;163;175m3 ok · 2 missing · 2 warnings[0m
+[1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;156;163;175m3 ok · 2 missing · 4 warnings[0m

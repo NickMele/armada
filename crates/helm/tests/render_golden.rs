@@ -905,6 +905,23 @@ fn doctor_matches_its_fixture() {
             "voice.md still as imported",
             "write ~/.armada/guild/voice.md in your own words",
         ),
+        // **The projection group**, which `doctor.md` reserved and could not
+        // report until there was a projector to compare against. It sits after
+        // the guild it is a projection *of* and before `manifest.db`, so the
+        // report reads outwards: your guild, then where it landed, then the
+        // machine's own store.
+        needs(
+            "~/.claude",
+            Problem::Partial,
+            "1 file yours rather than the guild's: hooks/stop-notify.sh",
+            "delete yours and run armada guild project, or keep it",
+        ),
+        needs(
+            "~/.claude",
+            Problem::Stale,
+            "2 files not what the guild says",
+            "armada guild project",
+        ),
         settled("manifest.db", Settled::Ok, "2 workspaces, 0 orphans"),
     ];
     let output = Output::Doctor(Box::new(Envelope::ok(

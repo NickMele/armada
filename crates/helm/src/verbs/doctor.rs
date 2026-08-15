@@ -12,18 +12,16 @@
 //! | **Layout** | `~/.armada/` with its directories and `machine.yml` |
 //! | **Guild drift** | behind, ahead of, or diverged from the remote, and by how many commits |
 //! | **Fragments** | which of the three are still whatever import produced |
+//! | **Projection** | whether the guild Claude Code reads is the guild you have |
 //!
 //! **Guild drift is the check that earns the command.** Two machines silently
 //! diverging is the guild's main failure mode (`PHASES.md` §11), and it is the
 //! one thing nothing else on the machine would ever tell you.
 //!
-//! **Projection is not here yet, and its absence is deliberate rather than an
-//! oversight.** `doctor.md` names a fourth group — whether the guild content
-//! Claude Code is actually reading matches what the guild says it should be —
-//! and there is nothing to compare against until the projector exists
-//! (`PLAN.md` §13.2). Reporting `ok` for a check that ran nothing would be the
-//! worse of the two failures: a `doctor` that says a machine is fine when
-//! nobody looked.
+//! **The projection group was withheld until there was a projector**, because a
+//! `doctor` reporting `ok` for a check that ran nothing is the worse of the two
+//! failures — a machine reported fine when nobody looked. It runs a survey,
+//! which writes nothing, so the command stays read-only.
 //!
 //! # Offline is not a failure
 //!
@@ -35,7 +33,7 @@ use armada_core::ctx::{Run, RunRequest};
 use armada_core::envelope::{DoctorData, Envelope, Finding, Problem, Settled};
 use armada_core::error::ArmadaError;
 use armada_guild::layout::{self, Guild, DIRECTORIES};
-use armada_guild::{machine, memory, repo};
+use armada_guild::{machine, memory, projector, repo};
 use std::path::Path;
 
 use crate::verbs::guild::Where;
@@ -58,6 +56,7 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     results.push(directories(&place.armada_home));
     results.extend(drift(runner, &guild));
     results.extend(fragments(&guild));
+    results.extend(projection(place, &guild));
     results.push(store(&place.armada_home));
 
     let status = DoctorData::verdict(&results);
@@ -394,6 +393,99 @@ fn fragments(guild: &Guild) -> Vec<Finding> {
         .collect()
 }
 
+/// The check every projection row belongs to. Named for the directory it is
+/// about, exactly as `~/.armada` is.
+const CLAUDE: &str = "~/.claude";
+
+/// **Is the guild Claude Code reads the guild you have?**
+///
+/// The group `docs/commands/doctor.md` reserved and could not report until
+/// something projected. It runs a survey, which writes nothing: a check that had
+/// to project in order to report on projection would be a check nobody could run
+/// twice, and `doctor` is read-only.
+///
+/// **Nothing at all when there is no guild.** `drift` has already said so in the
+/// group above, and a second row saying it again is a row a reader has to read
+/// twice to learn nothing — the same reasoning that kept this group out of the
+/// report entirely until a projector existed.
+fn projection(place: &Where, guild: &Guild) -> Vec<Finding> {
+    if !guild.exists() {
+        return Vec::new();
+    }
+    let steps = projector::survey(guild, &place.claude_home, &place.armada_home);
+    let mut found = Vec::new();
+
+    // **Yours first, because it is the row that needs a person.** Out of date is
+    // one command away; a file left alone is a decision only the reader can
+    // make, and burying it under the count of what is stale is how it gets
+    // missed.
+    let yours: Vec<&str> = steps
+        .iter()
+        .filter(|step| step.is_yours())
+        .map(|step| step.at.as_str())
+        .collect();
+    if !yours.is_empty() {
+        found.push(Finding::needs(
+            CLAUDE,
+            Problem::Partial,
+            format!(
+                "{} yours rather than the guild's: {}",
+                crate::render::format::count(yours.len(), "file"),
+                a_few(&yours)
+            ),
+            "delete yours and run armada guild project, or keep it",
+        ));
+    }
+
+    let behind = steps
+        .iter()
+        .filter(|step| step.writes() || step.deletes())
+        .count();
+    if behind > 0 {
+        found.push(Finding::needs(
+            CLAUDE,
+            Problem::Stale,
+            format!(
+                "{} not what the guild says",
+                crate::render::format::count(behind, "file")
+            ),
+            "armada guild project",
+        ));
+    }
+
+    if found.is_empty() {
+        // **A guild with nothing to project says so rather than reporting
+        // `ok`.** An empty guild and a projected one are different facts, and a
+        // row claiming the second when it means the first is the row this whole
+        // group was withheld to avoid.
+        found.push(Finding::settled(
+            CLAUDE,
+            Settled::Ok,
+            if steps.is_empty() {
+                "nothing in the guild to project".to_string()
+            } else {
+                format!(
+                    "{} current",
+                    crate::render::format::count(steps.len(), "file")
+                )
+            },
+        ));
+    }
+    found
+}
+
+/// The first couple of names and how many more there are.
+///
+/// **Names, not just a number.** A row saying `4 files` leaves the reader with
+/// nowhere to go; two paths and a `+2` fit on the line and say where to start.
+fn a_few(items: &[&str]) -> String {
+    const KEEP: usize = 2;
+    if items.len() <= KEEP {
+        return items.join(", ");
+    }
+    format!("{}, +{}", items[..KEEP].join(", "), items.len() - KEEP)
+}
+
 /// `manifest.db`, and what Guild is allowed to know about it — which is only
 /// that it is there.
 ///
@@ -684,6 +776,83 @@ mod tests {
         data.results
             .iter()
             .find(|row| row.check == check && row.detail.contains(detail))
+    }
+
+    /// **A guild that has not been projected is reported, and the row names the
+    /// command.** This is the group `doctor.md` reserved and could not report
+    /// until a projector existed.
+    #[test]
+    fn a_guild_that_is_not_on_claude_codes_load_path_is_stale() {
+        let (home, place) = machine_with_a_guild();
+        std::fs::create_dir_all(home.path().join(".armada/guild/skills/onboard-repo")).unwrap();
+        std::fs::write(
+            home.path()
+                .join(".armada/guild/skills/onboard-repo/SKILL.md"),
+            "# onboard\n",
+        )
+        .unwrap();
+
+        let findings = projection(&place, &place.guild());
+        let stale = findings
+            .iter()
+            .find(|row| row.check == CLAUDE)
+            .expect("no projection row");
+        assert_eq!(stale.status, Health::Stale);
+        assert!(stale.detail.contains("1 file"), "{}", stale.detail);
+        assert_eq!(stale.remedy.as_deref(), Some("armada guild project"));
+        assert!(
+            !place.claude_home.exists(),
+            "the survey wrote something, and `doctor` is read-only"
+        );
+    }
+
+    /// **A file you edited is reported as yours, not as out of date**, and it is
+    /// the first row, because it is the one only a person can decide about.
+    #[test]
+    fn a_file_you_edited_is_reported_as_yours() {
+        let (home, place) = machine_with_a_guild();
+        let guild = place.guild();
+        std::fs::create_dir_all(guild.path("subagents")).unwrap();
+        std::fs::write(guild.path("subagents/helm.md"), "# helm\n").unwrap();
+        armada_guild::projector::project(&guild, &place.claude_home, &place.armada_home).unwrap();
+        std::fs::write(place.claude_home.join("agents/helm.md"), "# mine\n").unwrap();
+        let _ = home;
+
+        let findings = projection(&place, &guild);
+        assert_eq!(findings[0].status, Health::Partial);
+        assert!(
+            findings[0].detail.contains("agents/helm.md"),
+            "{}",
+            findings[0].detail
+        );
+        assert!(findings[0].remedy.is_some());
+    }
+
+    /// **A guild with nothing in it says so rather than reporting `ok`.** An
+    /// empty guild and a projected one are different facts, and a row claiming
+    /// the second when it means the first is what this group was withheld to
+    /// avoid.
+    #[test]
+    fn a_guild_with_nothing_to_project_says_that_rather_than_ok() {
+        let (_home, place) = machine_with_a_guild();
+        let findings = projection(&place, &place.guild());
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].status, Health::Ok);
+        assert!(findings[0].detail.contains("nothing in the guild"));
+    }
+
+    /// **No row at all when there is no guild.** The group above has already
+    /// said so, and a second row saying it again is one a reader has to read
+    /// twice to learn nothing.
+    #[test]
+    fn a_machine_with_no_guild_gets_no_projection_row() {
+        let home = tempfile::tempdir().unwrap();
+        let place = Where {
+            armada_home: home.path().join(".armada"),
+            cwd: home.path().to_path_buf(),
+            claude_home: home.path().join(".claude"),
+        };
+        assert!(projection(&place, &place.guild()).is_empty());
     }
 
     /// **The check that earns the command**, with the remedy that fixes it.

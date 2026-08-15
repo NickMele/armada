@@ -18,7 +18,13 @@
     PARTIAL  voice.md still as imported
              -> write ~/.armada/guild/voice.md in your own words
 
+  ~/.claude
+    PARTIAL  1 file yours rather than the guild's: hooks/stop-notify.sh
+             -> delete yours and run armada guild project, or keep it
+    STALE    2 files not what the guild says
+             -> armada guild project
+
   manifest.db
     OK       2 workspaces, 0 orphans
 
-NEEDS ATTENTION  3 ok, 2 missing, 2 warnings
+NEEDS ATTENTION  3 ok, 2 missing, 4 warnings
