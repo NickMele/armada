@@ -1,0 +1,5 @@
+  STATUS  ID        DETAIL                                                  TIME
+  OPEN    6d40b1e9  reported, the dry-run said CREATED worktree and made …    4m
+  OPEN    a91f0c37  environment x4, `armada manifest clean` could not be …    9m
+
+OK  1 failure, 1 reported, 2 open, armada failures show <id>

@@ -850,7 +850,7 @@ pub fn task(entry: &Entry) -> String {
 fn report_task(entry: &Entry) -> String {
     let mut out = format!(
         "This was reported by hand rather than caught by Armada, and was recorded \
-         as `{}`. Armada did not fail — it did something wrong that it did not \
+         as `{}`. Armada did not fail: it did something wrong that it did not \
          notice, so there may be no error to look for.\n\n\
          What happened, in the words it was reported in:\n\n\
          \x20   {}\n\n\
@@ -864,7 +864,7 @@ fn report_task(entry: &Entry) -> String {
             diagnostics.armada,
             diagnostics.system,
             match &diagnostics.claude {
-                Some(claude) => format!(", with {claude}"),
+                Some(claude) => format!(", with claude {claude}"),
                 None => ", and `claude --version` did not answer".to_string(),
             }
         ));
@@ -940,7 +940,7 @@ mod tests {
         assert!(text.contains("~/.cargo/bin/armada"), "{text}");
 
         let folded = fold(&text);
-        assert_eq!(folded[0].class, ErrClass::Environment);
+        assert_eq!(folded[0].class, Some(ErrClass::Environment));
         assert_eq!(folded[0].r#where, "~/.cargo/bin/armada");
         assert_eq!(folded[0].cwd, "~/code/api");
     }

@@ -1876,7 +1876,25 @@ fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> St
     }
     out.push('\n');
 
-    let mut facts = vec![format::count(data.results.len(), "failure")];
+    // **"2 failures" is wrong the moment a filed report is in the list**, and
+    // wrong in the direction that matters: a person scanning the summary would
+    // read their own report back as something Armada broke on. So the count
+    // splits as soon as both kinds are present, and stays one word when only one
+    // kind is — a machine that has never had a report filed on it reads exactly
+    // as it did before.
+    let reported = data
+        .results
+        .iter()
+        .filter(|entry| entry.origin == armada_core::failure::Origin::Reported)
+        .count();
+    let mut facts = match reported {
+        0 => vec![format::count(data.results.len(), "failure")],
+        all if all == data.results.len() => vec![format::count(all, "report")],
+        some => vec![
+            format::count(data.results.len() - some, "failure"),
+            format!("{some} reported"),
+        ],
+    };
     if data.open > 0 {
         facts.push(format!("{} open", data.open));
     }
