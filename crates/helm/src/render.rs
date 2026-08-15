@@ -110,6 +110,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::GuildChange(envelope) => guild_change(envelope, style, width),
         Output::Failures(envelope) => failures(envelope, style, width),
         Output::Failure(envelope) => failure(envelope, style, width),
+        Output::Coverage(envelope) => coverage(envelope, style, width),
         Output::Spawn(envelope) => spawn(envelope, style, width),
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
         Output::Bridge(envelope) => bridge(envelope, style, width),
@@ -2052,6 +2053,61 @@ fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> St
             true => "armada tasks show <id>".to_string(),
             false => "armada failures show <id>".to_string(),
         });
+    }
+    out.push_str(&summary(style, envelope.status, &facts));
+    out
+}
+
+/// `armada coverage` — every verb Armada owns, and what this machine has done
+/// with each.
+///
+/// **No status word, and that is deliberate.** `docs/glossary.md` fixes the
+/// status vocabulary and every word in it describes *a thing Armada did*;
+/// "TRIED" would be a tenth word describing what **you** did, in a column
+/// readers have learned to read one way. The two facts are the count and the
+/// last time, so those are the cells — and `never` is spelled out, because an
+/// empty cell in the one column this listing exists for reads as a bug.
+fn coverage(
+    envelope: &Envelope<armada_core::envelope::CoverageData>,
+    style: Style,
+    width: usize,
+) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(vec![
+        Column::fixed("verb"),
+        Column::flexible("runs"),
+        Column::fixed("last").right(),
+    ])
+    .indent(2);
+    for row in &data.results {
+        table = table.row(vec![
+            Cell::painted(format!("armada {}", row.verb), Role::NavalBlue),
+            detail_cell(
+                style,
+                Some(&match row.count {
+                    0 => "not once".to_string(),
+                    n => format::count(n as usize, "run"),
+                }),
+            ),
+            Cell::muted(crate::verbs::coverage::when(row)),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    if table.is_empty() {
+        // **Reached by having run everything**, which is the one outcome worth
+        // saying in words: a blank table under `armada coverage` would read as
+        // the counter being broken.
+        out.push_str("  every verb has been run at least once\n");
+    }
+    out.push('\n');
+
+    let mut facts = vec![format!("{} never run", data.untried)];
+    if data.tried > 0 {
+        facts.push(format!("{} tried", data.tried));
+    }
+    if data.untried > 0 {
+        facts.push("armada task \"try <verb>\"".to_string());
     }
     out.push_str(&summary(style, envelope.status, &facts));
     out

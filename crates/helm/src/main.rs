@@ -196,6 +196,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Failures(failures) => failures.json(),
         Invocation::Tasks(tasks) => tasks.json(),
+        Invocation::Coverage { json, .. } => *json,
         Invocation::Report { json, .. } | Invocation::Task { json, .. } => *json,
         Invocation::Mcp { json } => *json,
         Invocation::Version | Invocation::Help(_) => false,
@@ -445,13 +446,42 @@ fn dispatch(
         };
     }
 
+    // **`armada coverage` has fewer preconditions than any other verb**, and it
+    // has to: it is the verb you reach for when you do not know what works yet.
+    // No workspace, no boot id, no guild — it reads one file and diffs it
+    // against Armada's own roster.
+    if let Invocation::Coverage { all, json } = invocation {
+        let place = verbs::fleet::Where {
+            home: home.to_path_buf(),
+            armada_home: armada_manifest::machine::armada_home(home),
+            cwd: cwd.to_path_buf(),
+            exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
+            boot_id: String::new(),
+        };
+        // A terminal is the flag, decided here rather than in the verb
+        // (`ARCHITECTURE.md` §1.4).
+        let interactive = terminal.can_ask() && !json;
+        let mut asking = at_the_terminal(style, terminal);
+        return verbs::coverage::ls(
+            &SystemClock,
+            &place,
+            all,
+            &mut asking,
+            interactive,
+            look(style, terminal),
+        );
+    }
+
     // **`armada tasks` joins them for `armada failures`' reasons exactly.** It
     // is the same store seen through the other lens, and starting a task is
     // `fleet spawn`, which needs what `spawn` needs and nothing a workspace
     // would add.
     if matches!(
         invocation,
-        Invocation::Fleet(_) | Invocation::Bridge(_) | Invocation::Failures(_) | Invocation::Tasks(_)
+        Invocation::Fleet(_)
+            | Invocation::Bridge(_)
+            | Invocation::Failures(_)
+            | Invocation::Tasks(_)
     ) {
         let place = verbs::fleet::Where {
             home: home.to_path_buf(),
@@ -784,6 +814,7 @@ fn dispatch(
         | Invocation::Helm(_)
         | Invocation::Failures(_)
         | Invocation::Tasks(_)
+        | Invocation::Coverage { .. }
         | Invocation::Report { .. }
         | Invocation::Task { .. } => {
             unreachable!("machine-scoped, and handled above")
@@ -1638,10 +1669,31 @@ fn remember(
         now.wall_ms(),
         &|text| armada_helm::redact::scrub(text),
     );
-    let _ = armada_manifest::recent::record(
-        &armada_manifest::recent::path(&armada_manifest::machine::armada_home(home)),
-        latest,
-    );
+    let armada_home = armada_manifest::machine::armada_home(home);
+    let _ = armada_manifest::recent::record(&armada_manifest::recent::path(&armada_home), latest);
+
+    // **The same run, counted against Armada's own roster** — `armada coverage`,
+    // whose whole subject is the verbs this machine has *never* run. It lives
+    // here rather than in a recorder of its own because the two answer the same
+    // question at different lengths: the buffer keeps ten runs and can say what
+    // you just did, and this keeps one line per verb forever and can say what
+    // you never have.
+    //
+    // **Nothing a person typed is written.** `matched` only ever hands back a
+    // name that was already on the roster, so a repository's declared command
+    // and a typo alike are counted as nothing at all — which is why this needs
+    // no redaction of its own.
+    if let Some(verb) = armada_core::coverage::matched(
+        &armada_core::recent::verb_of(argv),
+        &armada_helm::args::every_verb(),
+    ) {
+        let _ = armada_manifest::coverage::record(
+            &armada_manifest::coverage::path(&armada_home),
+            &verb,
+            now.wall_ms(),
+            exit == 0,
+        );
+    }
 }
 
 fn record(error: &ArmadaError, ambient: &Ambient, fault: Fault) {

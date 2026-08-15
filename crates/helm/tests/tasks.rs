@@ -110,7 +110,10 @@ fn tasks_and_failures_share_one_store_and_are_never_listed_together() {
             .collect()
     };
     assert!(ids(&tasks).contains(&task), "{tasks}");
-    assert!(!ids(&failures).contains(&task), "a task listed as a failure: {failures}");
+    assert!(
+        !ids(&failures).contains(&task),
+        "a task listed as a failure: {failures}"
+    );
     assert!(
         !ids(&failures).is_empty(),
         "the failure half has to be non-empty for the exclusion to mean anything: {failures}"
@@ -284,10 +287,9 @@ fn a_task_written_in_a_worktree_belongs_to_the_checkout() {
     assert!(added.status.success(), "git worktree add: {added:?}");
 
     let id = capture(&machine, &worktree, "rename the port allocator");
-    let shown: serde_json::Value = serde_json::from_str(&stdout(&machine.run(
-        &worktree,
-        &["tasks", "show", &id, "--json"],
-    )))
+    let shown: serde_json::Value = serde_json::from_str(&stdout(
+        &machine.run(&worktree, &["tasks", "show", &id, "--json"]),
+    ))
     .unwrap();
     let cwd = shown["data"]["results"][0]["cwd"].as_str().expect("a cwd");
     assert!(
@@ -318,8 +320,8 @@ fn no_absolute_home_path_reaches_the_store_from_a_task() {
     let machine = Machine::new();
     let repo = machine.repo("orders", "version: 1\nname: orders\n");
     capture(&machine, &repo, "rename the port allocator");
-    let written =
-        std::fs::read_to_string(machine.home.path().join(".armada/failures.jsonl")).expect("written");
+    let written = std::fs::read_to_string(machine.home.path().join(".armada/failures.jsonl"))
+        .expect("written");
     assert!(
         !written.contains(&machine.home.path().display().to_string()),
         "an absolute $HOME reached disk:\n{written}"

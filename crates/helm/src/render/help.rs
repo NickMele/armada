@@ -120,7 +120,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 40] = [
+const PAGES: [Page; 41] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -922,10 +922,7 @@ const PAGES: [Page; 40] = [
             "armada tasks clear <id> | --all",
         ],
         flags: &[
-            (
-                "--all",
-                "listing: include cleared; clear: clear every task",
-            ),
+            ("--all", "listing: include cleared; clear: clear every task"),
             ("--workflow <name>", "start: design|plan|bug|feature"),
             ("--dry-run", "start: report the Job, and spawn nothing"),
         ],
@@ -950,6 +947,24 @@ const PAGES: [Page; 40] = [
             "An id can be shortened to any prefix that names one row.",
             "Tasks and failures share one store and one id space, and list",
             "separately: this asks what to do, armada failures asks what broke.",
+        ],
+    },
+    Page {
+        path: "coverage",
+        synopsis: "coverage",
+        summary: "which of Armada's verbs you have never run here",
+        usage: &["armada coverage [--all] [--json]"],
+        flags: &[("--all", "every verb, not only the ones never run")],
+        examples: &[
+            ("armada coverage", "what you have not got to yet"),
+            ("armada coverage --all", "the whole roster, stalest first"),
+        ],
+        notes: &[
+            "Counted as you use it: every run of an Armada verb is tallied at",
+            "the end, in ~/.armada/coverage.jsonl. Nothing is sent anywhere.",
+            "A sub-verb counts as its parent: armada tasks start counts as tasks.",
+            "At a terminal, picking a row writes a task for it — nothing is",
+            "written down unless you pick it.",
         ],
     },
     Page {

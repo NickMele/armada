@@ -116,17 +116,31 @@ pub fn capture<R: Run, C: Clock>(
     what: &str,
     argv: &[String],
 ) -> Result<Output, ArmadaError> {
+    capture_text(now, place, what, argv, &project(runner, &place.cwd))
+}
+
+/// Capture, with the repository already decided.
+///
+/// **Split from [`capture`] so that a caller who is not standing anywhere can
+/// still write a task.** `armada coverage` is the one: *"try `armada guild
+/// edit`"* is not about the directory it was written in, and paying a `git`
+/// call to record one would be a subprocess for a fact nobody will read.
+pub fn capture_text<C: Clock>(
+    now: &C,
+    place: &Where,
+    what: &str,
+    argv: &[String],
+    project: &std::path::Path,
+) -> Result<Output, ArmadaError> {
     let what = what.trim();
     if what.is_empty() {
         return Err(empty());
     }
 
-    let project = project(runner, &place.cwd);
-
     let (id, line) = failure::written(
         what,
         &place.home,
-        &project,
+        project,
         argv,
         &now.wall_rfc3339(),
         now.wall_ms(),

@@ -180,6 +180,15 @@ pub enum Invocation {
     },
     /// `armada tasks [<verb>]` — what you wrote down, and how to start one.
     Tasks(Box<TasksInvocation>),
+    /// `armada coverage` — **which of Armada's verbs this machine has never
+    /// run.** No sub-verbs: it is a counter with one question, and the only
+    /// action it offers is writing a task, which is `armada task`'s.
+    Coverage {
+        /// Emit the envelope.
+        json: bool,
+        /// Every verb, not only the ones never run.
+        all: bool,
+    },
     /// `armada mcp serve` — the toolbelt, over stdio.
     ///
     /// **No fields but `--json`.** `--stdio` is the only transport and the
@@ -860,8 +869,8 @@ pub const FLEET_VERBS: [&str; 11] = [
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 8] = [
-    "init", "doctor", "bridge", "helm", "failures", "report", "task", "tasks",
+pub const TOP_LEVEL_VERBS: [&str; 9] = [
+    "init", "doctor", "bridge", "helm", "failures", "report", "task", "tasks", "coverage",
 ];
 
 /// `armada failures`' sub-verbs.
@@ -1051,6 +1060,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "report" => return report(rest, json, color),
             "task" => return task(rest, json, color),
             "tasks" => return tasks(rest, json, color),
+            "coverage" => return coverage(rest, json, color),
             "mcp" => return mcp(rest, json, color),
             // **The bare word, spelled the way `git`, `cargo`, `npm` and
             // `docker` all spell it.** `--help`/`-h` already reach every page
@@ -1762,7 +1772,12 @@ fn tasks(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
         _ => {
             let parsed = flags(tail, json, color, "tasks clear", &["--all"], &[])?;
             let all = parsed.on("--all");
-            let id = one_positional(&parsed, "tasks clear", "which task", "`armada tasks` lists them")?;
+            let id = one_positional(
+                &parsed,
+                "tasks clear",
+                "which task",
+                "`armada tasks` lists them",
+            )?;
             // One or the other, and refused rather than ordered — `armada
             // failures clear`'s rule, for its reason: naming an entry *and*
             // `--all` asks two questions, and answering the wider one would
@@ -1773,7 +1788,9 @@ fn tasks(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                         class: ErrClass::BadInvocation,
                         r#where: "tasks clear".to_string(),
                         message: match all {
-                            true => "`armada tasks clear` takes an id or --all, not both".to_string(),
+                            true => {
+                                "`armada tasks clear` takes an id or --all, not both".to_string()
+                            }
                             false => "`armada tasks clear` needs an id, or --all".to_string(),
                         },
                         next_action: Some("`armada tasks` lists them".to_string()),
@@ -1802,6 +1819,28 @@ fn one_task_id(parsed: &Flags, r#where: &str) -> Result<String, ParseFailure> {
             parsed.json,
         )),
     }
+}
+
+/// `armada coverage [--all]`.
+///
+/// **No sub-verbs and one flag.** The listing is the whole verb: without
+/// `--all` it answers *what have I never run*, which is the question it exists
+/// for, and with it the whole roster.
+fn coverage(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "coverage") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+    let parsed = flags(rest, json, color, "coverage", &["--all"], &[])?;
+    Ok(Invocation::Coverage {
+        json: parsed.json,
+        all: parsed.on("--all"),
+    })
 }
 
 /// `armada help`, `armada help <module>`, or `armada help <module> <verb>` —
