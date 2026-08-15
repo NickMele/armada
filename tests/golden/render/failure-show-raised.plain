@@ -1,0 +1,13 @@
+  STATUS  ID        DETAIL                                                  TIME
+  FIXING  4f2a91c8  raised, raise the CI timeout to 90s, or drop the flak…    0s
+
+  what it is asking:
+    raise the CI timeout to 90s, or drop the flaky test?
+
+  STATUS  FACT       DETAIL
+  SEEN    count      once, at 2026-08-09T14:02:11Z
+  TYPED   command    -
+  IN      directory  -
+  JOB     raised by  nightly-flake
+
+OK  armada fleet show nightly-flake, armada fleet answer 4f2a91c8 "…"

@@ -148,6 +148,86 @@ impl Entry {
     pub fn is_legacy(&self) -> bool {
         self.job_uuid.is_none() && self.closed.is_none()
     }
+
+    /// This entry in the **item** shape every listing in Armada already shares.
+    ///
+    /// # This is `001`'s one id space, and it is a projection rather than a move
+    ///
+    /// `docs/reserved/001-raised-items-need-identity.md` asks that *every item
+    /// Helm surfaces is an inbox entry with an id*. Three of the four kinds of
+    /// item already were — a recorded failure, a filed report and a written
+    /// task share `~/.armada/failures.jsonl`, one id space, one `show` and one
+    /// promotion ([`armada_core::failure::Origin`]). The inbox was the fourth
+    /// and the only one outside, so an id off `armada fleet inbox` resolved
+    /// nowhere else and an id off `armada failures` resolved nowhere here.
+    ///
+    /// **The inbox is not moved into that file**, and the reason is mechanical
+    /// rather than aesthetic: Helm's Stop hook greps `~/.armada/inbox.jsonl`
+    /// for unread entries and its monitor runs `tail -F` on that exact path
+    /// (`armada_core::helm`). Merging the two stores would break the mechanism
+    /// that makes a raised item reach anybody at all, in exchange for tidier
+    /// bytes. So the **writing** stays where it is and the **reading** is
+    /// unified: this projection is what lets one `read` produce one list, and
+    /// one resolver refuse an ambiguous prefix across every item on the
+    /// machine.
+    ///
+    /// # What each field is, and the two that are deliberately empty
+    ///
+    /// - **`id` is the first eight characters of the entry's uuid**, the width
+    ///   [`crate::jobs::short`] settled on and the width the `ID` column draws.
+    ///   Every other origin's id is an eight-character fingerprint, so a
+    ///   thirty-six-character uuid in the same column would be one id space
+    ///   with two shapes, which reads as two.
+    /// - **`state` is [`State::Fixing`] while it is open.** Not `Open`: a
+    ///   raised item is not a row nobody has started, it is a row with a Drone
+    ///   stopped in front of it — which is exactly what `FIXING` means
+    ///   elsewhere, *a Job is on it*. An answered or closed entry is `Cleared`,
+    ///   which is what keeps it out of the counts of what is still yours.
+    /// - **`job` is the Job's name**, so the one action `show` offers is
+    ///   `armada fleet show <job>` — and the name is a label here exactly as it
+    ///   is everywhere else (`docs/reserved/005-inbox-label-not-identity.md`);
+    ///   the identity is `job_uuid` and this projection is a read.
+    /// - **`class` and `where` are empty**, for [`Origin::Reported`]'s reason:
+    ///   they are Armada's own attribution and Armada attributed nothing. A
+    ///   Drone asked a question; nothing was classified because nothing failed.
+    /// - **`argv` and `cwd` are empty**, and the screen draws `-` for both.
+    ///   They are *the command that was typed* and *where it was typed*, and
+    ///   nobody typed anything — a Drone raised this while you were elsewhere.
+    ///   Putting `armada fleet answer <id>` in the `argv` cell was tried and
+    ///   reverted: under a column headed `TYPED` it reads as a command you ran,
+    ///   which is a fact the row would be inventing. What to type belongs on
+    ///   the summary line, where it is an offer rather than a record.
+    pub fn as_entry(&self) -> armada_core::failure::Entry {
+        use armada_core::failure::{Entry as Item, Origin, State};
+        Item {
+            id: crate::jobs::short(&self.uuid).to_string(),
+            state: match self.is_open() {
+                true => State::Fixing,
+                false => State::Cleared,
+            },
+            origin: Origin::Raised,
+            class: None,
+            r#where: String::new(),
+            message: self.body.clone(),
+            next: None,
+            argv: String::new(),
+            cwd: String::new(),
+            workspace: None,
+            // **One, always.** Two Drones asking the same question are two
+            // questions — they are stopped in two worktrees and each needs its
+            // own answer — so nothing here folds, and a count that could only
+            // ever be `1` is the honest value rather than a hidden zero.
+            count: 1,
+            first_at: self.raised_at.clone(),
+            last_at: self.raised_at.clone(),
+            last_ms: self.raised_ms,
+            // Filled by `armada_core::failure::age` against a clock, exactly as
+            // it is for every other origin. This module is pure.
+            age_s: 0,
+            job: Some(self.job.clone()),
+            diagnostics: None,
+        }
+    }
 }
 
 /// One line of the file: an entry raised, answered, closed, or given the
@@ -430,6 +510,56 @@ pub fn open_for<'a>(entries: &'a [Entry], job_uuid: &str) -> Option<&'a Entry> {
     entries
         .iter()
         .find(|entry| entry.job_uuid.as_deref() == Some(job_uuid) && entry.is_open())
+}
+
+/// The **open** entry an id names — by prefix, when the prefix names exactly
+/// one.
+///
+/// **This is the half of `001` the inbox was still missing.**
+/// `docs/reserved/005-inbox-label-not-identity.md` gave an entry a `job_uuid`
+/// so it could say which Job it belonged to; nothing gave a *reader* a way to
+/// say which entry they meant. `armada fleet answer <job>` names the Job and
+/// [`open_for`] picks the oldest of its open entries, so a Job that asked twice
+/// cannot be answered out of order and a table of five entries offers one
+/// action that does not name a row. An id fixes that from the reader's side.
+///
+/// **Only open entries are matched**, and that is the design rather than an
+/// optimisation. An id that resolves to an answered or closed entry would give
+/// the caller a row with nothing to answer — which is
+/// `005`'s second consequence, *the footer offers an action that cannot work*,
+/// arriving by a new route. `Ok(None)` means "this is not an entry id", which
+/// is what lets the caller fall back to resolving it as a Job handle.
+///
+/// **Ambiguity is refused rather than resolved**, exactly as
+/// `armada failures show` refuses it: picking one of two for the caller would
+/// close a question they did not name.
+pub fn find_open<'a>(entries: &'a [Entry], id: &str) -> Result<Option<&'a Entry>, ArmadaError> {
+    // An empty prefix would match every open entry; it is not an id and the
+    // ambiguity error it would raise would be nonsense.
+    if id.is_empty() {
+        return Ok(None);
+    }
+    let matched: Vec<&Entry> = entries
+        .iter()
+        .filter(|entry| entry.is_open() && entry.uuid.starts_with(id))
+        .collect();
+    match matched.as_slice() {
+        [] => Ok(None),
+        [one] => Ok(Some(one)),
+        many => Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: id.to_string(),
+            message: format!(
+                "`{id}` names {} open entries: {}",
+                many.len(),
+                many.iter()
+                    .map(|entry| crate::jobs::short(&entry.uuid))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            next_action: Some("give more of the id".to_string()),
+        }),
+    }
 }
 
 fn append(path: &Path, line: &Line) -> Result<(), ArmadaError> {
@@ -874,5 +1004,81 @@ mod tests {
                 why
             );
         }
+    }
+
+    // ------------------------------------------------------- an entry's own id
+
+    /// **A prefix names the row, and the row is not the oldest one.**
+    ///
+    /// This is the difference `docs/reserved/001-raised-items-need-identity.md`
+    /// exists to make. Both entries below belong to one Job, so
+    /// [`open_for`] answers `first` for either of them; only an id can say
+    /// *the second one* without a sentence.
+    #[test]
+    fn an_open_entry_is_found_by_a_prefix_of_its_own_id() {
+        let (_home, path) = scratch();
+        raised(&path, "aaaa1111-e", "job-uuid", "api", 1, "first");
+        raised(&path, "bbbb2222-e", "job-uuid", "api", 2, "second");
+        let entries = read(&path).unwrap();
+
+        assert_eq!(open_for(&entries, "job-uuid").unwrap().body, "first");
+        assert_eq!(find_open(&entries, "bbbb").unwrap().unwrap().body, "second");
+        assert_eq!(find_open(&entries, "aaaa").unwrap().unwrap().body, "first");
+    }
+
+    /// **An id nothing open answers to is `None`, not an error** — which is
+    /// what lets `armada fleet answer` try the same word as a Job handle
+    /// afterwards. An error here would make every Job-named answer fail.
+    #[test]
+    fn a_handle_that_names_no_open_entry_is_not_an_error() {
+        let (_home, path) = scratch();
+        raised(&path, "aaaa1111-e", "job-uuid", "api", 1, "first");
+        let entries = read(&path).unwrap();
+
+        assert!(find_open(&entries, "api").unwrap().is_none());
+        // The empty string would otherwise prefix-match every open entry and
+        // report an ambiguity about an id nobody typed.
+        assert!(find_open(&entries, "").unwrap().is_none());
+    }
+
+    /// **An answered entry is not findable**, so an id cannot be used to
+    /// re-answer something already closed. That is
+    /// `docs/reserved/005-inbox-label-not-identity.md`'s second consequence —
+    /// *an action that can only fail is worse than no action* — arriving by the
+    /// new route.
+    #[test]
+    fn only_open_entries_answer_to_an_id() {
+        let (_home, path) = scratch();
+        raised(&path, "aaaa1111-e", "job-uuid", "api", 1, "first");
+        answer(&path, "aaaa1111-e", "go ahead").unwrap();
+        let entries = read(&path).unwrap();
+
+        assert!(find_open(&entries, "aaaa").unwrap().is_none());
+    }
+
+    /// **Two matches are refused rather than picked between.** The same rule
+    /// `armada failures show` follows: resolving an ambiguous prefix for the
+    /// caller closes a question they did not name.
+    #[test]
+    fn a_prefix_naming_two_open_entries_is_refused() {
+        let (_home, path) = scratch();
+        raised(&path, "aaaa1111-e", "job-uuid", "api", 1, "first");
+        raised(&path, "aaaa2222-e", "other-uuid", "web", 2, "second");
+        let entries = read(&path).unwrap();
+
+        let error = find_open(&entries, "aaaa").unwrap_err();
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert!(
+            error.message.contains("names 2 open entries"),
+            "the refusal should say how many and which: {}",
+            error.message
+        );
+        // Inverted once: a prefix long enough to be unambiguous must resolve,
+        // or the assertion above would pass for a function that refused
+        // everything.
+        assert_eq!(
+            find_open(&entries, "aaaa1111").unwrap().unwrap().body,
+            "first"
+        );
     }
 }

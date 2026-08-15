@@ -1,0 +1,6 @@
+  [1m[38;2;156;163;175mSTATUS[0m       [1m[38;2;156;163;175mID[0m        [1m[38;2;156;163;175mJOB[0m            [1m[38;2;156;163;175mDETAIL[0m                              [1m[38;2;156;163;175mTIME[0m
+  [38;2;255;180;84mNEEDS_HUMAN[0m  [38;2;156;163;175m4f2a91c8[0m  [38;2;76;159;232mnightly-flake[0m  [38;2;156;163;175mraise the CI timeout to 90s, or d…[0m    [38;2;156;163;175m1h[0m
+  [38;2;255;92;92mBLOCKED[0m      [38;2;156;163;175mb83e7a15[0m  [38;2;76;159;232mrate-limit[0m     [38;2;156;163;175mthe staging database is not reach…[0m   [38;2;156;163;175m22m[0m
+  [38;2;156;163;175mNEEDS_HUMAN[0m  [38;2;156;163;175m7d1c5e02[0m  [38;2;76;159;232mrate-limit[0m     [38;2;156;163;175mwhich of the two ports should the…[0m    [38;2;156;163;175m3h[0m
+
+[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m2 open · armada fleet answer <id> "…"[0m

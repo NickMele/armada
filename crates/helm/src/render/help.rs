@@ -692,23 +692,34 @@ const PAGES: [Page; 45] = [
     },
     Page {
         path: "fleet answer",
-        synopsis: "answer <job> <answer>",
+        // **`<id>` in the synopsis, `<id|job>` in the usage.** The synopsis sets
+        // the width of every row in `armada fleet --help`, and it is the entry
+        // id this verb is now about
+        // (`docs/reserved/001-raised-items-need-identity.md`) — the Job form is
+        // the fallback, which is what `usage` and `notes` are for.
+        synopsis: "answer <id> <answer>",
         summary: "give a waiting Job your decision; let it continue",
-        usage: &["armada fleet answer <job> <answer> [--json]"],
+        usage: &["armada fleet answer <id|job> <answer> [--json]"],
         flags: &[],
         examples: &[
             (
                 "armada fleet inbox",
-                "what is being asked, and which Job is asking it",
+                "what is being asked, its id, and which Job is asking it",
+            ),
+            (
+                "armada fleet answer 4f2a91c8 \"raise the timeout to 90s\"",
+                "the entry's own id, off the inbox's ID column",
             ),
             (
                 "armada fleet answer nightly-flake \"raise the timeout to 90s\"",
-                "the Job, then the answer: two arguments, in that order",
+                "the Job instead: its oldest open entry is the one answered",
             ),
         ],
         notes: &[
             "Two arguments, not a sentence. Quote the answer, or the shell splits",
             "it into words and Armada refuses rather than guessing which is which.",
+            "Name the entry when a Job has asked more than one thing; naming the",
+            "Job answers whichever it asked first.",
         ],
     },
     Page {
@@ -721,7 +732,10 @@ const PAGES: [Page; 45] = [
             ("--all", "include entries already answered"),
         ],
         examples: &[],
-        notes: &["`armada fleet answer <job> <answer>` is how an entry is closed."],
+        notes: &[
+            "`armada fleet answer <id> <answer>` is how an entry is closed —",
+            "the id is the ID column, so a row is acted on one at a time.",
+        ],
     },
     Page {
         path: "fleet pause",

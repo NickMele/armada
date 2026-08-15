@@ -1,17 +1,17 @@
 armada fleet — the agents you do not talk to: Jobs, Drones, worktrees
 
 VERBS
-  spawn <task>           start an isolated agent Job on a task
-  ls                     what is running, what it has spent, and who needs you
-  show <job>             one Job in full, and why it needs you
-  board <job>            take a Job over yourself: worktree and resume command
-  answer <job> <answer>  give a waiting Job your decision; let it continue
-  inbox                  what the fleet needs from you
-  pause <job>            stop a Job's Drone and keep everything else
-  resume <job>           start a paused Job's session again
-  tick [<job>]           gate the step it rests on, then advance, retry or stop
-  reap                   end every finished Job and release what they hold
-  kill [<job>]           end a Job and release everything it owns
+  spawn <task>          start an isolated agent Job on a task
+  ls                    what is running, what it has spent, and who needs you
+  show <job>            one Job in full, and why it needs you
+  board <job>           take a Job over yourself: worktree and resume command
+  answer <id> <answer>  give a waiting Job your decision; let it continue
+  inbox                 what the fleet needs from you
+  pause <job>           stop a Job's Drone and keep everything else
+  resume <job>          start a paused Job's session again
+  tick [<job>]          gate the step it rests on, then advance, retry or stop
+  reap                  end every finished Job and release what they hold
+  kill [<job>]          end a Job and release everything it owns
 
 `armada fleet <verb> --help` for one verb's usage and flags.
 

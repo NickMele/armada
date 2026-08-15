@@ -1,0 +1,13 @@
+  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mID[0m        [1m[38;2;156;163;175mDETAIL[0m                                                  [1m[38;2;156;163;175mTIME[0m
+  [38;2;76;159;232mFIXING[0m  [38;2;76;159;232m4f2a91c8[0m  [38;2;156;163;175mraised, raise the CI timeout to 90s, or drop the flak…[0m    [38;2;156;163;175m0s[0m
+
+[38;2;156;163;175m  what it is asking:[0m
+    raise the CI timeout to 90s, or drop the flaky test?
+
+  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mFACT[0m       [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;156;163;175mSEEN[0m    [38;2;156;163;175mcount[0m      [38;2;156;163;175monce, at 2026-08-09T14:02:11Z[0m
+  [38;2;156;163;175mTYPED[0m   [38;2;156;163;175mcommand[0m    [38;2;156;163;175m—[0m
+  [38;2;156;163;175mIN[0m      [38;2;156;163;175mdirectory[0m  [38;2;156;163;175m—[0m
+  [38;2;76;159;232mJOB[0m     [38;2;156;163;175mraised by[0m  [38;2;156;163;175mnightly-flake[0m
+
+[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175marmada fleet show nightly-flake · armada fleet answer 4f2a91c8 "…"[0m

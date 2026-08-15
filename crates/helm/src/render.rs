@@ -61,7 +61,7 @@ use armada_core::envelope::{
     VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
-use armada_core::failure::{Entry as FailureEntry, State as FailureState};
+use armada_core::failure::{Entry as FailureEntry, Listing, State as FailureState};
 use armada_core::fleet::JobState;
 use armada_core::id::WorkspaceId;
 use armada_core::ports::{PortBlock, PortState};
@@ -1737,9 +1737,28 @@ fn released(style: Style, killed: &armada_core::envelope::Killed) -> String {
 }
 
 /// `armada fleet inbox` — what the fleet needs from you.
+///
+/// **The `ID` column is `001`'s whole demand, and this table was the last
+/// listing without one.** `docs/reserved/005-inbox-label-not-identity.md` gave
+/// `armada fleet ls` a uuid column for the same reason and left this one alone:
+/// an entry has carried its own `uuid` in `--json` since it was written, and a
+/// person reading the table could not see it. So the row that asked you
+/// something was a row you could only refer to as *"the second one"* — which is
+/// `docs/reserved/001-raised-items-need-identity.md`'s complaint, printed.
+///
+/// **Eight characters, via [`armada_fleet::jobs::short`]**, the same width the
+/// Job column's ids use and the same width the ambiguity errors print. `--json`
+/// keeps the whole uuid; the table shows what a person retypes.
 fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut table = Table::new(columns("job", "detail", true)).indent(2);
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("id"),
+        Column::fixed("job"),
+        Column::flexible("detail"),
+        Column::fixed("time").right(),
+    ])
+    .indent(2);
 
     for row in &data.results {
         table = table.row(vec![
@@ -1750,12 +1769,21 @@ fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
                 // as a live question is the diluted signal PLAN.md §15.4 is
                 // about, and it is how five entries against two dead Jobs went
                 // on looking urgent.
+                // **`BLOCKED`, upper case, because that is what the field
+                // holds.** `InboxRow::kind` is `inbox::Kind::word()` and every
+                // one of those is upper case; the arm here read `"blocked"` and
+                // so had never once matched, which meant a blocked entry — the
+                // one kind that cannot proceed without you — painted in the
+                // same orange as a Job that merely asked a question. Found by
+                // writing this table's first golden fixture, which is the
+                // argument for having one.
                 match (row.is_open(), row.kind.as_str()) {
                     (false, _) => Role::SteelGrey,
-                    (true, "blocked") => Role::DistressRed,
+                    (true, "BLOCKED") => Role::DistressRed,
                     (true, _) => Role::FlareOrange,
                 },
             ),
+            Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
             Cell::painted(row.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(row.body.as_str())),
             Cell::muted(format::elapsed(row.waiting_s * 1_000)),
@@ -1776,7 +1804,14 @@ fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
     // only fail, printed under a table of things that had already finished.
     let mut facts = vec![format!("{} open", data.open)];
     if data.open > 0 {
-        facts.push("armada fleet answer <job> \"…\"".to_string());
+        // **`<id>`, not `<job>`.** The action names the row the reader is
+        // looking at rather than the Job that owns it, which is the difference
+        // between acknowledging one item and acknowledging whichever of a Job's
+        // questions happens to be oldest
+        // (`docs/reserved/001-raised-items-need-identity.md`). A Job handle
+        // still works; the offer is for the id because the id is in the table
+        // above it and the Job's name is only a label.
+        facts.push("armada fleet answer <id> \"…\"".to_string());
     }
     out.push_str(&summary(style, envelope.status, &facts));
     out
@@ -2292,9 +2327,20 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
             style,
         )),
         None => {
+            // **The heading names who said it**, which is the one thing the
+            // three classless origins differ on. A raised item is a Drone's
+            // question and `what was reported` would attribute it to the person
+            // reading it — the same misattribution the branch above avoids the
+            // other way round.
             out.push_str(&format!(
                 "{}\n",
-                style.paint(Role::SteelGrey, "  what was reported:")
+                style.paint(
+                    Role::SteelGrey,
+                    match entry.origin.listing() {
+                        Listing::Raised => "  what it is asking:",
+                        Listing::Faults | Listing::Written => "  what was reported:",
+                    }
+                )
             ));
             for line in wrap_prose(&entry.message, width.saturating_sub(4)) {
                 out.push_str(&format!("    {line}\n"));
@@ -2328,7 +2374,15 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
     if let Some(job) = &entry.job {
         facts = facts.row(vec![
             token("job", Role::NavalBlue),
-            Cell::muted("spawned"),
+            // **`raised` rather than `spawned` for a raised item**, and the two
+            // words point in opposite directions: every other origin's Job was
+            // spawned *because of* the row, and a raised item's Job wrote it.
+            // One word saying both would leave a reader unable to tell which
+            // came first.
+            Cell::muted(match entry.origin.listing() {
+                Listing::Raised => "raised by",
+                Listing::Faults | Listing::Written => "spawned",
+            }),
             detail_cell(style, Some(job)),
         ]);
     }
@@ -2372,18 +2426,40 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
 
     // **What would be sent, before it is sent.** The task leaves this machine
     // when a Job is spawned on it, so the one place to read it is here.
-    out.push_str(&format!(
-        "{}\n",
-        style.paint(Role::SteelGrey, "  the task a Job would be given:")
-    ));
-    // **A line that fits is printed verbatim, and only a long one is wrapped.**
-    // The task is a block with an indented, column-aligned envelope in the middle
-    // of it, and [`wrap_prose`] splits on whitespace — so wrapping every line
-    // unconditionally would strip that indent and collapse that alignment. This
-    // is the one screen whose whole purpose is to show what will be sent, so what
-    // can be shown unaltered is.
+    //
+    // **Nothing is drawn when there is no task**, which is a raised item: its
+    // Job already exists and is stopped in front of the question
+    // (`armada_core::failure::task`). A heading reading *the task a Job would be
+    // given* over an empty block, about a Job that is already running, would be
+    // the screen answering a question nobody asked with a fact that is not true.
+    if !envelope.data.task.is_empty() {
+        out.push_str(&format!(
+            "{}\n",
+            style.paint(Role::SteelGrey, "  the task a Job would be given:")
+        ));
+        out.push_str(&task_block(&envelope.data.task, width));
+    }
+    out.push_str(&summary_for(entry, style, envelope.status));
+    out
+}
+
+/// The hand-over block: **a line that fits is printed verbatim, and only a long
+/// one is wrapped.**
+///
+/// The task is a block with an indented, column-aligned envelope in the middle
+/// of it, and [`wrap_prose`] splits on whitespace — so wrapping every line
+/// unconditionally would strip that indent and collapse that alignment. This is
+/// the one screen whose whole purpose is to show what will be sent, so what can
+/// be shown unaltered is.
+///
+/// **The trailing blank line is inside here** rather than at the call site,
+/// which is what an empty task made matter: printing it unconditionally left a
+/// raised item's screen with two blank lines where its hand-over block would
+/// have been, spacing an absent thing.
+fn task_block(task: &str, width: usize) -> String {
+    let mut out = String::new();
     let room = width.saturating_sub(4);
-    for paragraph in envelope.data.task.lines() {
+    for paragraph in task.lines() {
         if paragraph.trim().is_empty() {
             out.push('\n');
             continue;
@@ -2397,29 +2473,50 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
         }
     }
     out.push('\n');
+    out
+}
 
-    // **The vocabulary follows the origin, not the render function.** A task
-    // is not a failure — `armada tasks start` / `armada tasks clear`, the
-    // words `docs/glossary.md` and `Lens::promote` already settled — and this
-    // is the one screen `armada task`, `armada tasks show` and `armada
-    // failures show` all draw through, so the branch has to live here rather
-    // than being assumed away.
-    let (promote_verb, clear_verb) = match entry.origin.is_fault() {
-        true => ("failures fix", "failures clear"),
-        false => ("tasks start", "tasks clear"),
+/// The two actions a shown entry offers, chosen by its origin.
+///
+/// **The vocabulary follows the origin, not the render function.** A task
+/// is not a failure — `armada tasks start` / `armada tasks clear`, the words
+/// `docs/glossary.md` and `Lens::promote` already settled — and this is the one
+/// screen `armada task`, `armada tasks show` and `armada failures show` all
+/// draw through, so the branch has to live here rather than being assumed away.
+///
+/// **Three listings, matched exhaustively.** This read `is_fault()`, a `bool`,
+/// so *not a failure* meant *a task* — and a raised item would have been offered
+/// `tasks start` and `tasks clear`, two verbs that refuse it
+/// (`crate::verbs::failures`). A row whose only offered actions cannot work is
+/// `docs/reserved/005-inbox-label-not-identity.md`'s second consequence, and
+/// `001` is the reason that row can reach this screen at all.
+fn summary_for(entry: &FailureEntry, style: Style, status: Status) -> String {
+    let (promote_verb, clear_verb) = match entry.origin.listing() {
+        Listing::Faults => ("failures fix", "failures clear"),
+        Listing::Written => ("tasks start", "tasks clear"),
+        // Its Job exists and is waiting; the only act available is answering it.
+        // Both cells say so, because both would otherwise say something false.
+        Listing::Raised => ("fleet answer", "fleet answer"),
     };
-    out.push_str(&summary(
+    summary(
         style,
-        envelope.status,
+        status,
         &[
             match &entry.job {
                 Some(job) => format!("armada fleet show {job}"),
                 None => format!("armada {promote_verb} {}", entry.id),
             },
-            format!("armada {clear_verb} {}", entry.id),
+            match entry.origin.listing() {
+                // `armada fleet answer <id> "…"`, with the quotes, because the
+                // answer is the second argument and a reader who types the line
+                // without them gets a refusal about argument count.
+                Listing::Raised => format!("armada {clear_verb} {} \"…\"", entry.id),
+                Listing::Faults | Listing::Written => {
+                    format!("armada {clear_verb} {}", entry.id)
+                }
+            },
         ],
-    ));
-    out
+    )
 }
 
 // ------------------------------------------------------------- M2: the machine

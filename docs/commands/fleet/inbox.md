@@ -39,15 +39,22 @@ ownership store on disk rather than in a process. Reading does not mark entries 
 ## Output
 
 ```
-  STATUS       JOB            DETAIL                              TIME
-  needs_human  nightly-flake  Wants the CI timeout raised to 90s    9m
+  STATUS       ID        JOB            DETAIL                              TIME
+  NEEDS_HUMAN  4f2a91c8  nightly-flake  Wants the CI timeout raised to 90s    9m
 
-OK  1 open, armada fleet answer <job> "…"
+OK  1 open, armada fleet answer <id> "…"
 ```
 
-**Every entry has an id**, which is the half [`../../PLAN.md`](../../PLAN.md) §15.3.1 says is
-missing from anything raised in prose: an item you cannot name is an item you cannot
-acknowledge one row at a time.
+**The `ID` column is the entry's own id, cut to eight characters** — the same width
+[`ls.md`](ls.md) draws a Job's uuid at, and the same width every ambiguity refusal prints. An
+entry has carried its `uuid` in `--json` since it was first written and this table did not draw
+it, so the only way to refer to a row was *"the second one"*: the complaint
+[`../../reserved/001-raised-items-need-identity.md`](../../reserved/001-raised-items-need-identity.md)
+exists to fix, in the one listing that already had every id it needed.
+
+**Name the id to [`answer.md`](answer.md)** and that row is the one answered. Naming the Job
+answers whichever of its questions is oldest, which is the right guess when there is one
+question and a guess when there are two.
 
 **An entry names its Job by uuid, and the name beside it is only a label.** Names are handed
 out again once the Job holding one is over, so an entry keyed by a name cannot be resolved to
