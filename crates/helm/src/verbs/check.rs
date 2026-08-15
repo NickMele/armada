@@ -27,11 +27,12 @@
 use armada_core::config::{ResolvedCheck, ResolvedComponent, ResolvedConfig, Scope};
 use armada_core::ctx::{Clock, Fetch, Run, RunRequest, SpawnErrorKind, StdioMode};
 use armada_core::dispatch::{Dispatch, Journal, Scrub};
-use armada_core::envelope::{CheckData, CheckDryRun, Envelope};
+use armada_core::envelope::{CheckData, CheckDryRun, DetachedView, Envelope};
 use armada_core::error::{ArmadaError, ConfigWhere, ErrClass, Status};
 use armada_core::lease::{self, LeaseId, LeaseKind, Policy};
 use armada_core::reap::PathStat;
-use armada_core::run::{RunId, RunRecord};
+use armada_core::registry::{OwnedKind, OwnedRow};
+use armada_core::run::{Detached, RunId, RunRecord};
 use armada_core::schedule::{
     self, Action, CheckId, CheckResult, EnvDelta, Event, Phase, Plan, State, Waiting,
 };
@@ -69,6 +70,15 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     args: &Check,
     progress: &mut dyn Progress,
 ) -> Result<Output, ArmadaError> {
+    // **Answered before the config is even read.** `--status` is a query about
+    // a run that already happened, and a workspace whose `armada.yml` has been
+    // edited — or broken — since is exactly when somebody needs to read what
+    // the last run decided. Refusing to answer because the *current* config no
+    // longer parses would lose the record at the moment it is worth most.
+    if args.status {
+        return status(app, args).map(|e| Output::Check(Box::new(e)));
+    }
+
     let (workspace, config) = load_config(app)?;
     let selection = select_checks(&config, args)?;
     let candidates = candidate_files(app, &workspace, args, &selection)?;
@@ -77,6 +87,16 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
 
     if args.dry_run {
         return dry(app, &workspace, plans).map(|e| Output::CheckDryRun(Box::new(e)));
+    }
+
+    // **Everything above ran in the caller's terminal, and that is the point.**
+    // Selection, the diff, the port block and the substitution of every argv
+    // are the failures a caller can act on, and a `--detach` that deferred them
+    // would report a run id for a run that was already doomed — the caller
+    // would then poll it to learn what a synchronous error had been ready to
+    // say. What detaches is the part that takes time.
+    if args.detach {
+        return detach(app, &workspace, plans, args).map(|e| Output::Check(Box::new(e)));
     }
 
     // **Fail fast, unless the caller asked to queue** (PLAN.md §3.2.1).
@@ -384,6 +404,379 @@ fn dry<R: Run, C: Clock, F: Fetch>(
     ))
 }
 
+// --------------------------------------------------------- detach and status
+
+/// How a detached child is told which run it is.
+///
+/// **Its own variable rather than `ARMADA_RUN_ID`**, and the difference is what
+/// each one claims. `ARMADA_RUN_ID` marks a child *inside* a run, and the rule
+/// that goes with it is that such a child joins the outer run and inherits its
+/// lease (PLAN.md §3.2.1, `armada_core::run::nesting`). A detached child
+/// inherits nothing: the invocation that started it has already exited and
+/// holds no lease, so the child takes the run lease itself exactly as a
+/// foreground run does. Two different claims, two different variables — one
+/// variable meaning both is how a detached run would come to skip the lease
+/// that stops two runs sharing one workspace.
+const DETACH_RUN_VAR: &str = "ARMADA_DETACH_RUN";
+
+/// The run this invocation was detached to carry out, if it is one.
+///
+/// **Validated rather than trusted, because the id becomes a path.** The same
+/// rule `ARMADA_RUN_ID` is read under: Armada sets this variable and Armada
+/// reads it back, so a value that is not a run id means something in between
+/// rewrote it — and a value of `../../etc` reaching `.armada/run/<id>/` is a
+/// directory traversal. A malformed one starts an ordinary run of its own,
+/// which is the same forgiving answer `nesting` gives.
+fn adopted_run<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>) -> Option<RunId> {
+    app.inherited
+        .get(DETACH_RUN_VAR)
+        .and_then(|value| RunId::parse(value).ok())
+}
+
+/// The command line the detached child is given.
+///
+/// **Rebuilt from what was parsed, not replayed from `argv`.** A replay would
+/// have to strip `--detach` out of a vector it did not parse, and would carry
+/// through whatever spelling the caller used — `--color=always` from a terminal
+/// that is about to go away. What the child needs is the same *selection*,
+/// which is exactly what the parsed struct holds.
+///
+/// `--json` and `--color never` because the child's output goes to a file: an
+/// envelope is what a later reader can act on, and a spinner's escape codes in
+/// a log are noise nobody asked for.
+fn detached_argv(program: &str, args: &Check) -> Vec<String> {
+    let mut argv = vec![
+        program.to_string(),
+        "manifest".to_string(),
+        "check".to_string(),
+        "--json".to_string(),
+        "--color".to_string(),
+        "never".to_string(),
+    ];
+    if args.all_files {
+        argv.push("--all-files".to_string());
+    }
+    if args.fix {
+        argv.push("--fix".to_string());
+    }
+    // **Carried through, and it is the caller's own instruction.** A detached
+    // run that fails fast on a lease has nowhere to report it but its log;
+    // `--wait` is how a caller says to queue instead, and dropping it here
+    // would silently turn the one shape that always succeeds into the one that
+    // sometimes does not.
+    if args.wait {
+        argv.push("--wait".to_string());
+    }
+    if let Some(jobs) = args.jobs {
+        argv.push("--concurrency".to_string());
+        argv.push(jobs.to_string());
+    }
+    if let Some(component) = &args.component {
+        argv.push("--component".to_string());
+        argv.push(component.clone());
+    }
+    if let Some(selector) = &args.selector {
+        argv.push(selector.clone());
+    }
+    // **Last, because it consumes until the next flag.** Its own parser reads
+    // paths until it meets one, so anything placed after them would be read as
+    // a path.
+    if !args.files.is_empty() {
+        argv.push("--files".to_string());
+        argv.extend(args.files.iter().cloned());
+    }
+    argv
+}
+
+/// Start the run in its own session and answer with its id.
+///
+/// **The same shape Fleet gives a Drone** (`fleet::drone::start`), against a
+/// run directory instead of a transcript: `setsid` so the child is its own
+/// process group, a real file rather than a pipe so it survives this process,
+/// the handle dropped without a `wait`, and the group recorded as owned so
+/// `armada manifest clean` can reclaim it. Reusing the shape is the point — an
+/// orphaned detached run is then reaped by the same pass that reaps an orphaned
+/// Drone, and *"nothing is killed that Armada cannot prove is its own"* stays
+/// one rule with one implementation.
+///
+/// **What is written before the child starts is what makes the id answerable.**
+/// The record goes down first, so a `--status` racing this call reads a run
+/// that is planned rather than one that does not exist.
+fn detach<R: Run, C: Clock, F: Fetch>(
+    app: &mut App<R, C, F>,
+    workspace: &Workspace,
+    plans: Vec<Plan>,
+    args: &Check,
+) -> Result<Envelope<CheckData>, ArmadaError> {
+    let run_id = RunId::mint(app.ctx.now.wall_ms(), entropy(app));
+    let (reaped, skipped) = runs::reap(&workspace.root, app.machine.run_retention, &[])?;
+    fs::create_armada_dir(&workspace.root)?;
+    runs::prepare(&workspace.root, &run_id)?;
+
+    let slots = args.jobs.unwrap_or(app.machine.cpu_slots);
+    let plans: Vec<Plan> = plans
+        .into_iter()
+        .map(|mut plan| {
+            plan.log = Some(runs::log_reference(&run_id, &plan.id));
+            plan
+        })
+        .collect();
+    let state = State::new(workspace.root.clone(), slots, plans);
+    let planned = state.snapshot();
+    runs::write_record(
+        &workspace.root,
+        &RunRecord::new(
+            run_id.clone(),
+            workspace.id.clone(),
+            app.ctx.now.wall_rfc3339(),
+            state,
+        ),
+    )?;
+
+    // **This invocation's own binary, resolved rather than assumed.** A child
+    // spawned as `armada` would be whichever `armada` is on the child's `PATH`,
+    // which on a machine mid-upgrade is a different build deciding a run this
+    // one planned.
+    let program = std::env::current_exe().map_err(|e| ArmadaError {
+        class: ErrClass::Environment,
+        r#where: "detach".to_string(),
+        message: format!("Armada cannot find its own binary to detach: {e}"),
+        next_action: Some("run `armada manifest check` in the foreground".to_string()),
+    })?;
+    let argv = detached_argv(&program.to_string_lossy(), args);
+    let request = RunRequest::new(argv, workspace.root.clone())
+        .env(BTreeMap::from([(
+            DETACH_RUN_VAR.to_string(),
+            run_id.to_string(),
+        )]))
+        // **A real file, not a pipe.** The run outlives this process, and a
+        // captured stream would leave Armada holding the read end of a pipe it
+        // is about to drop — the first write after that is `EPIPE`, which would
+        // kill the run moments after this call reported it started.
+        .stdio(StdioMode::Log(runs::detach_log(&workspace.root, &run_id)));
+
+    // **Recorded before it is spawned, and settled afterwards** — the order
+    // `armada manifest up` established, for its reason: the failure mode must
+    // be a stale row and never an untracked process group. Spawn-then-record
+    // leaks a group if this process dies in between; this leaves a row pointing
+    // at nothing, which the next reap drops for free.
+    let pending = format!("detach:{run_id}");
+    app.db.record_owned(&OwnedRow {
+        workspace: workspace.id.clone(),
+        kind: OwnedKind::Pgid,
+        reference: pending.clone(),
+        boot_id: Some(app.boot_id.clone()),
+        pid_started_at: None,
+        component: None,
+    })?;
+
+    let spawned = ProcessGroup::spawn(&request);
+    let _ = app
+        .db
+        .delete_owned(&workspace.id, OwnedKind::Pgid, &pending);
+    let group = spawned.map_err(|e| ArmadaError {
+        class: ErrClass::Environment,
+        r#where: "detach".to_string(),
+        message: format!("the detached run would not start: {}", e.message),
+        next_action: Some("run `armada manifest check` in the foreground".to_string()),
+    })?;
+    let pgid = group.pgid();
+    // **The handle is dropped and the child is not waited on**, which is the
+    // one place that is correct: the run is meant to outlive this invocation.
+    // `setsid` has already put it in its own session, so init reaps it — the
+    // zombie rule `docs/traps.md` states applies to the children Armada keeps.
+    drop(group);
+
+    let detached = Detached {
+        pgid,
+        boot_id: app.boot_id.clone(),
+        // **Sampled after the spawn rather than remembered from it**, because
+        // this is the value a later poll compares against, and it has to be
+        // the one the machine reports rather than the one Armada guessed.
+        // Without it a recycled pid is indistinguishable from a live run, so
+        // the row is a permanent phantom (PLAN.md §2.3.1).
+        started_at: armada_manifest::machine::process_start_at(&app.ctx.run, &app.cwd(), pgid),
+        log: runs::detach_log_reference(&run_id),
+    };
+    app.db.record_owned(&OwnedRow {
+        workspace: workspace.id.clone(),
+        kind: OwnedKind::Pgid,
+        reference: pgid.to_string(),
+        boot_id: Some(detached.boot_id.clone()),
+        pid_started_at: detached.started_at.clone(),
+        component: None,
+    })?;
+    runs::write_detached(&workspace.root, &run_id, &detached)?;
+
+    let mut reaped_runs: Vec<String> = reaped.iter().map(RunId::to_string).collect();
+    reaped_runs.extend(skipped);
+
+    Ok(Envelope {
+        schema_version: armada_core::envelope::SCHEMA_VERSION,
+        verb: "check".to_string(),
+        workspace: Some(workspace.id.clone()),
+        // **`RUNNING`, which is progress and not a verdict** (PLAN.md §3.1).
+        // It carries no error, so this exits 0 — and a gate that treated that
+        // as a pass would be reading the exit code of the *start*. The verdict
+        // is what `--status` returns when the run has one.
+        status: Status::Running,
+        error: None,
+        data: CheckData {
+            run_id: run_id.to_string(),
+            results: planned.iter().map(Into::into).collect(),
+            reaped_runs,
+            detached: Some(DetachedView {
+                pgid,
+                alive: true,
+                log: detached.log,
+            }),
+        },
+    })
+}
+
+/// Read a run out of the run directory.
+///
+/// **It asks the directory, never the process.** A run that is still going is
+/// writing its record as each check settles, and that record is the run — so
+/// the answer to *"what has it decided"* comes from what it wrote down. The one
+/// thing the directory cannot answer is whether anything is still deciding, and
+/// that is the only question the process probe is put.
+///
+/// The three answers, in the order they are ruled out:
+///
+/// | the record | the group | answer |
+/// |---|---|---|
+/// | has a verdict | either | the verdict, exactly as the run reported it |
+/// | has none | alive | `RUNNING`, with the rows settled so far |
+/// | has none | gone | `DEAD` — it stopped without deciding |
+fn status<R: Run, C: Clock, F: Fetch>(
+    app: &mut App<R, C, F>,
+    args: &Check,
+) -> Result<Envelope<CheckData>, ArmadaError> {
+    let workspace = app.ctx.workspace()?.clone();
+    let run_id = match &args.run {
+        Some(named) => RunId::parse(named)?,
+        None => runs::present(&workspace.root)?
+            .pop()
+            .ok_or_else(|| no_runs(&workspace.id))?,
+    };
+    let record = runs::read_record(&workspace.root, &run_id)?
+        .ok_or_else(|| unknown_run(&run_id, &workspace.id))?;
+    let detached = runs::read_detached(&workspace.root, &run_id)?;
+
+    let alive = detached.as_ref().is_some_and(|detached| {
+        let observed =
+            armada_manifest::machine::process_start_at(&app.ctx.run, &workspace.root, detached.pgid);
+        detached.is_ours(&app.boot_id, observed.as_deref())
+    });
+
+    let (status, error) = match record.state.verdict() {
+        // **The record wins over the probe, and the order matters.** A run that
+        // has written its verdict has finished deciding whether or not its
+        // process has got as far as exiting, and re-deciding here on the
+        // strength of a `ps` would make a detached run answer differently from
+        // the attached one that produced the same rows.
+        Some(verdict) => verdict,
+        None if alive => (Status::Running, None),
+        None => (Status::Dead, Some(died_without_deciding(&run_id, &detached))),
+    };
+
+    Ok(Envelope {
+        schema_version: armada_core::envelope::SCHEMA_VERSION,
+        verb: "check".to_string(),
+        workspace: Some(workspace.id.clone()),
+        status,
+        error,
+        data: CheckData {
+            run_id: run_id.to_string(),
+            results: record.state.snapshot().iter().map(Into::into).collect(),
+            // Nothing was reaped by reading.
+            reaped_runs: Vec::new(),
+            detached: detached.map(|detached| DetachedView {
+                pgid: detached.pgid,
+                alive,
+                log: detached.log,
+            }),
+        },
+    })
+}
+
+fn no_runs(workspace: &armada_core::id::WorkspaceId) -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: workspace.as_str().to_string(),
+        message: "this workspace has kept no runs".to_string(),
+        next_action: Some("`armada manifest check --detach` starts one".to_string()),
+    }
+}
+
+fn unknown_run(run: &RunId, workspace: &armada_core::id::WorkspaceId) -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::BadInvocation,
+        r#where: run.to_string(),
+        message: format!("no run `{run}` in workspace {workspace}"),
+        next_action: Some(
+            "`armada manifest status` lists the runs this workspace has kept".to_string(),
+        ),
+    }
+}
+
+/// A run whose process is gone and whose record holds no verdict.
+///
+/// **`aborted`, which is retryable**, because that is what actually happened:
+/// something stopped the run — a reboot, a `clean`, a SIGKILL — rather than any
+/// check reaching a conclusion. Reporting `tool_failed` would send a reader to
+/// hunt a broken test that never ran.
+fn died_without_deciding(run: &RunId, detached: &Option<Detached>) -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::Aborted,
+        r#where: run.to_string(),
+        message: "the run stopped without reaching a verdict".to_string(),
+        next_action: Some(match detached {
+            Some(detached) => format!("{} says why, if anything does", detached.log),
+            // No detach record at all: this was a foreground run, and nothing
+            // recorded a group to ask about. Saying so is better than implying
+            // Armada probed and found nothing.
+            None => "this run was not detached, so nothing recorded a process to ask".to_string(),
+        }),
+    }
+}
+
+// ---------------------------------------------------------------- the record
+
+/// The run record as it stands right now.
+///
+/// **A projection of the loop's own state and nothing else.** The record is not
+/// a second copy of the run kept alongside it; it is the reducer's `State` and
+/// the journal, serialized. That is what makes `--status` able to answer with
+/// what the run decided rather than with what a writer remembered to say.
+fn record_of(workspace: &Workspace, it: &Loop<'_>) -> RunRecord {
+    RunRecord {
+        schema_version: armada_core::envelope::SCHEMA_VERSION,
+        run_id: it.run_id.clone(),
+        workspace: workspace.id.clone(),
+        started_at: it.started_at.clone(),
+        state: it.state.clone(),
+        journal: it.journal.clone(),
+    }
+}
+
+/// Write the record where it stands, and carry on if it cannot be written.
+///
+/// **A checkpoint is evidence and never a step of the run.** It is taken as
+/// each check reaches a verdict, so a run that is SIGKILLed halfway has the
+/// verdicts it did reach on disk rather than nothing at all — which is the
+/// difference between `--status` reporting three checks and reporting a run
+/// that seems never to have started. `write_record` renames into place, so a
+/// poll arriving mid-write reads the previous checkpoint and never half of one.
+///
+/// **Failing to write one does not fail the run.** The final write is the one
+/// that must succeed and is still checked; a disk that rejected an intermediate
+/// snapshot is not a reason to throw away checks that have already passed.
+fn checkpoint(workspace: &Workspace, it: &Loop<'_>) {
+    let _ = runs::write_record(&workspace.root, &record_of(workspace, it));
+}
+
 // ---------------------------------------------------------------- the run
 
 fn execute<R: Run, C: Clock, F: Fetch>(
@@ -393,12 +786,27 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     args: &Check,
     progress: &mut dyn Progress,
 ) -> Result<Envelope<CheckData>, ArmadaError> {
-    let run_id = RunId::mint(app.ctx.now.wall_ms(), entropy(app));
+    // **A detached child adopts the run its parent already opened** rather
+    // than minting one of its own, because the parent has already told the
+    // caller which run this is. A second id here would leave `--detach`
+    // printing one directory and `--status` reading another.
+    let adopted = adopted_run(app);
+    let run_id = adopted
+        .clone()
+        .unwrap_or_else(|| RunId::mint(app.ctx.now.wall_ms(), entropy(app)));
     app.run = Some(run_id.clone());
 
     // Reap first, then create: the new directory must not count toward its own
     // retention budget, and reaping is reported rather than silent.
-    let (reaped, skipped) = runs::reap(&workspace.root, app.machine.run_retention, &[])?;
+    //
+    // **The adopting child reaps nothing**, and not merely to save the work:
+    // its own directory is already on disk, so a reap here would be a retention
+    // pass that counts the run it is about to write into — and the parent has
+    // already done the pass and reported what it removed.
+    let (reaped, skipped) = match adopted {
+        Some(_) => (Vec::new(), Vec::new()),
+        None => runs::reap(&workspace.root, app.machine.run_retention, &[])?,
+    };
     fs::create_armada_dir(&workspace.root)?;
     runs::prepare(&workspace.root, &run_id)?;
 
@@ -435,11 +843,21 @@ fn execute<R: Run, C: Clock, F: Fetch>(
         interrupted: false,
         scrub: Scrub::new(&workspace.root, &workspace.id),
         run_id: run_id.clone(),
+        // **Read once, before the run.** It used to be read where the record is
+        // written, which is after the last check — so a fifteen-minute run
+        // recorded a start time fifteen minutes after it started.
+        started_at: app.ctx.now.wall_rfc3339(),
         ceiling_ms: app.machine.acquire_ceiling_ms(),
         held: BTreeMap::new(),
         slots: app.machine.cpu_slots,
         polled: BTreeMap::new(),
     };
+
+    // **The record exists before the first check does.** `--status` may be
+    // asked a millisecond after `--detach` returns, and the honest answer then
+    // is the run's plan; a missing file would read as *"no such run"* about a
+    // run that had just been reported by id.
+    checkpoint(workspace, &loop_state);
 
     let drove = drive(app, workspace, &mut loop_state);
     // **Nothing the shell took is left behind**, on every path out including
@@ -454,15 +872,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     }
     drove?;
 
-    let record = RunRecord {
-        schema_version: armada_core::envelope::SCHEMA_VERSION,
-        run_id: run_id.clone(),
-        workspace: workspace.id.clone(),
-        started_at: app.ctx.now.wall_rfc3339(),
-        state: loop_state.state,
-        journal: loop_state.journal,
-    };
-    runs::write_record(&workspace.root, &record)?;
+    runs::write_record(&workspace.root, &record_of(workspace, &loop_state))?;
 
     let (status, error) = loop_state
         .finish
@@ -475,6 +885,9 @@ fn execute<R: Run, C: Clock, F: Fetch>(
         run_id: run_id.to_string(),
         results: loop_state.rows.values().map(Into::into).collect(),
         reaped_runs,
+        // The run is this process. A caller holding this envelope has already
+        // waited for it, so there is nothing to say about a group to poll.
+        detached: None,
     };
 
     Ok(Envelope {
@@ -501,6 +914,9 @@ struct Loop<'a> {
     /// the one worth reporting.
     rows: BTreeMap<CheckId, CheckResult>,
     finish: Option<(Status, Option<ArmadaError>)>,
+    /// When the run began, RFC 3339. Read once at the top, because it is what
+    /// the record says the run started at.
+    started_at: String,
     /// Whether `Event::Interrupted` has already been delivered. The handler's
     /// flag stays set once tripped, so without this the loop would re-deliver
     /// on every turn.
@@ -659,7 +1075,15 @@ fn perform<R: Run, C: Clock, F: Fetch>(
                 .or(result.reason.as_deref());
             it.progress
                 .finished(result.id.as_str(), Verdict::Status(result.status), detail);
+            let settled = result.status.is_terminal();
             it.rows.insert(result.id.clone(), result);
+            // **Only where something was settled**, which is what makes this a
+            // handful of writes rather than one per turn: a `WAITING` row is
+            // re-emitted while a claim is queueing, and the state it reports
+            // has not changed.
+            if settled {
+                checkpoint(workspace, it);
+            }
             Ok(())
         }
         Action::Finish { status, error } => {

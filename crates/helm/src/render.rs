@@ -3718,6 +3718,26 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
         out.push('\n');
     }
 
+    // **One row, and only for a run that is not this process.** It answers the
+    // question `--status` is asked — is anything still deciding — and names the
+    // log the detached invocation wrote, which is where a run that failed
+    // before its first check says so.
+    if let Some(detached) = &data.detached {
+        let (word, role) = match detached.alive {
+            true => ("running", Role::for_status(Status::Running)),
+            false => ("stopped", Role::SteelGrey),
+        };
+        let group = Table::new(columns("detached", "detail", false))
+            .indent(2)
+            .row(vec![
+                token(word, role),
+                Cell::plain(format!("pgid {}", detached.pgid)),
+                Cell::muted(detached.log.clone()),
+            ]);
+        out.push_str(&group.render(style, width));
+        out.push('\n');
+    }
+
     let facts = check_facts(&data.results);
     // **No aggregate time**, and that is the second place this render departs
     // from the drawing. The envelope carries one duration per check and no wall
@@ -3774,13 +3794,15 @@ fn check_facts(results: &[ResultRow]) -> Vec<String> {
         };
         facts.push(format!("{n} {word}"));
     }
-    // Anything terminal that `ORDER` does not name — `PARTIAL`, or a state a
-    // later milestone adds. Counted rather than folded into `failed`, because
-    // being silently miscounted is the defect this function exists to fix.
+    // Anything `ORDER` does not name — `PARTIAL`, a state a later milestone
+    // adds, and the two progress states a `--status` poll reports. Counted
+    // rather than folded into `failed`, because being silently miscounted is
+    // the defect this function exists to fix. **A finished run reaches none of
+    // them**, so this adds nothing to the line an attached run prints.
     let mut rest: Vec<Status> = results
         .iter()
         .map(|r| r.status)
-        .filter(|s| s.is_terminal() && !ORDER.contains(s))
+        .filter(|s| !ORDER.contains(s))
         .collect();
     rest.sort_by_key(ToString::to_string);
     rest.dedup();
@@ -4748,8 +4770,20 @@ mod tests {
                 run_id: "01M00WRY00CYTZ44".to_string(),
                 results: rows,
                 reaped_runs: Vec::new(),
+                detached: None,
             },
         }
+    }
+
+    /// The same envelope, for a run this process is not carrying out.
+    fn detached_envelope(status: Status, rows: Vec<ResultRow>, alive: bool) -> Envelope<CheckData> {
+        let mut envelope = check_envelope(status, rows);
+        envelope.data.detached = Some(armada_core::envelope::DetachedView {
+            pgid: 4212,
+            alive,
+            log: ".armada/run/01M00WRY00CYTZ44/detach.log".to_string(),
+        });
+        envelope
     }
 
     fn rendered(output: &Output, style: Style) -> String {

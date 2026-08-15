@@ -214,6 +214,7 @@ const PAGES: [Page; 36] = [
         usage: &[
             "armada manifest check [flags] [<selector>]",
             "armada manifest check --files <path>…",
+            "armada manifest check --status [<run-id>]",
         ],
         flags: &[
             ("--dry-run", "report what would run; run nothing"),
@@ -226,6 +227,14 @@ const PAGES: [Page; 36] = [
                 "run fix: instead of cmd:; skips checks with no fix:",
             ),
             ("--wait", "queue for the run lease instead of failing fast"),
+            (
+                "--detach",
+                "start the run in its own session; print its id and return",
+            ),
+            (
+                "--status [<run-id>]",
+                "what a run decided, or is still deciding; the latest by default",
+            ),
             (
                 "--files <path>…",
                 "run only the checks these paths belong to",
@@ -257,6 +266,7 @@ const PAGES: [Page; 36] = [
         notes: &[
             "A selector is <component>:<check>, a component, or a check name.",
             "One selector, or several paths — never both, so nothing is guessed.",
+            "--status reads the run directory; it never asks a process how it is doing.",
         ],
     },
     Page {
@@ -1327,7 +1337,7 @@ fn not_built(style: Style, width: usize) -> String {
             Cell::muted("M3"),
         ]);
     }
-    let mut out = table
+    table = table
         .row(vec![
             Cell::plain(format!("armada guild {}", guild_verbs.join(", "))),
             Cell::muted("M2"),
@@ -1335,15 +1345,22 @@ fn not_built(style: Style, width: usize) -> String {
         .row(vec![
             Cell::plain(format!("armada manifest {}", manifest_verbs.join(", "))),
             Cell::muted("reserved"),
-        ])
-        .row(vec![
+        ]);
+    // **Skipped when the list is empty**, for the same reason the module row
+    // above is: `--detach` and `--status` were its only two entries and both
+    // shipped, and a row reading `armada manifest check ` with nothing after it
+    // claims a flag that does not exist. The row returns for free the next time
+    // a `check` flag is claimed and not built.
+    if !RESERVED_CHECK_FLAGS.is_empty() {
+        table = table.row(vec![
             Cell::plain(format!(
                 "armada manifest check {}",
                 RESERVED_CHECK_FLAGS.join(", ")
             )),
             Cell::muted("reserved"),
-        ])
-        .render(style, width);
+        ]);
+    }
+    let mut out = table.render(style, width);
     out.push_str(
         "\n  Each is claimed and answers `not built yet`, so that a name which is\n  \
          going to mean one thing never means something else first.\n",
@@ -1488,14 +1505,44 @@ mod tests {
     /// places, so a flag added to one and not the other shipped silently. A
     /// flag added here now reaches the page for free; this test is what fails
     /// if that ever stops being true.
+    ///
+    /// **The list is empty as of M4** — `--detach` and `--status` shipped — so
+    /// what is asserted is the other half of the same property: nothing is
+    /// claimed as unbuilt that is built. The loop is kept rather than deleted
+    /// because it is the assertion that has to be here the moment the list
+    /// gains an entry again.
     #[test]
     fn the_reserved_check_flags_row_names_every_flag_in_the_list() {
         let page = root_page();
-        assert!(page.contains("armada manifest check"), "the row is gone");
         for flag in RESERVED_CHECK_FLAGS {
             assert!(
                 page.contains(flag),
                 "`{flag}` is reserved and missing from the NOT BUILT YET row"
+            );
+        }
+        if RESERVED_CHECK_FLAGS.is_empty() {
+            assert!(
+                !page.contains("armada manifest check\n") && !page.contains("armada manifest check "),
+                "an empty reserved list still drew a NOT BUILT YET row for `check`"
+            );
+        }
+    }
+
+    /// **Both flags are on `check`'s page, and neither is on the unbuilt list.**
+    /// The pair that blocked M4 is the case that would most obviously go wrong
+    /// in one direction only: a parser that accepts a flag the help still calls
+    /// reserved teaches every reader the opposite of the truth.
+    #[test]
+    fn detach_and_status_are_documented_as_built() {
+        let page = page_text("manifest check");
+        for flag in ["--detach", "--status"] {
+            assert!(page.contains(flag), "`{flag}` is not on `check`'s page");
+        }
+        let root = root_page();
+        for flag in ["--detach", "--status"] {
+            assert!(
+                !root.contains(&format!("armada manifest check {flag}")),
+                "`{flag}` is built and still listed as NOT BUILT YET"
             );
         }
     }

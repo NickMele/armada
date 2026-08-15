@@ -268,6 +268,60 @@ impl RunRecord {
     }
 }
 
+/// What `.armada/run/<run-id>/detached.json` holds: the process group a
+/// `--detach` handed the run to.
+///
+/// **Written beside the run rather than only into `manifest.db`**, and the two
+/// are not redundant. The `owned` row is what `armada manifest clean` reclaims
+/// through, and it is keyed by pgid because that is what `killpg` takes; this
+/// is what answers *"is run `01J8X2` still going"*, and it is keyed by the run
+/// because that is what the caller has in its hand. A poller with only the
+/// `owned` rows would have to guess which of a workspace's groups was its run.
+///
+/// **The same three fields a Drone's handle carries, for the same reason**
+/// (`armada_core::fleet::job::Handle`): a pgid alone is not evidence. A pid is
+/// recycled, and a recorded group from a previous boot names whatever holds
+/// that number now — so the boot and the process's start time are what turn a
+/// number into a claim, and [`Detached::is_ours`] is
+/// [`crate::reap::pgid_is_ours`] rather than a second opinion about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Detached {
+    /// The process group `--detach` spawned. `setsid` makes the child its own
+    /// group leader, so this is its pid.
+    pub pgid: i32,
+    /// The boot it was started on.
+    pub boot_id: String,
+    /// When that pid started, as the machine reported it at spawn.
+    pub started_at: Option<String>,
+    /// Where the detached invocation's own output went, workspace-relative.
+    ///
+    /// **The only place a failure that happened before the run began can be
+    /// read.** A detached child refused the run lease writes an envelope and
+    /// exits without ever touching `state.json`, so without this the record
+    /// says *"no verdict"* and nothing says why.
+    pub log: String,
+}
+
+impl Detached {
+    /// Whether the group this names is provably still the run Armada started.
+    ///
+    /// **Ask it from a different process than the one that spawned the child.**
+    /// A start-time probe answers for a zombie with the same start time it had
+    /// while running (`docs/traps.md`), so a corpse this process has not reaped
+    /// reads as a survivor. Every caller here is a later `armada` invocation,
+    /// which is a fresh process by construction — but a caller that is not must
+    /// reap the group first.
+    pub fn is_ours(&self, current_boot: &str, observed_start: Option<&str>) -> bool {
+        self.pgid > 0
+            && crate::reap::pgid_is_ours(
+                Some(&self.boot_id),
+                self.started_at.as_deref(),
+                current_boot,
+                observed_start,
+            )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

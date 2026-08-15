@@ -443,6 +443,15 @@ impl Toolbelt {
                     fix: args.fix,
                     jobs: None,
                     wait: false,
+                    // **The tool runs the check and answers with its verdict.**
+                    // `--detach` exists for a caller that has somewhere else to
+                    // be; an MCP call already has one turn of an agent waiting
+                    // on it, and handing that agent a run id to poll over a
+                    // second tool call would be a worse version of the wait it
+                    // is already doing.
+                    detach: false,
+                    status: false,
+                    run: None,
                 },
                 &mut Silent,
             )

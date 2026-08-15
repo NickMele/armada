@@ -25,6 +25,7 @@
 
 use armada_core::error::{ArmadaError, ErrClass};
 use armada_core::failure::Fault;
+use armada_core::run::RunId;
 use armada_core::scope::Lens;
 
 use crate::render::help::Topic;
@@ -631,6 +632,17 @@ pub struct Check {
     pub jobs: Option<u32>,
     /// `--wait`: queue for the run lease instead of failing fast.
     pub wait: bool,
+    /// `--detach`: start the run in its own session and return the run id.
+    pub detach: bool,
+    /// `--status`: read a run's record rather than start one.
+    pub status: bool,
+    /// The run `--status` was pointed at. `None` is the most recent one this
+    /// workspace has kept.
+    ///
+    /// **A separate field from [`Check::status`] rather than a nested option**,
+    /// because the flag and its argument are two different questions and
+    /// `Option<Option<String>>` makes both unreadable at every use site.
+    pub run: Option<String>,
 }
 
 /// The flags more than one verb takes.
@@ -764,7 +776,14 @@ pub const MANIFEST_BUILT: [&str; 10] = [
 /// reads the same list to draw the NOT BUILT YET row. Before this, the two
 /// said the same two names in two places, and only one of them was ever the
 /// one somebody edited (`docs/reserved/009`, item 5).
-pub const RESERVED_CHECK_FLAGS: [&str; 2] = ["--detach", "--status"];
+///
+/// **Empty, and kept rather than deleted.** `--detach` and `--status` were its
+/// only two entries and both shipped (`PHASES.md` §8.6), so the list has
+/// nothing to name — but the mechanism it holds up is the one that stopped the
+/// help page and the parser drifting apart, and the next `check` flag claimed
+/// before it is built needs the list already wired rather than reinvented.
+/// Both readers already handle the empty case by drawing nothing.
+pub const RESERVED_CHECK_FLAGS: [&str; 0] = [];
 
 /// **Every verb the parser accepts**, as the caller types it after `armada`.
 ///
@@ -1024,6 +1043,22 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
             "--all-files" => parsed.all_files = true,
             "--fix" => parsed.fix = true,
             "--wait" => parsed.wait = true,
+            "--detach" => parsed.detach = true,
+            // **The run id is optional, and what decides is whether the next
+            // word *is* one.** A run id is sixteen Crockford characters and
+            // nothing else in this grammar looks like one, so asking
+            // `RunId::parse` is a decision rather than a guess — and it is the
+            // same validation the id gets everywhere else, which is what keeps
+            // `../../etc` out of a value that becomes a path.
+            "--status" => {
+                parsed.status = true;
+                if let Some(word) = rest.get(index) {
+                    if RunId::parse(word).is_ok() {
+                        parsed.run = Some(word.clone());
+                        index += 1;
+                    }
+                }
+            }
             // A list, so it consumes until the next flag. `--files` exists
             // precisely for names a shell would mangle as positionals.
             "--files" => {
@@ -1106,7 +1141,67 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
         }
     }
 
+    if let Some(error) = incoherent(&parsed) {
+        return Err(failure(error, parsed.json));
+    }
     Ok(parsed)
+}
+
+/// The `check` lines that parse and mean nothing.
+///
+/// **Refused rather than resolved by precedence**, which is the rule the whole
+/// grammar is written to (PLAN.md §3.2): a caller who typed `--status --fix`
+/// meant one of two very different things, and picking one silently is how an
+/// agent comes to believe it repaired a repository it only read. Each of these
+/// is a caller who has said two things at once, and the honest answer is to say
+/// which two.
+fn incoherent(parsed: &Check) -> Option<ArmadaError> {
+    let refuse = |message: &str, next: &str| {
+        Some(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: "check".to_string(),
+            message: message.to_string(),
+            next_action: Some(next.to_string()),
+        })
+    };
+
+    if parsed.status && parsed.detach {
+        return refuse(
+            "`--status` reads a run and `--detach` starts one",
+            "`armada manifest check --detach` prints the run id `--status` then takes",
+        );
+    }
+    // **`--status` is a read verb and takes no scope.** The run it reads was
+    // scoped when it started; a second scope now would either be ignored or
+    // silently filter somebody else's verdicts, and both are worse than saying
+    // no.
+    if parsed.status {
+        let scope = [
+            ("--dry-run", parsed.dry_run),
+            ("--all-files", parsed.all_files),
+            ("--fix", parsed.fix),
+            ("--wait", parsed.wait),
+            ("--files", !parsed.files.is_empty()),
+            ("--component", parsed.component.is_some()),
+            ("--concurrency", parsed.jobs.is_some()),
+            ("<selector>", parsed.selector.is_some()),
+        ];
+        if let Some((named, _)) = scope.iter().find(|(_, given)| *given) {
+            return refuse(
+                &format!("`--status` reads a run; it takes no {named}"),
+                "`armada manifest check --status [<run-id>]`, and nothing else",
+            );
+        }
+    }
+    // A preview changes nothing and finishes at once, so there is nothing to
+    // detach from and nothing a later `--status` could read.
+    if parsed.detach && parsed.dry_run {
+        return refuse(
+            "`--dry-run` runs nothing, so there is nothing to detach",
+            "`armada manifest check --dry-run` prints the schedule here and now",
+        );
+    }
+    None
 }
 
 // ---------------------------------------------------------------- M2: the
@@ -2860,7 +2955,10 @@ mod tests {
         for words in [
             &["--color", "never", "manifest", "explain"][..],
             &["manifest", "init", "--turbo", "--color", "never"][..],
-            &["manifest", "check", "--detach", "--color", "never"][..],
+            // Two flags that each parse and cannot both be meant — the
+            // refusal `incoherent` raises, which happens after the whole line
+            // has been read and so is the latest one `--color` has to survive.
+            &["manifest", "check", "--detach", "--status", "--color", "never"][..],
         ] {
             assert_eq!(
                 parse(&args(words)).unwrap_err().color,
