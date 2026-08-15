@@ -154,9 +154,10 @@ impl State {
 }
 
 /// **Who noticed** — the one property that tells a recorded failure from a
-/// filed report, and the reason there is one store rather than two.
+/// filed report from a written task, and the reason there is one store rather
+/// than three.
 ///
-/// # The two sets are different, and neither contains the other
+/// # The three sets are different, and none contains another
 ///
 /// [`Origin::Observed`] is *what Armada thinks went wrong*: it is written by
 /// the recorder on the path where an [`ArmadaError`] reaches the terminal, so
@@ -170,6 +171,14 @@ impl State {
 /// wording and anything that looks fine to the program all live only in this
 /// half.
 ///
+/// [`Origin::Written`] is *what you decided was worth doing*, and it is the one
+/// that is not about a defect at all. Armada noticed nothing and nothing went
+/// wrong; a person typed `armada task "…"` because they wanted the thought kept
+/// somewhere they would find it again. `docs/reserved/002-tasks.md` is its
+/// design and the sentence that put it on this enum rather than in a file of
+/// its own is that document's own: *"a task and a raised item are the same
+/// object from two directions."*
+///
 /// # Why that is a field and not a second file
 ///
 /// `docs/reserved/001-raised-items-need-identity.md` is the argument: a thing
@@ -178,6 +187,15 @@ impl State {
 /// listing to remember to read, and a second `fix` — and a person triaging on a
 /// Monday morning does not care which half of the machine noticed. **One list,
 /// one id, one promotion path**; the origin is a column.
+///
+/// **A third store would have been worse than a second**, which is why
+/// `002`'s `~/.armada/tasks/<project>.yml` is not what shipped. Every reason
+/// that document gave for the path it proposed — not in the repository, not in
+/// `.armada/`, one list across every worktree of a checkout — is a reason
+/// against the *workspace*, and `~/.armada/failures.jsonl` satisfies all three
+/// while `002`'s does not satisfy the one it did not consider: a task written
+/// in one repository is very often about another, and a list you have to be
+/// standing in the right directory to read is a list you stop reading.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Origin {
@@ -187,6 +205,11 @@ pub enum Origin {
     Observed,
     /// A person typed `armada report` about something Armada did not notice.
     Reported,
+    /// A person typed `armada task` about something they mean to do. **Nothing
+    /// went wrong**, which is the only reason this is worth telling from
+    /// [`Origin::Reported`] at all: the row is not a defect, so the listing it
+    /// belongs in is a different question even though the store is the same.
+    Written,
 }
 
 impl Origin {
@@ -195,6 +218,23 @@ impl Origin {
         match self {
             Origin::Observed => "observed",
             Origin::Reported => "reported",
+            Origin::Written => "written",
+        }
+    }
+
+    /// Whether this origin describes something that went **wrong**.
+    ///
+    /// **The whole of the split between the two listings**, in one function so
+    /// that a third origin cannot be added without deciding which question it
+    /// answers. `armada failures` asks *what is broken* and `armada tasks` asks
+    /// *what did I say I would do*; a single flat list of all three is one
+    /// list nobody reads, and two id spaces is the thing
+    /// `docs/reserved/001-raised-items-need-identity.md` forbids — so it is one
+    /// store, one id space, and two lenses over it.
+    pub const fn is_fault(self) -> bool {
+        match self {
+            Origin::Observed | Origin::Reported => true,
+            Origin::Written => false,
         }
     }
 }
@@ -261,10 +301,10 @@ pub struct Diagnostics {
 
 /// One line of the log.
 ///
-/// **Append-only, four shapes**, exactly as the inbox is: a failure happened, a
-/// person reported one, a Job was spawned for one, an entry was discarded.
-/// Nothing rewrites a line — which is what makes this survive the crash that
-/// produced the entry (PLAN.md §15.3).
+/// **Append-only, five shapes**, exactly as the inbox is: a failure happened, a
+/// person reported one, a person wrote a task down, a Job was spawned for one,
+/// an entry was discarded. Nothing rewrites a line — which is what makes this
+/// survive the crash that produced the entry (PLAN.md §15.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Line {
@@ -318,6 +358,36 @@ pub enum Line {
         cwd: String,
         /// Everything Armada gathered so that nobody had to paste it.
         diagnostics: Box<Diagnostics>,
+    },
+    /// A person wrote down something they mean to do.
+    ///
+    /// **The shape is [`Line::Reported`] without the diagnostics**, and the
+    /// missing field is the design rather than an omission. *"I don't wanna
+    /// burn tokens on it yet, and I don't want to lose track of it"* — capture
+    /// has to cost nothing, and every diagnostic a report attaches is a
+    /// subprocess run on the way to writing one sentence down. A task is a
+    /// sentence; the evidence a Job needs is the repository it names, and that
+    /// is `cwd`.
+    Written {
+        /// The fingerprint. **Unique per capture**, for [`reported`]'s reason:
+        /// writing the same sentence twice is two decisions, not one.
+        id: String,
+        /// When, wall clock, RFC 3339.
+        at: String,
+        /// Wall clock milliseconds.
+        at_ms: u64,
+        /// What is to be done, in the words it was written in. **The message**,
+        /// in the same field position a failure's is, so no renderer branches.
+        what: String,
+        /// The `armada task` line that captured it, with `$HOME` abbreviated.
+        argv: String,
+        /// **The repository the task belongs to**, tilde'd — the workspace root
+        /// when the capture was inside one, and the working directory when it
+        /// was not. Resolved at capture and never at read, so every worktree of
+        /// a checkout writes the same value and `armada tasks start` branches
+        /// the Job from the repository rather than from wherever the thought
+        /// happened to arrive.
+        cwd: String,
     },
     /// A Job was spawned to fix this entry.
     Promoted {
@@ -582,6 +652,62 @@ pub fn reported(
     )
 }
 
+/// The line to append for a task a person has just written down.
+///
+/// # It gathers nothing, and that is the whole feature
+///
+/// [`reported`] attaches the last runs, `armada doctor`'s findings and three
+/// version probes, because a report is filed *about* something and the evidence
+/// is what makes it worth having. A task is filed *before* anything: *"These
+/// tasks don't need to be synced between machines … I don't wanna burn tokens
+/// on it yet, and I don't want to lose track of it."* Capture that ran a
+/// subprocess would be capture with a reason not to bother.
+///
+/// So this takes a sentence, a directory and a clock, and it is the shortest
+/// path in the module from a thought to a row with an id on it.
+///
+/// # Redacted anyway
+///
+/// Nothing here was gathered, so nothing here came from an environment — but
+/// the sentence was typed by a person, and a person pasting the command that
+/// failed into the task is exactly how a token gets written down. The redactor
+/// is the caller's for [`reported`]'s reason: the detector lives in Guild,
+/// which is above this crate.
+///
+/// # Never deduplicated
+///
+/// The id carries the millisecond it was written, so two identical sentences
+/// are two rows. A failure's fingerprint collapses repeats because Armada wrote
+/// them without being asked; a person who typed the same task twice made two
+/// decisions, and merging them would silently discard one.
+pub fn written(
+    what: &str,
+    home: &Path,
+    cwd: &Path,
+    argv: &[String],
+    at: &str,
+    at_ms: u64,
+    redact: &dyn Fn(&str) -> String,
+) -> (String, Line) {
+    let clean = |text: &str| tilde(&redact(text), home);
+    let what = clean(what);
+    let mut hex = blake3::hash(format!("task|{at_ms}|{what}").as_bytes())
+        .to_hex()
+        .to_string();
+    hex.truncate(ID_LEN);
+    (
+        hex.clone(),
+        Line::Written {
+            id: hex,
+            at: at.to_string(),
+            at_ms,
+            what,
+            argv: clean(&argv_line(argv)),
+            cwd: clean(&cwd.display().to_string()),
+        },
+    )
+}
+
 /// **What counts as "the same" failure**: the class, the `where` and a
 /// normalised message.
 ///
@@ -754,6 +880,34 @@ pub fn fold(text: &str) -> Vec<Entry> {
                 job: None,
                 diagnostics: Some(diagnostics),
             }),
+            // **A written task is always a new row**, for a report's reason and
+            // one of its own: the id carries the moment it was written, and
+            // writing the same sentence down twice is two decisions.
+            Line::Written {
+                id,
+                at,
+                at_ms,
+                what,
+                argv,
+                cwd,
+            } => entries.push(Entry {
+                id,
+                state: State::Open,
+                origin: Origin::Written,
+                class: None,
+                r#where: String::new(),
+                message: what,
+                next: None,
+                argv,
+                cwd,
+                count: 1,
+                first_at: at.clone(),
+                last_at: at,
+                last_ms: at_ms,
+                age_s: 0,
+                job: None,
+                diagnostics: None,
+            }),
             // **A line about an id nobody recorded changes nothing.** The file
             // is a log, and a log may mention things that were never there.
             Line::Promoted { id, job, .. } => {
@@ -800,8 +954,10 @@ pub fn age(entries: &mut [Entry], now_ms: u64) {
 /// — which leaves this machine — cannot carry an absolute home path out of the
 /// log.
 pub fn task(entry: &Entry) -> String {
-    if entry.origin == Origin::Reported {
-        return report_task(entry);
+    match entry.origin {
+        Origin::Reported => return report_task(entry),
+        Origin::Written => return written_task(entry),
+        Origin::Observed => {}
     }
     let mut out = format!(
         "Armada failed with this, and the failure was recorded as `{}`:\n\n\
@@ -848,6 +1004,27 @@ pub fn task(entry: &Entry) -> String {
 /// [`reported`]'s redaction — which is the property that cannot be added
 /// afterwards, since a record that has already leaked a secret locally cannot
 /// be un-published once it is.
+/// The prompt a Job gets when a **written task** is started.
+///
+/// **The sentence leads, alone, and nothing is wrapped around it.**
+/// `docs/reserved/002-tasks.md` asks for a Job *"with the task as its prompt"*,
+/// and that is meant literally: the other two origins hand a Drone evidence of
+/// something that already happened and have to say what it is evidence of, but
+/// a task is already an instruction. A preamble explaining that a person wrote
+/// it down would be Armada talking over the only sentence that matters.
+///
+/// **What is added is one line of provenance**, because a Drone that knows the
+/// task was written somewhere else can say so instead of guessing — and because
+/// the directory is the thing the sentence most often leaves out.
+fn written_task(entry: &Entry) -> String {
+    format!(
+        "{}\n\nWritten down as task `{}` on {}, in {}. Nothing has been \
+         investigated yet: this is the whole of what was recorded, so start by \
+         reading the code it names rather than by trusting the phrasing.",
+        entry.message, entry.id, entry.first_at, entry.cwd
+    )
+}
+
 fn report_task(entry: &Entry) -> String {
     let mut out = format!(
         "This was reported by hand rather than caught by Armada, and was recorded \
@@ -1175,5 +1352,136 @@ mod tests {
         for state in [State::Open, State::Fixing, State::Cleared] {
             assert_eq!(state.word(), state.word().to_uppercase());
         }
+    }
+
+    /// Write a task into `text`, the way `armada task` would, and answer with
+    /// its id.
+    fn write_task(text: &mut String, what: &str, at_ms: u64) -> String {
+        let (id, line) = written(
+            what,
+            Path::new("/scratch/home"),
+            Path::new("/scratch/home/code/api"),
+            &["task".to_string(), what.to_string()],
+            "2026-08-15T09:00:00Z",
+            at_ms,
+            &|text| text.to_string(),
+        );
+        text.push_str(&serde_json::to_string(&line).unwrap());
+        text.push('\n');
+        id
+    }
+
+    /// **A task folds into the same [`Entry`] the other two origins do**, which
+    /// is the whole of `docs/reserved/002-tasks.md`'s claim that a task and a
+    /// raised item are one object: the id, the state, the message and the
+    /// promotion all come out identical, and only [`Entry::origin`] differs.
+    #[test]
+    fn a_written_task_folds_into_an_entry_with_an_id_and_nothing_else_new() {
+        let mut text = String::new();
+        let id = write_task(&mut text, "rebuild the cache warmer", 5_000);
+        let entries = fold(&text);
+
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[0];
+        assert_eq!(entry.id, id);
+        assert_eq!(entry.id.len(), ID_LEN);
+        assert_eq!(entry.origin, Origin::Written);
+        assert_eq!(entry.state, State::Open);
+        assert_eq!(entry.message, "rebuild the cache warmer");
+        // **No class, for a filed report's reason.** Armada attributed nothing
+        // because Armada noticed nothing, and inventing one would seed exactly
+        // the wrong-class symptom the log exists to expose.
+        assert_eq!(entry.class, None);
+        // **No diagnostics, and that is the feature.** Capture gathered
+        // nothing, so capture cost nothing.
+        assert_eq!(entry.diagnostics, None);
+        assert_eq!(entry.cwd, "~/code/api");
+    }
+
+    /// **A task is not a fault**, and that one bit is what keeps `armada
+    /// failures` answering *what is broken* while `armada tasks` answers *what
+    /// did I say I would do* — out of one store, with one id space.
+    #[test]
+    fn only_the_two_defect_origins_are_faults() {
+        assert!(Origin::Observed.is_fault());
+        assert!(Origin::Reported.is_fault());
+        assert!(!Origin::Written.is_fault());
+        for origin in [Origin::Observed, Origin::Reported, Origin::Written] {
+            assert_eq!(origin.word(), origin.word().to_lowercase());
+        }
+    }
+
+    /// **The same sentence twice is two rows.** A failure's fingerprint
+    /// collapses repeats because Armada wrote them unasked; a person who typed
+    /// the task twice made two decisions, and merging them would discard one.
+    #[test]
+    fn writing_one_sentence_twice_keeps_both() {
+        let mut text = String::new();
+        let first = write_task(&mut text, "look into the flaky golden", 1_000);
+        let second = write_task(&mut text, "look into the flaky golden", 2_000);
+        assert_ne!(first, second);
+        assert_eq!(fold(&text).len(), 2);
+    }
+
+    /// A task takes the same two lines every other entry does — one Job, one
+    /// discard — because promotion and clearing are the store's, not the
+    /// verb's.
+    #[test]
+    fn a_task_takes_the_promotion_and_the_clear_the_store_already_has() {
+        let mut text = String::new();
+        let id = write_task(&mut text, "rebuild the cache warmer", 5_000);
+        for line in [
+            Line::Promoted {
+                id: id.clone(),
+                at_ms: 6_000,
+                job: "warm-cache".to_string(),
+            },
+            Line::Cleared {
+                id: id.clone(),
+                at_ms: 7_000,
+            },
+        ] {
+            text.push_str(&serde_json::to_string(&line).unwrap());
+            text.push('\n');
+        }
+        let entry = &fold(&text)[0];
+        assert_eq!(entry.job.as_deref(), Some("warm-cache"));
+        assert_eq!(entry.state, State::Cleared);
+    }
+
+    /// **The prompt is the sentence, and the sentence leads.** `002` asks for a
+    /// Job *"with the task as its prompt"*; anything Armada says first is
+    /// Armada talking over the only line that matters.
+    #[test]
+    fn the_started_task_hands_the_job_the_sentence_first_and_the_home_path_never() {
+        let mut text = String::new();
+        let id = write_task(&mut text, "rebuild the cache warmer", 5_000);
+        let prompt = task(&fold(&text)[0]);
+        assert!(prompt.starts_with("rebuild the cache warmer"), "{prompt}");
+        assert!(prompt.contains(&id), "{prompt}");
+        assert!(prompt.contains("~/code/api"), "{prompt}");
+        assert!(!prompt.contains("/scratch/home"), "{prompt}");
+        // Not a failure, and never described as one: there is nothing to
+        // reproduce and no class that might be wrong.
+        assert!(!prompt.contains("Armada failed"), "{prompt}");
+    }
+
+    /// A sentence with a credential in it is scrubbed on the way in, exactly as
+    /// a report's is — a person pasting the command that failed into the task
+    /// is how a token gets written down.
+    #[test]
+    fn a_credential_typed_into_a_task_never_reaches_the_file() {
+        let (_, line) = written(
+            "fix the ghp_deadbeefdeadbeef push",
+            Path::new("/scratch/home"),
+            Path::new("/scratch/home/code/api"),
+            &["task".to_string()],
+            "2026-08-15T09:00:00Z",
+            1_000,
+            &|text| text.replace("ghp_deadbeefdeadbeef", "«redacted»"),
+        );
+        let written = serde_json::to_string(&line).unwrap();
+        assert!(!written.contains("ghp_dead"), "{written}");
+        assert!(written.contains("«redacted»"), "{written}");
     }
 }
