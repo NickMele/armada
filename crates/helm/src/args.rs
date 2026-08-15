@@ -163,6 +163,23 @@ pub enum Invocation {
         /// What happened, in the words it is being reported in.
         what: String,
     },
+    /// `armada task "<what to do>"` — **write down a thing you mean to do**,
+    /// and spend nothing on it.
+    ///
+    /// **Split from [`Invocation::Tasks`] the way `report` is split from
+    /// `failures`**, and for the same reason: capture takes one quoted sentence
+    /// and listing takes sub-verbs, so putting both under one word would make
+    /// `armada task show` ambiguous between a sub-verb and a task called
+    /// *"show"*. Two words, no ambiguity, and the grammar says which is which
+    /// before the parser has to guess.
+    Task {
+        /// Emit the envelope.
+        json: bool,
+        /// What is to be done, in the words it is being written in.
+        what: String,
+    },
+    /// `armada tasks [<verb>]` — what you wrote down, and how to start one.
+    Tasks(Box<TasksInvocation>),
     /// `armada mcp serve` — the toolbelt, over stdio.
     ///
     /// **No fields but `--json`.** `--stdio` is the only transport and the
@@ -331,6 +348,67 @@ impl FailuresInvocation {
             | FailuresInvocation::Show { json, .. }
             | FailuresInvocation::Fix { json, .. }
             | FailuresInvocation::Clear { json, .. } => *json,
+        }
+    }
+}
+
+/// One of `armada tasks`' verbs.
+///
+/// **The same four shapes [`FailuresInvocation`] has, because they are the same
+/// four verbs over the same store** — list, show, promote, discard
+/// (`docs/reserved/002-tasks.md`). Only the promotion is spelled differently:
+/// `start`, because you start a task and fix a failure, and one word doing both
+/// jobs would make the listing read as though Armada thought the thought was
+/// wrong.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TasksInvocation {
+    /// `armada tasks`.
+    Ls {
+        /// Emit the envelope.
+        json: bool,
+        /// Include tasks already cleared.
+        all: bool,
+    },
+    /// `armada tasks show <id>`.
+    Show {
+        /// Emit the envelope.
+        json: bool,
+        /// Which task, in full or by a prefix that names one.
+        id: String,
+    },
+    /// `armada tasks start <id>`.
+    Start {
+        /// Emit the envelope.
+        json: bool,
+        /// Which task.
+        id: String,
+        /// Report the Job that would be spawned, and spawn nothing.
+        dry_run: bool,
+        /// **Which workflow, rather than classifying to find out.** A failure
+        /// is always a `bug`; a task can be any of the four, and naming it is
+        /// what lets a pipe — and the suite — take this path without a model
+        /// call.
+        workflow: Option<String>,
+    },
+    /// `armada tasks clear <id>`, or `armada tasks clear --all`.
+    Clear {
+        /// Emit the envelope.
+        json: bool,
+        /// Which task, or `None` under `--all`.
+        id: Option<String>,
+        /// Clear every task that is not already cleared.
+        all: bool,
+    },
+}
+
+impl TasksInvocation {
+    /// Whether this invocation asked for the envelope.
+    pub fn json(&self) -> bool {
+        match self {
+            TasksInvocation::Ls { json, .. }
+            | TasksInvocation::Show { json, .. }
+            | TasksInvocation::Start { json, .. }
+            | TasksInvocation::Clear { json, .. } => *json,
         }
     }
 }
@@ -782,7 +860,9 @@ pub const FLEET_VERBS: [&str; 11] = [
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 6] = ["init", "doctor", "bridge", "helm", "failures", "report"];
+pub const TOP_LEVEL_VERBS: [&str; 8] = [
+    "init", "doctor", "bridge", "helm", "failures", "report", "task", "tasks",
+];
 
 /// `armada failures`' sub-verbs.
 ///
@@ -791,6 +871,14 @@ pub const TOP_LEVEL_VERBS: [&str; 6] = ["init", "doctor", "bridge", "helm", "fai
 /// they are one question — what has Armada broken on, and what do I do with one
 /// — and splitting it would make a reader visit four pages to learn one verb.
 pub const FAILURES_VERBS: [&str; 3] = ["show", "fix", "clear"];
+
+/// `armada tasks`' sub-verbs.
+///
+/// **`start` rather than `fix`**, and it is the only name that differs from
+/// [`FAILURES_VERBS`]. `docs/glossary.md` fixes the vocabulary: you fix
+/// something broken and you start something never begun, and a task offered
+/// `fix` would read as Armada calling the thought a defect.
+pub const TASKS_VERBS: [&str; 3] = ["show", "start", "clear"];
 
 /// The Guild verbs this milestone built. The rest answer "not built yet".
 ///
@@ -961,6 +1049,8 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "fleet" => return fleet(rest, json, color),
             "failures" => return failures(rest, json, color),
             "report" => return report(rest, json, color),
+            "task" => return task(rest, json, color),
+            "tasks" => return tasks(rest, json, color),
             "mcp" => return mcp(rest, json, color),
             // **The bare word, spelled the way `git`, `cargo`, `npm` and
             // `docker` all spell it.** `--help`/`-h` already reach every page
@@ -1565,6 +1655,150 @@ fn report(
             "report",
             "`armada report` needs a sentence saying what happened",
             "armada report \"the dry-run said CREATED and made nothing\"",
+            parsed.json,
+        )),
+    }
+}
+
+/// `armada task "<what to do>"`.
+///
+/// **One quoted positional, exactly as [`report`] takes one**, and refused for
+/// the same reason when it is missing: the default would be an empty row, which
+/// costs a reader a click and tells them nothing.
+///
+/// **The refusal names `armada tasks`.** A bare `armada task` is much more
+/// often somebody reaching for the list than somebody forgetting the sentence,
+/// so the line that would have listed them is in the answer.
+fn task(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "task") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+    let parsed = flags(rest, json, color, "task", &[], &[])?;
+    let what = one_positional(
+        &parsed,
+        "task",
+        "one sentence saying what to do",
+        "quote the whole sentence: armada task \"rename the port allocator\"",
+    )?;
+    match what {
+        Some(what) => Ok(Invocation::Task {
+            json: parsed.json,
+            what,
+        }),
+        None => Err(needs_positional(
+            "task",
+            "`armada task` needs a sentence saying what to do — `armada tasks` lists them",
+            "armada task \"rename the port allocator\"",
+            parsed.json,
+        )),
+    }
+}
+
+/// `armada tasks [<verb>]`.
+///
+/// **A bare `armada tasks` is the listing, and a leading flag still is** — the
+/// rule [`failures`] follows, because the two verbs are one listing over one
+/// store seen through two lenses.
+fn tasks(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "tasks") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+
+    let verb = rest
+        .first()
+        .map(String::as_str)
+        .filter(|word| !word.starts_with('-'));
+    let Some(verb) = verb else {
+        let parsed = flags(rest, json, color, "tasks", &["--all"], &[])?;
+        return Ok(Invocation::Tasks(Box::new(TasksInvocation::Ls {
+            json: parsed.json,
+            all: parsed.on("--all"),
+        })));
+    };
+
+    if !TASKS_VERBS.contains(&verb) {
+        let json = json || rest.iter().any(|a| a == "--json");
+        return Err(unknown(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: format!("tasks {verb}"),
+                message: format!("unknown verb `armada tasks {verb}`"),
+                next_action: Some("`armada tasks --help` lists them".to_string()),
+            },
+            json,
+            &format!("tasks {verb}"),
+        ));
+    }
+
+    let tail = &rest[1..];
+    let invocation = match verb {
+        "show" => {
+            let parsed = flags(tail, json, color, "tasks show", &[], &[])?;
+            TasksInvocation::Show {
+                json: parsed.json,
+                id: one_task_id(&parsed, "tasks show")?,
+            }
+        }
+        "start" => {
+            let parsed = flags(
+                tail,
+                json,
+                color,
+                "tasks start",
+                &["--dry-run"],
+                &["--workflow"],
+            )?;
+            TasksInvocation::Start {
+                json: parsed.json,
+                id: one_task_id(&parsed, "tasks start")?,
+                dry_run: parsed.on("--dry-run"),
+                workflow: parsed.value("--workflow"),
+            }
+        }
+        _ => {
+            let parsed = flags(tail, json, color, "tasks clear", &["--all"], &[])?;
+            let all = parsed.on("--all");
+            let id = one_positional(&parsed, "tasks clear", "which task", "`armada tasks` lists them")?;
+            // One or the other, and refused rather than ordered — `armada
+            // failures clear`'s rule, for its reason: naming an entry *and*
+            // `--all` asks two questions, and answering the wider one would
+            // discard rows nobody named.
+            if id.is_some() == all {
+                return Err(failure(
+                    ArmadaError {
+                        class: ErrClass::BadInvocation,
+                        r#where: "tasks clear".to_string(),
+                        message: match all {
+                            true => "`armada tasks clear` takes an id or --all, not both".to_string(),
+                            false => "`armada tasks clear` needs an id, or --all".to_string(),
+                        },
+                        next_action: Some("`armada tasks` lists them".to_string()),
+                    },
+                    parsed.json,
+                ));
+            }
+            TasksInvocation::Clear {
+                json: parsed.json,
+                id,
+                all,
+            }
+        }
+    };
+    Ok(Invocation::Tasks(Box::new(invocation)))
+}
+
+/// The one id a `tasks` verb takes, or a refusal that says what it wanted.
+fn one_task_id(parsed: &Flags, r#where: &str) -> Result<String, ParseFailure> {
+    match one_positional(parsed, r#where, "which task", "`armada tasks` lists them")? {
+        Some(id) => Ok(id),
+        None => Err(needs_positional(
+            r#where,
+            &format!("`armada {where}` needs the id of a task", where = r#where),
+            "`armada tasks` lists them",
             parsed.json,
         )),
     }
@@ -2705,6 +2939,9 @@ fn claimed(path: &str) -> bool {
         || FAILURES_VERBS
             .iter()
             .any(|verb| format!("failures {verb}") == path)
+        || TASKS_VERBS
+            .iter()
+            .any(|verb| format!("tasks {verb}") == path)
         || path == "failures"
 }
 

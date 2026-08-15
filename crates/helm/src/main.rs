@@ -195,7 +195,8 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Failures(failures) => failures.json(),
-        Invocation::Report { json, .. } => *json,
+        Invocation::Tasks(tasks) => tasks.json(),
+        Invocation::Report { json, .. } | Invocation::Task { json, .. } => *json,
         Invocation::Mcp { json } => *json,
         Invocation::Version | Invocation::Help(_) => false,
     }
@@ -423,7 +424,14 @@ fn dispatch(
     //   is. So it is optional here and the Jobs diagnostic is what is skipped.
     //
     // Everything else it gathers degrades the same way, in `verbs::report`.
-    if let Invocation::Report { what, .. } = invocation {
+    // **`armada task` runs here too, and for one of `report`'s two reasons.**
+    // Capture writes into the failures store, so it wants Fleet's `Where` — and
+    // it must not inherit Fleet's requirements, because a thought you had in a
+    // directory that is not a workspace is still a thought worth keeping. The
+    // boot id is not one of its preconditions either: nothing about writing a
+    // sentence down depends on a Drone handle being meaningful.
+    let capture = matches!(invocation, Invocation::Task { .. });
+    if let Invocation::Report { what, .. } | Invocation::Task { what, .. } = invocation {
         let place = verbs::fleet::Where {
             home: home.to_path_buf(),
             armada_home: armada_manifest::machine::armada_home(home),
@@ -431,12 +439,19 @@ fn dispatch(
             exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
             boot_id: armada_manifest::machine::boot_id(&run, cwd).unwrap_or_default(),
         };
-        return verbs::report::run(&run, &SystemClock, &place, &what, argv);
+        return match capture {
+            true => verbs::tasks::capture(&run, &SystemClock, &place, &what, argv),
+            false => verbs::report::run(&run, &SystemClock, &place, &what, argv),
+        };
     }
 
+    // **`armada tasks` joins them for `armada failures`' reasons exactly.** It
+    // is the same store seen through the other lens, and starting a task is
+    // `fleet spawn`, which needs what `spawn` needs and nothing a workspace
+    // would add.
     if matches!(
         invocation,
-        Invocation::Fleet(_) | Invocation::Bridge(_) | Invocation::Failures(_)
+        Invocation::Fleet(_) | Invocation::Bridge(_) | Invocation::Failures(_) | Invocation::Tasks(_)
     ) {
         let place = verbs::fleet::Where {
             home: home.to_path_buf(),
@@ -476,14 +491,19 @@ fn dispatch(
                             interactive,
                             look(style, terminal),
                             progress,
+                            verbs::failures::Lens::Failures,
                         )
                     }
                     args::FailuresInvocation::Show { id, .. } => {
                         verbs::failures::show(&SystemClock, &place, &id)
                     }
-                    args::FailuresInvocation::Clear { id, all, .. } => {
-                        verbs::failures::clear(&SystemClock, &place, id.as_deref(), all)
-                    }
+                    args::FailuresInvocation::Clear { id, all, .. } => verbs::failures::clear(
+                        &SystemClock,
+                        &place,
+                        id.as_deref(),
+                        all,
+                        verbs::failures::Lens::Failures,
+                    ),
                     args::FailuresInvocation::Fix { id, dry_run, .. } => {
                         // The same rule `fleet spawn` follows: `None` when
                         // nobody is there to answer. Promotion names the
@@ -498,6 +518,62 @@ fn dispatch(
                             &place,
                             &id,
                             dry_run,
+                            None,
+                            asking
+                                .as_mut()
+                                .map(|ask| ask as &mut dyn armada_helm::ask::Ask),
+                            progress,
+                        )
+                    }
+                };
+            }
+            Invocation::Tasks(tasks) => {
+                return match *tasks {
+                    // **A terminal is the flag**, exactly as it is for
+                    // `armada failures` — decided here and never sniffed in the
+                    // verb (`ARCHITECTURE.md` §1.4).
+                    args::TasksInvocation::Ls { all, json } => {
+                        let interactive = terminal.can_ask() && !json;
+                        let mut asking = at_the_terminal(style, terminal);
+                        verbs::tasks::ls(
+                            &run,
+                            &SystemClock,
+                            &place,
+                            all,
+                            &mut asking,
+                            interactive,
+                            look(style, terminal),
+                            progress,
+                        )
+                    }
+                    args::TasksInvocation::Show { id, .. } => {
+                        verbs::tasks::show(&SystemClock, &place, &id)
+                    }
+                    args::TasksInvocation::Clear { id, all, .. } => {
+                        verbs::tasks::clear(&SystemClock, &place, id.as_deref(), all)
+                    }
+                    args::TasksInvocation::Start {
+                        id,
+                        dry_run,
+                        workflow,
+                        ..
+                    } => {
+                        // **`None` when nobody is there to answer**, and here it
+                        // can genuinely be reached: a task with no `--workflow`
+                        // is classified, and a guess below the threshold asks.
+                        // Through a pipe that refuses by naming `--workflow`,
+                        // which is the honest answer — a Job started on a coin
+                        // flip costs a worktree and a budget to discover.
+                        let mut asking = terminal
+                            .can_ask()
+                            .then(|| at_the_terminal(style, terminal).interactive());
+                        verbs::tasks::start(
+                            &run,
+                            &SystemClock,
+                            &place,
+                            &id,
+                            dry_run,
+                            workflow.as_deref(),
                             asking
                                 .as_mut()
                                 .map(|ask| ask as &mut dyn armada_helm::ask::Ask),
@@ -707,7 +783,9 @@ fn dispatch(
         Invocation::Bridge(_)
         | Invocation::Helm(_)
         | Invocation::Failures(_)
-        | Invocation::Report { .. } => {
+        | Invocation::Tasks(_)
+        | Invocation::Report { .. }
+        | Invocation::Task { .. } => {
             unreachable!("machine-scoped, and handled above")
         }
     }

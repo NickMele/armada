@@ -1986,8 +1986,17 @@ pub(crate) fn failure_detail(entry: &FailureEntry) -> String {
     }
 }
 
-/// `armada failures`, and `armada failures clear` — Armada's own failures.
+/// `armada failures` and `armada tasks`, and each one's `clear`.
+///
+/// **One renderer over one store, told apart by the verb it is answering.** The
+/// rows are identical by construction — same four cells, same order — because
+/// `armada_core::failure::Entry` is one type; what differs is the noun in the
+/// summary and the verb the hint names, and both would be wrong if they were
+/// guessed from the rows instead of read from the envelope. A listing that has
+/// nothing in it has no origin to infer from at all.
 fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> String {
+    // `tasks` and `tasks clear` both, and neither `failures` nor anything else.
+    let tasks = envelope.verb.starts_with("tasks");
     let data = &envelope.data;
     let mut table = Table::new(columns("id", "detail", true)).indent(2);
     for entry in &data.results {
@@ -2003,7 +2012,10 @@ fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> St
     if table.is_empty() {
         // **An empty log is what a machine looks like when nothing has gone
         // wrong**, so it is said in words rather than left as a blank table.
-        out.push_str("  nothing recorded\n");
+        out.push_str(match tasks {
+            true => "  nothing written down\n",
+            false => "  nothing recorded\n",
+        });
     }
     out.push('\n');
 
@@ -2018,19 +2030,28 @@ fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> St
         .iter()
         .filter(|entry| entry.origin == armada_core::failure::Origin::Reported)
         .count();
-    let mut facts = match reported {
-        0 => vec![format::count(data.results.len(), "failure")],
-        all if all == data.results.len() => vec![format::count(all, "report")],
-        some => vec![
-            format::count(data.results.len() - some, "failure"),
-            format!("{some} reported"),
-        ],
+    // **The tasks listing never splits**, because it holds one origin by
+    // construction: every row in it was written by hand, so a second noun would
+    // be a distinction with nothing on the other side of it.
+    let mut facts = match tasks {
+        true => vec![format::count(data.results.len(), "task")],
+        false => match reported {
+            0 => vec![format::count(data.results.len(), "failure")],
+            all if all == data.results.len() => vec![format::count(all, "report")],
+            some => vec![
+                format::count(data.results.len() - some, "failure"),
+                format!("{some} reported"),
+            ],
+        },
     };
     if data.open > 0 {
         facts.push(format!("{} open", data.open));
     }
     if !data.results.is_empty() {
-        facts.push("armada failures show <id>".to_string());
+        facts.push(match tasks {
+            true => "armada tasks show <id>".to_string(),
+            false => "armada failures show <id>".to_string(),
+        });
     }
     out.push_str(&summary(style, envelope.status, &facts));
     out

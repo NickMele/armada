@@ -24,6 +24,7 @@ pub mod report;
 pub mod services;
 pub mod skills;
 pub mod status;
+pub mod tasks;
 
 use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
