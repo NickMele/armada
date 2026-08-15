@@ -37,19 +37,40 @@
 
 use serde::{Deserialize, Serialize};
 
+/// How the answer is typed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shape {
+    /// Paragraphs. Gets a real editor: wrapping, arrow keys, and a paste of
+    /// several paragraphs that arrives intact.
+    Prose,
+    /// One short structured value — a triple of ceilings, a remote. A single
+    /// line, because an editor for eleven characters is ceremony.
+    Line,
+}
+
 /// One question.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Question {
     /// Its position, one-based. Shown as `n/5`.
     pub number: usize,
-    /// The question itself.
+    /// The question itself, in one line.
     pub prompt: &'static str,
+    /// **What answer is wanted, and what the answer is for.**
+    ///
+    /// The prompt alone was not enough: a real first run produced *"What does
+    /// "done" mean — coverage, review, commit style?"* and the person answering
+    /// could not tell what shape of sentence was wanted or where it would end
+    /// up. Each question writes one specific file for one specific purpose, and
+    /// this is where it says so.
+    pub purpose: &'static str,
     /// What pressing enter does. **Always present**, because a question whose
     /// default is invisible is a question you cannot skip at one in the
     /// morning.
     pub hint: &'static str,
     /// The guild file the answer lands in.
     pub writes: &'static str,
+    /// How it is typed.
+    pub shape: Shape,
 }
 
 /// The five, in order.
@@ -57,32 +78,52 @@ pub const QUESTIONS: [Question; 5] = [
     Question {
         number: 1,
         prompt: "How should agents write to you?",
-        hint: "(enter to keep what import found)",
+        purpose: "Tone, length, and what to lead with. Every agent reads this \
+                  before it says anything.",
+        hint: "enter keeps what import found",
         writes: "voice.md",
+        shape: Shape::Prose,
     },
     Question {
         number: 2,
-        prompt: "What does \"done\" mean — coverage, review, commit style?",
-        hint: "(enter to keep what import found)",
+        prompt: "When is work actually finished?",
+        purpose: "What must be true before an agent tells you it is done: tests \
+                  passing, a review, a branch, a changelog entry. Workflows gate \
+                  on this.",
+        hint: "enter keeps what import found",
         writes: "expectations.md",
+        shape: Shape::Prose,
     },
     Question {
         number: 3,
-        prompt: "How do you work? Branching, when to ask versus decide, parallelism.",
-        hint: "(enter to keep what import found)",
+        prompt: "How should agents work in your repos?",
+        purpose: "Branching, what to do without asking, what to always ask about \
+                  first.",
+        hint: "enter keeps what import found",
         writes: "how-i-work.md",
+        shape: Shape::Prose,
     },
     Question {
         number: 4,
-        prompt: "Default budget ceilings — iterations, tokens, wall clock?",
-        hint: "(enter for the per-workflow ceilings, e.g. 20, 600k, 90m)",
+        prompt: "How much should one Job spend before it stops and asks you?",
+        purpose: "Iterations, tokens and wall clock, in that order. A Job that \
+                  hits any one of them stops and reports rather than carrying on.",
+        // **The default is spelled out rather than described.** "the
+        // per-workflow ceilings" is a sentence you cannot type; `20, 600k, 90m`
+        // is the answer *and* the format, which is what a reader who has never
+        // seen a ceiling before actually needs.
+        hint: "enter for 20, 600k, 90m — or type e.g. 8, 200k, 30m",
         writes: "workflows/*.yml",
+        shape: Shape::Line,
     },
     Question {
         number: 5,
-        prompt: "A private git remote to sync your guild to?",
-        hint: "(enter to leave sync off — export still works)",
+        prompt: "Where should your guild sync to?",
+        purpose: "A git URL, or a folder — iCloud Drive, a NAS, a drive you \
+                  plug in. Given a folder, Armada makes it a git remote for you.",
+        hint: "enter leaves sync off — export still works",
         writes: "machine.yml",
+        shape: Shape::Line,
     },
 ];
 
@@ -216,18 +257,29 @@ impl Answers {
         Answers::default()
     }
 
-    /// How many of the five were left at their default.
-    pub fn skipped(&self) -> usize {
+    /// How many of the five you typed an answer to.
+    pub fn answered(&self) -> usize {
         [
-            self.voice.is_none(),
-            self.expectations.is_none(),
-            self.how_i_work.is_none(),
-            self.ceilings.is_none(),
-            self.remote.is_none(),
+            self.voice.is_some(),
+            self.expectations.is_some(),
+            self.how_i_work.is_some(),
+            self.ceilings.is_some(),
+            self.remote.is_some(),
         ]
         .iter()
-        .filter(|defaulted| **defaulted)
+        .filter(|given| **given)
         .count()
+    }
+
+    /// How many were left at what import found.
+    ///
+    /// **Not "skipped".** Pressing enter is what the hint instructs and it
+    /// accepts a value; a report that called it skipping told a person who had
+    /// followed the instructions that he had done nothing. `armada doctor` still
+    /// names the fragments that are a machine's reading of your memory file
+    /// rather than your own words, which is the fact worth carrying.
+    pub fn kept(&self) -> usize {
+        COUNT - self.answered()
     }
 
     /// The answer for a fragment, if the interview got one.
@@ -272,29 +324,66 @@ mod tests {
         }
     }
 
-    /// The first question, exactly as `tests/golden/render/init-machine.plain`
-    /// spells it. The fixture is the specification and this is the text it
-    /// froze.
+    /// **Every question says what answer is wanted.** The first run of this
+    /// interview came back with "the questions do not say what answer is
+    /// wanted", so this is the rule stated as a test: a prompt is a question and
+    /// the purpose is the answer's shape, and neither may be missing.
     #[test]
-    fn the_first_question_is_the_one_the_agreed_layout_shows() {
-        assert_eq!(QUESTIONS[0].prompt, "How should agents write to you?");
-        assert_eq!(QUESTIONS[0].hint, "(enter to keep what import found)");
+    fn every_question_says_what_answer_it_wants() {
+        for question in QUESTIONS {
+            assert!(
+                question.prompt.ends_with('?'),
+                "question {} is not a question",
+                question.number
+            );
+            assert!(
+                question.purpose.len() > question.prompt.len(),
+                "question {}'s purpose says less than its prompt does",
+                question.number
+            );
+        }
+    }
+
+    /// **Question 4's default is a value, not a description.** He had no idea
+    /// what to type, and "the per-workflow ceilings" is not a thing you can
+    /// type — the hint now carries the answer and the format at once.
+    #[test]
+    fn the_budget_question_shows_its_default_as_something_you_could_type() {
+        let hint = QUESTIONS[3].hint;
+        assert!(hint.contains(&Ceilings::AUTONOMOUS.written()), "{hint}");
+        assert!(parse_ceilings(&Ceilings::AUTONOMOUS.written()).is_ok());
+    }
+
+    /// Prose gets the editor and a short structured value does not.
+    #[test]
+    fn the_three_fragments_are_prose_and_the_other_two_are_lines() {
+        let shapes: Vec<Shape> = QUESTIONS.iter().map(|q| q.shape).collect();
+        assert_eq!(
+            shapes,
+            vec![
+                Shape::Prose,
+                Shape::Prose,
+                Shape::Prose,
+                Shape::Line,
+                Shape::Line
+            ]
+        );
     }
 
     /// `--defaults` leaves a working guild and a report that says so.
     #[test]
-    fn defaulting_everything_is_five_skipped_and_not_an_error() {
+    fn defaulting_everything_keeps_all_five_and_is_not_an_error() {
         let answers = Answers::all_defaulted();
-        assert_eq!(answers.skipped(), COUNT);
+        assert_eq!(answers.answered(), 0);
+        assert_eq!(answers.kept(), COUNT);
         assert_eq!(answers.fragment("voice.md"), None);
         assert_eq!(answers.ceilings_for("bug"), Ceilings::AUTONOMOUS);
         assert_eq!(answers.ceilings_for("plan"), Ceilings::ADVISORY);
     }
 
-    /// An answered interview is nothing skipped — the case the agreed layout's
-    /// `5 questions, 0 skipped` summary shows.
+    /// An answered interview keeps nothing.
     #[test]
-    fn answering_everything_is_nothing_skipped() {
+    fn answering_everything_keeps_nothing() {
         let answers = Answers {
             voice: Some("Lead with the answer.".to_string()),
             expectations: Some("Tests pass.".to_string()),
@@ -302,7 +391,8 @@ mod tests {
             ceilings: Some(Ceilings::AUTONOMOUS),
             remote: Some("git@example.com:me/guild.git".to_string()),
         };
-        assert_eq!(answers.skipped(), 0);
+        assert_eq!(answers.answered(), COUNT);
+        assert_eq!(answers.kept(), 0);
         assert_eq!(answers.fragment("voice.md"), Some("Lead with the answer."));
     }
 

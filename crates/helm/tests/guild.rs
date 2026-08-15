@@ -127,7 +127,7 @@ fn a_machine_that_has_never_seen_armada_gets_a_working_guild() {
     assert_eq!(envelope["status"], "READY");
     assert_eq!(envelope["data"]["questions"], 5);
     assert_eq!(
-        envelope["data"]["skipped"], 5,
+        envelope["data"]["answered"], 0,
         "--defaults takes every default"
     );
 

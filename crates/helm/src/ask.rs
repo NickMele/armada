@@ -88,15 +88,17 @@ pub struct AtTheTerminal<W: std::io::Write, R: std::io::BufRead> {
     prompt: W,
     input: R,
     style: crate::render::style::Style,
+    width: usize,
 }
 
 impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
     /// Ask through these two streams.
-    pub fn new(prompt: W, input: R, style: crate::render::style::Style) -> Self {
+    pub fn new(prompt: W, input: R, style: crate::render::style::Style, width: usize) -> Self {
         AtTheTerminal {
             prompt,
             input,
             style,
+            width,
         }
     }
 
@@ -117,8 +119,15 @@ impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
 }
 
 impl<W: std::io::Write, R: std::io::BufRead> Ask for AtTheTerminal<W, R> {
+    /// **A blank line above every question.** Five of these with nothing between
+    /// them ran together on the one run that mattered — the answers scroll past
+    /// as you type them, so the only thing separating one question from the next
+    /// is the space you put there.
     fn question(&mut self, asked: &Asked) -> Option<String> {
-        let prompt = crate::render::interview_prompt(asked, self.style);
+        let prompt = format!(
+            "\n{}",
+            crate::render::interview_prompt(asked, self.style, self.width)
+        );
         self.put(&prompt).filter(|answer| !answer.is_empty())
     }
 
@@ -144,7 +153,10 @@ mod tests {
             number: 1,
             of: 5,
             prompt: "How should agents write to you?".to_string(),
-            hint: "(enter to keep what import found)".to_string(),
+            purpose: "Tone, length, and what to lead with.".to_string(),
+            writes: "voice.md".to_string(),
+            hint: "enter keeps what import found".to_string(),
+            standing: Some("Lead with the answer. Keep it short.".to_string()),
         }
     }
 
@@ -160,6 +172,7 @@ mod tests {
             Vec::new(),
             std::io::BufReader::new(input.as_bytes()),
             Style::plain(),
+            80,
         )
     }
 
@@ -182,17 +195,41 @@ mod tests {
         assert_eq!(terminal("").choose("q", &["a", "b", "c"], 3), 3);
     }
 
-    /// The prompt is what the agreed layout froze, and the caret is the last
-    /// thing on the line — the cursor sits after it.
+    /// **Everything a question needs, in the order it is read**, and the caret
+    /// is the last thing on the line — the cursor sits after it.
+    ///
+    /// Each of the four parts was asked for by name after a real first run: the
+    /// blank line that keeps five questions from running together, the purpose
+    /// and the file so the question says what answer it wants, and `now` so the
+    /// default is one you can see before you accept it.
     #[test]
-    fn the_prompt_is_the_one_the_agreed_layout_shows() {
+    fn a_question_says_what_it_wants_shows_what_enter_keeps_and_stands_apart() {
         let mut ask = terminal("3\n");
         ask.question(&asked());
         let written = String::from_utf8(ask.prompt).unwrap();
         assert_eq!(
             written,
-            "1/5  How should agents write to you?\n     (enter to keep what import found) > "
+            "\n1/5  How should agents write to you?\n     \
+             Tone, length, and what to lead with. Writes voice.md.\n\n     \
+             now  Lead with the answer. Keep it short.\n     \
+             enter keeps what import found  > "
         );
+    }
+
+    /// A standing value too long for the line is cut rather than wrapped: it is
+    /// a reminder of what is on disk, not the file.
+    #[test]
+    fn a_long_standing_value_is_cut_to_one_line() {
+        let mut ask = terminal("\n");
+        ask.question(&Asked {
+            standing: Some("x".repeat(200)),
+            ..asked()
+        });
+        let written = String::from_utf8(ask.prompt).unwrap();
+        for line in written.lines() {
+            assert!(line.chars().count() <= 80, "{line:?}");
+        }
+        assert!(written.contains('…'), "the cut is marked: {written}");
     }
 
     /// An answer outside the three takes the default rather than re-asking: a

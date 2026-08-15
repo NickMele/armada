@@ -3123,19 +3123,49 @@ separately editable and separately projected, which one file would not be.
 
 The interview asks what cannot be read from the machine, **from scratch**:
 
-| # | Asks | Default if skipped |
-|---|---|---|
-| 1 | How do you want to be spoken to? | whatever import wrote to `voice.md` |
-| 2 | What does "done" mean — when is work finished? | `expectations.md` as imported |
-| 3 | How do you work? Branching, review, what you want done without asking. | `how-i-work.md` as imported |
-| 4 | Default budget ceilings. | the per-workflow ceilings in §14.6 |
-| 5 | A private git remote to sync the guild to. | none — sync is off, `export` still works |
+| # | Asks | Writes | Default if you press enter |
+|---|---|---|---|
+| 1 | How should agents write to you? | `voice.md` | what import wrote |
+| 2 | When is work actually finished? | `expectations.md` | what import wrote |
+| 3 | How should agents work in your repos? | `how-i-work.md` | what import wrote |
+| 4 | How much should one Job spend before it stops and asks you? | `workflows/*.yml` | `20, 600k, 90m` |
+| 5 | Where should your guild sync to? | `machine.yml` | none — sync is off, `export` still works |
+
+**Every question names the file it writes and shows what enter would keep.** The first real run
+of this interview came back with three findings, and all three were about the question rather
+than about the answer.
+
+The prompts did not say what answer was wanted. *"What does "done" mean — coverage, review,
+commit style?"* is a question about a word; *"When is work actually finished?"* followed by
+*what must be true before an agent tells you it is done: tests passing, a review, a branch, a
+changelog entry* is a question about your repository. Each question writes one specific file for
+one specific purpose, and the question says so.
+
+The default was invisible. `(enter to keep what import found)` printed over an empty prompt is
+not a default anyone can accept with confidence — there is no way to tell whether import found
+anything at all. Every question now shows the standing value, truncated to a line.
+
+And the questions ran together. There is a blank line above each one, because the answers scroll
+past as you type them and nothing else separates one from the next.
+
+**Prose answers get a real editor, inline.** Questions 1–3 want paragraphs, and a single-line
+prompt that scrolls sideways is not somewhere anyone writes one — so those three open a
+`ratatui` text area in place, with wrapping, arrow keys and a paste that arrives intact.
+`ratatui` is already the decided TUI crate for the Bridge (`PHASES.md` §8.5), so this is the one
+dependency doing two jobs rather than a second one. It is **not** `$EDITOR`: leaving the terminal
+to answer question two and coming back for question three is a worse interview than a box that
+scrolls. Questions 4 and 5 are one short structured value each and stay a single line.
 
 **It does not show you a parsed split and ask you to correct it.** That was considered and
 rejected: reviewing a machine's guess at how to carve up your own memory file is more work than
 answering the question, and it produces a worse answer — you would be editing its interpretation
 rather than saying what you mean. Import populates the files; the interview asks fresh; your
-answers win where they overlap.
+answers win where they overlap. Showing the standing value is not the same thing: it is a
+reminder of what is on disk, not a draft in the box waiting to be edited.
+
+**An accepted default is `kept`, not `skipped`.** The summary reads `1 answered · 4 kept as
+imported`. Pressing enter is what the hint instructs and it accepts a value; reporting that as
+skipping told someone who had followed the instructions that he had done nothing.
 
 **Four starter workflows are not confirmed either.** They are copied, and
 `armada guild edit` changes them. A confirmation step on a file you have not read yet is

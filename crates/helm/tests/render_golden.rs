@@ -697,11 +697,20 @@ fn armada_init_matches_its_fixture() {
             asked: vec![Asked {
                 number: 1,
                 of: 5,
-                prompt: "How should agents write to you?".to_string(),
-                hint: "(enter to keep what import found)".to_string(),
+                prompt: armada_guild::interview::QUESTIONS[0].prompt.to_string(),
+                purpose: armada_guild::interview::QUESTIONS[0].purpose.to_string(),
+                writes: armada_guild::interview::QUESTIONS[0].writes.to_string(),
+                hint: armada_guild::interview::QUESTIONS[0].hint.to_string(),
+                // **What import wrote, as the question shows it.** A prompt that
+                // says *enter keeps what import found* over nothing is a default
+                // the reader cannot accept with confidence, which is what a real
+                // first run said about it.
+                standing: Some(
+                    "Lead with the answer. Tables for anything comparative.".to_string(),
+                ),
             }],
             questions: 5,
-            skipped: 0,
+            answered: 0,
             guild_path: "~/.armada/guild".to_string(),
         },
     )));

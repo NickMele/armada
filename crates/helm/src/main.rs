@@ -175,6 +175,7 @@ fn machine_scoped(
             std::io::stderr(),
             std::io::BufReader::new(std::io::stdin()),
             style,
+            terminal.width,
         ))
     } else {
         // No terminal, no interview. Every question has a default and taking

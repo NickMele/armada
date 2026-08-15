@@ -97,7 +97,7 @@ pub fn run(
                 imported: Vec::new(),
                 asked: Vec::new(),
                 questions: QUESTIONS.len(),
-                skipped: 0,
+                answered: 0,
                 guild_path: shown(&place.armada_home.join("guild")),
             },
         ))));
@@ -125,7 +125,7 @@ pub fn run(
 
     let mut imported = Vec::new();
     let mut asked = Vec::new();
-    let mut skipped = 0;
+    let mut answered = 0;
     // **Only the third answer reaches the interview** (PLAN.md §13.4), so the
     // other two report no questions rather than five they never put. A summary
     // reading `5 questions, 0 skipped` after a clone would be describing an
@@ -181,7 +181,7 @@ pub fn run(
             if let Output::GuildInit(envelope) = &built {
                 imported = envelope.data.imported.clone();
                 imported.insert(0, format!("imported from {}", place.claude_shown()));
-                skipped = envelope.data.skipped;
+                answered = envelope.data.answered;
                 questions = envelope.data.questions;
             }
         }
@@ -201,7 +201,7 @@ pub fn run(
             imported,
             asked,
             questions,
-            skipped,
+            answered,
             guild_path: shown(&place.armada_home.join("guild")),
         },
     ))))
@@ -391,7 +391,7 @@ mod tests {
             .unwrap(),
         );
         assert_eq!(data.questions, 5);
-        assert_eq!(data.skipped, 5);
+        assert_eq!(data.answered, 0);
         assert!(place.guild().path("voice.md").is_file());
     }
 

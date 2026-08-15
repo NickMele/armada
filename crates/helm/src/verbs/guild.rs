@@ -88,8 +88,10 @@ pub fn init(
     };
 
     // 2. Ask the five, from scratch. Every one of them has a default, and
-    //    `--defaults` is an `Ask` that takes all of them.
-    let mut answers = interview(ask, QUESTIONS.len());
+    //    `--defaults` is an `Ask` that takes all of them. The guild is passed in
+    //    so each question can show what pressing enter would keep — import has
+    //    just written it, and a default nobody can see is not a default.
+    let mut answers = interview(ask, Some(&guild));
     if let Some(remote) = &options.remote {
         answers.remote = Some(remote.clone());
     }
@@ -135,7 +137,7 @@ pub fn init(
             wrote,
             remote: answers.remote.clone(),
             questions: QUESTIONS.len(),
-            skipped: answers.skipped(),
+            answered: answers.answered(),
         },
     ))))
 }
@@ -158,14 +160,23 @@ pub struct InitOptions {
 /// **Every answer is optional and nothing is re-asked.** An unparseable ceiling
 /// takes the documented default rather than looping: a loop is a loop a piped
 /// stdin cannot escape, and the default is a working outcome.
-pub fn interview(ask: &mut dyn Ask, _of: usize) -> Answers {
+///
+/// **Each question carries what pressing enter would keep.** Import has already
+/// written the three fragments, so the standing value is read back off disk and
+/// shown — a default you cannot see is not one you can accept with confidence,
+/// which is what a real first run of this said about `(enter to keep what import
+/// found)` printed over nothing.
+pub fn interview(ask: &mut dyn Ask, guild: Option<&Guild>) -> Answers {
     let mut answers = Answers::default();
     for question in QUESTIONS {
         let asked = armada_core::envelope::Asked {
             number: question.number,
             of: QUESTIONS.len(),
             prompt: question.prompt.to_string(),
+            purpose: question.purpose.to_string(),
+            writes: question.writes.to_string(),
             hint: question.hint.to_string(),
+            standing: standing(question, guild),
         };
         let Some(given) = ask.question(&asked) else {
             continue;
@@ -173,6 +184,36 @@ pub fn interview(ask: &mut dyn Ask, _of: usize) -> Answers {
         record(&mut answers, question, &given);
     }
     answers
+}
+
+/// What pressing enter would keep, in one line.
+///
+/// The fragments are read from the guild the import has just written; the
+/// ceilings are a constant; the remote has no standing value because sync being
+/// off is the absence of one, which the hint already says in words.
+fn standing(question: Question, guild: Option<&Guild>) -> Option<String> {
+    match question.number {
+        4 => Some(interview::Ceilings::AUTONOMOUS.written()),
+        5 => None,
+        _ => {
+            let body = std::fs::read_to_string(guild?.path(question.writes)).ok()?;
+            Some(one_line(&body)).filter(|line| !line.is_empty())
+        }
+    }
+}
+
+/// A file's content as one line: comments dropped, blanks dropped, the rest
+/// joined with a space.
+///
+/// **The marker line goes.** Import writes `<!-- Imported from CLAUDE.md … -->`
+/// at the top of each fragment, and showing that as the standing answer would
+/// tell the reader what wrote the file rather than what it says.
+fn one_line(body: &str) -> String {
+    body.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("<!--") && !line.starts_with('#'))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn record(answers: &mut Answers, question: Question, given: &str) {
@@ -723,14 +764,14 @@ mod tests {
             ],
             ..crate::ask::Scripted::default()
         };
-        let answers = interview(&mut ask, QUESTIONS.len());
+        let answers = interview(&mut ask, None);
 
         assert_eq!(ask.asked.len(), 5);
         assert_eq!(ask.asked[0].of, 5);
         assert_eq!(answers.voice.as_deref(), Some("brief"));
         assert_eq!(answers.expectations, None);
         assert_eq!(answers.ceilings.unwrap().iterations, 8);
-        assert_eq!(answers.skipped(), 2);
+        assert_eq!(answers.kept(), 2);
     }
 
     /// **An unreadable ceiling takes the default rather than looping.** A loop
@@ -741,8 +782,8 @@ mod tests {
             answers: vec![None, None, None, Some("lots".to_string()), None],
             ..crate::ask::Scripted::default()
         };
-        let answers = interview(&mut ask, QUESTIONS.len());
+        let answers = interview(&mut ask, None);
         assert_eq!(answers.ceilings, None);
-        assert_eq!(answers.skipped(), 5);
+        assert_eq!(answers.kept(), 5);
     }
 }

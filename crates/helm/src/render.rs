@@ -507,18 +507,93 @@ pub fn guild_question(question: &str, options: &[&str], style: Style) -> String 
     out
 }
 
+/// How far every line of a question is indented, past the `n/5`.
+const ASK_INDENT: usize = 5;
+
 /// One interview question — **live**, as it is put to a person.
 ///
-/// The hint is indented to line up under the prompt rather than under the
-/// number: it belongs to the question, not to the count.
-pub fn interview_prompt(asked: &armada_core::envelope::Asked, style: Style) -> String {
-    format!(
-        "{}  {}\n     {} {} ",
-        style.paint(Role::SignalAmber, &format!("{}/{}", asked.number, asked.of)),
-        style.paint(Role::SteelGrey, &asked.prompt),
-        style.paint(Role::SteelGrey, &asked.hint),
-        style.paint(Role::RadarCyan, style.caret())
-    )
+/// ```text
+/// 2/5  When is work actually finished?
+///      What must be true before an agent tells you it is done: tests
+///      passing, a review, a branch, a changelog entry. → expectations.md
+///
+///      now  Tests pass and the diff has been read by someone.
+///      enter keeps what import found  ›
+/// ```
+///
+/// **Four things a real first run said were missing, and one it did not have to
+/// say.** The purpose line, because the prompt alone did not say what answer was
+/// wanted. The file, because each question writes one and knowing which changes
+/// the answer you give. The `now` line, because *(enter to keep what import
+/// found)* over an empty prompt is a default you cannot see. And the blank line
+/// above it, because five questions with no space between them ran together.
+///
+/// The one it did not have to say is that everything after the number is
+/// indented to line up under the prompt: it all belongs to the question rather
+/// than to the count.
+pub fn interview_prompt(
+    asked: &armada_core::envelope::Asked,
+    style: Style,
+    width: usize,
+) -> String {
+    let pad = " ".repeat(ASK_INDENT);
+    let mut out = format!(
+        "{}  {}\n",
+        style.strong(Role::SignalAmber, &format!("{}/{}", asked.number, asked.of)),
+        style.strong(Role::Foreground, &asked.prompt),
+    );
+
+    // The purpose and the file it writes read as one sentence, so they wrap as
+    // one: the file stranded on a line of its own would look like a fix line.
+    //
+    // **Written out rather than joined with `→`.** The arrow is one column for a
+    // person and two for an agent (`style.rs`), so a break point computed from
+    // it would fall between different words in the two renders — and "same
+    // columns, same order, same words" is the property the pair of fixtures
+    // exists to prove.
+    let sentence = format!("{} Writes {}.", asked.purpose, asked.writes);
+    for line in wrap_prose(&sentence, width.saturating_sub(ASK_INDENT)) {
+        out.push_str(&pad);
+        out.push_str(&style.paint(Role::SteelGrey, &line));
+        out.push('\n');
+    }
+
+    if let Some(standing) = &asked.standing {
+        out.push('\n');
+        out.push_str(&pad);
+        out.push_str(&style.paint(Role::SteelGrey, "now  "));
+        out.push_str(&style.paint(
+            Role::RadarCyan,
+            &term::truncate(standing, width.saturating_sub(ASK_INDENT + 5)),
+        ));
+        out.push('\n');
+    }
+
+    out.push_str(&pad);
+    out.push_str(&style.paint(Role::SteelGrey, &asked.hint));
+    out.push_str("  ");
+    out.push_str(&style.paint(Role::RadarCyan, style.caret()));
+    out.push(' ');
+    out
+}
+
+/// Greedy word wrap. **Not [`wrapped`]**, which spaces a run of items with a
+/// separator whose two forms differ in width; this is prose, so both audiences
+/// break at the same words and no measurement depends on the style.
+fn wrap_prose(text: &str, width: usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match lines.last_mut() {
+            Some(line) if term::display_width(line) + 1 + term::display_width(word) <= width => {
+                line.push(' ');
+                line.push_str(word);
+            }
+            // A word longer than the line gets one of its own and overhangs.
+            // Cutting a word is worse than a ragged edge.
+            _ => lines.push(word.to_string()),
+        }
+    }
+    lines
 }
 
 /// `armada init` — set up **this machine**.
@@ -565,18 +640,17 @@ fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize
         // **The trailing space goes.** Live, it is where the cursor sits; in
         // the record it would be trailing whitespace, which is what makes a
         // diff of two captured outputs unreadable (`render/table.rs`).
-        out.push_str(interview_prompt(asked, style).trim_end());
+        out.push_str(interview_prompt(asked, style, width).trim_end());
         out.push('\n');
     }
 
     out.push('\n');
     // **The question counts appear only when there was an interview.** Pulling
-    // a guild from a remote asks nothing, and `5 questions, 0 skipped` under a
-    // clone would be describing something that did not happen.
+    // a guild from a remote asks nothing, and a count under a clone would be
+    // describing something that did not happen.
     let mut facts = vec![format!("guild at {}", data.guild_path)];
     if data.questions > 0 {
-        facts.push(format::count(data.questions, "question"));
-        facts.push(format!("{} skipped", data.skipped));
+        facts.extend(interview_facts(data.questions, data.answered));
     }
     out.push_str(&summary(style, envelope.status, &facts));
     if let Some(error) = &envelope.error {
@@ -742,30 +816,34 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
         detail_cell(style, Some(&data.imported.join(", "))),
         time_cell(None),
     ]);
-    // **Always a row, even when nothing was withheld.** "Armada looked and
-    // found no credentials" and "nobody looked" read identically otherwise, and
-    // only one of them is a guarantee — the same reasoning `clean` keeps its
-    // table for.
-    table = table.row(vec![
-        token(
-            "withheld",
-            if data.withheld.is_empty() {
-                Role::SteelGrey
-            } else {
-                Role::FlareOrange
-            },
-        ),
-        Cell::plain(format::count(data.withheld.len(), "value")),
-        detail_cell(
-            style,
-            Some(&if data.withheld.is_empty() {
-                "no credential-shaped values found".to_string()
-            } else {
-                format!("{} -> machine.yml", ids(&data.withheld, KEEP))
-            }),
-        ),
-        time_cell(None),
-    ]);
+    // **No row when nothing was withheld.**
+    //
+    // There used to be one, on the argument that "Armada looked and found no
+    // credentials" and "nobody looked" read identically as an absence. What it
+    // actually printed was `withheld  0 values  no credential-shaped values
+    // found`, and the reader it reached could not tell what had been checked,
+    // against what, or why it was being told. A row that says nothing three
+    // times is worse than no row: it is the one a reader learns to skip, and the
+    // next time it says `1 value` he skips that too.
+    //
+    // The guarantee has not gone anywhere — the importer still refuses
+    // credential-shaped values, `armada doctor` still reports how many are held
+    // in `machine.yml`, and `guild/init.md` still states the rule. What is gone
+    // is a line of output claiming to report it.
+    if !data.withheld.is_empty() {
+        table = table.row(vec![
+            token("withheld", Role::FlareOrange),
+            Cell::plain(format::count(data.withheld.len(), "value")),
+            detail_cell(
+                style,
+                Some(&format!(
+                    "{} -> machine.yml, which never syncs",
+                    ids(&data.withheld, KEEP)
+                )),
+            ),
+            time_cell(None),
+        ]);
+    }
     table = table.row(vec![
         token("wrote", Role::BeaconGreen),
         Cell::plain(format::count(data.wrote.len(), "file")),
@@ -787,19 +865,30 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
 
     let mut out = table.render(style, width);
     out.push('\n');
-    out.push_str(&summary(
-        style,
-        envelope.status,
-        &[
-            format!("guild at {}", data.guild_path),
-            format::count(data.questions, "question"),
-            format!("{} skipped", data.skipped),
-        ],
-    ));
+    let mut facts = vec![format!("guild at {}", data.guild_path)];
+    facts.extend(interview_facts(data.questions, data.answered));
+    out.push_str(&summary(style, envelope.status, &facts));
     if let Some(error) = &envelope.error {
         out.push_str(&error_lines(error, style));
     }
     out
+}
+
+/// What an interview is summarised as: what you said, and what you kept.
+///
+/// **`4 kept as imported`, never `4 skipped`.** Pressing enter is what the hint
+/// instructs and it accepts a value — so telling someone who followed the
+/// instructions that he skipped four questions is telling him he did nothing,
+/// which is what a real first run came back with. Both halves are stated because
+/// each is a different fact about the guild: what is yours, and what is still a
+/// machine's reading of your memory file.
+fn interview_facts(questions: usize, answered: usize) -> Vec<String> {
+    let kept = questions.saturating_sub(answered);
+    let mut facts = vec![format!("{answered} answered")];
+    if kept > 0 {
+        facts.push(format!("{kept} kept as imported"));
+    }
+    facts
 }
 
 /// `armada guild export` and `armada guild import`.
@@ -2795,7 +2884,7 @@ mod tests {
 
     // ------------------------------------------------------------------ M2
 
-    fn a_guild_init(withheld: &[&str], remote: Option<&str>, skipped: usize) -> Output {
+    fn a_guild_init(withheld: &[&str], remote: Option<&str>, answered: usize) -> Output {
         Output::GuildInit(Box::new(Envelope::ok(
             "guild init",
             None,
@@ -2812,34 +2901,37 @@ mod tests {
                 ],
                 remote: remote.map(str::to_string),
                 questions: 5,
-                skipped,
+                answered,
             },
         )))
     }
 
-    /// **The withheld row is drawn even when nothing was withheld**, because
-    /// "Armada looked and found no credentials" and "nobody looked" read
-    /// identically as an absence — and only one of them is a guarantee. Same
-    /// reasoning as `clean` keeping its table.
+    /// **No row at all when nothing was withheld.** `withheld  0 values  no
+    /// credential-shaped values found` says nothing three times and does not say
+    /// what was checked or against what — a reader learns to skip it, and then
+    /// skips the day it says `1 value`.
     #[test]
-    fn guild_init_says_so_when_it_withheld_nothing() {
-        let text = rendered(&a_guild_init(&[], None, 5), Style::plain());
+    fn guild_init_draws_no_withheld_row_when_it_withheld_nothing() {
+        let text = rendered(&a_guild_init(&[], None, 0), Style::plain());
+        assert!(!text.contains("withheld"), "{text}");
+        assert!(!text.contains("credential-shaped"), "{text}");
+    }
+
+    /// **`kept as imported`, never `skipped`.** Pressing enter is what the hint
+    /// instructs and it accepts a value; the old wording told someone who had
+    /// followed the instructions that he had done nothing.
+    #[test]
+    fn an_accepted_default_is_kept_rather_than_skipped() {
+        let text = rendered(&a_guild_init(&[], None, 1), Style::plain());
+        assert!(text.contains("1 answered, 4 kept as imported"), "{text}");
+        assert!(!text.contains("skipped"), "{text}");
+
+        let all = rendered(&a_guild_init(&[], None, 5), Style::plain());
+        assert!(all.contains("5 answered"), "{all}");
         assert!(
-            has_row(
-                &text,
-                &[
-                    "withheld",
-                    "0",
-                    "values",
-                    "no",
-                    "credential-shaped",
-                    "values",
-                    "found"
-                ]
-            ),
-            "{text}"
+            !all.contains("kept"),
+            "0 kept is a fact about nothing: {all}"
         );
-        assert!(text.contains("5 questions, 5 skipped"), "{text}");
     }
 
     /// A withheld value is named by **key**, and the destination is stated: the

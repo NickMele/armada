@@ -735,9 +735,9 @@ pub struct MachineInitData {
     pub asked: Vec<Asked>,
     /// How many questions the interview has.
     pub questions: usize,
-    /// How many were left at their default. **`--defaults` is all of them**,
-    /// and it leaves a working guild that `armada doctor` reports as incomplete.
-    pub skipped: usize,
+    /// How many you typed an answer to. **`--defaults` is none of them**, and it
+    /// leaves a working guild that `armada doctor` reports as incomplete.
+    pub answered: usize,
     /// Where the guild is, as a person writes it.
     pub guild_path: String,
 }
@@ -763,8 +763,21 @@ pub struct Asked {
     pub of: usize,
     /// The question.
     pub prompt: String,
+    /// What answer is wanted, and what the answer is for.
+    pub purpose: String,
+    /// The guild file this answer lands in.
+    pub writes: String,
     /// What pressing enter would have done.
     pub hint: String,
+    /// **What pressing enter would keep, as it stands right now.**
+    ///
+    /// A default you cannot see is not a default you can accept with
+    /// confidence: the first run of this interview offered *(enter to keep what
+    /// import found)* over an empty line, and the person answering had no way to
+    /// know whether import had found anything at all. Truncated to one line by
+    /// the render — the whole of it is on disk, in the file named by `writes`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub standing: Option<String>,
 }
 
 /// `armada doctor` — what this machine is missing.
@@ -1118,8 +1131,11 @@ pub struct GuildInitData {
     pub remote: Option<String>,
     /// How many questions the interview has.
     pub questions: usize,
-    /// How many were left at their default.
-    pub skipped: usize,
+    /// How many you typed an answer to. **The rest were `kept`, not skipped** —
+    /// pressing enter is what the hint instructs and it accepts a value, so the
+    /// count that used to be called `skipped` told someone who followed the
+    /// instructions that he had done nothing.
+    pub answered: usize,
 }
 
 /// `armada guild export` and `armada guild import`.
@@ -1854,16 +1870,26 @@ mod tests {
                 number: 1,
                 of: 5,
                 prompt: "How should agents write to you?".to_string(),
-                hint: "(enter to keep what import found)".to_string(),
+                purpose: "Tone, length, and what to lead with.".to_string(),
+                writes: "voice.md".to_string(),
+                hint: "enter keeps what import found".to_string(),
+                standing: Some("Lead with the answer.".to_string()),
             }],
             questions: 5,
-            skipped: 0,
+            answered: 1,
             guild_path: "~/.armada/guild".to_string(),
         };
         let json = serde_json::to_string(&data).unwrap();
         assert!(json.contains(r#""chosen":3"#), "{json}");
         assert!(json.contains("How should agents write to you?"), "{json}");
-        assert!(json.contains(r#""skipped":0"#), "{json}");
+        assert!(json.contains(r#""answered":1"#), "{json}");
+        // **What pressing enter would have kept is in the payload too.** The
+        // transcript on the terminal showed it; a `--json` account of the same
+        // run that did not would be a different account.
+        assert!(
+            json.contains(r#""standing":"Lead with the answer.""#),
+            "{json}"
+        );
     }
 
     /// The withheld list is keys, and the type it is built from has nowhere to
@@ -1878,7 +1904,7 @@ mod tests {
             wrote: vec!["voice.md".to_string()],
             remote: None,
             questions: 5,
-            skipped: 5,
+            answered: 0,
         };
         let json = serde_json::to_string(&data).unwrap();
         assert!(json.contains("env.GITHUB_TOKEN"), "{json}");
