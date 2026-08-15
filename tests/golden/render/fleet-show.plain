@@ -1,0 +1,32 @@
+  STATUS   JOB            WORKFLOW  STEP                        SPENT  TIME
+  BLOCKED  release-merge  feature   implement, attempt 2 of 15  $1.25    1h
+
+  STATUS    ASKED     TIME
+  ANSWERED  e30b91aa   47m
+    should the 4.2 tag be signed with the release key?
+    you said: yes, and push the tag once check is green
+  BLOCKED   e4f1a2c9    9m
+    the release branch carries two migrations that both rename the orders index.
+    Squash them into one, or revert 0042 and re-cut it? Both are safe; the
+    second loses the rename.
+
+  TASK
+  merge the release branch and cut 4.2, resolving the migration conflict in
+  orders before the tag goes out
+
+  STATUS    FACT      DETAIL
+  RECORDED  state     RUNNING, as a verb last wrote it
+  ALIVE     drone     process group 48122
+  SPENT     budget    4 of 15 turns, 119k of 400k tokens, $1.25
+  LEFT      budget    11 turns, 280k tokens, 25m
+  SINCE     started   2026-08-09T14:02:11Z
+  HELD      ports     5470-5479
+  HELD      worktree  ~/.armada/workspaces/orders/release-merge
+  HELD      branch    armada/release-merge
+  FROM      repo      orders
+
+  STATUS    STEP       DETAIL                                           TIME
+  REPORTED  implement  rebased onto main, two migration conflicts left    6m
+  REPORTED  plan       approach agreed: squash the two migrations        41m
+
+BLOCKED  release-merge, feature, needs you, 1 open, $1.25

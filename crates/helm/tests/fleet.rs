@@ -1425,6 +1425,183 @@ fn an_empty_inbox_succeeds_and_reports_nothing() {
     }
 }
 
+// ------------------------------------------------------------------ show
+//
+// The defect: a Bridge row saying `NEEDS YOU: YES` with no way to find out why.
+
+/// **The question that raised the flag comes back in its own words.**
+///
+/// `ls` folds the oldest open entry into one truncated `DETAIL` cell and the
+/// Bridge draws the task there instead, so neither view can answer *why*. This
+/// one carries the entry whole, beside the task whole — and it carries the
+/// entry's id, which is what `armada fleet answer` acknowledges.
+#[test]
+fn show_reports_the_inbox_entry_that_raised_needs_you_in_full() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    await_turn(&scratch, &data.uuid);
+
+    let asked = "the gateway limiter can be per-key or per-ip and the two behave \
+                 differently behind the CDN. Which one, and should the CDN header \
+                 be trusted for it?";
+    let record = scratch.store().load(&data.uuid).unwrap();
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "e1",
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "2026-08-09T14:02:11Z",
+        record.created_ms + 1,
+        asked,
+    )
+    .unwrap();
+
+    let output = fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+    assert_eq!(
+        output.exit_code(),
+        0,
+        "a Job that needs you is not a failure"
+    );
+    let Output::Show(envelope) = output else {
+        panic!("not a show")
+    };
+    let shown = envelope.data;
+
+    assert!(
+        shown.needs_attention,
+        "the flag the Bridge draws is not set"
+    );
+    assert_eq!(shown.asked.len(), 1);
+    // **Whole, and not the first column's worth.** This is the defect.
+    assert_eq!(shown.asked[0].body, asked);
+    assert_eq!(shown.asked[0].uuid, "e1");
+    assert_eq!(shown.asked[0].kind, "NEEDS_HUMAN");
+    assert!(shown.asked[0].answered.is_none());
+
+    // Everything the row could not hold.
+    assert_eq!(shown.task, "add rate limiting");
+    assert_eq!(shown.job, data.name);
+    assert_eq!(shown.branch, data.branch);
+    assert_eq!(shown.worktree, data.worktree);
+    assert!(shown.budget.iterations > 0, "no ceiling to spend against");
+    assert_eq!(
+        shown.turns + shown.budget_remaining.iterations,
+        shown.budget.iterations,
+        "spent and left do not account for the ceiling"
+    );
+}
+
+/// **A handle is reusable, and a new Job does not inherit its namesake's
+/// questions.** Without the cut at `created_ms` a fresh Job would open with a
+/// week-old question against it, which is the worst possible answer to "why does
+/// this need me".
+#[test]
+fn show_leaves_out_entries_raised_before_this_job_existed() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    await_turn(&scratch, &data.uuid);
+
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "older",
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "2026-08-01T09:00:00Z",
+        1,
+        "a question the last Job of this name asked",
+    )
+    .unwrap();
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "mine",
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "2026-08-09T14:02:11Z",
+        record.created_ms + 1,
+        "a question this Job asked",
+    )
+    .unwrap();
+
+    let output = fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+    let Output::Show(envelope) = output else {
+        panic!("not a show")
+    };
+    let ids: Vec<&str> = envelope
+        .data
+        .asked
+        .iter()
+        .map(|row| row.uuid.as_str())
+        .collect();
+    assert_eq!(ids, ["mine"]);
+}
+
+/// **The three facts that only disagree when something is wrong.** A record
+/// still saying `RUNNING`, a process group that is not ours, and a worktree and
+/// branch still held: every other view folds these into one state word, and this
+/// is the one place all three are separately readable.
+///
+/// **A reboot rather than a kill, for the reason `docs/traps.md` gives**: a
+/// signalled child is a zombie until its parent exits and `ps` answers for a
+/// zombie, so no test can kill a Drone and then ask in the same process whether
+/// it is alive. A stale boot id is the same question with an unambiguous answer.
+#[test]
+fn show_separates_the_recorded_state_from_the_drone_that_is_no_longer_there() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &task(&format!("add rate limiting {STAY_ALIVE}")),
+    );
+
+    // The record still says `RUNNING`, because nothing writes that back — a
+    // Drone reports to nobody.
+    let mut record = scratch.store().load(&data.uuid).unwrap();
+    record.state = JobState::Running;
+    record.drone = Some(Handle {
+        boot_id: "a-previous-boot".to_string(),
+        ..record.drone.clone().unwrap()
+    });
+    scratch.store().save(&record).unwrap();
+
+    let output = fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+    let Output::Show(envelope) = output else {
+        panic!("not a show")
+    };
+    let shown = envelope.data;
+
+    assert_eq!(shown.recorded_state, JobState::Running, "the record");
+    assert!(!shown.drone_alive, "the process table");
+    assert!(shown.drone_pgid.is_some(), "which group to look for");
+    // Still holding both, which is what `armada fleet kill` would take back.
+    assert!(!shown.worktree.is_empty());
+    assert!(!shown.branch.is_empty());
+}
+
+/// **Reading changes nothing**, the rule every view in Armada follows: `show`
+/// neither persists what it observed nor raises a second inbox entry for it.
+#[test]
+fn show_persists_nothing_and_raises_nothing() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    await_turn(&scratch, &data.uuid);
+
+    let before = scratch.store().load(&data.uuid).unwrap();
+    fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+    let after = scratch.store().load(&data.uuid).unwrap();
+
+    assert_eq!(before.state, after.state);
+    assert_eq!(before.verdict, after.verdict);
+    assert!(armada_fleet::inbox::read(&scratch.inbox())
+        .unwrap()
+        .is_empty());
+}
+
 // ---------------------------------------------------------------- the Bridge
 //
 // **The Bridge is a renderer over these verbs, so it is tested against them.**

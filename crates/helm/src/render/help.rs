@@ -118,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 25] = [
+const PAGES: [Page; 26] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -509,6 +509,18 @@ const PAGES: [Page; 25] = [
         ],
         examples: &[],
         notes: &["The handle in the first column is what every other verb takes."],
+    },
+    Page {
+        path: "fleet show",
+        synopsis: "show <job>",
+        summary: "one Job in full, and why it needs you",
+        usage: &["armada fleet show <job> [--json]"],
+        flags: &[],
+        examples: &[],
+        notes: &[
+            "`ls` and the Bridge draw a row; this is what the row was cut from —",
+            "the question that raised NEEDS YOU, the whole task, and what is held.",
+        ],
     },
     Page {
         path: "fleet board",

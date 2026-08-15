@@ -3,6 +3,7 @@ armada fleet — the agents you do not talk to: Jobs, Drones, worktrees
 VERBS
   spawn <task>           start an isolated agent Job on a task
   ls                     what is running, what it has spent, and who needs you
+  show <job>             one Job in full, and why it needs you
   board <job>            take a Job over yourself: worktree and resume command
   answer <job> <answer>  give a waiting Job your decision; let it continue
   inbox                  what the fleet needs from you

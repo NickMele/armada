@@ -27,8 +27,8 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
     GuildInitData, GuildSyncData, InboxData, InitData, InitDryRun, KillData, MachineInitData,
-    McpData, ProbeData, Projection, ReportData, ScanData, ServicesData, SkillsData, SpawnData,
-    StatusData, UpDryRun, VerdictData, VerifyData,
+    McpData, ProbeData, Projection, ReportData, ScanData, ServicesData, ShowData, SkillsData,
+    SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -87,6 +87,8 @@ pub enum Output {
     FleetLs(Box<Envelope<FleetLsData>>),
     /// `armada bridge` — one frame of the live screen.
     Bridge(Box<Envelope<BridgeData>>),
+    /// `armada fleet show` — one Job, and why it wants you.
+    Show(Box<Envelope<ShowData>>),
     /// `armada fleet board`.
     Board(Box<Envelope<BoardData>>),
     /// `armada fleet kill`.
@@ -137,6 +139,7 @@ impl Output {
             Output::Spawn(e) => e.to_json(),
             Output::FleetLs(e) => e.to_json(),
             Output::Bridge(e) => e.to_json(),
+            Output::Show(e) => e.to_json(),
             Output::Board(e) => e.to_json(),
             Output::Kill(e) => e.to_json(),
             Output::Inbox(e) => e.to_json(),
@@ -193,6 +196,7 @@ impl Output {
             Output::Spawn(e) => e.exit_code(),
             Output::FleetLs(e) => e.exit_code(),
             Output::Bridge(e) => e.exit_code(),
+            Output::Show(e) => e.exit_code(),
             Output::Board(e) => e.exit_code(),
             Output::Kill(e) => e.exit_code(),
             Output::Inbox(e) => e.exit_code(),
