@@ -262,6 +262,30 @@ fn machine_scoped(
             args::GuildInvocation::Import {
                 path, merge, force, ..
             } => verbs::guild::import_bundle(&run, place, &place.cwd.join(&path), merge, force),
+            // **Whether a person is here is decided at the entrypoint**, exactly
+            // as it is for the interview's widgets, and passed down as a value.
+            // A terminal is what turns the listing into a navigable one; there
+            // is no flag for that. `--list` only goes the other way, which is
+            // what makes "both forms carry the same facts" something a test can
+            // check from a terminal.
+            args::GuildInvocation::Ls { list, .. } => verbs::guild::ls(
+                &run,
+                place,
+                ask.as_mut(),
+                terminal.can_ask() && !list,
+                look(style, terminal),
+            ),
+            args::GuildInvocation::Show { item, .. } => verbs::guild::show(place, &item),
+            args::GuildInvocation::Edit { item, from, .. } => verbs::guild::edit(
+                &run,
+                place,
+                ask.as_mut(),
+                &item,
+                from.as_deref().map(std::path::Path::new),
+            ),
+            args::GuildInvocation::Delete { item, yes, .. } => {
+                verbs::guild::delete(&run, place, ask.as_mut(), &item, yes, terminal.can_ask())
+            }
         },
         _ => return None,
     })
@@ -1069,6 +1093,15 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<Armad
         }
     }
     None
+}
+
+/// How `armada guild ls` draws what it shows mid-session.
+///
+/// **Gathered here rather than read down there**, which is `ARCHITECTURE.md`
+/// §1.4: at a terminal it prints a table and a file's content on stderr while it
+/// is running, and nothing below the entrypoint asks the terminal anything.
+fn look(style: Style, terminal: render::term::Terminal) -> verbs::guild::Look {
+    verbs::guild::Look { style, terminal }
 }
 
 /// The one thing in the process that asks a person a question.

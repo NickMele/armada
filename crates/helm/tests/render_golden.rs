@@ -30,10 +30,11 @@
 
 use armada_core::envelope::{
     Asked, BridgeData, CheckData, CleanData, ComponentView, ComponentsData, DispatchData,
-    DoctorData, Envelope, Finding, FleetLsData, GrantedCommand, GuildChoice, GuildSyncData,
-    Headline, InboxRow, InitData, JobRow, MachineInitData, NoteRow, PortReport, Problem,
-    Projection, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, ShowData,
-    SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
+    DoctorData, Envelope, Finding, FleetLsData, GrantedCommand, GuildChange, GuildChangeData,
+    GuildChoice, GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow,
+    InitData, JobRow, MachineInitData, NoteRow, PortReport, Problem, Projection, Released,
+    ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData,
+    StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -979,6 +980,207 @@ fn guild_pull_matches_its_fixture() {
         },
     )));
     assert_render("guild-pull", &output);
+}
+
+/// **`armada guild ls` — the listing, which is the verb.**
+///
+/// A terminal draws these rows as a selector and this is what everything else
+/// gets, so freezing it freezes the half of PLAN.md §3.1.1 that is easy to lose:
+/// an interactive verb whose non-interactive form drifted would still look right
+/// to the person who built it.
+///
+/// **Every kind is in the fixture on purpose.** The STATUS column is the kind,
+/// so a fixture with only skills in it would not pin the column width — and the
+/// `memory` row that says a fragment is still Armada's example is the row a
+/// reader most often came for.
+#[test]
+fn guild_ls_matches_its_fixture() {
+    let item =
+        |kind: &str, name: &str, path: &str, opens: &str, detail: &str, bytes: u64| GuildItemRow {
+            kind: kind.to_string(),
+            name: name.to_string(),
+            path: path.to_string(),
+            opens: opens.to_string(),
+            detail: detail.to_string(),
+            bytes,
+        };
+    let output = Output::GuildList(Box::new(Envelope::ok(
+        "guild ls",
+        None,
+        Status::Ready,
+        GuildListData {
+            at: "~/.armada/guild".to_string(),
+            items: vec![
+                item(
+                    "memory",
+                    "voice.md",
+                    "voice.md",
+                    "voice.md",
+                    "150 words maximum. Lead with the answer.",
+                    412,
+                ),
+                item(
+                    "memory",
+                    "expectations.md",
+                    "expectations.md",
+                    "expectations.md",
+                    "still Armada's example text",
+                    904,
+                ),
+                item(
+                    "skill",
+                    "onboard-repo",
+                    "skills/onboard-repo",
+                    "skills/onboard-repo/SKILL.md",
+                    "Write a repository's armada.yml with them.",
+                    6210,
+                ),
+                item(
+                    "subagent",
+                    "helm.md",
+                    "subagents/helm.md",
+                    "subagents/helm.md",
+                    "The one agent you talk to.",
+                    3180,
+                ),
+                item(
+                    "workflow",
+                    "bug.yml",
+                    "workflows/bug.yml",
+                    "workflows/bug.yml",
+                    "4 steps, reproduce, fix, review, land",
+                    2044,
+                ),
+                item(
+                    "hook",
+                    "stop-notify.sh",
+                    "hooks/stop-notify.sh",
+                    "hooks/stop-notify.sh",
+                    "sh, 12 lines",
+                    284,
+                ),
+                item(
+                    "schema",
+                    "workflow.schema.json",
+                    "workflows/workflow.schema.json",
+                    "workflows/workflow.schema.json",
+                    "what every workflow is checked against",
+                    5312,
+                ),
+            ],
+            facts: vec![
+                "1 skill".to_string(),
+                "1 hook".to_string(),
+                "1 subagent".to_string(),
+                "1 workflow".to_string(),
+            ],
+        },
+    )));
+    assert_render("guild-ls", &output);
+}
+
+/// **`armada guild show` — one item, and the layout the terminal's *view*
+/// draws too.**
+///
+/// Freezing it freezes the thing the split was for: `show` and the *view*
+/// action build the same envelope and go through the same renderer, so a fixture
+/// here is a fixture for both. The body is deliberately front-matter plus prose,
+/// because that is the shape a `SKILL.md` has and the shape that would tempt a
+/// renderer into reflowing it.
+#[test]
+fn guild_show_matches_its_fixture() {
+    let output = Output::GuildItem(Box::new(Envelope::ok(
+        "guild show",
+        None,
+        Status::Ready,
+        GuildItemData {
+            at: "~/.armada/guild".to_string(),
+            item: GuildItemRow {
+                kind: "skill".to_string(),
+                name: "onboard-repo".to_string(),
+                path: "skills/onboard-repo".to_string(),
+                opens: "skills/onboard-repo/SKILL.md".to_string(),
+                detail: "Write a repository's armada.yml with them.".to_string(),
+                bytes: 6210,
+            },
+            body: "---\nname: onboard-repo\ndescription: Write a repository's armada.yml \
+                   with them.\n---\n\n# Onboard a repository\n\nOne question at a time, and \
+                   nothing written before they confirm.\n"
+                .to_string(),
+        },
+    )));
+    assert_render("guild-show", &output);
+}
+
+/// **`armada guild edit` that refused to commit**, which is the case worth
+/// freezing.
+///
+/// The file is on disk, the history did not move, and `guild push` will carry
+/// nothing — three facts a reader has to be able to tell apart from "the command
+/// broke". `REFUSED` is orange rather than red for exactly that reason.
+#[test]
+fn guild_edit_refused_matches_its_fixture() {
+    let output = Output::GuildChange(Box::new(Envelope::failed(
+        "guild edit",
+        None,
+        ArmadaError {
+            class: ErrClass::ToolFailed,
+            r#where: "workflows/bug.yml".to_string(),
+            message: "workflows/bug.yml does not validate: `steps` is a required property"
+                .to_string(),
+            next_action: Some(
+                "fix it and run `armada guild edit workflows/bug.yml` again, or \
+                 `git -C ~/.armada/guild checkout workflows/bug.yml` to put it back"
+                    .to_string(),
+            ),
+        },
+        GuildChangeData {
+            at: "~/.armada/guild".to_string(),
+            item: GuildItemRow {
+                kind: "workflow".to_string(),
+                name: "bug.yml".to_string(),
+                path: "workflows/bug.yml".to_string(),
+                opens: "workflows/bug.yml".to_string(),
+                detail: "does not parse".to_string(),
+                bytes: 1980,
+            },
+            outcome: GuildChange::Refused,
+            reading: "`steps` is a required property".to_string(),
+            committed: false,
+            referenced_by: Vec::new(),
+        },
+    )));
+    assert_render("guild-edit-refused", &output);
+}
+
+/// **`armada guild delete`, with something still naming it.**
+///
+/// The guild syncs, so the removal is committed — and the row saying a workflow
+/// still names the skill that has just gone is the only place that connection is
+/// ever drawn.
+#[test]
+fn guild_delete_matches_its_fixture() {
+    let output = Output::GuildChange(Box::new(Envelope::ok(
+        "guild delete",
+        None,
+        Status::Ready,
+        GuildChangeData {
+            at: "~/.armada/guild".to_string(),
+            item: GuildItemRow {
+                kind: "skill".to_string(),
+                name: "add-migration".to_string(),
+                path: "skills/add-migration".to_string(),
+                opens: "skills/add-migration/SKILL.md".to_string(),
+                detail: "Write a migration and its rollback.".to_string(),
+                bytes: 1402,
+            },
+            outcome: GuildChange::Deleted,
+            reading: "Write a migration and its rollback.".to_string(),
+            committed: true,
+            referenced_by: vec!["workflows/feature.yml".to_string()],
+        },
+    )));
+    assert_render("guild-delete", &output);
 }
 
 /// `armada guild project` — the verb that puts the guild on Claude Code's load

@@ -239,7 +239,7 @@ rather than a gap:
 | Not built | Why |
 |---|---|
 | **`manifest render`** | Listed in the table above because its managed-region bookkeeping is the same machinery projection needs. Projection has since landed and built that machinery — `armada_guild::project` — so `render` is now a caller of something that exists rather than a milestone of its own. |
-| **`armada guild edit` and `guild verify`** | Reserved by name and refused by name. `edit` is `$EDITOR` plus the validation `verify` performs, so building it first would mean building half of `verify` twice. |
+| **`armada guild verify`** | Reserved by name and refused by name. **`edit` is no longer reserved**: it was built to the contract it was claimed under — open a guild file, validate it, commit it — alongside `guild ls`, `guild show` and `guild delete` (`PLAN.md` §15.3.4). Its validation reads each file the way the thing that consumes it does; `verify` is the wider cross-check, and still unbuilt. |
 | **`armada doctor --fix`** | Refused by name rather than half-implemented: every finding already carries the command that fixes it, so `--fix` is a convenience over a surface that already works, and one that silently did half of what it promised would be worse than one that says it is not built. |
 
 #### Projection: the broken path, and how it was closed

@@ -1,0 +1,10 @@
+  STATUS    ITEM                  DETAIL
+  MEMORY    voice.md              150 words maximum. Lead with the answer.
+  MEMORY    expectations.md       still Armada's example text
+  SKILL     onboard-repo          Write a repository's armada.yml with them.
+  SUBAGENT  helm.md               The one agent you talk to.
+  WORKFLOW  bug.yml               4 steps, reproduce, fix, review, land
+  HOOK      stop-notify.sh        sh, 12 lines
+  SCHEMA    workflow.schema.json  what every workflow is checked against
+
+READY  ~/.armada/guild, 1 skill, 1 hook, 1 subagent, 1 workflow

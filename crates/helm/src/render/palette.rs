@@ -202,6 +202,44 @@ impl Role {
         }
     }
 
+    /// The colour one guild item's kind is spoken in.
+    ///
+    /// **The three fragments are amber and everything else is one of two
+    /// quieter colours**, because a listing of forty rows in nine colours is a
+    /// listing nobody can scan. `voice.md`, `expectations.md` and `how-i-work.md`
+    /// are the half of a guild that is *you* — they are what `armada doctor`
+    /// complains about being unwritten, and they are what a reader opening this
+    /// verb came to check. The things you author are cyan; the things Armada or
+    /// a tool maintains are grey.
+    ///
+    /// **Colour agrees with the word and never replaces it** (`render.rs`): the
+    /// kind is spelled out in the STATUS column either way, and a monochrome
+    /// terminal loses nothing but the grouping.
+    pub const fn for_guild_kind(kind: armada_guild::inventory::Kind) -> Role {
+        use armada_guild::inventory::Kind;
+        match kind {
+            Kind::Memory => Role::SignalAmber,
+            Kind::Skill | Kind::Subagent | Kind::Workflow | Kind::Hook => Role::RadarCyan,
+            Kind::Settings | Kind::Plugins | Kind::Mcp | Kind::Schema => Role::SteelGrey,
+        }
+    }
+
+    /// The colour a change to one guild item is spoken in.
+    ///
+    /// **`REFUSED` is orange and not red.** Nothing failed and nothing was lost:
+    /// the edit is on disk and git still holds the version before it. Red would
+    /// say the command broke, which is the misreading this verb most needs to
+    /// avoid — a person who thinks his edit is gone will retype it.
+    pub const fn for_guild_change(change: armada_core::envelope::GuildChange) -> Role {
+        use armada_core::envelope::GuildChange;
+        match change {
+            GuildChange::Edited => Role::BeaconGreen,
+            GuildChange::Deleted => Role::FlareOrange,
+            GuildChange::Refused => Role::FlareOrange,
+            GuildChange::Viewed | GuildChange::Unchanged => Role::SteelGrey,
+        }
+    }
+
     /// The colour a Job state is spoken in.
     ///
     /// **This is the palette table read straight down** (`docs/commands/render.md`):

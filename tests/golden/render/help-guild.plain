@@ -7,9 +7,12 @@ VERBS
   push             send local guild changes to the remote
   export           write the whole guild to one portable file
   import <bundle>  restore a guild from a bundle
+  ls               see what is in your guild
+  show <item>      print one guild file
+  edit <item>      open one guild file, validate it, and commit it
+  delete <item>    remove one thing from your guild, and commit the removal
 
 NOT BUILT YET
-  edit    open a guild file, validate it, commit it
   verify  cross-check every workflow, skill and scope
 
 `armada guild <verb> --help` for one verb's usage and flags.

@@ -1309,6 +1309,134 @@ pub struct GuildBundleData {
     pub conflicts: Vec<String>,
 }
 
+/// `armada guild ls` — **what is in your guild**, named.
+///
+/// **The listing is the verb, and navigating it is one way of reading it.** A
+/// person at a terminal navigates these rows and picks one; an agent reads the
+/// same rows off stdout; `--json` carries the same rows again. All three see
+/// identical facts, which is PLAN.md §3.1.1's rule applied to the one verb most
+/// tempting to build for a terminal alone.
+///
+/// **`ls` is the word `fleet ls` already uses for this**, and one concept gets
+/// one name across the four modules (`docs/glossary.md`) — a third spelling in a
+/// third module is how a vocabulary stops being one.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildListData {
+    /// Where the guild is, as a person writes it.
+    pub at: String,
+    /// Everything in it, in reading order.
+    pub items: Vec<GuildItemRow>,
+    /// The same tree as the summary line already states it — `19 skills, 4
+    /// workflows`. **Both, because they answer different questions**: the rows
+    /// say what you have and the facts say how much, and a reader who came for
+    /// the second should not have to count the first.
+    pub facts: Vec<String>,
+}
+
+/// One thing in a guild, as the envelope carries it.
+///
+/// **`path` and `opens` are both here and they are not always the same.** A
+/// skill is deleted at `skills/onboard-repo` and opened at
+/// `skills/onboard-repo/SKILL.md`, and an agent handed only one of them would
+/// have to guess the other.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildItemRow {
+    /// `skill`, `workflow`, `memory` — the word in the STATUS column.
+    pub kind: String,
+    /// What a person calls it.
+    pub name: String,
+    /// Guild-relative, and what a delete removes.
+    pub path: String,
+    /// Guild-relative, and what a view or an edit opens.
+    pub opens: String,
+    /// One line saying what it is, read out of the file.
+    pub detail: String,
+    /// How big the opened file is.
+    pub bytes: u64,
+}
+
+/// `armada guild show <item>` — **one item's content**.
+///
+/// **The body is in the payload and not only on the screen.** `show` is the
+/// non-interactive half of reading a guild: an agent that can list nine skills
+/// and read none of them has been given a directory listing, and the row this
+/// carries alongside the body is the same [`GuildItemRow`] the listing carries,
+/// so the two answers cannot drift.
+///
+/// **This is also what the terminal's *view* action renders.** One envelope, one
+/// renderer, two ways in — the alternative is a screen and a pipe that agree
+/// until somebody edits one of them.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildItemData {
+    /// Where the guild is, as a person writes it.
+    pub at: String,
+    /// Which item, in the listing's own words.
+    pub item: GuildItemRow,
+    /// What is in the file `item.opens` names, verbatim.
+    ///
+    /// **Unwrapped and untruncated.** A reader asked for what is on disk, and a
+    /// `show` that reflowed a `SKILL.md` would answer a different question.
+    pub body: String,
+}
+
+/// `armada guild edit` and `armada guild delete` — one item, changed.
+///
+/// **`committed` is the field that matters and it is separate from `status`.**
+/// An edit that does not validate is written to disk and left uncommitted: the
+/// work is not lost, and the broken version does not reach `push`. A reader who
+/// saw only `FAILED` would not know which of those two happened.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GuildChangeData {
+    /// Where the guild is, as a person writes it.
+    pub at: String,
+    /// What was acted on.
+    pub item: GuildItemRow,
+    /// What happened to it, spelled as the STATUS column spells it.
+    pub outcome: GuildChange,
+    /// What the validator read, or why it refused.
+    pub reading: String,
+    /// Whether the change is in git — and therefore whether `guild push` will
+    /// carry it to the other machine.
+    pub committed: bool,
+    /// Everything else in the guild that names this item, guild-relative.
+    ///
+    /// **In-guild only.** A project's `armada.yml` naming a workflow is not
+    /// here: those live in repositories Guild has no register of, and Guild may
+    /// not ask Manifest for one (`ARCHITECTURE.md` §1.9).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub referenced_by: Vec<String>,
+}
+
+/// What happened to one guild item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum GuildChange {
+    /// Read and printed; nothing was written.
+    Viewed,
+    /// Written, validated and committed.
+    Edited,
+    /// Removed and committed.
+    Deleted,
+    /// Written and **not** committed, because it does not validate.
+    Refused,
+    /// Nothing was written, because nothing changed.
+    Unchanged,
+}
+
+impl GuildChange {
+    /// The word the STATUS column prints, and the word in the payload. One
+    /// spelling, both places (PLAN.md §3.1).
+    pub const fn word(self) -> &'static str {
+        match self {
+            GuildChange::Viewed => "VIEWED",
+            GuildChange::Edited => "EDITED",
+            GuildChange::Deleted => "DELETED",
+            GuildChange::Refused => "REFUSED",
+            GuildChange::Unchanged => "UNCHANGED",
+        }
+    }
+}
+
 // ------------------------------------------------------------------ M3: Fleet
 //
 // **Fleet's bodies live here for the same reason Manifest's and Guild's do**:

@@ -27,10 +27,10 @@ use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
-    GuildInitData, GuildSyncData, HelmData, InboxData, InitData, InitDryRun, KillData,
-    MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
-    ResumeData, ScanData, ServicesData, ShowData, SkillsData, SpawnData, StatusData, UpDryRun,
-    VerdictData, VerifyData,
+    GuildChangeData, GuildInitData, GuildItemData, GuildListData, GuildSyncData, HelmData,
+    InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData, ProbeData,
+    Projection, ReapPlanData, ReportData, ResumeData, ScanData, ServicesData, ShowData, SkillsData,
+    SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -83,6 +83,12 @@ pub enum Output {
     GuildBundle(Box<Envelope<GuildBundleData>>),
     /// `armada guild project`, with or without `--remove`.
     GuildProject(Box<Envelope<Projection>>),
+    /// `armada guild ls` — what is in the guild, named.
+    GuildList(Box<Envelope<GuildListData>>),
+    /// `armada guild show` — one item's content, and the terminal's *view*.
+    GuildItem(Box<Envelope<GuildItemData>>),
+    /// `armada guild edit` and `armada guild delete` — one item, changed.
+    GuildChange(Box<Envelope<GuildChangeData>>),
     /// `armada fleet spawn`.
     Spawn(Box<Envelope<SpawnData>>),
     /// `armada fleet ls`.
@@ -147,6 +153,9 @@ impl Output {
             Output::GuildInit(e) => e.to_json(),
             Output::GuildBundle(e) => e.to_json(),
             Output::GuildProject(e) => e.to_json(),
+            Output::GuildList(e) => e.to_json(),
+            Output::GuildItem(e) => e.to_json(),
+            Output::GuildChange(e) => e.to_json(),
             Output::Spawn(e) => e.to_json(),
             Output::FleetLs(e) => e.to_json(),
             Output::Bridge(e) => e.to_json(),
@@ -208,6 +217,9 @@ impl Output {
             Output::GuildInit(e) => e.exit_code(),
             Output::GuildBundle(e) => e.exit_code(),
             Output::GuildProject(e) => e.exit_code(),
+            Output::GuildList(e) => e.exit_code(),
+            Output::GuildItem(e) => e.exit_code(),
+            Output::GuildChange(e) => e.exit_code(),
             Output::Spawn(e) => e.exit_code(),
             Output::FleetLs(e) => e.exit_code(),
             Output::Bridge(e) => e.exit_code(),

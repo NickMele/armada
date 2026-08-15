@@ -43,6 +43,32 @@ pub trait Ask {
     /// scan`'s hand-over were two printed lists that each waited silently on
     /// stdin, and fixing one of them would have left the other.
     fn choose(&mut self, question: &str, options: &[Choice], default: usize) -> usize;
+
+    /// Put something in front of the person, mid-conversation.
+    ///
+    /// **The half of asking that is not a question.** `armada guild ls` has
+    /// to show a file's content between two selections and report what an edit
+    /// did before offering the next one, and neither is an answer to anything.
+    /// It goes to the same stream the prompts go to — stderr — for the same
+    /// reason: stdout carries the finished envelope once, at the end, and a
+    /// file's text on it would be in the way of the one consumer the envelope
+    /// exists for.
+    ///
+    /// Defaulted to doing nothing, because the two implementations that answer
+    /// no questions have nobody to show it to.
+    fn show(&mut self, _text: &str) {}
+
+    /// Open a body of text for editing, and hand back what it became.
+    ///
+    /// `None` means it was left as it was — the same meaning [`Ask::question`]
+    /// gives a `None`, and the same meaning `esc` has in the text area.
+    ///
+    /// **Defaulted to `None`, so nothing that cannot draw a box silently
+    /// rewrites a file.** `armada guild edit` with no terminal and no `--from`
+    /// refuses in words instead, which is a refusal a script can read.
+    fn edit(&mut self, _title: &str, _initial: &str) -> Option<String> {
+        None
+    }
 }
 
 /// Take the default answer to everything.
@@ -71,9 +97,25 @@ pub struct Scripted {
     pub answers: Vec<Option<String>>,
     /// What the one multiple-choice question is answered with.
     pub choice: Option<usize>,
+    /// One answer per closed question, in order — for a conversation that puts
+    /// several.
+    ///
+    /// **Consumed rather than repeated, and that is what makes a loop
+    /// testable.** `armada guild ls` asks the same question until it is told
+    /// to stop, so a scripted answer that repeated forever would hang the suite
+    /// rather than exercise the loop. An empty queue falls through to
+    /// [`Scripted::choice`] and then to the default, which every navigating
+    /// question spells as *done*.
+    pub choices: Vec<usize>,
     /// Every prompt that was put, in order — so a test can assert the interview
     /// asked what it claims to ask.
     pub asked: Vec<Asked>,
+    /// Every closed question that was put, and the options it offered.
+    pub chosen: Vec<(String, Vec<String>)>,
+    /// Everything that was shown, in order.
+    pub shown: Vec<String>,
+    /// One body per edit, in order. An empty queue leaves every file as it was.
+    pub edits: Vec<String>,
 }
 
 impl Ask for Scripted {
@@ -85,10 +127,35 @@ impl Ask for Scripted {
         self.answers.remove(0)
     }
 
-    fn choose(&mut self, _: &str, _: &[Choice], default: usize) -> usize {
-        self.choice.unwrap_or(default)
+    fn choose(&mut self, question: &str, options: &[Choice], default: usize) -> usize {
+        self.chosen.push((
+            question.to_string(),
+            options.iter().map(|option| option.label.clone()).collect(),
+        ));
+        if self.choices.is_empty() {
+            return self.choice.unwrap_or(default);
+        }
+        self.choices.remove(0)
+    }
+
+    fn show(&mut self, text: &str) {
+        self.shown.push(text.to_string());
+    }
+
+    fn edit(&mut self, _title: &str, initial: &str) -> Option<String> {
+        match self.edits.is_empty() {
+            true => None,
+            false => Some(self.edits.remove(0).replace(KEEP_THE_REST, initial)),
+        }
     }
 }
+
+/// What a scripted edit writes to mean *and then everything that was there*.
+///
+/// A test that only wants to append a line should not have to restate the file
+/// it is appending to — restating it is how a test starts asserting against its
+/// own copy of a fixture rather than against the fixture.
+pub const KEEP_THE_REST: &str = "{{ as it was }}";
 
 /// A person, at a terminal.
 ///
@@ -253,6 +320,41 @@ impl<W: std::io::Write, R: std::io::BufRead> Ask for AtTheTerminal<W, R> {
             .unwrap_or(default);
         self.echo(question, options, chosen);
         chosen
+    }
+
+    /// Straight to the prompt stream, which is stderr.
+    fn show(&mut self, text: &str) {
+        self.write(text);
+    }
+
+    /// **The same text area the interview's prose questions open**, holding the
+    /// file rather than a fragment.
+    ///
+    /// It is the widget this repository already has, and a second one would be
+    /// a second set of keys for one motion. Where it cannot be drawn — no raw
+    /// mode, no terminal, an agent reading stdout — the file is left as it was
+    /// and the caller says so; falling through to a line of stdin would be
+    /// offering to replace a `SKILL.md` with whatever arrived next.
+    fn edit(&mut self, title: &str, initial: &str) -> Option<String> {
+        if self.surface != Surface::Widgets {
+            return None;
+        }
+        self.write(&crate::render::editing(title, self.style, self.width));
+        match editor::read(self.style, initial) {
+            editor::Answer::Given(text) => {
+                self.gap();
+                Some(text)
+            }
+            editor::Answer::Kept => {
+                self.gap();
+                None
+            }
+            editor::Answer::Unavailable => {
+                self.write(&crate::render::no_text_area(self.style, self.width));
+                self.gap();
+                None
+            }
+        }
     }
 }
 
