@@ -512,6 +512,60 @@ POSIX process module, all a single call: `libc::signal` for SIGPIPE, `setsid` in
 `#![deny(unsafe_code)]` despite appearing in this file's own verified snippet. An earlier
 version of this note said two and omitted the one the whole cleanup model depends on.
 
+## Secret-shaped test fixtures — GitHub push protection, and where the detector lives
+
+Measured 2026-08-15 on darwin, against `armada-guild`'s `secrets.rs` and `cargo xtask
+boundaries`.
+
+### A realistic fixture blocks the push, and assembling it at run time is the wrong fix
+
+`crates/guild/src/secrets.rs` tests `value_is_credential_shaped` against fixtures that must
+*be* credential-shaped to exercise the code. A first version wrote them as realistic-looking
+literals (`ghp_16C7e42F292c6912E7710c838347Ae178B4a`) and GitHub's push protection blocked the
+push — correctly, since a scanner cannot know a `ghp_` string is synthetic.
+
+The fix tried first was `fn shaped(prefix, rest) { format!("{prefix}{rest}") }`, splicing the
+string together at run time so nothing scannable sat in the source. **That defeats the scanner
+rather than satisfying it** — the realistic body was still there, just invisible to detection,
+which is strictly worse than the literal it replaced.
+
+**The actual fix is cheaper than either.** `value_is_credential_shaped`'s three tests —
+registered prefix, JWT's three segments, a long opaque run — never examine what follows a
+prefix or fills the run. A fixture gains zero test coverage from looking realistic, so replacing
+the body with an unmistakable marker (`ghp_EXAMPLE_NOT_A_REAL_CREDENTIAL_000001`) exercises the
+same code path with none of the risk. Where a vendor publishes an official placeholder (AWS:
+`AKIAIOSFODNN7EXAMPLE`), prefer that over inventing one. **If you assume a scanner-evasion trick
+is ever the right move here:** it survives review once, then every later reader either trusts a
+literal that could now be real, or has to re-derive that it can't be — the module's whole job is
+telling those apart, so a fixture that only *reads* safe is a bug planted in its own test suite.
+
+### `xtask` cannot import the detector it would need to enforce this repo-wide — `cargo xtask boundaries` says so
+
+Tempting next step: have `cargo xtask privacy` reuse
+`armada_guild::secrets::value_is_credential_shaped` to catch a scanner-evading fixture anywhere
+in the repo, not just in `secrets.rs`'s own tests. Adding `armada-guild` to `xtask/Cargo.toml`
+and running `cargo xtask boundaries` on it:
+
+```
+xtask/Cargo.toml:0  `xtask` (tooling) depends on `armada-guild` (Guild) (normal) — nothing
+points upward (ARCHITECTURE.md §1.9); tooling may depend on [core]
+```
+
+`boundaries.rs` grants `Tooling` (`xtask`) no entries in `may_depend_on` at all — not even
+`Core` gets a free pass there, since `to == Module::Core` is checked separately and `Tooling`
+still isn't `from` in that branch for anything but itself. So `xtask` cannot depend on any
+Armada module crate, full stop; reusing the guild's own detector from `xtask` is not available.
+
+**If you assume otherwise:** the alternative — reimplementing the detector's rules a second time
+inside `xtask` — is the same hand-copied-list drift `xtask/src/docs.rs`'s `FIXED` corpus already
+demonstrated once: `docs/reserved/*.md` used to be a retyped list there too, and it silently
+stopped covering new files until it was replaced with discovery. Two copies of
+`CREDENTIAL_PREFIXES` would agree only until the day someone updates one and not the other. The
+property therefore lives only
+in `secrets.rs`'s own tests (`every_credential_shaped_fixture_is_self_evidently_synthetic`,
+iterating the same `CREDENTIAL_SHAPED_FIXTURES` list the detection test asserts against), and
+not in `xtask` — this is a deliberate scope decision, not an oversight.
+
 ## Serialization and parsing — what the golden snapshots depend on
 
 Measured 2026-08-09 on darwin, against `serde_json` 1.0.151 and `serde_yaml_ng` 0.10.0 — the
