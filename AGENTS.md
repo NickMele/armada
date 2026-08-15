@@ -212,6 +212,32 @@ a diagnosis.
 
 ---
 
+## Working here cheaply
+
+This repository is unusually expensive to read: **comments are roughly 60% of every line**,
+deliberately, because the reasoning is the artefact. That is worth paying for once and not
+repeatedly.
+
+**Do not read a file you will later reformat.** A workspace-wide `cargo fmt` rewrites every file
+it touches, and every one you had already read is re-sent to you in full. One agent measured this
+as **~90k tokens of a 331k-token task** — its single largest avoidable cost. Format once at the
+very end, or scope it: `cargo fmt -- <path>`.
+
+**Run the narrowest suite that answers the question.** `cargo test --workspace` is the gate
+before you report, not the loop you develop in. The same agent ran it eight times where three
+would have done. `cargo test -p <crate> --test <suite> <filter>` is usually the right call.
+
+**Filter tool output before it reaches you.** A full golden-fixture diff, an unfiltered test log
+or a JSON payload dump costs more than the answer inside it. Pipe through `tail`, `grep -c`, or a
+short `python3 -c` that prints the counts you actually need — and remember that
+`grep -c FAILED` is never a valid gate (above).
+
+**Prefer one agent over several for related work.** Each new agent re-reads this repository from
+scratch. Four related fixes in one dispatch cost far less than four dispatches, and the cost is
+paid in the reading, not the thinking.
+
+---
+
 ## Workflow
 
 **Two rules the ownership layer learned the hard way**, with the reasoning in
