@@ -353,7 +353,7 @@ pub fn fold(text: &str) -> Vec<Entry> {
     // **Most recent first**, because the failure you are looking for is almost
     // always the one that just happened. Stable, so two entries last seen in
     // the same millisecond keep the order the file put them in.
-    entries.sort_by(|a, b| b.last_ms.cmp(&a.last_ms));
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.last_ms));
     entries
 }
 
@@ -479,8 +479,16 @@ mod tests {
     /// signature normaliser already knows which those are.
     #[test]
     fn a_pid_and_a_duration_do_not_make_two_failures_out_of_one() {
-        let a = fingerprint(ErrClass::ToolFailed, "api:test", "the child died pid=4021 after 1.2s");
-        let b = fingerprint(ErrClass::ToolFailed, "api:test", "the child died pid=9773 after 4.8s");
+        let a = fingerprint(
+            ErrClass::ToolFailed,
+            "api:test",
+            "the child died pid=4021 after 1.2s",
+        );
+        let b = fingerprint(
+            ErrClass::ToolFailed,
+            "api:test",
+            "the child died pid=9773 after 4.8s",
+        );
         assert_eq!(a, b);
     }
 

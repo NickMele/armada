@@ -434,7 +434,7 @@ fn dispatch(
                             progress,
                         )
                     }
-                }
+                };
             }
             Invocation::Fleet(fleet) => fleet,
             _ => unreachable!("every arm is matched above"),

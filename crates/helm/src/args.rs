@@ -1616,8 +1616,9 @@ fn failures(
                         class: ErrClass::BadInvocation,
                         r#where: "failures clear".to_string(),
                         message: match all {
-                            true => "`armada failures clear` takes an id or --all, not both"
-                                .to_string(),
+                            true => {
+                                "`armada failures clear` takes an id or --all, not both".to_string()
+                            }
                             false => "`armada failures clear` needs an id, or --all".to_string(),
                         },
                         next_action: Some("`armada failures` lists them".to_string()),
@@ -1637,7 +1638,12 @@ fn failures(
 
 /// The one id a `failures` verb takes, or a refusal that says what it wanted.
 fn one_id(parsed: &Flags, r#where: &str) -> Result<String, ParseFailure> {
-    match one_positional(parsed, r#where, "which failure", "`armada failures` lists them")? {
+    match one_positional(
+        parsed,
+        r#where,
+        "which failure",
+        "`armada failures` lists them",
+    )? {
         Some(id) => Ok(id),
         None => Err(needs_positional(
             r#where,

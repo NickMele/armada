@@ -809,13 +809,22 @@ const PAGES: [Page; 36] = [
             "armada failures clear <id> | --all",
         ],
         flags: &[
-            ("--all", "listing: include cleared; clear: clear every entry"),
+            (
+                "--all",
+                "listing: include cleared; clear: clear every entry",
+            ),
             ("--dry-run", "fix: report the Job, and spawn nothing"),
         ],
         examples: &[
             ("armada failures", "everything still open on this machine"),
-            ("armada failures show a1b2", "one failure, and what a Job would be told"),
-            ("armada failures fix a1b2", "a Job on the bug workflow, in the repo it happened in"),
+            (
+                "armada failures show a1b2",
+                "one failure, and what a Job would be told",
+            ),
+            (
+                "armada failures fix a1b2",
+                "a Job on the bug workflow, in the repo it happened in",
+            ),
             ("armada failures clear a1b2", "done with it"),
         ],
         notes: &[

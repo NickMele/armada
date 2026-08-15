@@ -176,16 +176,13 @@ mod tests {
     fn clearing_appends_and_leaves_what_it_cleared_on_disk() {
         let (_home, path) = scratch();
         let id = record(&path, 1_000);
-        assert!(append(
-            &path,
-            &Line::Cleared {
-                id,
-                at_ms: 2_000
-            }
-        ));
+        assert!(append(&path, &Line::Cleared { id, at_ms: 2_000 }));
 
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("could not be found"), "nothing was overwritten");
+        assert!(
+            text.contains("could not be found"),
+            "nothing was overwritten"
+        );
         assert_eq!(read(&path).unwrap()[0].state, State::Cleared);
     }
 

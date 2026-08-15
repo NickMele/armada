@@ -288,7 +288,8 @@ mod tests {
         let mut fixing = entry("ff001122");
         fixing.state = State::Fixing;
         fixing.job = Some("fix-ff001122".to_string());
-        let Output::Failures(envelope) = listing("failures", vec![entry("a1b2c3d4"), fixing]) else {
+        let Output::Failures(envelope) = listing("failures", vec![entry("a1b2c3d4"), fixing])
+        else {
             panic!("a listing answers as one");
         };
         assert_eq!(envelope.data.results.len(), 2);
