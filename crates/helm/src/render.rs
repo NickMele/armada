@@ -3362,7 +3362,7 @@ fn init(envelope: &Envelope<InitData>, style: Style, width: usize) -> String {
         out.push('\n');
     }
 
-    out.push_str(&reaped(&data.reaped, style, width));
+    out.push_str(&reaped(&data.reaped, false, style, width));
     out.push_str(&summary(
         style,
         envelope.status,
@@ -3399,7 +3399,7 @@ fn init_dry(envelope: &Envelope<InitDryRun>, style: Style, width: usize) -> Stri
     if !table.is_empty() {
         out.push('\n');
     }
-    out.push_str(&reaped(&data.would_reap, style, width));
+    out.push_str(&reaped(&data.would_reap, true, style, width));
     out.push_str(&summary(
         style,
         envelope.status,
@@ -3963,7 +3963,7 @@ fn clean(envelope: &Envelope<CleanData>, style: Style, width: usize) -> String {
         out.push('\n');
     }
 
-    out.push_str(&reaped(&data.reaped, style, width));
+    out.push_str(&reaped(&data.reaped, false, style, width));
     // A zero is left out of the summary rather than printed: `0 skipped` is a
     // fact nobody was asking about, on the verb that most needs to read as calm.
     let mut facts = vec![format::count(data.results.len(), "workspace")];
@@ -4711,25 +4711,33 @@ fn commands(envelope: &Envelope<CommandsData>, style: Style, width: usize) -> St
 
 /// What a reap pass did. **Reported, never silent** — a tool that removes things
 /// without saying so is worse than one that does not remove them.
-fn reaped(plan: &ReapPlan, style: Style, width: usize) -> String {
+///
+/// **`dry` is the same distinction [`spawn`] draws, and it is here for the same
+/// reason.** [`init_dry`] renders `data.would_reap` through this function, so a
+/// preview of `armada manifest init` said `REAPED workspace <id>, directory
+/// gone` for a workspace still on disk — under a summary reading `dry run,
+/// nothing was changed`, which is the report contradicting itself in five lines.
+/// The rows a preview *keeps* rather than reclaims already read conditionally
+/// (`KEPT`, `UNSWEPT`), so only the reclaiming ones needed the word.
+fn reaped(plan: &ReapPlan, dry: bool, style: Style, width: usize) -> String {
     let mut table = Table::new(columns("reaped", "detail", false)).indent(2);
     for id in &plan.workspaces {
         table = table.row(vec![
-            token("reaped", Role::BeaconGreen),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain("workspace"),
             Cell::muted(format!("{id}, directory gone")),
         ]);
     }
     for target in &plan.resources {
         table = table.row(vec![
-            token("reaped", Role::BeaconGreen),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain(target.kind.to_string()),
             Cell::muted(format!("{}, {}", target.reference, target.workspace)),
         ]);
     }
     for lease in &plan.leases {
         table = table.row(vec![
-            token("reaped", Role::BeaconGreen),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain("lease"),
             Cell::muted(format!("{lease}, heartbeat cold")),
         ]);

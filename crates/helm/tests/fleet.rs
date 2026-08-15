@@ -258,6 +258,24 @@ impl Harness {
 }
 
 impl Run for Harness {
+    /// **The tick is called, which the default implementation does not do.**
+    ///
+    /// [`Run::call_with_tick`]'s default ignores it — right for a fake, because
+    /// nothing in a unit test is waiting on anything. But `spawn` now redraws
+    /// its live table from this hook while the classifying call is in flight,
+    /// and a harness that silently dropped it would let that regress to the
+    /// silence it was written to fix. Twice, because one tick cannot tell a
+    /// loop from a call site that ticked once and gave up.
+    fn call_with_tick(
+        &self,
+        request: &RunRequest,
+        tick: &mut dyn FnMut(),
+    ) -> Result<RunOutput, SpawnError> {
+        tick();
+        tick();
+        self.call(request)
+    }
+
     fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
         self.seen.borrow_mut().push(request.argv.clone());
         let spelled = request.argv.join(" ");
@@ -1013,6 +1031,17 @@ fn a_spawn_that_could_not_prepare_releases_what_it_had_and_marks_the_job_ended()
 }
 
 /// **`--dry-run` starts nothing and leaves nothing.**
+///
+/// **This is the property, and the report telling the truth about it is a
+/// separate assertion** (`render_golden.rs`). They are worth stating apart,
+/// because the reported defect was the second one passing while the first one
+/// held: the run really did create nothing, and said `CREATED` anyway. A test
+/// that only compared words would have gone green on a preview that spawned,
+/// and a test that only checked the disk would have gone green on the output
+/// that was actually shipped.
+///
+/// So this one asserts the disk, exhaustively — no worktree, no Job record, no
+/// port claim, and no `git` or `armada manifest` call that could have made one.
 #[test]
 fn a_dry_run_reports_the_plan_and_writes_no_record() {
     let scratch = Scratch::new();
@@ -1034,11 +1063,126 @@ fn a_dry_run_reports_the_plan_and_writes_no_record() {
     assert_eq!(data.workflow, "feature");
     assert_eq!(data.state, JobState::Queued);
     assert_eq!(data.pgid, None, "a Drone was started by a preview");
+    assert_eq!(data.port_block, None, "a preview claimed a block");
     assert!(
         scratch.store().all().unwrap().is_empty(),
         "a Job was minted"
     );
+
+    // **The worktree the report names, looked for where the report says it
+    // is.** Asserting on a path this test built itself would prove only that
+    // the test can spell it; reading the cell back is what makes the assertion
+    // about the thing the reader was shown.
+    let promised = scratch.home.path().join(
+        data.worktree
+            .strip_prefix("~/")
+            .expect("the cell is written the way a person writes it"),
+    );
+    assert!(
+        !promised.exists(),
+        "`{}` was created by a preview",
+        promised.display()
+    );
+    // And nothing anywhere under it, in case the name was derived differently.
+    assert!(
+        !scratch.home.path().join(".armada/workspaces").exists(),
+        "a preview made the workspaces directory"
+    );
+    // The store's directory may exist — opening it is a read — but it holds no
+    // record, and a transcript would mean a Drone had written one.
+    let jobs = scratch.home.path().join(".armada/jobs");
+    let records: Vec<_> = std::fs::read_dir(&jobs)
+        .map(|entries| entries.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    assert!(
+        records.is_empty(),
+        "a preview left files in {jobs:?}: {records:?}"
+    );
+
+    // Neither of the two calls that would have created any of it was made.
     assert!(run.at_index(&["worktree", "add"]).is_none());
+    assert!(
+        run.at_index(&["manifest", "init"]).is_none(),
+        "a preview ran `armada manifest init`, which claims the block: {:#?}",
+        run.calls()
+    );
+}
+
+/// **A preview classifies, and that is deliberate.**
+///
+/// Classification is the one step of a spawn with a real cost — one Haiku call,
+/// 7.5s in the run that reported this — so "should a dry run make it at all" is
+/// a fair question. It should: `commands/fleet/spawn.md` says `--dry-run`
+/// reports the classification, and the workflow is the whole substance of the
+/// preview. The thing a preview exists to check is that a whole Job budget is
+/// about to be spent on the right workflow, and one cheap call is what buys
+/// that. Inverted — a preview that skipped it — this table's most useful column
+/// would be empty.
+///
+/// **And `--workflow` still makes it free**, which is the escape for anyone who
+/// wants a preview that calls nothing.
+#[test]
+fn a_preview_classifies_but_an_override_still_costs_nothing() {
+    let scratch = Scratch::new();
+
+    let run = scratch.harness();
+    fleet::spawn(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &Spawn {
+            dry_run: true,
+            ..task("add rate limiting to the API")
+        },
+        None,
+        &mut armada_helm::render::progress::Silent,
+    )
+    .unwrap();
+    let classified = spawned(
+        &fleet::spawn(
+            &run,
+            &FrozenClock::new(),
+            &scratch.place(),
+            &Spawn {
+                dry_run: true,
+                ..task("add rate limiting to the API")
+            },
+            None,
+            &mut armada_helm::render::progress::Silent,
+        )
+        .unwrap(),
+    )
+    .classify_ms;
+    assert!(
+        classified.is_some(),
+        "a preview stopped reporting how long classification took"
+    );
+
+    let named = scratch.harness();
+    let data = spawned(
+        &fleet::spawn(
+            &named,
+            &FrozenClock::new(),
+            &scratch.place(),
+            &Spawn {
+                dry_run: true,
+                workflow: Some("bug".to_string()),
+                ..task("add rate limiting to the API")
+            },
+            None,
+            &mut armada_helm::render::progress::Silent,
+        )
+        .unwrap(),
+    );
+    assert_eq!(data.workflow, "bug");
+    assert_eq!(
+        data.classify_ms, None,
+        "an override still paid for a classifying call"
+    );
+    assert_eq!(
+        data.confidence, None,
+        "`you said so` was reported as certainty"
+    );
 }
 
 #[test]
@@ -3171,5 +3315,224 @@ fn ls_prints_the_short_uuid_that_disambiguates_two_jobs_of_one_name() {
     assert!(
         text.contains("  ID  ") || text.contains(" ID "),
         "no ID column:\n{text}"
+    );
+}
+
+// ------------------------------------------- the table opens before the wait
+
+/// Every call `spawn` makes on its reporter, in the order it made them.
+///
+/// **The order is the whole assertion**, which is why this records rather than
+/// counts. The defect was never that a spawn reported nothing — it reported
+/// four rows — but that it reported them *after* the only part of the run
+/// anybody waits through.
+#[derive(Default)]
+struct Recorder(Vec<String>);
+
+impl armada_helm::render::progress::Progress for Recorder {
+    fn begin(
+        &mut self,
+        _shape: armada_helm::render::progress::Shape,
+        rows: &[armada_helm::render::progress::Planned<'_>],
+        _now_mono: u64,
+    ) {
+        let named: Vec<&str> = rows.iter().map(|row| row.id).collect();
+        self.0.push(format!("begin {}", named.join(",")));
+    }
+
+    fn started(&mut self, id: &str) {
+        self.0.push(format!("started {id}"));
+    }
+
+    fn finished(
+        &mut self,
+        id: &str,
+        _verdict: armada_helm::render::progress::Verdict,
+        _detail: Option<&str>,
+    ) {
+        self.0.push(format!("finished {id}"));
+    }
+
+    fn tick(&mut self, _now_mono: u64) {
+        self.0.push("tick".to_string());
+    }
+
+    fn finish(&mut self) {
+        self.0.push("finish".to_string());
+    }
+}
+
+impl Recorder {
+    /// Where an event first appears, so two of them can be compared.
+    fn at(&self, event: &str) -> usize {
+        self.0
+            .iter()
+            .position(|seen| seen == event)
+            .unwrap_or_else(|| panic!("`{event}` never happened: {:#?}", self.0))
+    }
+}
+
+/// **The table is on the screen before the classifying call, not after it.**
+///
+/// This is the defect reported as "it hangs, and then outputs a table at the
+/// very end". Every other step of a spawn finishes in well under a second;
+/// classification took 7.5s in the reported run and a measured 20.6s for a
+/// one-line task — and it used to happen before `progress.begin`, so the one
+/// part of a spawn a person waits through was the one part that reported
+/// nothing.
+///
+/// Inverted — `begin` after the call, which is what shipped — the tick
+/// assertion fails, because there is no table open for the wait to redraw.
+#[test]
+fn the_table_opens_before_the_classifying_call_and_ticks_through_it() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let mut progress = Recorder::default();
+    let output = fleet::spawn(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &task("add rate limiting to the API"),
+        None,
+        &mut progress,
+    )
+    .unwrap();
+    scratch.watch(&spawned(&output).uuid);
+
+    // All four rows are planned by name from the first frame, so a spawn stuck
+    // on any one of them shows which, and that the rest are coming.
+    assert_eq!(
+        progress.0.first().map(String::as_str),
+        Some("begin workflow,worktree,ports,drone"),
+        "{:#?}",
+        progress.0
+    );
+    // The classify row is *started* before anything else is reported, and it is
+    // ticked while the call is in flight — the harness ticks from inside
+    // `call_with_tick`, so a tick between `started` and `finished` can only have
+    // come from the wait itself.
+    assert_eq!(
+        progress.0.get(1).map(String::as_str),
+        Some("started workflow"),
+        "{:#?}",
+        progress.0
+    );
+    assert_eq!(
+        progress.0.get(2).map(String::as_str),
+        Some("tick"),
+        "the classifying call ran with no table to redraw: {:#?}",
+        progress.0
+    );
+    assert!(
+        progress.at("started workflow") < progress.at("finished workflow"),
+        "{:#?}",
+        progress.0
+    );
+    // And the rest of the run still reports itself, in order.
+    for (before, after) in [
+        ("finished workflow", "started worktree"),
+        ("started worktree", "finished worktree"),
+        ("finished worktree", "started ports"),
+        ("started ports", "finished ports"),
+        ("finished ports", "started drone"),
+        ("started drone", "finished drone"),
+    ] {
+        assert!(
+            progress.at(before) < progress.at(after),
+            "`{before}` did not precede `{after}`: {:#?}",
+            progress.0
+        );
+    }
+}
+
+/// **A preview draws the one step it takes.**
+///
+/// A live table listing `worktree`, `ports` and `drone` for a run that will
+/// never reach them is the same untruth the final table used to tell, drawn a
+/// few hundred milliseconds earlier and then erased. It is worth asserting
+/// because the live table and the final one render from different sources, so
+/// nothing structural makes them agree about this.
+#[test]
+fn a_preview_draws_only_the_step_it_performs() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let mut progress = Recorder::default();
+    fleet::spawn(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &Spawn {
+            dry_run: true,
+            ..task("add rate limiting to the API")
+        },
+        None,
+        &mut progress,
+    )
+    .unwrap();
+
+    assert_eq!(
+        progress.0.first().map(String::as_str),
+        Some("begin workflow"),
+        "a preview planned steps it will never take: {:#?}",
+        progress.0
+    );
+    for never in ["started worktree", "started ports", "started drone"] {
+        assert!(
+            !progress.0.iter().any(|seen| seen == never),
+            "a preview reported `{never}`: {:#?}",
+            progress.0
+        );
+    }
+}
+
+/// **What is drawn cannot change what is answered.**
+///
+/// PLAN.md §3.1.1 puts progress on stderr and the envelope on stdout, and the
+/// hazard in threading a reporter through a verb is that the verb starts
+/// reporting *instead of* returning. So one spawn is run twice — once telling
+/// nobody, once telling a recorder that logs every hook — and the two `--json`
+/// payloads are compared byte for byte.
+///
+/// That is the testable half of "`--json` stdout is byte-identical with and
+/// without a terminal": a terminal changes which `Progress` the entrypoint
+/// builds (`main::reporter`) and nothing else, and `Silent` against a reporter
+/// that answers every hook is the widest version of that difference this suite
+/// can construct without a pty. The captured-stream half — that neither stream
+/// receives a frame when nobody is watching — is `tests/render.rs`.
+#[test]
+fn what_progress_draws_never_reaches_the_envelope() {
+    // **One scratch machine for both runs, and one frozen clock.** With two,
+    // the uuid — minted from the repository path, the wall reading and the pid —
+    // differs for a reason that has nothing to do with who was watching, and
+    // the comparison this test exists to make is drowned by it.
+    let scratch = Scratch::new();
+    let spawn = |progress: &mut dyn armada_helm::render::progress::Progress| {
+        let run = scratch.harness();
+        fleet::spawn(
+            &run,
+            &FrozenClock::new(),
+            &scratch.place(),
+            &Spawn {
+                dry_run: true,
+                ..task("add rate limiting to the API")
+            },
+            None,
+            progress,
+        )
+        .unwrap()
+        .to_json()
+    };
+
+    let quiet = spawn(&mut armada_helm::render::progress::Silent);
+    let mut watching = Recorder::default();
+    let watched = spawn(&mut watching);
+
+    assert!(
+        !watching.0.is_empty(),
+        "the watched run reported nothing, so this compares two silences"
+    );
+    assert_eq!(
+        quiet, watched,
+        "the envelope changed depending on who was watching"
     );
 }
