@@ -9,9 +9,18 @@ Do you already have a guild?  > 3 build one now
   imported from ~/.claude/, 19 skills, 12 hooks, 4 plugins, CLAUDE.md
   projected into ~/.claude/, 20 placed
 
-1/5  How should agents write to you?
+1/7  How should agents write to you?
      Tone, length, and what to lead with. Every agent reads this before it says
      anything. Writes voice.md.
      enter for a new line, ctrl-d saves, esc keeps it as it was
 
-READY  guild at ~/.armada/guild, 0 answered, 5 kept as imported
+5/7  How many tokens should one Job spend before it stops and asks you?
+     One number — write it as 600k or as 600000, both read the same. It counts
+     every token that Job spends, and at this many it stops and waits for you
+     exactly as the iteration limit does. This is the limit that bounds what a
+     Job costs. Writes workflows/*.yml.
+
+     now  600k
+     enter keeps 600k  >
+
+READY  guild at ~/.armada/guild, 0 answered, 7 kept as imported

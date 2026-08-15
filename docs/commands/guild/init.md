@@ -46,20 +46,28 @@ Every fragment Armada writes carries a marker, and `armada doctor` names it unti
 it: `still as imported`, or `still Armada's example text`. See
 [`PLAN.md`](../../PLAN.md) §13.4.
 
-### 2. Ask five questions, from scratch
+### 2. Ask seven questions, from scratch
 
 | # | Asked | Written to | Default if you press enter |
 |---|---|---|---|
 | 1 | How should agents write to you? | `voice.md` | what import wrote |
 | 2 | When is work actually finished? | `expectations.md` | what import wrote |
 | 3 | How should agents work in your repos? | `how-i-work.md` | what import wrote |
-| 4 | How much should one Job spend before it stops and asks you? | `workflows/*.yml` | `20, 600k, 90m` |
-| 5 | Where should your guild sync to? | `machine.yml` | none — sync off, `export` still works |
+| 4 | How many iterations should one Job run before it stops and asks you? | `workflows/*.yml` | `20` |
+| 5 | How many tokens should one Job spend before it stops and asks you? | `workflows/*.yml` | `600k` |
+| 6 | How long should one Job run before it stops and asks you? | `workflows/*.yml` | `90m` |
+| 7 | Where should your guild sync to? | `machine.yml` | none — sync off, `export` still works |
+
+**Questions 4–6 are one number each.** They were a single question taking `20, 600k, 90m`, and a
+positional triple whose `m` meant minutes in one slot and nothing in another was reported as
+confusing twice. Each limit now asks on its own, shows its own default, and says in its prompt
+what happens when it is reached — the Job stops, keeps everything it has done, and waits in your
+inbox. It is never thrown away. See [`PLAN.md`](../../PLAN.md) §13.4.
 
 **Every question says what answer it wants, and puts the current one in front of you.**
 
 ```
-2/5  When is work actually finished?
+2/7  When is work actually finished?
      What must be true before an agent tells you it is done: tests passing, a
      review, a branch, a changelog entry. Workflows gate on this. Writes
      expectations.md.
@@ -181,7 +189,7 @@ value. Calling that skipping told someone who had followed the instructions that
 nothing.
 
 `--json` returns one result per imported category and one per written file, `answered` — how many
-of the five you typed an answer to — and `projected`, holding `at`, one result per projected area,
+of the seven you typed an answer to — and `projected`, holding `at`, one result per projected area,
 and `kept`.
 
 ## Dependencies

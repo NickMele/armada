@@ -915,23 +915,41 @@ fn armada_init_matches_its_fixture() {
                 kept: 0,
                 headline: None,
             }),
-            asked: vec![Asked {
-                number: 1,
-                of: 5,
-                prompt: armada_guild::interview::QUESTIONS[0].prompt.to_string(),
-                purpose: armada_guild::interview::QUESTIONS[0].purpose.to_string(),
-                writes: armada_guild::interview::QUESTIONS[0].writes.to_string(),
-                keeps: armada_guild::interview::QUESTIONS[0].keeps.to_string(),
-                prose: true,
-                // **What import wrote, as the question shows it.** A prompt that
-                // says *enter keeps what import found* over nothing is a default
-                // the reader cannot accept with confidence, which is what a real
-                // first run said about it.
-                standing: Some(
-                    "Lead with the answer. Tables for anything comparative.".to_string(),
-                ),
-            }],
-            questions: 5,
+            asked: vec![
+                Asked {
+                    number: 1,
+                    of: armada_guild::interview::COUNT,
+                    prompt: armada_guild::interview::QUESTIONS[0].prompt.to_string(),
+                    purpose: armada_guild::interview::QUESTIONS[0].purpose.to_string(),
+                    writes: armada_guild::interview::QUESTIONS[0].writes.to_string(),
+                    keeps: armada_guild::interview::QUESTIONS[0].keeps.to_string(),
+                    prose: true,
+                    // **What import wrote, as the question shows it.** A prompt
+                    // that says *enter keeps what import found* over nothing is
+                    // a default the reader cannot accept with confidence, which
+                    // is what a real first run said about it.
+                    standing: Some(
+                        "Lead with the answer. Tables for anything comparative.".to_string(),
+                    ),
+                },
+                // **One of the three limit questions is in the fixture**, so the
+                // transcript proves what a question asking for a number actually
+                // looks like: one number, its default on the `now` line, the same
+                // number after `enter keeps`, and a prompt that says what happens
+                // when it is reached. The old single question asked for
+                // `20, 600k, 90m` and was reported as confusing twice.
+                Asked {
+                    number: 5,
+                    of: armada_guild::interview::COUNT,
+                    prompt: armada_guild::interview::QUESTIONS[4].prompt.to_string(),
+                    purpose: armada_guild::interview::QUESTIONS[4].purpose.to_string(),
+                    writes: armada_guild::interview::QUESTIONS[4].writes.to_string(),
+                    keeps: armada_guild::interview::QUESTIONS[4].keeps.to_string(),
+                    prose: false,
+                    standing: Some(armada_guild::interview::QUESTIONS[4].keeps.to_string()),
+                },
+            ],
+            questions: armada_guild::interview::COUNT,
             answered: 0,
             guild_path: "~/.armada/guild".to_string(),
         },

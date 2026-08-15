@@ -269,17 +269,15 @@ mod tests {
         assert!(bug.contains("wall_clock: 90m"), "{bug}");
     }
 
-    /// An answered question 4 replaces them everywhere, and the file is still a
+    /// Answered questions 4–6 replace them everywhere, and the file is still a
     /// file — the prose and the comments survive.
     #[test]
     fn an_answered_ceiling_rewrites_the_numbers_and_leaves_the_document_alone() {
         let guild = tempfile::tempdir().unwrap();
         let answers = Answers {
-            ceilings: Some(Ceilings {
-                iterations: 8,
-                tokens: 200_000,
-                wall_clock_minutes: 30,
-            }),
+            iterations: Some(8),
+            tokens: Some(200_000),
+            wall_clock_minutes: Some(30),
             ..Answers::default()
         };
         write(guild.path(), &answers).unwrap();

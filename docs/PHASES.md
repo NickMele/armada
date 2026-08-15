@@ -228,7 +228,7 @@ and a `git diff` in the guild repo shows what changed since the other machine.
 
 The done-when is met and run rather than reasoned about: `crates/helm/tests/guild.rs` drives the
 real binary against real `git`, two scratch `$HOME`s and a bare repository standing in for the
-private remote. Built: `armada init`, `armada doctor`, `armada guild init` with the five-question
+private remote. Built: `armada init`, `armada doctor`, `armada guild init` with the seven-question
 interview, `guild pull` / `push` / `export` / `import`, and `guild project` — which is what makes
 the guild something Claude Code reads rather than a directory on disk. The starters, the secret
 guard and the three agreed layouts are in and frozen.

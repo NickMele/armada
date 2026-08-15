@@ -51,7 +51,7 @@ fn answers() -> Vec<Choice> {
     vec![
         Choice::new(ANSWERS[0], "clones it — the second-machine path"),
         Choice::new(ANSWERS[1], "unpacks a file you exported elsewhere"),
-        Choice::new(ANSWERS[2], "imports ~/.claude/, then asks five questions"),
+        Choice::new(ANSWERS[2], "imports ~/.claude/, then asks seven questions"),
     ]
 }
 
@@ -161,8 +161,8 @@ pub fn run(
     let mut asked = Vec::new();
     let mut answered = 0;
     // **Only the third answer reaches the interview** (PLAN.md §13.4), so the
-    // other two report no questions rather than five they never put. A summary
-    // reading `5 questions, 0 skipped` after a clone would be describing an
+    // other two report no questions rather than seven they never put. A summary
+    // reading `7 questions, 0 skipped` after a clone would be describing an
     // interview that did not happen.
     let mut questions = 0;
 
@@ -197,8 +197,8 @@ pub fn run(
             imported.extend(guild::inventory_of(&place.guild()).facts());
         }
         _ => {
-            // Import first, then the five questions — the order that makes the
-            // interview five questions rather than thirty.
+            // Import first, then the seven questions — the order that makes the
+            // interview seven questions rather than thirty.
             let built = guild::init(
                 runner,
                 place,
@@ -434,7 +434,7 @@ mod tests {
             )
             .unwrap(),
         );
-        assert_eq!(data.questions, 5);
+        assert_eq!(data.questions, 7);
         assert_eq!(data.answered, 0);
         assert!(place.guild().path("voice.md").is_file());
     }

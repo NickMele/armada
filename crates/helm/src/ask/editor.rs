@@ -11,7 +11,7 @@
 //! coming back for question three is a worse interview than a box that scrolls —
 //! it puts a modal application between you and the next question, and on a
 //! machine whose `$EDITOR` is unset or is `vi` it puts a puzzle there. The
-//! interview is five questions long; it should be five questions long from where
+//! interview is seven questions long; it should be seven questions long from where
 //! you started it.
 //!
 //! # Why `ratatui`

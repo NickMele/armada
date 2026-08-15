@@ -3,7 +3,7 @@
 //! **Import runs first and does most of the work** (`PLAN.md` §13.4). The guild
 //! starts nearly complete rather than empty, which is the difference between a
 //! tool you configure once and one you abandon during configuration — and it is
-//! the reason the interview is five questions rather than thirty.
+//! the reason the interview is seven questions rather than thirty.
 //!
 //! | From `~/.claude/` | To `~/.armada/guild/` |
 //! |---|---|
