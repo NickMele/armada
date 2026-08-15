@@ -1,0 +1,14 @@
+# The root holds the two things that describe the *whole* repository, and
+# nothing that describes any one product in it. That is the shape a scan was
+# blind to: it read here, found these two, and reported everything else absent.
+services:
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"

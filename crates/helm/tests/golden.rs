@@ -387,9 +387,34 @@ fn check_matches_its_snapshot() {
 /// reads a fixture directory rather than a scratch repo.
 #[test]
 fn config_scan_matches_its_snapshot() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/next-prisma");
-    let output = verbs::config::scan(&root).expect("a readable directory always answers");
-    assert_golden("config-scan", &output.to_json());
+    assert_golden("config-scan", &scan_of("next-prisma"));
+}
+
+/// The same verb over a **monorepo**, which is the shape that had no coverage
+/// and therefore had the bug.
+///
+/// **`tests/fixtures/` already had `pnpm-monorepo`, so the config *schema*
+/// handled this shape all along — nothing tested the *scanner* against it.**
+/// That gap is the inverse of the one `ARCHITECTURE.md` §2.4 warns about: the
+/// scanner was built against the simple repositories that were in front of it.
+/// This snapshot is what stops it being rebuilt against them.
+#[test]
+fn config_scan_over_a_monorepo_matches_its_snapshot() {
+    assert_golden("config-scan-monorepo", &scan_of("polyglot-monorepo"));
+}
+
+/// `config scan` over a fixture directory, as the verb would answer it.
+///
+/// **No scenario and no redaction.** A scan has no workspace, claims no ports
+/// and mints no run id, so there is nothing in the payload that differs between
+/// two correct machines.
+fn scan_of(fixture: &str) -> String {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures")
+        .join(fixture);
+    verbs::config::scan(&RealRun, &root)
+        .expect("a readable directory always answers")
+        .to_json()
 }
 
 /// `armada manifest config verify`, **both passes**, against a scratch repo.

@@ -486,10 +486,30 @@ fn a_refused_dispatch_matches_its_fixture() {
 /// are where this verb's mistakes live.
 #[test]
 fn config_scan_matches_its_fixture() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/next-prisma");
-    let files = armada_manifest::scan::read(&root);
+    assert_render("config-scan", &scan_of("next-prisma"));
+}
+
+/// `armada manifest config scan` over a **monorepo**, which is the shape the
+/// first version was blind to.
+///
+/// **The regression, frozen.** Every lockfile and manifest here sits one level
+/// down and was reported `absent`; the root holds only the compose file and the
+/// workflow, which were the only two things that version found. Nothing but a
+/// fixture of this shape would have caught it, and nothing but a byte
+/// comparison keeps it caught.
+#[test]
+fn config_scan_over_a_monorepo_matches_its_fixture() {
+    assert_render("config-scan-monorepo", &scan_of("polyglot-monorepo"));
+}
+
+/// The evidence a real directory yields, as the verb would answer it.
+fn scan_of(fixture: &str) -> Output {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures")
+        .join(fixture);
+    let files = armada_manifest::scan::read(&armada_manifest::process::RealRun, &root);
     let evidence = armada_core::scan::scan(&files);
-    let output = Output::Scan(Box::new(Envelope::ok(
+    Output::Scan(Box::new(Envelope::ok(
         "config scan",
         None,
         Status::Ok,
@@ -497,8 +517,7 @@ fn config_scan_matches_its_fixture() {
             results: armada_core::scan::findings(&evidence),
             evidence,
         },
-    )));
-    assert_render("config-scan", &output);
+    )))
 }
 
 /// `armada manifest config verify`, with pass 1 failing.

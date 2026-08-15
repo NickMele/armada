@@ -1,0 +1,43 @@
+no armada.yml here, this is evidence and not a config
+
+  STATUS  KIND             DETAIL
+  found   lockfile         backend/uv.lock, uv
+  found   lockfile         scripts/uv.lock, uv
+  found   lockfile         web/pnpm-lock.yaml, pnpm@9
+  found   package scripts  4 in web/package.json
+  found   compose          docker-compose.yml, 2 services
+  found   ci               .github/workflows/ci.yml, 5 steps
+  found   pyproject        backend/pyproject.toml, 3 tool sections
+  found   pyproject        scripts/pyproject.toml, 1 tool section
+  absent  makefile         -
+
+  web/package.json scripts, verbatim and not interpreted
+    dev    next dev
+    build  next build
+    test   vitest run
+    lint   eslint .
+
+  pyproject tool sections
+    backend/pyproject.toml  ruff, mypy, pytest
+    scripts/pyproject.toml  ruff
+
+  docker-compose.yml services
+    postgres  5432
+    redis     6379
+
+  ci steps, the best existing evidence of what you actually run
+    pnpm --dir web install --frozen-lockfile, uv sync --project backend
+    pnpm --dir web test, uv run --project backend pytest
+
+  packages, a directory with a manifest of its own
+    backend  pyproject.toml, uv.lock
+    scripts  pyproject.toml, uv.lock
+    web      package.json, pnpm-lock.yaml
+
+  workspaces: candidates, each resolves its own dependencies
+    backend, scripts, web
+
+Evidence only. Armada does not guess which of these you actually run.
+
+  1 let an agent write it with me  opens claude here
+  2 print the evidence and stop    I will write armada.yml myself

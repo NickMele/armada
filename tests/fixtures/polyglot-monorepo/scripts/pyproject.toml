@@ -1,0 +1,10 @@
+# A directory literally called `scripts/` that is a Python package, which is
+# the collision that renamed the `scripts` evidence kind: `absent scripts —`
+# was read as a statement about this directory rather than about the `scripts`
+# block of a `package.json`. The kind is `package scripts` now.
+[project]
+name = "scripts"
+version = "0.1.0"
+
+[tool.ruff]
+line-length = 100

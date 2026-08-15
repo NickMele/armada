@@ -1775,19 +1775,27 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
     }
     out.push_str(&section(style, width, "makefile targets", None, &targets));
 
-    // **One section over every compose file**, because a service is a service
-    // whichever file declared it and a reader scanning for `postgres` should
-    // not have to know which one.
-    let mut services = pairs();
+    // **A section per compose file, not one merged list.** The first version
+    // merged them, and against a repository with two compose files that printed
+    // `postgres` and `redis` twice with nothing saying which file either came
+    // from — the same fact-destroying merge that made the scanner blind to
+    // `backend/` in the first place, one level down.
     for compose in &evidence.compose {
+        let mut services = pairs();
         for service in &compose.services {
             services = services.row(vec![
                 Cell::painted(service.name.clone(), Role::RadarCyan),
                 Cell::muted(service.ports.join(", ")),
             ]);
         }
+        out.push_str(&section(
+            style,
+            width,
+            &format!("{} services", compose.file),
+            None,
+            &services,
+        ));
     }
-    out.push_str(&section(style, width, "compose services", None, &services));
 
     let runs: Vec<String> = evidence
         .ci
@@ -1814,6 +1822,64 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
         ]);
     }
     out.push_str(&section(style, width, "workspace globs", None, &globs));
+
+    // **The layout, stated once.** `backend/` holding `uv.lock` and
+    // `pyproject.toml` while `web/` holds `pnpm-lock.yaml` is the single most
+    // important fact about a polyglot repository, and reading it off the flat
+    // lists above is work the author should not have to do.
+    // **Drawn only when there is a layout to draw.** A repository with one
+    // package at the root has no monorepo structure, and a section saying
+    // `.  package.json, pnpm-lock.yaml` restates the table above it. `--json`
+    // carries `packages` either way, because a consumer asking "what is here"
+    // wants the answer whichever shape the repository is.
+    let mut packages = pairs();
+    for package in evidence
+        .packages
+        .iter()
+        .filter(|_| evidence.packages.iter().any(|p| !p.dir.is_empty()))
+    {
+        let mut held = package.manifests.clone();
+        held.extend(package.lockfiles.iter().cloned());
+        packages = packages.row(vec![
+            Cell::painted(
+                if package.dir.is_empty() {
+                    ".".to_string()
+                } else {
+                    package.dir.clone()
+                },
+                Role::RadarCyan,
+            ),
+            Cell::muted(held.join(", ")),
+        ]);
+    }
+    out.push_str(&section(
+        style,
+        width,
+        "packages",
+        Some("a directory with a manifest of its own"),
+        &packages,
+    ));
+
+    // **Reported, never decided** (PLAN.md §4.6). The fact underneath is that
+    // each of these resolves its own dependencies — a manifest *and* a lockfile
+    // of its own, claimed by nobody's workspace glob — which is what tells a
+    // separate product from a member of one. Whether to declare it is the
+    // author's call.
+    let candidates: Vec<String> = evidence
+        .packages
+        .iter()
+        .filter(|package| package.independent)
+        .map(|package| package.dir.clone())
+        .collect();
+    if !candidates.is_empty() {
+        out.push('\n');
+        out.push_str(&heading(
+            style,
+            "workspaces: candidates",
+            Some("each resolves its own dependencies"),
+        ));
+        out.push_str(&wrapped(style, &candidates, width));
+    }
 
     out.push_str(&format!(
         "\n{} {}\n\n",

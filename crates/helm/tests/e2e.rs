@@ -1029,6 +1029,80 @@ fn config_verify_fails_pass_one_and_does_not_attempt_pass_two() {
     assert!(text.contains("\n  -> "), "no fix line: {text}");
 }
 
+/// **`config scan` on a monorepo, end to end.** The unit tests hand the parser
+/// a list of files; only a real run establishes that the *search* finds them,
+/// which is the half that was wrong.
+#[test]
+fn config_scan_finds_evidence_below_the_root_of_a_real_checkout() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    let write = |relative: &str, text: &str| {
+        let path = repo.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    };
+
+    write("web/package.json", r#"{"scripts":{"test":"vitest run"}}"#);
+    write("web/pnpm-lock.yaml", "");
+    write("backend/pyproject.toml", "[project]\n[tool.ruff]\n");
+    write("backend/uv.lock", "");
+    // Ignored, so it is not evidence — and the rule that says so is git's.
+    write(".gitignore", "generated/\n");
+    write("generated/package.json", r#"{"scripts":{"nope":"nope"}}"#);
+    // Never evidence, ignored or not.
+    write("node_modules/left-pad/package.json", "{}");
+    // Past the depth bound: a vendored copy, not a package.
+    write("a/b/c/d/package.json", "{}");
+
+    let output = machine.run(&repo, &["manifest", "config", "scan", "--json"]);
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(output.status.code(), Some(0), "{payload}");
+
+    let found: Vec<&str> = payload["data"]["evidence"]["lockfiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["file"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        found,
+        ["backend/uv.lock", "web/pnpm-lock.yaml"],
+        "{payload}"
+    );
+
+    let scripts: Vec<&str> = payload["data"]["evidence"]["scripts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["file"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        scripts,
+        ["web/package.json"],
+        "an ignored, a vendored or a too-deep manifest reached the report: {payload}"
+    );
+
+    // The layout, which is the fact the flat lists cannot carry.
+    let packages: Vec<(&str, bool)> = payload["data"]["evidence"]["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            (
+                p["dir"].as_str().unwrap(),
+                p["independent"].as_bool().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(packages, [("backend", true), ("web", true)], "{payload}");
+
+    // And the kind that was read as a path is no longer spellable as one.
+    let human = machine.run(&repo, &["manifest", "config", "scan"]);
+    let text = String::from_utf8_lossy(&human.stdout);
+    assert!(text.contains("package scripts"), "{text}");
+    assert!(text.contains("workspaces: candidates"), "{text}");
+}
+
 /// The other side of the short-circuit: pass 1 passes, so pass 2 runs the check
 /// suite **for real** — against a scratch repository and nowhere else.
 #[test]

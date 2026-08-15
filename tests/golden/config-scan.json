@@ -13,7 +13,7 @@
         "reason": "pnpm-lock.yaml, pnpm@9"
       },
       {
-        "id": "scripts",
+        "id": "package scripts",
         "status": "OK",
         "path": "package.json",
         "reason": "14 in package.json"
@@ -142,7 +142,20 @@
           ]
         }
       ],
-      "workspace_globs": []
+      "workspace_globs": [],
+      "packages": [
+        {
+          "dir": "",
+          "manifests": [
+            "package.json"
+          ],
+          "lockfiles": [
+            "pnpm-lock.yaml"
+          ],
+          "member": false,
+          "independent": false
+        }
+      ]
     }
   }
 }

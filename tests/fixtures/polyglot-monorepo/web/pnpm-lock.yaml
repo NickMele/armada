@@ -1,0 +1,3 @@
+# pnpm writes this. Its contents are never read; its presence is the evidence,
+# and the directory it sits in is the fact the first scanner threw away.
+lockfileVersion: '9.0'

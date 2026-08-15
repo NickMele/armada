@@ -1,12 +1,12 @@
 [38;2;255;180;84mno armada.yml here[0m · [38;2;107;114;128mthis is evidence and not a config[0m
 
-  [1m[38;2;107;114;128mSTATUS[0m  [1m[38;2;107;114;128mKIND[0m       [1m[38;2;107;114;128mDETAIL[0m
-  [38;2;61;220;132mfound[0m   lockfile   [38;2;107;114;128mpnpm-lock.yaml, pnpm@9[0m
-  [38;2;61;220;132mfound[0m   scripts    [38;2;107;114;128m14 in package.json[0m
-  [38;2;61;220;132mfound[0m   compose    [38;2;107;114;128mdocker-compose.yml, 3 services[0m
-  [38;2;61;220;132mfound[0m   ci         [38;2;107;114;128m.github/workflows/ci.yml, 6 steps[0m
-  [38;2;107;114;128mabsent[0m  pyproject  [38;2;107;114;128m—[0m
-  [38;2;107;114;128mabsent[0m  makefile   [38;2;107;114;128m—[0m
+  [1m[38;2;107;114;128mSTATUS[0m  [1m[38;2;107;114;128mKIND[0m             [1m[38;2;107;114;128mDETAIL[0m
+  [38;2;61;220;132mfound[0m   lockfile         [38;2;107;114;128mpnpm-lock.yaml, pnpm@9[0m
+  [38;2;61;220;132mfound[0m   package scripts  [38;2;107;114;128m14 in package.json[0m
+  [38;2;61;220;132mfound[0m   compose          [38;2;107;114;128mdocker-compose.yml, 3 services[0m
+  [38;2;61;220;132mfound[0m   ci               [38;2;107;114;128m.github/workflows/ci.yml, 6 steps[0m
+  [38;2;107;114;128mabsent[0m  pyproject        [38;2;107;114;128m—[0m
+  [38;2;107;114;128mabsent[0m  makefile         [38;2;107;114;128m—[0m
 
   [38;2;255;169;64mpackage.json scripts[0m · [38;2;107;114;128mverbatim and not interpreted[0m
     [38;2;92;225;230mdev[0m         [38;2;107;114;128mnext dev[0m
@@ -24,7 +24,7 @@
     [38;2;92;225;230mclean[0m       [38;2;107;114;128mrm -rf .next node_modules/.cache[0m
     [38;2;92;225;230mstorybook[0m   [38;2;107;114;128mstorybook dev -p 6006[0m
 
-  [38;2;255;169;64mcompose services[0m
+  [38;2;255;169;64mdocker-compose.yml services[0m
     [38;2;92;225;230mpostgres[0m  [38;2;107;114;128m5432[0m
     [38;2;92;225;230mredis[0m     [38;2;107;114;128m6379[0m
     [38;2;92;225;230mmailhog[0m   [38;2;107;114;128m1025, 8025[0m

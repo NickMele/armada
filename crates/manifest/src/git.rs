@@ -172,6 +172,38 @@ pub fn changed_files(run: &impl Run, root: &Path, base: &str) -> Result<Vec<Stri
     Ok(files)
 }
 
+/// Every file in the checkout that git would not ignore — tracked, plus
+/// untracked-and-not-ignored.
+///
+/// **This is how `config scan` respects `.gitignore` without parsing one.** A
+/// `.gitignore` has negations, precedence, per-directory files and a global
+/// excludes file, and a hand-rolled subset of that is a scanner that reports a
+/// build output as a package on somebody's machine and not on somebody else's.
+/// `--exclude-standard` is git applying its own rules, which are the rules the
+/// repository actually meant.
+///
+/// Distinct from [`tracked_files`] on purpose: that one answers "what would
+/// `--all-files` run over", which is a question about committed source. This
+/// one answers "what is here", and a `pyproject.toml` a developer has written
+/// but not yet committed is very much here.
+pub fn visible_files(run: &impl Run, root: &Path) -> Result<Vec<String>, ArmadaError> {
+    let mut files = nul_separated(
+        run,
+        root,
+        &[
+            "git",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        ],
+    )?;
+    files.sort();
+    files.dedup();
+    Ok(files)
+}
+
 /// Every file git is tracking, which is what `--all-files` expands the globs
 /// against.
 pub fn tracked_files(run: &impl Run, root: &Path) -> Result<Vec<String>, ArmadaError> {

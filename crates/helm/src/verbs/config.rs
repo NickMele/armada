@@ -40,8 +40,8 @@ use crate::verbs::Output;
 /// (`docs/commands/manifest/config.md`): it reports rather than judges, so
 /// there is no outcome it could fail on. A file that does not parse contributes
 /// nothing and the other twelve pieces of evidence still print.
-pub fn scan(root: &Path) -> Result<Output, ArmadaError> {
-    let files = armada_manifest::scan::read(root);
+pub fn scan(run: &impl Run, root: &Path) -> Result<Output, ArmadaError> {
+    let files = armada_manifest::scan::read(run, root);
     let evidence = scan::scan(&files);
     Ok(Output::Scan(Box::new(Envelope::ok(
         "config scan",
@@ -226,7 +226,7 @@ fn look<R: Run, C: Clock, F: Fetch>(
         resolvable,
         inside,
         matched,
-        package_manager: package_manager(root),
+        package_manager: package_manager(&app.ctx.run, root),
     })
 }
 
@@ -267,8 +267,8 @@ fn is_executable(path: &Path) -> bool {
 /// says "did you mean `pnpm exec vitest run`?" because `pnpm-lock.yaml` is
 /// there and pnpm is what writes it — it does not decide that the repository
 /// runs anything.
-fn package_manager(root: &Path) -> Option<String> {
-    let evidence = scan::scan(&armada_manifest::scan::read(root));
+fn package_manager(run: &impl Run, root: &Path) -> Option<String> {
+    let evidence = scan::scan(&armada_manifest::scan::read(run, root));
     evidence
         .lockfiles
         .iter()

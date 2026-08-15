@@ -371,7 +371,7 @@ fn dispatch(
         ..
     } = &invocation
     {
-        return verbs::config::scan(cwd);
+        return verbs::config::scan(&run, cwd);
     }
 
     // Two invocations legitimately run outside any workspace: asking about

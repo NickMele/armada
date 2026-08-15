@@ -17,13 +17,47 @@
 //!
 //! **Pure, like everything else in this crate.** The caller reads the files and
 //! hands them over as [`SourceFile`]s; [`scan`] parses. Which files are worth
-//! reading is [`CANDIDATES`] plus the workflow directory, so the shell has a
-//! list rather than a heuristic and nothing here opens a directory.
+//! reading is [`CANDIDATES`], and how far down to look is [`MAX_DEPTH`] and
+//! [`SKIP_DIRS`] — stated here because they are policy, and applied by the
+//! shell because only the shell opens a directory.
+//!
+//! # Where a scan looks, and why it is not just the root
+//!
+//! **The first version read the root and nothing else, and on a monorepo that
+//! made it blind to the thing it most needed to see.** Against a real polyglot
+//! repository it reported `absent lockfile` and `absent scripts` while
+//! `web/pnpm-lock.yaml`, `backend/uv.lock` and `backend/pyproject.toml` sat one
+//! level down; the two things it did find — a compose file and a workflow —
+//! were the only two at the root. The parsing was right and the search was
+//! wrong.
+//!
+//! So it descends, and the bound is the whole design:
+//!
+//! | Bound | Why |
+//! |---|---|
+//! | `.gitignore`, via git | a build output is not a package, and git already knows which is which |
+//! | [`SKIP_DIRS`] | the same answer for a repository that is not a git checkout, and for one that commits `node_modules` |
+//! | [`MAX_DEPTH`] | a lockfile eight levels down is a vendored copy, not a package |
+//!
+//! # Location is evidence, and merging it away loses the report
+//!
+//! `backend/` holding `uv.lock` and `pyproject.toml` while `web/` holds
+//! `pnpm-lock.yaml` is the single most important fact about such a repository —
+//! it is three products in one checkout — and a flat "found: lockfile" list
+//! destroys it. So every path here is workspace-relative and complete, and
+//! [`Evidence::packages`] states the grouping outright: which directories carry
+//! a manifest of their own, and which of those resolve their own dependencies.
+//!
+//! **That last distinction is reported, never decided.** A directory with its
+//! own lockfile resolves its dependencies for itself, which is what tells a
+//! separate product from a member of a workspace — and separate products
+//! sharing one repository is exactly what `workspaces:` is for (PLAN.md §4.6).
+//! Whether to declare one is the author's call. Layer 1 says which qualify.
 
 use crate::envelope::ResultRow;
 use crate::error::Status;
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// A file the caller read, and the workspace-relative path it came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,14 +78,12 @@ impl SourceFile {
     }
 }
 
-/// The root-level files a scan reads, and nothing else.
+/// The file **names** a scan reads, wherever in the tree they turn up.
 ///
-/// **A list rather than a walk.** `armada manifest config scan` promises to
-/// depend on nothing but a readable directory
-/// (`docs/commands/manifest/config.md`), and a recursive walk of an unknown
-/// repository is a promise about `node_modules` nobody made. Workflows are the
-/// one exception and are read from `.github/workflows/` by name, because that
-/// directory *is* the evidence of what a repo actually runs.
+/// **Names rather than paths, because location is what the first version got
+/// wrong.** A `pyproject.toml` is a `pyproject.toml` whether it sits at the
+/// root or under `backend/`, and a list of root-relative paths could only ever
+/// find the first kind.
 pub const CANDIDATES: &[&str] = &[
     "armada.yml",
     "package.json",
@@ -62,6 +94,7 @@ pub const CANDIDATES: &[&str] = &[
     "bun.lock",
     "bun.lockb",
     "pyproject.toml",
+    "setup.py",
     "uv.lock",
     "poetry.lock",
     "Pipfile.lock",
@@ -70,8 +103,11 @@ pub const CANDIDATES: &[&str] = &[
     "go.mod",
     "go.sum",
     "go.work",
+    "Gemfile",
     "Gemfile.lock",
+    "composer.json",
     "composer.lock",
+    "mix.exs",
     "mix.lock",
     "Makefile",
     "makefile",
@@ -84,6 +120,69 @@ pub const CANDIDATES: &[&str] = &[
 
 /// The directory whose every `.yml`/`.yaml` file is a CI workflow.
 pub const WORKFLOW_DIR: &str = ".github/workflows";
+
+/// How many directories below the root a scan will descend.
+///
+/// **Three, and the number is an argument rather than a taste.** `web/` is one,
+/// `apps/web/` and `crates/core/` are two, and a repository that nests a
+/// package three deep is unusual but real. At four the things a scan finds stop
+/// being packages: a vendored copy, a fixture, a test resource, an example app
+/// inside a library. Under-reporting a genuinely four-deep package costs one
+/// line of evidence; over-reporting turns the report into a list of other
+/// people's lockfiles, which is the state this whole layer exists to avoid.
+pub const MAX_DEPTH: usize = 3;
+
+/// Directories a scan never descends into.
+///
+/// **The second line of defence, not the first.** Git already answers
+/// "is this ignored" exactly, including a repository's own local rules, and
+/// that is what a scan uses when it has a checkout to ask. This list is what
+/// answers the same question for a directory that is not one — and for the
+/// repository that commits its `vendor/` tree, where git would say yes and the
+/// evidence would still be somebody else's.
+pub const SKIP_DIRS: &[&str] = &[
+    ".git",
+    ".armada",
+    ".cache",
+    ".gradle",
+    ".mypy_cache",
+    ".next",
+    ".nuxt",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".svelte-kit",
+    ".terraform",
+    ".tox",
+    ".venv",
+    "_build",
+    "bower_components",
+    "build",
+    "deps",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "target",
+    "vendor",
+    "venv",
+    "__pycache__",
+];
+
+/// The manifests that make a directory a package of its own.
+///
+/// A lockfile is **not** one: a lockfile says how dependencies resolved, and a
+/// manifest says there is something here to resolve them for. The pair is what
+/// [`Package`] reports, and keeping them apart is what lets it tell a workspace
+/// member from a separate product.
+const PACKAGE_MANIFESTS: &[&str] = &[
+    "package.json",
+    "pyproject.toml",
+    "setup.py",
+    "Cargo.toml",
+    "go.mod",
+    "Gemfile",
+    "composer.json",
+    "mix.exs",
+];
 
 /// Every lockfile Armada recognises, and the package manager it implies.
 ///
@@ -142,6 +241,40 @@ pub struct Evidence {
     pub ci: Vec<CiWorkflow>,
     /// Monorepo layout: the globs a workspace manifest declares.
     pub workspace_globs: Vec<WorkspaceGlobs>,
+    /// Monorepo layout: every directory with a package manifest of its own.
+    ///
+    /// **The grouping the flat lists above cannot carry.** `backend/` holding
+    /// `uv.lock` and `pyproject.toml` while `web/` holds `pnpm-lock.yaml` is
+    /// the single most important fact about a polyglot repository, and reading
+    /// it off seven separate lists is work the author should not have to do.
+    pub packages: Vec<Package>,
+}
+
+/// A directory that is a package in its own right.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Package {
+    /// Workspace-relative directory. Empty for the root.
+    pub dir: String,
+    /// The manifests that make it one, by name — `pyproject.toml`,
+    /// `package.json`.
+    pub manifests: Vec<String>,
+    /// The lockfiles it carries, by name.
+    pub lockfiles: Vec<String>,
+    /// Whether a workspace glob declared elsewhere in the repository covers
+    /// this directory — which is what makes it a *member* rather than a
+    /// neighbour.
+    pub member: bool,
+    /// Whether this directory looks like a **separate product sharing the
+    /// repository**, which is what `workspaces:` is for (PLAN.md §4.6).
+    ///
+    /// **Reported, never decided.** The fact underneath it is that the
+    /// directory resolves its own dependencies: it has a manifest *and* a
+    /// lockfile of its own, and no workspace glob claims it. A member of a pnpm
+    /// workspace has the manifest and no lockfile, because the root resolved
+    /// for it — so the two are told apart by what is on disk rather than by a
+    /// guess. Whether to declare one is the author's call; layer 1 says which
+    /// qualify.
+    pub independent: bool,
 }
 
 /// A lockfile, and the package manager that writes it.
@@ -240,101 +373,186 @@ pub struct WorkspaceGlobs {
 /// printing.
 pub fn scan(files: &[SourceFile]) -> Evidence {
     let mut evidence = Evidence::default();
-    let find = |name: &str| files.iter().find(|f| f.path == name);
 
-    evidence.config_present = find("armada.yml").is_some();
+    // **Sorted by directory and then by name, so the root's evidence comes
+    // first and everything below it is grouped.** A directory listing has no
+    // order a golden snapshot can hold still, and a reader scanning for
+    // `backend/` wants its three files together rather than spread by
+    // alphabet across the whole report.
+    let mut files: Vec<&SourceFile> = files.iter().collect();
+    files.sort_by(|a, b| {
+        (directory(&a.path), base(&a.path)).cmp(&(directory(&b.path), base(&b.path)))
+    });
 
-    // The package manager a `package.json` pins, so `pnpm-lock.yaml` can be
-    // reported as `pnpm@9` rather than as `pnpm` plus a version nobody stated.
-    let pinned = find("package.json").and_then(|f| package_manager(&f.text));
+    evidence.config_present = files.iter().any(|f| f.path == "armada.yml");
 
-    for (name, manager) in LOCKFILES {
-        if find(name).is_none() {
-            continue;
-        }
-        let manager = match &pinned {
-            Some(pinned) if pinned.split('@').next() == Some(manager) => pinned.clone(),
-            _ => (*manager).to_string(),
-        };
-        evidence.lockfiles.push(Lockfile {
-            file: (*name).to_string(),
-            manager,
-        });
-    }
+    for file in &files {
+        let name = base(&file.path);
+        let dir = directory(&file.path);
 
-    if let Some(file) = find("package.json") {
-        let scripts = json_scripts(&file.text);
-        if !scripts.is_empty() {
-            evidence.scripts.push(ScriptSource {
+        if let Some((_, manager)) = LOCKFILES.iter().find(|(n, _)| *n == name) {
+            // **The pin is read from the `package.json` beside it**, not from
+            // the root's. In a polyglot repo the root may have no manifest at
+            // all, and `web/package.json` is the only thing that knows which
+            // pnpm `web/pnpm-lock.yaml` was written by.
+            let pinned = beside(&files, dir, "package.json").and_then(|f| package_manager(&f.text));
+            let manager = match pinned {
+                Some(pinned) if pinned.split('@').next() == Some(manager) => pinned,
+                _ => (*manager).to_string(),
+            };
+            evidence.lockfiles.push(Lockfile {
                 file: file.path.clone(),
-                scripts,
+                manager,
             });
         }
-    }
 
-    if let Some(file) = find("pyproject.toml") {
-        evidence.pyproject.push(PyProject {
-            file: file.path.clone(),
-            tools: toml_tool_sections(&file.text),
-        });
-    }
-
-    for name in ["Makefile", "makefile", "GNUmakefile"] {
-        if let Some(file) = find(name) {
-            evidence.makefiles.push(Makefile {
+        match name {
+            "package.json" => {
+                let scripts = json_scripts(&file.text);
+                if !scripts.is_empty() {
+                    evidence.scripts.push(ScriptSource {
+                        file: file.path.clone(),
+                        scripts,
+                    });
+                }
+                let globs = json_workspaces(Some(file));
+                if !globs.is_empty() {
+                    evidence.workspace_globs.push(WorkspaceGlobs {
+                        file: file.path.clone(),
+                        globs,
+                    });
+                }
+            }
+            "pyproject.toml" => evidence.pyproject.push(PyProject {
+                file: file.path.clone(),
+                tools: toml_tool_sections(&file.text),
+            }),
+            "Makefile" | "makefile" | "GNUmakefile" => evidence.makefiles.push(Makefile {
                 file: file.path.clone(),
                 targets: make_targets(&file.text),
-            });
+            }),
+            "docker-compose.yml" | "docker-compose.yaml" | "compose.yml" | "compose.yaml" => {
+                evidence.compose.push(ComposeFile {
+                    file: file.path.clone(),
+                    services: compose_services(&file.text),
+                })
+            }
+            "pnpm-workspace.yaml" => {
+                let globs = yaml_string_list(Some(file), "packages");
+                if !globs.is_empty() {
+                    evidence.workspace_globs.push(WorkspaceGlobs {
+                        file: file.path.clone(),
+                        globs,
+                    });
+                }
+            }
+            "Cargo.toml" => {
+                let globs = toml_workspace_members(Some(file));
+                if !globs.is_empty() {
+                    evidence.workspace_globs.push(WorkspaceGlobs {
+                        file: file.path.clone(),
+                        globs,
+                    });
+                }
+            }
+            _ => {}
         }
-    }
 
-    for name in [
-        "docker-compose.yml",
-        "docker-compose.yaml",
-        "compose.yml",
-        "compose.yaml",
-    ] {
-        if let Some(file) = find(name) {
-            evidence.compose.push(ComposeFile {
+        if file.path.starts_with(WORKFLOW_DIR) {
+            let (steps, runs) = workflow_steps(&file.text);
+            evidence.ci.push(CiWorkflow {
                 file: file.path.clone(),
-                services: compose_services(&file.text),
+                steps,
+                runs,
             });
         }
     }
 
-    // Workflows arrive from a directory listing, so they are sorted by path
-    // rather than taken in the order the filesystem happened to hand them over.
-    let mut workflows: Vec<&SourceFile> = files
-        .iter()
-        .filter(|f| f.path.starts_with(WORKFLOW_DIR))
-        .collect();
-    workflows.sort_by(|a, b| a.path.cmp(&b.path));
-    for file in workflows {
-        let (steps, runs) = workflow_steps(&file.text);
-        evidence.ci.push(CiWorkflow {
-            file: file.path.clone(),
-            steps,
-            runs,
-        });
-    }
-
-    for (name, globs) in [
-        (
-            "pnpm-workspace.yaml",
-            yaml_string_list(find("pnpm-workspace.yaml"), "packages"),
-        ),
-        ("package.json", json_workspaces(find("package.json"))),
-        ("Cargo.toml", toml_workspace_members(find("Cargo.toml"))),
-    ] {
-        if !globs.is_empty() {
-            evidence.workspace_globs.push(WorkspaceGlobs {
-                file: name.to_string(),
-                globs,
-            });
-        }
-    }
-
+    evidence.packages = packages(&files, &evidence.workspace_globs);
     evidence
+}
+
+/// Every directory that carries a package manifest, and what makes it one.
+fn packages(files: &[&SourceFile], globs: &[WorkspaceGlobs]) -> Vec<Package> {
+    let mut dirs: BTreeMap<&str, (Vec<String>, Vec<String>)> = BTreeMap::new();
+    for file in files {
+        let name = base(&file.path);
+        let entry = if PACKAGE_MANIFESTS.contains(&name) {
+            0
+        } else if LOCKFILES.iter().any(|(n, _)| *n == name) {
+            1
+        } else {
+            continue;
+        };
+        let slot = dirs.entry(directory(&file.path)).or_default();
+        if entry == 0 {
+            slot.0.push(name.to_string());
+        } else {
+            slot.1.push(name.to_string());
+        }
+    }
+
+    dirs.into_iter()
+        // A directory with a lockfile and no manifest is not a package — it is
+        // a lockfile somebody left there. Reported in `lockfiles`, and not
+        // dignified with a package of its own.
+        .filter(|(_, (manifests, _))| !manifests.is_empty())
+        .map(|(dir, (manifests, lockfiles))| {
+            let member = globs.iter().any(|declared| {
+                declared
+                    .globs
+                    .iter()
+                    .any(|glob| crate::glob::matches(&rooted(&declared.file, glob), dir))
+            });
+            Package {
+                dir: dir.to_string(),
+                // **A directory that locks its own dependencies is a separate
+                // product**; one whose manifest is claimed by somebody else's
+                // glob is a member of theirs. The root is neither — it is the
+                // repository.
+                independent: !dir.is_empty() && !lockfiles.is_empty() && !member,
+                manifests,
+                lockfiles,
+                member,
+            }
+        })
+        .collect()
+}
+
+/// A workspace glob, made relative to the repository rather than to the
+/// manifest that declared it.
+///
+/// `packages/*` in a root `pnpm-workspace.yaml` means `packages/*`; the same
+/// line in `web/pnpm-workspace.yaml` means `web/packages/*`.
+fn rooted(declared_in: &str, glob: &str) -> String {
+    match directory(declared_in) {
+        "" => glob.to_string(),
+        dir => format!("{dir}/{glob}"),
+    }
+}
+
+/// The directory part of a workspace-relative path; `""` for the root.
+pub fn directory(path: &str) -> &str {
+    match path.rfind('/') {
+        Some(at) => &path[..at],
+        None => "",
+    }
+}
+
+/// The file name part of a workspace-relative path.
+fn base(path: &str) -> &str {
+    match path.rfind('/') {
+        Some(at) => &path[at + 1..],
+        None => path,
+    }
+}
+
+/// A file of this name in this directory, if the scan was handed one.
+fn beside<'a>(files: &[&'a SourceFile], dir: &str, name: &str) -> Option<&'a SourceFile> {
+    files
+        .iter()
+        .copied()
+        .find(|f| directory(&f.path) == dir && base(&f.path) == name)
 }
 
 /// The kinds of evidence a scan reports, in the order a reader meets them.
@@ -346,9 +564,15 @@ pub fn scan(files: &[SourceFile]) -> Evidence {
 /// (`docs/reference-output/command-output.html`) and is not sorted by outcome:
 /// a table whose rows move when a repository gains a `Makefile` is a table
 /// nobody can diff.
+/// **`package scripts` and not `scripts`**, because the first spelling was
+/// read as a path. A repository with a `scripts/` directory that is a Python
+/// package had its `absent scripts —` row understood as a statement about that
+/// directory, when the row is about the `scripts` block of a `package.json` and
+/// nothing else. The space is deliberate: a kind with a space in it cannot be
+/// mistaken for a directory, whatever a reader is expecting to see.
 pub const KINDS: [&str; 6] = [
     "lockfile",
-    "scripts",
+    "package scripts",
     "compose",
     "ci",
     "pyproject",
@@ -373,7 +597,7 @@ pub fn findings(evidence: &Evidence) -> Vec<ResultRow> {
     }
     for source in &evidence.scripts {
         out.push(finding(
-            "scripts",
+            "package scripts",
             &source.file,
             format!("{} in {}", source.scripts.len(), source.file),
         ));
@@ -917,15 +1141,18 @@ mod tests {
                 .iter()
                 .map(|w| (w.file.as_str(), w.globs.clone()))
                 .collect::<Vec<_>>(),
+            // Sorted by directory and then by name, which is the order every
+            // list here comes back in and the only one a golden snapshot can
+            // hold still.
             [
-                (
-                    "pnpm-workspace.yaml",
-                    vec!["apps/*".to_string(), "packages/*".to_string()]
-                ),
-                ("package.json", vec!["web/*".to_string()]),
                 (
                     "Cargo.toml",
                     vec!["crates/core".to_string(), "crates/cli".to_string()]
+                ),
+                ("package.json", vec!["web/*".to_string()]),
+                (
+                    "pnpm-workspace.yaml",
+                    vec!["apps/*".to_string(), "packages/*".to_string()]
                 ),
             ]
         );
@@ -991,7 +1218,7 @@ mod tests {
             seen,
             [
                 ("lockfile", "pnpm-lock.yaml", "pnpm-lock.yaml, pnpm@9"),
-                ("scripts", "package.json", "1 in package.json"),
+                ("package scripts", "package.json", "1 in package.json"),
                 (
                     "compose",
                     "docker-compose.yml",
@@ -1017,7 +1244,165 @@ mod tests {
             r#"{"scripts":{"a":"x"}}"#,
         )])));
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].id, "scripts");
+        assert_eq!(rows[0].id, "package scripts");
+    }
+
+    // ---------------------------------------------------------- monorepos
+    // The shape the first version was blind to, and the reason it was: the
+    // scanner was built against the simple repositories that were in front of
+    // it, and every one of them kept its evidence at the root.
+
+    /// The polyglot shape, reduced to its bones: nothing at the root but a
+    /// compose file and a workflow, and three products one level down.
+    fn polyglot() -> Vec<SourceFile> {
+        files(&[
+            ("docker-compose.yml", "services:\n  db: {}\n"),
+            (
+                ".github/workflows/ci.yml",
+                "jobs:\n  b:\n    steps:\n      - run: make check\n",
+            ),
+            (
+                "web/package.json",
+                r#"{"packageManager":"pnpm@9.1.0","scripts":{"dev":"next dev"}}"#,
+            ),
+            ("web/pnpm-lock.yaml", ""),
+            (
+                "backend/pyproject.toml",
+                "[project]\n[tool.ruff]\n[tool.mypy]\n",
+            ),
+            ("backend/uv.lock", ""),
+            ("scripts/pyproject.toml", "[project]\n[tool.ruff]\n"),
+            ("scripts/uv.lock", ""),
+        ])
+    }
+
+    /// **The bug, as a test.** Every one of these was reported `absent` while
+    /// the file sat one level down.
+    #[test]
+    fn evidence_one_level_down_is_found_and_named_by_its_full_path() {
+        let evidence = scan(&polyglot());
+
+        assert_eq!(
+            evidence
+                .lockfiles
+                .iter()
+                .map(|l| (l.file.as_str(), l.manager.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("backend/uv.lock", "uv"),
+                ("scripts/uv.lock", "uv"),
+                ("web/pnpm-lock.yaml", "pnpm@9"),
+            ],
+            "a lockfile below the root was invisible"
+        );
+        assert_eq!(evidence.scripts[0].file, "web/package.json");
+        assert_eq!(
+            evidence
+                .pyproject
+                .iter()
+                .map(|p| p.file.as_str())
+                .collect::<Vec<_>>(),
+            ["backend/pyproject.toml", "scripts/pyproject.toml"]
+        );
+        // And the two the first version *did* find, which were the only two at
+        // the root — the parsing was always right.
+        assert_eq!(evidence.compose[0].file, "docker-compose.yml");
+        assert_eq!(evidence.ci[0].file, ".github/workflows/ci.yml");
+    }
+
+    /// **The pin is read from the manifest beside the lockfile.** In a polyglot
+    /// repo the root may have no `package.json` at all, so a root-only lookup
+    /// would report `pnpm` and lose the version the repository stated.
+    #[test]
+    fn a_nested_lockfile_takes_its_pin_from_the_manifest_in_its_own_directory() {
+        let evidence = scan(&files(&[
+            ("package.json", r#"{"packageManager":"pnpm@8.0.0"}"#),
+            ("web/package.json", r#"{"packageManager":"pnpm@9.1.0"}"#),
+            ("web/pnpm-lock.yaml", ""),
+        ]));
+        assert_eq!(
+            evidence.lockfiles[0].manager, "pnpm@9",
+            "the root's pin won"
+        );
+    }
+
+    /// **Three products in one checkout, stated once.** Reading that off seven
+    /// separate lists is work the author should not have to do, and it is the
+    /// fact `workspaces:` exists for (PLAN.md §4.6).
+    #[test]
+    fn a_directory_with_its_own_manifest_and_lockfile_is_an_independent_package() {
+        let evidence = scan(&polyglot());
+        assert_eq!(
+            evidence
+                .packages
+                .iter()
+                .map(|p| (p.dir.as_str(), p.independent))
+                .collect::<Vec<_>>(),
+            [("backend", true), ("scripts", true), ("web", true)]
+        );
+        let backend = &evidence.packages[0];
+        assert_eq!(backend.manifests, ["pyproject.toml"]);
+        assert_eq!(backend.lockfiles, ["uv.lock"]);
+        assert!(!backend.member);
+    }
+
+    /// **A workspace member is not an independent package**, and the fact that
+    /// tells them apart is on disk: the member's dependencies were resolved by
+    /// the root, so it has a manifest and no lockfile of its own.
+    #[test]
+    fn a_member_of_a_declared_workspace_is_not_a_candidate() {
+        let evidence = scan(&files(&[
+            ("package.json", r#"{"packageManager":"pnpm@9.0.0"}"#),
+            ("pnpm-workspace.yaml", "packages:\n  - 'apps/*'\n"),
+            ("pnpm-lock.yaml", ""),
+            ("apps/web/package.json", r#"{"scripts":{"dev":"next dev"}}"#),
+        ]));
+        let web = evidence
+            .packages
+            .iter()
+            .find(|p| p.dir == "apps/web")
+            .expect("the member is still reported as a package");
+        assert!(web.member, "a declared glob claims it");
+        assert!(!web.independent, "it does not resolve its own dependencies");
+
+        // The root is a package and never a candidate: it is the repository.
+        let root = evidence.packages.iter().find(|p| p.dir.is_empty()).unwrap();
+        assert!(!root.independent);
+    }
+
+    /// A glob is relative to the manifest that declared it, not to the
+    /// repository — so a nested workspace claims its own neighbours and not the
+    /// root's.
+    #[test]
+    fn a_nested_workspace_glob_claims_only_what_is_under_it() {
+        let evidence = scan(&files(&[
+            ("web/pnpm-workspace.yaml", "packages:\n  - 'apps/*'\n"),
+            ("web/package.json", "{}"),
+            ("web/apps/site/package.json", "{}"),
+            ("apps/other/package.json", "{}"),
+        ]));
+        let claimed = |dir: &str| {
+            evidence
+                .packages
+                .iter()
+                .find(|p| p.dir == dir)
+                .map(|p| p.member)
+        };
+        assert_eq!(claimed("web/apps/site"), Some(true));
+        assert_eq!(
+            claimed("apps/other"),
+            Some(false),
+            "`apps/*` in web/ must not reach the root's apps/"
+        );
+    }
+
+    /// A lockfile with no manifest beside it is a lockfile somebody left there,
+    /// not a package. It is still reported as evidence.
+    #[test]
+    fn a_lockfile_with_no_manifest_is_not_a_package() {
+        let evidence = scan(&files(&[("tools/uv.lock", "")]));
+        assert_eq!(evidence.lockfiles[0].file, "tools/uv.lock");
+        assert!(evidence.packages.is_empty());
     }
 
     /// The order the agreed layout draws, and it does not move when a
@@ -1028,7 +1413,7 @@ mod tests {
             KINDS,
             [
                 "lockfile",
-                "scripts",
+                "package scripts",
                 "compose",
                 "ci",
                 "pyproject",
