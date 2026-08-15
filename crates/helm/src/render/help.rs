@@ -144,6 +144,8 @@ const PAGES: [Page; 21] = [
         notes: &[
             "scan reports facts and decides nothing; an agent authors; verify checks.",
             "scan is the one verb that runs in a repo with no armada.yml.",
+            "At a terminal, scan offers to hand the evidence to an agent. Through a",
+            "pipe it prints the command instead, so nothing waits on an answer.",
         ],
     },
     Page {
