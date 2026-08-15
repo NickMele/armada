@@ -3,17 +3,20 @@ armada manifest check — lint, format and test — the verb a gate calls
 USAGE
   armada manifest check [flags] [<selector>]
   armada manifest check --files <path>…
+  armada manifest check --status [<run-id>]
 
 FLAGS
-  --dry-run           report what would run; run nothing
-  --all-files         scope from each component's match: globs, not the diff
-  --fix               run fix: instead of cmd:; skips checks with no fix:
-  --wait              queue for the run lease instead of failing fast
-  --files <path>…     run only the checks these paths belong to
-  --component <name>  every check on one component
-  --concurrency <n>   this run's CPU budget, overriding the machine's
-  --json              answer as one JSON object, for a script or an agent
-  --color <when>      auto (default), always, never; NO_COLOR wins
+  --dry-run            report what would run; run nothing
+  --all-files          scope from each component's match: globs, not the diff
+  --fix                run fix: instead of cmd:; skips checks with no fix:
+  --wait               queue for the run lease instead of failing fast
+  --detach             start the run in its own session and return
+  --status [<run-id>]  what a run decided, or is still deciding
+  --files <path>…      run only the checks these paths belong to
+  --component <name>   every check on one component
+  --concurrency <n>    this run's CPU budget, overriding the machine's
+  --json               answer as one JSON object, for a script or an agent
+  --color <when>       auto (default), always, never; NO_COLOR wins
 
 EXAMPLES
   armada manifest check
@@ -30,3 +33,5 @@ EXAMPLES
 
 A selector is <component>:<check>, a component, or a check name.
 One selector, or several paths — never both, so nothing is guessed.
+--detach prints a run id; --status with no id reads the most recent run.
+--status reads the run directory; it never asks a process how it is doing.

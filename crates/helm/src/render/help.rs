@@ -227,13 +227,10 @@ const PAGES: [Page; 36] = [
                 "run fix: instead of cmd:; skips checks with no fix:",
             ),
             ("--wait", "queue for the run lease instead of failing fast"),
-            (
-                "--detach",
-                "start the run in its own session; print its id and return",
-            ),
+            ("--detach", "start the run in its own session and return"),
             (
                 "--status [<run-id>]",
-                "what a run decided, or is still deciding; the latest by default",
+                "what a run decided, or is still deciding",
             ),
             (
                 "--files <path>…",
@@ -266,6 +263,7 @@ const PAGES: [Page; 36] = [
         notes: &[
             "A selector is <component>:<check>, a component, or a check name.",
             "One selector, or several paths — never both, so nothing is guessed.",
+            "--detach prints a run id; --status with no id reads the most recent run.",
             "--status reads the run directory; it never asks a process how it is doing.",
         ],
     },

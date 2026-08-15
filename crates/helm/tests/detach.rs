@@ -421,6 +421,33 @@ fn detach_and_status_together_are_refused() {
     }
 }
 
+/// **Neither flag answers "not built yet" any more.**
+///
+/// The inverse of the test that lived in `check.rs` for three milestones, and
+/// it is kept for the same reason that one was: these two were refused *by
+/// name* rather than as unknown flags, so a regression that put either back on
+/// the reserved list would produce a polite, plausible refusal that no other
+/// assertion here would notice.
+#[test]
+fn neither_flag_is_refused_as_unbuilt() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    machine.run(&repo, &["manifest", "init"]);
+
+    for flag in ["--detach", "--status"] {
+        let output = machine.run(&repo, &["manifest", "check", flag, "--json"]);
+        let payload = envelope(&output);
+        stop(pgid_of(&payload));
+        assert!(
+            !payload["error"]["message"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("not built"),
+            "`{flag}` is built and still says it is not: {payload}"
+        );
+    }
+}
+
 /// **A bad selector fails in the caller's terminal, not in the detached run.**
 /// `--detach` reports a run id, and a caller who gets one for a run that was
 /// never going to start would poll it to learn what a synchronous error had
