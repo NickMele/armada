@@ -34,8 +34,18 @@ pub struct WorkspaceRow {
     pub path: PathBuf,
     /// The grouping key, or `None` when it was underivable.
     pub project: Option<ProjectId>,
-    /// The reserved span.
-    pub ports: PortBlock,
+    /// The reserved span, or `None` for a workspace that needs none.
+    ///
+    /// **A block exists so parallel worktrees do not collide on a service's
+    /// port** (PLAN.md §2.2), so a workspace whose components declare no
+    /// `ports:` gets none — there is nothing to collide over, and ten ports of a
+    /// finite pool are left for a workspace that does need them
+    /// ([`crate::ports::needs_block`]).
+    ///
+    /// It is registered all the same. The row is what makes the workspace
+    /// reclaimable after its directory is gone, and that is true whether or not
+    /// it ever held a port.
+    pub ports: Option<PortBlock>,
     /// Wall clock, and only ever displayed.
     pub claimed_at: String,
 }

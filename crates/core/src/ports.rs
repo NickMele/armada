@@ -91,6 +91,37 @@ pub fn choose_block(taken: &[PortBlock], size: u16) -> Option<PortBlock> {
     }
 }
 
+/// Every port name this workspace declares, sorted and deduplicated.
+///
+/// **Two components may name the same port** — a service and the check that
+/// talks to it — so the set is deduplicated rather than counted; whether that is
+/// a mistake is `config verify`'s question.
+pub fn declared(config: &ResolvedConfig) -> Vec<&String> {
+    let mut names: Vec<&String> = config
+        .components
+        .values()
+        .filter_map(|component| component.run.as_ref())
+        .flat_map(|run| run.common().ports.keys())
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Whether this workspace needs a port block at all.
+///
+/// **A block exists so that parallel worktrees do not collide on a service's
+/// port** (PLAN.md §2.2). A workspace that declares no `ports:` has no service
+/// to collide over, so a block reserved for it reserves nothing — it is a range
+/// printed at the top of `init` that means nothing, and ten ports of a finite
+/// pool that a workspace which does need them cannot have.
+///
+/// This is the whole rule, and it is a function so that `init` and `config
+/// verify` cannot disagree about what "needs ports" means.
+pub fn needs_block(config: &ResolvedConfig) -> bool {
+    !declared(config).is_empty()
+}
+
 /// Assign every declared port name a port inside the block.
 ///
 /// **Port names are a workspace-global namespace, not a per-component one.**
@@ -108,14 +139,7 @@ pub fn assign_ports(
     block: PortBlock,
     file: &str,
 ) -> Result<BTreeMap<String, u16>, ArmadaError> {
-    let mut names: Vec<&String> = config
-        .components
-        .values()
-        .filter_map(|component| component.run.as_ref())
-        .flat_map(|run| run.common().ports.keys())
-        .collect();
-    names.sort();
-    names.dedup();
+    let names = declared(config);
 
     if names.len() > block.size() as usize {
         return Err(ArmadaError {
@@ -290,6 +314,41 @@ manifest:
         .unwrap();
         assert_eq!(assigned["api"], 5460);
         assert_eq!(assigned["pg"], 5461);
+    }
+
+    /// **A block exists so parallel worktrees do not collide on a service's
+    /// port.** A workspace with no `ports:` has nothing to collide over, so a
+    /// block reserved for it reserves nothing — and takes ten ports of a finite
+    /// pool from a workspace that does need them.
+    #[test]
+    fn a_workspace_that_declares_no_ports_needs_no_block() {
+        for yaml in [
+            // Nothing runs at all: a repository of checks.
+            "manifest:\n  version: 1\n  components:\n    api:\n      checks:\n        lint: { cmd: \"ruff\" }\n",
+            // Something runs and publishes nothing.
+            "manifest:\n  version: 1\n  components:\n    api:\n      run: { driver: command, cmd: \"./api\" }\n",
+        ] {
+            let config = config_with_ports(yaml);
+            assert!(declared(&config).is_empty(), "{yaml}");
+            assert!(!needs_block(&config), "{yaml}");
+        }
+    }
+
+    #[test]
+    fn one_declared_port_anywhere_is_enough_to_need_a_block() {
+        let config = config_with_ports(
+            r#"
+manifest:
+  version: 1
+  components:
+    api:
+      run: { driver: command, cmd: "./api" }
+    db:
+      run: { driver: command, cmd: "./db", ports: { pg: 5432 } }
+"#,
+        );
+        assert_eq!(declared(&config), [&"pg".to_string()]);
+        assert!(needs_block(&config));
     }
 
     #[test]

@@ -144,18 +144,17 @@ fn assigned_ports<R: Run, C: Clock, F: Fetch>(
     workspace: &Workspace,
     config: &ResolvedConfig,
 ) -> Result<BTreeMap<String, u16>, ArmadaError> {
-    let declares_ports = config
-        .components
-        .values()
-        .filter_map(|component| component.run.as_ref())
-        .any(|run| !run.common().ports.is_empty());
+    // The same predicate `init` decides with, so the two cannot disagree about
+    // what "needs ports" means — which is what would otherwise produce a check
+    // demanding a block that `init` deliberately did not claim.
+    let declares_ports = armada_core::ports::needs_block(config);
 
     let block = app
         .db
         .workspaces()?
         .into_iter()
         .find(|row| row.id == workspace.id)
-        .map(|row| row.ports);
+        .and_then(|row| row.ports);
 
     match (block, declares_ports) {
         (Some(block), _) => {

@@ -78,10 +78,10 @@ mod tests {
             id: WorkspaceId::from_stored(id),
             path: PathBuf::from(format!("/srv/{id}")),
             project: project.map(ProjectId::from_stored),
-            ports: PortBlock {
+            ports: Some(PortBlock {
                 from: 5460,
                 to: 5469,
-            },
+            }),
             claimed_at: "2026-08-09T14:02:11Z".to_string(),
         }
     }

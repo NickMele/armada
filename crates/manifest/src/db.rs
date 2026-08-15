@@ -62,11 +62,13 @@ pub struct Db {
 /// What claiming a port block did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClaimOutcome {
-    /// A new block was reserved.
-    Claimed(PortBlock),
-    /// This workspace already held one. **Claims are idempotent by workspace
-    /// id** — `armada manifest init` twice is one block, not two.
-    AlreadyHeld(PortBlock),
+    /// The workspace is registered. `None` when it needs no block — a
+    /// registration rather than a claim, which is still what makes the
+    /// workspace reclaimable after its directory is gone.
+    Claimed(Option<PortBlock>),
+    /// This workspace was already registered. **Claims are idempotent by
+    /// workspace id** — `armada manifest init` twice is one block, not two.
+    AlreadyHeld(Option<PortBlock>),
     /// Another workspace took the block Armada chose between the read and the
     /// write. The caller re-decides; that is what the claim loop's `Attempt`
     /// action means.
@@ -307,7 +309,7 @@ impl Db {
             .unwrap_or(false)
     }
 
-    /// Every claimed workspace.
+    /// Every registered workspace.
     pub fn workspaces(&self) -> Result<Vec<WorkspaceRow>, ArmadaError> {
         let mut statement = self
             .conn
@@ -319,10 +321,7 @@ impl Db {
                     id: WorkspaceId::from_stored(row.get::<_, String>(0)?),
                     path: PathBuf::from(row.get::<_, String>(1)?),
                     project: row.get::<_, Option<String>>(2)?.map(ProjectId::from_stored),
-                    ports: PortBlock {
-                        from: row.get::<_, i64>(3)? as u16,
-                        to: row.get::<_, i64>(4)? as u16,
-                    },
+                    ports: block_of(row.get::<_, i64>(3)?, row.get::<_, i64>(4)?),
                     claimed_at: row.get(5)?,
                 })
             })
@@ -331,17 +330,22 @@ impl Db {
             .map_err(|e| map_sqlite(&self.path, e))
     }
 
-    /// Claim a port block for this workspace, idempotently.
+    /// Register this workspace, claiming a port block if it needs one.
     ///
     /// The choice and the write happen inside **one** `BEGIN IMMEDIATE`, which
     /// is what makes "two directories claim non-overlapping blocks
     /// concurrently" true rather than usually true.
+    ///
+    /// **`size: None` registers without claiming**, for a workspace whose
+    /// components declare no `ports:` ([`armada_core::ports::needs_block`]).
+    /// The row is still written: it is what makes the workspace reclaimable
+    /// after its directory is gone, and that has nothing to do with ports.
     pub fn claim_block(
         &mut self,
         workspace: &WorkspaceId,
         path: &Path,
         project: Option<&ProjectId>,
-        size: u16,
+        size: Option<u16>,
         claimed_at: &str,
     ) -> Result<ClaimOutcome, ArmadaError> {
         let tx = self
@@ -372,33 +376,39 @@ impl Db {
             )
             .map_err(|e| map_sqlite(&self.path, e))?;
             tx.commit().map_err(|e| map_sqlite(&self.path, e))?;
-            return Ok(ClaimOutcome::AlreadyHeld(PortBlock {
-                from: from as u16,
-                to: to as u16,
-            }));
+            return Ok(ClaimOutcome::AlreadyHeld(block_of(from, to)));
         }
 
-        let taken: Vec<PortBlock> = {
-            let mut statement = tx
-                .prepare("SELECT port_from, port_to FROM workspaces")
-                .map_err(|e| map_sqlite(&self.path, e))?;
-            let rows = statement
-                .query_map([], |row| {
-                    Ok(PortBlock {
-                        from: row.get::<_, i64>(0)? as u16,
-                        to: row.get::<_, i64>(1)? as u16,
-                    })
-                })
-                .map_err(|e| map_sqlite(&self.path, e))?;
-            rows.collect::<Result<_, _>>()
-                .map_err(|e| map_sqlite(&self.path, e))?
+        let block = match size {
+            None => None,
+            Some(size) => {
+                let taken: Vec<PortBlock> = {
+                    let mut statement = tx
+                        .prepare("SELECT port_from, port_to FROM workspaces")
+                        .map_err(|e| map_sqlite(&self.path, e))?;
+                    let rows = statement
+                        .query_map([], |row| {
+                            Ok(block_of(row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                        })
+                        .map_err(|e| map_sqlite(&self.path, e))?;
+                    // A workspace holding no block reserves nothing, so it is
+                    // not something a chooser has to route around.
+                    rows.collect::<Result<Vec<_>, _>>()
+                        .map_err(|e| map_sqlite(&self.path, e))?
+                        .into_iter()
+                        .flatten()
+                        .collect()
+                };
+
+                let Some(block) = choose_block(&taken, size) else {
+                    tx.rollback().map_err(|e| map_sqlite(&self.path, e))?;
+                    return Ok(ClaimOutcome::Exhausted);
+                };
+                Some(block)
+            }
         };
 
-        let Some(block) = choose_block(&taken, size) else {
-            tx.rollback().map_err(|e| map_sqlite(&self.path, e))?;
-            return Ok(ClaimOutcome::Exhausted);
-        };
-
+        let (from, to) = stored(block);
         let inserted = tx.execute(
             "INSERT OR IGNORE INTO workspaces (id, path, project, port_from, port_to, claimed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -406,8 +416,8 @@ impl Db {
                 workspace.as_str(),
                 path.display().to_string(),
                 project.map(|p| p.as_str().to_string()),
-                block.from as i64,
-                block.to as i64,
+                from,
+                to,
                 claimed_at,
             ),
         );
@@ -955,6 +965,36 @@ fn parse_kind(text: &str) -> LeaseKind {
 /// measured, a full disk looks healthy from the lease's point of view: a claim
 /// fails with `SQLITE_FULL` while a *smaller* subsequent write still succeeds,
 /// so heartbeats keep renewing and nothing gets reclaimed.
+/// How "this workspace holds no block" is stored.
+///
+/// **A sentinel rather than a nullable column, and the reason is the schema
+/// rule**: changes are additive for the whole 0.x line — a new column, never a
+/// dropped or retyped one — because an older binary reading a `NULL` out of an
+/// `INTEGER NOT NULL` column would fail at the `row.get` rather than at the
+/// version check. `0` is not a port any workspace can be given: the pool starts
+/// at [`armada_core::ports::PORT_BASE`], which is 5460.
+///
+/// **It is translated in exactly these two functions and nowhere else.** Every
+/// caller above the store sees `Option<PortBlock>`, so nothing outside this file
+/// compares a port to zero.
+const NO_BLOCK: i64 = 0;
+
+/// A stored pair as the rest of Armada sees it.
+fn block_of(from: i64, to: i64) -> Option<PortBlock> {
+    (from != NO_BLOCK).then_some(PortBlock {
+        from: from as u16,
+        to: to as u16,
+    })
+}
+
+/// A block as the store holds it.
+fn stored(block: Option<PortBlock>) -> (i64, i64) {
+    match block {
+        Some(block) => (block.from as i64, block.to as i64),
+        None => (NO_BLOCK, NO_BLOCK),
+    }
+}
+
 fn map_sqlite(path: &Path, error: rusqlite::Error) -> ArmadaError {
     let extended = match &error {
         rusqlite::Error::SqliteFailure(inner, _) => inner.extended_code,
@@ -1120,14 +1160,15 @@ mod tests {
     fn two_workspaces_get_non_overlapping_blocks() {
         let (_home, mut db) = open();
         let a = db
-            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, 10, "t")
+            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, Some(10), "t")
             .unwrap();
         let b = db
-            .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, 10, "t")
+            .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, Some(10), "t")
             .unwrap();
         let (ClaimOutcome::Claimed(a), ClaimOutcome::Claimed(b)) = (a, b) else {
             panic!("both claims should have succeeded");
         };
+        let (a, b) = (a.expect("a block"), b.expect("a block"));
         assert!(!a.overlaps(&b), "{a:?} overlaps {b:?}");
     }
 
@@ -1135,10 +1176,10 @@ mod tests {
     fn claiming_twice_is_idempotent_by_workspace_id() {
         let (_home, mut db) = open();
         let first = db
-            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, 10, "t")
+            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, Some(10), "t")
             .unwrap();
         let second = db
-            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, 10, "t")
+            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, Some(10), "t")
             .unwrap();
         match (first, second) {
             (ClaimOutcome::Claimed(a), ClaimOutcome::AlreadyHeld(b)) => assert_eq!(a, b),
@@ -1151,14 +1192,14 @@ mod tests {
     fn a_released_block_is_reused_by_the_next_claimant() {
         let (_home, mut db) = open();
         let ClaimOutcome::Claimed(first) = db
-            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, 10, "t")
+            .claim_block(&ws("aaaaaaaa"), Path::new("/a"), None, Some(10), "t")
             .unwrap()
         else {
             panic!()
         };
         db.release_workspace(&ws("aaaaaaaa"), &[]).unwrap();
         let ClaimOutcome::Claimed(second) = db
-            .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, 10, "t")
+            .claim_block(&ws("bbbbbbbb"), Path::new("/b"), None, Some(10), "t")
             .unwrap()
         else {
             panic!()

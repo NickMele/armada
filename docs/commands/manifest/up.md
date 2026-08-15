@@ -65,7 +65,7 @@ and its selector is honoured exactly.
 
 | On | Why |
 |---|---|
-| [`init.md`](init.md) | The port block must be claimed first. `up` will not claim one. |
+| [`init.md`](init.md) | The workspace must be registered first, and its block claimed if it needs one. `up` will not claim one. A workspace that declares no `ports:` has no block and starts perfectly well — *not registered at all* is the refusal, not *registered without a block*. |
 | A container runtime | For compose-backed components. |
 | `armada.yml` | The `components:` block. |
 

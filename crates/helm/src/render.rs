@@ -60,7 +60,7 @@ use armada_core::envelope::{
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
 use armada_core::id::WorkspaceId;
-use armada_core::ports::PortState;
+use armada_core::ports::{PortBlock, PortState};
 use armada_core::reap::ReapPlan;
 use armada_core::scan::{Handover, TellWhy};
 
@@ -1353,6 +1353,26 @@ fn ids(items: &[String], keep: usize) -> String {
 
 // ------------------------------------------------------------------------ init
 
+/// The block, pinned to the far edge of a header — or a statement that there is
+/// none.
+///
+/// **A workspace that needs no block says so rather than showing nothing.** The
+/// absence is the interesting part: a reader who ran `init` in a repository that
+/// declares no `ports:` is being told why there is no range to see, which is the
+/// question a blank corner would leave them holding. It is also how the change
+/// is visible at all — the old output printed `ports 5460–5469` for a workspace
+/// that reserved nothing.
+fn ports_pinned(style: Style, block: Option<PortBlock>) -> Option<String> {
+    Some(match block {
+        Some(block) => format!(
+            "{} {}",
+            style.paint(Role::SteelGrey, "ports"),
+            style.paint(Role::NavalBlue, &style.span(block.from, block.to))
+        ),
+        None => style.paint(Role::SteelGrey, "no ports declared"),
+    })
+}
+
 /// `armada manifest init`.
 ///
 /// Two tables, because the envelope holds two grains: the components it ran
@@ -1360,16 +1380,11 @@ fn ids(items: &[String], keep: usize) -> String {
 /// TIME`; neither invents a row the envelope does not have.
 fn init(envelope: &Envelope<InitData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let block = style.span(data.port_block.from, data.port_block.to);
     let mut out = header(
         style,
         envelope.workspace.as_ref(),
         None,
-        Some(format!(
-            "{} {}",
-            style.paint(Role::SteelGrey, "ports"),
-            style.paint(Role::NavalBlue, &block)
-        )),
+        ports_pinned(style, data.port_block),
         width,
     );
 
@@ -1469,16 +1484,11 @@ fn init_dry(envelope: &Envelope<InitDryRun>, style: Style, width: usize) -> Stri
 ///    has to run `status` to find out.
 fn services(envelope: &Envelope<ServicesData>, style: Style, width: usize, noun: &str) -> String {
     let data = &envelope.data;
-    let block = style.span(data.port_block.from, data.port_block.to);
     let mut out = header(
         style,
         envelope.workspace.as_ref(),
         None,
-        Some(format!(
-            "{} {}",
-            style.paint(Role::SteelGrey, "ports"),
-            style.paint(Role::NavalBlue, &block)
-        )),
+        ports_pinned(style, data.port_block),
         width,
     );
 
@@ -1531,15 +1541,19 @@ fn services(envelope: &Envelope<ServicesData>, style: Style, width: usize, noun:
     // **Stated, not implied.** `down` keeps the block so the next `up` gets the
     // same ports, which keeps URLs, bookmarks and `.env` files valid across a
     // restart — and a reader who cannot see that has to go and check.
-    let kept = Table::new(columns("resource", "detail", false))
-        .indent(2)
-        .row(vec![
-            token("kept", Role::BeaconGreen),
-            Cell::plain("ports"),
-            Cell::painted(block, Role::NavalBlue),
-        ]);
-    out.push_str(&kept.render(style, width));
-    out.push('\n');
+    // A workspace holding no block has nothing to keep, and drawing a `kept`
+    // row for it would claim it kept something.
+    if let Some(block) = data.port_block {
+        let kept = Table::new(columns("resource", "detail", false))
+            .indent(2)
+            .row(vec![
+                token("kept", Role::BeaconGreen),
+                Cell::plain("ports"),
+                Cell::painted(style.span(block.from, block.to), Role::NavalBlue),
+            ]);
+        out.push_str(&kept.render(style, width));
+        out.push('\n');
+    }
 
     // **Counted against the row's success state, not the envelope's.** A
     // `PARTIAL` run reading "1 partial" would be counting the wrong thing: the

@@ -184,7 +184,7 @@ fn init_matches_its_fixture() {
         Some(workspace()),
         Status::Ready,
         InitData {
-            port_block: block(),
+            port_block: Some(block()),
             claimed_at: "2026-08-09T14:02:11Z".to_string(),
             ports: BTreeMap::from([("api".to_string(), 5460), ("web".to_string(), 5461)]),
             reaped: ReapPlan::default(),
@@ -245,7 +245,7 @@ fn up_matches_its_fixture() {
             next_action: Some("raise `ready.timeout:`, or read the service's log".to_string()),
         },
         ServicesData {
-            port_block: block(),
+            port_block: Some(block()),
             results: vec![postgres, web],
         },
     );
@@ -277,7 +277,7 @@ fn down_matches_its_fixture() {
         Some(workspace()),
         Status::Down,
         ServicesData {
-            port_block: block(),
+            port_block: Some(block()),
             results: vec![web, postgres],
         },
     )));

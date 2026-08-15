@@ -159,11 +159,14 @@ fn concurrent_claimants_never_receive_overlapping_blocks() {
             // read and the write, so the answer has changed.
             for _ in 0..64 {
                 match db
-                    .claim_block(&id, Path::new(&format!("/w/{index}")), None, 10, "t")
+                    .claim_block(&id, Path::new(&format!("/w/{index}")), None, Some(10), "t")
                     .unwrap()
                 {
                     ClaimOutcome::Claimed(block) | ClaimOutcome::AlreadyHeld(block) => {
-                        return block
+                        // Every claimant asked for a block, so every one of them
+                        // must have got one: a `None` here would mean the store
+                        // registered a workspace that wanted ports without them.
+                        return block.expect("a claimant that asked for a block got one");
                     }
                     ClaimOutcome::Lost => continue,
                     ClaimOutcome::Exhausted => panic!("the machine cannot be out of ports"),

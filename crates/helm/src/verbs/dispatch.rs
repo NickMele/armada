@@ -60,7 +60,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
         .workspaces()?
         .into_iter()
         .find(|row| row.id == workspace.id)
-        .map(|row| row.ports);
+        .and_then(|row| row.ports);
     let ports = match block {
         Some(block) => armada_core::ports::assign_ports(&config, block, &workspace.config_label)?,
         // No block means `armada manifest init` has not run here. `${port.NAME}` then has

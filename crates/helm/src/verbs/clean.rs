@@ -388,8 +388,13 @@ fn released_from_selectors<R: Run, C: Clock, F: Fetch>(
     refused: &mut Vec<String>,
     skipped: &mut Vec<String>,
 ) -> Result<(), ArmadaError> {
-    let ports =
-        armada_core::ports::assign_ports(config, row.ports, "armada.yml").unwrap_or_default();
+    // **A workspace with no block has no ports to substitute**, which is a
+    // legitimate state rather than a failure: nothing it declares references
+    // one (`armada_core::ports::needs_block`).
+    let ports = row
+        .ports
+        .and_then(|block| armada_core::ports::assign_ports(config, block, "armada.yml").ok())
+        .unwrap_or_default();
 
     // Resolved up front, so the docker calls below can take the whole `App`:
     // they renew the heartbeat, and a template borrowing the inherited
@@ -471,8 +476,10 @@ fn remove_artifacts<R: Run, C: Clock, F: Fetch>(
     let Some(config) = load_foreign_config(&row.path, &app.machine) else {
         return Ok(0);
     };
-    let ports =
-        armada_core::ports::assign_ports(&config, row.ports, "armada.yml").unwrap_or_default();
+    let ports = row
+        .ports
+        .and_then(|block| armada_core::ports::assign_ports(&config, block, "armada.yml").ok())
+        .unwrap_or_default();
     let vars = Vars::new(row.id.as_str(), &ports, &app.inherited);
     let at = ConfigWhere::Path {
         file: "armada.yml".to_string(),
@@ -555,7 +562,12 @@ fn dry<R: Run, C: Clock, F: Fetch>(
     let mut preview = CleanDryRun {
         would_release: selected
             .iter()
-            .map(|row| format!("ports {}-{} ({})", row.ports.from, row.ports.to, row.id))
+            .map(|row| match row.ports {
+                Some(block) => format!("ports {}-{} ({})", block.from, block.to, row.id),
+                // Named all the same: `clean` releases the *registration*, and
+                // a workspace that held no ports is still one it forgets.
+                None => format!("registration ({})", row.id),
+            })
             .collect(),
         would_remove: plan
             .resources
@@ -600,8 +612,10 @@ fn would_delete<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>, row: &WorkspaceR
     let Some(config) = load_foreign_config(&row.path, &app.machine) else {
         return Vec::new();
     };
-    let ports: BTreeMap<String, u16> =
-        armada_core::ports::assign_ports(&config, row.ports, "armada.yml").unwrap_or_default();
+    let ports: BTreeMap<String, u16> = row
+        .ports
+        .and_then(|block| armada_core::ports::assign_ports(&config, block, "armada.yml").ok())
+        .unwrap_or_default();
     let vars = Vars::new(row.id.as_str(), &ports, &app.inherited);
     let at = ConfigWhere::Path {
         file: "armada.yml".to_string(),

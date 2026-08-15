@@ -56,7 +56,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
         let mut result = ResultRow::new(row.id.to_string(), Status::Ok);
         result.path = Some(row.path.display().to_string());
         result.project = row.project.clone();
-        result.port_block = Some(row.ports);
+        result.port_block = row.ports;
 
         // A live lease is the only thing that distinguishes "running" from
         // "claimed and idle", and a cold one is a holder that died — which is
@@ -101,9 +101,10 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
 
         if exists {
             if let Some(config) = load_foreign_config(&row.path, &app.machine) {
-                if let Ok(ports) =
-                    armada_core::ports::assign_ports(&config, row.ports, "armada.yml")
-                {
+                if let Ok(ports) = row.ports.map_or_else(
+                    || Ok(std::collections::BTreeMap::new()),
+                    |block| armada_core::ports::assign_ports(&config, block, "armada.yml"),
+                ) {
                     result.ports = ports
                         .into_iter()
                         .map(|(name, port)| {

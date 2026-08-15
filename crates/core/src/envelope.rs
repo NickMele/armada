@@ -389,8 +389,19 @@ pub struct Released {
 /// `armada manifest init`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct InitData {
-    /// The span reserved for this workspace, and when.
-    pub port_block: PortBlock,
+    /// The span reserved for this workspace, or `null` for one that needs none.
+    ///
+    /// **A block exists so parallel worktrees do not collide on a service's
+    /// port** (PLAN.md §2.2). A workspace whose components declare no `ports:`
+    /// has nothing to collide over, so none is claimed and none is printed —
+    /// a range that reserved nothing was ten ports of a finite pool taken from
+    /// a workspace that did need them.
+    ///
+    /// **Emitted as `null` rather than omitted**, which is the rule the
+    /// envelope's own `workspace` already follows: a consumer reading this key
+    /// unconditionally finds it, and finds out that there is no block, instead
+    /// of finding nothing at all.
+    pub port_block: Option<PortBlock>,
     /// When the block was claimed. Wall clock, and only ever displayed.
     pub claimed_at: String,
     /// Port name → assigned port, workspace-global.
@@ -418,8 +429,9 @@ pub struct InitData {
 /// valid across a restart.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ServicesData {
-    /// The span reserved for this workspace. Held across `down`.
-    pub port_block: PortBlock,
+    /// The span reserved for this workspace, held across `down` — or `null` for
+    /// a workspace that needs none. See [`InitData::port_block`].
+    pub port_block: Option<PortBlock>,
     /// One row per selected component, in the order it was acted on —
     /// dependency order for `up`, the reverse for `down`.
     pub results: Vec<ResultRow>,

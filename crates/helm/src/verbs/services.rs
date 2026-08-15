@@ -91,7 +91,12 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     // would make the two verbs interchangeable in a way that hides a missing
     // `init` until something else fails for a reason two steps away.
     let block = held_block(app, &workspace, verb)?;
-    let assigned = ports::assign_ports(&config, block, &workspace.config_label)?;
+    // No block means nothing to assign, which is the ordinary state of a
+    // workspace whose services publish nothing.
+    let assigned = match block {
+        Some(block) => ports::assign_ports(&config, block, &workspace.config_label)?,
+        None => BTreeMap::new(),
+    };
 
     let selected = service::select(&config, selector, verb)?;
     let order = match direction {
@@ -125,12 +130,18 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     })
 }
 
-/// This workspace's claimed block, or the refusal that names the missing verb.
+/// This workspace's block, or the refusal that names the missing verb.
+///
+/// **Registered-with-no-block and not-registered-at-all are different answers**,
+/// and only the second is a refusal. A workspace whose components declare no
+/// `ports:` is initialised, has services that publish nothing, and starts
+/// perfectly well; refusing it would make `armada manifest up` unusable for
+/// every repository that runs something without exposing a port.
 fn held_block<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
     verb: &str,
-) -> Result<PortBlock, ArmadaError> {
+) -> Result<Option<PortBlock>, ArmadaError> {
     app.db
         .workspaces()?
         .into_iter()
@@ -139,7 +150,7 @@ fn held_block<R: Run, C: Clock, F: Fetch>(
         .ok_or_else(|| ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: verb.to_string(),
-            message: "this workspace has claimed no port block".to_string(),
+            message: "this workspace is not initialised".to_string(),
             next_action: Some("`armada manifest init` claims one; `up` will not".to_string()),
         })
 }
@@ -153,7 +164,7 @@ fn drive<R: Run, C: Clock, F: Fetch>(
     direction: Direction,
     order: Vec<String>,
     assigned: &BTreeMap<String, u16>,
-    block: PortBlock,
+    block: Option<PortBlock>,
     lease: &LeaseId,
 ) -> Result<Envelope<ServicesData>, ArmadaError> {
     let mut state = State::new(direction, order, needs_map(config), &ready_timeouts(config));

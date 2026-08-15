@@ -30,9 +30,18 @@ Takes no selector: init is whole-workspace by definition.
 2. **Reaps first.** Before claiming anything, releases resources whose owning workspace no
    longer exists ([`PLAN.md`](../../PLAN.md) §2.3.1). This is why a machine does not accumulate
    orphans: cleanup happens on the way in, not only on the way out.
-3. **Claims a port block** — a contiguous range recorded against this workspace in
-   `~/.armada/manifest.db`. Parallel workspaces cannot collide because the claim is
-   machine-global, not per-directory.
+3. **Registers the workspace, and claims a port block if it needs one** — a contiguous range
+   recorded against this workspace in `~/.armada/manifest.db`. Parallel workspaces cannot
+   collide because the claim is machine-global, not per-directory.
+
+   **A workspace whose components declare no `ports:` gets no block.** The range exists so
+   parallel worktrees do not collide on a *service's* port ([`PLAN.md`](../../PLAN.md) §2.2);
+   a repository with no service has nothing to collide over, so a block reserved for it
+   reserves nothing — and takes ten ports of a finite pool from a workspace that does need
+   them. `port_block` is then `null` and the header says `no ports declared`.
+
+   The registration happens either way. That row is what makes the workspace reclaimable once
+   its directory is gone, which has nothing to do with ports.
 4. **Runs `setup:`** for each component, in dependency order. `setup:` must be idempotent —
    `init` is expected to be re-run and re-running it must be free ([`PLAN.md`](../../PLAN.md) §4.1).
 5. **Writes `.armada/`** into the workspace: resolved config and the port assignments. It holds

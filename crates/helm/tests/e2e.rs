@@ -402,6 +402,72 @@ manifest:
       help: Echo whatever it is given
 ";
 
+/// **A workspace that declares no `ports:` gets no block, and says so.**
+///
+/// A block exists so parallel worktrees do not collide on a service's port
+/// (PLAN.md §2.2). A repository with no service has nothing to collide over, so
+/// a range reserved for it reserved nothing — and took ten ports of a finite
+/// pool from a workspace that did need them. Found in real use: `armada.yml`
+/// declared no ports anywhere and `init` still printed `ports 5460–5469`.
+///
+/// The registration is separate from the claim and still happens: that row is
+/// what makes the workspace reclaimable once its directory is gone.
+#[test]
+fn a_workspace_with_no_declared_ports_claims_no_block() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", PORTLESS_CONFIG);
+
+    let inited: Value =
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "init", "--json"]).stdout)
+            .unwrap();
+    assert_eq!(inited["status"], "READY", "{inited}");
+    // **`null`, not absent.** A consumer reading this key unconditionally finds
+    // out that there is no block rather than finding nothing at all — the rule
+    // the envelope's own `workspace` already follows.
+    assert_eq!(inited["data"]["port_block"], Value::Null, "{inited}");
+    assert!(inited["data"]["ports"].is_null(), "{inited}");
+
+    // The human render says why the corner is empty rather than leaving a blank.
+    let drawn =
+        String::from_utf8_lossy(&machine.run(&repo, &["manifest", "init"]).stdout).to_string();
+    assert!(drawn.contains("no ports declared"), "{drawn}");
+
+    // Registered all the same, and `status` reports it without a range.
+    let status: Value =
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "status", "--json"]).stdout)
+            .unwrap();
+    let rows = status["data"]["results"].as_array().expect("one row");
+    assert_eq!(rows.len(), 1, "{status}");
+    assert!(
+        rows[0].get("port_block").is_none(),
+        "a row with no block must not carry one: {status}"
+    );
+
+    // And it is reclaimable, which is the half that has nothing to do with
+    // ports.
+    let cleaned: Value =
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "clean", "--json"]).stdout)
+            .unwrap();
+    assert_eq!(cleaned["status"], "CLEAN", "{cleaned}");
+}
+
+/// The other half of the rule: **one declared port anywhere is enough.** Without
+/// this, "claims no block" could be true because claiming broke.
+#[test]
+fn a_workspace_that_declares_one_port_still_gets_its_block() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+
+    let inited: Value =
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "init", "--json"]).stdout)
+            .unwrap();
+    assert!(
+        inited["data"]["port_block"]["from"].is_u64(),
+        "a workspace with a service lost its block: {inited}"
+    );
+    assert!(inited["data"]["ports"]["web"].is_u64(), "{inited}");
+}
+
 /// `init --dry-run` decides everything and changes nothing: no block is
 /// claimed, no `.armada/` appears, and the workspace is still unknown to the
 /// store afterwards.
@@ -692,6 +758,17 @@ manifest:
         driver: command
         cmd: ./serve
         ports: { web: 3000 }
+";
+
+/// A repository that runs something and publishes nothing — the shape that
+/// exposed the bug. Checks, a command, no `ports:` anywhere.
+const PORTLESS_CONFIG: &str = "\
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        lint: { cmd: true }
 ";
 
 const DISPATCH_CONFIG: &str = "\

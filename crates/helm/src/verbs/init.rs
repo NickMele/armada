@@ -63,8 +63,18 @@ fn claim_and_prepare<R: Run, C: Clock, F: Fetch>(
     let reaped = app.reap()?;
 
     let claimed_at = app.ctx.now.wall_rfc3339();
-    let block = claim(app, workspace, &claimed_at)?;
-    let ports = ports::assign_ports(config, block, &workspace.config_label)?;
+    // **A block only for a workspace that has something to collide over.** The
+    // span exists so parallel worktrees do not fight over a service's port
+    // (PLAN.md §2.2); a repository that declares no `ports:` has no service, so
+    // a block reserved for it reserves nothing — and takes ten ports of a finite
+    // pool from a workspace that does need them. The workspace is registered
+    // either way: that row is what makes it reclaimable once its directory is
+    // gone, which has nothing to do with ports.
+    let block = claim(app, workspace, config, &claimed_at)?;
+    let ports = match block {
+        Some(block) => ports::assign_ports(config, block, &workspace.config_label)?,
+        None => BTreeMap::new(),
+    };
 
     fs::create_armada_dir(&workspace.root)?;
     record_release_commands(app, workspace, config, &ports)?;
@@ -93,18 +103,23 @@ fn claim_and_prepare<R: Run, C: Clock, F: Fetch>(
     })
 }
 
-/// Claim the block, re-deciding when a concurrent claimant wins the race.
+/// Register the workspace, claiming a block if it needs one, and re-deciding
+/// when a concurrent claimant wins the race.
 fn claim<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
+    config: &ResolvedConfig,
     claimed_at: &str,
-) -> Result<PortBlock, ArmadaError> {
+) -> Result<Option<PortBlock>, ArmadaError> {
+    // **The size is what says whether a block is wanted at all.** `None` still
+    // writes the registry row; it just reserves nothing.
+    let size = ports::needs_block(config).then_some(app.machine.port_block_size);
     for _ in 0..CLAIM_ATTEMPTS {
         let outcome = app.db.claim_block(
             &workspace.id,
             &workspace.root,
             workspace.project.as_ref(),
-            app.machine.port_block_size,
+            size,
             claimed_at,
         )?;
         match outcome {
@@ -338,11 +353,15 @@ fn dry<R: Run, C: Clock, F: Fetch>(
 ) -> Result<Envelope<InitDryRun>, ArmadaError> {
     let rows = app.db.workspaces()?;
     let held = rows.iter().find(|row| row.id == workspace.id);
-    let taken: Vec<PortBlock> = rows.iter().map(|row| row.ports).collect();
+    let taken: Vec<PortBlock> = rows.iter().filter_map(|row| row.ports).collect();
 
-    let would_claim = match held {
-        Some(row) => Some(row.ports),
-        None => ports::choose_block(&taken, app.machine.port_block_size),
+    // **The preview says `none` for a workspace that needs none**, because that
+    // is what the real pass would do — a preview that showed a range the run
+    // would not claim is the one thing `--dry-run` must never do.
+    let would_claim = match (held, ports::needs_block(config)) {
+        (_, false) => None,
+        (Some(row), true) => row.ports,
+        (None, true) => ports::choose_block(&taken, app.machine.port_block_size),
     };
 
     // Decided, not executed: listing and stat-ing change nothing, so the

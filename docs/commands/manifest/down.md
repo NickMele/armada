@@ -45,7 +45,8 @@ postgres  stopped
 ports     41200–41209 kept
 ```
 
-`--json` returns one result per component plus the retained port block, in the same
+`--json` returns one result per component plus the retained port block — `null` for a
+workspace that declares no `ports:` and therefore holds none — in the same
 `data` shape [`up.md`](up.md) answers in.
 
 **A stop is confirmed, not merely signalled.** `down` reports `DOWN` for a `command` service
