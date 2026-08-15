@@ -1,4 +1,4 @@
-//! `armada coverage` end to end, against a scratch `$HOME`.
+//! `armada untried` end to end, against a scratch `$HOME`.
 //!
 //! **What this holds is the one claim that cannot be checked in a unit test**:
 //! that the counter is written by the real entrypoint, on the real path, for
@@ -16,7 +16,7 @@ fn stdout(output: &std::process::Output) -> String {
 }
 
 fn listing(machine: &Machine, at: &std::path::Path, args: &[&str]) -> serde_json::Value {
-    let mut line = vec!["coverage"];
+    let mut line = vec!["untried"];
     line.extend_from_slice(args);
     line.push("--json");
     let out = machine.run(at, &line);
@@ -124,7 +124,7 @@ fn nothing_off_armadas_own_roster_is_ever_written_down() {
     machine.run(&repo, &["ghp_notarealtoken"]);
     machine.run(&repo, &["manifest", "status"]);
 
-    let written = std::fs::read_to_string(machine.home.path().join(".armada/coverage.jsonl"))
+    let written = std::fs::read_to_string(machine.home.path().join(".armada/untried.jsonl"))
         .expect("written");
     assert!(!written.contains("deploy"), "{written}");
     assert!(!written.contains("ghp_"), "{written}");
@@ -144,7 +144,7 @@ fn the_file_holds_one_line_per_verb_however_much_armada_is_used() {
         machine.run(&repo, &["manifest", "status"]);
     }
     machine.run(&repo, &["doctor"]);
-    let written = std::fs::read_to_string(machine.home.path().join(".armada/coverage.jsonl"))
+    let written = std::fs::read_to_string(machine.home.path().join(".armada/untried.jsonl"))
         .expect("written");
     assert_eq!(written.lines().count(), 2, "{written}");
 
@@ -152,11 +152,11 @@ fn the_file_holds_one_line_per_verb_however_much_armada_is_used() {
     assert_eq!(row(&all, "manifest status").unwrap()["count"], 6, "{all}");
 }
 
-/// **`armada coverage` answers on a machine that has never run anything.** It is
+/// **`armada untried` answers on a machine that has never run anything.** It is
 /// the verb you reach for when you do not know what works yet, so it must not
 /// need a workspace, a guild or a boot id.
 #[test]
-fn coverage_answers_from_nowhere_on_a_machine_that_has_done_nothing() {
+fn untried_answers_from_nowhere_on_a_machine_that_has_done_nothing() {
     let machine = Machine::new();
     let outside = machine.outside();
     let listed = listing(&machine, &outside, &[]);

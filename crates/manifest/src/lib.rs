@@ -17,7 +17,6 @@
 
 pub mod clock;
 pub mod config_file;
-pub mod coverage;
 pub mod db;
 pub mod discovery;
 pub mod docker;
@@ -31,3 +30,4 @@ pub mod process;
 pub mod recent;
 pub mod runs;
 pub mod scan;
+pub mod untried;

@@ -11,7 +11,6 @@ pub mod clean;
 pub mod commands;
 pub mod components;
 pub mod config;
-pub mod coverage;
 pub mod dispatch;
 pub mod doctor;
 pub mod failures;
@@ -26,17 +25,18 @@ pub mod services;
 pub mod skills;
 pub mod status;
 pub mod tasks;
+pub mod untried;
 
 use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
-    CommandsData, ComponentsData, CoverageData, DispatchData, DoctorData, Envelope, FailureData,
-    FailuresData, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData,
-    GuildListData, GuildSyncData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun,
-    KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
+    CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
+    FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
+    GuildSyncData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun, KillData,
+    MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
     ResumeData, ScanData, ServicesData, ShowData, SkillsData, SpawnData, StatusData, TickData,
-    UpDryRun, VerdictData, VerifyData,
+    UntriedData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -102,9 +102,9 @@ pub enum Output {
     Failures(Box<Envelope<FailuresData>>),
     /// `armada failures show <id>` — one failure, whole.
     Failure(Box<Envelope<FailureData>>),
-    /// `armada coverage` — every verb Armada owns, and what this machine has
+    /// `armada untried` — every verb Armada owns, and what this machine has
     /// done with each.
-    Coverage(Box<Envelope<CoverageData>>),
+    Untried(Box<Envelope<UntriedData>>),
     /// `armada fleet spawn`.
     Spawn(Box<Envelope<SpawnData>>),
     /// `armada fleet ls`.
@@ -180,7 +180,7 @@ impl Output {
             Output::GuildChange(e) => e.to_json(),
             Output::Failures(e) => e.to_json(),
             Output::Failure(e) => e.to_json(),
-            Output::Coverage(e) => e.to_json(),
+            Output::Untried(e) => e.to_json(),
             Output::Spawn(e) => e.to_json(),
             Output::FleetLs(e) => e.to_json(),
             Output::Bridge(e) => e.to_json(),
@@ -250,7 +250,7 @@ impl Output {
             Output::GuildChange(e) => e.exit_code(),
             Output::Failures(e) => e.exit_code(),
             Output::Failure(e) => e.exit_code(),
-            Output::Coverage(e) => e.exit_code(),
+            Output::Untried(e) => e.exit_code(),
             Output::Spawn(e) => e.exit_code(),
             Output::FleetLs(e) => e.exit_code(),
             Output::Bridge(e) => e.exit_code(),

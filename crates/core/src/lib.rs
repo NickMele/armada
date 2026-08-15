@@ -17,7 +17,6 @@
 
 pub mod compose;
 pub mod config;
-pub mod coverage;
 pub mod ctx;
 pub mod dispatch;
 pub mod envelope;
@@ -41,5 +40,6 @@ pub mod scope;
 pub mod select;
 pub mod service;
 pub mod template;
+pub mod untried;
 pub mod verify;
 pub mod workspace;

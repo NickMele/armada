@@ -953,21 +953,23 @@ const PAGES: [Page; 43] = [
         ],
     },
     Page {
-        path: "coverage",
-        synopsis: "coverage",
+        path: "untried",
+        synopsis: "untried",
         summary: "which of Armada's verbs you have never run here",
-        usage: &["armada coverage [--all] [--json]"],
+        usage: &["armada untried [--all] [--json]"],
         flags: &[("--all", "every verb, not only the ones never run")],
         examples: &[
-            ("armada coverage", "what you have not got to yet"),
-            ("armada coverage --all", "the whole roster, stalest first"),
+            ("armada untried", "what you have not got to yet"),
+            ("armada untried --all", "the whole roster, stalest first"),
         ],
         notes: &[
             "Counted as you use it: every run of an Armada verb is tallied at",
-            "the end, in ~/.armada/coverage.jsonl. Nothing is sent anywhere.",
+            "the end, in ~/.armada/untried.jsonl. Nothing is sent anywhere.",
             "A sub-verb counts as its parent: armada tasks start counts as tasks.",
             "At a terminal, picking a row writes a task for it — nothing is",
             "written down unless you pick it.",
+            "Not `coverage`: this repository's own CI job already owns that",
+            "word, for code coverage (AGENTS.md, docs/glossary.md).",
         ],
     },
     Page {
@@ -1147,7 +1149,23 @@ fn verbs_of(module: &str) -> Vec<(&'static str, &'static str)> {
         return ORCHESTRATION
             .iter()
             .filter_map(|path| PAGES.iter().find(|page| page.path == *path))
-            .map(|page| (page.synopsis, page.summary))
+            .map(|page| {
+                // **`enable` and `disable` keep the module they belong to.**
+                // The heading above this list is not one uniform prefix the
+                // way `FLEET`'s is — `helm` and `bridge` really are top-level
+                // verbs, so they read bare, but `enable`/`disable` are
+                // `helm`'s own sub-verbs and a bare row here reads as
+                // `armada enable`, which the parser refuses. The individual
+                // `--help` page still opens with the bare word — that page
+                // already spells the module out in USAGE — so only the
+                // shared listing needs the fold-back-in.
+                let synopsis = match page.path {
+                    "helm enable" => "helm enable",
+                    "helm disable" => "helm disable",
+                    _ => page.synopsis,
+                };
+                (synopsis, page.summary)
+            })
             .collect();
     }
     PAGES

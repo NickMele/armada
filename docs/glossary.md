@@ -75,6 +75,7 @@ again in six months.
 | **Contract**, as a task | The unit of work assigned to a Drone. | The word was already load-bearing in its ordinary sense across the `--json` envelope, the verb tables and a dozen doc comments. **Job** took the role instead, and nothing had to be renamed. |
 | **Session** | The unit of work. | Ambiguous once Job and Drone are distinguished: it named both the durable record and the running process, which is the conflation §14.1 exists to undo. Still correct for *a Claude Code session*, which is what a Job's conversation actually is. |
 | `helm`, as a binary | The orchestrator's command. | See below. |
+| **Coverage**, as a verb name | `armada coverage` — which of Armada's own verbs this machine has never run. | Already load-bearing: the CI job is named `coverage` and `AGENTS.md` gates the merge on its ratchet. A second meaning under one word is the exact defect this page exists to prevent — shipped as `armada untried` instead, and the file it counts into is `~/.armada/untried.jsonl`. |
 
 ## Why there is no `helm` on `PATH`
 

@@ -313,6 +313,86 @@ fn a_task_with_nothing_to_do_is_refused_and_points_at_the_listing() {
     assert!(said.contains("armada tasks"), "{said}");
 }
 
+/// **`armada tasks` is scoped to the repository it is run from, by default.**
+/// A task written in one checkout does not clutter the listing of a completely
+/// unrelated one — the gap he found: *"I was hoping they could be scoped to
+/// the directory that it was run in."*
+#[test]
+fn a_task_is_scoped_to_the_repository_it_was_written_in_by_default() {
+    let machine = Machine::new();
+    let orders = machine.repo("orders", "version: 1\nname: orders\n");
+    let payments = machine.repo("payments", "version: 1\nname: payments\n");
+    let id = capture(&machine, &orders, "rename the port allocator");
+
+    let elsewhere: serde_json::Value =
+        serde_json::from_str(&stdout(&machine.run(&payments, &["tasks", "--json"]))).unwrap();
+    assert!(
+        elsewhere["data"]["results"].as_array().unwrap().is_empty(),
+        "a task from another repository showed up unscoped: {elsewhere}"
+    );
+
+    let home: serde_json::Value =
+        serde_json::from_str(&stdout(&machine.run(&orders, &["tasks", "--json"]))).unwrap();
+    assert_eq!(home["data"]["results"][0]["id"], id.as_str(), "{home}");
+
+    // **`--all` is the same word `armada manifest status` already uses to
+    // widen past its own narrow default** — reused rather than a second flag.
+    let all: serde_json::Value = serde_json::from_str(&stdout(
+        &machine.run(&payments, &["tasks", "--all", "--json"]),
+    ))
+    .unwrap();
+    assert!(
+        all["data"]["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["id"] == id.as_str()),
+        "--all did not reach a task from another repository: {all}"
+    );
+}
+
+/// **A task written outside any repository is not scoped out of existence.**
+/// It has no project to be excluded from, so it is reachable from the same
+/// place it was written, and `--all` reaches it from anywhere.
+#[test]
+fn a_task_written_outside_any_workspace_is_reachable_by_default_and_under_all() {
+    let machine = Machine::new();
+    let outside = machine.outside();
+    let repo = machine.repo("orders", "version: 1\nname: orders\n");
+    let id = capture(&machine, &outside, "set this machine up properly");
+
+    let same_place: serde_json::Value =
+        serde_json::from_str(&stdout(&machine.run(&outside, &["tasks", "--json"]))).unwrap();
+    assert!(
+        same_place["data"]["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["id"] == id.as_str()),
+        "a task written outside any repository vanished from its own directory: {same_place}"
+    );
+
+    let from_a_repo: serde_json::Value =
+        serde_json::from_str(&stdout(&machine.run(&repo, &["tasks", "--json"]))).unwrap();
+    assert!(
+        from_a_repo["data"]["results"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "{from_a_repo}"
+    );
+    let all: serde_json::Value =
+        serde_json::from_str(&stdout(&machine.run(&repo, &["tasks", "--all", "--json"]))).unwrap();
+    assert!(
+        all["data"]["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["id"] == id.as_str()),
+        "--all did not reach a task written outside any repository: {all}"
+    );
+}
+
 /// **No absolute `$HOME` reaches disk**, the rule `docs/reserved/010` states for
 /// the failure log — and a task is a line in that same file.
 #[test]

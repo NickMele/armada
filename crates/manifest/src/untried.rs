@@ -1,6 +1,6 @@
-//! `~/.armada/coverage.jsonl` — **which of Armada's verbs this machine has run.**
+//! `~/.armada/untried.jsonl` — **which of Armada's verbs this machine has run.**
 //!
-//! The format and the fold are [`armada_core::coverage`]; this is the file. It
+//! The format and the fold are [`armada_core::untried`]; this is the file. It
 //! sits beside `recent.jsonl` and `failures.jsonl`, in Manifest and for the
 //! reason [`crate::failures`] gives: `~/.armada/` is Manifest's, and this is the
 //! lowest layer that may open a file at all (`ARCHITECTURE.md` §1.5).
@@ -16,12 +16,12 @@
 //! third time: *a recorder that turns a working command into a failing one is
 //! worse than no recorder.* Nothing in this module returns an error.
 
-use armada_core::coverage::Seen;
+use armada_core::untried::Seen;
 use std::path::{Path, PathBuf};
 
-/// `~/.armada/coverage.jsonl`.
+/// `~/.armada/untried.jsonl`.
 pub fn path(armada_home: &Path) -> PathBuf {
-    armada_home.join("coverage.jsonl")
+    armada_home.join("untried.jsonl")
 }
 
 /// What the file holds. **An absent file is an empty count, not an error** — it
@@ -29,7 +29,7 @@ pub fn path(armada_home: &Path) -> PathBuf {
 /// is a perfectly good answer to *what have I tried*.
 pub fn read(path: &Path) -> Vec<Seen> {
     match std::fs::read_to_string(path) {
-        Ok(text) => armada_core::coverage::parse(&text),
+        Ok(text) => armada_core::untried::parse(&text),
         Err(_) => Vec::new(),
     }
 }
@@ -47,7 +47,7 @@ pub fn write(path: &Path, seen: &[Seen]) -> bool {
     // rename race loses its own increment, which is the milder of the two
     // failures available — the alternative is counts that cannot be parsed.
     let temporary = path.with_extension(format!("jsonl.{}", std::process::id()));
-    if std::fs::write(&temporary, armada_core::coverage::render(seen)).is_err() {
+    if std::fs::write(&temporary, armada_core::untried::render(seen)).is_err() {
         let _ = std::fs::remove_file(&temporary);
         return false;
     }
@@ -63,7 +63,7 @@ pub fn write(path: &Path, seen: &[Seen]) -> bool {
 pub fn record(path: &Path, verb: &str, at_ms: u64, ok: bool) -> bool {
     write(
         path,
-        &armada_core::coverage::note(read(path), verb, at_ms, ok),
+        &armada_core::untried::note(read(path), verb, at_ms, ok),
     )
 }
 
@@ -121,6 +121,6 @@ mod tests {
             .unwrap()
             .map(|entry| entry.unwrap().file_name())
             .collect();
-        assert_eq!(beside, vec![std::ffi::OsString::from("coverage.jsonl")]);
+        assert_eq!(beside, vec![std::ffi::OsString::from("untried.jsonl")]);
     }
 }

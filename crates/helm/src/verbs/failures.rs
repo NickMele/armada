@@ -114,6 +114,11 @@ impl Lens {
 /// **The listing is read again after the navigating rather than before it**, so
 /// a session that put a Job on two entries and discarded a third reports what
 /// the log says now instead of what it said when it opened.
+///
+/// **`scope`, when given, is a second filter on top of `lens`.** Only
+/// [`crate::verbs::tasks::ls`] ever passes one — `armada failures` reads the
+/// whole machine, because what Armada broke on does not stop mattering when
+/// you change directory. `None` always, for every other caller.
 #[allow(clippy::too_many_arguments)]
 pub fn ls<R: Run, C: Clock>(
     run: &R,
@@ -125,11 +130,15 @@ pub fn ls<R: Run, C: Clock>(
     look: Look,
     progress: &mut dyn Progress,
     lens: Lens,
+    scope: Option<&str>,
 ) -> Result<Output, ArmadaError> {
     if interactive {
-        wander(run, now, place, all, ask, look, progress, lens)?;
+        wander(run, now, place, all, ask, look, progress, lens, scope)?;
     }
-    Ok(listing(lens.verb(), shown(read(now, place)?, all, lens)))
+    Ok(listing(
+        lens.verb(),
+        shown(read(now, place)?, all, lens, scope),
+    ))
 }
 
 /// What the last option says, and what it says about itself.
@@ -159,13 +168,18 @@ fn row_furniture(total_options: usize) -> usize {
 
 /// The entries this lens shows.
 ///
-/// **Two filters, and they are different questions.** [`Lens`] decides which
+/// **Three filters, and they are different questions.** [`Lens`] decides which
 /// half of the store this listing is about and never changes; `all` decides
-/// whether a row you already dealt with is still worth drawing.
-fn shown(entries: Vec<Entry>, all: bool, lens: Lens) -> Vec<Entry> {
+/// whether a row you already dealt with is still worth drawing; `scope`, when
+/// given, decides whether a row about a different repository is.
+fn shown(entries: Vec<Entry>, all: bool, lens: Lens, scope: Option<&str>) -> Vec<Entry> {
     entries
         .into_iter()
-        .filter(|entry| lens.shows(entry) && (all || entry.state != State::Cleared))
+        .filter(|entry| {
+            lens.shows(entry)
+                && (all || entry.state != State::Cleared)
+                && scope.is_none_or(|project| entry.cwd == project)
+        })
         .collect()
 }
 
@@ -196,9 +210,10 @@ fn wander<R: Run, C: Clock>(
     look: Look,
     progress: &mut dyn Progress,
     lens: Lens,
+    scope: Option<&str>,
 ) -> Result<(), ArmadaError> {
     loop {
-        let entries = shown(read(now, place)?, all, lens);
+        let entries = shown(read(now, place)?, all, lens, scope);
         if entries.is_empty() {
             return Ok(());
         }
@@ -685,8 +700,8 @@ mod tests {
         reported.class = None;
         let all = vec![entry("a1b2c3d4"), reported, task];
 
-        let failures = shown(all.clone(), false, Lens::Failures);
-        let tasks = shown(all, false, Lens::Tasks);
+        let failures = shown(all.clone(), false, Lens::Failures, None);
+        let tasks = shown(all, false, Lens::Tasks, None);
         assert_eq!(failures.len(), 2, "{failures:?}");
         assert_eq!(tasks.len(), 1, "{tasks:?}");
         assert_eq!(tasks[0].id, "11112222");

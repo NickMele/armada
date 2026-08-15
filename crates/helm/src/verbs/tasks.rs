@@ -122,7 +122,7 @@ pub fn capture<R: Run, C: Clock>(
 /// Capture, with the repository already decided.
 ///
 /// **Split from [`capture`] so that a caller who is not standing anywhere can
-/// still write a task.** `armada coverage` is the one: *"try `armada guild
+/// still write a task.** `armada untried` is the one: *"try `armada guild
 /// edit`"* is not about the directory it was written in, and paying a `git`
 /// call to record one would be a subprocess for a fact nobody will read.
 pub fn capture_text<C: Clock>(
@@ -214,7 +214,21 @@ fn project(runner: &impl Run, cwd: &std::path::Path) -> std::path::PathBuf {
 /// **A wrapper and nothing more.** Every line of the listing, the navigating
 /// and the acting is [`crate::verbs::failures`]'s, because there is one store
 /// and a second implementation of *"draw the rows, pick one, do something to
-/// it"* would drift within a release. What this adds is [`Lens::Tasks`].
+/// it"* would drift within a release. What this adds is [`Lens::Tasks`] and the
+/// scope.
+///
+/// **Scoped to this repository by default, and `--all` is the one flag that
+/// widens it** — the same word `armada manifest status`'s scope lens already
+/// spends on *wider than my own narrow default* (`crates/core/src/scope.rs`),
+/// reused rather than paired with a second flag nobody would remember to
+/// combine with it. Without `--all` the listing is also every cleared task
+/// gone, exactly as it always was — one flag, and it removes every filter this
+/// verb has rather than one axis of them.
+///
+/// **A task written outside any repository is not lost.** It has no project to
+/// be scoped out of — [`project`] falls back to the bare working directory —
+/// so it shows by default only from that same directory, and `--all` always
+/// reaches it, the same as every other task.
 #[allow(clippy::too_many_arguments)]
 pub fn ls<R: Run, C: Clock>(
     run: &R,
@@ -226,6 +240,7 @@ pub fn ls<R: Run, C: Clock>(
     look: Look,
     progress: &mut dyn Progress,
 ) -> Result<Output, ArmadaError> {
+    let scope = (!all).then(|| scope(run, place));
     failures::ls(
         run,
         now,
@@ -236,6 +251,22 @@ pub fn ls<R: Run, C: Clock>(
         look,
         progress,
         Lens::Tasks,
+        scope.as_deref(),
+    )
+}
+
+/// The value a task written from here, right now, would carry in its `cwd`
+/// column — computed without writing anything, so the listing can filter on
+/// exactly what a row already holds.
+///
+/// **Bit for bit the same transform [`capture`] applies**: [`project`], then
+/// the same redaction and the same tilde. Computed any other way, a checkout
+/// that captured a task under one spelling of its path could fail to find it
+/// again under another.
+fn scope<R: Run>(runner: &R, place: &Where) -> String {
+    failure::tilde(
+        &crate::redact::scrub(&project(runner, &place.cwd).display().to_string()),
+        &place.home,
     )
 }
 
