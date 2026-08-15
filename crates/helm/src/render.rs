@@ -3204,14 +3204,17 @@ mod tests {
     #[test]
     fn guild_init_says_when_it_rewrote_machine_yml_and_nothing_when_it_did_not() {
         let quiet = rendered(&a_guild_init(&[], None, 0), Style::plain());
-        assert!(!quiet.contains("migrated"), "{quiet}");
+        // Case-insensitively: the status token is SCREAMING like every other
+        // one, and a test that hard-codes its casing breaks the next time that
+        // rule is applied rather than the next time the behaviour changes.
+        assert!(!quiet.to_lowercase().contains("migrated"), "{quiet}");
 
         let mut output = a_guild_init(&[], None, 0);
         if let Output::GuildInit(envelope) = &mut output {
             envelope.data.migrated = Some("cpu_slots moved under `manifest:`".to_string());
         }
         let text = rendered(&output, Style::plain());
-        assert!(text.contains("migrated"), "{text}");
+        assert!(text.to_lowercase().contains("migrated"), "{text}");
         assert!(text.contains("machine.yml"), "{text}");
         assert!(text.contains("cpu_slots"), "{text}");
     }
