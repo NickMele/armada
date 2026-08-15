@@ -406,7 +406,12 @@ fn execute<R: Run, C: Clock, F: Fetch>(
             plan
         })
         .collect();
-    progress.begin(plans.len());
+    // **By name, before anything runs.** The live table has a row per check
+    // from its first frame, so a run that is waiting on a lease still shows
+    // what it is waiting to run rather than an empty count.
+    let ids: Vec<&str> = plans.iter().map(|plan| plan.id.as_str()).collect();
+    progress.begin(&ids, app.ctx.now.mono());
+    drop(ids);
 
     let mut loop_state = Loop {
         progress,
@@ -538,12 +543,12 @@ fn drive<R: Run, C: Clock, F: Fetch>(
         // finished is more informative than a deadline that has not.
         collect_children(workspace, it, &mut queue);
         collect_deadlines(app, it, &mut queue);
-        // One turn of the loop went by, which is the only clock a spinner needs
-        // — and the only one it may have, since the real one is injected.
-        it.progress.tick();
-        queue.push(Event::Tick {
-            now_mono: app.ctx.now.mono(),
-        });
+        // One turn of the loop went by. The reading is handed to the watcher
+        // rather than read by it: the real clock is injected, and the live
+        // table's elapsed column must be the same clock the deadlines are.
+        let now_mono = app.ctx.now.mono();
+        it.progress.tick(now_mono);
+        queue.push(Event::Tick { now_mono });
     }
     Ok(())
 }
@@ -606,7 +611,18 @@ fn perform<R: Run, C: Clock, F: Fetch>(
             // the point the scheduler considers the check answered — and a
             // `WAITING` row emitted before a verdict is progress the watcher
             // wants to see change.
-            it.progress.finished(result.id.as_str(), result.status);
+            // **The same detail the final table will print**, chosen the same
+            // way (`render.rs`): its own failure, else the prose, else nothing.
+            // A watcher that showed a verdict without the line explaining it
+            // would make the reader wait for the end to learn what went wrong,
+            // which is the wait this table exists to remove.
+            let detail = result
+                .error
+                .as_ref()
+                .map(|e| e.message.as_str())
+                .or(result.reason.as_deref());
+            it.progress
+                .finished(result.id.as_str(), result.status, detail);
             it.rows.insert(result.id.clone(), result);
             Ok(())
         }

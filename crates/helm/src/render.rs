@@ -33,6 +33,7 @@
 pub mod banner;
 pub mod format;
 pub mod help;
+pub mod live;
 pub mod palette;
 pub mod progress;
 pub mod style;

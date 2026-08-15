@@ -195,6 +195,32 @@ impl Cell {
     }
 }
 
+/// One run of text on a line, and the role it is spoken in.
+///
+/// **What [`Table::spans`] emits instead of escape sequences.** Padding is a
+/// span too, with no role — a caller painting these does not have to know which
+/// pieces were the table's spacing and which were a value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Span {
+    /// The characters.
+    pub text: String,
+    /// The palette role, or `None` for the terminal's own foreground.
+    pub role: Option<Role>,
+    /// Whether this piece is a heading.
+    pub bold: bool,
+}
+
+impl Span {
+    /// `n` spaces, in no colour.
+    fn pad(n: usize) -> Span {
+        Span {
+            text: " ".repeat(n),
+            role: None,
+            bold: false,
+        }
+    }
+}
+
 /// A described table, ready to render.
 #[derive(Debug, Clone)]
 pub struct Table {
@@ -301,6 +327,93 @@ impl Table {
             }
         }
         out
+    }
+
+    /// The same table, as **coloured pieces rather than a painted string**.
+    ///
+    /// **For the one surface that cannot take escape sequences.** The live run
+    /// table redraws through `ratatui`, which paints spans itself and prints an
+    /// SGR sequence literally if it finds one in a string. It still has to be
+    /// the same table — the columns a reader watches a run in are the columns
+    /// they read the result in, or they learn the layout twice.
+    ///
+    /// So the *decisions* are shared and only the emitting differs: this and
+    /// [`Table::render`] both ask [`Table::kept_columns`] which columns survive
+    /// and [`Table::widths`] how wide each is, which is where the two could
+    /// otherwise drift. What is left is padding, and padding that disagreed
+    /// would be visible in the first frame.
+    ///
+    /// **No trailing-space trim, unlike `render`.** A viewport pads every line
+    /// to its own width regardless, so trimming here would buy nothing and make
+    /// the two emitters differ by one more thing.
+    pub fn spans(&self, style: Style, width: usize) -> Vec<Vec<Span>> {
+        if self.rows.is_empty() {
+            return Vec::new();
+        }
+
+        let kept = self.kept_columns();
+        let columns: Vec<&Column> = kept.iter().map(|index| &self.columns[*index]).collect();
+        let widths = self.widths(&kept, width);
+        let mut out = Vec::new();
+
+        if self.headers && columns.iter().any(|c| !c.header.is_empty()) {
+            let header: Vec<Cell> = columns
+                .iter()
+                .map(|c| Cell::painted(c.header.to_uppercase(), Role::SteelGrey))
+                .collect();
+            out.push(self.spans_for(&columns, &header, &widths, style, true));
+        }
+        for row in &self.rows {
+            let cells: Vec<Cell> = kept
+                .iter()
+                .map(|index| row.cells.get(*index).cloned().unwrap_or_else(Cell::empty))
+                .collect();
+            out.push(self.spans_for(&columns, &cells, &widths, style, false));
+        }
+        out
+    }
+
+    /// One line's pieces, in order, padded to `widths`.
+    fn spans_for(
+        &self,
+        columns: &[&Column],
+        cells: &[Cell],
+        widths: &[usize],
+        style: Style,
+        bold: bool,
+    ) -> Vec<Span> {
+        let mut line = vec![Span::pad(self.indent)];
+        let last = widths.len().saturating_sub(1);
+
+        for (index, width) in widths.iter().enumerate() {
+            let blank = Cell::empty();
+            let cell = cells.get(index).unwrap_or(&blank);
+            let text = truncate(&cell.shown(style), *width);
+            let pad = width.saturating_sub(display_width(&text));
+            let value = Span {
+                text,
+                role: cell.role,
+                bold,
+            };
+
+            match columns.get(index).map_or(Align::Left, |c| c.align) {
+                Align::Right => {
+                    line.push(Span::pad(pad));
+                    line.push(value);
+                }
+                Align::Left => {
+                    line.push(value);
+                    if index != last {
+                        line.push(Span::pad(pad));
+                    }
+                }
+            }
+            if index != last {
+                line.push(Span::pad(GAP));
+            }
+        }
+        line.retain(|span| !span.text.is_empty());
+        line
     }
 
     /// One rendered line, padded to `widths` and with no trailing spaces.
@@ -461,6 +574,62 @@ mod tests {
             Cell::painted("FAILED", Role::DistressRed),
             Cell::plain("25632ms"),
         ])
+    }
+
+    /// **The two emitters are one layout.** `spans` exists because `ratatui`
+    /// cannot take escape sequences, not because the live table is a different
+    /// table — so concatenating the spans has to give the painted line back,
+    /// modulo the trailing spaces `render` trims and a viewport supplies.
+    ///
+    /// This is the test that stops the live run table and the final one drifting
+    /// into two layouts, which is the whole reason `spans` shares
+    /// `kept_columns` and `widths` rather than measuring for itself.
+    #[test]
+    fn the_spans_of_a_line_are_the_line() {
+        for width in [80, 40, 24] {
+            let table = ids();
+            let painted = table.render(Style::plain(), width);
+            let joined: Vec<String> = table
+                .spans(Style::plain(), width)
+                .into_iter()
+                .map(|line| {
+                    line.into_iter()
+                        .map(|span| span.text)
+                        .collect::<String>()
+                        .trim_end()
+                        .to_string()
+                })
+                .collect();
+            assert_eq!(
+                joined.join("\n"),
+                painted.trim_end(),
+                "spans and render disagree at {width} columns"
+            );
+        }
+    }
+
+    /// A span carries the role the painted cell would have carried, so the live
+    /// table's `PASS` is green for the same reason the final one's is.
+    #[test]
+    fn a_spans_role_is_the_cells_role() {
+        let lines = ids().spans(Style::plain(), 80);
+        let verdicts: Vec<Option<Role>> = lines
+            .iter()
+            .skip(1)
+            .flat_map(|line| line.iter())
+            .filter(|span| span.text == "PASS" || span.text == "FAILED")
+            .map(|span| span.role)
+            .collect();
+        assert_eq!(
+            verdicts,
+            vec![Some(Role::BeaconGreen), Some(Role::DistressRed)]
+        );
+        assert!(
+            lines[0]
+                .iter()
+                .all(|span| !span.bold || span.role.is_some()),
+            "a heading span lost its role"
+        );
     }
 
     #[test]

@@ -117,7 +117,7 @@ fn main() -> ExitCode {
 /// it off did not ask for an animation either; and the caller did not ask for
 /// `--json`, which is a parser waiting for one payload and nothing else.
 ///
-/// A spinner is drawn on **stderr and never stdout** (PLAN.md §3.1.1): stdout
+/// The table is drawn on **stderr and never stdout** (PLAN.md §3.1.1): stdout
 /// carries the result, and a frame of animation in it is what breaks the one
 /// consumer the envelope exists for.
 fn reporter(
@@ -128,11 +128,7 @@ fn reporter(
     if json || !terminal.stderr_is_tty || !style.enabled() {
         return Box::new(render::progress::Silent);
     }
-    Box::new(render::progress::Spinner::new(
-        std::io::stderr(),
-        style,
-        terminal,
-    ))
+    Box::new(render::live::Watcher::new(style, terminal))
 }
 
 fn json_wanted(invocation: &Invocation) -> bool {
