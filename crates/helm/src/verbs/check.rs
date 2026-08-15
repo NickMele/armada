@@ -14,8 +14,13 @@
 //!                   Emit / Finish
 //! ```
 //!
-//! **The loop never blocks**, which is why [`ProcessGroup::poll`] exists. The
-//! lease heartbeat is renewed from this loop and from no background timer,
+//! **The loop never blocks**, which is why [`ProcessGroup::poll`] exists — and
+//! why [`acquire`] is one attempt rather than a wait. Both are the same rule:
+//! deadlines, child exits and the interrupt are all observed on this one
+//! thread, so anything that sits inside a single action stops all three. An
+//! acquisition that waited here stopped them for up to `acquire_timeout`.
+//!
+//! The lease heartbeat is renewed from this loop and from no background timer,
 //! precisely so that a wedged loop is a loop that stopped renewing and the
 //! cold-heartbeat path reclaims it (PLAN.md §4.3).
 
@@ -28,7 +33,7 @@ use armada_core::lease::{self, LeaseId, LeaseKind, Policy};
 use armada_core::reap::PathStat;
 use armada_core::run::{RunId, RunRecord};
 use armada_core::schedule::{
-    self, Action, CheckId, CheckResult, EnvDelta, Event, Phase, Plan, State,
+    self, Action, CheckId, CheckResult, EnvDelta, Event, Phase, Plan, State, Waiting,
 };
 use armada_core::select::{self, Selection, Selector};
 use armada_core::template::{self, Site, Vars};
@@ -38,7 +43,7 @@ use armada_manifest::{fs, git, runs};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use crate::app::{self, App};
+use crate::app::{self, App, Claim};
 use crate::args::Check;
 use crate::render::progress::{Planned, Progress, Shape, Verdict};
 use crate::verbs::{load_config, Output};
@@ -433,9 +438,21 @@ fn execute<R: Run, C: Clock, F: Fetch>(
         ceiling_ms: app.machine.acquire_ceiling_ms(),
         held: BTreeMap::new(),
         slots: app.machine.cpu_slots,
+        polled: BTreeMap::new(),
     };
 
-    drive(app, workspace, &mut loop_state)?;
+    let drove = drive(app, workspace, &mut loop_state);
+    // **Nothing the shell took is left behind**, on every path out including
+    // the failing one. The reducer releases what it knows about, and it knows
+    // about *classes*: a check whose claim never completed has an empty `held`
+    // there, so an exclusive it did take — `browser`, while `gpu` was still
+    // held elsewhere — would be released by nobody and sit in `manifest.db`
+    // until its heartbeat went cold sixty seconds later.
+    for lease in std::mem::take(&mut loop_state.held).into_values().flatten() {
+        let _ = app.release(&lease);
+        app.held.retain(|h| h != &lease);
+    }
+    drove?;
 
     let record = RunRecord {
         schema_version: armada_core::envelope::SCHEMA_VERSION,
@@ -498,6 +515,14 @@ struct Loop<'a> {
     held: BTreeMap<CheckId, Vec<LeaseId>>,
     /// The machine's slot count, which bounds what the store can ever grant.
     slots: u32,
+    /// When each check last attempted its claim, so a polled acquisition is a
+    /// poll rather than a spin.
+    ///
+    /// **Not a copy of anything the reducer owns.** The reducer knows a check
+    /// is `Waiting` and when it started; how often the shell goes back to the
+    /// store is the shell's own business, and there is nowhere else it could
+    /// be recorded.
+    polled: BTreeMap<CheckId, u64>,
 }
 
 fn drive<R: Run, C: Clock, F: Fetch>(
@@ -546,10 +571,14 @@ fn drive<R: Run, C: Clock, F: Fetch>(
             continue;
         }
 
-        // Observe: children first, then deadlines, then the clock. A child that
-        // finished is more informative than a deadline that has not.
+        // Observe: children first, then deadlines, then the queued claims, then
+        // the clock. A child that finished is more informative than a deadline
+        // that has not, and both are more informative than a lease that is
+        // probably still held — but the ordering is also what keeps a claim
+        // from ever being the reason a deadline went unnoticed.
         collect_children(workspace, it, &mut queue);
         collect_deadlines(app, it, &mut queue);
+        poll_claims(app, workspace, it, &mut queue)?;
         // One turn of the loop went by. The reading is handed to the watcher
         // rather than read by it: the real clock is injected, and the live
         // table's elapsed column must be the same clock the deadlines are.
@@ -657,13 +686,22 @@ fn exclusives_of(workspace: &Workspace, it: &Loop<'_>, check: &CheckId) -> Vec<L
         .collect()
 }
 
-/// **The ordering rule, performed rather than re-decided.**
+/// **One attempt at a claim, and then back to the loop.**
 ///
 /// `lease::acquisition_order` is the single statement of "exclusives first, in
 /// sorted name order, then slots" — the shell asks it which concrete leases a
 /// class means and takes them in the order it returns. Sorting here as well
 /// would be a second implementation of the property that makes a cross-workspace
 /// cycle impossible.
+///
+/// **What it must not do is wait.** An earlier version blocked here until the
+/// lease came free, bounded only by `acquire_timeout` — forty minutes by
+/// default — and the run loop is single-threaded, so for the whole of that wait
+/// no `Deadline` fired, no `ChildExited` was observed and no interrupt was
+/// seen. A check with a sixty-second `timeout:` running alongside sailed past
+/// it silently and was killed whenever the *other* check's lease happened to
+/// come free. So a denial returns here, the loop keeps turning, and
+/// [`poll_claims`] comes back to it.
 fn acquire<R: Run, C: Clock, F: Fetch>(
     app: &mut App<R, C, F>,
     workspace: &Workspace,
@@ -672,6 +710,26 @@ fn acquire<R: Run, C: Clock, F: Fetch>(
     kind: LeaseKind,
     queue: &mut Vec<Event>,
 ) -> Result<(), ArmadaError> {
+    it.polled.insert(check.clone(), app.ctx.now.mono());
+
+    // **The ceiling is read off the scheduler's `Waiting::since_mono`**, not
+    // accumulated here. A blocking claim could count its own sleeps because it
+    // owned the whole wait; a polled one does not, and a counter in the shell
+    // would be a second answer to "how long has this waited" that disagreed
+    // with the reducer's the moment a poll was skipped or a turn ran long.
+    if waited_ms(it, check).is_some_and(|waited| waited >= it.ceiling_ms) {
+        // The claim is over, so whatever it managed to take goes back — the
+        // reducer will not release it, because it never saw the class granted.
+        release_claim(app, it, check);
+        // The ceiling expiring is this check's answer, not the run's:
+        // retryable, because the actionable fact is that the machine was busy
+        // rather than that this check is slow.
+        queue.push(Event::AcquireCeiling {
+            check: check.clone(),
+        });
+        return Ok(());
+    }
+
     let cost = it
         .state
         .checks
@@ -679,45 +737,69 @@ fn acquire<R: Run, C: Clock, F: Fetch>(
         .map(|entry| entry.plan.cost)
         .unwrap_or(0);
 
-    // The wait is reported once per claim rather than once per poll: the claim
-    // loop reports on every turn, and a fifteen-minute wait would otherwise put
-    // eighteen hundred identical rows in the record.
     let mut denials: Vec<armada_core::lease::WaitingOn> = Vec::new();
-    let outcome: Result<Vec<LeaseId>, ArmadaError> = match kind {
+    let mut taken: Vec<LeaseId> = Vec::new();
+    // Anything that comes back an error is the store being broken, which is not
+    // this check's problem and not something the next check will survive
+    // either — so it ends the run rather than the claim.
+    let granted = match kind {
         LeaseKind::Exclusive => {
-            let mut taken = Vec::new();
-            let mut failure = None;
+            let already: Vec<LeaseId> = it.held.get(check).cloned().unwrap_or_default();
+            let mut complete = true;
             for id in exclusives_of(workspace, it, check) {
-                match app.acquire_reporting(
-                    id.clone(),
-                    Policy::Block,
-                    Some(it.ceiling_ms),
-                    &mut |w| denials.push(w),
-                ) {
-                    Ok(held) => taken.push(held),
-                    Err(error) => {
-                        failure = Some(error);
+                if already.contains(&id) {
+                    continue;
+                }
+                match app.claim(&id, &mut |w| denials.push(w))? {
+                    Claim::Granted(got) => taken.extend(got),
+                    Claim::Waiting => {
+                        complete = false;
                         break;
                     }
                 }
             }
-            match failure {
-                Some(error) => Err(error),
-                None => Ok(taken),
+            complete
+        }
+        LeaseKind::CpuSlot => {
+            match app.claim_slots(&workspace.id, cost, it.slots, &mut |w| denials.push(w))? {
+                Claim::Granted(got) => {
+                    taken.extend(got);
+                    true
+                }
+                Claim::Waiting => false,
             }
         }
-        LeaseKind::CpuSlot => app.acquire_slots(
-            &workspace.id,
-            cost,
-            it.slots,
-            Some(it.ceiling_ms),
-            &mut |w| denials.push(w),
-        ),
         // The scheduler asks for neither, and saying so is cheaper than a
         // silent no-op that would look like a granted claim.
-        LeaseKind::Run | LeaseKind::Machine => Ok(Vec::new()),
+        LeaseKind::Run | LeaseKind::Machine => true,
     };
 
+    // **Recorded the moment it is held, whether or not the class is complete.**
+    // A check holding `browser` while it waits for `gpu` is the ordering rule
+    // working as specified; what must not happen is the shell forgetting it
+    // holds `browser` between two polls, because then nothing gives it back.
+    for lease in &taken {
+        app.held.push(lease.clone());
+    }
+    it.held.entry(check.clone()).or_default().extend(taken);
+
+    if granted {
+        queue.push(Event::LeaseGranted {
+            check: check.clone(),
+            kind,
+        });
+        return Ok(());
+    }
+
+    // **Reported once per claim rather than once per poll**, and polling makes
+    // that constraint sharper rather than softer: the shell now comes back
+    // every half-second, and a fifteen-minute wait would otherwise put eighteen
+    // hundred identical rows in the record. The gate is the reducer's own —
+    // `Waiting` carries no holder until it has taken a `LeaseDenied` — so there
+    // is no flag here to fall out of step with it.
+    if !unreported(it, check) {
+        return Ok(());
+    }
     if let Some(first) = denials.first() {
         let holder = match first {
             armada_core::lease::WaitingOn::Exclusive { held_by, .. } => Some(held_by.clone()),
@@ -733,31 +815,88 @@ fn acquire<R: Run, C: Clock, F: Fetch>(
             dispatch.waited(kind, &kind.to_string(), holder, 0);
         }
     }
+    Ok(())
+}
 
-    match outcome {
-        Ok(taken) => {
-            for lease in &taken {
-                app.held.push(lease.clone());
-            }
-            it.held.entry(check.clone()).or_default().extend(taken);
-            queue.push(Event::LeaseGranted {
-                check: check.clone(),
-                kind,
-            });
-            Ok(())
+/// Try again for every claim the scheduler is still waiting on.
+///
+/// **This is the half that makes a non-blocking [`acquire`] a queue rather than
+/// a single try.** `Action::Acquire` is proposed once, when a check first
+/// becomes ready; a denial leaves it in `Phase::Waiting`, which nothing else
+/// re-proposes, so the loop comes back to it here — between the observations,
+/// and with a full turn of ticking in between.
+///
+/// **Oldest first.** `acquisition_order` makes a cycle impossible, not a queue
+/// fair, and a poll is a race: retrying in id order would let a check that has
+/// waited one second beat one that has waited ten minutes, every single time
+/// the lease came free. Sorting by when the wait started is FIFO by arrival,
+/// and it is read out of the reducer rather than kept alongside it.
+fn poll_claims<R: Run, C: Clock, F: Fetch>(
+    app: &mut App<R, C, F>,
+    workspace: &Workspace,
+    it: &mut Loop<'_>,
+    queue: &mut Vec<Event>,
+) -> Result<(), ArmadaError> {
+    let now = app.ctx.now.mono();
+    let mut waiting: Vec<(u64, CheckId, LeaseKind)> = Vec::new();
+
+    for (check, entry) in &it.state.checks {
+        let Phase::Waiting(wait) = &entry.phase else {
+            continue;
+        };
+        // `lease::POLL_INTERVAL_MS`, because it is the same question the
+        // blocking claim answered with it: well under the renewal interval so a
+        // released lease is picked up promptly, and far enough above zero that
+        // a fifteen-minute wait is not a spin against `manifest.db`. The loop
+        // itself turns every `TURN_MS`, so most turns skip every waiter.
+        let due = it
+            .polled
+            .get(check)
+            .map_or(0, |at| at.saturating_add(lease::POLL_INTERVAL_MS));
+        if now < due {
+            continue;
         }
-        // The ceiling expiring is this check's answer, not the run's:
-        // retryable, because the actionable fact is that the machine was busy
-        // rather than that this check is slow.
-        Err(error) if error.class == ErrClass::Aborted => {
-            queue.push(Event::AcquireCeiling {
-                check: check.clone(),
-            });
-            Ok(())
-        }
-        // Anything else is the store being broken, which is not this check's
-        // problem and not something the next check will survive either.
-        Err(error) => Err(error),
+        waiting.push((wait.since_mono, check.clone(), wait.kind));
+    }
+
+    waiting.sort();
+    for (_, check, kind) in waiting {
+        acquire(app, workspace, it, &check, kind, queue)?;
+    }
+    Ok(())
+}
+
+/// How long this check's claim has been outstanding, or `None` if it has none.
+fn waited_ms(it: &Loop<'_>, check: &CheckId) -> Option<u64> {
+    let entry = it.state.checks.get(check)?;
+    let Phase::Waiting(wait) = &entry.phase else {
+        return None;
+    };
+    Some(it.state.now_mono.saturating_sub(wait.since_mono))
+}
+
+/// Whether this check's claim is one nothing has reported yet.
+///
+/// `start_ready` opens a claim with no holder and `Event::LeaseDenied` fills
+/// one in, so the absence of a holder *is* "not reported" — held in the one
+/// place that already has to know, rather than in a second flag beside it.
+fn unreported(it: &Loop<'_>, check: &CheckId) -> bool {
+    matches!(
+        it.state.checks.get(check).map(|entry| &entry.phase),
+        Some(Phase::Waiting(Waiting { holder: None, .. }))
+    )
+}
+
+/// Give back whatever this check took before its claim ended without being
+/// granted.
+fn release_claim<R: Run, C: Clock, F: Fetch>(
+    app: &mut App<R, C, F>,
+    it: &mut Loop<'_>,
+    check: &CheckId,
+) {
+    for lease in it.held.remove(check).unwrap_or_default() {
+        let _ = app.release(&lease);
+        app.held.retain(|h| h != &lease);
     }
 }
 

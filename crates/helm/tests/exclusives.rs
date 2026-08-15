@@ -242,6 +242,163 @@ fn two_runs_each_wanting_the_whole_budget_take_turns_rather_than_splitting_it() 
     );
 }
 
+/// **A check that is queueing must not stop the run loop.**
+///
+/// The loop is single-threaded and every deadline, every child reap and every
+/// interrupt is observed on it. An acquisition that waits *inside* one action
+/// therefore parks all three — for up to `acquire_timeout`, which is forty
+/// minutes by default — and the visible symptom is the worst kind: a check with
+/// a perfectly good `timeout:` runs past it in silence and is killed whenever
+/// some *other* check's lease happens to come free, with a duration to match.
+///
+/// So the scenario is built exactly: one workspace **holding** `browser`, a
+/// second **waiting** on it, and a third check in the waiting run already
+/// **running** with a short deadline. The assertion is on that third check's
+/// duration, not on its status — a parked loop still reports `TIMEOUT`
+/// eventually, and "eventually" is the entire bug.
+#[test]
+fn a_running_checks_deadline_still_fires_while_another_check_queues_for_a_lease() {
+    let machine = Machine::new();
+    // Room for every check here to hold its slot at once, so the only thing
+    // anything queues for is `browser`.
+    std::fs::create_dir_all(machine.home.path().join(".armada")).unwrap();
+    std::fs::write(
+        machine.home.path().join(".armada/machine.yml"),
+        "cpu_slots: 6\n",
+    )
+    .unwrap();
+
+    let holder = machine.repo("holder", HOLDS_BROWSER);
+    let queued = machine.repo("queued", TICKS_WHILE_WAITING);
+    machine.run(&holder, &["manifest", "init"]);
+    machine.run(&queued, &["manifest", "init"]);
+
+    let mut first = machine.spawn(&holder, &["manifest", "check", "--json"]);
+    // Long enough that `browser` is held before the second run asks for it, and
+    // far short of the ten seconds it is held for.
+    std::thread::sleep(Duration::from_millis(700));
+    let second = machine.run(&queued, &["manifest", "check", "--json"]);
+    assert!(wait_bounded(&mut first, Duration::from_secs(60)).is_some());
+
+    let payload = envelope(&second);
+    let rows = payload["data"]["results"]
+        .as_array()
+        .expect("a results array");
+    let ticks = rows
+        .iter()
+        .find(|row| row["id"].as_str().is_some_and(|id| id.ends_with("ticks")))
+        .unwrap_or_else(|| panic!("no row for the ticking check: {payload}"));
+
+    assert_eq!(
+        ticks["status"].as_str(),
+        Some("TIMEOUT"),
+        "the ticking check did not time out at all: {ticks}"
+    );
+    // Its `timeout:` is two seconds and `browser` is held for ten. A loop that
+    // waits inside the claim notices at ten and reports about nine; the bound
+    // is nowhere near either number, so it is a verdict rather than a race.
+    let ran_for = ticks["duration_ms"].as_u64().expect("a duration");
+    assert!(
+        ran_for < 5_000,
+        "the deadline fired {ran_for}ms in, so the run loop was parked inside the lease claim"
+    );
+
+    // And the queue still works: the check that waited for `browser` got it
+    // once the other workspace was done with it.
+    let waits = rows
+        .iter()
+        .find(|row| row["id"].as_str().is_some_and(|id| id.ends_with("waits")))
+        .unwrap_or_else(|| panic!("no row for the queueing check: {payload}"));
+    assert_eq!(
+        waits["status"].as_str(),
+        Some("PASS"),
+        "the queueing check never got the exclusive: {waits}"
+    );
+}
+
+/// **`acquire_timeout` still ends a wait that is never going to end**, and it is
+/// now measured against the clock rather than against a count of the shell's
+/// own sleeps — the shell no longer sleeps inside the claim, so a wait that is
+/// polled from the run loop has to be timed from when the claim opened.
+///
+/// The ceiling is two seconds here for the same reason the suite injects
+/// anything: the default is forty minutes, and a test that waited it out would
+/// not be a test.
+#[test]
+fn a_claim_that_never_comes_free_still_hits_the_acquisition_ceiling() {
+    let machine = Machine::new();
+    std::fs::create_dir_all(machine.home.path().join(".armada")).unwrap();
+    std::fs::write(
+        machine.home.path().join(".armada/machine.yml"),
+        "acquire_timeout: 2\n",
+    )
+    .unwrap();
+
+    let holder = machine.repo("holder", HOLDS_BROWSER);
+    let queued = machine.repo("queued", WANTS_BROWSER);
+    machine.run(&holder, &["manifest", "init"]);
+    machine.run(&queued, &["manifest", "init"]);
+
+    let mut first = machine.spawn(&holder, &["manifest", "check", "--json"]);
+    std::thread::sleep(Duration::from_millis(700));
+    let started = Instant::now();
+    let second = machine.run(&queued, &["manifest", "check", "--json"]);
+    let gave_up_after = started.elapsed();
+    assert!(wait_bounded(&mut first, Duration::from_secs(60)).is_some());
+
+    let payload = envelope(&second);
+    let row = payload["data"]["results"][0].clone();
+    assert_eq!(
+        row["error"]["class"].as_str(),
+        Some("aborted"),
+        "the ceiling did not end the claim: {payload}"
+    );
+    // `browser` is held for ten seconds and the ceiling is two, so giving up
+    // anywhere short of the hold is the ceiling and not the release.
+    assert!(
+        gave_up_after < Duration::from_secs(8),
+        "it waited {gave_up_after:?}, which is the lease coming free rather than the ceiling"
+    );
+}
+
+const WANTS_BROWSER: &str = "\
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        waits: { cmd: \"sleep 1\", scope: component, exclusive: [browser] }
+";
+
+const HOLDS_BROWSER: &str = "\
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        holds: { cmd: \"sleep 10\", scope: component, exclusive: [browser] }
+";
+
+/// `gate` exists so `waits` claims its exclusive on a *later* pass than the one
+/// that starts `ticks` — otherwise the claim is performed before the ticking
+/// child is spawned, and there is no running deadline for a parked loop to
+/// miss. That ordering is the whole setup, so it is stated here rather than
+/// left to the reader to notice.
+const TICKS_WHILE_WAITING: &str = "\
+manifest:
+  version: 1
+  components:
+    app:
+      checks:
+        gate:  { cmd: \"sleep 1\", scope: component }
+        ticks: { cmd: \"sleep 30\", scope: component, timeout: 2 }
+        waits:
+          cmd: \"sleep 1\"
+          scope: component
+          exclusive: [browser]
+          needs: [app:gate]
+";
+
 const EXPENSIVE: &str = "\
 manifest:
   version: 1
