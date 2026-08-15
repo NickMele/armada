@@ -37,6 +37,7 @@ pub mod run;
 pub mod scan;
 pub mod schedule;
 pub mod scope;
+pub mod secrets;
 pub mod select;
 pub mod service;
 pub mod template;

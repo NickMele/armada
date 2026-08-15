@@ -73,6 +73,17 @@ pub struct App<R: Run, C: Clock, F: Fetch> {
     pub boot_id: String,
     /// The environment Armada was started with, captured once.
     pub inherited: BTreeMap<String, String>,
+    /// Whatever a detaching parent left on this process's stdin, read once at
+    /// the entrypoint. `None` for every invocation that is not a detached run.
+    ///
+    /// **The secret handoff, and it is a `String` rather than a reader for the
+    /// same reason `inherited` is a map rather than `std::env::var`**
+    /// (`ARCHITECTURE.md` §1.4): the ambient world is read at the top and passed
+    /// down as a value, so nothing below the entrypoint sniffs for it. The
+    /// decision to read at all is made from [`App::inherited`] alone — see
+    /// [`crate::secrets`] for why the channel is stdin and not a file, an
+    /// environment variable or argv.
+    pub handoff: Option<String>,
     /// The run this invocation belongs to, when it is inside one.
     ///
     /// Set for `check` and cleared everywhere else, which is what makes
@@ -757,6 +768,10 @@ pub fn build<R: Run, C: Clock, F: Fetch>(
         namespace,
         boot_id,
         inherited,
+        // Filled in by the entrypoint, and only for a detached run. Nothing
+        // here may touch stdin: this function is what every test builds its
+        // runtime with, and a read here would block every one of them.
+        handoff: None,
         run: None,
         held: Vec::new(),
     })

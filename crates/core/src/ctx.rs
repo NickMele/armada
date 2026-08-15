@@ -69,6 +69,23 @@ pub enum StdioMode {
     /// The child keeps Armada's own descriptors — colours, progress bars and
     /// prompts work, and Armada sees nothing.
     Inherit,
+    /// Armada reads the child's stdout; **stdin and stderr stay the
+    /// terminal's**.
+    ///
+    /// **This is the secret provider's mode and it has no second caller**
+    /// (PLAN.md §4.7). A provider is a command that prints one secret to
+    /// stdout, and the three streams want three different answers:
+    ///
+    /// | stream | who gets it | why |
+    /// |---|---|---|
+    /// | stdout | Armada | it is the secret, and it must reach nothing else |
+    /// | stdin | the terminal | `op` against a locked vault has to be able to read a passphrase, and a `Stdio::null()` stdin is the difference between `--detach` working with 1Password and hanging |
+    /// | stderr | the terminal | the prompt and the *"vault is locked"* belong in front of the person, **and** §4.7 rule 3 forbids Armada repeating a provider's output — a stream Armada never captures is one it cannot repeat by accident |
+    ///
+    /// Pairs with [`RunRequest::session`]`(false)`: `setsid` creates a session
+    /// with no controlling terminal, so a provider spawned into one cannot open
+    /// `/dev/tty` however its stdin is wired.
+    CaptureStdout,
     /// Both streams go to this file, and **Armada holds no end of the pipe**.
     ///
     /// **This is the only mode a service may be started in** (PLAN.md §4.2:
@@ -160,6 +177,18 @@ impl RunRequest {
     /// Choose where the child's output goes.
     pub fn stdio(mut self, stdio: StdioMode) -> Self {
         self.stdio = stdio;
+        self
+    }
+
+    /// Whether to put the child in a new session. Defaults to `true`.
+    ///
+    /// **The one caller that turns it off is the secret provider**
+    /// ([`StdioMode::CaptureStdout`]): `setsid` gives a child no controlling
+    /// terminal, so a provider that has to prompt cannot. Everything else wants
+    /// the default, because a session is what makes one `killpg` reach a whole
+    /// tree.
+    pub fn session(mut self, new_session: bool) -> Self {
+        self.new_session = new_session;
         self
     }
 }

@@ -787,6 +787,7 @@ fn dispatch(
         fetch: RealFetch,
     };
     let mut app = app::build(ctx, home, inherited)?;
+    app.handoff = detach_handoff(&app.inherited);
 
     match invocation {
         Invocation::Init(common) => verbs::init::run(&mut app, common.dry_run),
@@ -1495,6 +1496,47 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<Armad
 /// is running, and nothing below the entrypoint asks the terminal anything.
 fn look(style: Style, terminal: render::term::Terminal) -> verbs::guild::Look {
     verbs::guild::Look { style, terminal }
+}
+
+/// The secret handoff a detaching parent left on stdin, if this is that child.
+///
+/// **Read here and nowhere else**, because this is the entrypoint and stdin is
+/// ambient (`ARCHITECTURE.md` §1.4). The verb underneath gets a `String` on
+/// [`app::App::handoff`] exactly as it gets the environment on `inherited`.
+///
+/// Two guards, and both are about never blocking:
+///
+/// - **`ARMADA_DETACH_RUN` must hold a real run id.** Nothing else in Armada
+///   reads stdin at startup, and an unconditional read would hang every ordinary
+///   invocation whose stdin is the terminal it was typed at. The id is *parsed*
+///   rather than merely present, so that this agrees with
+///   `verbs::check::adopted_run` — which validates for its own reason, the id
+///   becoming a path — and a malformed value takes the ordinary resolving path
+///   in both places instead of one each.
+/// - **stdin must not be a terminal.** Armada sets that variable and Armada
+///   reads it back, so a person who exported it by hand is not a detached child
+///   — and the honest answer for them is an ordinary run, not a wait on input
+///   that will never come. A detaching parent gives its child a pipe, writes the
+///   payload and closes it, so the child's read returns at once.
+///
+/// Why the payload travels this way at all — rather than in a file, in Armada's
+/// own environment, or in argv — is [`armada_helm::secrets`], which is also the
+/// only thing that can read it back.
+fn detach_handoff(inherited: &BTreeMap<String, String>) -> Option<String> {
+    use std::io::{IsTerminal, Read};
+    inherited
+        .get(armada_helm::verbs::check::DETACH_RUN_VAR)
+        .and_then(|value| armada_core::run::RunId::parse(value).ok())?;
+    let mut stdin = std::io::stdin();
+    if stdin.is_terminal() {
+        return None;
+    }
+    let mut payload = String::new();
+    // A read that fails is a run with no secrets rather than a run that cannot
+    // start: the grant it cannot satisfy will fail by name a moment later, which
+    // says far more than "could not read stdin" would.
+    stdin.read_to_string(&mut payload).ok()?;
+    Some(payload)
 }
 
 /// The one thing in the process that asks a person a question.

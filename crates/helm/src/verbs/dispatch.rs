@@ -114,6 +114,31 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
         );
     }
 
+    // **A `commands:` entry's grant is resolved here, and this is the whole of
+    // it** (PLAN.md §4.7). A dispatch is synchronous and attached — there is no
+    // detach to be before — so the ordering `check` has to be careful about is
+    // free here; what is not free is that a declared grant which silently did
+    // nothing would be worse than no grant at all.
+    //
+    // `resolved.stdio` already defaults to `pipe` for an entry that grants
+    // secrets, precisely so Armada can see the output it has to scrub, and the
+    // mask below is what that default was for.
+    let wanted = armada_core::secrets::wanted([entry.secrets.as_slice()]);
+    let vault = if wanted.is_empty() {
+        crate::secrets::Vault::default()
+    } else {
+        let calls = armada_core::secrets::plan(&config, &wanted, &workspace.config_label)?;
+        crate::secrets::resolve(
+            &app.ctx.run,
+            &workspace.root,
+            &calls,
+            crate::secrets::PROVIDER_TIMEOUT_MS,
+        )?
+    };
+    // Into the environment and never into argv, which is world-readable
+    // through `ps`.
+    env.extend(vault.granted(&entry.secrets));
+
     // **`--json` overrides `stdio:` and forces `pipe`.** With `inherit` the
     // child writes to Armada's own stdout and Armada then writes the envelope to
     // the same descriptor, so the one consumer the envelope exists for receives
@@ -158,15 +183,24 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
                 // could move it: sending its stdout to Armada's stderr would make
                 // `Armada mycmd > out.txt` capture nothing, which is the opposite
                 // of what redirecting a command means.
+                //
+                // **The terminal counts as a write** (PLAN.md §4.7): if an
+                // agent runs this and Armada relays the child's output, that
+                // lands in the transcript. So a resolved value is masked on the
+                // way out of Armada, at the value level and before anything
+                // encodes it — which is what `stdio: pipe`'s default for an
+                // entry that grants secrets was always for.
+                let (child_out, child_err) =
+                    (vault.mask(&output.stdout), vault.mask(&output.stderr));
                 let mut err = std::io::stderr();
                 if json {
-                    let _ = err.write_all(output.stdout.as_bytes());
+                    let _ = err.write_all(child_out.as_bytes());
                 } else {
                     let mut out = std::io::stdout();
-                    let _ = out.write_all(output.stdout.as_bytes());
+                    let _ = out.write_all(child_out.as_bytes());
                     let _ = out.flush();
                 }
-                let _ = err.write_all(output.stderr.as_bytes());
+                let _ = err.write_all(child_err.as_bytes());
                 let _ = err.flush();
             }
             Ok(Output::Dispatch(Box::new(Envelope::ok(

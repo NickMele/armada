@@ -47,6 +47,7 @@ use std::path::PathBuf;
 use crate::app::{self, App, Claim};
 use crate::args::Check;
 use crate::render::progress::{Planned, Progress, Shape, Verdict};
+use crate::secrets::{self, Vault};
 use crate::verbs::{load_config, Output};
 
 /// How long the loop sleeps between turns when it has nothing else to do.
@@ -85,9 +86,23 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     let ports = assigned_ports(app, &workspace, &config)?;
     let plans = build_plans(&config, &selection, &candidates, &ports, &workspace, args)?;
 
+    // **Before any provider is invoked, and that is the ordering `--dry-run`
+    // needs.** Reporting what *would* run is not a reason to make somebody
+    // touch a hardware key, so the preview returns from above the resolution
+    // rather than being carved out of it (PLAN.md §4.7).
     if args.dry_run {
         return dry(app, &workspace, plans).map(|e| Output::CheckDryRun(Box::new(e)));
     }
+
+    // **Resolved here, in the caller's terminal, whether or not this run is
+    // about to detach** (PLAN.md §4.7, `docs/reserved/013`). Putting this in
+    // the run loop at `Action::Spawn` — where the value is actually needed — is
+    // right for an attached run and wrong for a detached one, and it fails
+    // *only* in the detached case: the `setsid`'d child has no terminal, so `op`
+    // would wait on a biometric nobody is looking at and the run would hang
+    // until its ceiling instead of failing. `crates/helm/src/secrets.rs` is the
+    // whole of the reasoning, including how a value reaches that child.
+    let vault = resolve_secrets(app, &config, &workspace, &plans)?;
 
     // **Everything above ran in the caller's terminal, and that is the point.**
     // Selection, the diff, the port block and the substitution of every argv
@@ -96,7 +111,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     // would then poll it to learn what a synchronous error had been ready to
     // say. What detaches is the part that takes time.
     if args.detach {
-        return detach(app, &workspace, plans, args).map(|e| Output::Check(Box::new(e)));
+        return detach(app, &workspace, plans, args, &vault).map(|e| Output::Check(Box::new(e)));
     }
 
     // **Fail fast, unless the caller asked to queue** (PLAN.md §3.2.1).
@@ -111,7 +126,7 @@ pub fn run<R: Run, C: Clock, F: Fetch>(
     };
     let lease = LeaseId::run(workspace.id.clone());
     let envelope = app::with_lease(app, lease, policy, None, |app| {
-        execute(app, &workspace, plans, args, progress)
+        execute(app, &workspace, plans, args, progress, &vault)
     });
     // **The line is erased whichever way the run ended**, including the lease
     // acquisition failing before anything was drawn. A failure report printed
@@ -372,6 +387,59 @@ fn blocked_on_a_service(check: &ResolvedCheck) -> Option<ArmadaError> {
     })
 }
 
+// -------------------------------------------------------------------- secrets
+
+/// Every secret this run's checks were granted, resolved — or inherited from
+/// the parent that already resolved them.
+///
+/// **Two callers of this function and only one of them ever runs a provider.**
+/// An ordinary invocation holds the terminal and resolves; a detached child
+/// reads what its parent resolved off stdin and **must never invoke a provider
+/// at all**, because it has no terminal for one to prompt on. That branch is
+/// the enforcement of `PLAN.md` §4.7's *"resolved before the process detaches"*,
+/// and it is written as a branch rather than as a comment precisely because the
+/// wrong version passes every attached test.
+///
+/// **Called before the run lease is taken, and that ordering is load-bearing.**
+/// A provider may wait two minutes for a person to find a hardware key
+/// ([`secrets::PROVIDER_TIMEOUT_MS`]); holding the workspace's run lease across
+/// that would block every other agent in the worktree on a prompt they cannot
+/// see, and a heartbeat renewed from a loop that is parked in `read` is the
+/// shape PLAN.md §4.3 exists to make impossible. Nothing is claimed until the
+/// answers are in hand.
+///
+/// **Only what this run wants.** `check --component api` resolves `api`'s
+/// grants and nothing else, so a repository with four providers does not
+/// produce four prompts to lint one component. Skipped checks are included:
+/// a `--fix` that skips a check has still selected it, and a plan is not the
+/// place to decide that a grant was hypothetical.
+fn resolve_secrets<R: Run, C: Clock, F: Fetch>(
+    app: &App<R, C, F>,
+    config: &ResolvedConfig,
+    workspace: &Workspace,
+    plans: &[Plan],
+) -> Result<Vault, ArmadaError> {
+    if let Some(payload) = &app.handoff {
+        return Ok(secrets::inherit(payload));
+    }
+
+    let wanted = armada_core::secrets::wanted(plans.iter().map(|plan| plan.env.secrets.as_slice()));
+    if wanted.is_empty() {
+        // **No calls, so no `op`, so no prompt.** The overwhelming majority of
+        // runs are this one, and a repository that declares providers but grants
+        // nothing to the selected checks must be indistinguishable from one that
+        // declares none.
+        return Ok(Vault::default());
+    }
+    let calls = armada_core::secrets::plan(config, &wanted, &workspace.config_label)?;
+    secrets::resolve(
+        &app.ctx.run,
+        &app.cwd(),
+        &calls,
+        secrets::PROVIDER_TIMEOUT_MS,
+    )
+}
+
 // -------------------------------------------------------------------- dry run
 
 fn dry<R: Run, C: Clock, F: Fetch>(
@@ -417,7 +485,7 @@ fn dry<R: Run, C: Clock, F: Fetch>(
 /// foreground run does. Two different claims, two different variables — one
 /// variable meaning both is how a detached run would come to skip the lease
 /// that stops two runs sharing one workspace.
-const DETACH_RUN_VAR: &str = "ARMADA_DETACH_RUN";
+pub const DETACH_RUN_VAR: &str = "ARMADA_DETACH_RUN";
 
 /// The run this invocation was detached to carry out, if it is one.
 ///
@@ -507,6 +575,7 @@ fn detach<R: Run, C: Clock, F: Fetch>(
     workspace: &Workspace,
     plans: Vec<Plan>,
     args: &Check,
+    vault: &Vault,
 ) -> Result<Envelope<CheckData>, ArmadaError> {
     let run_id = RunId::mint(app.ctx.now.wall_ms(), entropy(app));
     let (reaped, skipped) = runs::reap(&workspace.root, app.machine.run_retention, &[])?;
@@ -553,7 +622,17 @@ fn detach<R: Run, C: Clock, F: Fetch>(
         // captured stream would leave Armada holding the read end of a pipe it
         // is about to drop — the first write after that is `EPIPE`, which would
         // kill the run moments after this call reported it started.
-        .stdio(StdioMode::Log(runs::detach_log(&workspace.root, &run_id)));
+        .stdio(StdioMode::Log(runs::detach_log(&workspace.root, &run_id)))
+        // **The secret handoff, and the reason it goes here rather than into
+        // `.env()` above.** PLAN.md §4.7 rule 5: §4.5 inherits Armada's own
+        // environment wholesale to every child, so a resolved value put in it
+        // would grant every secret to every child and void per-entry grants
+        // entirely. This is a pipe between exactly two processes, written and
+        // closed inside `ProcessGroup::spawn` before this call returns, and it
+        // touches no disk on the way — which is the constraint
+        // `ARCHITECTURE.md` §1.8 puts on the whole design. See
+        // `crates/helm/src/secrets.rs` for the alternatives and why each fails.
+        .with_stdin(vault.handoff());
 
     // **Recorded before it is spawned, and settled afterwards** — the order
     // `armada manifest up` established, for its reason: the failure mode must
@@ -834,6 +913,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     plans: Vec<Plan>,
     args: &Check,
     progress: &mut dyn Progress,
+    vault: &Vault,
 ) -> Result<Envelope<CheckData>, ArmadaError> {
     // **A detached child adopts the run its parent already opened** rather
     // than minting one of its own, because the parent has already told the
@@ -901,6 +981,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
         held: BTreeMap::new(),
         slots: app.machine.cpu_slots,
         polled: BTreeMap::new(),
+        vault,
     };
 
     // **The record exists before the first check does.** `--status` may be
@@ -992,6 +1073,15 @@ struct Loop<'a> {
     /// store is the shell's own business, and there is nowhere else it could
     /// be recorded.
     polled: BTreeMap<CheckId, u64>,
+    /// What this run resolved, **borrowed rather than owned**, because it was
+    /// resolved before the run started and outlives it.
+    ///
+    /// The loop uses it for exactly two things and neither is a decision: the
+    /// per-entry grant handed to a child at [`spawn`], and the mask applied to
+    /// captured output on its way to disk in [`collect_children`]. Nothing in
+    /// [`armada_core::schedule`] can see it — a pure function that has never
+    /// seen a value cannot leak one (`ARCHITECTURE.md` §1.8).
+    vault: &'a Vault,
 }
 
 fn drive<R: Run, C: Clock, F: Fetch>(
@@ -1415,6 +1505,17 @@ fn spawn<R: Run, C: Clock, F: Fetch>(
 
     let mut environment = app.child_env();
     environment.extend(env.set.clone());
+    // **The grant, applied at the last possible moment** (PLAN.md §4.7). The
+    // vault holds everything this run resolved; this check gets only the names
+    // its own `secrets:` listed, so a sibling with no grant sees none of them —
+    // which is the assertion §4.7 rule 5 asks for by name and which
+    // `crates/helm/tests/secrets.rs` makes.
+    //
+    // **Into the environment and never into argv**, because argv is
+    // world-readable through `ps` — and the dispatch record written a few lines
+    // above already carries `EnvDelta::names()` rather than values, so the run
+    // directory learns that the variable was set and never what it was set to.
+    environment.extend(it.vault.granted(&env.secrets));
 
     let request = RunRequest::new(argv, cwd)
         .env(environment)
@@ -1462,7 +1563,19 @@ fn collect_children(workspace: &Workspace, it: &mut Loop<'_>, queue: &mut Vec<Ev
     for (check, output) in finished {
         it.children.remove(&check);
 
-        let text = format!("{}{}", output.stdout, output.stderr);
+        // **Armada reads raw and writes scrubbed** (PLAN.md §4.7). The exit code
+        // above is read off the real child and the mask is a filter on the way
+        // *out*, applied at the value level before anything serializes it —
+        // filtering the serialized form would fail the moment a value contained
+        // a `"` or a `\`, because Armada's own encoder would have escaped it
+        // first (§4.7 rule 2).
+        //
+        // A check granted a token and told to `set -x` is the case this exists
+        // for: the run directory is a place agents are *expected* to read, which
+        // is the whole reason §4.7 was written.
+        let text = it
+            .vault
+            .mask(&format!("{}{}", output.stdout, output.stderr));
         let path = runs::log_path(&workspace.root, &it.run_id, &check);
         let _ = std::fs::write(&path, text.as_bytes());
 

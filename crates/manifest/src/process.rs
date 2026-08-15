@@ -115,6 +115,19 @@ impl ProcessGroup {
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
             }
+            // **Only stdout is Armada's.** The other two stay the terminal's so
+            // that a secret provider can prompt on one and complain on the
+            // other — see [`StdioMode::CaptureStdout`], which is this variant's
+            // only caller and states why each stream goes where it does.
+            StdioMode::CaptureStdout => {
+                command
+                    .stdin(match request.stdin {
+                        Some(_) => Stdio::piped(),
+                        None => Stdio::inherit(),
+                    })
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit());
+            }
             StdioMode::Inherit => {
                 command
                     .stdin(match request.stdin {
