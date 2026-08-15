@@ -4,8 +4,7 @@
   missing  docker     not required by every repo
   created  ~/.armada  guild/, jobs/, workspaces/
 
-Do you already have a guild?
-  1 pull from a remote  2 import a bundle  3 build one now  > 3
+Do you already have a guild?  > 3 build one now
 
   imported from ~/.claude/, 19 skills, 12 hooks, 4 plugins, CLAUDE.md
 

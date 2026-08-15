@@ -485,6 +485,13 @@ fn a_refused_dispatch_matches_its_fixture() {
 /// directory, so building the envelope by hand would test the renderer against
 /// a scan nobody performed, and the two parsers between the files and the table
 /// are where this verb's mistakes live.
+///
+/// **`Ask` ends the report and draws nothing.** It used to print a menu of two
+/// numbers here, which is what a real reader could not tell was a prompt; the
+/// question is a selector on stderr now (`ask::select`), below the evidence
+/// rather than inside it. A widget is not byte-comparable, so this fixture
+/// freezes the half that is — everything stdout carries — and the widget's
+/// behaviour is covered by unit tests over its key handling.
 #[test]
 fn config_scan_matches_its_fixture() {
     assert_render("config-scan", &scan_of("next-prisma", Handover::Ask));

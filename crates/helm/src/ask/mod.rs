@@ -25,17 +25,24 @@
 
 pub mod buffer;
 pub mod editor;
+pub mod select;
+pub mod terminal;
 
 use armada_core::envelope::Asked;
+pub use select::Choice;
 
-/// Who answers the interview.
+/// Who answers a question Armada puts.
 pub trait Ask {
     /// Put one question. `None` means the default was taken.
     fn question(&mut self, asked: &Asked) -> Option<String>;
 
-    /// Put the one multiple-choice question, and return the **one-based** index
-    /// of the answer.
-    fn choose(&mut self, question: &str, options: &[&str], default: usize) -> usize;
+    /// Put a closed question, and return the **one-based** index of the answer.
+    ///
+    /// **Every multiple-choice question in Armada comes through here**, which is
+    /// the point: `armada init`'s *do you already have a guild?* and `config
+    /// scan`'s hand-over were two printed lists that each waited silently on
+    /// stdin, and fixing one of them would have left the other.
+    fn choose(&mut self, question: &str, options: &[Choice], default: usize) -> usize;
 }
 
 /// Take the default answer to everything.
@@ -52,7 +59,7 @@ impl Ask for Defaults {
         None
     }
 
-    fn choose(&mut self, _: &str, _: &[&str], default: usize) -> usize {
+    fn choose(&mut self, _: &str, _: &[Choice], default: usize) -> usize {
         default
     }
 }
@@ -78,7 +85,7 @@ impl Ask for Scripted {
         self.answers.remove(0)
     }
 
-    fn choose(&mut self, _: &str, _: &[&str], default: usize) -> usize {
+    fn choose(&mut self, _: &str, _: &[Choice], default: usize) -> usize {
         self.choice.unwrap_or(default)
     }
 }
@@ -92,42 +99,52 @@ pub struct AtTheTerminal<W: std::io::Write, R: std::io::BufRead> {
     input: R,
     style: crate::render::style::Style,
     width: usize,
-    prose: Prose,
+    surface: Surface,
 }
 
-/// How a paragraph-shaped answer is typed.
+/// Whether this invocation may draw a widget.
+///
+/// **One flag for both widgets, because they answer one question**: is a person
+/// here who can see a box and press a key. The text area and the selector had no
+/// business disagreeing about that, and two flags is how they would eventually
+/// have.
 ///
 /// **Two, because one of them cannot be tested and the other is most of the
-/// behaviour.** [`Prose::Area`] takes over the terminal — raw mode, an inline
-/// viewport, real key events — and no test that runs without a TTY can drive it.
-/// [`Prose::Line`] is the same question read through the same streams as every
-/// other one, which is what the whole `Ask` suite uses and what a run with no
-/// terminal gets.
+/// behaviour.** [`Surface::Widgets`] takes over the terminal — raw mode, an
+/// inline viewport, real key events — and no test that runs without a TTY can
+/// drive it. [`Surface::Lines`] reads through the same streams as everything
+/// else, which is what the whole `Ask` suite uses, what a terminal that refuses
+/// raw mode falls back to, and what a run with no terminal gets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Prose {
-    /// The inline text area of [`editor`].
-    Area,
-    /// One line, like every other question.
-    Line,
+pub enum Surface {
+    /// The inline text area of [`editor`] and the selector of [`select`].
+    Widgets,
+    /// Printed prompts and a line of stdin, like every other question.
+    Lines,
 }
 
 impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
-    /// Ask through these two streams, reading paragraphs a line at a time.
+    /// Ask through these two streams, in lines.
     pub fn new(prompt: W, input: R, style: crate::render::style::Style, width: usize) -> Self {
         AtTheTerminal {
             prompt,
             input,
             style,
             width,
-            prose: Prose::Line,
+            surface: Surface::Lines,
         }
     }
 
-    /// Open the inline text area for the three questions that want paragraphs.
+    /// Draw widgets: the text area for prose, the selector for a closed
+    /// question.
     ///
-    /// Only `main` calls this, and only when stderr is a real terminal.
-    pub fn with_text_area(mut self) -> Self {
-        self.prose = Prose::Area;
+    /// **Only `main` calls this, and only when both stdin and stdout are a
+    /// terminal** — the same rule `armada_core::scan::handover` applies, and for
+    /// the same reason. stdin decides whether an answer can arrive and stdout
+    /// decides whether the question was seen; an agent that met a widget on
+    /// either would block on stdin that never comes.
+    pub fn interactive(mut self) -> Self {
+        self.surface = Surface::Widgets;
         self
     }
 
@@ -157,7 +174,7 @@ impl<W: std::io::Write, R: std::io::BufRead> Ask for AtTheTerminal<W, R> {
             "\n{}",
             crate::render::interview_prompt(asked, self.style, self.width)
         );
-        if asked.prose && self.prose == Prose::Area {
+        if asked.prose && self.surface == Surface::Widgets {
             let _ = self.prompt.write_all(prompt.as_bytes());
             let _ = self.prompt.flush();
             return match editor::read(self.style, asked.standing.as_deref()) {
@@ -168,15 +185,47 @@ impl<W: std::io::Write, R: std::io::BufRead> Ask for AtTheTerminal<W, R> {
         self.put(&prompt).filter(|answer| !answer.is_empty())
     }
 
-    fn choose(&mut self, question: &str, options: &[&str], default: usize) -> usize {
-        let prompt = crate::render::guild_question(question, options, self.style);
+    /// **The selector when a person is here; the printed list otherwise.**
+    ///
+    /// The list is not a lesser copy kept around out of caution — it is the form
+    /// an agent reading stdout gets, and the form a terminal that will not go
+    /// into raw mode falls back to. Both are real audiences, and neither may
+    /// block on a widget it cannot see.
+    fn choose(&mut self, question: &str, options: &[Choice], default: usize) -> usize {
+        if self.surface == Surface::Widgets {
+            if let Some(chosen) = select::ask(question, options, default, self.style) {
+                self.echo(question, options, chosen);
+                return chosen;
+            }
+        }
+        let prompt = crate::render::choice_list(question, options, default, self.style);
         // **An unreadable answer takes the default rather than re-asking.** A
         // loop here is a loop a piped stdin cannot escape, and the default is a
-        // documented, working outcome for every question in this interview.
-        self.put(&prompt)
+        // documented, working outcome for every question Armada asks.
+        let chosen = self
+            .put(&prompt)
             .and_then(|answer| answer.parse::<usize>().ok())
             .filter(|chosen| *chosen >= 1 && *chosen <= options.len())
-            .unwrap_or(default)
+            .unwrap_or(default);
+        self.echo(question, options, chosen);
+        chosen
+    }
+}
+
+impl<W: std::io::Write, R: std::io::BufRead> AtTheTerminal<W, R> {
+    /// Write what was picked, where the question was put.
+    ///
+    /// **A selector that clears itself leaves no record of the decision.** The
+    /// widget's viewport is gone the moment it closes, so without this the
+    /// scrollback shows a report, a gap, and whatever happened next — and the
+    /// one line saying which of the options produced it is nowhere.
+    fn echo(&mut self, question: &str, options: &[Choice], chosen: usize) {
+        let Some(choice) = options.get(chosen.saturating_sub(1)) else {
+            return;
+        };
+        let line = crate::render::chosen_line(question, &choice.label, chosen, self.style);
+        let _ = self.prompt.write_all(line.as_bytes());
+        let _ = self.prompt.flush();
     }
 }
 
@@ -198,11 +247,19 @@ mod tests {
         }
     }
 
+    fn three() -> Vec<Choice> {
+        vec![
+            Choice::new("pull from a remote", "clones it"),
+            Choice::bare("import a bundle"),
+            Choice::bare("build one now"),
+        ]
+    }
+
     /// `--defaults` answers nothing, and that is not a failure.
     #[test]
     fn defaults_takes_every_default() {
         assert_eq!(Defaults.question(&asked()), None);
-        assert_eq!(Defaults.choose("q", &["a", "b", "c"], 3), 3);
+        assert_eq!(Defaults.choose("q", &three(), 3), 3);
     }
 
     fn terminal(input: &str) -> AtTheTerminal<Vec<u8>, std::io::BufReader<&[u8]>> {
@@ -230,7 +287,7 @@ mod tests {
     #[test]
     fn end_of_input_takes_the_default_rather_than_hanging() {
         assert_eq!(terminal("").question(&asked()), None);
-        assert_eq!(terminal("").choose("q", &["a", "b", "c"], 3), 3);
+        assert_eq!(terminal("").choose("q", &three(), 3), 3);
     }
 
     /// **Everything a question needs, in the order it is read**, and the caret
@@ -275,8 +332,42 @@ mod tests {
     #[test]
     fn an_unreadable_choice_takes_the_default() {
         for input in ["9\n", "yes\n", "\n"] {
-            assert_eq!(terminal(input).choose("q", &["a", "b", "c"], 3), 3);
+            assert_eq!(terminal(input).choose("q", &three(), 3), 3);
         }
-        assert_eq!(terminal("1\n").choose("q", &["a", "b", "c"], 3), 1);
+        assert_eq!(terminal("1\n").choose("q", &three(), 1), 1);
+    }
+
+    /// **The printed form says what each option does and what enter takes.**
+    ///
+    /// It replaces one line of numbers ending at a bare caret, which is the
+    /// thing a real reader could not interpret — *"just stopping and me guessing
+    /// it's asking me to input a number"*. This is what an agent reading stdout
+    /// gets and what a terminal that refuses raw mode falls back to, so it has
+    /// to stand on its own.
+    #[test]
+    fn the_printed_list_gives_every_option_a_line_and_says_what_enter_takes() {
+        let mut ask = terminal("2\n");
+        ask.choose("Do you already have a guild?", &three(), 3);
+        let written = String::from_utf8(ask.prompt).unwrap();
+        assert_eq!(
+            written,
+            "Do you already have a guild?\n\
+             \x20 1  pull from a remote  clones it\n\
+             \x20 2  import a bundle\n\
+             \x20 3  build one now\n\
+             \x20 a number, or enter for 3  > \
+             Do you already have a guild?  > 2 import a bundle\n"
+        );
+    }
+
+    /// **What was picked is echoed, whichever way it was picked.** A selector
+    /// clears its own viewport, so without this the scrollback shows a report, a
+    /// gap, and no record of the decision that produced what follows.
+    #[test]
+    fn the_chosen_option_is_echoed_for_the_scrollback() {
+        let mut ask = terminal("\n");
+        assert_eq!(ask.choose("q", &three(), 3), 3);
+        let written = String::from_utf8(ask.prompt).unwrap();
+        assert!(written.ends_with("q  > 3 build one now\n"), "{written:?}");
     }
 }

@@ -39,6 +39,3 @@ no armada.yml here, this is evidence and not a config
     backend, scripts, web
 
 Evidence only. Armada does not guess which of these you actually run.
-
-  1 let an agent write it with me  opens claude here
-  2 print the evidence and stop    I will write armada.yml myself

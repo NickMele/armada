@@ -33,6 +33,3 @@
     [38;2;107;114;128mpnpm install --frozen-lockfile · pnpm lint · pnpm test · pnpm build[0m
 
 [1m[38;2;255;169;64mEvidence only.[0m [38;2;107;114;128mArmada does not guess which of these you actually run.[0m
-
-  1 let an agent write it with me  [38;2;107;114;128mopens claude here[0m
-  2 print the evidence and stop    [38;2;107;114;128mI will write armada.yml myself[0m

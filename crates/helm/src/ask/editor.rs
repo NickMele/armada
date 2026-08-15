@@ -36,18 +36,14 @@
 //! and a panic hook puts them back before the message is printed — because the
 //! message is unreadable otherwise, which is exactly when you need it.
 
-use ratatui::crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind, KeyModifiers,
-};
-use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::Style as RataStyle;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::{Terminal, TerminalOptions, Viewport};
 
 use super::buffer::Buffer;
+use super::terminal::{painted, Restore};
 use crate::render::palette::Role;
 use crate::render::style::Style;
 
@@ -192,76 +188,9 @@ fn wrapped_rows_before(buffer: &Buffer, row: usize, width: usize) -> usize {
         .sum()
 }
 
-/// One of Armada's roles as a `ratatui` style, or unstyled when colour is off.
-///
-/// **The palette is not duplicated.** `render/palette.rs` is the one place a
-/// colour is chosen (`docs/commands/render.md`), and this reads its RGB rather
-/// than naming a second set here.
-fn painted(style: Style, role: Role) -> RataStyle {
-    if !style.enabled() {
-        return RataStyle::default();
-    }
-    let (r, g, b) = role.rgb();
-    RataStyle::default().fg(ratatui::style::Color::Rgb(r, g, b))
-}
-
-/// Raw mode and bracketed paste, put back on drop **and on panic**.
-///
-/// Both are process-wide switches. A panic that left raw mode on would leave the
-/// person with a shell that does not echo what they type — and the panic message
-/// itself would be printed without carriage returns, stepping diagonally down
-/// the screen. So the hook restores first and prints second: the one moment the
-/// message matters is the one moment it would otherwise be unreadable.
-struct Restore;
-
-impl Restore {
-    fn install() -> Result<Restore, std::io::Error> {
-        enable_raw_mode()?;
-        if execute!(std::io::stderr(), EnableBracketedPaste).is_err() {
-            // A terminal that will not bracket pastes still edits fine; a paste
-            // arrives as keystrokes instead. Not worth refusing the interview
-            // over.
-            let _ = disable_raw_mode();
-            enable_raw_mode()?;
-        }
-
-        let previous = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            let _ = execute!(std::io::stderr(), DisableBracketedPaste);
-            let _ = disable_raw_mode();
-            previous(info);
-        }));
-
-        Ok(Restore)
-    }
-}
-
-impl Drop for Restore {
-    fn drop(&mut self) {
-        let _ = execute!(std::io::stderr(), DisableBracketedPaste);
-        let _ = disable_raw_mode();
-        let _ = std::panic::take_hook();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// **A palette colour, not a second palette.** `render/palette.rs` is the
-    /// one place a colour is chosen, and colour off means no styling at all.
-    #[test]
-    fn the_editor_paints_from_the_one_palette() {
-        assert_eq!(
-            painted(Style::plain(), Role::SteelGrey),
-            RataStyle::default()
-        );
-        let (r, g, b) = Role::SteelGrey.rgb();
-        assert_eq!(
-            painted(Style::painted(), Role::SteelGrey),
-            RataStyle::default().fg(ratatui::style::Color::Rgb(r, g, b))
-        );
-    }
 
     /// The cursor follows the wrap. A line twice the width of the box occupies
     /// two rows of it, and the row after that starts on the third.

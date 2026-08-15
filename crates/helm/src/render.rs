@@ -52,6 +52,7 @@ use armada_core::ports::PortState;
 use armada_core::reap::ReapPlan;
 use armada_core::scan::{Handover, TellWhy};
 
+use crate::ask::Choice;
 use crate::verbs::Output;
 use palette::Role;
 use style::Style;
@@ -513,26 +514,60 @@ fn machine_table(rows: &[Finding], style: Style) -> Table {
     table
 }
 
-/// *Do you already have a guild?* — **live**, as it is put to a person.
+/// A closed question **printed rather than drawn** — the form an agent reading
+/// stdout gets, and the one a terminal that refuses raw mode falls back to.
+///
+/// It replaces a one-line menu of numbers that ended at a bare caret. That form
+/// was compact and it was the thing a real reader could not interpret: *"has to
+/// have a better UI for selecting options instead of just stopping and me
+/// guessing it's asking me to input a number."* One option per line leaves room
+/// for what each one does, and the last line says what is expected and what
+/// enter takes.
 ///
 /// Ends at the caret with a space and no newline, because that is where the
-/// cursor sits and the terminal's own echo completes the line. The record in
-/// [`machine_init`] is this string with the answer put back, which is what
-/// makes the two identical rather than merely similar.
-pub fn guild_question(question: &str, options: &[&str], style: Style) -> String {
+/// cursor sits and the terminal's own echo completes the line.
+pub fn choice_list(question: &str, options: &[Choice], default: usize, style: Style) -> String {
     let mut out = format!("{}\n", style.paint(Role::SignalAmber, question));
-    // **The three answers on one line**, because a menu of three is a list you
-    // scan rather than read.
-    out.push_str("  ");
-    for (index, option) in options.iter().enumerate() {
-        out.push_str(&style.paint(Role::NavalBlue, &(index + 1).to_string()));
-        out.push(' ');
-        out.push_str(option);
-        out.push_str("  ");
+    let mut table = Table::new(vec![
+        Column::fixed(""),
+        Column::fixed(""),
+        Column::flexible(""),
+    ])
+    .headerless()
+    .indent(2);
+    for (index, choice) in options.iter().enumerate() {
+        table = table.row(vec![
+            Cell::painted((index + 1).to_string(), Role::NavalBlue),
+            Cell::plain(choice.label.clone()),
+            Cell::muted(choice.aside.clone()),
+        ]);
     }
+    out.push_str(&table.render(style, Terminal::FALLBACK_WIDTH));
+    out.push_str("  ");
+    out.push_str(&style.paint(
+        Role::SteelGrey,
+        &format!("a number, or enter for {default}"),
+    ));
+    out.push_str("  ");
     out.push_str(&style.paint(Role::SteelGrey, style.caret()));
     out.push(' ');
     out
+}
+
+/// What was picked, on one line, for the scrollback.
+///
+/// **A selector that clears itself leaves no record of the decision.** The
+/// widget's viewport is gone the moment it closes; this is the line that stays,
+/// and it is also how [`machine_init`] replays the choice into its transcript —
+/// which is what makes the live conversation and the record the same sentence
+/// rather than merely similar ones.
+pub fn chosen_line(question: &str, label: &str, chosen: usize, style: Style) -> String {
+    format!(
+        "{}  {} {}\n",
+        style.paint(Role::SignalAmber, question),
+        style.paint(Role::SteelGrey, style.caret()),
+        style.paint(Role::RadarCyan, &format!("{chosen} {label}")),
+    )
 }
 
 /// How far every line of a question is indented, past the `n/5`.
@@ -679,14 +714,20 @@ fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize
     let mut out = machine_table(&data.results, style).render(style, width);
 
     if let Some(choice) = &data.guild {
-        let options: Vec<&str> = choice.options.iter().map(String::as_str).collect();
         out.push('\n');
-        out.push_str(&guild_question(&choice.question, &options, style));
-        // **The answer is the terminal's own echo when it is live**, and this
-        // is the same line replayed with what was typed put back.
-        out.push_str(&format!(
-            "{}\n",
-            style.paint(Role::RadarCyan, &choice.chosen.to_string())
+        // **The record, not the menu.** Live, the question is a selector drawn
+        // on stderr and gone the moment it closes; what belongs in a transcript
+        // is which option produced everything under it. Same line the selector
+        // itself echoes, so the two cannot drift.
+        out.push_str(&chosen_line(
+            &choice.question,
+            choice
+                .options
+                .get(choice.chosen.saturating_sub(1))
+                .map(String::as_str)
+                .unwrap_or_default(),
+            choice.chosen,
+            style,
         ));
     }
 
@@ -2121,14 +2162,22 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
     }
 
     out.push_str(&format!(
-        "\n{} {}\n\n",
+        "\n{} {}\n",
         style.strong(Role::SignalAmber, "Evidence only."),
         style.paint(
             Role::SteelGrey,
             "Armada does not guess which of these you actually run."
         )
     ));
-    out.push_str(&handover(style, width, &data.handover));
+    // **The blank line belongs to the hand-over, not to the sentence above it.**
+    // Two of the three hand-overs now draw nothing — one is a selector on
+    // stderr, the other is `--json` — and a report that ended in a blank line
+    // whenever nothing followed it would be a trailing newline nobody asked for.
+    let next = handover(style, width, &data.handover);
+    if !next.is_empty() {
+        out.push('\n');
+        out.push_str(&next);
+    }
     out
 }
 
@@ -2148,17 +2197,15 @@ fn handover(style: Style, width: usize, choice: &Handover) -> String {
     match choice {
         // Nothing at all: `--json` is a parser waiting for one payload.
         Handover::Silent => return String::new(),
-        Handover::Ask => {
-            table = table
-                .row(vec![
-                    Cell::plain("1 let an agent write it with me"),
-                    Cell::muted("opens claude here"),
-                ])
-                .row(vec![
-                    Cell::plain("2 print the evidence and stop"),
-                    Cell::muted("I will write armada.yml myself"),
-                ]);
-        }
+        // **Nothing here either, and that is the change.** The choice used to be
+        // printed as part of this report — a list of numbers that then waited
+        // silently on stdin, which is the thing a real reader could not
+        // interpret. It is a selector now (`ask::select`), drawn on stderr
+        // *below* this report so the evidence he has just read stays on the
+        // screen, and echoed afterwards so the scrollback records what he
+        // picked. `Ask` is only ever produced when a person is at a terminal, so
+        // there is no audience left for a printed menu here.
+        Handover::Ask => return String::new(),
         // **The command, so a reader who cannot answer a menu still learns the
         // next step.** A prompt drawn for an agent is worse than no prompt: it
         // is a question it cannot satisfy, in the place an instruction belongs.

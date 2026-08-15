@@ -31,6 +31,7 @@ use std::path::Path;
 
 use crate::app::App;
 use crate::args::BUILTIN_VERBS;
+use crate::ask::Choice;
 use crate::render::progress::Progress;
 use crate::render::term::Terminal;
 use crate::verbs::Output;
@@ -77,6 +78,34 @@ pub fn scan(
             handover: scan::handover(json, terminal.stdin_is_tty, terminal.stdout_is_tty, skill),
         },
     ))))
+}
+
+/// The question `config scan` ends on, and its two answers.
+///
+/// **Here rather than in the renderer**, which is where the two options used to
+/// be spelled: they are now put by a selector on stderr, printed as a list when
+/// there is no selector to draw, and echoed afterwards — three call sites, so
+/// the words live once, next to the verb that means them.
+pub const ONBOARD_QUESTION: &str = "Write armada.yml now?";
+
+/// Which answer means "hand this repository to an agent". **One-based**, like
+/// everything the selector returns.
+pub const HAND_OVER: usize = 1;
+
+/// The default: print the evidence and stop. **Doing nothing is what an
+/// unanswered question gets**, because the alternative is launching a session
+/// somebody did not ask for.
+pub const STOP: usize = 2;
+
+/// The two answers, in the order they are offered.
+pub fn onboarding_choices() -> Vec<Choice> {
+    vec![
+        Choice::new("let an agent write it with me", "opens claude here"),
+        Choice::new(
+            "print the evidence and stop",
+            "I will write armada.yml myself",
+        ),
+    ]
 }
 
 /// `armada manifest config verify`, in the two passes PLAN.md §5 specifies.

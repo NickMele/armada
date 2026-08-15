@@ -29,7 +29,7 @@ use armada_guild::interview::QUESTIONS;
 use armada_guild::layout::{DIRECTORIES, GUILD_DIRECTORIES};
 use std::path::Path;
 
-use crate::ask::Ask;
+use crate::ask::{Ask, Choice};
 use crate::verbs::guild::{self, InitOptions, Where};
 use crate::verbs::{preflight, Output};
 
@@ -38,6 +38,19 @@ const QUESTION: &str = "Do you already have a guild?";
 
 /// The three, in the order they are offered.
 const ANSWERS: [&str; 3] = ["pull from a remote", "import a bundle", "build one now"];
+
+/// The three, with what each one actually does.
+///
+/// **The aside is not decoration.** Two of these three take seconds and one is
+/// a five-question interview, and a reader who has never run Armada cannot tell
+/// which from three verb phrases.
+fn answers() -> Vec<Choice> {
+    vec![
+        Choice::new(ANSWERS[0], "clones it — the second-machine path"),
+        Choice::new(ANSWERS[1], "unpacks a file you exported elsewhere"),
+        Choice::new(ANSWERS[2], "imports ~/.claude/, then asks five questions"),
+    ]
+}
 
 /// Which answer `--guild`, `--bundle` and a bare run mean.
 const FROM_REMOTE: usize = 1;
@@ -120,7 +133,7 @@ pub fn run(
         (Some(_), _) => FROM_REMOTE,
         (_, Some(_)) => FROM_BUNDLE,
         _ if already || options.defaults => BUILD_ONE,
-        _ => ask.choose(QUESTION, &ANSWERS, BUILD_ONE),
+        _ => ask.choose(QUESTION, &answers(), BUILD_ONE),
     };
 
     let mut imported = Vec::new();
@@ -223,7 +236,7 @@ impl Ask for Recording<'_> {
         self.inner.question(asked)
     }
 
-    fn choose(&mut self, question: &str, options: &[&str], default: usize) -> usize {
+    fn choose(&mut self, question: &str, options: &[Choice], default: usize) -> usize {
         self.inner.choose(question, options, default)
     }
 }

@@ -45,6 +45,20 @@ impl Terminal {
     /// overhanging line is ugly, a line truncated to `ap…` is wrong.
     pub const MIN_WIDTH: usize = 40;
 
+    /// Whether Armada may draw a widget and wait for a keypress.
+    ///
+    /// **Both streams, not either.** stdin decides whether an answer can arrive
+    /// and stdout decides whether the question was seen; a selector drawn while
+    /// stdout is a pipe is a question nobody read, and one drawn while stdin is
+    /// a pipe is a wait that never ends.
+    ///
+    /// This is `armada_core::scan::handover`'s rule, spelled here for every
+    /// other question Armada asks. The test below holds the two against each
+    /// other so they cannot drift into disagreeing about what a terminal is.
+    pub const fn can_ask(self) -> bool {
+        self.stdin_is_tty && self.stdout_is_tty
+    }
+
     /// Ask the operating system. **`main` only.**
     pub fn detect() -> Terminal {
         Terminal {
@@ -153,6 +167,32 @@ mod tests {
         let piped = Terminal::piped();
         assert!(!piped.stdout_is_tty && !piped.stderr_is_tty);
         assert_eq!(piped.width, 80);
+    }
+
+    /// **Whether Armada may ask is one rule, in two places, and they agree.**
+    ///
+    /// `armada_core::scan::handover` decides it for `config scan` and
+    /// [`Terminal::can_ask`] decides it for every other question. Two spellings
+    /// of one rule is how a selector eventually gets drawn for a reader
+    /// `config scan` had already decided could not answer one.
+    #[test]
+    fn asking_is_the_same_rule_the_scan_handover_applies() {
+        for stdin in [false, true] {
+            for stdout in [false, true] {
+                let terminal = Terminal {
+                    stdin_is_tty: stdin,
+                    stdout_is_tty: stdout,
+                    stderr_is_tty: true,
+                    width: 80,
+                };
+                let scan = armada_core::scan::handover(false, stdin, stdout, true);
+                assert_eq!(
+                    terminal.can_ask(),
+                    scan == armada_core::scan::Handover::Ask,
+                    "stdin={stdin} stdout={stdout}"
+                );
+            }
+        }
     }
 
     /// A terminal narrower than the floor is treated as the floor. Shrinking

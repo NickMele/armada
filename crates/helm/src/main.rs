@@ -172,19 +172,7 @@ fn machine_scoped(
     // carries the finished transcript once, at the end, which is what keeps
     // `armada init --json` working without a special case.
     let mut ask: Box<dyn armada_helm::ask::Ask> = if terminal.stderr_is_tty {
-        // **The text area is opened only here.** It takes the terminal into raw
-        // mode, which is a thing to do to a person at a keyboard and not to a
-        // pipe — every other construction of this reads paragraphs a line at a
-        // time, which is also what a run with no terminal gets.
-        Box::new(
-            armada_helm::ask::AtTheTerminal::new(
-                std::io::stderr(),
-                std::io::BufReader::new(std::io::stdin()),
-                style,
-                terminal.width,
-            )
-            .with_text_area(),
-        )
+        Box::new(at_the_terminal(style, terminal))
     } else {
         // No terminal, no interview. Every question has a default and taking
         // all of them leaves a working guild (PLAN.md §13.4) — a prompt written
@@ -569,7 +557,31 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<Armad
     None
 }
 
-/// Read the answer to `config scan`'s choice, and act on it.
+/// The one thing in the process that asks a person a question.
+///
+/// **Widgets only when both stdin and stdout are a terminal**, which is the same
+/// rule `armada_core::scan::handover` applies and is here for the same reason:
+/// stdin decides whether an answer can arrive and stdout decides whether the
+/// question was seen. Computed at the entrypoint and passed down as a value, so
+/// no widget sniffs the ambient world for itself (`ARCHITECTURE.md` §1.4).
+fn at_the_terminal(
+    style: Style,
+    terminal: render::term::Terminal,
+) -> armada_helm::ask::AtTheTerminal<std::io::Stderr, std::io::BufReader<std::io::Stdin>> {
+    let at = armada_helm::ask::AtTheTerminal::new(
+        std::io::stderr(),
+        std::io::BufReader::new(std::io::stdin()),
+        style,
+        terminal.width,
+    );
+    if terminal.can_ask() {
+        at.interactive()
+    } else {
+        at
+    }
+}
+
+/// Put `config scan`'s choice, and act on it.
 ///
 /// **Only ever reached for [`Handover::Ask`]**, which the core decides and
 /// which is only ever produced when both stdin and stdout are a terminal. That
@@ -577,10 +589,15 @@ fn rebuild_refusal(artifacts: bool, orphaned: bool, force: bool) -> Option<Armad
 /// must never block on stdin that will never arrive, and the way it never does
 /// is that no code path here is reachable without a person on the other end.
 ///
+/// **The same selector the interview uses**, drawn below the report rather than
+/// printed into it. That is the whole of what changed: this used to be a list of
+/// numbers in the middle of the output followed by a silent `read_line`, and the
+/// person it was put to could not tell it was waiting for him.
+///
 /// **Option 1 execs rather than spawning.** Armada has produced the evidence
 /// and has nothing further to do, so it gets out of the way entirely — the same
 /// shape `armada fleet board --exec` takes handing over a session.
-fn hand_over(output: &Output) {
+fn hand_over(output: &Output, style: Style, terminal: render::term::Terminal) {
     let Output::Scan(envelope) = output else {
         return;
     };
@@ -588,13 +605,13 @@ fn hand_over(output: &Output) {
         return;
     }
 
-    let mut answer = String::new();
-    // A read that fails is a stream that ended — Ctrl-D, or a terminal that
-    // went away. Nothing was chosen, so nothing happens, which is option 2.
-    if std::io::stdin().read_line(&mut answer).is_err() {
-        return;
-    }
-    if answer.trim() != "1" {
+    let chosen = armada_helm::ask::Ask::choose(
+        &mut at_the_terminal(style, terminal),
+        verbs::config::ONBOARD_QUESTION,
+        &verbs::config::onboarding_choices(),
+        verbs::config::STOP,
+    );
+    if chosen != verbs::config::HAND_OVER {
         return;
     }
 
@@ -636,7 +653,7 @@ fn emit(output: Output, json: bool, style: Style, terminal: render::term::Termin
         // **After the evidence is written and flushed, never before.** The
         // question is about what the reader has just seen, and a prompt that
         // arrives first is a prompt answered blind.
-        hand_over(&output);
+        hand_over(&output, style, terminal);
     }
     // **A signal has no error class, so it does not get the class's code**
     // (`ARCHITECTURE.md` §1.6). The envelope above still says `aborted`,
