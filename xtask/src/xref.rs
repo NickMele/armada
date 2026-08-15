@@ -38,7 +38,7 @@ pub fn check(docs: &[Doc]) -> Vec<Finding> {
             .lines()
             .filter_map(|l| heading.captures(l).map(|c| c[1].to_string()))
             .collect();
-        index.insert(doc.name, secs);
+        index.insert(doc.name.as_str(), secs);
     }
 
     let mut findings = Vec::new();
@@ -53,7 +53,7 @@ pub fn check(docs: &[Doc]) -> Vec<Finding> {
                     continue;
                 }
 
-                let mut candidates: Vec<&str> = vec![doc.name];
+                let mut candidates: Vec<&str> = vec![doc.name.as_str()];
                 if let Some(dm) = docname
                     .find_iter(&line[..whole.start()])
                     .last()

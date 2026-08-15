@@ -6,65 +6,37 @@
 
 use std::path::{Path, PathBuf};
 
-/// The corpus, by the short name a cross-reference uses to attribute a `§`.
+/// The fixed corpus, by the short name a cross-reference uses to attribute a `§`.
 ///
-/// The first six are ordered as `ARCHITECTURE.md` §2.8 orders precedence, so
-/// reports read in the order the documents actually rank. `docs/reserved/*`
-/// follows: one reserved design per file (docs/PLAN.md §15.3), none of which
-/// define a `§`-numbered heading of their own, so their order does not matter
-/// to xref resolution — only that they are read at all.
-pub const FILES: &[(&str, &str)] = &[
+/// Ordered as `ARCHITECTURE.md` §2.8 orders precedence, so reports read in the
+/// order the documents actually rank.
+///
+/// **`docs/reserved/*.md` is not listed here — it is discovered.** A retyped
+/// list was the first shape, and it had the defect the reserved designs
+/// themselves argue against: adding a design without also editing this file left
+/// it silently unchecked, so the gate reported clean on a corpus it had stopped
+/// describing. Discovery cannot drift, and a directory that grows every time
+/// somebody uses Armada is exactly where that matters.
+pub const FIXED: &[(&str, &str)] = &[
     ("traps.md", "docs/traps.md"),
     ("ARCHITECTURE.md", "docs/ARCHITECTURE.md"),
     ("PLAN.md", "docs/PLAN.md"),
     ("PHASES.md", "docs/PHASES.md"),
     ("AGENTS.md", "AGENTS.md"),
     ("README.md", "README.md"),
-    ("reserved/README.md", "docs/reserved/README.md"),
-    (
-        "001-raised-items-need-identity.md",
-        "docs/reserved/001-raised-items-need-identity.md",
-    ),
-    ("002-tasks.md", "docs/reserved/002-tasks.md"),
-    (
-        "003-bridge-command-centre.md",
-        "docs/reserved/003-bridge-command-centre.md",
-    ),
-    (
-        "004-guild-inventory.md",
-        "docs/reserved/004-guild-inventory.md",
-    ),
-    (
-        "005-inbox-label-not-identity.md",
-        "docs/reserved/005-inbox-label-not-identity.md",
-    ),
-    (
-        "006-guild-has-no-way-to-learn.md",
-        "docs/reserved/006-guild-has-no-way-to-learn.md",
-    ),
-    (
-        "007-scanner-should-propose.md",
-        "docs/reserved/007-scanner-should-propose.md",
-    ),
-    (
-        "008-armada-injects-its-own-skills.md",
-        "docs/reserved/008-armada-injects-its-own-skills.md",
-    ),
-    (
-        "009-smaller-things-raised-in-use.md",
-        "docs/reserved/009-smaller-things-raised-in-use.md",
-    ),
-    (
-        "010-armada-records-its-own-failures.md",
-        "docs/reserved/010-armada-records-its-own-failures.md",
-    ),
 ];
+
+/// Where the reserved designs live, one per file.
+///
+/// None of them define a `§`-numbered heading of their own, so their order does
+/// not matter to xref resolution — only that they are all read.
+pub const RESERVED_DIR: &str = "docs/reserved";
 
 pub struct Doc {
     /// Short name — `PLAN.md`. What a `§` reference attributes against.
-    pub name: &'static str,
+    pub name: String,
     /// Repo-relative path — `docs/PLAN.md`. What a report cites.
-    pub rel: &'static str,
+    pub rel: String,
     pub text: String,
 }
 
@@ -75,15 +47,55 @@ impl Doc {
 }
 
 pub fn load(root: &Path) -> Result<Vec<Doc>, String> {
-    FILES
+    let mut docs: Vec<Doc> = FIXED
         .iter()
         .map(|(name, rel)| {
             let path: PathBuf = root.join(rel);
             std::fs::read_to_string(&path)
-                .map(|text| Doc { name, rel, text })
+                .map(|text| Doc {
+                    name: (*name).to_string(),
+                    rel: (*rel).to_string(),
+                    text,
+                })
                 .map_err(|e| format!("{rel}: {e}"))
         })
-        .collect()
+        .collect::<Result<_, _>>()?;
+
+    // **Sorted, because a directory listing is not ordered.** Two runs that read
+    // the same corpus in different orders would report the same findings in
+    // different places, and a lint whose output moves between runs is one nobody
+    // trusts enough to diff.
+    let dir = root.join(RESERVED_DIR);
+    let mut found: Vec<PathBuf> = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries
+            .filter_map(|entry| entry.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|e| e == "md"))
+            .collect(),
+        // **A missing directory is not an error.** The reserved designs are a
+        // thing this repository grew, not a thing it requires, and a checkout
+        // that predates them still lints.
+        Err(_) => Vec::new(),
+    };
+    found.sort();
+
+    for path in found {
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .to_string();
+        let rel = format!("{RESERVED_DIR}/{name}");
+        // `README.md` is the index and is attributed as `reserved/README.md`, so
+        // that a `§` citing it cannot be confused with the repository root's.
+        let name = match name.as_str() {
+            "README.md" => "reserved/README.md".to_string(),
+            other => other.to_string(),
+        };
+        let text = std::fs::read_to_string(&path).map_err(|e| format!("{rel}: {e}"))?;
+        docs.push(Doc { name, rel, text });
+    }
+
+    Ok(docs)
 }
 
 /// One fenced code block.
