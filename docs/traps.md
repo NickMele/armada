@@ -1273,3 +1273,36 @@ it was added named the cause in full on the first line.
 
 **If you assume otherwise:** you will write a test whose failure output is the word "failed",
 and the cost lands on whoever reads the job — usually not you, and usually much later.
+
+## `script(1)` does not answer the cursor query, so a live table draws nothing under it
+
+Measured 2026-08-15, darwin 27.0.
+
+`render/live.rs` reserves a **ratatui inline viewport**, and reserving one begins with a Device
+Status Report — `ESC [ 6 n` — that the terminal is expected to answer with the cursor's row.
+`script -q out.raw armada fleet spawn …` gives the program a real pty, so `stderr_is_tty` is
+true and `Live::start` succeeds, but `script` itself never answers the query. The viewport gets
+no row to anchor to and every frame after it is a no-op.
+
+The capture then contains the query, a few colour resets, and the final table — which reads
+exactly like progress being broken:
+
+```
+b'\x1b[6n\r\n\x1b[39m\x1b[49m\x1b[0m\x1b[?25l …  STATUS  STEP  DETAIL  TIME\r\n …'
+```
+
+Two further things have to be right before frames appear, and each fails the same silent way:
+
+- **The pty needs a window size.** `pty.fork()` leaves it at 0×0, so `terminal_size` reports
+  nothing, the table renders into no columns, and the frames are present but empty.
+- **A read can split an escape sequence in half**, so a replayer that parses each `read()`
+  independently paints the digits of a truncated `ESC [ 38 ; 2 ; …` onto its own screen.
+
+A harness that forks a pty, sets `TIOCSWINSZ`, answers the DSR with something like `ESC [ 20 ; 1 R`
+and buffers partial escapes shows the frames. There is one in this task's scratch notes rather
+than in the repo, because nothing in the suite draws a viewport: `main::reporter` picks `Silent`
+whenever stderr is not a terminal, which `cargo test` never is.
+
+**If you assume otherwise:** you will conclude that live progress does not work, and "fix" a
+verb that was already reporting correctly — or, worse, replace the viewport with appended lines
+and break the contract in `PLAN.md` §3.1.1 that keeps a captured stderr clean.

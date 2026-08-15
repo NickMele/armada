@@ -34,9 +34,8 @@ use armada_core::envelope::{
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow, InitData,
     InitDryRun, JobRow, MachineInitData, NoteRow, PortReport, Problem, Projection, Released,
-    ResolvedSkillView,
-    ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync,
-    SyncItem, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
+    ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData,
+    StatusData, Sync, SyncItem, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
