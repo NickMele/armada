@@ -551,6 +551,22 @@ mod tests {
                 "`armada {module}` is not on the page"
             );
         }
+        for (verb, _) in FLEET_VERBS {
+            assert!(page.contains(verb), "`armada fleet {verb}` is not listed");
+        }
+    }
+
+    /// **The module page names the six and says what a Job is.** A reader who
+    /// has not met the Job/Drone distinction cannot make sense of `board` or
+    /// `kill`, and this page is where they meet it (`glossary.md`).
+    #[test]
+    fn the_fleet_page_lists_its_verbs_and_draws_the_job_drone_line() {
+        let page = render(Topic::Fleet, Style::plain(), Terminal::at(100));
+        for (verb, _) in FLEET_VERBS {
+            assert!(page.contains(verb), "`{verb}` is not on the Fleet page");
+        }
+        assert!(page.contains("Drone"), "the Drone is not explained");
+        assert!(page.contains("does not attach"), "board is not qualified");
     }
 
     /// Every built verb has a page of its own, and it names its own flags.
@@ -593,7 +609,7 @@ mod tests {
     /// an ordinary terminal, and no line is padded out with trailing spaces.
     #[test]
     fn no_page_overflows_an_eighty_column_terminal() {
-        let pages = [Topic::Root, Topic::Manifest]
+        let pages = [Topic::Root, Topic::Manifest, Topic::Guild, Topic::Fleet]
             .into_iter()
             .chain(MANIFEST.iter().map(|page| Topic::Verb(page.name)));
         for topic in pages {

@@ -70,8 +70,15 @@ pub fn elapsed(ms: u64) -> String {
 /// without the renderer having to align anything — `$0.45` and `$12.30` are the
 /// same shape. The unrounded figure stays in `--json`, where the reader is doing
 /// arithmetic rather than scanning.
+///
+/// **`+ 0.0` is not noise, and it is here because a real run printed
+/// `$-0.00`.** Rust sums floats from `-0.0` rather than `0.0` — deliberately, so
+/// that the sign of an empty or all-negative-zero sum survives — and an empty
+/// fleet therefore spends negative nothing. Adding positive zero collapses the
+/// two zeroes and changes no other value. A golden fixture could never have
+/// caught it: every drawn row costs money.
 pub fn money(usd: f64) -> String {
-    format!("${usd:.2}")
+    format!("${:.2}", usd + 0.0)
 }
 
 /// `n` of something, pluralised by the only rule English is reliable about.
@@ -160,6 +167,19 @@ mod tests {
         assert_eq!(money(0.4499), "$0.45");
         assert_eq!(money(0.0), "$0.00");
         assert_eq!(money(8.4), "$8.40");
+    }
+
+    /// **An empty fleet spent nothing, and it says `$0.00`.**
+    ///
+    /// A real `armada fleet ls` on a machine with no Jobs printed `$-0.00`,
+    /// because Rust sums floats from `-0.0` so that the sign of an empty sum
+    /// survives. Pinned here rather than in a golden fixture: every drawn row
+    /// costs money, so no fixture can reach this value.
+    #[test]
+    fn an_empty_sum_is_zero_dollars_and_not_negative_zero() {
+        let nothing: f64 = [0.0f64; 0].iter().sum();
+        assert_eq!(money(nothing), "$0.00");
+        assert_eq!(money(-0.0), "$0.00");
     }
 
     #[test]

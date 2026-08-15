@@ -2086,6 +2086,209 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------ Fleet
+
+    fn fleet_verb(words: &[&str]) -> FleetInvocation {
+        match parse(&args(words)).unwrap().invocation {
+            Invocation::Fleet(fleet) => *fleet,
+            other => panic!("{words:?} did not parse as a Fleet verb: {other:?}"),
+        }
+    }
+
+    /// **The module name is a level of the grammar**, so a bare `armada fleet`
+    /// is as incomplete as a bare `armada` and gets that module's page.
+    #[test]
+    fn a_bare_fleet_is_the_module_page_rather_than_an_error() {
+        assert_eq!(
+            parse(&args(&["fleet"])).unwrap().invocation,
+            Invocation::Help(Topic::Fleet)
+        );
+        assert_eq!(
+            parse(&args(&["fleet", "--help"])).unwrap().invocation,
+            Invocation::Help(Topic::Fleet)
+        );
+    }
+
+    #[test]
+    fn spawn_takes_a_task_and_four_ways_to_override_the_plan() {
+        let FleetInvocation::Spawn(spawn) = fleet_verb(&[
+            "fleet",
+            "spawn",
+            "add rate limiting",
+            "--workflow",
+            "feature",
+            "--name",
+            "rate-limit",
+            "--budget",
+            "max_tokens=200000",
+            "--budget",
+            "max_wall_clock=45m",
+            "-C",
+            "../api",
+            "--json",
+        ]) else {
+            panic!("not a spawn")
+        };
+        assert_eq!(spawn.task, "add rate limiting");
+        assert_eq!(spawn.workflow.as_deref(), Some("feature"));
+        assert_eq!(spawn.name.as_deref(), Some("rate-limit"));
+        // **Repeatable, and every occurrence survives.** A `--budget` that kept
+        // only the last one would silently drop a ceiling the caller raised.
+        assert_eq!(spawn.budget, ["max_tokens=200000", "max_wall_clock=45m"]);
+        assert_eq!(spawn.at.as_deref(), Some("../api"));
+        assert!(spawn.json);
+    }
+
+    /// **A `spawn` with no task is refused.** Classifying an empty string would
+    /// burn a worktree, a port block and a model call on a Job nobody described.
+    #[test]
+    fn spawn_without_a_task_is_refused() {
+        let failure = parse(&args(&["fleet", "spawn"])).unwrap_err();
+        assert_eq!(failure.error.class, ErrClass::BadInvocation);
+        assert!(failure.error.next_action.unwrap().contains("fleet spawn"));
+    }
+
+    /// Two bare words is two questions. `armada fleet spawn add rate limiting`
+    /// is a quoted string that lost its quotes, and guessing that they were one
+    /// sentence would make the refusal impossible.
+    #[test]
+    fn spawn_takes_one_task_and_not_several_words() {
+        assert!(parse(&args(&["fleet", "spawn", "add", "rate", "limiting"])).is_err());
+    }
+
+    #[test]
+    fn ls_takes_its_two_lenses() {
+        assert_eq!(
+            fleet_verb(&["fleet", "ls", "--all", "--needs-attention"]),
+            FleetInvocation::Ls {
+                json: false,
+                all: true,
+                needs_attention: true,
+            }
+        );
+    }
+
+    #[test]
+    fn board_takes_one_job_and_the_two_ways_to_enter_it() {
+        assert_eq!(
+            fleet_verb(&["fleet", "board", "rate-limit", "--exec"]),
+            FleetInvocation::Board {
+                json: false,
+                job: "rate-limit".to_string(),
+                exec: true,
+            }
+        );
+        // `--print` is the default; a caller being explicit about it is never
+        // refused.
+        assert!(parse(&args(&["fleet", "board", "rate-limit", "--print"])).is_ok());
+        assert!(parse(&args(&["fleet", "board"])).is_err());
+    }
+
+    /// **`--keep-worktree` implies `--keep-branch`.** A directory left behind
+    /// whose branch was deleted is a worktree pointing at nothing.
+    #[test]
+    fn keeping_a_worktree_keeps_its_branch_without_being_asked_twice() {
+        let FleetInvocation::Kill {
+            keep_branch,
+            keep_worktree,
+            ..
+        } = fleet_verb(&["fleet", "kill", "rate-limit", "--keep-worktree"])
+        else {
+            panic!("not a kill")
+        };
+        assert!(keep_worktree);
+        assert!(keep_branch);
+    }
+
+    /// **A Job or `--all-finished`, and refused rather than ordered.** Naming a
+    /// Job *and* the flag asks two questions, and picking one could kill four
+    /// Jobs the caller did not name.
+    #[test]
+    fn kill_takes_a_job_or_all_finished_and_never_both_or_neither() {
+        assert!(matches!(
+            fleet_verb(&["fleet", "kill", "--all-finished"]),
+            FleetInvocation::Kill { job: None, .. }
+        ));
+        for line in [
+            args(&["fleet", "kill"]),
+            args(&["fleet", "kill", "rate-limit", "--all-finished"]),
+        ] {
+            let failure = parse(&line).unwrap_err();
+            assert_eq!(failure.error.class, ErrClass::BadInvocation, "{line:?}");
+        }
+    }
+
+    #[test]
+    fn answer_takes_a_job_and_what_to_tell_it() {
+        assert_eq!(
+            fleet_verb(&["fleet", "answer", "nightly-flake", "yes, raise it to 90s"]),
+            FleetInvocation::Answer {
+                json: false,
+                job: "nightly-flake".to_string(),
+                answer: "yes, raise it to 90s".to_string(),
+            }
+        );
+        assert!(parse(&args(&["fleet", "answer", "nightly-flake"])).is_err());
+    }
+
+    #[test]
+    fn inbox_takes_a_job_filter_and_the_answered_lens() {
+        assert_eq!(
+            fleet_verb(&["fleet", "inbox", "--job", "flake", "--all"]),
+            FleetInvocation::Inbox {
+                json: false,
+                job: Some("flake".to_string()),
+                all: true,
+            }
+        );
+    }
+
+    /// **`--json` is answered wherever it sits**, including before the module,
+    /// because how a failure is reported must not depend on where in the line
+    /// the flag was typed.
+    #[test]
+    fn every_fleet_verb_answers_the_envelope_flag_from_either_side() {
+        for verb in FLEET_VERBS.map(|(name, _)| name) {
+            let tail: &[&str] = match verb {
+                "spawn" => &["a task"],
+                "board" | "kill" => &["rate-limit"],
+                "answer" => &["rate-limit", "go on"],
+                _ => &[],
+            };
+            let mut before = args(&["--json", "fleet", verb]);
+            before.extend(tail.iter().map(|s| s.to_string()));
+            let mut after = args(&["fleet", verb]);
+            after.extend(tail.iter().map(|s| s.to_string()));
+            after.push("--json".to_string());
+
+            for line in [before, after] {
+                let Invocation::Fleet(fleet) = parse(&line).unwrap().invocation else {
+                    panic!("{line:?} is not a Fleet verb")
+                };
+                assert!(fleet.json(), "{line:?} lost --json");
+            }
+        }
+    }
+
+    /// A verb Fleet does not have is a typo, and the message says where the six
+    /// are listed rather than leaving the caller to guess.
+    #[test]
+    fn an_unknown_fleet_verb_is_refused_by_name() {
+        let failure = parse(&args(&["fleet", "restart"])).unwrap_err();
+        assert_eq!(failure.error.r#where, "fleet restart");
+        assert!(failure.error.next_action.unwrap().contains("--help"));
+    }
+
+    /// **`fleet` has left the reserved table**, and nothing that is built may
+    /// still be claimed as unbuilt — that is the one way this table goes wrong.
+    #[test]
+    fn no_built_module_is_still_listed_as_reserved() {
+        for (name, _) in RESERVED_TOP_LEVEL {
+            assert_ne!(name, "fleet", "fleet is built and still reserved");
+            assert!(parse(&args(&[name])).is_err(), "`{name}` is not built");
+        }
+    }
+
     #[test]
     fn version_and_help_win_wherever_they_appear_among_the_global_flags() {
         assert_eq!(
