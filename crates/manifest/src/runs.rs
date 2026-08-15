@@ -179,7 +179,10 @@ pub fn write_detached(root: &Path, run: &RunId, detached: &Detached) -> Result<(
 
 /// Read `detached.json` back. `None` means the run was never detached.
 pub fn read_detached(root: &Path, run: &RunId) -> Result<Option<Detached>, ArmadaError> {
-    read_json(&run_dir(root, run).join("detached.json"), "the detach record")
+    read_json(
+        &run_dir(root, run).join("detached.json"),
+        "the detach record",
+    )
 }
 
 /// One JSON document off disk, where absent and unreadable are different
@@ -198,12 +201,14 @@ fn read_json<T: serde::de::DeserializeOwned>(
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(environment(path, "read", &e)),
     };
-    serde_json::from_str(&text).map(Some).map_err(|e| ArmadaError {
-        class: ErrClass::Environment,
-        r#where: path.display().to_string(),
-        message: format!("cannot read {what} at {}: {e}", path.display()),
-        next_action: Some("`armada manifest check` starts a fresh run".to_string()),
-    })
+    serde_json::from_str(&text)
+        .map(Some)
+        .map_err(|e| ArmadaError {
+            class: ErrClass::Environment,
+            r#where: path.display().to_string(),
+            message: format!("cannot read {what} at {}: {e}", path.display()),
+            next_action: Some("`armada manifest check` starts a fresh run".to_string()),
+        })
 }
 
 fn environment(path: &Path, verb: &str, error: &io::Error) -> ArmadaError {
@@ -386,5 +391,80 @@ mod tests {
             log_path(Path::new("/srv/repo"), &run, &CheckId::new("api:lint")),
             Path::new("/srv/repo").join(&reference)
         );
+    }
+
+    // ----------------------------------------------------- the detach record
+
+    fn a_detached(pgid: i32) -> Detached {
+        Detached {
+            pgid,
+            boot_id: "boot-a".to_string(),
+            started_at: Some("Mon Aug 11 14:02:11 2026".to_string()),
+            log: detach_log_reference(&id(0)),
+        }
+    }
+
+    #[test]
+    fn a_detach_record_is_written_where_the_poll_looks_for_it() {
+        let dir = workspace();
+        let run = id(0);
+        prepare(dir.path(), &run).unwrap();
+        write_detached(dir.path(), &run, &a_detached(4212)).unwrap();
+
+        assert_eq!(
+            read_detached(dir.path(), &run).unwrap(),
+            Some(a_detached(4212))
+        );
+        assert_eq!(
+            detach_log(dir.path(), &run),
+            dir.path().join(detach_log_reference(&run))
+        );
+        assert!(!detach_log_reference(&run).starts_with('/'));
+    }
+
+    /// **Absent and unreadable are different answers**, and folding them
+    /// together is what would make a truncated record read as *"this run was
+    /// never detached"* — the one wrong answer a poller acts on, because it
+    /// stops asking about a process that is still there.
+    #[test]
+    fn a_missing_record_is_none_and_a_corrupt_one_is_an_error() {
+        let dir = workspace();
+        let run = id(0);
+        prepare(dir.path(), &run).unwrap();
+
+        assert_eq!(read_detached(dir.path(), &run).unwrap(), None);
+        assert!(read_record(dir.path(), &run).unwrap().is_none());
+
+        std::fs::write(run_dir(dir.path(), &run).join("detached.json"), "{").unwrap();
+        let error = read_detached(dir.path(), &run).expect_err("half a document is a fault");
+        assert_eq!(error.class, ErrClass::Environment);
+        assert!(error.next_action.is_some(), "no way forward is offered");
+    }
+
+    /// A run directory that has never existed answers `None` rather than
+    /// failing: `--status` names the run it could not find, and a read that
+    /// errored on `ENOENT` would report the machine as broken instead.
+    #[test]
+    fn a_run_that_was_never_created_reads_back_as_nothing() {
+        let dir = workspace();
+        assert!(read_record(dir.path(), &id(7)).unwrap().is_none());
+        assert!(read_detached(dir.path(), &id(7)).unwrap().is_none());
+    }
+
+    /// The record a run wrote reads back as the record it wrote, which is what
+    /// `--status` depends on and what nothing else asserts end to end.
+    #[test]
+    fn a_run_record_reads_back_as_what_was_written() {
+        let dir = workspace();
+        let run = id(0);
+        prepare(dir.path(), &run).unwrap();
+        let record = RunRecord::new(
+            run.clone(),
+            WorkspaceId::from_stored("a3f91c02"),
+            "2026-08-11T14:02:11Z".to_string(),
+            State::new(dir.path().to_path_buf(), 6, Vec::new()),
+        );
+        write_record(dir.path(), &record).unwrap();
+        assert_eq!(read_record(dir.path(), &run).unwrap(), Some(record));
     }
 }

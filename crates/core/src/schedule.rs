@@ -2835,4 +2835,95 @@ mod tests {
         assert_eq!(row.duration_ms, Some(3_120));
         assert_eq!(row.reason.as_deref(), Some("because"));
     }
+
+    // ------------------------------------------------ what a poll reads back
+
+    /// **`snapshot` has a row for every check and `results` does not.** The two
+    /// answer different questions, and a poll asking what a run is *doing*
+    /// needs the checks that have not answered — which are exactly the ones
+    /// `results` is right to leave out.
+    #[test]
+    fn a_snapshot_covers_every_check_while_the_verdict_rows_cover_none_of_them_yet() {
+        let state = run(vec![plan("api:lint"), plan("api:test")]);
+        let (state, _) = to_running(state, "api:lint");
+
+        assert!(
+            state.results().is_empty(),
+            "a check with no verdict produced a verdict row"
+        );
+        let rows = state.snapshot();
+        assert_eq!(rows.len(), 2, "a check went missing from the snapshot");
+        assert_eq!(rows[0].status, Status::Running, "the running check");
+        assert_eq!(rows[1].status, Status::Waiting, "the one not yet reached");
+        // Progress is never a verdict: nothing here may be read as a failure.
+        assert!(rows.iter().all(|row| row.error.is_none()));
+        // The log is named while it is being written, so a fifteen-minute check
+        // can be watched by tailing rather than by asking again.
+        assert!(rows[0].log.is_some(), "a running check hid its log");
+    }
+
+    /// **The verdict rows a poll reads are the rows the run emitted**, and this
+    /// is the property `--status` rests on: a detached run reporting a
+    /// different verdict from an attached one over the same state would make
+    /// the flag worse than useless.
+    #[test]
+    fn a_snapshot_of_a_finished_run_is_exactly_what_it_emitted() {
+        let state = run(vec![plan("api:lint"), plan("api:test")]);
+        let (state, _) = to_running(state, "api:lint");
+        let (state, _) = to_running(state, "api:test");
+
+        let mut emitted: BTreeMap<CheckId, CheckResult> = BTreeMap::new();
+        let mut state = state;
+        for name in ["api:lint", "api:test"] {
+            let (next, actions) = step(
+                state,
+                Event::ChildExited {
+                    check: id(name),
+                    code: 0,
+                },
+            );
+            state = next;
+            for action in actions {
+                if let Action::Emit { result } = action {
+                    emitted.insert(result.id.clone(), result);
+                }
+            }
+        }
+
+        let collected: Vec<CheckResult> = emitted.into_values().collect();
+        assert_eq!(collected.len(), 2, "the run emitted a row per check");
+        assert_eq!(
+            state.snapshot(),
+            collected,
+            "reading the record back gives different rows from the run"
+        );
+        assert_eq!(state.results(), collected, "and so does `results`");
+    }
+
+    /// A run whose checks have all settled has a verdict, and it is the same
+    /// one the reducer proposed as it finished — one statement of how a run
+    /// ends, asked by the loop and by the reader of the record alike.
+    #[test]
+    fn the_verdict_a_poll_reads_is_the_one_the_run_proposed() {
+        let state = run(vec![plan("api:lint")]);
+        let (state, _) = to_running(state, "api:lint");
+        assert!(
+            state.verdict().is_none(),
+            "a run with a check still going claimed a verdict"
+        );
+
+        let (state, actions) = step(
+            state,
+            Event::ChildExited {
+                check: id("api:lint"),
+                code: 1,
+            },
+        );
+        let proposed = actions.into_iter().find_map(|action| match action {
+            Action::Finish { status, error } => Some((status, error)),
+            _ => None,
+        });
+        assert_eq!(state.verdict(), proposed, "the record decides differently");
+        assert_eq!(state.verdict().expect("a verdict").0, Status::Failed);
+    }
 }

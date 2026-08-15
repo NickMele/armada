@@ -1520,7 +1520,8 @@ mod tests {
         }
         if RESERVED_CHECK_FLAGS.is_empty() {
             assert!(
-                !page.contains("armada manifest check\n") && !page.contains("armada manifest check "),
+                !page.contains("armada manifest check\n")
+                    && !page.contains("armada manifest check "),
                 "an empty reserved list still drew a NOT BUILT YET row for `check`"
             );
         }

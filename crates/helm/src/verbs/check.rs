@@ -665,8 +665,11 @@ fn status<R: Run, C: Clock, F: Fetch>(
     let detached = runs::read_detached(&workspace.root, &run_id)?;
 
     let alive = detached.as_ref().is_some_and(|detached| {
-        let observed =
-            armada_manifest::machine::process_start_at(&app.ctx.run, &workspace.root, detached.pgid);
+        let observed = armada_manifest::machine::process_start_at(
+            &app.ctx.run,
+            &workspace.root,
+            detached.pgid,
+        );
         detached.is_ours(&app.boot_id, observed.as_deref())
     });
 
@@ -678,7 +681,10 @@ fn status<R: Run, C: Clock, F: Fetch>(
         // the attached one that produced the same rows.
         Some(verdict) => verdict,
         None if alive => (Status::Running, None),
-        None => (Status::Dead, Some(died_without_deciding(&run_id, &detached))),
+        None => (
+            Status::Dead,
+            Some(died_without_deciding(&run_id, &detached)),
+        ),
     };
 
     Ok(Envelope {
@@ -1530,4 +1536,112 @@ fn never_finished() -> ArmadaError {
 fn entropy<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>) -> u64 {
     let pid = armada_manifest::posix::pid() as u64;
     pid.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ app.ctx.now.mono()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **The detached child is given the same selection, spelled once.**
+    /// Rebuilding from the parsed struct rather than replaying the caller's
+    /// argv is what stops `--detach` reaching the child, and what stops a
+    /// `--color=always` typed at a terminal following the run into a log file.
+    #[test]
+    fn the_detached_child_is_given_the_same_selection_and_never_detach_itself() {
+        let args = Check {
+            detach: true,
+            fix: true,
+            all_files: true,
+            wait: true,
+            jobs: Some(3),
+            component: Some("api".to_string()),
+            ..Default::default()
+        };
+        let argv = detached_argv("/usr/local/bin/armada", &args);
+
+        assert_eq!(argv[0], "/usr/local/bin/armada");
+        assert_eq!(&argv[1..3], ["manifest", "check"]);
+        assert!(
+            !argv.iter().any(|word| word == "--detach"),
+            "the child would detach again, forever: {argv:?}"
+        );
+        for expected in ["--json", "--all-files", "--fix", "--wait", "--component"] {
+            assert!(argv.iter().any(|word| word == expected), "{expected}");
+        }
+        assert_eq!(
+            argv.windows(2)
+                .find(|pair| pair[0] == "--concurrency")
+                .map(|pair| pair[1].as_str()),
+            Some("3")
+        );
+        // The child writes to a file, so its output is an envelope rather than
+        // a spinner's escape codes.
+        assert_eq!(
+            argv.windows(2)
+                .find(|pair| pair[0] == "--color")
+                .map(|pair| pair[1].as_str()),
+            Some("never")
+        );
+    }
+
+    /// **`--files` goes last**, because its own parser reads paths until it
+    /// meets a flag — anything placed after them would be read as a path.
+    #[test]
+    fn the_file_list_is_the_last_thing_the_child_is_given() {
+        let args = Check {
+            files: vec!["src/main.rs".to_string(), "src/args.rs".to_string()],
+            fix: true,
+            ..Default::default()
+        };
+        let argv = detached_argv("armada", &args);
+        let at = argv
+            .iter()
+            .position(|word| word == "--files")
+            .expect("--files");
+        assert_eq!(&argv[at + 1..], ["src/main.rs", "src/args.rs"]);
+    }
+
+    /// A bare positional survives as a positional, so `check --detach api:lint`
+    /// runs the check the caller named and not every check in the repo.
+    #[test]
+    fn a_selector_reaches_the_child_as_a_selector() {
+        let args = Check {
+            selector: Some("api:lint".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(detached_argv("armada", &args).last().unwrap(), "api:lint");
+    }
+
+    /// **The fingerprint changes when a check moves and at no other time**,
+    /// which is what makes "the record is rewritten on every state change" a
+    /// handful of writes rather than one every twenty milliseconds. A clock
+    /// reading is not a state change; a phase is.
+    #[test]
+    fn only_a_check_changing_phase_asks_for_a_new_record() {
+        let plans = vec![Plan {
+            id: CheckId::new("api:lint"),
+            argv: vec!["true".to_string()],
+            env: EnvDelta::default(),
+            files: Vec::new(),
+            timeout_ms: 900_000,
+            cost: 1,
+            exclusives: Vec::new(),
+            needs: Vec::new(),
+            log: None,
+            skip: None,
+            blocked: None,
+        }];
+        let mut state = State::new(PathBuf::from("/srv/repo"), 6, plans);
+        let pending = phases(&state);
+
+        state.now_mono = 5_000;
+        assert_eq!(phases(&state), pending, "a clock reading moved the run");
+
+        let (state, _) = schedule::step(state, Event::Started);
+        assert_ne!(
+            phases(&state),
+            pending,
+            "a check that left Pending did not ask to be recorded"
+        );
+    }
 }

@@ -2958,7 +2958,9 @@ mod tests {
             // Two flags that each parse and cannot both be meant — the
             // refusal `incoherent` raises, which happens after the whole line
             // has been read and so is the latest one `--color` has to survive.
-            &["manifest", "check", "--detach", "--status", "--color", "never"][..],
+            &[
+                "manifest", "check", "--detach", "--status", "--color", "never",
+            ][..],
         ] {
             assert_eq!(
                 parse(&args(words)).unwrap_err().color,
@@ -3434,6 +3436,10 @@ mod tests {
     /// (`docs/reserved/009`, item 5). This is the test that catches it now: a
     /// flag added to the list and not wired into `check`'s refusal — or the
     /// reverse — fails here instead of shipping as a silent mismatch.
+    /// **The list is empty as of M4**, which makes the loop below vacuous and
+    /// the assertion after it the live one: the two flags that were on it are
+    /// built, and a regression that put either back would be a polite refusal
+    /// nothing else notices.
     #[test]
     fn every_reserved_check_flag_is_refused_as_not_built_yet() {
         for flag in RESERVED_CHECK_FLAGS {
@@ -3444,6 +3450,101 @@ mod tests {
                 failure.error.message
             );
         }
+        for built in ["--detach", "--status"] {
+            assert!(
+                !RESERVED_CHECK_FLAGS.contains(&built),
+                "`{built}` is built and is still claimed as reserved"
+            );
+        }
+    }
+
+    // --------------------------------------------------- check --detach/--status
+
+    fn check_of(words: &[&str]) -> Check {
+        let mut line = vec!["manifest", "check"];
+        line.extend_from_slice(words);
+        match parse(&args(&line)).unwrap().invocation {
+            Invocation::Check(check) => *check,
+            other => panic!("`armada {}` parsed as {other:?}", line.join(" ")),
+        }
+    }
+
+    #[test]
+    fn detach_and_status_are_parsed_rather_than_refused() {
+        assert!(check_of(&["--detach"]).detach);
+        let status = check_of(&["--status"]);
+        assert!(status.status);
+        assert_eq!(status.run, None, "no id means the most recent run");
+    }
+
+    /// **What decides whether `--status` takes the next word is whether that
+    /// word is a run id.** Sixteen Crockford characters is a shape nothing else
+    /// in this grammar has, so this is a decision rather than a guess — and it
+    /// is the same validation that keeps `../../etc` out of a value which
+    /// becomes a path.
+    #[test]
+    fn status_takes_the_next_word_only_when_it_is_a_run_id() {
+        let named = check_of(&["--status", "01M00WRY00CYTZ44"]);
+        assert_eq!(named.run.as_deref(), Some("01M00WRY00CYTZ44"));
+        assert_eq!(named.selector, None, "the id was read twice");
+
+        // Not an id: left alone, so the ordinary refusal below sees it.
+        let failure = parse(&args(&["manifest", "check", "--status", "api:lint"])).unwrap_err();
+        assert_eq!(failure.error.class, ErrClass::BadInvocation);
+        assert!(
+            failure.error.message.contains("no <selector>"),
+            "{}",
+            failure.error.message
+        );
+    }
+
+    /// **Two things said at once are refused rather than resolved by
+    /// precedence.** A caller who typed `--status --fix` meant one of two very
+    /// different things, and picking one silently is how an agent comes to
+    /// believe it repaired a repository it only read.
+    #[test]
+    fn a_check_line_that_says_two_things_at_once_is_refused() {
+        for words in [
+            &["--detach", "--status"][..],
+            &["--status", "--fix"][..],
+            &["--status", "--all-files"][..],
+            &["--status", "--component", "api"][..],
+            &["--status", "--files", "a.py"][..],
+            &["--status", "--concurrency", "2"][..],
+            &["--status", "--wait"][..],
+            &["--status", "--dry-run"][..],
+            &["--status", "api:lint"][..],
+            &["--detach", "--dry-run"][..],
+        ] {
+            let mut line = vec!["manifest", "check"];
+            line.extend_from_slice(words);
+            let failure = match parse(&args(&line)) {
+                Err(failure) => failure,
+                Ok(parsed) => panic!("`armada {}` was accepted: {parsed:?}", line.join(" ")),
+            };
+            assert_eq!(
+                failure.error.class,
+                ErrClass::BadInvocation,
+                "`armada {}`",
+                line.join(" ")
+            );
+            assert!(
+                failure.error.next_action.is_some(),
+                "`armada {}` refused without saying what to type instead",
+                line.join(" ")
+            );
+        }
+    }
+
+    /// The flags that mean nothing together are the only ones refused: a
+    /// `--detach` that carries a scope is an ordinary, useful line.
+    #[test]
+    fn detach_keeps_the_scope_it_was_given() {
+        let detached = check_of(&["--detach", "--component", "api", "--fix", "--wait"]);
+        assert!(detached.detach);
+        assert_eq!(detached.component.as_deref(), Some("api"));
+        assert!(detached.fix);
+        assert!(detached.wait);
     }
 
     /// **Every verb the roster names parses, and answers `--help` with a page.**

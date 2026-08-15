@@ -116,7 +116,10 @@ fn poll_until_running(machine: &Machine, repo: &Path, run: &str) -> serde_json::
         // than this fixture was written for, not a defect worth failing on —
         // but it is not the state the caller wanted, so say which happened.
         if last["status"] != "RUNNING" {
-            panic!("the run reached {} before it could be caught running", last["status"]);
+            panic!(
+                "the run reached {} before it could be caught running",
+                last["status"]
+            );
         }
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -261,7 +264,7 @@ fn detach_returns_while_the_run_is_still_going_and_status_says_so() {
 /// Without the row, an `armada` that died mid-run would leave a process nothing
 /// on the machine could name.
 #[test]
-fn clean_reclaims_a_detached_run_because_the_group_is_recorded_as_owned() {
+fn the_detached_group_is_recorded_as_something_the_workspace_owns() {
     let machine = Machine::new();
     let repo = machine.repo("main", SLOW);
     machine.run(&repo, &["manifest", "init"]);
@@ -271,24 +274,61 @@ fn clean_reclaims_a_detached_run_because_the_group_is_recorded_as_owned() {
     assert!(pgid > 1, "no group to record: {started}");
 
     let owned = envelope(&machine.run(&repo, &["manifest", "status", "--json"]));
-    let recorded = serde_json::to_string(&owned["data"])
-        .unwrap_or_default()
-        .contains(&pgid.to_string());
-
-    let cleaned = machine.run(&repo, &["manifest", "clean", "--json"]);
-    // Belt and braces: if `clean` did not take it, this does, and the assertion
-    // below still reports what happened.
     stop(pgid);
 
     assert!(
-        recorded,
+        serde_json::to_string(&owned["data"])
+            .unwrap_or_default()
+            .contains(&pgid.to_string()),
         "the detached group is not among what the workspace owns: {owned}"
     );
-    assert_eq!(cleaned.status.code(), Some(0), "clean refused: {cleaned:?}");
+    assert!(!group_alive(pgid), "the group outlived the test");
+}
+
+/// **A detached run holds the run lease exactly as an attached one does**, so
+/// `clean` will not tear the workspace down underneath it.
+///
+/// This is the property that makes the child, and not the invocation that
+/// started it, the thing that takes the lease: the parent has already exited,
+/// and a lease held by a process that is gone is one the cold-heartbeat path
+/// reclaims. The refusal already points at `--status`, which is what a caller
+/// told "a run is already in flight" wants next.
+#[test]
+fn a_detached_run_holds_the_lease_so_the_workspace_is_not_cleaned_under_it() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", SLOW);
+    machine.run(&repo, &["manifest", "init"]);
+
+    let started = envelope(&machine.run(&repo, &["manifest", "check", "--detach", "--json"]));
+    let pgid = pgid_of(&started);
+    let run = started["data"]["run_id"]
+        .as_str()
+        .expect("a run id")
+        .to_string();
+    poll_until_running(&machine, &repo, &run);
+
+    let cleaned = envelope(&machine.run(&repo, &["manifest", "clean", "--json"]));
+    let second = envelope(&machine.run(&repo, &["manifest", "check", "--json"]));
+    stop(pgid);
+
+    assert_eq!(cleaned["error"]["class"], "bad_invocation", "{cleaned}");
     assert!(
-        !group_alive(pgid),
-        "`clean` left the detached run's group running"
+        cleaned["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("already in flight"),
+        "{cleaned}"
     );
+    assert!(
+        cleaned["error"]["next_action"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("--status"),
+        "the refusal does not say how to watch the run it named: {cleaned}"
+    );
+    // The same lease, so a second run fails fast rather than racing the first
+    // over the same ports and containers.
+    assert_eq!(second["error"]["class"], "bad_invocation", "{second}");
 }
 
 /// **A run whose group is gone and whose record holds no verdict is `DEAD`, not
@@ -384,7 +424,13 @@ fn status_on_an_unknown_run_names_it() {
 
     let output = machine.run(
         &repo,
-        &["manifest", "check", "--status", "01M00WRY00CYTZ44", "--json"],
+        &[
+            "manifest",
+            "check",
+            "--status",
+            "01M00WRY00CYTZ44",
+            "--json",
+        ],
     );
     let payload = envelope(&output);
     assert_eq!(payload["error"]["class"], "bad_invocation");
@@ -413,7 +459,8 @@ fn detach_and_status_together_are_refused() {
         let output = machine.run(&repo, line);
         let payload = envelope(&output);
         assert_eq!(
-            payload["error"]["class"], "bad_invocation",
+            payload["error"]["class"],
+            "bad_invocation",
             "`armada {}` was accepted: {payload}",
             line.join(" ")
         );
