@@ -29,12 +29,12 @@
 //! than a flag you reach for without reading.
 
 use armada_core::envelope::{
-    Asked, BridgeData, CheckData, CleanData, ComponentView, ComponentsData, DispatchData,
-    DoctorData, Envelope, Finding, FleetLsData, GrantedCommand, GuildChange, GuildChangeData,
-    GuildChoice, GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxRow,
-    InitData, JobRow, MachineInitData, NoteRow, PortReport, Problem, Projection, Released,
-    ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, ShowData, SkillsData, SpawnData,
-    StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
+    Asked, BridgeData, CheckData, CleanData, CommandView, CommandsData, ComponentView,
+    ComponentsData, DispatchData, DoctorData, Envelope, Finding, FleetLsData, GrantedCommand,
+    GuildChange, GuildChangeData, GuildChoice, GuildItemData, GuildItemRow, GuildListData,
+    GuildSyncData, Headline, InboxRow, InitData, JobRow, MachineInitData, NoteRow, PortReport,
+    Problem, Projection, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled,
+    ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -772,6 +772,79 @@ fn components_matches_its_fixture() {
         },
     )));
     assert_render("components", &output);
+}
+
+/// `armada manifest commands` — the listing that says what a repository's own
+/// verbs are.
+///
+/// **The report it answers**: "I have no idea what `<name>` means", said of the
+/// root help page's `<name>` row. The names live in `armada.yml` and nothing
+/// printed them, so the only way to learn a repository's verbs was to open the
+/// file — the same gap `skills` and `components` had, and the last of the three.
+///
+/// The fixture holds all three shapes an entry comes in: one with a `help:` and
+/// a secrets grant, one with a `help:` and none, and one with neither — because
+/// the detail column falls back to the command string and a fixture without that
+/// row would freeze the sentence case only.
+fn command_view(name: &str, cmd: &str, help: Option<&str>, secrets: &[&str]) -> CommandView {
+    CommandView {
+        name: name.to_string(),
+        cmd: cmd.to_string(),
+        help: help.map(str::to_string),
+        stdio: match secrets.is_empty() {
+            true => "inherit".to_string(),
+            false => "pipe".to_string(),
+        },
+        secrets: secrets.iter().map(|s| (*s).to_string()).collect(),
+    }
+}
+
+fn commands_envelope(commands: Vec<CommandView>) -> Output {
+    let results = commands
+        .iter()
+        .map(|command| {
+            let mut row = ResultRow::new(command.name.clone(), Status::Ok);
+            row.reason = Some(command.help.clone().unwrap_or_else(|| command.cmd.clone()));
+            row
+        })
+        .collect();
+    Output::Commands(Box::new(Envelope::ok(
+        "commands",
+        Some(workspace()),
+        Status::Ok,
+        CommandsData { results, commands },
+    )))
+}
+
+#[test]
+fn commands_matches_its_fixture() {
+    assert_render(
+        "commands",
+        &commands_envelope(vec![
+            command_view(
+                "deploy",
+                "./scripts/deploy.sh",
+                Some("Deploy this branch to staging"),
+                &["GITHUB_TOKEN"],
+            ),
+            command_view("seed-db", "pnpm prisma db seed", None, &[]),
+            command_view(
+                "worktrees",
+                "uv run scripts/worktrees.py",
+                Some("Create and tear down git worktrees"),
+                &[],
+            ),
+        ]),
+    );
+}
+
+/// **A repository that declares none is the common case, not an edge one**, and
+/// it is the one where a reader most needs to be told something. An empty table
+/// with the ordinary trailer would answer "run one of these" against a list of
+/// nothing.
+#[test]
+fn commands_with_nothing_declared_matches_its_fixture() {
+    assert_render("commands-none", &commands_envelope(Vec::new()));
 }
 
 // ------------------------------------------------------------------- M2: the

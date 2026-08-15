@@ -103,6 +103,15 @@ pub enum Invocation {
         /// Emit the envelope rather than human output.
         json: bool,
     },
+    /// `armada manifest commands`.
+    ///
+    /// **Takes nothing but the shared flags**, for the reason
+    /// [`Invocation::Components`] gives: a listing is not itself a thing to
+    /// filter, and a caller who wants one entry runs it.
+    Commands {
+        /// Emit the envelope rather than human output.
+        json: bool,
+    },
     /// `armada manifest config <scan|verify>`.
     Config {
         /// Which half of the sandwich (PLAN.md §5).
@@ -571,7 +580,7 @@ pub struct Common {
 /// The verbs Manifest owns. A `commands:` entry may not shadow one — the schema
 /// rejects that, because without the rule a repo can silently break the one
 /// guarantee the project exists to provide.
-pub const BUILTIN_VERBS: [&str; 12] = [
+pub const BUILTIN_VERBS: [&str; 13] = [
     "init",
     "up",
     "down",
@@ -581,6 +590,12 @@ pub const BUILTIN_VERBS: [&str; 12] = [
     "config",
     "skills",
     "components",
+    // **`commands` is the newest name taken, and it cost a repository one.**
+    // Listing what a repo declares means the listing verb owns the word, so no
+    // `commands:` entry may be called `commands` any more (PLAN.md §4.5). It is
+    // the same trade every promoted name carries, and it is worth it because
+    // "what can I run here" had no other answer.
+    "commands",
     "render",
     "agents-md",
     "explain",
@@ -653,7 +668,7 @@ pub const RESERVED_GUILD_VERBS: [(&str, &str); 1] =
 /// A separate list from [`BUILTIN_VERBS`], because that one claims names,
 /// several of which answer "not built yet": giving `armada manifest render
 /// --help` a page would promise a verb that does not exist.
-pub const MANIFEST_BUILT: [&str; 9] = [
+pub const MANIFEST_BUILT: [&str; 10] = [
     "init",
     "up",
     "down",
@@ -663,6 +678,7 @@ pub const MANIFEST_BUILT: [&str; 9] = [
     "config",
     "skills",
     "components",
+    "commands",
 ];
 
 /// **Every verb the parser accepts**, as the caller types it after `armada`.
@@ -835,6 +851,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         "config" => config(rest, json, color),
         "skills" => skills(rest, json, color),
         "components" => components(rest, json, color),
+        "commands" => commands(rest, json, color),
         "clean" => {
             let common = common(
                 rest,
@@ -1960,6 +1977,38 @@ fn components(
     Ok(Invocation::Components { json })
 }
 
+/// `armada manifest commands`.
+///
+/// **The name is a built-in now, and this function is where that becomes
+/// visible.** Before it, `armada manifest commands` fell through to the
+/// dispatch arm and would have run a repo's own `commands:` entry of that name;
+/// the schema forbids the entry as of this verb, so the fall-through is gone
+/// and the word means one thing everywhere (PLAN.md §4.5).
+fn commands(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    let json = json || rest.iter().any(|a| a == "--json");
+    *color = color_in(rest, *color).map_err(|e| failure(e, json))?;
+    let words = positional(rest);
+    if !words.is_empty() {
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: words.join(" "),
+                message: "`armada manifest commands` takes nothing".to_string(),
+                next_action: Some(
+                    "it lists them all; `armada manifest <name>` runs one".to_string(),
+                ),
+            },
+            json,
+        ));
+    }
+    only_flags(rest, json, &[])?;
+    Ok(Invocation::Commands { json })
+}
+
 /// The bare words of a verb's own argv, with the flags Armada owns removed.
 fn positional(rest: &[String]) -> Vec<String> {
     let mut out = Vec::new();
@@ -2257,6 +2306,41 @@ mod tests {
                 argv: args(&["prune", "--dry-run", "--", "-x"]),
                 json: false,
             }
+        );
+    }
+
+    /// **`commands` is Armada's verb now and never a dispatch**, which is the
+    /// whole cost of promoting the name. Before the listing existed this line
+    /// fell through to the dispatch arm; the schema forbids the entry as of the
+    /// same change, so nothing a repository can legally write reaches it.
+    #[test]
+    fn manifest_commands_lists_rather_than_dispatching_an_entry_of_that_name() {
+        assert_eq!(
+            parse(&args(&["manifest", "commands"])).unwrap().invocation,
+            Invocation::Commands { json: false }
+        );
+        assert_eq!(
+            parse(&args(&["manifest", "commands", "--json"]))
+                .unwrap()
+                .invocation,
+            Invocation::Commands { json: true }
+        );
+    }
+
+    /// A listing is not a thing to filter, so a positional is refused rather
+    /// than quietly ignored — and the refusal says which verb takes one.
+    #[test]
+    fn manifest_commands_refuses_an_argument_and_says_what_does_take_one() {
+        let err = parse(&args(&["manifest", "commands", "deploy"]))
+            .unwrap_err()
+            .error;
+        assert_eq!(err.class, ErrClass::BadInvocation);
+        assert!(
+            err.next_action
+                .as_deref()
+                .is_some_and(|next| next.contains("armada manifest <name>")),
+            "{:?}",
+            err.next_action
         );
     }
 

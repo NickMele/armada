@@ -1,0 +1,11 @@
+[1m[38;2;255;169;64marmada[0m  [38;2;156;163;175m3d9cc7ba[0m
+
+  [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mCOMMAND[0m    [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;61;220;132mDECLARED[0m  deploy     [38;2;156;163;175mDeploy this branch to staging[0m
+  [38;2;61;220;132mDECLARED[0m  seed-db    [38;2;156;163;175mpnpm prisma db seed[0m
+  [38;2;61;220;132mDECLARED[0m  worktrees  [38;2;156;163;175mCreate and tear down git worktrees[0m
+
+[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m3 commands · 1 with a secrets grant[0m
+
+[38;2;156;163;175m`armada manifest <command>` runs one; everything after the name is its own.[0m
+[38;2;156;163;175mThese are this repository's own verbs; `armada manifest --help` lists Armada's.[0m

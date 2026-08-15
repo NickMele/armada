@@ -13,8 +13,9 @@ MANIFEST — what a workspace is and how to operate it
   check [<selector>]    lint, format and test — the verb a gate calls
   skills [show <name>]  what this repository knows about itself
   components            what this repository can be filtered by
+  commands              the verbs this repository declares
   clean                 release what this workspace owns
-  <name>                a commands: entry from this repo's armada.yml
+  <name>                a verb this repo declares; manifest commands lists them
 
 GUILD — you, portable: voice, skills, hooks, workflows
   init             build your guild by interviewing you

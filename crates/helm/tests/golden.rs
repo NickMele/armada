@@ -427,6 +427,37 @@ fn a_dispatched_command_matches_its_snapshot() {
     assert_golden("commands", &json);
 }
 
+/// `armada manifest commands` — the **listing**, which shares its `verb` with
+/// the dispatch snapshot above and is told apart by its body.
+///
+/// Snapshotted for the reason `skills` is: an agent lists a repository's verbs
+/// from this payload rather than by parsing `armada.yml`, so a rename here is a
+/// rename in somebody else's tooling. It carries `stdio` **after inference** —
+/// `pipe` on the granted entry, which no key in the config says.
+#[test]
+fn the_commands_listing_matches_its_snapshot() {
+    let scenario = scenario(COMMANDS_CONFIG);
+    let json = run_verb(&scenario, verbs::commands::run);
+    assert_golden("commands-list", &json);
+}
+
+/// Both `commands:` shapes: one with a `help:` and a grant, one with neither.
+const COMMANDS_CONFIG: &str = "\
+manifest:
+  version: 1
+  secret_providers:
+    op: { cmd: \"op read ${ref}\" }
+  secrets:
+    GITHUB_TOKEN: op://Engineering/github/token
+  commands:
+    seed-db:
+      cmd: ./exiter.sh 0
+    tickets:
+      cmd: ./exiter.sh 0
+      help: Report stale tickets
+      secrets: [GITHUB_TOKEN]
+";
+
 /// `armada manifest check`, which is the verb agents call most and therefore the snapshot
 /// most worth having: a rename in this payload surfaces here rather than in
 /// somebody else's repository.

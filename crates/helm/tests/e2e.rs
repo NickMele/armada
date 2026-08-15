@@ -349,7 +349,12 @@ fn version_and_help_answer_from_outside_a_workspace() {
     assert!(help.status.success());
     let text = String::from_utf8_lossy(&help.stdout);
     assert!(text.contains("MANIFEST"), "{text}");
-    assert!(text.contains("a commands: entry"), "{text}");
+    // **The `<name>` row, and now the verb that resolves it.** The row used to
+    // read "a commands: entry from this repo's armada.yml", which named a
+    // placeholder and left opening the file as the only way to learn what could
+    // go in it — the complaint that produced `manifest commands`.
+    assert!(text.contains("<name>"), "{text}");
+    assert!(text.contains("manifest commands lists them"), "{text}");
     // The limits are stated on the page rather than discovered by running one.
     assert!(text.contains("NOT BUILT YET"), "{text}");
 }

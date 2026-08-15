@@ -94,6 +94,17 @@ fn the_schema_rejects_what_the_contract_forbids() {
             "a skill named `components`, which carries the same rule (§4.8)",
             "manifest:\n  version: 1\n  skills:\n    components:\n      summary: list them\n      doc: docs/c.md\n",
         ),
+        // `commands` is the name `armada manifest commands` took, and it is the
+        // most pointed case of the trade: the verb that lists a repository's
+        // `commands:` block is the one name that block may no longer contain.
+        (
+            "a commands: entry named `commands`, now that the listing verb exists",
+            "manifest:\n  version: 1\n  commands:\n    commands:\n      cmd: ./scripts/list.sh\n",
+        ),
+        (
+            "a skill named `commands`, which carries the same rule (§4.8)",
+            "manifest:\n  version: 1\n  skills:\n    commands:\n      summary: list them\n      doc: docs/c.md\n",
+        ),
         (
             "${files} in a commands: entry — there is no scope to compute (PLAN.md §4.5)",
             "manifest:\n  version: 1\n  commands:\n    fmt:\n      cmd: ./scripts/fmt.sh ${files}\n",

@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "verb": "commands",
+  "workspace": "<workspace>",
+  "status": "OK",
+  "error": null,
+  "data": {
+    "results": [
+      {
+        "id": "seed-db",
+        "status": "OK",
+        "reason": "./exiter.sh 0"
+      },
+      {
+        "id": "tickets",
+        "status": "OK",
+        "reason": "Report stale tickets"
+      }
+    ],
+    "commands": [
+      {
+        "name": "seed-db",
+        "cmd": "./exiter.sh 0",
+        "stdio": "inherit"
+      },
+      {
+        "name": "tickets",
+        "cmd": "./exiter.sh 0",
+        "help": "Report stale tickets",
+        "stdio": "pipe",
+        "secrets": [
+          "GITHUB_TOKEN"
+        ]
+      }
+    ]
+  }
+}

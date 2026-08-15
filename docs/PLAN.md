@@ -2208,27 +2208,41 @@ oversight rather than a decision.
 is also what lets the source repo keep `worktrees` / `tickets` / `design` while giving up
 `check` and `servers` (phase 6), so it is on the critical path rather than a nicety.
 
-#### Reserved, not built: `armada manifest commands`
+#### `armada manifest commands` — built
 
-**`skills:` and `commands:` are the same kind of thing and only one of them is
-listable.** `armada manifest skills` shows what a repo declares; there is no
-`armada manifest commands`, so the only way to learn a repo's verbs is to read
+**`skills:` and `commands:` are the same kind of thing and only one of them was
+listable.** `armada manifest skills` showed what a repo declares; there was no
+`armada manifest commands`, so the only way to learn a repo's verbs was to read
 `armada.yml`. That is the question a newcomer — human or agent — asks first.
 
-It should exist, and it should look like `skills`: a table of name, what it runs,
-and its one-line `help:`. `--json` in the §3.1 envelope, so an agent can list a
-repo's capability without parsing YAML.
+It exists, and it looks like `skills`: a table of name and detail, `--json` in
+the §3.1 envelope, so an agent lists a repo's capability without parsing YAML.
+**The detail column is the entry's `help:`, falling back to its `cmd:`** when the
+entry declares none — a blank cell reads as a defect, and the command string is
+the only other thing Armada knows. The payload carries both unconditionally, plus
+the **resolved** `stdio:`, which is the one value in a `commands:` entry that the
+file frequently does not state: an entry with a grant and no key is `pipe`, and
+nothing in `armada.yml` says so.
 
-**The consequence that has to land with it.** Adding `commands` to the built-in
-verb list means **no repo may declare a `commands:` entry named `commands`** —
-§4.5's shadow rule applies the moment the name is taken, and the schema rejects
-it at config-verify time rather than at run time. That is the same trade as the
+**The consequence landed with it.** Adding `commands` to the built-in verb list
+means **no repo may declare a `commands:` entry named `commands`** — §4.5's
+shadow rule applies the moment the name is taken, and the schema rejects it at
+config-verify time rather than at run time. That is the same trade as the
 root-level aliases of §3: a name promoted into Armada's namespace is a name
 taken away from every repository. It is worth it here because "what can I run"
 is a question with no other answer.
 
-**Not scheduled.** It is small, and it belongs with whichever milestone next
-touches the dispatcher rather than on its own.
+**What it fixed on the help pages, which is what it was asked for.** The root
+page's `<name>` row read *"a commands: entry from this repo's armada.yml"* — a
+placeholder whose only resolution was opening the file, which is the complaint
+this verb answers. It now names the verb that lists them. The **module** page
+carried no such row at all, so `armada manifest --help` never said a
+repository's own verbs were invocable; it does now.
+
+**Every key the file accepts is written down.** [`armada-yml.md`](armada-yml.md)
+is the reference this section had never produced — one page per block, what each
+key defaults to, and which layer rejects a mistake. A listing verb that shows
+what is declared is only half an answer to "what should be in that file".
 
 ### 4.6 `workspaces:` — nested workspaces in one repo
 

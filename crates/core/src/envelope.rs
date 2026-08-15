@@ -717,6 +717,55 @@ pub struct ComponentView {
     pub checks: Vec<String>,
 }
 
+/// `armada manifest commands` — the verbs this repository declares.
+///
+/// **The third of the same gap.** `skills:` and `components:` both had a block
+/// in `armada.yml` that nothing could list, and both were closed by a verb that
+/// reads the resolved config and prints it. `commands:` was the one left: the
+/// only way to learn a repository's own verbs was to open the file, which is
+/// the first question a newcomer — human or agent — asks and the work Armada
+/// exists to remove (PLAN.md §4.5).
+///
+/// **`verb` is `commands` on this payload and on a dispatched entry's**, and
+/// the two are told apart by their bodies: a listing has `results[]` and
+/// `commands[]`, a dispatch has `command`, `dispatched` and `child_exit`. They
+/// are the same subsystem answering the two questions it has — what is there,
+/// and what happened when you ran one.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CommandsData {
+    /// One row per declared command, in name order.
+    pub results: Vec<ResultRow>,
+    /// The commands themselves, so an agent reads structure rather than a
+    /// rendered table.
+    pub commands: Vec<CommandView>,
+}
+
+/// One `commands:` entry, as the listing describes it.
+///
+/// **`cmd` is carried even though the table usually shows `help`.** The two
+/// answer different questions — what this verb is *for*, and what it will
+/// actually execute — and an agent deciding whether to run something wants the
+/// second. A human reading eighty columns wants the first, which is why the
+/// render prefers `help:` and the payload refuses to choose.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CommandView {
+    /// The declared name — what `armada manifest <name>` takes.
+    pub name: String,
+    /// What that entry runs, as the config declares it, before substitution.
+    pub cmd: String,
+    /// The entry's one-line `help:`, when it declares one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help: Option<String>,
+    /// `inherit` or `pipe`, **after inference** — the resolved value rather
+    /// than the written one, so a reader learns what will happen rather than
+    /// what the file happened to say. An entry with a grant and no `stdio:` key
+    /// reports `pipe` here and nothing in `armada.yml` says so.
+    pub stdio: String,
+    /// The secret names granted to this entry and nowhere else.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub secrets: Vec<String>,
+}
+
 /// One skill, resolved: its grants expanded to the commands they name.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedSkillView {

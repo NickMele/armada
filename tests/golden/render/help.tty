@@ -13,8 +13,9 @@
   check [<selector>]    [38;2;156;163;175mlint, format and test — the verb a gate calls[0m
   skills [show <name>]  [38;2;156;163;175mwhat this repository knows about itself[0m
   components            [38;2;156;163;175mwhat this repository can be filtered by[0m
+  commands              [38;2;156;163;175mthe verbs this repository declares[0m
   clean                 [38;2;156;163;175mrelease what this workspace owns[0m
-  <name>                [38;2;156;163;175ma commands: entry from this repo's armada.yml[0m
+  <name>                [38;2;156;163;175ma verb this repo declares; manifest commands lists them[0m
 
 [1m[38;2;255;169;64mGUILD — you, portable: voice, skills, hooks, workflows[0m
   init             [38;2;156;163;175mbuild your guild by interviewing you[0m

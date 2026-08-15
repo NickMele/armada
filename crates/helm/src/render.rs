@@ -52,12 +52,12 @@ pub mod term;
 
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
-    ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData,
-    GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData, GuildSyncData,
-    Headline, HelmData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData,
-    PauseData, ProbeData, Projection, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData,
-    ServicesData, ShowData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData,
-    VerifyData, Wiring,
+    CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding,
+    FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
+    GuildSyncData, Headline, HelmData, InboxData, InitData, InitDryRun, KillData, MachineInitData,
+    McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData, ResultRow, ResumeData,
+    ScanData, ServicesData, ShowData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun,
+    VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -97,6 +97,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Verify(envelope) => verify(envelope, style, width),
         Output::Skills(envelope) => skills(envelope, style, width),
         Output::Components(envelope) => components(envelope, style, width),
+        Output::Commands(envelope) => commands(envelope, style, width),
         Output::MachineInit(envelope) => machine_init(envelope, style, width),
         Output::Doctor(envelope) => doctor(envelope, style, width),
         Output::GuildSync(envelope) => guild_sync(envelope, style, width),
@@ -4205,6 +4206,72 @@ fn components(envelope: &Envelope<ComponentsData>, style: Style, width: usize) -
             Role::SteelGrey,
             "`armada manifest check --component <name>`, or `<name>:<check>` for one check."
         )
+    ));
+    out
+}
+
+/// `armada manifest commands` — the verbs this repository declares.
+///
+/// **The same shape as `skills` and `components`**, and deliberately: the three
+/// answer the same kind of question about the same document, and a reader who
+/// has met one has met the others. `declared` is a render-only word for the
+/// reason the other two give — the envelope has no status that means it, and a
+/// word that read as a verdict would claim something this verb never checked.
+///
+/// **The trailer says whose verbs these are**, because that is the confusion
+/// this listing exists to end: nothing in `armada.yml` is Armada's, and a
+/// reader who has just been shown a table of verbs has every reason to wonder
+/// which of them Armada would have had anyway. The answer is none of them.
+fn commands(envelope: &Envelope<CommandsData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = header(style, envelope.workspace.as_ref(), None, None, width);
+
+    let mut table = Table::new(columns("command", "detail", false)).indent(2);
+    for command in &data.commands {
+        table = table.row(vec![
+            token("declared", Role::BeaconGreen),
+            Cell::plain(command.name.clone()),
+            detail_cell(style, Some(crate::verbs::commands::detail(command))),
+        ]);
+    }
+    out.push_str(&table.render(style, width));
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    // **The grant count is a fact about the listing, not a state of a row**, so
+    // it goes where `skills` puts its unresolved-reference count rather than
+    // into the status column. "What can reach this token" was previously
+    // answered by grepping the config; this is the same answer, counted.
+    let granted = data
+        .commands
+        .iter()
+        .filter(|command| !command.secrets.is_empty())
+        .count();
+    let mut facts = vec![format::count(data.commands.len(), "command")];
+    if !data.commands.is_empty() {
+        facts.push(format!("{granted} with a secrets grant"));
+    }
+    out.push_str(&summary(style, envelope.status, &facts));
+
+    // **A repository that declares none gets different lines, not the same
+    // lines against an empty table.** "These are this repository's verbs" said
+    // over nothing is answering a question nobody could have asked; what that
+    // reader needs is what a `commands:` entry is made of.
+    let trailer: [&str; 2] = match data.commands.is_empty() {
+        true => [
+            "No commands: block in armada.yml, so this repository declares no verbs.",
+            "An entry is a name, a cmd: to run, and a help: line saying what it is for.",
+        ],
+        false => [
+            "`armada manifest <command>` runs one; everything after the name is its own.",
+            "These are this repository's own verbs; `armada manifest --help` lists Armada's.",
+        ],
+    };
+    out.push_str(&format!(
+        "\n{}\n{}\n",
+        style.paint(Role::SteelGrey, trailer[0]),
+        style.paint(Role::SteelGrey, trailer[1])
     ));
     out
 }

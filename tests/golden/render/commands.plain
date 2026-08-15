@@ -1,0 +1,11 @@
+armada  3d9cc7ba
+
+  STATUS    COMMAND    DETAIL
+  DECLARED  deploy     Deploy this branch to staging
+  DECLARED  seed-db    pnpm prisma db seed
+  DECLARED  worktrees  Create and tear down git worktrees
+
+OK  3 commands, 1 with a secrets grant
+
+`armada manifest <command>` runs one; everything after the name is its own.
+These are this repository's own verbs; `armada manifest --help` lists Armada's.

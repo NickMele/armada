@@ -118,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 34] = [
+const PAGES: [Page; 35] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -291,6 +291,28 @@ const PAGES: [Page; 34] = [
         notes: &[
             "RUNS means the component has a run:, so up and down act on it.",
             "A check is reached as <component>:<check>.",
+        ],
+    },
+    Page {
+        path: "manifest commands",
+        synopsis: "commands",
+        summary: "the verbs this repository declares",
+        usage: &["armada manifest commands [--json]"],
+        flags: &[],
+        examples: &[
+            (
+                "armada manifest commands",
+                "the names `armada manifest <name>` takes here",
+            ),
+            (
+                "armada manifest seed-db -- --force",
+                "then run one; everything after -- is the command's own",
+            ),
+        ],
+        notes: &[
+            "Every row is this repository's own, declared in armada.yml.",
+            "Armada provides none of them; armada manifest --help lists Armada's.",
+            "An entry with no help: shows what it runs instead.",
         ],
     },
     Page {
@@ -945,7 +967,15 @@ fn root(style: Style, terminal: Terminal) -> String {
         "MANIFEST — what a workspace is and how to operate it",
     ));
     let mut verbs = verbs_of("manifest");
-    verbs.push(("<name>", "a commands: entry from this repo's armada.yml"));
+    // **`<name>` is a placeholder, and a placeholder with nowhere to look it up
+    // is worse than no row at all.** The line used to end at "this repo's
+    // armada.yml", which told a reader that names exist and left opening the
+    // file as the only way to learn them. `armada manifest commands` is that
+    // way now, so the row names it.
+    verbs.push((
+        "<name>",
+        "a verb this repo declares; manifest commands lists them",
+    ));
     out.push_str(&two_column(&verbs).render(style, width));
 
     out.push('\n');
@@ -1109,7 +1139,16 @@ fn manifest(style: Style, terminal: Terminal) -> String {
         )
     );
     out.push_str(&heading(style, "VERBS"));
-    out.push_str(&two_column(&verbs_of("manifest")).render(style, width));
+    // **The root page carried this row and the module page did not**, which
+    // meant `armada manifest --help` — the page a reader reaches by asking
+    // about this module specifically — never said that a repository's own verbs
+    // are invocable here at all.
+    let mut verbs = verbs_of("manifest");
+    verbs.push((
+        "<name>",
+        "a verb this repo declares; manifest commands lists them",
+    ));
+    out.push_str(&two_column(&verbs).render(style, width));
     out.push('\n');
     out.push_str(&heading(style, "NOT BUILT YET"));
     out.push_str(
