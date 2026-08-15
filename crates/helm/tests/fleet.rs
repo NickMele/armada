@@ -250,10 +250,10 @@ impl Run for Harness {
             }
             ["claude", "--model", ..] => ok(&self.classified),
             [_, "manifest", "init", "--json"] => ok(
-                r#"{"schema_version":1,"verb":"init","workspace":"3d9cc7ba","status":"READY","error":null,"data":{"port_block":{"from":5470,"to":5479},"claimed_at":"t","reaped":{},"results":[]}}"#,
+                r#"{"schema_version":2,"verb":"init","workspace":"3d9cc7ba","status":"READY","error":null,"data":{"port_block":{"from":5470,"to":5479},"claimed_at":"t","reaped":{},"results":[]}}"#,
             ),
             [_, "manifest", "clean", "--json"] => ok(
-                r#"{"schema_version":1,"verb":"clean","status":"CLEAN","error":null,"data":{"reaped":{},"results":[{"id":"a","status":"CLEAN","released":{"processes":0,"containers":3,"networks":0,"volumes":0,"images":0,"port_block":true,"files":0}}]}}"#,
+                r#"{"schema_version":2,"verb":"clean","status":"CLEAN","error":null,"data":{"reaped":{},"results":[{"id":"a","status":"CLEAN","released":{"processes":0,"containers":3,"networks":0,"volumes":0,"images":0,"port_block":true,"files":0}}]}}"#,
             ),
             ["git", ..] => ok(""),
             other => Err(SpawnError {

@@ -1,7 +1,7 @@
 //! The `--json` envelope (PLAN.md §3.1) and the per-verb bodies phase 2 fills.
 //!
 //! ```json
-//! { "schema_version": 1, "verb": "init", "workspace": "a3f91c02",
+//! { "schema_version": 2, "verb": "init", "workspace": "a3f91c02",
 //!   "status": "READY", "error": null, "data": {} }
 //! ```
 //!
@@ -34,7 +34,21 @@ use std::fmt;
 /// does.** That rule is checkable, and it lets a consumer say "I need ≥ 1" and
 /// be right. It is global rather than per-verb because six verbs ship in one
 /// binary and an agent uses all of them.
-pub const SCHEMA_VERSION: u32 = 1;
+///
+/// **2 because [`InitData::port_block`] and [`ServicesData::port_block`] went
+/// from `PortBlock` to `Option<PortBlock>`.** That is the "changing its type"
+/// clause, not the "adding a field" one: both keys are emitted unconditionally,
+/// so code that read `port_block.from` used to be right on every payload and
+/// now breaks on the one a workspace with no `ports:` produces. A reader cannot
+/// tell that from the version staying still.
+///
+/// **The envelope's own `workspace` is not the precedent it looks like.** That
+/// key was nullable in version 1 and documented as such, so every consumer that
+/// ever existed was written against a `T | null`. `port_block` changed *under* a
+/// reader who had no reason to expect it. Nullable-from-the-start and
+/// nullable-since are the same shape and different promises, and the bump rule
+/// is about the promise.
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// The fixed wrapper every verb answers in.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -158,9 +172,9 @@ pub struct ResultRow {
     /// matters — whether the workspace that declared it still exists. Listing it
     /// twice would make a reader wonder which one was authoritative.
     ///
-    /// **Additive: `schema_version` stays 1** (PLAN.md §3.1 — adding a field does
-    /// not bump; removing one or changing its type does). Omitted when empty, so
-    /// no verb that owns nothing gains a key.
+    /// **Additive, so it did not bump `schema_version`** (PLAN.md §3.1 — adding a
+    /// field does not bump; removing one or changing its type does). Omitted when
+    /// empty, so no verb that owns nothing gains a key.
     ///
     /// [`leases`]: ResultRow::leases
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -195,8 +209,8 @@ pub struct ResultRow {
     /// reconstruct afterwards — `${port.NAME}` has already been substituted and
     /// the config no longer says what ran.
     ///
-    /// Additive, so `schema_version` stays 1, and omitted when empty, so no
-    /// verb that spawns nothing gains a key.
+    /// Additive, so it did not bump `schema_version`, and omitted when empty, so
+    /// no verb that spawns nothing gains a key.
     ///
     /// [`commands/manifest/up.md`]: ../../../docs/commands/manifest/up.md
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -401,6 +415,12 @@ pub struct InitData {
     /// envelope's own `workspace` already follows: a consumer reading this key
     /// unconditionally finds it, and finds out that there is no block, instead
     /// of finding nothing at all.
+    ///
+    /// **This field is why [`SCHEMA_VERSION`] is 2.** It was `PortBlock` and is
+    /// now `Option<PortBlock>` — a type change under a reader, which the bump
+    /// rule says bumps. Borrowing `workspace`'s emit-rather-than-skip *shape*
+    /// does not borrow its version history: `workspace` was nullable in version
+    /// 1, so no consumer was ever promised otherwise, and this one was.
     pub port_block: Option<PortBlock>,
     /// When the block was claimed. Wall clock, and only ever displayed.
     pub claimed_at: String,

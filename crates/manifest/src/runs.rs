@@ -261,7 +261,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&text).expect("whole JSON");
         assert_eq!(parsed["run_id"], run.as_str());
         assert_eq!(parsed["workspace"], "a3f91c02");
-        assert_eq!(parsed["schema_version"], 1);
+        assert_eq!(parsed["schema_version"], 2);
 
         // The temporary is renamed, not left behind — a reader listing the
         // directory must not find two records.

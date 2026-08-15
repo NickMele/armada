@@ -533,7 +533,7 @@ snapshots — and none of them can invent it independently without the three inc
 answers [`PHASES.md`](PHASES.md) §8 warns about.
 
 ```json
-{ "schema_version": 1,
+{ "schema_version": 2,
   "verb":           "check",
   "workspace":      "a3f91c02",
   "status":         "FAILED",
@@ -565,7 +565,7 @@ Every verb acts on many things: `check` runs N checks, `up` starts N services, `
 touches N workspaces. So they share one array shape, learned once:
 
 ```json
-{ "schema_version": 1, "verb": "check", "workspace": "a3f91c02",
+{ "schema_version": 2, "verb": "check", "workspace": "a3f91c02",
   "status": "FAILED",
   "error": { "class": "tool_failed", "where": "api:lint",
              "message": "2 of 4 checks did not pass" },
@@ -696,8 +696,8 @@ here: it is a command rather than a resource, Armada never executes it (§6.1), 
 `data.unreclaimed` already carries it with the fact that matters — whether the workspace that
 declared it still exists.
 
-**Additive, so `schema_version` stays 1**, per the rule at the top of this section: adding a
-field does not bump, removing one or changing its type does. It is omitted when empty, so no
+**Additive, so it did not bump `schema_version`**, per the rule at the top of this section:
+adding a field does not bump, removing one or changing its type does. It is omitted when empty, so no
 verb that owns nothing gains a key. The human render of the same fact names the first three and
 counts the rest ([`commands/render.md`](commands/render.md)); `--json` always carries them all.
 
@@ -3450,7 +3450,7 @@ exactly one machine-readable output shape:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "module": "fleet",
   "step": "implement",
   "verdict": "PASS",

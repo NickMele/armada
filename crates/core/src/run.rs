@@ -493,7 +493,7 @@ mod tests {
         );
         assert_eq!(record.schema_version, crate::envelope::SCHEMA_VERSION);
         let json = serde_json::to_string(&record).expect("a run record serializes");
-        assert!(json.contains("\"schema_version\":1"), "{json}");
+        assert!(json.contains("\"schema_version\":2"), "{json}");
         assert!(json.contains("\"workspace\":\"a3f91c02\""), "{json}");
     }
 }

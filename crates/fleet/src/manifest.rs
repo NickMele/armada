@@ -184,7 +184,7 @@ mod tests {
         }
     }
 
-    const INITED: &str = r#"{"schema_version":1,"verb":"init","workspace":"3d9cc7ba","status":"READY","error":null,"data":{"port_block":{"from":5470,"to":5479},"claimed_at":"t","reaped":{},"results":[]}}"#;
+    const INITED: &str = r#"{"schema_version":2,"verb":"init","workspace":"3d9cc7ba","status":"READY","error":null,"data":{"port_block":{"from":5470,"to":5479},"claimed_at":"t","reaped":{},"results":[]}}"#;
 
     /// **The verb is run in the worktree**, which is the whole point: it claims
     /// a block for *that* directory, and running it anywhere else would claim a
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn a_workspace_with_no_port_block_is_not_a_failure() {
         let run = FakeRun::answering(
-            r#"{"schema_version":1,"verb":"init","status":"READY","error":null,"data":{"results":[]}}"#,
+            r#"{"schema_version":2,"verb":"init","status":"READY","error":null,"data":{"port_block":null,"results":[]}}"#,
         );
         assert_eq!(
             init(&run, Path::new("/bin/armada"), Path::new("/w")).unwrap(),
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn clean_sums_what_every_row_released() {
         let run = FakeRun::answering(
-            r#"{"schema_version":1,"verb":"clean","status":"CLEAN","error":null,"data":{"reaped":{},"results":[
+            r#"{"schema_version":2,"verb":"clean","status":"CLEAN","error":null,"data":{"reaped":{},"results":[
                 {"id":"a","status":"CLEAN","released":{"processes":1,"containers":2,"networks":0,"volumes":0,"images":0,"port_block":true,"files":0}},
                 {"id":"b","status":"CLEAN","released":{"processes":0,"containers":1,"networks":1,"volumes":0,"images":0,"port_block":false,"files":0}}
             ]}}"#,
@@ -252,7 +252,7 @@ mod tests {
         let run = FakeRun {
             code: 1,
             ..FakeRun::answering(
-                r#"{"schema_version":1,"verb":"clean","status":"PARTIAL","error":{"class":"tool_failed","where":"api","message":"a container would not stop"},"data":{"reaped":{},"results":[
+                r#"{"schema_version":2,"verb":"clean","status":"PARTIAL","error":{"class":"tool_failed","where":"api","message":"a container would not stop"},"data":{"reaped":{},"results":[
                     {"id":"a","status":"CLEAN","released":{"processes":0,"containers":1,"networks":0,"volumes":0,"images":0,"port_block":true,"files":0}}
                 ]}}"#,
             )

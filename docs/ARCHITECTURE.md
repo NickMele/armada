@@ -377,7 +377,7 @@ the design permits; all four are recorded in `traps.md`.
 four things consume it and none can invent it independently. Full definition in PLAN.md §3.1.
 
 ```json
-{ "schema_version": 1, "verb": "check", "workspace": "a3f91c02",
+{ "schema_version": 2, "verb": "check", "workspace": "a3f91c02",
   "status": "FAILED", "error": null, "data": { } }
 ```
 
@@ -394,6 +394,25 @@ is checkable, and it lets a consumer say "I need ≥ 1" and be right.
 Global rather than per-verb because six verbs ship in one binary and an agent uses all of
 them — eight independently drifting version numbers works against the project's "learn it
 once" thesis for a precision nobody needs.
+
+**It is 2, and the bump is the rule's first real exercise.** `init` and `up`/`down` carry a
+`port_block`, and a workspace whose components declare no `ports:` has nothing to collide
+over, so the field went from `PortBlock` to `PortBlock | null`. That is the *changing its
+type* clause: both keys are emitted unconditionally, so `port_block.from` used to be safe on
+every payload and now fails on one. The version is the only place a consumer could have
+learned that.
+
+**The envelope's own `workspace` is not the precedent it looks like**, and it was reached for.
+That key has been `WorkspaceId | null` since version 1 and is documented as such, so every
+consumer that ever existed was written against a nullable. `port_block` changed *under* a
+reader who had no reason to expect it. The two end in the same shape and make opposite
+promises, and the bump rule is about the promise, not the shape — a field that was born
+nullable teaches nothing about one that became nullable.
+
+The bump was cheap because nothing is published: one constant, eleven golden payloads and the
+docs. That is the argument *for* spending it rather than against — the version's whole value
+is that it was never allowed to lie, and the first skipped bump is the one that makes every
+later one unbelievable.
 
 Worth being honest: the field has no consumer today. The MCP server is in-process and always
 the same version, and agents read JSON adaptively rather than branching on a version number.
@@ -437,7 +456,7 @@ Every error carries **which class of failure it is, where, and what to do next.*
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "verb": "config verify",
   "error": {
     "class": "bad_config",

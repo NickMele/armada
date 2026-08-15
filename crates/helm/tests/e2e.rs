@@ -313,7 +313,7 @@ fn a_parse_time_failure_answers_in_the_envelope_when_json_was_asked_for() {
             String::from_utf8_lossy(&output.stderr)
         )
     });
-    assert_eq!(payload["schema_version"], Value::from(1));
+    assert_eq!(payload["schema_version"], Value::from(2));
     assert_eq!(payload["status"], "FAILED");
     assert_eq!(payload["error"]["class"], "bad_invocation");
     assert_eq!(payload["workspace"], Value::Null, "resolution never ran");
