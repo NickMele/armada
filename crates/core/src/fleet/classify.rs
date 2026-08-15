@@ -21,12 +21,33 @@ use serde::Serialize;
 /// The model, pinned (PHASES.md §8.5).
 pub const MODEL: &str = "claude-haiku-4-5-20251001";
 
-/// Below this, a spawn is confirmed rather than taken (PLAN.md §15.4).
+/// Below this, a spawn **stops and asks** rather than proceeding (PLAN.md
+/// §15.4).
 ///
 /// **A threshold rather than a judgement**, because the failure it prevents is
 /// specific: a misclassification wastes a whole budget, and the two cases where
 /// an unconfirmed spawn is expensive — low confidence, and a workflow that ends
 /// at you anyway — are both checkable.
+///
+/// # Why 0.75, and what the number is doing
+///
+/// The choice is between two costs, and they are not symmetric. **Asking when
+/// the model was right** costs one keypress on a prompt that arrives with the
+/// right answer already selected. **Not asking when it was wrong** costs a
+/// worktree, a port block, a `manifest init`, and however much of a budget the
+/// Drone spends before anybody reads what it produced — and the wrong workflow
+/// is not a thing you notice quickly, because a `design` Job working on a bug
+/// looks busy.
+///
+/// So the threshold sits well above a coin flip: four in five is the point at
+/// which "probably right" stops being a reason to spend a budget unattended.
+/// Below it the model is *guessing between two labels*, and a person who is
+/// already at the terminal can settle it in one keypress.
+///
+/// It is not tuned, and it should not be. A number chosen to make a particular
+/// task classify a particular way is a number that stops meaning anything —
+/// which is why it is **overridable per spawn** (`--confidence`) rather than
+/// adjusted here when a task lands on the wrong side of it.
 pub const CONFIDENT: f64 = 0.75;
 
 /// Where a Job's workflow came from.
@@ -66,8 +87,11 @@ impl Classification {
     /// Whether this is confident enough to spawn without asking.
     ///
     /// An override always is: you already answered the question.
-    pub fn is_confident(&self) -> bool {
-        self.confidence.is_none_or(|c| c >= CONFIDENT)
+    ///
+    /// `threshold` is [`CONFIDENT`] unless a caller said otherwise, which is
+    /// what keeps the number a policy rather than a tuning knob nobody can see.
+    pub fn is_confident(&self, threshold: f64) -> bool {
+        self.confidence.is_none_or(|c| c >= threshold)
     }
 }
 
@@ -311,7 +335,7 @@ mod tests {
     fn an_answer_with_no_confidence_is_not_treated_as_certain() {
         let classification = parse(r#"{"workflow":"design"}"#).unwrap();
         assert_eq!(classification.confidence, Some(0.0));
-        assert!(!classification.is_confident());
+        assert!(!classification.is_confident(CONFIDENT));
     }
 
     #[test]
@@ -338,7 +362,10 @@ mod tests {
         let overridden = Classification::overridden("bug");
         assert_eq!(overridden.confidence, None);
         assert_eq!(overridden.source, Source::Override);
-        assert!(overridden.is_confident());
+        // An override is confident at any threshold, including one that
+        // would refuse every model answer: you already answered the question.
+        assert!(overridden.is_confident(CONFIDENT));
+        assert!(overridden.is_confident(1.0));
         let json = serde_json::to_string(&overridden).unwrap();
         assert!(!json.contains("confidence"), "{json}");
     }
@@ -350,7 +377,23 @@ mod tests {
             confidence: Some(c),
             source: Source::Model,
         };
-        assert!(at(CONFIDENT).is_confident());
-        assert!(!at(CONFIDENT - 0.01).is_confident());
+        assert!(at(CONFIDENT).is_confident(CONFIDENT));
+        assert!(!at(CONFIDENT - 0.01).is_confident(CONFIDENT));
+    }
+
+    /// **The threshold is a policy, not a tuning knob**, so it is overridable
+    /// per spawn rather than adjusted when one task lands on the wrong side of
+    /// it. `0` never asks and `1` asks about everything the model answered.
+    #[test]
+    fn the_threshold_moves_when_a_caller_moves_it() {
+        let guess = Classification {
+            workflow: "feature".to_string(),
+            confidence: Some(0.5),
+            source: Source::Model,
+        };
+        assert!(!guess.is_confident(CONFIDENT), "0.5 is a coin flip");
+        assert!(guess.is_confident(0.4), "a lower bar accepts it");
+        assert!(guess.is_confident(0.0), "0 never asks");
+        assert!(!guess.is_confident(1.0), "1 asks about every guess");
     }
 }

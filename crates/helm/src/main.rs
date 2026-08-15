@@ -293,7 +293,23 @@ fn dispatch(
         };
         return match *fleet {
             args::FleetInvocation::Spawn(spawn) => {
-                verbs::fleet::spawn(&run, &SystemClock, &place, &spawn)
+                // **`None` when nobody is there to answer**, which is the same
+                // rule `config scan`'s hand-over applies: both streams, decided
+                // at the entrypoint and passed down rather than sniffed inside a
+                // verb (`ARCHITECTURE.md` §1.4). A low-confidence spawn then
+                // refuses instead of waiting on an answer that cannot arrive.
+                let mut asking = terminal
+                    .can_ask()
+                    .then(|| at_the_terminal(style, terminal).interactive());
+                verbs::fleet::spawn(
+                    &run,
+                    &SystemClock,
+                    &place,
+                    &spawn,
+                    asking
+                        .as_mut()
+                        .map(|ask| ask as &mut dyn armada_helm::ask::Ask),
+                )
             }
             args::FleetInvocation::Ls {
                 all,

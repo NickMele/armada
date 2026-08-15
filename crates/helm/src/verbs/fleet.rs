@@ -37,6 +37,7 @@ use armada_guild::layout::Guild;
 use std::path::{Path, PathBuf};
 
 use crate::args::Spawn;
+use crate::ask::{Ask, Choice};
 use crate::verbs::Output;
 
 /// Everything a Fleet verb needs from the machine, gathered at the entrypoint.
@@ -186,16 +187,22 @@ fn settle<C: Clock>(
 /// durable handle exists before the process does, so a spawn that dies halfway
 /// leaves a Job `armada fleet kill` can still find and release — which is the
 /// whole reason PLAN.md §14.1 puts the minting first.
+///
+/// **A guess stops and asks.** `ask` is `Some` only when a person is at the
+/// other end; see [`settle_workflow`] for why a low-confidence spawn refuses
+/// rather than proceeding when nobody is.
 pub fn spawn<R: Run, C: Clock>(
     run: &R,
     now: &C,
     place: &Where,
     options: &Spawn,
+    ask: Option<&mut dyn Ask>,
 ) -> Result<Output, ArmadaError> {
     let repo_root = repository(run, place, options)?;
     let repo = home::repo_name(&repo_root);
 
-    let (classification, classify_ms) = classify(run, now, &repo_root, options)?;
+    let (guessed, classify_ms) = classify(run, now, &repo_root, options)?;
+    let classification = settle_workflow(guessed, options, ask)?;
     let workflow = read_workflow(place, &classification.workflow)?;
     let budget = workflow::override_budget(workflow.budget, &options.budget)?;
 
@@ -367,6 +374,98 @@ fn classify<R: Run, C: Clock>(
             let classified = drone::classify(run, repo_root, &options.task)?;
             Ok((classified, Some(now.mono().saturating_sub(started))))
         }
+    }
+}
+
+/// A guess, settled by a person — or refused.
+///
+/// **Printing the word `a guess` was not enough.** A real spawn read
+/// `classified  workflow  feature, confidence 0.15, a guess` and went straight
+/// on to make a worktree, claim a block and start a Drone on a budget. §14.2
+/// puts the confidence on the screen *"so a guess is visible as a guess"*, and a
+/// guess that is visible for one line and then acted on regardless has not been
+/// surfaced — it has been narrated.
+///
+/// So below the threshold the four workflows are put to the person, with the
+/// model's guess already selected: one keypress confirms it and one arrow key
+/// changes it. That is cheaper than the thing it prevents by an order of
+/// magnitude — the wrong workflow is a whole budget spent looking busy, and a
+/// `design` Job working on a bug does not look wrong until somebody reads it.
+///
+/// **With nobody there it refuses, and does not hang.** An agent driving Armada
+/// through a pipe cannot answer, and waiting on an answer that will never arrive
+/// is worse than either alternative. `bad_invocation` naming `--workflow` is the
+/// honest one: a Job started on a coin flip costs a worktree and a budget to
+/// discover.
+fn settle_workflow(
+    guessed: Classification,
+    options: &Spawn,
+    ask: Option<&mut dyn Ask>,
+) -> Result<Classification, ArmadaError> {
+    let threshold = options
+        .confidence
+        .unwrap_or(armada_core::fleet::classify::CONFIDENT);
+    if guessed.is_confident(threshold) {
+        return Ok(guessed);
+    }
+
+    let Some(ask) = ask else {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: "classify".to_string(),
+            message: format!(
+                "`{}` is a guess at {:.2}, and there is nobody to ask",
+                guessed.workflow,
+                guessed.confidence.unwrap_or(0.0)
+            ),
+            next_action: Some(format!(
+                "name it: --workflow {}",
+                workflow::STARTERS.join("|")
+            )),
+        });
+    };
+
+    // The guess is the default, so confirming it is `enter` and changing it is
+    // one arrow key. `select.rs` handles the keys, the digits and the
+    // non-widget fallback; this only decides what is offered.
+    let options_offered: Vec<Choice> = workflow::STARTERS
+        .iter()
+        .map(|name| Choice::new(name, describe(name)))
+        .collect();
+    let default = workflow::STARTERS
+        .iter()
+        .position(|name| *name == guessed.workflow)
+        .map_or(1, |at| at + 1);
+
+    let chosen = ask.choose(
+        &format!(
+            "Which workflow is this? (guessed {} at {:.2})",
+            guessed.workflow,
+            guessed.confidence.unwrap_or(0.0)
+        ),
+        &options_offered,
+        default,
+    );
+    let picked = workflow::STARTERS
+        .get(chosen.saturating_sub(1))
+        .unwrap_or(&workflow::STARTERS[0]);
+
+    // **Answered by a person is an override, not a confident model.** Recording
+    // it any other way would put a confidence on the screen that nobody
+    // measured — the distinction `Classification::overridden` exists for.
+    Ok(Classification::overridden(picked))
+}
+
+/// One clause per workflow, for the selector's aside.
+///
+/// **The same four sentences the classifier's prompt uses**, so the person and
+/// the model are choosing between the same descriptions.
+fn describe(workflow: &str) -> &'static str {
+    match workflow {
+        "design" => "deciding an approach, no code",
+        "plan" => "writing down how, before building",
+        "bug" => "something is broken, reproduce it first",
+        _ => "building something new",
     }
 }
 

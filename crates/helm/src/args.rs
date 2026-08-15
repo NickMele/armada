@@ -35,7 +35,7 @@ use crate::render::style::ColorChoice;
 /// **`color` sits here rather than on each variant** because it is decided once
 /// for the process (PLAN.md §3.1.1) and applies to output no verb produces —
 /// `--version`, `--help`, and the error from a line that never named a verb.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Parsed {
     /// The verb, and its own flags.
     pub invocation: Invocation,
@@ -44,7 +44,7 @@ pub struct Parsed {
 }
 
 /// A parsed invocation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Invocation {
     /// `armada --version`.
     Version,
@@ -140,7 +140,7 @@ pub enum Invocation {
 /// almost nothing: `spawn` takes a task and four ways to override the plan,
 /// `board` takes one Job, and `ls` takes two lenses. A single struct would be
 /// twelve optional fields with a comment saying which combinations are legal.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FleetInvocation {
     /// `armada fleet spawn "<task>"`.
     Spawn(Box<Spawn>),
@@ -212,7 +212,11 @@ impl FleetInvocation {
 /// `armada fleet spawn`, with the flags `commands/fleet/spawn.md` gives it.
 ///
 /// A struct rather than variant fields, for the same reason [`Check`] is one.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+///
+/// **No `Eq`**, because `--confidence` is a float and a float is not one.
+/// `PartialEq` is what the tests compare with, and it is what a threshold
+/// deserves.
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Spawn {
     /// Emit the envelope.
     pub json: bool,
@@ -226,6 +230,14 @@ pub struct Spawn {
     pub budget: Vec<String>,
     /// Which repository to branch from.
     pub at: Option<String>,
+    /// Below this confidence, stop and ask which workflow this is.
+    ///
+    /// **Overridable rather than tuned.** The default is
+    /// [`armada_core::fleet::classify::CONFIDENT`], and a number chosen to make
+    /// one task classify one way is a number that stops meaning anything — so a
+    /// caller who wants a different bar says so per spawn. `0` never asks;
+    /// anything above `1` always does.
+    pub confidence: Option<f64>,
     /// Report the classification, worktree path, port block and budget. Starts
     /// nothing.
     pub dry_run: bool,
@@ -1111,7 +1123,7 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 color,
                 "fleet spawn",
                 &["--dry-run"],
-                &["--workflow", "--name", "--budget", "-C"],
+                &["--workflow", "--name", "--budget", "-C", "--confidence"],
             )?;
             // **The task is required and is not defaulted.** A `spawn` with no
             // task would classify an empty string and burn a worktree, a port
@@ -1130,9 +1142,31 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                     parsed.json,
                 ));
             };
+            // Refused rather than clamped: a caller who typed `--confidence 75`
+            // meant 0.75 and would otherwise get "always ask", which looks like
+            // Armada ignoring the flag.
+            let confidence = match parsed.value("--confidence") {
+                None => None,
+                Some(given) => match given.parse::<f64>() {
+                    Ok(value) if (0.0..=1.0).contains(&value) => Some(value),
+                    _ => return Err(failure(
+                        ArmadaError {
+                            class: ErrClass::BadInvocation,
+                            r#where: "--confidence".to_string(),
+                            message: format!("`{given}` is not a confidence between 0 and 1"),
+                            next_action: Some(
+                                "`--confidence 0.9` asks more often; `--confidence 0` never asks"
+                                    .to_string(),
+                            ),
+                        },
+                        parsed.json,
+                    )),
+                },
+            };
             FleetInvocation::Spawn(Box::new(Spawn {
                 json: parsed.json,
                 task,
+                confidence,
                 workflow: parsed.value("--workflow"),
                 name: parsed.value("--name"),
                 budget: parsed.every("--budget"),

@@ -2,16 +2,18 @@
 
 [1m[38;2;255;169;64mUSAGE[0m
   armada fleet spawn <task> [--workflow <name>] [--name <handle>]
-  armada fleet spawn <task> [--budget <k>=<v>]… [-C <path>] [--dry-run]
+  armada fleet spawn <task> [--budget <k>=<v>]… [--confidence <0-1>]
+  armada fleet spawn <task> [-C <path>] [--dry-run]
 
 [1m[38;2;255;169;64mFLAGS[0m
-  --workflow <name>  [38;2;156;163;175moverride classification; a workflow in your guild[0m
-  --name <handle>    [38;2;156;163;175mthe Job's handle; derived from the task when absent[0m
-  --budget <k>=<v>   [38;2;156;163;175moverride one ceiling, repeatable[0m
-  -C <path>          [38;2;156;163;175mthe repository to branch from; the cwd's when absent[0m
-  --dry-run          [38;2;156;163;175mreport the plan: workflow, worktree, ports, budget[0m
-  --json             [38;2;156;163;175manswer as one JSON object, for a script or an agent[0m
-  --color <when>     [38;2;156;163;175mauto (default), always, never; NO_COLOR wins[0m
+  --workflow <name>   [38;2;156;163;175moverride classification; a workflow in your guild[0m
+  --name <handle>     [38;2;156;163;175mthe Job's handle; derived from the task when absent[0m
+  --budget <k>=<v>    [38;2;156;163;175moverride one ceiling, repeatable[0m
+  --confidence <0-1>  [38;2;156;163;175mbelow this, stop and ask which workflow; 0 never asks[0m
+  -C <path>           [38;2;156;163;175mthe repository to branch from; the cwd's when absent[0m
+  --dry-run           [38;2;156;163;175mreport the plan: workflow, worktree, ports, budget[0m
+  --json              [38;2;156;163;175manswer as one JSON object, for a script or an agent[0m
+  --color <when>      [38;2;156;163;175mauto (default), always, never; NO_COLOR wins[0m
 
 [1m[38;2;255;169;64mEXAMPLES[0m
   armada fleet spawn "add rate limiting to the API"

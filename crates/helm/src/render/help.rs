@@ -416,7 +416,8 @@ const PAGES: [Page; 22] = [
         summary: "start an isolated agent Job on a task",
         usage: &[
             "armada fleet spawn <task> [--workflow <name>] [--name <handle>]",
-            "armada fleet spawn <task> [--budget <k>=<v>]… [-C <path>] [--dry-run]",
+            "armada fleet spawn <task> [--budget <k>=<v>]… [--confidence <0-1>]",
+            "armada fleet spawn <task> [-C <path>] [--dry-run]",
         ],
         flags: &[
             (
@@ -428,6 +429,10 @@ const PAGES: [Page; 22] = [
                 "the Job's handle; derived from the task when absent",
             ),
             ("--budget <k>=<v>", "override one ceiling, repeatable"),
+            (
+                "--confidence <0-1>",
+                "below this, stop and ask which workflow; 0 never asks",
+            ),
             (
                 "-C <path>",
                 "the repository to branch from; the cwd's when absent",

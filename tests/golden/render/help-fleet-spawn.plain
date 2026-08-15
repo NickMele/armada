@@ -2,16 +2,18 @@ armada fleet spawn — start an isolated agent Job on a task
 
 USAGE
   armada fleet spawn <task> [--workflow <name>] [--name <handle>]
-  armada fleet spawn <task> [--budget <k>=<v>]… [-C <path>] [--dry-run]
+  armada fleet spawn <task> [--budget <k>=<v>]… [--confidence <0-1>]
+  armada fleet spawn <task> [-C <path>] [--dry-run]
 
 FLAGS
-  --workflow <name>  override classification; a workflow in your guild
-  --name <handle>    the Job's handle; derived from the task when absent
-  --budget <k>=<v>   override one ceiling, repeatable
-  -C <path>          the repository to branch from; the cwd's when absent
-  --dry-run          report the plan: workflow, worktree, ports, budget
-  --json             answer as one JSON object, for a script or an agent
-  --color <when>     auto (default), always, never; NO_COLOR wins
+  --workflow <name>   override classification; a workflow in your guild
+  --name <handle>     the Job's handle; derived from the task when absent
+  --budget <k>=<v>    override one ceiling, repeatable
+  --confidence <0-1>  below this, stop and ask which workflow; 0 never asks
+  -C <path>           the repository to branch from; the cwd's when absent
+  --dry-run           report the plan: workflow, worktree, ports, budget
+  --json              answer as one JSON object, for a script or an agent
+  --color <when>      auto (default), always, never; NO_COLOR wins
 
 EXAMPLES
   armada fleet spawn "add rate limiting to the API"

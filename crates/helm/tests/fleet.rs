@@ -160,6 +160,16 @@ impl Harness {
         }
     }
 
+    /// A classifier that answers with a guess rather than an answer.
+    fn guessing(self, workflow: &str, confidence: f64) -> Harness {
+        Harness {
+            classified: format!(
+                r#"{{"type":"result","result":"{{\"workflow\":\"{workflow}\",\"confidence\":{confidence}}}"}}"#
+            ),
+            ..self
+        }
+    }
+
     fn refusing(self, prefix: &str, stderr: &str) -> Harness {
         self.refuse
             .borrow_mut()
@@ -347,7 +357,8 @@ fn spawned(output: &Output) -> armada_core::envelope::SpawnData {
 /// Spawn a Job and remember its Drone.
 fn spawn(scratch: &Scratch, run: &Harness, options: &Spawn) -> armada_core::envelope::SpawnData {
     let data = spawned(
-        &fleet::spawn(run, &FrozenClock::new(), &scratch.place(), options).expect("the Job spawns"),
+        &fleet::spawn(run, &FrozenClock::new(), &scratch.place(), options, None)
+            .expect("the Job spawns"),
     );
     scratch.watch(&data.uuid);
     data
@@ -424,6 +435,7 @@ fn two_jobs_run_at_the_same_time() {
             &clock,
             &scratch.place(),
             &task(&format!("add rate limiting {STAY_ALIVE}")),
+            None,
         )
         .unwrap(),
     );
@@ -435,6 +447,7 @@ fn two_jobs_run_at_the_same_time() {
             &clock,
             &scratch.place(),
             &task(&format!("fix the nightly flake {STAY_ALIVE}")),
+            None,
         )
         .unwrap(),
     );
@@ -520,6 +533,167 @@ fn a_drones_process_group_is_recorded_as_owned_by_its_workspace() {
     // **No component**, so `armada manifest down <service>` never touches a
     // Drone while `armada manifest clean`, which takes everything, still does.
     assert_eq!(row.component, None);
+}
+
+// ----------------------------------------------------------------------- spawn
+
+// ------------------------------------------------------- a guess stops and asks
+
+/// **A guess is put to the person, with the guess already selected.**
+///
+/// Printing the word `a guess` was not enough: a real spawn read `feature,
+/// confidence 0.15, a guess` and went straight on to make a worktree, claim a
+/// block and start a Drone on a budget. §14.2 puts the confidence on the screen
+/// *"so a guess is visible as a guess"*, and a guess that is visible for one
+/// line and acted on regardless has been narrated rather than surfaced.
+#[test]
+fn a_low_confidence_classification_asks_which_workflow_this_is() {
+    let scratch = Scratch::new();
+    let run = scratch.harness().guessing("design", 0.15);
+    // The person picks the second option — `plan` — rather than the guess.
+    let mut answering = armada_helm::ask::Scripted {
+        choice: Some(2),
+        ..Default::default()
+    };
+
+    let data = spawned(
+        &fleet::spawn(
+            &run,
+            &FrozenClock::new(),
+            &scratch.place(),
+            &task("something ambiguous"),
+            Some(&mut answering),
+        )
+        .expect("the Job spawns once the question is answered"),
+    );
+    scratch.watch(&data.uuid);
+
+    assert_eq!(data.workflow, "plan", "the answer was not used");
+    // **Answered by a person is an override, not a confident model.** Recording
+    // it otherwise would put a confidence on the screen that nobody measured.
+    assert_eq!(data.confidence, None);
+    assert_eq!(
+        scratch.store().load(&data.uuid).unwrap().workflow,
+        "plan",
+        "the record kept the guess instead of the answer"
+    );
+}
+
+/// The guess is the **default**, so confirming it is one keypress. A selector
+/// that opened on the wrong row would make the common case — the model was
+/// right — cost more than it saves.
+#[test]
+fn the_guess_is_the_option_already_selected() {
+    let scratch = Scratch::new();
+    let run = scratch.harness().guessing("bug", 0.20);
+    // `Scripted` with no choice takes whatever default it was offered.
+    let mut answering = armada_helm::ask::Scripted::default();
+
+    let data = spawned(
+        &fleet::spawn(
+            &run,
+            &FrozenClock::new(),
+            &scratch.place(),
+            &task("something ambiguous"),
+            Some(&mut answering),
+        )
+        .unwrap(),
+    );
+    scratch.watch(&data.uuid);
+    assert_eq!(data.workflow, "bug", "the guess was not pre-selected");
+}
+
+/// **With nobody there it refuses, and does not hang.** An agent driving Armada
+/// through a pipe cannot answer, and waiting on an answer that will never arrive
+/// is worse than either alternative — so the refusal names the flag that settles
+/// it, because a Job started on a coin flip costs a worktree and a budget to
+/// discover.
+#[test]
+fn a_low_confidence_spawn_with_nobody_to_ask_refuses_rather_than_guessing() {
+    let scratch = Scratch::new();
+    let run = scratch.harness().guessing("design", 0.15);
+
+    let error = fleet::spawn(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &task("something ambiguous"),
+        None,
+    )
+    .expect_err("a coin flip must not spend a budget unattended");
+
+    assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
+    assert!(error.message.contains("0.15"), "{}", error.message);
+    let next = error.next_action.unwrap();
+    assert!(
+        next.contains("--workflow design|plan|feature|bug"),
+        "{next}"
+    );
+
+    // Nothing was created: no worktree, no block, no Job, no Drone.
+    assert!(scratch.store().all().unwrap().is_empty());
+    assert!(run.at_index(&["worktree", "add"]).is_none());
+    assert!(run.at_index(&["manifest", "init"]).is_none());
+}
+
+/// **`--workflow` settles it without asking anything**, which is what the
+/// refusal above points at. It is also the path an agent takes.
+#[test]
+fn naming_the_workflow_skips_the_question_entirely() {
+    let scratch = Scratch::new();
+    let run = scratch.harness().guessing("design", 0.15);
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("something ambiguous")
+        },
+    );
+    assert_eq!(data.workflow, "bug");
+    assert!(run.at_index(&["--model"]).is_none(), "it classified anyway");
+}
+
+/// **The threshold is a policy, not a tuning knob**, so it moves per spawn
+/// rather than being adjusted when one task lands on the wrong side of it.
+#[test]
+fn the_confidence_bar_is_overridable_per_spawn() {
+    let scratch = Scratch::new();
+
+    // A guess that would normally ask, accepted because the caller lowered the
+    // bar.
+    let run = scratch.harness().guessing("design", 0.30);
+    let data = spawned(
+        &fleet::spawn(
+            &run,
+            &FrozenClock::new(),
+            &scratch.place(),
+            &Spawn {
+                confidence: Some(0.25),
+                ..task("something ambiguous")
+            },
+            None,
+        )
+        .expect("0.30 clears a bar of 0.25"),
+    );
+    scratch.watch(&data.uuid);
+    assert_eq!(data.workflow, "design");
+
+    // And an answer that would normally pass, refused because the caller raised
+    // it. The harness's ordinary classification is 0.94.
+    let scratch = Scratch::new();
+    let refused = fleet::spawn(
+        &scratch.harness(),
+        &FrozenClock::new(),
+        &scratch.place(),
+        &Spawn {
+            confidence: Some(0.99),
+            ..task("add rate limiting")
+        },
+        None,
+    )
+    .expect_err("0.94 does not clear a bar of 0.99");
+    assert_eq!(refused.class, armada_core::error::ErrClass::BadInvocation);
 }
 
 // ----------------------------------------------------------------------- spawn
@@ -627,6 +801,7 @@ fn a_spawn_that_could_not_prepare_releases_what_it_had_and_marks_the_job_ended()
         &FrozenClock::new(),
         &scratch.place(),
         &task("add rate limiting"),
+        None,
     )
     .expect_err("the worktree could not be made");
     assert_eq!(error.class, armada_core::error::ErrClass::ToolFailed);
@@ -655,6 +830,7 @@ fn a_dry_run_reports_the_plan_and_writes_no_record() {
             dry_run: true,
             ..task("add rate limiting to the API")
         },
+        None,
     )
     .unwrap();
 
@@ -681,6 +857,7 @@ fn an_unknown_workflow_is_refused_before_anything_is_created() {
             workflow: Some("refactor".to_string()),
             ..task("tidy this up")
         },
+        None,
     )
     .unwrap_err();
     assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);

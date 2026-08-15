@@ -19,6 +19,7 @@ armada fleet spawn "<task>" [--workflow <name>] [--name <name>] [--budget <k=v>.
 | `--workflow <name>` | workflow id | **classified** | Override classification. Names a file in `~/.armada/guild/workflows/`. |
 | `--name <name>` | string | derived from task | The Job's handle. Must be unique among live Jobs. |
 | `--budget <k=v>` | repeatable | from the workflow | Override one ceiling, e.g. `--budget max_tokens=200000`. |
+| `--confidence <0-1>` | float | `0.75` | Below this, stop and ask which workflow this is. `0` never asks. |
 | `-C <path>` | directory | cwd | Which repository to branch from. |
 | `--dry-run` | flag | off | Report the classification, worktree path, port block and budget. Starts nothing. |
 
@@ -65,21 +66,39 @@ a guess, or nobody knows to override it. An override reports *you named it* rath
 confidence of `1.0`: "you said so" and "the model was certain" are different facts and only
 one of them is a measurement.
 
-**Below the threshold, it is said in words rather than left as a decimal.** A real spawn
-classified a task as `design` at `0.10` and proceeded silently; a tenth is a coin flip, and a
-reader has no reason to read `0.10` in a column as a warning unless they already know where the
-line is. So a guess is labelled in its own cell and gets a line under the verdict:
+**Below the threshold, a spawn stops and asks.** A real spawn classified a task as `design` at
+`0.10` and went straight on to make a worktree, claim a block and start a Drone on a budget.
+Printing the word `a guess` is not enough when that is what happens next: §14.2 puts the
+confidence on the screen *"so a guess is visible as a guess"*, and a guess visible for one line
+and acted on regardless has been narrated rather than surfaced.
+
+So the four workflows are put to you, with the model's guess already selected — `enter` confirms
+it, one arrow key changes it:
 
 ```
-  STATUS      STEP      DETAIL                            TIME
-  classified  workflow  design, confidence 0.10, a guess  20.6s
+Which workflow is this? (guessed design at 0.10)
 
-RUNNING  this-test, armada fleet board this-test to take over
-  -> low confidence: this may be the wrong workflow. --workflow design|plan|feature|bug respawns it
+  design   deciding an approach, no code
+  plan     writing down how, before building
+  feature  building something new
+  bug      something is broken, reproduce it first
+
+  up/down move · 1-4 jump · enter choose · esc keep the default
 ```
 
-Helm confirms below the same threshold instead of asking ([`../../PLAN.md`](../../PLAN.md)
-§15.4); Fleet at a shell has nobody to ask, so it says so loudly.
+**What you answer is an override, not a confident model.** `confidence` is then absent from the
+payload: "you said so" and "the model was certain" are different facts, and only one of them is
+a measurement.
+
+**With nobody at the terminal it refuses rather than hanging.** An agent driving Armada through
+a pipe cannot answer, and a Job started on a coin flip costs a worktree, a port block and a
+budget to discover — so the refusal is `bad_invocation` and names `--workflow`. The rule for
+"is anybody there" is both streams being a terminal, the same one
+[`manifest/config.md`](../manifest/config.md)'s hand-over uses.
+
+**The threshold is a policy, not a tuning knob.** `0.75` is where "probably right" stops being a
+reason to spend a budget unattended; a number adjusted until one task classifies one way stops
+meaning anything, which is why `--confidence` moves it per spawn instead.
 
 **The lead word on the summary line is the Job's state, not the command's.** `RUNNING` says
 what the Job is doing; the envelope's `status` says how `spawn` ended, and they are different
