@@ -908,6 +908,11 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "failures" => return failures(rest, json, color),
             "report" => return report(rest, json, color),
             "mcp" => return mcp(rest, json, color),
+            // **The bare word, spelled the way `git`, `cargo`, `npm` and
+            // `docker` all spell it.** `--help`/`-h` already reach every page
+            // below; this is the same set of pages, reached the way a reader
+            // who has never met Armada's own flag will still try first.
+            "help" => return help_command(rest, json, color),
             _ => {}
         }
         let json = json || rest.iter().any(|a| a == "--json");
@@ -1509,6 +1514,81 @@ fn report(
             parsed.json,
         )),
     }
+}
+
+/// `armada help`, `armada help <module>`, or `armada help <module> <verb>` —
+/// the same page `--help`/`-h` already reach at every level of the grammar,
+/// spelled the way `git help`, `cargo help`, `npm help` and `docker help` all
+/// spell it: the word a reader who has never met Armada's own flag tries
+/// first.
+///
+/// **Answered through [`Topic`] and [`help_page`], never through a route of
+/// its own.** `armada help fleet spawn` is asking exactly the question
+/// `armada fleet spawn --help` already answers, and a second answer to one
+/// question is how the two drift.
+///
+/// **Not a name in [`BUILTIN_VERBS`] or [`TOP_LEVEL_VERBS`].** It is claimed
+/// only at this level of the grammar — the level a `commands:` entry never
+/// reaches (PLAN.md §4.5) — so a repository that declares its own `help:`
+/// command still runs it: `armada manifest help` never reaches this arm,
+/// because it only matches the word directly after `armada`.
+fn help_command(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    *color = color_in(rest, *color).map_err(|e| failure(e, json))?;
+
+    // **`--color`'s value is skipped along with the flag**, the same rule
+    // `flags` and `check` already follow: how a line is read must not depend
+    // on where in it a flag happened to sit. Every other flag — `--help`,
+    // `-h`, `--json`, anything a caller invents — is simply not a topic word.
+    let mut words: Vec<&str> = Vec::new();
+    let mut index = 0;
+    while index < rest.len() {
+        match rest[index].as_str() {
+            "--color" => index += 2,
+            flag if flag.starts_with('-') => index += 1,
+            word => {
+                words.push(word);
+                index += 1;
+            }
+        }
+    }
+
+    let topic = match words.as_slice() {
+        [] => Topic::Root,
+        ["manifest"] => Topic::Manifest,
+        ["guild"] => Topic::Guild,
+        ["fleet"] => Topic::Fleet,
+        ["mcp"] => Topic::Mcp,
+        _ => {
+            // `help_page` wants a module and a verb apart only so it can join
+            // them back into one path; `words` is already that path, so it is
+            // passed as the whole `verb` with an empty module.
+            let path = words.join(" ");
+            match help_page("", &path) {
+                Some(topic) => topic,
+                None => {
+                    return Err(refused(
+                        ArmadaError {
+                            class: ErrClass::BadInvocation,
+                            r#where: format!("help {path}"),
+                            message: format!(
+                                "`armada {path}` is not something Armada can help with"
+                            ),
+                            next_action: Some(
+                                "`armada --help` lists the modules and verbs that are built"
+                                    .to_string(),
+                            ),
+                        },
+                        json,
+                    ));
+                }
+            }
+        }
+    };
+    Ok(Invocation::Help(topic))
 }
 
 /// `armada mcp serve`.

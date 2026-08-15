@@ -375,6 +375,13 @@ fn help_answers_at_every_level_of_the_grammar() {
             "armada manifest check",
         ),
         (&["manifest", "clean", "-h"][..], "armada manifest clean"),
+        // **`armada help`, the bare word — `git help`, `cargo help`, `npm
+        // help` and `docker help`'s own spelling** — reaches the same pages
+        // `--help` does at every level, through `Topic` rather than a route
+        // of its own.
+        (&["help"][..], "armada — "),
+        (&["help", "fleet"][..], "armada fleet — "),
+        (&["help", "manifest", "check"][..], "armada manifest check"),
     ] {
         let output = machine.run(&repo, args);
         assert!(output.status.success(), "`armada {}`", args.join(" "));
@@ -400,6 +407,29 @@ fn help_answers_at_every_level_of_the_grammar() {
     );
 }
 
+/// **`armada help` is claimed only at the level of the grammar it sits at.**
+/// A repository whose own `commands:` names one `help` still runs it under
+/// `armada manifest help` — that is a different level entirely, the one a
+/// `commands:` entry always reaches, and `help` is not in
+/// [`armada_helm::args::BUILTIN_VERBS`] so nothing there refuses the name.
+#[test]
+fn a_commands_entry_named_help_still_runs() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", HELP_CONFIG);
+
+    let child = machine.run(&repo, &["manifest", "help", "fleet"]);
+    assert!(
+        child.status.success(),
+        "`armada manifest help fleet`: {}",
+        String::from_utf8_lossy(&child.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&child.stdout).trim(),
+        "fleet",
+        "a repo's own `help` command was shadowed by Armada's"
+    );
+}
+
 const HELP_CONFIG: &str = "\
 manifest:
   version: 1
@@ -410,6 +440,9 @@ manifest:
     echoer:
       cmd: ./echoer.sh
       help: Echo whatever it is given
+    help:
+      cmd: ./echoer.sh
+      help: This repo's own help, not Armada's
 ";
 
 /// **A workspace that declares no `ports:` gets no block, and says so.**
