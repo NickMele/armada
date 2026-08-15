@@ -43,14 +43,23 @@ Read-only. Never resumes or interrupts a Job.
 ## Output
 
 ```
-  STATUS   JOB            WORKFLOW  DETAIL                   SPENT  TIME
-  RUNNING  rate-limit     feature   implement, check green   $2.10   14m
-  STALLED  xlsx-report    bug       no output for 6m         $4.60   22m
-  BLOCKED  release-merge  feature   wants CI timeout raised  $1.25    1h
-  QUEUED   nightly-flake  bug       -                            -     -
+  STATUS   JOB            ID        WORKFLOW  DETAIL                 SPENT  TIME
+  RUNNING  rate-limit     c19d0a34  feature   implement, check gre…  $2.10   14m
+  STALLED  xlsx-report    3d9cc7ba  bug       no output for 6m       $4.60   22m
+  BLOCKED  release-merge  7f2ab618  feature   wants CI timeout rai…  $1.25    1h
+  QUEUED   nightly-flake  e52eaad5  bug       -                          -     -
 
 RUNNING  4 jobs, 1 need you, $8.40 today
 ```
+
+**`ID` is the Job's uuid, cut to eight characters.** A name is a handle rather than a key —
+it is handed out again once the Job holding it is over — so two Jobs can be called
+`this-test`, and then `armada fleet show this-test` refuses as ambiguous. Eight characters is
+what that refusal prints and what you type instead, so the table shows them rather than making
+you run a second command to learn them
+([`../../reserved/005-inbox-label-not-identity.md`](../../reserved/005-inbox-label-not-identity.md)).
+The cost is ten columns of `DETAIL`; the truncated half is recoverable from
+[`show.md`](show.md), and a Job you cannot name is not recoverable from anywhere.
 
 **Status first and always a word**, like every other table Armada draws
 ([`../render.md`](../render.md)). The layout is frozen by

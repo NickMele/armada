@@ -14,12 +14,12 @@ armada fleet answer <job> "<answer>" [--json]
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `<job>` | Job name | — | Which Job. Required. |
+| `<job>` | Job name or uuid | — | Which Job. Required. A name meaning two Jobs is refused; the refusal prints the eight characters to type instead, and [`ls.md`](ls.md) draws them in its `ID` column. |
 | `"<answer>"` | string | — | What to tell it. Required. |
 
 ## How it works
 
-1. Marks the Job's open inbox entry answered.
+1. Marks the Job's open inbox entry answered. **The entry is found by the Job's uuid, never by its name** ([`../../reserved/005-inbox-label-not-identity.md`](../../reserved/005-inbox-label-not-identity.md)): a name is handed out again once the Job holding it is over, so answering by name let a fresh Job close its namesake's questions.
 2. **Resumes the Job** with `--resume <uuid>` and your answer as the next turn, in its own
    worktree with its context intact ([`PHASES.md`](../../PHASES.md) §9.1 F1). The resumed
    Drone is detached exactly as a fresh one is: an answer *starts* a turn and does not wait for
@@ -28,6 +28,10 @@ armada fleet answer <job> "<answer>" [--json]
    answer is a continuation, not a new run, and resetting the ceiling here would make budgets
    unenforceable for any Job that asks a question. The resumed session appends its own `result`
    to the same transcript, so continuing costs what it costs and the sum keeps counting.
+
+**A Job that has ended is refused, and told why.** Its entries were closed when it reached
+`DONE` or `ABORTED`, so there is nothing to answer — and the refusal says *it has ended* rather
+than *nothing is open*, because those are two different facts with two different remedies.
 
 **A Job that has already reached a ceiling is refused rather than resumed.** `on_exhausted:
 needs_human` means a person decides what happens next; silently continuing past a ceiling is how

@@ -41,6 +41,18 @@ impl FrozenClock {
     fn new() -> FrozenClock {
         FrozenClock(RefCell::new(1_786_284_131_000))
     }
+
+    /// The same clock, `ms` milliseconds later.
+    ///
+    /// **For the one thing a frozen clock cannot express: two Jobs of one
+    /// name.** `mint_uuid` seeds on `repo|name|wall_ms|pid`, and its own doc
+    /// comment names the cost — two Jobs minted in the same millisecond, in
+    /// the same process, from the same worktree, with the same name collide.
+    /// On a real machine the second spawn happens later; here it has to be
+    /// said out loud.
+    fn later(ms: u64) -> FrozenClock {
+        FrozenClock(RefCell::new(1_786_284_131_000 + ms))
+    }
 }
 
 impl Clock for FrozenClock {
@@ -1819,6 +1831,7 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
     armada_fleet::inbox::raise(
         &scratch.inbox(),
         "e1",
+        &data.uuid,
         &data.name,
         armada_fleet::inbox::Kind::NeedsHuman,
         "2026-08-09T14:02:11Z",
@@ -1891,6 +1904,7 @@ fn answering_a_job_twice_adds_up_rather_than_starting_over() {
         armada_fleet::inbox::raise(
             &scratch.inbox(),
             id,
+            &data.uuid,
             &data.name,
             armada_fleet::inbox::Kind::NeedsHuman,
             "t",
@@ -1952,6 +1966,7 @@ fn answering_a_job_that_has_run_out_of_rope_is_refused_and_raised() {
     armada_fleet::inbox::raise(
         &scratch.inbox(),
         "e1",
+        &data.uuid,
         &data.name,
         armada_fleet::inbox::Kind::NeedsHuman,
         "t",
@@ -2009,6 +2024,7 @@ fn the_inbox_reports_what_is_open_and_changes_nothing() {
     armada_fleet::inbox::raise(
         &scratch.inbox(),
         "e1",
+        "c19d0a34-3069",
         "flake",
         armada_fleet::inbox::Kind::NeedsHuman,
         "t",
@@ -2064,6 +2080,7 @@ fn show_reports_the_inbox_entry_that_raised_needs_you_in_full() {
     armada_fleet::inbox::raise(
         &scratch.inbox(),
         "e1",
+        &data.uuid,
         &data.name,
         armada_fleet::inbox::Kind::NeedsHuman,
         "2026-08-09T14:02:11Z",
@@ -2108,31 +2125,41 @@ fn show_reports_the_inbox_entry_that_raised_needs_you_in_full() {
 }
 
 /// **A handle is reusable, and a new Job does not inherit its namesake's
-/// questions.** Without the cut at `created_ms` a fresh Job would open with a
-/// week-old question against it, which is the worst possible answer to "why does
-/// this need me".
+/// questions.**
+///
+/// **This used to be a cut at `created_ms`, and the cut was the bug.** `show`
+/// filtered entries by name and then dropped anything raised before the Job
+/// was minted — an approximation that only works while two Jobs of one name
+/// never overlap, which is precisely the case
+/// `docs/reserved/005-inbox-label-not-identity.md` was raised about. So the
+/// entry raised here is *newer* than the Job that must not see it: a timestamp
+/// window would hand it over, and the uuid does not.
 #[test]
-fn show_leaves_out_entries_raised_before_this_job_existed() {
+fn show_leaves_out_the_entries_another_job_of_the_same_name_raised() {
     let scratch = Scratch::new();
     let run = scratch.harness();
     let data = spawn(&scratch, &run, &task("add rate limiting"));
     await_turn(&scratch, &data.uuid);
 
-    armada_fleet::inbox::raise(
-        &scratch.inbox(),
-        "older",
-        &data.name,
-        armada_fleet::inbox::Kind::NeedsHuman,
-        "2026-08-01T09:00:00Z",
-        1,
-        "a question the last Job of this name asked",
-    )
-    .unwrap();
-
     let record = scratch.store().load(&data.uuid).unwrap();
     armada_fleet::inbox::raise(
         &scratch.inbox(),
+        "someone-elses",
+        // A different Job, the same name, and raised *after* this Job was
+        // minted — the case no timestamp can separate.
+        "3d9cc7ba-1f40-4a6e-9c21-5b8e0d2a7f13",
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "2026-08-09T14:03:11Z",
+        record.created_ms + 60_000,
+        "a question the other Job of this name asked",
+    )
+    .unwrap();
+
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
         "mine",
+        &data.uuid,
         &data.name,
         armada_fleet::inbox::Kind::NeedsHuman,
         "2026-08-09T14:02:11Z",
@@ -2462,4 +2489,441 @@ fn a_dry_run_promotion_leaves_the_entry_open() {
     let entry = folded(&scratch).into_iter().find(|e| e.id == id).unwrap();
     assert_eq!(entry.state, armada_core::failure::State::Open);
     assert_eq!(entry.job, None, "nothing was started, so nothing is named");
+}
+
+// ------------------------------------------- 005: the inbox records an identity
+//
+// **These drive the real path and not a store.** A green unit test on
+// `armada_fleet::inbox` proves the file can hold a uuid; it does not prove the
+// writer ever passes one. Every entry below is raised by Armada deciding to
+// raise it — a Job reaching its ceiling, inside `settle` — resolved back
+// through the verbs a person uses, and closed by the verb that ends the Job.
+
+/// A Job that will reach its ceiling on its first turn, under a chosen name.
+///
+/// `at_ms` is how far into the frozen day it is spawned, which is what lets a
+/// second Job take a name the first has released.
+fn ceilinged(
+    scratch: &Scratch,
+    run: &Harness,
+    name: &str,
+    at_ms: u64,
+) -> armada_core::envelope::SpawnData {
+    let data = spawned(
+        &fleet::spawn(
+            run,
+            &FrozenClock::later(at_ms),
+            &scratch.place(),
+            &Spawn {
+                name: Some(name.to_string()),
+                budget: vec!["max_tokens=1".to_string()],
+                ..task("add rate limiting")
+            },
+            None,
+            &mut armada_helm::render::progress::Silent,
+        )
+        .expect("the Job spawns"),
+    );
+    scratch.watch(&data.uuid);
+    await_turn(scratch, &data.uuid);
+    data
+}
+
+/// Make Armada raise, through the path that raises in production: a verb
+/// observes a ceiling, `settle` records it and raises the entry.
+fn raise_by_reaching_the_ceiling(scratch: &Scratch, run: &Harness, name: &str) {
+    let error = fleet::resume(run, &FrozenClock::new(), &scratch.place(), name).unwrap_err();
+    assert!(
+        error.message.contains("ceiling"),
+        "the ceiling was not what stopped it: {error:?}"
+    );
+}
+
+/// **An entry raised by a real code path carries the Job's uuid**, and resolves
+/// back to that Job and to nothing else.
+///
+/// The name is still recorded, because a reader wants to see it — but it is a
+/// label, and `open_for` does not accept one.
+#[test]
+fn an_entry_armada_raises_carries_the_uuid_and_resolves_back_to_its_job() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = ceilinged(&scratch, &run, "this-test", 0);
+    raise_by_reaching_the_ceiling(&scratch, &run, &data.name);
+
+    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    assert_eq!(entries.len(), 1, "the ceiling raised exactly once");
+    assert_eq!(
+        entries[0].job_uuid.as_deref(),
+        Some(data.uuid.as_str()),
+        "the writer passed a name where the uuid belongs"
+    );
+    assert_eq!(entries[0].job, "this-test", "the label travels beside it");
+    assert!(entries[0].is_open());
+
+    assert_eq!(
+        armada_fleet::inbox::open_for(&entries, &data.uuid).map(|entry| entry.uuid.as_str()),
+        Some(entries[0].uuid.as_str())
+    );
+    assert!(
+        armada_fleet::inbox::open_for(&entries, "this-test").is_none(),
+        "a name resolved to an entry — it is a label, not an identity"
+    );
+
+    // And the verb a person reads it through agrees.
+    let Output::Show(envelope) =
+        fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.uuid).unwrap()
+    else {
+        panic!("not a show")
+    };
+    assert_eq!(envelope.data.asked.len(), 1);
+    assert_eq!(
+        envelope.data.asked[0].job_uuid.as_deref(),
+        Some(data.uuid.as_str())
+    );
+    assert!(envelope.data.needs_attention);
+}
+
+/// **An entry does not outlive its Job.** The first of `005`'s two
+/// consequences: both of the user's Jobs reached `ABORTED` and five entries
+/// stayed open against Jobs that no longer existed.
+///
+/// **And the action that cannot work is refused rather than offered**, which is
+/// the second: `armada fleet answer` on a Job that has ended says so.
+#[test]
+fn killing_a_job_closes_what_it_had_open_and_answering_it_is_refused() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = ceilinged(&scratch, &run, "this-test", 0);
+    raise_by_reaching_the_ceiling(&scratch, &run, &data.name);
+    assert!(armada_fleet::inbox::read(&scratch.inbox()).unwrap()[0].is_open());
+
+    fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&data.uuid),
+        false,
+        false,
+    )
+    .unwrap();
+
+    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    assert!(
+        armada_fleet::inbox::open_for(&entries, &data.uuid).is_none(),
+        "an entry outlived the Job that raised it"
+    );
+    // **Marked, not deleted.** Why it stopped is still readable.
+    assert!(entries.iter().any(|entry| entry.body.contains("ceiling")));
+
+    let output = fleet::inbox(&FrozenClock::new(), &scratch.place(), None, true).unwrap();
+    let Output::Inbox(envelope) = &output else {
+        panic!("not an inbox")
+    };
+    assert_eq!(envelope.data.open, 0, "the inbox still reports it as open");
+
+    // **And the footer stops offering an action that cannot work**, which is
+    // the second of `005`'s two consequences. The row is still printed under
+    // `--all` — it is the record of why the Job stopped — but nothing tells
+    // the reader to answer it.
+    let text = armada_helm::render::human(
+        &output,
+        armada_helm::render::style::Style::plain(),
+        armada_helm::render::term::Terminal::piped(),
+    );
+    assert!(text.contains("ceiling"), "the entry vanished:\n{text}");
+    assert!(
+        !text.contains("armada fleet answer"),
+        "the footer offers an answer with nothing open:\n{text}"
+    );
+
+    let error = fleet::answer(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &data.uuid,
+        "go on then",
+    )
+    .unwrap_err();
+    assert!(
+        error.message.contains("has ended"),
+        "answering an ended Job was not refused for the right reason: {error:?}"
+    );
+}
+
+/// **The case that produced the bug: two Jobs called `this-test`.**
+///
+/// A name is reusable once the Job holding it is over
+/// ([`armada_fleet::jobs::Store::free_name`]), which is how the user came to
+/// have two — and then `armada fleet ls` reported *no Jobs* while `armada fleet
+/// inbox` reported five open entries, all naming `this-test`, and neither Job
+/// could be matched to any of them.
+///
+/// Each Job's entries are its own here, and each resolves to exactly one Job.
+#[test]
+fn two_jobs_sharing_a_name_each_get_their_own_entries_and_each_resolves() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+
+    let first = ceilinged(&scratch, &run, "this-test", 0);
+    raise_by_reaching_the_ceiling(&scratch, &run, &first.uuid);
+    fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&first.uuid),
+        false,
+        false,
+    )
+    .unwrap();
+
+    // The name is free again now the first Job is over, which is exactly how
+    // two Jobs come to share one.
+    let second = ceilinged(&scratch, &run, "this-test", 60_000);
+    assert_eq!(second.name, first.name, "the second Job took the same name");
+    assert_ne!(second.uuid, first.uuid);
+    raise_by_reaching_the_ceiling(&scratch, &run, &second.uuid);
+
+    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    assert_eq!(entries.len(), 2, "one entry each");
+    assert!(
+        armada_fleet::inbox::open_for(&entries, &first.uuid).is_none(),
+        "the first Job ended, and its entry is still open"
+    );
+    let open = armada_fleet::inbox::open_for(&entries, &second.uuid)
+        .expect("the second Job's question is open");
+    assert_eq!(
+        open.job_uuid.as_deref(),
+        Some(second.uuid.as_str()),
+        "the live Job inherited its namesake's entry"
+    );
+
+    // `show` separates them, and each sees only its own — by uuid, because the
+    // name is refused as ambiguous exactly as it was for the user.
+    for (data, expected) in [(&first, 1), (&second, 1)] {
+        let Output::Show(envelope) =
+            fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.uuid).unwrap()
+        else {
+            panic!("not a show")
+        };
+        assert_eq!(
+            envelope.data.asked.len(),
+            expected,
+            "{} saw the other Job's entries",
+            data.uuid
+        );
+        assert_eq!(
+            envelope.data.asked[0].job_uuid.as_deref(),
+            Some(data.uuid.as_str())
+        );
+    }
+    assert!(
+        fleet::show(&run, &FrozenClock::new(), &scratch.place(), "this-test").is_err(),
+        "a name meaning two Jobs resolved to one of them"
+    );
+
+    // `inbox --job` takes a handle and resolves it the same way, so the two
+    // Jobs' entries are separable from the command line too.
+    let Output::Inbox(envelope) = fleet::inbox(
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&second.uuid),
+        true,
+    )
+    .unwrap() else {
+        panic!("not an inbox")
+    };
+    assert_eq!(envelope.data.results.len(), 1);
+    assert_eq!(
+        envelope.data.results[0].job_uuid.as_deref(),
+        Some(second.uuid.as_str())
+    );
+    assert_eq!(envelope.data.open, 1);
+
+    // The ended Job of the two has nothing open, asked for by uuid — and its
+    // entry is still there to read.
+    let Output::Inbox(envelope) = fleet::inbox(
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&first.uuid),
+        true,
+    )
+    .unwrap() else {
+        panic!("not an inbox")
+    };
+    assert_eq!(envelope.data.results.len(), 1, "its record was lost");
+    assert_eq!(envelope.data.open, 0, "an ended Job still wants an answer");
+    assert_eq!(envelope.data.results[0].closed.as_deref(), Some("ENDED"));
+
+    // Both rows are labelled `this-test`, which is the point: the label is
+    // ambiguous and the identity beside it is not.
+    for entry in &entries {
+        assert_eq!(entry.job, "this-test");
+    }
+}
+
+/// **The inbox already on a real machine, migrated on the first read.**
+///
+/// Every line here is the shape the user's own `~/.armada/inbox.jsonl` has —
+/// `raised` lines with a `job` string and no uuid — and the two cases that
+/// matter are both present: a name that means exactly one Job, and a name that
+/// means two.
+///
+/// **The migration does not guess**, so the ambiguous entries are closed
+/// `UNRESOLVABLE` rather than attached to a coin flip. That is the outcome the
+/// user's machine gets: five entries that could never be answered stop being
+/// offered, and stay readable.
+#[test]
+fn a_legacy_name_keyed_inbox_migrates_on_the_first_read() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+
+    // Two Jobs of one name, made the way a machine makes them.
+    let first = ceilinged(&scratch, &run, "this-test", 0);
+    fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&first.uuid),
+        false,
+        false,
+    )
+    .unwrap();
+    let second = ceilinged(&scratch, &run, "this-test", 60_000);
+    let alone = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            name: Some("nightly-flake".to_string()),
+            ..task("chase the flaky test")
+        },
+    );
+
+    // The file as it was written before `005` was fixed: no `job_uuid`
+    // anywhere. Authored text — nothing here came off a real machine.
+    let legacy = [
+        (
+            r#""legacy-1""#,
+            "this-test",
+            "reached its wall clock ceiling on the explore step",
+        ),
+        (
+            r#""legacy-2""#,
+            "this-test",
+            "reached its wall clock ceiling on the plan step",
+        ),
+        (
+            r#""legacy-3""#,
+            "nightly-flake",
+            "wants the CI timeout raised from 30s to 90s",
+        ),
+    ];
+    let mut text = String::new();
+    for (id, name, body) in legacy {
+        text.push_str(&format!(
+            r#"{{"type":"raised","uuid":{id},"job":"{name}","kind":"needs_human","raised_at":"2026-08-09T14:02:11Z","raised_ms":1,"body":"{body}"}}"#
+        ));
+        text.push('\n');
+    }
+    std::fs::create_dir_all(scratch.inbox().parent().unwrap()).unwrap();
+    std::fs::write(scratch.inbox(), &text).unwrap();
+
+    // One ordinary read is the whole migration.
+    let Output::Inbox(envelope) =
+        fleet::inbox(&FrozenClock::new(), &scratch.place(), None, true).unwrap()
+    else {
+        panic!("not an inbox")
+    };
+    assert_eq!(envelope.data.results.len(), 3, "an entry was lost");
+
+    let by_id = |id: &str| {
+        envelope
+            .data
+            .results
+            .iter()
+            .find(|row| row.uuid == id)
+            .unwrap_or_else(|| panic!("{id} is gone"))
+            .clone()
+    };
+
+    // The unambiguous one is bound to the Job it always meant, and is open.
+    let bound = by_id("legacy-3");
+    assert_eq!(bound.job_uuid.as_deref(), Some(alone.uuid.as_str()));
+    assert_eq!(bound.closed, None);
+    assert!(bound.is_open());
+
+    // The ambiguous ones are not guessed at. Both are closed, both still
+    // readable, and neither is offered against either Job.
+    for id in ["legacy-1", "legacy-2"] {
+        let row = by_id(id);
+        assert_eq!(row.job_uuid, None, "the migration guessed");
+        assert_eq!(row.closed.as_deref(), Some("UNRESOLVABLE"));
+        assert!(!row.is_open());
+        assert!(row.body.contains("ceiling"), "the reason was lost");
+    }
+    assert_eq!(envelope.data.open, 1, "only the resolvable one is open");
+
+    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    assert!(armada_fleet::inbox::open_for(&entries, &first.uuid).is_none());
+    assert!(armada_fleet::inbox::open_for(&entries, &second.uuid).is_none());
+    assert_eq!(
+        armada_fleet::inbox::open_for(&entries, &alone.uuid).map(|entry| entry.uuid.as_str()),
+        Some("legacy-3")
+    );
+
+    // **It converges.** A second read writes nothing, so an inbox does not grow
+    // a line every time somebody looks at it.
+    let after = std::fs::read_to_string(scratch.inbox()).unwrap();
+    fleet::inbox(&FrozenClock::new(), &scratch.place(), None, true).unwrap();
+    assert_eq!(std::fs::read_to_string(scratch.inbox()).unwrap(), after);
+    assert!(
+        after.lines().count() > text.lines().count(),
+        "nothing was appended, so nothing was migrated"
+    );
+}
+
+/// **`ls` prints the id, because the name is not one.**
+///
+/// The user's own conclusion after `armada fleet show this-test` refused as
+/// ambiguous and `armada fleet show c19d0a34` worked: *"having legible IDs is
+/// really nice, but maybe when we do ls, we should also see the real ID."*
+#[test]
+fn ls_prints_the_short_uuid_that_disambiguates_two_jobs_of_one_name() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let first = ceilinged(&scratch, &run, "this-test", 0);
+    fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&first.uuid),
+        false,
+        false,
+    )
+    .unwrap();
+    let second = ceilinged(&scratch, &run, "this-test", 60_000);
+
+    let output = fleet::ls(&run, &FrozenClock::new(), &scratch.place(), true, false).unwrap();
+    let Output::FleetLs(envelope) = &output else {
+        panic!("not a listing")
+    };
+    assert_eq!(envelope.data.results.len(), 2);
+
+    let text = armada_helm::render::human(
+        &output,
+        armada_helm::render::style::Style::plain(),
+        armada_helm::render::term::Terminal::piped(),
+    );
+    for uuid in [&first.uuid, &second.uuid] {
+        let short = armada_fleet::jobs::short(uuid);
+        assert!(
+            text.contains(short),
+            "`ls` does not print {short}, so the two rows called `this-test` \
+             cannot be told apart:\n{text}"
+        );
+    }
+    assert!(
+        text.contains("  ID  ") || text.contains(" ID "),
+        "no ID column:\n{text}"
+    );
 }
