@@ -154,7 +154,7 @@ pub enum Invocation {
     /// **No sub-verbs, deliberately.** Filing is the only thing this does;
     /// listing, showing, promoting and discarding a report are `armada
     /// failures`' verbs, because a report and a recorded failure are one list
-    /// (`docs/reserved/012`). A `report ls` would be the second store the
+    /// (`docs/reserved/014`). A `report ls` would be the second store the
     /// design exists to avoid, spelled as a verb instead of as a file.
     Report {
         /// Emit the envelope.

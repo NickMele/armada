@@ -63,10 +63,16 @@ fn a_report_is_filed_with_its_diagnostics_and_lists_beside_what_armada_caught() 
         said.contains("the dry-run said CREATED worktree and made nothing"),
         "the description comes back: {said}"
     );
-    assert!(said.contains("REPORTED") || said.contains("reported"), "{said}");
+    assert!(
+        said.contains("REPORTED") || said.contains("reported"),
+        "{said}"
+    );
     // The diagnostics are attached rather than asked for.
     assert!(said.contains("what was run before it"), "{said}");
-    assert!(said.contains("manifest status"), "the run before it: {said}");
+    assert!(
+        said.contains("manifest status"),
+        "the run before it: {said}"
+    );
     assert!(said.contains("armada"), "{said}");
 
     // **One store.** The same entry is in `armada failures`, and `show` opens
@@ -152,10 +158,7 @@ fn no_credential_survives_a_report_from_the_environment_the_argv_or_the_output()
 
     let filed = machine.run(
         &repo,
-        &[
-            "report",
-            "the output carried something it should not have",
-        ],
+        &["report", "the output carried something it should not have"],
     );
     assert!(filed.status.success(), "{}", why(&filed));
 
@@ -265,7 +268,8 @@ fn a_filed_report_promotes_into_a_job_through_the_same_verb() {
     let workflows = machine.home.path().join(".armada/guild/workflows");
     std::fs::create_dir_all(&workflows).unwrap();
     std::fs::copy(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../templates/guild/workflows/bug.yml"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../templates/guild/workflows/bug.yml"),
         workflows.join("bug.yml"),
     )
     .unwrap();

@@ -513,6 +513,7 @@ pub fn failed(
 /// twice has done two deliberate things about two different runs, and merging
 /// them would silently discard the second one's diagnostics — which are the
 /// part that differs and the part that is worth having.
+#[allow(clippy::too_many_arguments)]
 pub fn reported(
     what: &str,
     home: &Path,

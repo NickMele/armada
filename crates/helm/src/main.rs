@@ -1439,7 +1439,7 @@ struct Ambient<'a> {
 /// the failures; this keeps everything, which is the whole point — the run that
 /// prompted `armada report` exited `0` and printed `CREATED worktree` for work
 /// it had correctly not done, and no failure recorder could ever have held it
-/// (`docs/reserved/012`).
+/// (`docs/reserved/014`).
 ///
 /// **Silent, and never able to change what the run answered.** Same rule as
 /// `record`: a recorder that turns a working command into a failing one is

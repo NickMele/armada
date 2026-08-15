@@ -143,6 +143,7 @@ impl Ran {
 /// **Redaction runs before [`tilde`](crate::failure::tilde)**, deliberately: a
 /// token that happens to contain the home path would otherwise be split in half
 /// and stop looking credential-shaped.
+#[allow(clippy::too_many_arguments)]
 pub fn note(
     argv: &[String],
     home: &Path,
@@ -325,7 +326,7 @@ mod tests {
         let held = run.envelope.clone().unwrap();
         assert!(held.len() < big.len());
         assert!(held.ends_with("bytes"), "{held}");
-        assert_eq!(parse(&render(&[run.clone()])), vec![run]);
+        assert_eq!(parse(&render(std::slice::from_ref(&run))), vec![run]);
     }
 
     /// A torn line is skipped and the runs around it still read.

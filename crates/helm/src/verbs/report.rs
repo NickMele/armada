@@ -29,8 +29,8 @@
 //! attention is useless until it has an id you can act on one at a time. A
 //! second store would mean a second id space, a second `show`, a second listing
 //! to remember, and a second promotion path, and a person triaging on a Monday
-//! does not care which half of the machine noticed. So a report is a
-//! [`Line::Reported`] in `~/.armada/failures.jsonl`, it lists under `armada
+//! does not care which half of the machine noticed. So a report is an
+//! [`armada_core::failure::Line::Reported`] in `~/.armada/failures.jsonl`, it lists under `armada
 //! failures`, it shows under `armada failures show`, and `armada failures fix`
 //! promotes it into a Job exactly as it promotes a failure.
 //!
