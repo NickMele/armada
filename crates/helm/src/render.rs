@@ -1838,10 +1838,19 @@ fn failure_state(state: FailureState) -> Cell {
 /// person picking a row off `armada failures` at a terminal and the same person
 /// reading it through a pipe are looking at one sentence, not two that agree
 /// today.
+/// **The lead is the class when Armada assigned one and the origin when it did
+/// not.** A filed report has no class — Armada did not notice, so it attributed
+/// nothing (`armada_core::failure::Origin`) — and the cell reads `reported,
+/// the dry-run said CREATED and made nothing`. That is one column doing one
+/// job: it says where the row came from, which is the first thing a reader
+/// triaging a mixed list needs and the only thing the two halves differ on.
 pub(crate) fn failure_detail(entry: &FailureEntry) -> String {
+    let lead = entry
+        .class
+        .map_or_else(|| entry.origin.word().to_string(), |class| class.to_string());
     match entry.count {
-        0 | 1 => format!("{}, {}", entry.class, entry.message),
-        n => format!("{} x{n}, {}", entry.class, entry.message),
+        0 | 1 => format!("{lead}, {}", entry.message),
+        n => format!("{lead} x{n}, {}", entry.message),
     }
 }
 
@@ -1877,6 +1886,76 @@ fn failures(envelope: &Envelope<FailuresData>, style: Style, width: usize) -> St
     out
 }
 
+/// What `armada report` gathered, as rows on the facts table the entry already
+/// draws.
+///
+/// **Rows rather than a second table**, because every one of them is a single
+/// fact about the machine the report was filed on — the same kind of thing
+/// `typed` and `in` already are. The runs are the exception and get their own
+/// table; see the call site.
+///
+/// **An absent diagnostic is printed rather than omitted.** "`claude --version`
+/// did not answer" is a finding, and a row that vanished when the answer was
+/// missing would make the most interesting case the invisible one.
+fn diagnosed(
+    mut facts: Table,
+    diagnostics: &armada_core::failure::Diagnostics,
+    style: Style,
+) -> Table {
+    facts = facts.row(vec![
+        token("ran", Role::SteelGrey),
+        Cell::muted("armada"),
+        detail_cell(style, Some(&diagnostics.armada)),
+    ]);
+    facts = facts.row(vec![
+        token("ran", Role::SteelGrey),
+        Cell::muted("claude"),
+        detail_cell(
+            style,
+            Some(diagnostics.claude.as_deref().unwrap_or("did not answer")),
+        ),
+    ]);
+    facts = facts.row(vec![
+        token("on", Role::SteelGrey),
+        Cell::muted("system"),
+        detail_cell(style, Some(&diagnostics.system)),
+    ]);
+    facts = facts.row(vec![
+        token("in", Role::SteelGrey),
+        Cell::muted("workspace"),
+        detail_cell(
+            style,
+            Some(&match (&diagnostics.workspace, diagnostics.manifest) {
+                (Some(at), true) => format!("{at}, with an armada.yml"),
+                (Some(at), false) => format!("{at}, with no armada.yml"),
+                (None, _) => "no workspace here".to_string(),
+            }),
+        ),
+    ]);
+    if !diagnostics.doctor.is_empty() {
+        facts = facts.row(vec![
+            token("said", Role::FlareOrange),
+            Cell::muted("doctor"),
+            detail_cell(style, Some(&diagnostics.doctor.join(style.between()))),
+        ]);
+    }
+    if !diagnostics.failures.is_empty() {
+        facts = facts.row(vec![
+            token("open", Role::FlareOrange),
+            Cell::muted("failures"),
+            detail_cell(style, Some(&diagnostics.failures.join(style.between()))),
+        ]);
+    }
+    if !diagnostics.jobs.is_empty() {
+        facts = facts.row(vec![
+            token("in", Role::NavalBlue),
+            Cell::muted("flight"),
+            detail_cell(style, Some(&diagnostics.jobs.join(style.between()))),
+        ]);
+    }
+    facts
+}
+
 /// `armada failures show <id>` — one failure, whole.
 ///
 /// **It reprints the failure exactly as the terminal printed it**, through the
@@ -1903,15 +1982,31 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
     let mut out = identity.render(style, width);
     out.push('\n');
 
-    out.push_str(&error_lines(
-        &ArmadaError {
-            class: entry.class,
-            r#where: entry.r#where.clone(),
-            message: entry.message.clone(),
-            next_action: entry.next.clone(),
-        },
-        style,
-    ));
+    // **A failure is reprinted; a report is quoted.** There is no envelope to
+    // reprint for a filing — Armada did not fail, so there is no class, no
+    // `where` and no next action — and pushing the person's sentence through
+    // `error_lines` would dress their words up as Armada's own report of an
+    // error that never happened.
+    match entry.class {
+        Some(class) => out.push_str(&error_lines(
+            &ArmadaError {
+                class,
+                r#where: entry.r#where.clone(),
+                message: entry.message.clone(),
+                next_action: entry.next.clone(),
+            },
+            style,
+        )),
+        None => {
+            out.push_str(&format!(
+                "{}\n",
+                style.paint(Role::SteelGrey, "  what was reported:")
+            ));
+            for line in wrap_prose(&entry.message, width.saturating_sub(4)) {
+                out.push_str(&format!("    {line}\n"));
+            }
+        }
+    }
     out.push('\n');
 
     let mut facts = Table::new(columns("fact", "detail", false)).indent(2);
@@ -1943,8 +2038,43 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
             detail_cell(style, Some(job)),
         ]);
     }
+    if let Some(diagnostics) = &entry.diagnostics {
+        facts = diagnosed(facts, diagnostics, style);
+    }
     out.push_str(&facts.render(style, width));
     out.push('\n');
+
+    // **The runs are their own table because they are the attachment**, not a
+    // fact about the filing. They are the answer to *"the thing that just
+    // happened"* — the reason the ring buffer exists — and folding them into
+    // the facts above as one comma-joined cell would lose the one column that
+    // makes them readable: whether each one said it worked.
+    if let Some(diagnostics) = &entry.diagnostics {
+        if !diagnostics.recent.is_empty() {
+            out.push_str(&format!(
+                "{}\n",
+                style.paint(Role::SteelGrey, "  what was run before it:")
+            ));
+            let mut runs = Table::new(columns("run", "detail", true)).indent(2);
+            let newest = diagnostics.recent.first().map_or(0, |run| run.at_ms);
+            for run in &diagnostics.recent {
+                runs = runs.row(vec![
+                    token(
+                        run.word(),
+                        match run.exit {
+                            0 => Role::SteelGrey,
+                            _ => Role::FlareOrange,
+                        },
+                    ),
+                    Cell::painted(run.verb.clone(), Role::NavalBlue),
+                    detail_cell(style, Some(&run.argv)),
+                    Cell::muted(format::elapsed(newest.saturating_sub(run.at_ms))),
+                ]);
+            }
+            out.push_str(&runs.render(style, width));
+            out.push('\n');
+        }
+    }
 
     // **What would be sent, before it is sent.** The task leaves this machine
     // when a Job is spawned on it, so the one place to read it is here.

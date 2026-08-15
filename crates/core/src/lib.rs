@@ -30,6 +30,7 @@ pub mod lease;
 pub mod lifecycle;
 pub mod ports;
 pub mod reap;
+pub mod recent;
 pub mod registry;
 pub mod run;
 pub mod scan;
