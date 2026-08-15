@@ -2425,12 +2425,7 @@ pub fn editing(title: &str, style: Style, width: usize) -> String {
         "{pad}{}\n\n",
         style.paint(
             Role::SteelGrey,
-            &[
-                "enter for a new line",
-                "ctrl-d saves",
-                "esc leaves it as it was",
-            ]
-            .join(style.between()),
+            &prose_keys("saves", "leaves it as it was", style.between()),
         )
     ));
     out
@@ -2507,15 +2502,43 @@ fn guild_item(envelope: &Envelope<GuildItemData>, style: Style, width: usize) ->
 /// the preview this widget was pre-filled to remove.
 fn keys(asked: &armada_core::envelope::Asked, style: Style) -> String {
     if asked.prose {
-        [
-            "enter for a new line",
-            "ctrl-d saves",
-            "esc keeps it as it was",
-        ]
-        .join(style.between())
+        prose_keys("saves", "keeps it as it was", style.between())
     } else {
         format!("enter keeps {}", asked.keeps)
     }
+}
+
+/// The three keys **every** text area in Armada accepts, and the one place they
+/// are named.
+///
+/// ```text
+/// enter for a new line · ctrl-d saves · esc keeps it as it was
+/// ```
+///
+/// **Three surfaces put a box in front of somebody and all three must name the
+/// same chords.** The interview's prose questions, `armada guild edit`, and the
+/// Bridge's compose box — and the Bridge's was the one that named none of them,
+/// which is exactly what a first reader reported: *"there is no help text, so I
+/// didn't really know what to do … I guessed with control-d."* A second
+/// convention would have been worse than either, so there is one, quoted from
+/// here.
+///
+/// **What the two ways out *mean* is the caller's, and only that.** `ctrl-d` in
+/// the interview saves a fragment and in the Bridge starts a Job; `esc` there
+/// keeps a file as it was and here starts nothing. The keys never differ, which
+/// is the half a reader learns once.
+///
+/// `between` is the caller's spacing rather than [`Style::between`] taken here:
+/// a prompt block separates with a middle dot, and the Bridge's on-screen key
+/// lines use two spaces so that both audiences read one width
+/// (`commands/helm/bridge.md`).
+pub fn prose_keys(saves: &str, leaves: &str, between: &str) -> String {
+    [
+        "enter for a new line".to_string(),
+        format!("ctrl-d {saves}"),
+        format!("esc {leaves}"),
+    ]
+    .join(between)
 }
 
 /// Greedy word wrap. **Not [`wrapped`]**, which spaces a run of items with a
