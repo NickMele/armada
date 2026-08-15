@@ -162,7 +162,15 @@ pub enum Runner {
 /// (PHASES.md §9.1 F2). Fleet builds no accounting layer and estimates nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Budget {
-    /// How many times a step may be retried before the rope runs out.
+    /// How many turns the **Job** may spend before the rope runs out.
+    ///
+    /// **The Job's, not a step's**, and the two are not interchangeable.
+    /// PLAN.md §14.3's interview asks *"how many iterations should one Job run
+    /// before it stops and asks you?"* and names [`super::job::exhausted`] as
+    /// what reads the answer — a comparison against `spend.turns`, summed off
+    /// each turn's `num_turns`. A per-step attempt ceiling on the same number
+    /// was built and removed: [`super::gate`]'s ceiling section has the two
+    /// reasons.
     pub iterations: u32,
     /// Total tokens, summed over the turn ledgers.
     pub tokens: u64,

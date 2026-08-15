@@ -30,6 +30,7 @@ usually asking which one applies.
 | [015](015-batch-a-job-from-many-entries.md) | One Job from many entries | RESERVED | helm | Select several entries and dispatch them as one Job, not one each |
 | [013](013-secrets-must-resolve-before-the-run-detaches.md) | Secrets must resolve before the run detaches | RESERVED | manifest | `check --detach` shipped; a resolver written into the run loop would hang a detached run at a prompt nobody can see |
 | [014](014-report-what-you-know-went-wrong.md) | Reporting what you know went wrong | BUILT | cross-cutting | `armada report` — a dry-run printed `CREATED` for work it had correctly not done and exited 0, so [010](010-armada-records-its-own-failures.md) could never hold it |
+| [016](016-what-the-gate-cannot-prove.md) | What the gate cannot prove | RESERVED | fleet | M4's evaluator decides five of the eight predicates, asks you one, and refuses two — `review_clean` and `subjob_passed` both need a Job that Fleet does not spawn |
 
 **When Armada's task system exists** ([002](002-tasks.md)), these become its first rows — one
 file per row is what makes that a script rather than a rewrite.
