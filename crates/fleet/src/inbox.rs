@@ -192,6 +192,12 @@ enum Line {
 /// importance: the first is what the entry is resolved by, the second is only
 /// what a reader is shown. A caller that has one has the other, because both
 /// come off the same Job record.
+// Eight, and every one is a field of the line about to be written: bundling
+// them would be a struct built at the call site and unpacked here, with the
+// same eight names typed twice. The eighth is `job_uuid`, which is the fix —
+// the seventh-argument limit is not a reason to go on writing a label where an
+// identity belongs.
+#[allow(clippy::too_many_arguments)]
 pub fn raise(
     path: &Path,
     id: &str,
@@ -300,8 +306,10 @@ pub fn migrate(path: &Path, jobs: &[(String, String, bool)]) -> Result<Migrated,
             Some(uuid) => uuid.clone(),
             None if entry.closed.is_some() => continue,
             None => {
-                let named: Vec<&(String, String, bool)> =
-                    jobs.iter().filter(|(name, _, _)| *name == entry.job).collect();
+                let named: Vec<&(String, String, bool)> = jobs
+                    .iter()
+                    .filter(|(name, _, _)| *name == entry.job)
+                    .collect();
                 let [(_, uuid, _)] = named.as_slice() else {
                     append(
                         path,
@@ -327,10 +335,7 @@ pub fn migrate(path: &Path, jobs: &[(String, String, bool)]) -> Result<Migrated,
         if entry.answered.is_some() || entry.closed.is_some() {
             continue;
         }
-        if jobs
-            .iter()
-            .any(|(_, uuid, over)| *uuid == bound && *over)
-        {
+        if jobs.iter().any(|(_, uuid, over)| *uuid == bound && *over) {
             append(
                 path,
                 &Line::Closed {
@@ -537,8 +542,22 @@ mod tests {
     #[test]
     fn two_jobs_sharing_a_name_each_keep_their_own_entries() {
         let (_home, path) = scratch();
-        raised(&path, "e1", "c19d0a34", "this-test", 1, "the first one asks");
-        raised(&path, "e2", "94b1fd2e", "this-test", 2, "the second one asks");
+        raised(
+            &path,
+            "e1",
+            "c19d0a34",
+            "this-test",
+            1,
+            "the first one asks",
+        );
+        raised(
+            &path,
+            "e2",
+            "94b1fd2e",
+            "this-test",
+            2,
+            "the second one asks",
+        );
 
         let entries = read(&path).unwrap();
         assert_eq!(open_for(&entries, "c19d0a34").unwrap().uuid, "e1");
@@ -634,7 +653,14 @@ mod tests {
     #[test]
     fn a_jobs_entries_close_when_the_job_ends_and_are_still_readable() {
         let (_home, path) = scratch();
-        raised(&path, "e1", "u1", "flake", 1, "reached its wall clock ceiling");
+        raised(
+            &path,
+            "e1",
+            "u1",
+            "flake",
+            1,
+            "reached its wall clock ceiling",
+        );
         raised(&path, "e2", "u1", "flake", 2, "and again");
         raised(&path, "e3", "u2", "other", 3, "someone else's");
 
@@ -839,7 +865,10 @@ mod tests {
             (Closed::Unresolvable, "UNRESOLVABLE", "unresolvable"),
         ] {
             assert_eq!(why.word(), shown);
-            assert_eq!(serde_json::to_string(&why).unwrap(), format!("\"{stored}\""));
+            assert_eq!(
+                serde_json::to_string(&why).unwrap(),
+                format!("\"{stored}\"")
+            );
             assert_eq!(
                 serde_json::from_str::<Closed>(&format!("\"{stored}\"")).unwrap(),
                 why

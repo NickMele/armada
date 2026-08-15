@@ -1380,6 +1380,9 @@ fn the_help_pages_match_their_fixtures() {
 /// body whole — while a Job you cannot name is not recoverable from anywhere.
 #[test]
 fn fleet_ls_matches_its_fixture() {
+    // Eight, and every one is a column of the row being built. A struct here
+    // would be `JobRow` with different field names.
+    #[allow(clippy::too_many_arguments)]
     fn row(
         name: &str,
         uuid: &str,

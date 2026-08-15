@@ -7,13 +7,19 @@ moves every time another is added. Formerly `PLAN.md`'s numbered subsections 15.
 
 Numbered in the order each was thought of. Numbers are never reused or reassigned.
 
+**Four statuses, and the closing one depends on what was opened.** `RESERVED` is a design that
+wants its own pass; `BUG` is a defect found in use. A `RESERVED` item closes as `BUILT` and a
+`BUG` closes as `FIXED` — the words are not interchangeable, because *"we built the thing"* and
+*"the thing was wrong and is not now"* are different claims and a reader scanning this table is
+usually asking which one applies.
+
 | id | title | status | module | hook |
 |---|---|---|---|---|
 | [001](001-raised-items-need-identity.md) | Raised items need identity | RESERVED | helm | An item Helm surfaces in prose has no id to acknowledge against |
 | [002](002-tasks.md) | Tasks | RESERVED | helm | Capture a thing to do without spending anything on it yet |
 | [003](003-bridge-command-centre.md) | The Bridge as the command centre | RESERVED | helm | One screen for Fleet, Manifest and Guild, not three |
 | [004](004-guild-inventory.md) | Seeing what is in your guild | BUILT | guild | `armada guild ls` / `show` — no verb showed you what you had |
-| [005](005-inbox-label-not-identity.md) | The inbox records a label, not an identity | BUG | fleet | Inbox entries keyed by Job name collide; should be uuid |
+| [005](005-inbox-label-not-identity.md) | The inbox records a label, not an identity | FIXED | fleet | Inbox entries keyed by Job name collided; they carry the Job's uuid, close when it ends, and `ls` shows the id |
 | [006](006-guild-has-no-way-to-learn.md) | The guild has no way to learn | RESERVED | guild | No provenance means no path for Armada's own updates to reach an existing guild |
 | [007](007-scanner-should-propose.md) | The scanner should propose, not only report | RESERVED | manifest | Deterministic findings (package manager, workspaces, exact-name checks) should become proposals, not just report text |
 | [008](008-armada-injects-its-own-skills.md) | Armada injects its own skills | RESERVED | cross-cutting | Drones need Armada's own tools and the standing to propose manifest/guild changes |

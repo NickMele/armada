@@ -2426,8 +2426,7 @@ fn an_entry_armada_raises_carries_the_uuid_and_resolves_back_to_its_job() {
     assert!(entries[0].is_open());
 
     assert_eq!(
-        armada_fleet::inbox::open_for(&entries, &data.uuid)
-            .map(|entry| entry.uuid.as_str()),
+        armada_fleet::inbox::open_for(&entries, &data.uuid).map(|entry| entry.uuid.as_str()),
         Some(entries[0].uuid.as_str())
     );
     assert!(
@@ -2481,12 +2480,26 @@ fn killing_a_job_closes_what_it_had_open_and_answering_it_is_refused() {
     // **Marked, not deleted.** Why it stopped is still readable.
     assert!(entries.iter().any(|entry| entry.body.contains("ceiling")));
 
-    let Output::Inbox(envelope) =
-        fleet::inbox(&FrozenClock::new(), &scratch.place(), None, false).unwrap()
-    else {
+    let output = fleet::inbox(&FrozenClock::new(), &scratch.place(), None, true).unwrap();
+    let Output::Inbox(envelope) = &output else {
         panic!("not an inbox")
     };
     assert_eq!(envelope.data.open, 0, "the inbox still reports it as open");
+
+    // **And the footer stops offering an action that cannot work**, which is
+    // the second of `005`'s two consequences. The row is still printed under
+    // `--all` — it is the record of why the Job stopped — but nothing tells
+    // the reader to answer it.
+    let text = armada_helm::render::human(
+        &output,
+        armada_helm::render::style::Style::plain(),
+        armada_helm::render::term::Terminal::piped(),
+    );
+    assert!(text.contains("ceiling"), "the entry vanished:\n{text}");
+    assert!(
+        !text.contains("armada fleet answer"),
+        "the footer offers an answer with nothing open:\n{text}"
+    );
 
     let error = fleet::answer(
         &run,
@@ -2653,9 +2666,21 @@ fn a_legacy_name_keyed_inbox_migrates_on_the_first_read() {
     // The file as it was written before `005` was fixed: no `job_uuid`
     // anywhere. Authored text — nothing here came off a real machine.
     let legacy = [
-        (r#""legacy-1""#, "this-test", "reached its wall clock ceiling on the explore step"),
-        (r#""legacy-2""#, "this-test", "reached its wall clock ceiling on the plan step"),
-        (r#""legacy-3""#, "nightly-flake", "wants the CI timeout raised from 30s to 90s"),
+        (
+            r#""legacy-1""#,
+            "this-test",
+            "reached its wall clock ceiling on the explore step",
+        ),
+        (
+            r#""legacy-2""#,
+            "this-test",
+            "reached its wall clock ceiling on the plan step",
+        ),
+        (
+            r#""legacy-3""#,
+            "nightly-flake",
+            "wants the CI timeout raised from 30s to 90s",
+        ),
     ];
     let mut text = String::new();
     for (id, name, body) in legacy {
@@ -2706,8 +2731,7 @@ fn a_legacy_name_keyed_inbox_migrates_on_the_first_read() {
     assert!(armada_fleet::inbox::open_for(&entries, &first.uuid).is_none());
     assert!(armada_fleet::inbox::open_for(&entries, &second.uuid).is_none());
     assert_eq!(
-        armada_fleet::inbox::open_for(&entries, &alone.uuid)
-            .map(|entry| entry.uuid.as_str()),
+        armada_fleet::inbox::open_for(&entries, &alone.uuid).map(|entry| entry.uuid.as_str()),
         Some("legacy-3")
     );
 
@@ -2762,5 +2786,8 @@ fn ls_prints_the_short_uuid_that_disambiguates_two_jobs_of_one_name() {
              cannot be told apart:\n{text}"
         );
     }
-    assert!(text.contains("  ID  ") || text.contains(" ID "), "no ID column:\n{text}");
+    assert!(
+        text.contains("  ID  ") || text.contains(" ID "),
+        "no ID column:\n{text}"
+    );
 }

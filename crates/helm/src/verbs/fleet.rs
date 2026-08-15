@@ -1478,7 +1478,10 @@ pub fn inbox<C: Clock>(
     };
     let rows: Vec<InboxRow> = entries(place)?
         .into_iter()
-        .filter(|entry| only.as_deref().is_none_or(|uuid| entry.job_uuid.as_deref() == Some(uuid)))
+        .filter(|entry| {
+            only.as_deref()
+                .is_none_or(|uuid| entry.job_uuid.as_deref() == Some(uuid))
+        })
         .filter(|entry| all || entry.is_open())
         .map(|entry| row(&entry, wall))
         .collect();

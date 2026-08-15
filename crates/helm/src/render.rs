@@ -1442,10 +1442,15 @@ fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
         table = table.row(vec![
             token(
                 &row.kind,
-                match (row.answered.is_some(), row.kind.as_str()) {
-                    (true, _) => Role::SteelGrey,
-                    (false, "blocked") => Role::DistressRed,
-                    (false, _) => Role::FlareOrange,
+                // **Grey the moment it stops wanting you**, answered or closed
+                // alike. A row that has ended reading in the same alarm colour
+                // as a live question is the diluted signal PLAN.md §15.4 is
+                // about, and it is how five entries against two dead Jobs went
+                // on looking urgent.
+                match (row.is_open(), row.kind.as_str()) {
+                    (false, _) => Role::SteelGrey,
+                    (true, "blocked") => Role::DistressRed,
+                    (true, _) => Role::FlareOrange,
                 },
             ),
             Cell::painted(row.job.clone(), Role::NavalBlue),
@@ -1461,14 +1466,16 @@ fn inbox(envelope: &Envelope<InboxData>, style: Style, width: usize) -> String {
         out.push_str("  nothing waiting\n");
     }
     out.push('\n');
-    out.push_str(&summary(
-        style,
-        envelope.status,
-        &[
-            format!("{} open", data.open),
-            "armada fleet answer <job> \"…\"".to_string(),
-        ],
-    ));
+    // **The action is offered only when something can take it**
+    // (`docs/reserved/005-inbox-label-not-identity.md`). This line used to be
+    // unconditional, so an inbox whose every entry belonged to a Job that had
+    // ended still told the reader to answer one — an instruction that could
+    // only fail, printed under a table of things that had already finished.
+    let mut facts = vec![format!("{} open", data.open)];
+    if data.open > 0 {
+        facts.push("armada fleet answer <job> \"…\"".to_string());
+    }
+    out.push_str(&summary(style, envelope.status, &facts));
     out
 }
 
