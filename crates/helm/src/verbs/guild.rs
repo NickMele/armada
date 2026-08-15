@@ -976,7 +976,11 @@ fn act(
 }
 
 /// Draw what just happened, where the questions are being put.
-fn report(ask: &mut dyn Ask, look: Look, output: &Output) {
+///
+/// **Shared with `armada failures`**, which navigates its listing the same way
+/// and has the same thing to do between two selections. A second copy would be
+/// the second place mid-session output could stop going to stderr.
+pub(crate) fn report(ask: &mut dyn Ask, look: Look, output: &Output) {
     let mut text = crate::render::human(output, look.style, look.terminal);
     text.push('\n');
     ask.show(&text);

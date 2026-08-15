@@ -415,8 +415,25 @@ fn dispatch(
             Invocation::Bridge(options) => return bridge(&run, &place, &options, style, terminal),
             Invocation::Failures(failures) => {
                 return match *failures {
-                    args::FailuresInvocation::Ls { all, .. } => {
-                        verbs::failures::ls(&SystemClock, &place, all)
+                    // **A terminal is the flag.** At one, the listing is
+                    // navigable; through a pipe, and under `--json` even at a
+                    // terminal, it is the same listing printed once. Decided
+                    // here rather than in the verb, like every other terminal
+                    // question (`ARCHITECTURE.md` §1.4) — which is what lets
+                    // the suite drive the navigating against a `TempDir`.
+                    args::FailuresInvocation::Ls { all, json } => {
+                        let interactive = terminal.can_ask() && !json;
+                        let mut asking = at_the_terminal(style, terminal);
+                        verbs::failures::ls(
+                            &run,
+                            &SystemClock,
+                            &place,
+                            all,
+                            &mut asking,
+                            interactive,
+                            look(style, terminal),
+                            progress,
+                        )
                     }
                     args::FailuresInvocation::Show { id, .. } => {
                         verbs::failures::show(&SystemClock, &place, &id)

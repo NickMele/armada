@@ -26,25 +26,208 @@ use armada_core::envelope::{Envelope, FailureData, FailuresData};
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::failure::{self, Entry, Line, State};
 
-use crate::ask::Ask;
+use crate::ask::{Ask, Choice};
 use crate::render::progress::Progress;
 use crate::verbs::Output;
 
 pub use crate::verbs::fleet::Where;
+pub use crate::verbs::guild::Look;
 
-/// `armada failures` — the log, folded.
+/// `armada failures` — the log, folded, **and at a terminal a way through it**.
 ///
 /// **Cleared entries are hidden unless asked for**, which is the same lens
 /// `armada fleet ls --all` applies to finished Jobs: the default answers "what
 /// is still mine to deal with", and the flag answers "what has this machine
 /// ever done".
-pub fn ls<C: Clock>(now: &C, place: &Where, all: bool) -> Result<Output, ArmadaError> {
-    let entries = read(now, place)?;
-    let shown: Vec<Entry> = entries
+///
+/// `interactive` is decided at the entrypoint from whether a person is there
+/// and whether they asked for the envelope (`ARCHITECTURE.md` §1.4), never
+/// sniffed here. There is deliberately **no flag that opts into the
+/// interaction** — a terminal is the flag, exactly as it is for `armada guild
+/// ls`, and an interactive-only verb would be a bug rather than a feature
+/// (PLAN.md §3.1.1).
+///
+/// **The listing is read again after the navigating rather than before it**, so
+/// a session that put a Job on two entries and discarded a third reports what
+/// the log says now instead of what it said when it opened.
+#[allow(clippy::too_many_arguments)]
+pub fn ls<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    all: bool,
+    ask: &mut dyn Ask,
+    interactive: bool,
+    look: Look,
+    progress: &mut dyn Progress,
+) -> Result<Output, ArmadaError> {
+    if interactive {
+        wander(run, now, place, all, ask, look, progress)?;
+    }
+    Ok(listing("failures", shown(read(now, place)?, all)))
+}
+
+/// Columns a navigable row spends on something other than the detail: the two
+/// spaces after the status, the two after the id, the selector's own cursor,
+/// number and indent, and the gap before the age.
+const ROW_FURNITURE: usize = 18;
+
+/// The entries this lens shows.
+fn shown(entries: Vec<Entry>, all: bool) -> Vec<Entry> {
+    entries
         .into_iter()
         .filter(|entry| all || entry.state != State::Cleared)
-        .collect();
-    Ok(listing("failures", shown))
+        .collect()
+}
+
+/// Navigating the listing: pick a failure, then pick what to do about it, until
+/// you are done.
+///
+/// **This is the whole point of the verb being interactive**, in the words it
+/// was asked for in: *"so that I can navigate the list and quickly dispatch a
+/// job rather than having to remember the ID and copy it and then run fix with
+/// the ID."* The selection carries the id into [`fix`], so there is nothing to
+/// retype and nothing to mistype.
+///
+/// **Two selections rather than a row of verbs on every line**, which is
+/// `armada guild ls`'s shape and its reasoning: a reader opens this to find out
+/// what has broken and only then decides what to do about one of them, and a
+/// list carrying three actions per row is a list nobody can scan.
+///
+/// **It reads the log again on every turn.** A Job put on an entry changes what
+/// that row says about itself, and a session holding the listing it opened with
+/// would offer `fix` on something already being fixed.
+fn wander<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    all: bool,
+    ask: &mut dyn Ask,
+    look: Look,
+    progress: &mut dyn Progress,
+) -> Result<(), ArmadaError> {
+    loop {
+        let entries = shown(read(now, place)?, all);
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let mut options: Vec<Choice> = rows(&entries, look);
+        // **`done` is the last option and it is the default**, so `esc` and a
+        // stream that ended both leave rather than acting on the way out.
+        options.push(Choice::new("done", "stop looking"));
+        let done = options.len();
+        let picked = ask.choose("What has Armada broken on?", &options, done);
+        if picked >= done || picked == 0 {
+            return Ok(());
+        }
+        let entry = entries[picked - 1].clone();
+        act(run, now, place, ask, look, progress, &entry)?;
+    }
+}
+
+/// One row per entry, in the listing's own shape.
+///
+/// **`STATUS · ID · DETAIL · TIME`, the same four cells the table draws and in
+/// the same order**, because the person navigating and the person reading a
+/// pipe are looking at one listing. The status leads and is always a word — no
+/// tick, no cross — for the reason `render/palette.rs` gives: a row told apart
+/// by a glyph or a colour is a row a monochrome terminal cannot tell apart at
+/// all. The detail comes from [`crate::render::failure_detail`], so the two
+/// audiences cannot drift.
+///
+/// **The status is padded and the detail is truncated**, both so the ids line
+/// up in a column: a column of ids that starts somewhere different on every row
+/// is a column nobody can scan, and scanning is what this list is for.
+fn rows(entries: &[Entry], look: Look) -> Vec<Choice> {
+    let widest = entries
+        .iter()
+        .map(|entry| entry.state.word().len())
+        .max()
+        .unwrap_or(0);
+    // What is left for the detail once the status, the id, the cursor, the
+    // option number and the gap before the aside have had theirs. **Truncated
+    // rather than wrapped**, the same rule `render/term.rs` states for every
+    // table: a wrapped row loses the column that made the listing worth having.
+    let id = entries
+        .iter()
+        .map(|entry| entry.id.len())
+        .max()
+        .unwrap_or(0);
+    let room = look
+        .terminal
+        .usable_width()
+        .saturating_sub(widest + id + ROW_FURNITURE);
+    entries
+        .iter()
+        .map(|entry| {
+            Choice::new(
+                &format!(
+                    "{:<widest$}  {}  {}",
+                    entry.state.word(),
+                    entry.id,
+                    crate::render::term::truncate(
+                        &crate::render::failure_detail(entry),
+                        room.max(8)
+                    )
+                ),
+                &crate::render::format::elapsed(entry.age_s * 1_000),
+            )
+        })
+        .collect()
+}
+
+/// What to do about the one failure that was picked.
+///
+/// **Three things and a way out**, and they are the three the verb already has:
+/// show it whole, put a Job on it, discard it. Nothing here is a fourth verb —
+/// each option runs the same function `armada failures show|fix|clear` runs, so
+/// there is one implementation of each and one place a field can be added to
+/// it.
+///
+/// **Discarding asks nothing first**, which is where this parts company with
+/// `armada guild ls`'s delete. That one removes a file from a guild that syncs
+/// to every machine; this appends a line to an append-only log, keeps the id
+/// and the entry, and reopens on the next recurrence. There is nothing to
+/// confirm because there is nothing to lose.
+fn act<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    ask: &mut dyn Ask,
+    look: Look,
+    progress: &mut dyn Progress,
+    entry: &Entry,
+) -> Result<(), ArmadaError> {
+    let options = vec![
+        Choice::new("show", "the failure, whole"),
+        Choice::new("fix", "spawn a Job on it"),
+        Choice::new("discard", "clear it; a recurrence brings it back"),
+        Choice::new("back", "leave it alone"),
+    ];
+    let back = options.len();
+    let chosen = ask.choose(&format!("{} — {}", entry.id, entry.message), &options, back);
+    // **An answer outside the list leaves rather than acting**, the same rule
+    // `guild ls` follows: the first option must never be the one an
+    // out-of-range answer lands on, and here the first option would spawn.
+    let Some(action) = chosen
+        .checked_sub(1)
+        .and_then(|at| options.get(at))
+        .map(|choice| choice.label.clone())
+    else {
+        return Ok(());
+    };
+
+    let output = match action.as_str() {
+        "show" => show(now, place, &entry.id)?,
+        // **The id goes through from the selection**, which is the feature.
+        // `dry_run` is false because a person who picked *fix* off a list asked
+        // for the Job, and `--dry-run` is how a caller asks for the rehearsal.
+        "fix" => fix(run, now, place, &entry.id, false, Some(&mut *ask), progress)?,
+        "discard" => clear(now, place, Some(&entry.id), false)?,
+        _ => return Ok(()),
+    };
+    crate::verbs::guild::report(ask, look, &output);
+    Ok(())
 }
 
 /// `armada failures show <id>` — one entry, whole.
