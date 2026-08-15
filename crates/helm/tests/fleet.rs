@@ -2337,6 +2337,9 @@ fn reading_a_frame_resumes_nothing_and_writes_nothing() {
         rows = frame.rows.len();
     }
 
+    // Both Jobs are on the frame — which is also what makes `rows` a count the
+    // platform-specific assertion at the bottom can multiply by.
+    assert_eq!(rows, 2, "a frame carries every Job, finished or not");
     assert_eq!(scratch.store().load(&data.uuid).unwrap(), before);
     assert_eq!(scratch.store().load(&live.uuid).unwrap(), before_live);
     // **Whatever a redraw runs, it is a question and never a message** — no
