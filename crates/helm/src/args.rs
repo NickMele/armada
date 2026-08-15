@@ -223,7 +223,6 @@ pub enum FleetInvocation {
         /// Which Job.
         job: String,
     },
-    /// `armada fleet resume <job>`.
     /// `armada fleet tick` — one pass of the workflow loop, or `--watch`.
     Tick {
         /// Emit the envelope.
@@ -233,6 +232,7 @@ pub enum FleetInvocation {
         /// Keep going until nothing in scope could move again.
         watch: bool,
     },
+    /// `armada fleet resume <job>`.
     Resume {
         /// `--json`.
         json: bool,

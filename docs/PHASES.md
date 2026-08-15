@@ -421,12 +421,30 @@ parent already opened and takes the run lease itself. `--status` is the same rea
 | **The record is rewritten whenever a check changes phase.** | It used to be written once, at the end. A `--status` mid-run then reported a check that had been running for two minutes as *waiting* — the record was the source of truth and was stale about the only thing a poll asks. |
 | **The record wins over the process probe.** | A run that has written its verdict has finished deciding whether or not its process has got as far as exiting. Re-deciding on the strength of a `ps` is exactly how a detached run would come to disagree with an attached one over the same rows, which is worse than having no detach at all. |
 
-**What is left of M4 is the loop itself**, which is Fleet's and Guild's rather than Manifest's:
-the workflow steps, the ceiling, and the branch it lands on.
+**The loop itself is `armada fleet tick`**
+([`commands/fleet/tick.md`](commands/fleet/tick.md)). A pass looks at each Job once, asks whether
+there is anything to do at all, gathers only what the step's predicate needs looked at, decides,
+and hands the answer to `fleet.verdict` — the verb that already refuses a `PASS` with no
+evidence. **A verb rather than a daemon**: Armada owns no long-lived process, a pass is
+idempotent, and `--watch` is one driver of it rather than the only one.
+
+**Three more things were decided in the building:**
+
+| | |
+|---|---|
+| **A gate's evidence is what the shell looked at, and the decision is pure.** `gate::needs` says which fact a predicate wants; the shell starts a check, searches the tree or stats a path; `gate::decide` weighs what came back. That split is what let the evaluator be tested against a fake and then proved end to end against a real `armada` and a stub `claude` — the lesson of the two bugs that shipped behind green reducer tests. |
+| **One ceiling, read in the unit it was declared in.** A per-step attempt ceiling was built beside the Job's and removed. `budget.iterations` is the **Job's** turn ledger (§14.3 of [`PLAN.md`](PLAN.md)), comparing the same number against attempts at one step is a second unit on one field, and it could never fire anyway: an attempt costs at least one turn, so the Job-wide ceiling always reaches the number first. |
+| **Two predicates are refused rather than decided.** `review_clean` and `subjob_passed` both need another Job's verdict and Fleet spawns none from inside a gate. The loop stops once and names what is missing: *yes* would be the false pass the predicate exists to prevent, and *no* would spend the budget and then blame a ceiling. [`reserved/016`](reserved/016-what-the-gate-cannot-prove.md) has the whole of the evaluator's coverage. |
 
 **Done when:** a bug workflow reproduces a failure, writes a test that fails first, fixes it,
 gets `check` green, and lands on a local branch, with no human turn in the middle and a hard
 ceiling that stops it if it cannot.
+
+**Met**, by `a_bug_workflow_reproduces_fixes_and_lands_with_no_human_turn_in_the_middle` in
+`crates/helm/tests/fleet.rs` — three steps, every one settled by an external command, an empty
+inbox at the end. **The shipped four-step `bug` workflow has a `review` step this cannot reach**,
+and `the_shipped_bug_workflow_runs_to_its_review_step_and_stops_there` holds that boundary as a
+fact in the suite rather than a sentence here.
 
 ---
 
