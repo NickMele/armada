@@ -578,6 +578,38 @@ mod tests {
         );
     }
 
+    /// **The workspace-member shape**, which is `tests/fixtures/pnpm-monorepo`
+    /// and most of the JavaScript world: the root holds the lockfile and every
+    /// package below it holds a manifest and no lockfile, because the root
+    /// resolved for them.
+    ///
+    /// So the members get their checks phrased with the root's manager, and the
+    /// **one** install goes on the component that holds the lockfile rather than
+    /// on each of them — which is what `setup:` per member would produce.
+    #[test]
+    fn a_member_borrows_the_roots_manager_and_not_its_setup() {
+        let proposals = of(&[
+            file("package.json", r#"{"name":"acme","private":true}"#),
+            file("pnpm-lock.yaml", ""),
+            file("pnpm-workspace.yaml", "packages:\n  - packages/*\n"),
+            file("packages/core/package.json", SCRIPTS),
+        ]);
+        assert_eq!(
+            ats(&proposals),
+            [
+                "components.core",
+                "components.core.checks.test",
+                "components.core.checks.lint",
+            ],
+            "a member grew a setup line, or lost the root's manager"
+        );
+        assert_eq!(proposals[1].writes, "pnpm run test");
+        // The root itself proposes nothing: it has a manifest and a lockfile and
+        // no script anybody could run, which is a repository rather than a
+        // component.
+        assert!(proposals.iter().all(|p| p.component != "acme"));
+    }
+
     /// A directory with a manifest and nothing to run is a name, not a fact —
     /// which is exactly what `scripts/` was in the repository that raised this.
     #[test]

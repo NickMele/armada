@@ -1,7 +1,7 @@
 armada manifest — one repository's stack: ports, services, checks
 
 VERBS
-  config <scan|verify>  report the evidence, then verify what was written
+  config <scan|verify>  propose what the repository proves, then verify it
   init                  claim this workspace: ports, .armada/, setup
   up [<component>]      start this workspace's services; wait until they answer
   down [<component>]    stop this workspace's services; keep the port block

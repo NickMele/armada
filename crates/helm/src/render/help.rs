@@ -125,7 +125,7 @@ const PAGES: [Page; 43] = [
     Page {
         path: "manifest config",
         synopsis: "config <scan|verify>",
-        summary: "report the evidence, then verify what was written",
+        summary: "propose what the repository proves, then verify it",
         usage: &[
             "armada manifest config scan [--json]",
             "armada manifest config verify [--json]",
@@ -134,7 +134,7 @@ const PAGES: [Page; 43] = [
         examples: &[
             (
                 "armada manifest config scan",
-                "the evidence: languages, services, ports, existing tooling",
+                "the evidence, and the lines it can prove from it",
             ),
             (
                 "armada manifest config scan --json",
@@ -146,10 +146,13 @@ const PAGES: [Page; 43] = [
             ),
         ],
         notes: &[
-            "scan reports facts and decides nothing; an agent authors; verify checks.",
+            "scan proposes only what it can prove: a lockfile names the package",
+            "manager, a script named exactly test is the test check, test:changed",
+            "is neither. Nothing is written until you tick it.",
             "scan is the one verb that runs in a repo with no armada.yml.",
-            "At a terminal, scan offers to hand the evidence to an agent. Through a",
-            "pipe it prints the command instead, so nothing waits on an answer.",
+            "At a terminal it offers to write the proposals or to hand the",
+            "repository to an agent. Through a pipe it prints the command",
+            "instead, so nothing waits on an answer.",
         ],
     },
     Page {
