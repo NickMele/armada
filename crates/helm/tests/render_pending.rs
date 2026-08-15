@@ -63,10 +63,19 @@ fn pending_dir() -> PathBuf {
 /// milestone that built it**, which is the evidence this file was written to
 /// collect.
 ///
-/// It is kept rather than deleted because the next reserved layout — the
-/// Bridge's, and whatever M4 draws — arrives the same way, and a mechanism
-/// deleted the moment its queue empties is a mechanism that gets reinvented
-/// worse. An empty list costs one test run of nothing.
+/// It is kept rather than deleted because the next reserved layout arrives the
+/// same way, and a mechanism deleted the moment its queue empties is a mechanism
+/// that gets reinvented worse. An empty list costs one test run of nothing.
+///
+/// **The Bridge did not come through here, and that is the exception worth
+/// naming.** `armada bridge` shipped straight into `render_golden.rs` as
+/// `bridge` and `bridge-filtered`, because the drawing on
+/// `commands/helm/bridge.md` could not have been transcribed into this directory
+/// in the first place: it puts `JOB` before `STATUS` and marks a column with
+/// `●`, and both guards below would have refused the file. The layout was
+/// therefore settled by *this* file's rules rather than against a fixture, which
+/// is the same outcome by a shorter route — and the departures are recorded on
+/// the page rather than left in a diff.
 const PENDING: [(&str, &str); 0] = [];
 
 fn fixture(name: &str) -> String {
