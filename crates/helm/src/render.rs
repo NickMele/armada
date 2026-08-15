@@ -5552,6 +5552,49 @@ mod tests {
         assert!(head.ends_with("\n\n"), "the block does not close: {head:?}");
     }
 
+    /// **Every box in Armada names the same three chords.** The Bridge's
+    /// compose box had none at all, and the person who met it first guessed
+    /// `ctrl-d` from having used the interview — a guess that happened to be
+    /// right is still a guess, and a second convention would have been worse
+    /// than either. So all three surfaces quote [`prose_keys`], and this holds
+    /// them against each other rather than against a string typed twice.
+    #[test]
+    fn every_text_area_names_the_same_three_keys_however_it_spaces_them() {
+        let interview = interview_prompt(
+            &armada_core::envelope::Asked {
+                number: 1,
+                of: 7,
+                prompt: "What is this repository for?".to_string(),
+                purpose: "one paragraph".to_string(),
+                writes: "project.md".to_string(),
+                keeps: "what import found".to_string(),
+                standing: None,
+                prose: true,
+            },
+            Style::plain(),
+            80,
+        );
+        let file = editing("workflows/bug.yml", Style::plain(), 80);
+        // The Bridge spaces its key lines with two spaces rather than a
+        // separator whose width differs between the two audiences.
+        let bridge = prose_keys("starts it", "starts nothing", "  ");
+
+        for surface in [&interview, &file, &bridge] {
+            for chord in ["enter", "ctrl-d", "esc"] {
+                assert!(surface.contains(chord), "`{chord}` unnamed in:\n{surface}");
+            }
+            assert!(surface.contains("enter for a new line"), "{surface}");
+        }
+        // The order never varies either: what you press to finish is always the
+        // middle one, between the two that do not.
+        for surface in [&interview, &file, &bridge] {
+            let enter = surface.find("enter for a new line").unwrap();
+            let save = surface.find("ctrl-d").unwrap();
+            let leave = surface.find("esc ").unwrap();
+            assert!(enter < save && save < leave, "out of order:\n{surface}");
+        }
+    }
+
     /// **`guild show` shows the file, not a rendering of it.** A reader is here
     /// to see what is on disk, so long lines overhang rather than wrap — the
     /// same choice `wrap_prose` makes about a word it cannot break.
