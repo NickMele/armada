@@ -3295,7 +3295,7 @@ under it and then be told for ever that the file was not his.
 reads `nothing of yours yet` for a templated fragment rather than quoting the examples back —
 showing them would tell a reader his memory file said something it never said.
 
-#### Five questions, and none of them ask you to confirm the import
+#### Seven questions, and none of them ask you to confirm the import
 
 The interview asks what cannot be read from the machine, **from scratch**:
 
@@ -3304,8 +3304,38 @@ The interview asks what cannot be read from the machine, **from scratch**:
 | 1 | How should agents write to you? | `voice.md` | what import wrote |
 | 2 | When is work actually finished? | `expectations.md` | what import wrote |
 | 3 | How should agents work in your repos? | `how-i-work.md` | what import wrote |
-| 4 | How much should one Job spend before it stops and asks you? | `workflows/*.yml` | `20, 600k, 90m` |
-| 5 | Where should your guild sync to? | `machine.yml` | none — sync is off, `export` still works |
+| 4 | How many iterations should one Job run before it stops and asks you? | `workflows/*.yml` | `20` |
+| 5 | How many tokens should one Job spend before it stops and asks you? | `workflows/*.yml` | `600k` |
+| 6 | How long should one Job run before it stops and asks you? | `workflows/*.yml` | `90m` |
+| 7 | Where should your guild sync to? | `machine.yml` | none — sync is off, `export` still works |
+
+**Questions 4–6 were one question, and rewording it was not enough.** It asked for
+`20, 600k, 90m` — a positional triple in which `m` meant *minutes* in the third slot and nothing
+at all in the second, where `k` meant thousands. It was reported as confusing; a first pass
+changed only its default from a description to a typeable value; it was reported as confusing
+again. **The shape was the defect, not the wording.** Three decisions in one answer means a
+person who knows exactly what he wants for one of them still cannot answer without inventing the
+other two, and positional units mean he cannot check his answer by reading it back.
+
+So each limit is its own question taking **one number**, with its own visible default. The gain
+is not only legibility: each is now independently answered or defaulted, so answering the token
+question alone leaves `design` its 15 iterations and `bug` its 20 rather than flattening both to
+whatever number had to be typed to get past the other two slots (§14.6).
+
+**They say *stops and asks you*, because that is what happens.** Every workflow budget carries
+`on_exhausted: needs_human` and that is the enum's only value: the Drone stops, the Job records
+what it spent and where it reached, and it is raised to the inbox as `NEEDS_HUMAN`, which settles
+the Job to `PAUSED`. Nothing is discarded and nothing is rolled back — so the prompts must not
+say *aborts*, which is a different product, and a person choosing a number is entitled to know
+which one he is choosing.
+
+**There is no question about money.** A Job's `Spend` carries `cost_usd`, summed from each turn's
+`total_cost_usd`, but `Budget` has no dollar field and `fleet::job::exhausted` checks iterations,
+tokens and wall clock and nothing else. A dollar ceiling asked for here would be a number the
+engine never reads — it would look like a spending cap and stop nothing, which is worse than not
+asking. Dollars are **reported**, not **capped**; the token limit is the one that bounds cost.
+Adding a real money ceiling is a change to `Budget` and to `exhausted`, and it belongs there
+rather than in a question.
 
 **Every question names the file it writes and shows what enter would keep.** The first real run
 of this interview came back with three findings, and all three were about the question rather
@@ -3331,7 +3361,7 @@ prompt that scrolls sideways is not somewhere anyone writes one — so those thr
 `ratatui` is already the decided TUI crate for the Bridge (`PHASES.md` §8.5), so this is the one
 dependency doing two jobs rather than a second one. It is **not** `$EDITOR`: leaving the terminal
 to answer question two and coming back for question three is a worse interview than a box that
-scrolls. Questions 4 and 5 are one short structured value each and stay a single line.
+scrolls. Questions 4–7 are one short structured value each and stay a single line.
 
 #### The box opens holding the current value
 
@@ -3410,7 +3440,7 @@ that has already reached a remote cannot be un-pushed.
 
 #### A remote is a git URL **or a folder**
 
-Question 5 takes either. The honest answer to *do you have a private git remote?* is, for most
+Question 7 takes either. The honest answer to *do you have a private git remote?* is, for most
 people, no — and nobody is going to create one to finish setting a tool up. A folder that is
 already on every machine they own is another matter: iCloud Drive, Dropbox, a NAS mount, a drive
 they plug in.
