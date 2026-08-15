@@ -32,9 +32,9 @@
 //! nobody runs on a train, which is where you most want it.
 
 use armada_core::ctx::Run;
-use armada_core::envelope::{DoctorData, Envelope, Finding, Health};
+use armada_core::envelope::{DoctorData, Envelope, Finding, Problem, Settled};
 use armada_core::error::ArmadaError;
-use armada_guild::layout::{Guild, DIRECTORIES};
+use armada_guild::layout::{self, Guild, DIRECTORIES};
 use armada_guild::{machine, memory, repo};
 use std::path::Path;
 
@@ -49,8 +49,12 @@ use crate::verbs::{preflight, Output};
 /// is not built.
 pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     let guild = place.guild();
+    // **Ordered so that a check's rows are contiguous**, because the render
+    // draws one table per check (`render.rs`). `guild` reports drift and then
+    // every fragment still as imported, and interleaving those with `manifest.db`
+    // is what made a real reader ask which rows belonged together.
     let mut results = preflight::run(runner, &place.cwd, true).results;
-    results.push(layout(&place.armada_home));
+    results.push(directories(&place.armada_home));
     results.extend(drift(runner, &guild));
     results.extend(fragments(&guild));
     results.push(store(&place.armada_home));
@@ -69,33 +73,69 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
 }
 
 /// `~/.armada/` and its three directories.
-fn layout(armada_home: &Path) -> Finding {
+///
+/// **The check is named for the thing, not for the code that checks it.** It
+/// used to be called `layout` and to report `no jobs, workspaces` — an
+/// implementation word over a set difference, which told a real reader neither
+/// what was missing nor why he should care. It is now named `~/.armada` and says
+/// which paths are absent and what writes to them.
+fn directories(armada_home: &Path) -> Finding {
+    let home = crate::verbs::machine::shown(armada_home);
+    if !armada_home.is_dir() {
+        return Finding::needs(
+            &home,
+            Problem::Missing,
+            format!("{home} is not there; nothing Armada keeps is on this machine"),
+            "armada init",
+        );
+    }
     let missing: Vec<&str> = DIRECTORIES
         .iter()
         .copied()
         .filter(|directory| !armada_home.join(directory).is_dir())
         .collect();
-    if !armada_home.is_dir() {
-        return Finding {
-            check: "layout".to_string(),
-            status: Health::Missing,
-            detail: format!("{} is not there", crate::verbs::machine::shown(armada_home)),
-            remedy: Some("armada init".to_string()),
-        };
-    }
     if missing.is_empty() {
-        return Finding {
-            check: "layout".to_string(),
-            status: Health::Ok,
-            detail: format!("{} complete", crate::verbs::machine::shown(armada_home)),
-            remedy: None,
-        };
+        return Finding::settled(
+            &home,
+            Settled::Ok,
+            format!("{}, all present", paths(&DIRECTORIES)),
+        );
     }
-    Finding {
-        check: "layout".to_string(),
-        status: Health::Missing,
-        detail: format!("no {}", missing.join(", ")),
-        remedy: Some("armada init --force".to_string()),
+    Finding::needs(
+        &home,
+        Problem::Missing,
+        format!(
+            "{} {} missing; {} {} there",
+            paths(&missing),
+            if missing.len() == 1 { "is" } else { "are" },
+            written(&missing.iter().map(|d| layout::holds(d)).collect::<Vec<_>>()),
+            if missing.len() == 1 { "goes" } else { "go" },
+        ),
+        // **`--force`, and it no longer means "replace the guild".** A re-run
+        // recreates what is missing and leaves an existing guild alone
+        // (`verbs/machine.rs`), which is what makes naming it here safe.
+        "armada init --force",
+    )
+}
+
+/// `jobs/ and workspaces/` — directory names, written as paths so a reader can
+/// see they are directories.
+fn paths(directories: &[&str]) -> String {
+    written(
+        &directories
+            .iter()
+            .map(|d| format!("{d}/"))
+            .collect::<Vec<_>>(),
+    )
+}
+
+/// `a`, `a and b`, `a, b and c`.
+fn written(items: &[impl AsRef<str>]) -> String {
+    let items: Vec<&str> = items.iter().map(AsRef::as_ref).collect();
+    match items.split_last() {
+        None => String::new(),
+        Some((last, [])) => (*last).to_string(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
     }
 }
 
@@ -105,12 +145,12 @@ fn layout(armada_home: &Path) -> Finding {
 /// guild's main failure mode, and nothing else on the machine would tell you.
 fn drift(runner: &impl Run, guild: &Guild) -> Vec<Finding> {
     if !guild.exists() {
-        return vec![Finding {
-            check: "guild".to_string(),
-            status: Health::Missing,
-            detail: "there is no guild on this machine".to_string(),
-            remedy: Some("armada guild init".to_string()),
-        }];
+        return vec![Finding::needs(
+            GUILD,
+            Problem::Missing,
+            "there is no guild on this machine",
+            "armada guild init",
+        )];
     }
     let remote = match repo::remote(runner, guild.root()) {
         Ok(Some(remote)) => remote,
@@ -118,12 +158,11 @@ fn drift(runner: &impl Run, guild: &Guild) -> Vec<Finding> {
         // works, and a `doctor` that warned about it every day would train the
         // reader to skim the report.
         Ok(None) => {
-            return vec![Finding {
-                check: "guild".to_string(),
-                status: Health::Ok,
-                detail: "no remote: sync off, export still works".to_string(),
-                remedy: None,
-            }]
+            return vec![Finding::settled(
+                GUILD,
+                Settled::Ok,
+                "no remote: sync off, export still works",
+            )]
         }
         Err(error) => return vec![offline(&error)],
     };
@@ -134,55 +173,56 @@ fn drift(runner: &impl Run, guild: &Guild) -> Vec<Finding> {
         Err(error) => return vec![offline(&error)],
     };
     if apart.diverged() {
-        return vec![Finding {
-            check: "guild".to_string(),
-            status: Health::Stale,
-            detail: apart.written(),
-            remedy: Some("armada guild pull".to_string()),
-        }];
+        return vec![Finding::needs(
+            GUILD,
+            Problem::Stale,
+            apart.written(),
+            "armada guild pull",
+        )];
     }
     let mut found = Vec::new();
     if apart.behind > 0 {
-        found.push(Finding {
-            check: "guild".to_string(),
-            status: Health::Stale,
-            detail: format!(
+        found.push(Finding::needs(
+            GUILD,
+            Problem::Stale,
+            format!(
                 "{} behind origin",
                 crate::render::format::count(apart.behind, "commit")
             ),
-            remedy: Some("armada guild pull".to_string()),
-        });
+            "armada guild pull",
+        ));
     }
     if apart.ahead > 0 {
-        found.push(Finding {
-            check: "guild".to_string(),
-            status: Health::Stale,
-            detail: format!(
+        found.push(Finding::needs(
+            GUILD,
+            Problem::Stale,
+            format!(
                 "{} not pushed",
                 crate::render::format::count(apart.ahead, "commit")
             ),
-            remedy: Some("armada guild push".to_string()),
-        });
+            "armada guild push",
+        ));
     }
     if found.is_empty() {
-        found.push(Finding {
-            check: "guild".to_string(),
-            status: Health::Ok,
-            detail: "in step with origin".to_string(),
-            remedy: None,
-        });
+        found.push(Finding::settled(GUILD, Settled::Ok, "in step with origin"));
     }
     found
 }
 
+/// The check every guild row belongs to. One spelling, because the render groups
+/// on it.
+const GUILD: &str = "guild";
+
 /// A drift check that could not run. **A warning, never a failure.**
 fn offline(error: &ArmadaError) -> Finding {
-    Finding {
-        check: "guild".to_string(),
-        status: Health::Offline,
-        detail: format!("could not reach the remote: {}", error.message),
-        remedy: None,
-    }
+    Finding::needs(
+        GUILD,
+        Problem::Offline,
+        format!("could not reach the remote: {}", error.message),
+        // Not nothing. "Could not be checked" without a next step reads as a
+        // fault the reader has to diagnose, and it is usually a train.
+        "reconnect, then armada doctor again",
+    )
 }
 
 /// Which fragments are still whatever import produced.
@@ -204,11 +244,22 @@ fn fragments(guild: &Guild) -> Vec<Finding> {
                 .map(|body| body.contains("Imported from CLAUDE.md"))
                 .unwrap_or(false)
         })
-        .map(|name| Finding {
-            check: "guild".to_string(),
-            status: Health::Partial,
-            detail: format!("{name} still as imported"),
-            remedy: None,
+        .map(|name| {
+            Finding::needs(
+                GUILD,
+                Problem::Partial,
+                format!("{name} still as imported"),
+                // **A sentence rather than a command, and that is still a fix.**
+                // There is no verb that writes this for you — `armada guild
+                // edit` is not built — so the remedy is the path and what to do
+                // with it. An earlier version left this `None` on the grounds
+                // that prose is not a command, and the row reached a reader with
+                // nothing to act on, which is the failure the rule is about.
+                format!(
+                    "open {} and say it in your own words",
+                    crate::verbs::machine::shown(&guild.path(name))
+                ),
+            )
         })
         .collect()
 }
@@ -224,31 +275,30 @@ fn store(armada_home: &Path) -> Finding {
     let path = armada_home.join("manifest.db");
     let withheld = machine::read(armada_home).withheld.len();
     if !path.is_file() {
-        return Finding {
-            check: "manifest.db".to_string(),
-            status: Health::Ok,
-            detail: "not created yet: `armada manifest init` makes it".to_string(),
-            remedy: None,
-        };
+        return Finding::settled(
+            "manifest.db",
+            Settled::Ok,
+            "not created yet: `armada manifest init` makes it",
+        );
     }
-    Finding {
-        check: "manifest.db".to_string(),
-        status: Health::Ok,
-        detail: match withheld {
+    Finding::settled(
+        "manifest.db",
+        Settled::Ok,
+        match withheld {
             0 => "present".to_string(),
             n => format!(
                 "present, {} withheld from the guild",
                 crate::render::format::count(n, "value")
             ),
         },
-        remedy: None,
-    }
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use armada_core::ctx::{RunOutput, RunRequest, SpawnError};
+    use armada_core::envelope::Health;
     use std::path::PathBuf;
 
     struct Answers {
@@ -428,17 +478,19 @@ mod tests {
             )
             .unwrap(),
         );
-        let layout = find(&data, "layout", "is not there").expect("no layout row");
-        assert_eq!(layout.status, Health::Missing);
-        assert_eq!(layout.remedy.as_deref(), Some("armada init"));
+        let row = find(&data, "~/.armada", "is not there").expect("no directories row");
+        assert_eq!(row.status, Health::Missing);
+        assert_eq!(row.remedy.as_deref(), Some("armada init"));
     }
 
-    /// **A `→` line for every problem Armada can name a command for.** A check
-    /// that reports a problem without the fix sends the reader to the
-    /// documentation, which is most of what `doctor` exists to save.
+    /// **`layout` and `no jobs, workspaces` said nothing a reader could use.**
+    /// The check is named for the thing it checks, and the detail names the
+    /// paths and what writes to them.
     #[test]
-    fn every_missing_thing_carries_the_command_that_fixes_it() {
+    fn a_missing_directory_is_named_as_a_path_and_says_what_writes_there() {
         let (_home, place) = machine_with_a_guild();
+        std::fs::remove_dir_all(place.armada_home.join("jobs")).unwrap();
+        std::fs::remove_dir_all(place.armada_home.join("workspaces")).unwrap();
         let data = data(
             &run(
                 &Answers {
@@ -449,16 +501,59 @@ mod tests {
             )
             .unwrap(),
         );
-        for row in data.results.iter().filter(|r| r.status == Health::Missing) {
-            assert!(
+        let row = find(&data, "~/.armada", "missing").expect("no directories row");
+        assert_eq!(
+            row.detail,
+            "jobs/ and workspaces/ are missing; Jobs and worktrees go there"
+        );
+        assert_eq!(row.remedy.as_deref(), Some("armada init --force"));
+    }
+
+    /// **A `→` line for every row that asks the reader to do something**, not
+    /// only for the missing ones. `missing ~/.armada` and both `partial guild`
+    /// rows reached a real reader with nothing to act on, which is the failure
+    /// `Finding::needs` now makes unrepresentable — this holds it against a real
+    /// pass as well as against the type.
+    #[test]
+    fn every_row_that_needs_action_carries_the_fix_for_it() {
+        let (_home, place) = machine_with_a_guild();
+        std::fs::remove_dir_all(place.armada_home.join("jobs")).unwrap();
+        for fragment in memory::FRAGMENTS {
+            std::fs::write(
+                place.guild().path(fragment),
+                "<!-- Imported from CLAUDE.md by `armada guild init`. -->\n",
+            )
+            .unwrap();
+        }
+        let data = data(
+            &run(
+                &Answers {
+                    divergence: "3\t0\n",
+                    remote: true,
+                },
+                &place,
+            )
+            .unwrap(),
+        );
+        let needy = data
+            .results
+            .iter()
+            .filter(|row| row.status.needs_action())
+            .count();
+        assert!(needy >= 5, "the case did not produce problems: {data:?}");
+        for row in &data.results {
+            assert_eq!(
+                row.status.needs_action(),
                 row.remedy.is_some(),
-                "`{}` reports a problem and no way to fix it",
-                row.check
+                "`{}` reports {:?} with remedy {:?}",
+                row.check,
+                row.status,
+                row.remedy
             );
         }
     }
 
-    /// The layout row names `~/.armada` and never a real home directory.
+    /// The directories row names `~/.armada` and never a real home directory.
     #[test]
     fn no_row_carries_a_real_home_directory() {
         let (_home, place) = machine_with_a_guild();
@@ -472,8 +567,18 @@ mod tests {
             )
             .unwrap(),
         );
-        let layout = find(&data, "layout", "complete").expect("no layout row");
-        assert_eq!(layout.detail, "~/.armada complete");
+        let row = find(&data, "~/.armada", "all present").expect("no directories row");
+        assert_eq!(row.detail, "guild/, jobs/ and workspaces/, all present");
         let _ = PathBuf::new();
+    }
+
+    /// `a`, `a and b`, `a, b and c` — the shape every detail here is built from.
+    #[test]
+    fn a_list_is_written_the_way_a_sentence_writes_one() {
+        assert_eq!(written(&["a"]), "a");
+        assert_eq!(written(&["a", "b"]), "a and b");
+        assert_eq!(written(&["a", "b", "c"]), "a, b and c");
+        let none: [&str; 0] = [];
+        assert_eq!(written(&none), "");
     }
 }

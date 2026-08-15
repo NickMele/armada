@@ -56,6 +56,7 @@ pub struct Column {
     header: String,
     align: Align,
     flexible: bool,
+    floor: usize,
 }
 
 impl Column {
@@ -68,6 +69,7 @@ impl Column {
             header: header.to_string(),
             align: Align::Left,
             flexible: false,
+            floor: 0,
         }
     }
 
@@ -79,12 +81,26 @@ impl Column {
             header: header.to_string(),
             align: Align::Left,
             flexible: true,
+            floor: 0,
         }
     }
 
     /// Line this column up on its right edge.
     pub fn right(mut self) -> Column {
         self.align = Align::Right;
+        self
+    }
+
+    /// Never narrower than this, whatever this table's own rows need.
+    ///
+    /// **For a set of tables that must line up with each other.** `armada
+    /// doctor` draws one table per check, and each measures only its own rows —
+    /// so a group holding `ok` and a group holding `missing` would start their
+    /// second column five columns apart, and the reader would lose the one
+    /// alignment the whole report is scanned on. The caller measures across all
+    /// the groups once and tells each table the answer.
+    pub fn at_least(mut self, floor: usize) -> Column {
+        self.floor = floor;
         self
     }
 }
@@ -388,7 +404,7 @@ impl Table {
                 self.rows
                     .iter()
                     .map(|row| row.cells.get(*index).map_or(0, Cell::width))
-                    .chain(std::iter::once(header))
+                    .chain([header, column.floor])
                     .max()
                     .unwrap_or(0)
             })

@@ -23,7 +23,7 @@
 //! defence against it is structural rather than a rule anyone has to remember.
 
 use armada_core::ctx::Run;
-use armada_core::envelope::{Asked, Envelope, Finding, GuildChoice, Health, MachineInitData};
+use armada_core::envelope::{Asked, Envelope, Finding, GuildChoice, MachineInitData, Settled};
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_guild::interview::QUESTIONS;
 use armada_guild::layout::{DIRECTORIES, GUILD_DIRECTORIES};
@@ -105,12 +105,21 @@ pub fn run(
 
     results.push(create_layout(&place.armada_home, existed)?);
 
+    // **A machine that already has a guild is never asked the question again.**
+    // `--force` means "re-run against an existing `~/.armada/`" — which is the
+    // repair `armada doctor` names when a directory has gone missing — and it
+    // must not mean "rebuild the guild". Replacing a guild is `armada guild init
+    // --force`, which says so in the words you typed. This is the one path where
+    // getting it wrong is unrecoverable: he has a guild, built today, and
+    // `create_layout` above has already put back whatever was missing.
+    let already = place.guild().exists();
+
     // The one question. `--guild` and `--bundle` answer it from the command
     // line; `--defaults` takes the default, which is to build one now.
     let chosen = match (&options.guild, &options.bundle) {
         (Some(_), _) => FROM_REMOTE,
         (_, Some(_)) => FROM_BUNDLE,
-        _ if options.defaults => BUILD_ONE,
+        _ if already || options.defaults => BUILD_ONE,
         _ => ask.choose(QUESTION, &ANSWERS, BUILD_ONE),
     };
 
@@ -146,6 +155,13 @@ pub fn run(
             imported.push(format!("imported {path}"));
             imported.extend(guild::inventory_of(&place.guild()).facts());
         }
+        _ if already => {
+            // Nothing is asked and nothing is written. The layout has been put
+            // back and the guild is reported as found, which is what makes
+            // `armada init --force` a repair rather than a hazard.
+            imported.push("guild already here, left alone".to_string());
+            imported.extend(guild::inventory_of(&place.guild()).facts());
+        }
         _ => {
             // Import first, then the five questions — the order that makes the
             // interview five questions rather than thirty.
@@ -156,10 +172,11 @@ pub fn run(
                     inner: ask,
                     asked: &mut asked,
                 },
-                &InitOptions {
-                    force: options.force,
-                    ..InitOptions::default()
-                },
+                // **Never `options.force`.** `guild init --force` replaces a
+                // guild; this branch only runs when there is none to replace,
+                // and passing the flag through would have made
+                // `armada init --force` the command that destroyed one.
+                &InitOptions::default(),
             )?;
             if let Output::GuildInit(envelope) = &built {
                 imported = envelope.data.imported.clone();
@@ -226,15 +243,22 @@ fn create_layout(armada_home: &Path, existed: bool) -> Result<Finding, ArmadaErr
         std::fs::create_dir_all(armada_home.join("guild").join(directory))
             .map_err(|e| unwritable(armada_home, &e))?;
     }
-    Ok(Finding {
-        check: shown(armada_home) + "/",
+    Ok(Finding::settled(
+        shown(armada_home),
         // Re-running on a machine that already had it is `ok`, not `created`:
         // Armada made nothing, and saying it did would be the one thing a
         // checklist must never do.
-        status: if existed { Health::Ok } else { Health::Created },
-        detail: DIRECTORIES.join(", "),
-        remedy: None,
-    })
+        if existed {
+            Settled::Ok
+        } else {
+            Settled::Created
+        },
+        DIRECTORIES
+            .iter()
+            .map(|directory| format!("{directory}/"))
+            .collect::<Vec<_>>()
+            .join(", "),
+    ))
 }
 
 /// `~/.armada` however it is really spelled, as a person writes it.
@@ -260,6 +284,7 @@ mod tests {
     use super::*;
     use crate::ask::Defaults;
     use armada_core::ctx::{RunOutput, RunRequest, SpawnError};
+    use armada_core::envelope::Health;
     use std::cell::RefCell;
     use std::path::PathBuf;
 
@@ -402,6 +427,46 @@ mod tests {
         );
         let layout = data.results.last().unwrap();
         assert_eq!(layout.status, Health::Ok);
+    }
+
+    /// **The unrecoverable one, and the reason `doctor` may name this command.**
+    /// `armada init --force` used to pass its `--force` through to
+    /// `guild init`, so the repair `doctor` recommends for a missing `jobs/`
+    /// would have rebuilt a guild somebody had been writing for a year. It now
+    /// puts the directory back and leaves the guild untouched.
+    #[test]
+    fn a_forced_rerun_repairs_the_layout_and_leaves_an_existing_guild_alone() {
+        let (_home, place) = scratch();
+        init(&place, &Options::default()).unwrap();
+        std::fs::write(place.guild().path("voice.md"), "my own words\n").unwrap();
+        std::fs::remove_dir_all(place.armada_home.join("jobs")).unwrap();
+
+        let data = data(
+            &init(
+                &place,
+                &Options {
+                    force: true,
+                    ..Options::default()
+                },
+            )
+            .unwrap(),
+        );
+
+        assert!(
+            place.armada_home.join("jobs").is_dir(),
+            "jobs/ not restored"
+        );
+        assert_eq!(
+            std::fs::read_to_string(place.guild().path("voice.md")).unwrap(),
+            "my own words\n",
+            "a re-run overwrote a guild fragment"
+        );
+        assert_eq!(data.questions, 0, "a re-run asked the interview again");
+        assert!(
+            data.imported.iter().any(|f| f.contains("left alone")),
+            "{:?}",
+            data.imported
+        );
     }
 
     /// **A missing `claude` is fatal, and the checklist is still printed.** A

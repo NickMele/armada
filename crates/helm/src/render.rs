@@ -485,20 +485,6 @@ fn machine_table(rows: &[Finding], style: Style) -> Table {
     table
 }
 
-/// The `→` lines. **The point of `armada doctor`**: a check that reports a
-/// problem without the command that fixes it sends the reader to the
-/// documentation, which is most of what the verb exists to save.
-fn fix_lines(rows: &[Finding], style: Style) -> String {
-    let mut out = String::new();
-    for remedy in rows.iter().filter_map(|row| row.remedy.as_deref()) {
-        out.push_str(&format!(
-            "  {}\n",
-            style.paint(Role::SteelGrey, &format!("{} {remedy}", style.arrow()))
-        ));
-    }
-    out
-}
-
 /// *Do you already have a guild?* — **live**, as it is put to a person.
 ///
 /// Ends at the caret with a space and no newline, because that is where the
@@ -600,16 +586,78 @@ fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize
 }
 
 /// `armada doctor` — what this machine is missing.
+///
+/// **One table per check, not one flat table**, which is the one place this
+/// diverges from `armada init` beside it. `init` ticks each check off once, so a
+/// flat list *is* the grouping. `doctor` reports a check as many times as it has
+/// something to say — `guild` is drift plus one row per fragment still as
+/// imported — and a real report came back with three `guild` rows interleaved
+/// with `docker` and `manifest.db` and nothing to tell the reader which belonged
+/// together.
+///
+/// The check's name is hoisted out of the rows into a heading, because inside a
+/// group it is the same word on every line. What is left needs no column names,
+/// which is what [`Table::headerless`] is for, and the status column is given a
+/// floor so that the groups line up with each other rather than each measuring
+/// its own rows.
+///
+/// **The `→` line sits under its own row**, not in a block at the bottom. With
+/// one problem the two are the same; with three, a list at the end makes the
+/// reader match fixes to rows by eye.
 fn doctor(envelope: &Envelope<DoctorData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut out = machine_table(&data.results, style).render(style, width);
-    out.push('\n');
+    let mut out = String::new();
+
+    let widest = data
+        .results
+        .iter()
+        .map(|row| row.status.word().len())
+        .max()
+        .unwrap_or(0);
+
+    for check in checks_in_order(&data.results) {
+        out.push_str(&format!("  {}\n", style.strong(Role::SignalAmber, &check)));
+        let mut table = Table::new(vec![
+            Column::fixed("").at_least(widest),
+            Column::flexible(""),
+        ])
+        .headerless()
+        .indent(4);
+        for row in data.results.iter().filter(|row| row.check == check) {
+            table = table.row_with_note(
+                vec![
+                    token(row.status.word(), Role::for_health(row.status)),
+                    detail_cell(style, Some(row.detail.as_str())),
+                ],
+                row.remedy
+                    .as_deref()
+                    .map(|remedy| format!("{} {remedy}", style.arrow())),
+            );
+        }
+        out.push_str(&table.render(style, width));
+        out.push('\n');
+    }
+
     out.push_str(&match data.headline {
         Some(word) => headline(style, word, &data.tally),
         None => summary(style, envelope.status, &data.tally),
     });
-    out.push_str(&fix_lines(&data.results, style));
     out
+}
+
+/// Every check named in the rows, once each, in the order they first appear.
+///
+/// Order comes from the rows rather than from a list here, so a check added to
+/// `verbs::doctor` appears without this file being told about it — and the run
+/// order, which is deliberate, is the reading order.
+fn checks_in_order(rows: &[Finding]) -> Vec<String> {
+    let mut seen: Vec<String> = Vec::new();
+    for row in rows {
+        if !seen.contains(&row.check) {
+            seen.push(row.check.clone());
+        }
+    }
+    seen
 }
 
 /// `armada guild pull` and `armada guild push`.

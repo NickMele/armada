@@ -30,8 +30,8 @@
 
 use armada_core::envelope::{
     Asked, CheckData, CleanData, DispatchData, DoctorData, Envelope, Finding, FleetLsData,
-    GrantedCommand, GuildChoice, GuildSyncData, Headline, Health, InitData, JobRow,
-    MachineInitData, PortReport, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData,
+    GrantedCommand, GuildChoice, GuildSyncData, Headline, InitData, JobRow, MachineInitData,
+    PortReport, Problem, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled,
     SkillsData, SpawnData, StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
@@ -640,13 +640,12 @@ fn skills_show_matches_its_fixture() {
 // ------------------------------------------------------------------- M2: the
 // three layouts that came up out of `pending/`
 
-fn finding(check: &str, status: Health, detail: &str, remedy: Option<&str>) -> Finding {
-    Finding {
-        check: check.to_string(),
-        status,
-        detail: detail.to_string(),
-        remedy: remedy.map(str::to_string),
-    }
+fn settled(check: &str, status: Settled, detail: &str) -> Finding {
+    Finding::settled(check, status, detail)
+}
+
+fn needs(check: &str, status: Problem, detail: &str, remedy: &str) -> Finding {
+    Finding::needs(check, status, detail, remedy)
 }
 
 /// **`armada init` on a machine that has never seen Armada** — the transcript,
@@ -669,20 +668,15 @@ fn armada_init_matches_its_fixture() {
         Status::Ready,
         MachineInitData {
             results: vec![
-                finding("git", Health::Found, "2.51.0", None),
-                finding("claude", Health::Found, "2.0.14", None),
-                finding(
+                settled("git", Settled::Found, "2.51.0"),
+                settled("claude", Settled::Found, "2.0.14"),
+                needs(
                     "docker",
-                    Health::Missing,
+                    Problem::Missing,
                     "not required by every repo",
-                    None,
+                    "not required by every repo",
                 ),
-                finding(
-                    "~/.armada/",
-                    Health::Created,
-                    "guild, jobs, workspaces",
-                    None,
-                ),
+                settled("~/.armada", Settled::Created, "guild/, jobs/, workspaces/"),
             ],
             guild: Some(GuildChoice {
                 question: "Do you already have a guild?".to_string(),
@@ -716,36 +710,56 @@ fn armada_init_matches_its_fixture() {
 
 /// **`armada doctor`, and the `→` lines that are the point of it.**
 ///
-/// One correction to the transcribed fixture, made by hand and recorded here
-/// rather than absorbed: the drawing's summary reads `4 ok · 1 missing · 2
-/// warnings` over a table with **three** `ok` rows. Six rows, seven counted.
-/// The tally is derived from the rows by [`armada_helm::verbs`], so shipping the
-/// drawing's arithmetic would have meant either freezing a summary that
-/// miscounts its own table or hand-writing a tally the code cannot produce.
-/// The layout is untouched; one digit is not the layout.
+/// Two corrections to the transcribed fixture, both made by hand and recorded
+/// here rather than absorbed.
+///
+/// The first: the drawing's summary reads `4 ok · 1 missing · 2 warnings` over a
+/// table with **three** `ok` rows. Six rows, seven counted. The tally is derived
+/// from the rows by [`armada_helm::verbs`], so shipping the drawing's arithmetic
+/// would have meant either freezing a summary that miscounts its own table or
+/// hand-writing a tally the code cannot produce. One digit is not the layout.
+///
+/// The second is the layout, and it came from running the verb: the drawing is a
+/// flat table with its `→` lines collected underneath, and a real report of it
+/// had three `guild` rows scattered among unrelated ones with nothing to say
+/// which belonged together. This fixture freezes the grouped form — one table
+/// per check, the check's name as its heading, and each `→` line under the row
+/// it answers.
+///
+/// **The `partial guild` row now carries a fix and previously did not.** The old
+/// note said a fragment's fix was prose rather than a command and therefore no
+/// remedy; the reader it reached could not tell what he was being asked to do.
+/// A sentence naming the file and what to do with it is a fix.
 #[test]
 fn doctor_matches_its_fixture() {
     let results = vec![
-        finding("git", Health::Ok, "2.51.0", None),
-        finding("claude", Health::Ok, "2.0.14", None),
-        finding(
+        settled("git", Settled::Ok, "2.51.0"),
+        settled("claude", Settled::Ok, "2.0.14"),
+        needs(
             "docker",
-            Health::Missing,
+            Problem::Missing,
             "compose driver unavailable",
-            Some("install docker, or accept that compose repos will not start"),
+            "install docker, or accept that compose repos will not start",
         ),
-        finding(
+        needs(
+            "~/.armada",
+            Problem::Missing,
+            "jobs/ and workspaces/ are missing; Jobs and worktrees go there",
+            "armada init --force",
+        ),
+        needs(
             "guild",
-            Health::Stale,
+            Problem::Stale,
             "3 commits behind origin",
-            Some("armada guild pull"),
+            "armada guild pull",
         ),
-        // **No remedy, and that is not an omission.** The fix for a fragment
-        // still as imported is to write it, which is prose rather than a
-        // command — and a `→` line reading "edit it" is the documentation
-        // round-trip `doctor` exists to save.
-        finding("guild", Health::Partial, "voice.md still as imported", None),
-        finding("manifest.db", Health::Ok, "2 workspaces, 0 orphans", None),
+        needs(
+            "guild",
+            Problem::Partial,
+            "voice.md still as imported",
+            "open ~/.armada/guild/voice.md and say it in your own words",
+        ),
+        settled("manifest.db", Settled::Ok, "2 workspaces, 0 orphans"),
     ];
     let output = Output::Doctor(Box::new(Envelope::ok(
         "doctor",

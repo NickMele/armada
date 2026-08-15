@@ -51,6 +51,25 @@ use std::path::{Path, PathBuf};
 /// `PLAN.md` §13.1's tree.
 pub const DIRECTORIES: [&str; 3] = ["guild", "jobs", "workspaces"];
 
+/// What each of [`DIRECTORIES`] is for, in the words a reader needs to decide
+/// whether its absence matters.
+///
+/// **`armada doctor` used to report `missing layout — no jobs, workspaces`**,
+/// which names an implementation and a set difference and tells a reader
+/// nothing. A directory is worth restoring because something writes to it, so
+/// the check says what.
+/// **Kept short on purpose.** It is read into one line of a `doctor` row beside
+/// the paths themselves, and a detail that truncates has lost the half a reader
+/// came for.
+pub fn holds(directory: &str) -> &'static str {
+    match directory {
+        "guild" => "your guild",
+        "jobs" => "Jobs",
+        "workspaces" => "worktrees",
+        _ => "nothing Armada knows about",
+    }
+}
+
 /// Everything under `~/.armada/` that describes **this machine** and therefore
 /// never leaves it.
 ///
@@ -147,6 +166,20 @@ mod tests {
                  be un-pushed (PLAN.md §13.5)."
             );
             assert_eq!(sync_of(entry), Sync::Never);
+        }
+    }
+
+    /// Every directory `armada init` creates can say what it is for. A new one
+    /// with no answer would report `nothing Armada knows about`, which is a
+    /// failing test rather than a row a reader cannot act on.
+    #[test]
+    fn every_created_directory_says_what_it_holds() {
+        for directory in DIRECTORIES {
+            assert_ne!(
+                holds(directory),
+                "nothing Armada knows about",
+                "`{directory}` is created and cannot say why it matters"
+            );
         }
     }
 

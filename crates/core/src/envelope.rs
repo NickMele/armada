@@ -836,21 +836,129 @@ impl DoctorData {
 ///
 /// **`remedy` is the point of the command.** `docs/commands/doctor.md`: a check
 /// that reports a problem without the command that fixes it sends the reader to
-/// the documentation, which is most of what `doctor` exists to save. It is
-/// `Option` because a check that passed has nothing to fix, and for no other
-/// reason — a failing check without one is a defect.
+/// the documentation, which is most of what `doctor` exists to save.
+///
+/// # A problem without a remedy is not representable
+///
+/// The rule used to be a sentence in this comment, and three checks did not
+/// follow it — `missing layout` and both `partial guild` rows reached a real
+/// reader with nothing to act on. So it is a type now. The struct is
+/// `#[non_exhaustive]`, which means no crate but this one may write a `Finding {
+/// .. }` literal; the only ways in are [`Finding::settled`], which cannot name a
+/// problem, and [`Finding::needs`], whose remedy is a `String` and not an
+/// `Option`. A check that reports a problem and offers no fix now fails to
+/// compile rather than failing to help.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct Finding {
-    /// What was checked: `git`, `docker`, `guild`, `manifest.db`.
+    /// What was checked: `git`, `docker`, `guild`, `~/.armada`.
     pub check: String,
     /// How it stands.
     pub status: Health,
     /// The specific delta rather than a verdict — `3 commits behind origin`,
     /// not `out of date`.
     pub detail: String,
-    /// The exact command that would fix it.
+    /// The exact command that would fix it, or the sentence that says how.
+    /// Present on every [`Problem`] and absent on everything else.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remedy: Option<String>,
+}
+
+impl Finding {
+    /// A check with nothing to do about it.
+    pub fn settled(
+        check: impl Into<String>,
+        status: Settled,
+        detail: impl Into<String>,
+    ) -> Finding {
+        Finding {
+            check: check.into(),
+            status: status.health(),
+            detail: detail.into(),
+            remedy: None,
+        }
+    }
+
+    /// A check that found a problem, **and the fix for it**.
+    ///
+    /// `remedy` is a `String` rather than an `Option<String>` on purpose: this
+    /// is the constructor that makes "every non-`ok` row carries a fix line"
+    /// hold by construction. It is a command where one exists and a sentence
+    /// where none does — *open `~/.armada/guild/voice.md` and say it in your own
+    /// words* is a fix; *out of date* is not.
+    pub fn needs(
+        check: impl Into<String>,
+        status: Problem,
+        detail: impl Into<String>,
+        remedy: impl Into<String>,
+    ) -> Finding {
+        Finding {
+            check: check.into(),
+            status: status.health(),
+            detail: detail.into(),
+            remedy: Some(remedy.into()),
+        }
+    }
+}
+
+/// The half of [`Health`] that means nothing needs doing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Settled {
+    /// Present and current — `doctor`'s word.
+    Ok,
+    /// Present, with the version that was found — `armada init`'s word.
+    Found,
+    /// Armada made it, just now.
+    Created,
+}
+
+impl Settled {
+    /// The wire spelling.
+    pub const fn health(self) -> Health {
+        match self {
+            Settled::Ok => Health::Ok,
+            Settled::Found => Health::Found,
+            Settled::Created => Health::Created,
+        }
+    }
+}
+
+/// The half of [`Health`] that means something does.
+///
+/// **Split from [`Settled`] so that a remedy can be required for one and
+/// forbidden for the other**, which is the whole mechanism behind the rule in
+/// [`Finding`]'s own documentation. A single enum could only ever ask nicely.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Problem {
+    /// Not there at all.
+    Missing,
+    /// There, and behind what it should be.
+    Stale,
+    /// There, and only half set up.
+    Partial,
+    /// Could not be checked, because the network was not reachable.
+    Offline,
+}
+
+impl Problem {
+    /// The wire spelling.
+    pub const fn health(self) -> Health {
+        match self {
+            Problem::Missing => Health::Missing,
+            Problem::Stale => Health::Stale,
+            Problem::Partial => Health::Partial,
+            Problem::Offline => Health::Offline,
+        }
+    }
+
+    /// Every one of them, for the test that holds the two halves against
+    /// [`Health`].
+    pub const ALL: [Problem; 4] = [
+        Problem::Missing,
+        Problem::Stale,
+        Problem::Partial,
+        Problem::Offline,
+    ];
 }
 
 /// How one thing on this machine stands — for `armada init`'s preflight and
@@ -915,6 +1023,15 @@ impl Health {
     /// Whether this state is a warning: real, and not a failure.
     pub const fn is_warning(self) -> bool {
         matches!(self, Health::Stale | Health::Partial | Health::Offline)
+    }
+
+    /// Whether this state asks the reader to do something.
+    ///
+    /// The two halves — [`Settled`] and [`Problem`] — partition this enum, and
+    /// the test below holds them against it so a state added to one is not
+    /// quietly absent from both.
+    pub const fn needs_action(self) -> bool {
+        self.is_failure() || self.is_warning()
     }
 }
 
@@ -1264,6 +1381,55 @@ pub struct AnswerData {
 mod tests {
     use super::*;
     use crate::error::ErrClass;
+
+    /// **Every state that asks the reader to do something carries the fix.**
+    ///
+    /// Asserted over [`Problem::ALL`] rather than over the checks that happen to
+    /// exist, because the point is the type: there is no way to reach one of
+    /// these four without a remedy, so this holds for checks nobody has written
+    /// yet.
+    #[test]
+    fn a_finding_that_reports_a_problem_cannot_omit_the_fix() {
+        for problem in Problem::ALL {
+            let finding = Finding::needs("guild", problem, "something is wrong", "do this");
+            assert!(finding.status.needs_action(), "{problem:?}");
+            assert_eq!(finding.remedy.as_deref(), Some("do this"));
+        }
+    }
+
+    /// The two halves partition [`Health`]. A state added to one and not the
+    /// other would be either unreachable or reachable without a fix, and this is
+    /// what makes that a failing test rather than a discovery.
+    #[test]
+    fn the_two_halves_of_health_partition_it() {
+        for problem in Problem::ALL {
+            assert!(problem.health().needs_action(), "{problem:?}");
+        }
+        for settled in [Settled::Ok, Settled::Found, Settled::Created] {
+            assert!(!settled.health().needs_action(), "{settled:?}");
+            assert!(Finding::settled("git", settled, "2.51.0").remedy.is_none());
+        }
+        // Seven states, and every one of them is in exactly one half.
+        let covered = Problem::ALL.len() + 3;
+        for health in [
+            Health::Ok,
+            Health::Found,
+            Health::Created,
+            Health::Missing,
+            Health::Stale,
+            Health::Partial,
+            Health::Offline,
+        ] {
+            assert!(
+                Problem::ALL.iter().any(|p| p.health() == health)
+                    || [Settled::Ok, Settled::Found, Settled::Created]
+                        .iter()
+                        .any(|s| s.health() == health),
+                "{health:?} is in neither half"
+            );
+        }
+        assert_eq!(covered, 7);
+    }
 
     fn failed(id: &str, class: ErrClass) -> ResultRow {
         let mut row = ResultRow::new(id, Status::Failed);

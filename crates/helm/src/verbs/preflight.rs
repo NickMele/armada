@@ -20,7 +20,7 @@
 //! spawn, and that failure *is* the answer.
 
 use armada_core::ctx::{Run, RunRequest, StdioMode};
-use armada_core::envelope::{Finding, Health};
+use armada_core::envelope::{Finding, Problem, Settled};
 use armada_core::error::{ArmadaError, ErrClass};
 use std::path::Path;
 use std::time::Duration;
@@ -81,15 +81,14 @@ pub fn run(run: &impl Run, cwd: &Path, doctor: bool) -> Preflight {
 
     for tool in TOOLS {
         match version(run, cwd, tool.program) {
-            Some(found) => results.push(Finding {
-                check: tool.program.to_string(),
+            Some(found) => results.push(Finding::settled(
+                tool.program,
                 // **`found` for `init`, `ok` for `doctor`.** A preflight is
                 // *looking* for something and a check is *confirming* it, and
                 // the two verbs say so in their own words.
-                status: if doctor { Health::Ok } else { Health::Found },
-                detail: found,
-                remedy: None,
-            }),
+                if doctor { Settled::Ok } else { Settled::Found },
+                found,
+            )),
             None => {
                 if tool.fatal {
                     fatal.get_or_insert(ArmadaError {
@@ -99,12 +98,16 @@ pub fn run(run: &impl Run, cwd: &Path, doctor: bool) -> Preflight {
                         next_action: Some(tool.when_missing.to_string()),
                     });
                 }
-                results.push(Finding {
-                    check: tool.program.to_string(),
-                    status: Health::Missing,
-                    detail: tool.when_missing.to_string(),
-                    remedy: doctor.then(|| tool.when_missing.to_string()),
-                });
+                // **The remedy is recorded whichever verb asked**, and whether a
+                // `→` line is drawn is the render's decision rather than this
+                // one: `armada init` is a transcript of a setup and draws none.
+                // Carrying it either way is what lets the type require it.
+                results.push(Finding::needs(
+                    tool.program,
+                    Problem::Missing,
+                    tool.when_missing,
+                    tool.when_missing,
+                ));
             }
         }
     }
@@ -155,6 +158,7 @@ fn parse_version(banner: &str) -> Option<String> {
 mod tests {
     use super::*;
     use armada_core::ctx::{RunOutput, SpawnError, SpawnErrorKind};
+    use armada_core::envelope::Health;
     use std::cell::RefCell;
 
     struct Fake {
@@ -265,16 +269,36 @@ mod tests {
         assert_eq!(run_at(&run, true).results[0].status, Health::Ok);
     }
 
-    /// A `→` line is `doctor`'s, and `init` has none: `init` is a transcript of
-    /// a setup, not a report of what to go and fix.
+    /// **Every missing tool carries its fix, whichever verb asked.** Whether a
+    /// `→` line is *drawn* is the render's decision — `armada init` is a
+    /// transcript of a setup and draws none — but the finding knows it either
+    /// way, which is what lets `Finding::needs` require it.
     #[test]
-    fn only_doctor_carries_the_line_that_names_the_fix() {
+    fn a_missing_tool_carries_the_line_that_names_the_fix_for_both_verbs() {
         let run = fake(&[("git", "git version 2.51.0\n"), ("claude", "2.0.14\n")]);
-        assert!(run_at(&run, false).results[2].remedy.is_none());
-        assert_eq!(
-            run_at(&run, true).results[2].remedy.as_deref(),
-            Some("not required by every repo")
-        );
+        for doctor in [false, true] {
+            assert_eq!(
+                run_at(&run, doctor).results[2].remedy.as_deref(),
+                Some("not required by every repo"),
+                "doctor={doctor}"
+            );
+        }
+    }
+
+    /// The one rule the type now enforces, held against a real pass.
+    #[test]
+    fn no_row_reports_a_problem_without_a_fix() {
+        let run = fake(&[("git", "git version 2.51.0\n")]);
+        for row in run_at(&run, true).results {
+            assert_eq!(
+                row.status.needs_action(),
+                row.remedy.is_some(),
+                "`{}` reports {:?} and {:?}",
+                row.check,
+                row.status,
+                row.remedy
+            );
+        }
     }
 
     /// Every call carries Armada's own deadline. `doctor` is run *because*

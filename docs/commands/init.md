@@ -20,9 +20,14 @@ armada init [--guild <remote>] [--bundle <path>] [--defaults] [--json]
 | `--guild <remote>` | git remote URL | — | Skip the prompt and pull an existing guild from this remote. |
 | `--bundle <path>` | file path | — | Skip the prompt and import an existing guild from a bundle. |
 | `--defaults` | flag | off | Take the default answer to every interview question. Leaves a **working** guild, not an empty one, and `armada doctor` reports it as incomplete. |
-| `--force` | flag | off | Re-run against an existing `~/.armada/`. Refuses without this. |
+| `--force` | flag | off | Re-run against an existing `~/.armada/`, recreating whatever is missing. Refuses without this. |
 
 `--guild` and `--bundle` are mutually exclusive.
+
+**`--force` never replaces a guild.** A re-run puts back any missing directory and, if a guild is
+already here, does not ask the question and does not write a byte of it — which is what makes
+`armada init --force` the repair [`doctor.md`](doctor.md) names for a missing `jobs/`. Replacing
+a guild is [`guild/init.md`](guild/init.md) `--force`, which says so in the words you typed.
 
 ## How it works
 
@@ -48,11 +53,11 @@ interview prompt as it was put, and the verdict. Frozen byte for byte by
 `tests/golden/render/init-machine.plain`.
 
 ```
-  STATUS   CHECK       DETAIL                      TIME
-  found    git         2.51.0                         -
-  found    claude      2.0.14                         -
-  missing  docker      not required by every repo     -
-  created  ~/.armada/  guild, jobs, workspaces        -
+  STATUS   CHECK      DETAIL
+  found    git        2.51.0
+  found    claude     2.0.14
+  missing  docker     not required by every repo
+  created  ~/.armada  guild/, jobs/, workspaces/
 
 Do you already have a guild?
   1 pull from a remote  2 import a bundle  3 build one now  > 3
