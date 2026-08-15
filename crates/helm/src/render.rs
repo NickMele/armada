@@ -485,10 +485,10 @@ fn ls_facts(data: &FleetLsData) -> Vec<String> {
 /// **Order is priority and not importance-of-verb.** `enter` is first because it
 /// is what a person tries on a table with a cursor; `d detail` is second for the
 /// same reason, and because it is the only key that answers the one column that
-/// is ever a call to action; `r reap` is last because it is occasional
-/// housekeeping rather than something done while watching. What falls off the
-/// end at a given width falls off in that order, and [`QUIT`] is never one of
-/// them.
+/// is ever a call to action; `/ filter` is last because a filter over two rows
+/// is worth nothing, and a fleet large enough to need one is a fleet whose
+/// reader has already gone looking for `?`. What falls off the end at a given
+/// width falls off in that order, and [`QUIT`] is never one of them.
 ///
 /// **`d detail` is on the line now, and it is the overflow that pays for it.**
 /// It was left unnamed while the line had no way to shed anything: eight pairs
@@ -504,8 +504,8 @@ fn bridge_key_pairs(selected: Option<JobState>) -> [(&'static str, &'static str)
         ("p", armada_core::fleet::bridge::pause_key(selected)),
         ("x", "abort"),
         ("a", "answer"),
-        ("/", "filter"),
         ("r", "reap"),
+        ("/", "filter"),
     ]
 }
 
