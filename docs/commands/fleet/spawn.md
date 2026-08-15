@@ -53,13 +53,27 @@ and no second answer to *is this pid still mine*.
 
 ```
   STATUS      STEP      DETAIL                           TIME
-  classified  workflow  feature, confidence 0.91         0.8s
-  created     worktree  ~/.armada/workspaces/rate-limit  0.3s
-  claimed     ports     5470-5479                           -
-  started     drone     job 8f2a, plan step                 -
+  CLASSIFIED  workflow  feature, confidence 0.91         0.8s
+  CREATED     worktree  ~/.armada/workspaces/rate-limit  0.3s
+  CLAIMED     ports     5470-5479                           -
+  STARTED     drone     job 8f2a, plan step                 -
 
 RUNNING  rate-limit, armada fleet board rate-limit to take over
 ```
+
+**The four rows are drawn live, then replaced by the table above.** A spawn
+makes a worktree, runs `armada manifest init` and starts a Drone, and it used to
+print nothing at all until the last of them was done — the same silence
+`armada manifest check` had. It is the same component answering
+([`render.md`](../render.md)): an inline viewport on **stderr**, only when stderr
+is a terminal, never under `--json`, and one row per step from the first frame
+so the step it is stuck on has a name. The live table and the final one share
+their columns rather than agreeing on them, so the two cannot drift.
+
+**The table opens once the classification is settled**, because a spawn below
+the confidence threshold stops and asks, and the prompt reserves a viewport on
+stderr of its own. The `classified` row is not lost to that — it appears the
+moment the table opens, carrying the time it actually took.
 
 **The confidence is on the screen and not only in the payload.** A guess has to be visible as
 a guess, or nobody knows to override it. An override reports *you named it* rather than a

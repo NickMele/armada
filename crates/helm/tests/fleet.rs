@@ -357,8 +357,15 @@ fn spawned(output: &Output) -> armada_core::envelope::SpawnData {
 /// Spawn a Job and remember its Drone.
 fn spawn(scratch: &Scratch, run: &Harness, options: &Spawn) -> armada_core::envelope::SpawnData {
     let data = spawned(
-        &fleet::spawn(run, &FrozenClock::new(), &scratch.place(), options, None)
-            .expect("the Job spawns"),
+        &fleet::spawn(
+            run,
+            &FrozenClock::new(),
+            &scratch.place(),
+            options,
+            None,
+            &mut armada_helm::render::progress::Silent,
+        )
+        .expect("the Job spawns"),
     );
     scratch.watch(&data.uuid);
     data
@@ -436,6 +443,7 @@ fn two_jobs_run_at_the_same_time() {
             &scratch.place(),
             &task(&format!("add rate limiting {STAY_ALIVE}")),
             None,
+            &mut armada_helm::render::progress::Silent,
         )
         .unwrap(),
     );
@@ -448,6 +456,7 @@ fn two_jobs_run_at_the_same_time() {
             &scratch.place(),
             &task(&format!("fix the nightly flake {STAY_ALIVE}")),
             None,
+            &mut armada_helm::render::progress::Silent,
         )
         .unwrap(),
     );
@@ -563,6 +572,7 @@ fn a_low_confidence_classification_asks_which_workflow_this_is() {
             &scratch.place(),
             &task("something ambiguous"),
             Some(&mut answering),
+            &mut armada_helm::render::progress::Silent,
         )
         .expect("the Job spawns once the question is answered"),
     );
@@ -596,6 +606,7 @@ fn the_guess_is_the_option_already_selected() {
             &scratch.place(),
             &task("something ambiguous"),
             Some(&mut answering),
+            &mut armada_helm::render::progress::Silent,
         )
         .unwrap(),
     );
@@ -619,6 +630,7 @@ fn a_low_confidence_spawn_with_nobody_to_ask_refuses_rather_than_guessing() {
         &scratch.place(),
         &task("something ambiguous"),
         None,
+        &mut armada_helm::render::progress::Silent,
     )
     .expect_err("a coin flip must not spend a budget unattended");
 
@@ -673,6 +685,7 @@ fn the_confidence_bar_is_overridable_per_spawn() {
                 ..task("something ambiguous")
             },
             None,
+            &mut armada_helm::render::progress::Silent,
         )
         .expect("0.30 clears a bar of 0.25"),
     );
@@ -691,6 +704,7 @@ fn the_confidence_bar_is_overridable_per_spawn() {
             ..task("add rate limiting")
         },
         None,
+        &mut armada_helm::render::progress::Silent,
     )
     .expect_err("0.94 does not clear a bar of 0.99");
     assert_eq!(refused.class, armada_core::error::ErrClass::BadInvocation);
@@ -802,6 +816,7 @@ fn a_spawn_that_could_not_prepare_releases_what_it_had_and_marks_the_job_ended()
         &scratch.place(),
         &task("add rate limiting"),
         None,
+        &mut armada_helm::render::progress::Silent,
     )
     .expect_err("the worktree could not be made");
     assert_eq!(error.class, armada_core::error::ErrClass::ToolFailed);
@@ -831,6 +846,7 @@ fn a_dry_run_reports_the_plan_and_writes_no_record() {
             ..task("add rate limiting to the API")
         },
         None,
+        &mut armada_helm::render::progress::Silent,
     )
     .unwrap();
 
@@ -858,6 +874,7 @@ fn an_unknown_workflow_is_refused_before_anything_is_created() {
             ..task("tidy this up")
         },
         None,
+        &mut armada_helm::render::progress::Silent,
     )
     .unwrap_err();
     assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);

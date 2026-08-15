@@ -38,6 +38,9 @@ use std::path::{Path, PathBuf};
 
 use crate::args::Spawn;
 use crate::ask::{Ask, Choice};
+use crate::render::palette::Role;
+// `Verdict` is already Fleet's own, so the progress one is `Reached` here.
+use crate::render::progress::{Planned, Progress, Shape, SpawnStep, Verdict as Reached};
 use crate::verbs::Output;
 
 /// Everything a Fleet verb needs from the machine, gathered at the entrypoint.
@@ -191,17 +194,39 @@ fn settle<C: Clock>(
 /// **A guess stops and asks.** `ask` is `Some` only when a person is at the
 /// other end; see [`settle_workflow`] for why a low-confidence spawn refuses
 /// rather than proceeding when nobody is.
+///
+/// **It reports itself as it goes, in the table it will answer in.** A spawn
+/// makes a worktree, runs `armada manifest init` and starts a Drone, and until
+/// this it printed nothing at all until every one of them was done — the same
+/// silence `armada manifest check` had before `render/live.rs`, and answered
+/// the same way rather than a second way. `progress` is the same trait,
+/// `Shape::Spawn` picks the same columns the final table uses, and
+/// [`SpawnStep`] is the one place either table learns the words.
+///
+/// **The table opens after the classification is settled, never before.** A
+/// low-confidence spawn asks, and `ask/select.rs` reserves an inline viewport
+/// on stderr of its own — two of them on one stream is a corrupted screen. The
+/// classify row is not lost to that: it is reported the moment the table opens,
+/// with the interval it actually took, so all four rows are present from the
+/// first frame and the steps that made the run feel hung are the ones drawn
+/// live.
 pub fn spawn<R: Run, C: Clock>(
     run: &R,
     now: &C,
     place: &Where,
     options: &Spawn,
     ask: Option<&mut dyn Ask>,
+    progress: &mut dyn Progress,
 ) -> Result<Output, ArmadaError> {
     let repo_root = repository(run, place, options)?;
     let repo = home::repo_name(&repo_root);
 
+    let classify_from = now.mono();
     let (guessed, classify_ms) = classify(run, now, &repo_root, options)?;
+    let classify_to = now.mono();
+    // Blocks on a person when the classification was a guess, which is why the
+    // reading above it is taken before this line and not after: the time
+    // somebody took to answer is not time spent classifying.
     let classification = settle_workflow(guessed, options, ask)?;
     let workflow = read_workflow(place, &classification.workflow)?;
     let budget = workflow::override_budget(workflow.budget, &options.budget)?;
@@ -268,7 +293,33 @@ pub fn spawn<R: Run, C: Clock>(
     // orphaned worktree holding a port block nobody can name.
     store.save(&record)?;
 
+    // **All four rows from the first frame**, exactly as `check` plans its
+    // table by name rather than by count: a spawn stuck making a worktree
+    // should show which step that is and that three more are coming, not a
+    // number. None of them has a configured deadline, so none claims one —
+    // `render/live.rs` leaves that cell empty rather than printing `timeout 0s`.
+    let planned: Vec<Planned<'_>> = SpawnStep::ALL
+        .iter()
+        .map(|step| Planned {
+            id: step.id(),
+            timeout_ms: None,
+        })
+        .collect();
+    progress.begin(Shape::Spawn, &planned, classify_from);
+    // Already done by the time the table can safely open, and reported with the
+    // interval it took rather than as a row that mysteriously starts complete.
+    progress.started(SpawnStep::Classify.id());
+    progress.tick(classify_to);
+    let (classified, role) = crate::render::spawn_classified(&record.workflow, record.confidence);
+    progress.finished(
+        SpawnStep::Classify.id(),
+        Reached::Word(SpawnStep::Classify.done(), role),
+        Some(&classified),
+    );
+
     let started = now.mono();
+    progress.tick(started);
+    progress.started(SpawnStep::Worktree.id());
     if let Err(error) = worktree::add(run, &repo_root, &path, &branch) {
         // **A failed spawn cleans up after itself** (`commands/fleet/spawn.md`).
         // A half-created worktree holding a claimed block is released before the
@@ -282,15 +333,42 @@ pub fn spawn<R: Run, C: Clock>(
         store.save(&record)?;
         return Err(error);
     }
+    progress.tick(now.mono());
+    progress.finished(
+        SpawnStep::Worktree.id(),
+        Reached::Word(SpawnStep::Worktree.done(), Role::BeaconGreen),
+        Some(&place.shown(&path)),
+    );
+
+    progress.started(SpawnStep::Ports.id());
     record.port_block = manifest::init(run, &place.exe, &path)?;
     record.state = JobState::Running;
     store.save(&record)?;
     let prepare_ms = now.mono().saturating_sub(started);
+    progress.tick(now.mono());
+    // A workspace with nothing to collide over claims nothing, and the row says
+    // so in grey rather than reporting a green success at claiming no ports —
+    // which is the same distinction `render.rs`'s final row draws.
+    progress.finished(
+        SpawnStep::Ports.id(),
+        Reached::Word(
+            SpawnStep::Ports.done(),
+            match record.port_block {
+                Some(_) => Role::BeaconGreen,
+                None => Role::SteelGrey,
+            },
+        ),
+        record
+            .port_block
+            .map(|b| format!("{}-{}", b.from, b.to))
+            .as_deref(),
+    );
 
     // **The Drone is started detached and `spawn` returns.** That is the whole
     // purpose of Fleet — five Jobs at once with one thing to watch — and it is
     // why nothing here waits, reads a ledger, or reports a spend: the Drone is
     // still working when this function ends.
+    progress.started(SpawnStep::Drone.id());
     record.drone = Some(start_drone(
         run,
         place,
@@ -299,6 +377,12 @@ pub fn spawn<R: Run, C: Clock>(
         argv::spawn_argv(&uuid, &prompt(&workflow, &step, &options.task)),
     )?);
     store.save(&record)?;
+    progress.tick(now.mono());
+    progress.finished(
+        SpawnStep::Drone.id(),
+        Reached::Word(SpawnStep::Drone.done(), Role::BeaconGreen),
+        Some(&format!("job {}, {} step", job::short(&uuid), step)),
+    );
 
     Ok(envelope(
         &record,

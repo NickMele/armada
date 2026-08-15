@@ -149,7 +149,7 @@ fn job_summary(style: Style, state: JobState, facts: &[String]) -> String {
 /// the documentation.
 fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut table = Table::new(columns("step", "detail", true)).indent(2);
+    let mut table = Table::new(columns_for(progress::Shape::Spawn)).indent(2);
 
     // Below the threshold Helm confirms at (PLAN.md §15.4). Fleet at the CLI has
     // nobody to ask, so it says so loudly instead.
@@ -157,48 +157,28 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         .confidence
         .is_some_and(|c| c < armada_core::fleet::classify::CONFIDENT);
 
+    let (classified, role) = spawn_classified(&data.workflow, data.confidence);
     table = table.row(vec![
-        token(
-            "classified",
-            // A low confidence is the one row on this table worth looking twice
-            // at, so it is the one that is not green.
-            match guessed {
-                true => Role::FlareOrange,
-                false => Role::BeaconGreen,
-            },
-        ),
-        Cell::plain("workflow"),
-        detail_cell(
-            style,
-            Some(&match (data.confidence, guessed) {
-                // **Said in the cell as well as below it.** A reader scanning the
-                // table should not have to reach the summary to learn that the
-                // number beside them is a coin flip.
-                (Some(c), true) => format!("{}, confidence {c:.2}, a guess", data.workflow),
-                (Some(c), false) => format!("{}, confidence {c:.2}", data.workflow),
-                // **An override reports that you named it, not a confidence of
-                // 1.0.** "You said so" and "the model was certain" are different
-                // facts and only one of them is a measurement.
-                (None, _) => format!("{}, you named it", data.workflow),
-            }),
-        ),
+        token(progress::SpawnStep::Classify.done(), role),
+        Cell::plain(progress::SpawnStep::Classify.id()),
+        detail_cell(style, Some(&classified)),
         time_cell(data.classify_ms),
     ]);
     table = table.row(vec![
-        token("created", Role::BeaconGreen),
-        Cell::plain("worktree"),
+        token(progress::SpawnStep::Worktree.done(), Role::BeaconGreen),
+        Cell::plain(progress::SpawnStep::Worktree.id()),
         detail_cell(style, Some(&data.worktree)),
         time_cell(Some(data.prepare_ms)),
     ]);
     table = table.row(vec![
         token(
-            "claimed",
+            progress::SpawnStep::Ports.done(),
             match data.port_block {
                 Some(_) => Role::BeaconGreen,
                 None => Role::SteelGrey,
             },
         ),
-        Cell::plain("ports"),
+        Cell::plain(progress::SpawnStep::Ports.id()),
         detail_cell(
             style,
             data.port_block
@@ -208,8 +188,8 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         time_cell(None),
     ]);
     table = table.row(vec![
-        token("started", Role::BeaconGreen),
-        Cell::plain("drone"),
+        token(progress::SpawnStep::Drone.done(), Role::BeaconGreen),
+        Cell::plain(progress::SpawnStep::Drone.id()),
         detail_cell(
             style,
             Some(&format!(
@@ -1265,6 +1245,61 @@ fn token(word: &str, role: Role) -> Cell {
     Cell::painted(word.to_uppercase(), role)
 }
 
+/// The columns a verb that draws a **live** table uses — the live one and the
+/// final one both.
+///
+/// **The single place either render learns its header.** `render/live.rs` says
+/// same columns is the requirement rather than a nicety, and [`Table::spans`]
+/// makes the *widths* structural; this makes the headers structural too. Before
+/// it, the live table said `CHECK` and `fleet spawn`'s answer said `STEP`, and
+/// nothing could notice because the two nouns were typed in two files.
+fn columns_for(shape: progress::Shape) -> Vec<Column> {
+    match shape {
+        progress::Shape::Check => columns("check", "detail", true),
+        progress::Shape::Spawn => columns("step", "detail", true),
+    }
+}
+
+/// What the `classified` row says, and what colours it.
+///
+/// **Shared with the live table, because it is the row worth reading twice.**
+/// The confidence is on the screen so a guess is visible as a guess
+/// (`commands/fleet/spawn.md`), and a live table that omitted it would put the
+/// warning only where it arrives last. Below the threshold Helm confirms at
+/// (PLAN.md §15.4) the cell is not green — a low confidence is the one fact on
+/// this table a reader has to act on.
+pub(crate) fn spawn_classified(workflow: &str, confidence: Option<f64>) -> (String, Role) {
+    let guessed = confidence.is_some_and(|c| c < armada_core::fleet::classify::CONFIDENT);
+    let detail = match (confidence, guessed) {
+        // **Said in the cell as well as below it.** A reader scanning the table
+        // should not have to reach the summary to learn that the number beside
+        // them is a coin flip.
+        (Some(c), true) => format!("{workflow}, confidence {c:.2}, a guess"),
+        (Some(c), false) => format!("{workflow}, confidence {c:.2}"),
+        // **An override reports that you named it, not a confidence of 1.0.**
+        // "You said so" and "the model was certain" are different facts and only
+        // one of them is a measurement.
+        (None, _) => format!("{workflow}, you named it"),
+    };
+    let role = match guessed {
+        true => Role::FlareOrange,
+        false => Role::BeaconGreen,
+    };
+    (detail, role)
+}
+
+/// The status cell for a row that has finished, in either vocabulary.
+///
+/// Both arms already existed and are unchanged — this is the one `match` that
+/// picks between them, so the live table and the final one cannot spell or
+/// colour a verdict differently.
+fn verdict_cell(reached: progress::Verdict) -> Cell {
+    match reached {
+        progress::Verdict::Status(status) => verdict(status),
+        progress::Verdict::Word(word, role) => token(word, role),
+    }
+}
+
 /// The four columns, named for this verb.
 fn columns(name: &str, detail: &str, time: bool) -> Vec<Column> {
     let mut columns = vec![
@@ -1810,7 +1845,7 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
         .max(2);
     let mut out = format!("{left}{}{right}\n\n", " ".repeat(gap));
 
-    let mut table = Table::new(columns("check", "detail", true)).indent(2);
+    let mut table = Table::new(columns_for(progress::Shape::Check)).indent(2);
     for row in &data.results {
         let detail = row
             .error

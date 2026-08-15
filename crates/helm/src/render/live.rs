@@ -35,11 +35,11 @@ use std::io::Stderr;
 use armada_core::error::Status;
 
 use super::palette::Role;
-use super::progress::{Planned, Progress};
+use super::progress::{Planned, Progress, Shape, Verdict};
 use super::style::Style;
 use super::table::{Cell, Span, Table};
 use super::term::Terminal;
-use super::{columns, format, verdict};
+use super::{columns_for, format, verdict_cell};
 
 /// The most rows the viewport will ever take.
 ///
@@ -59,19 +59,24 @@ enum RowState {
     Running { since_mono: u64 },
     /// Answered.
     Done {
-        status: Status,
+        reached: Verdict,
         elapsed_ms: u64,
         detail: Option<String>,
     },
 }
 
 impl RowState {
-    /// The verdict word this row shows now.
-    fn status(&self) -> Status {
+    /// The verdict this row shows now.
+    ///
+    /// **The two unfinished states are `Status`es in either table.** `WAITING`
+    /// and `RUNNING` are the progress states PLAN.md §3.1 defines, and they mean
+    /// the same thing for a check and for a spawn's worktree — only the word a
+    /// row ends on is per-verb.
+    fn reached(&self) -> Verdict {
         match self {
-            RowState::Waiting => Status::Waiting,
-            RowState::Running { .. } => Status::Running,
-            RowState::Done { status, .. } => *status,
+            RowState::Waiting => Verdict::Status(Status::Waiting),
+            RowState::Running { .. } => Verdict::Status(Status::Running),
+            RowState::Done { reached, .. } => *reached,
         }
     }
 
@@ -87,6 +92,9 @@ impl RowState {
 /// terminal to test. `Live` is the twenty lines that cannot be tested without
 /// one.
 pub struct Run {
+    /// Which table this is. Handed in, never inferred — see
+    /// [`super::progress::Shape`].
+    shape: Shape,
     /// In plan order, which is the order the final table uses.
     rows: Vec<Row>,
     index: BTreeMap<String, usize>,
@@ -94,18 +102,19 @@ pub struct Run {
     now_mono: u64,
 }
 
-/// One check's row.
+/// One row.
 struct Row {
     id: String,
-    /// Its own deadline, carried so a running row can say what it is.
-    timeout_ms: u64,
+    /// Its own deadline, carried so a running row can say what it is, or `None`
+    /// for a step nobody bounded.
+    timeout_ms: Option<u64>,
     state: RowState,
 }
 
 impl Run {
-    /// A run of these checks, none of them started.
-    pub fn new(checks: &[Planned<'_>], now_mono: u64) -> Run {
-        let rows: Vec<Row> = checks
+    /// A run of these rows, none of them started.
+    pub fn new(shape: Shape, planned: &[Planned<'_>], now_mono: u64) -> Run {
+        let rows: Vec<Row> = planned
             .iter()
             .map(|planned| Row {
                 id: planned.id.to_string(),
@@ -119,6 +128,7 @@ impl Run {
             .map(|(at, row)| (row.id.clone(), at))
             .collect();
         Run {
+            shape,
             rows,
             index,
             now_mono,
@@ -152,7 +162,7 @@ impl Run {
     /// **Elapsed is measured from the spawn, not from the plan.** A check that
     /// waited four minutes for a lease and ran for two did not take six, and the
     /// final table's `TIME` means the same thing.
-    pub fn finished(&mut self, id: &str, status: Status, detail: Option<&str>) {
+    pub fn finished(&mut self, id: &str, reached: Verdict, detail: Option<&str>) {
         let now = self.now_mono;
         let Some(row) = self.row(id) else { return };
         let elapsed_ms = match row {
@@ -163,7 +173,7 @@ impl Run {
             _ => 0,
         };
         *row = RowState::Done {
-            status,
+            reached,
             elapsed_ms,
             detail: detail.map(str::to_string),
         };
@@ -213,7 +223,7 @@ impl Run {
 
     /// The table, in the columns the final one uses.
     fn table(&self) -> Table {
-        let mut table = Table::new(columns("check", "detail", true)).indent(2);
+        let mut table = Table::new(columns_for(self.shape)).indent(2);
         for at in self.visible() {
             let row = &self.rows[at];
             let (detail, elapsed) = match &row.state {
@@ -224,8 +234,14 @@ impl Run {
                 // run that prompted this was the second and looked like the
                 // first. Nothing here is a hang nobody bounded, and now the row
                 // says so instead of leaving the reader to open `machine.yml`.
+                //
+                // **A row with no deadline says nothing rather than `0s`.** Not
+                // every step has a configured ceiling — a spawn's are the
+                // worktree and the Drone — and a budget of zero is a claim, not
+                // an absence.
                 RowState::Running { since_mono } => (
-                    Some(format!("timeout {}", format::duration(row.timeout_ms))),
+                    row.timeout_ms
+                        .map(|ms| format!("timeout {}", format::duration(ms))),
                     Some(self.now_mono.saturating_sub(*since_mono)),
                 ),
                 RowState::Done {
@@ -233,7 +249,7 @@ impl Run {
                 } => (detail.clone(), Some(*elapsed_ms)),
             };
             table = table.row(vec![
-                verdict(row.state.status()),
+                verdict_cell(row.state.reached()),
                 Cell::plain(row.id.clone()),
                 match detail {
                     Some(text) => Cell::muted(text),
@@ -363,8 +379,12 @@ impl Watcher {
 }
 
 impl Progress for Watcher {
-    fn begin(&mut self, checks: &[Planned<'_>], now_mono: u64) {
-        self.live = Live::start(Run::new(checks, now_mono), self.style, self.terminal);
+    fn begin(&mut self, shape: Shape, planned: &[Planned<'_>], now_mono: u64) {
+        self.live = Live::start(
+            Run::new(shape, planned, now_mono),
+            self.style,
+            self.terminal,
+        );
     }
 
     fn started(&mut self, id: &str) {
@@ -374,9 +394,9 @@ impl Progress for Watcher {
         }
     }
 
-    fn finished(&mut self, id: &str, status: Status, detail: Option<&str>) {
+    fn finished(&mut self, id: &str, reached: Verdict, detail: Option<&str>) {
         if let Some(live) = self.live.as_mut() {
-            live.run().finished(id, status, detail);
+            live.run().finished(id, reached, detail);
             live.draw();
         }
     }
@@ -443,10 +463,27 @@ mod tests {
             .iter()
             .map(|id| Planned {
                 id: id.as_str(),
-                timeout_ms: FIFTEEN_MINUTES,
+                timeout_ms: Some(FIFTEEN_MINUTES),
             })
             .collect();
-        Run::new(&planned, 0)
+        Run::new(Shape::Check, &planned, 0)
+    }
+
+    /// A `fleet spawn`'s four rows, none of them bounded by a deadline.
+    fn spawn_run() -> Run {
+        let planned: Vec<Planned<'_>> = super::super::progress::SpawnStep::ALL
+            .iter()
+            .map(|step| Planned {
+                id: step.id(),
+                timeout_ms: None,
+            })
+            .collect();
+        Run::new(Shape::Spawn, &planned, 0)
+    }
+
+    /// A convenience for the tests that still speak `check`'s vocabulary.
+    fn reached(status: Status) -> Verdict {
+        Verdict::Status(status)
     }
 
     /// **Every planned check has a row before anything has started**, which is
@@ -484,9 +521,9 @@ mod tests {
         run.started("api:check0");
         run.started("api:check1");
         run.tick(1_300);
-        run.finished("api:check0", Status::Pass, None);
+        run.finished("api:check0", reached(Status::Pass), None);
         run.tick(423_000);
-        run.finished("api:check2", Status::Failed, Some("exited 101"));
+        run.finished("api:check2", reached(Status::Failed), Some("exited 101"));
 
         let frame = text(&run);
         assert!(frame.contains("PASS"), "{frame}");
@@ -518,7 +555,7 @@ mod tests {
         assert!(frame.contains("timeout 15m"), "{frame}");
         // And it goes once there is a verdict — the budget mattered while the
         // answer was still outstanding.
-        run.finished("api:check0", Status::Pass, None);
+        run.finished("api:check0", reached(Status::Pass), None);
         assert!(!text(&run).contains("timeout"), "{}", text(&run));
     }
 
@@ -530,7 +567,7 @@ mod tests {
         run.tick(60_000);
         run.started("api:check0");
         run.tick(62_000);
-        run.finished("api:check0", Status::Pass, None);
+        run.finished("api:check0", reached(Status::Pass), None);
         let frame = text(&run);
         assert!(frame.contains("2.0s"), "counted the wait: {frame}");
     }
@@ -555,7 +592,7 @@ mod tests {
         run.tick(1_000);
         // Everything but the last two has come back.
         for index in 0..MAX_ROWS + 3 {
-            run.finished(&format!("api:check{index}"), Status::Pass, None);
+            run.finished(&format!("api:check{index}"), reached(Status::Pass), None);
         }
         let frame = text(&run);
         for index in [MAX_ROWS + 3, MAX_ROWS + 4] {
@@ -574,7 +611,7 @@ mod tests {
         let mut run = run_of(4);
         run.started("api:check2");
         run.tick(500);
-        run.finished("api:check2", Status::Pass, None);
+        run.finished("api:check2", reached(Status::Pass), None);
         let frame = text(&run);
         let order: Vec<usize> = (0..4)
             .map(|i| frame.find(&format!("api:check{i}")).expect("a row"))
@@ -591,7 +628,7 @@ mod tests {
     fn a_check_that_never_started_is_not_credited_with_the_runs_elapsed() {
         let mut run = run_of(1);
         run.tick(500_000);
-        run.finished("api:check0", Status::Skipped, Some("no fix:"));
+        run.finished("api:check0", reached(Status::Skipped), Some("no fix:"));
         assert!(text(&run).contains("SKIPPED"));
         assert!(!text(&run).contains("8m"), "{}", text(&run));
     }
@@ -602,7 +639,7 @@ mod tests {
     fn an_unplanned_id_does_not_grow_the_table() {
         let mut run = run_of(1);
         run.started("web:e2e");
-        run.finished("web:e2e", Status::Pass, None);
+        run.finished("web:e2e", reached(Status::Pass), None);
         assert!(!text(&run).contains("web:e2e"));
         assert_eq!(run.height(), 2);
     }
@@ -611,14 +648,15 @@ mod tests {
     #[test]
     fn a_check_that_declares_a_deadline_shows_the_one_it_declared() {
         let mut run = Run::new(
+            Shape::Check,
             &[
                 Planned {
                     id: "api:quick",
-                    timeout_ms: 30_000,
+                    timeout_ms: Some(30_000),
                 },
                 Planned {
                     id: "api:e2e",
-                    timeout_ms: FIFTEEN_MINUTES,
+                    timeout_ms: Some(FIFTEEN_MINUTES),
                 },
             ],
             0,
@@ -628,5 +666,71 @@ mod tests {
         let frame = text(&run);
         assert!(frame.contains("timeout 30.0s"), "{frame}");
         assert!(frame.contains("timeout 15m"), "{frame}");
+    }
+
+    /// **`fleet spawn` gets the same table, headed the way its answer is
+    /// headed.** The column is `STEP` rather than `CHECK` because
+    /// [`super::super::columns_for`] is the one place either render learns it —
+    /// invert this to `CHECK` and it fails, which is the drift the shared
+    /// component exists to prevent.
+    #[test]
+    fn a_spawn_draws_the_same_table_under_its_own_noun() {
+        let run = spawn_run();
+        let frame = text(&run);
+        let header = frame.lines().next().expect("a header");
+        assert!(header.contains("STATUS"), "{header}");
+        assert!(header.contains("STEP"), "{header}");
+        assert!(!header.contains("CHECK"), "{header}");
+        // STATUS is the first column here as it is everywhere: the universal
+        // rule won over `STEP` first (`commands/render.md`).
+        assert!(
+            header.trim_start().starts_with("STATUS"),
+            "STATUS is not first: {header}"
+        );
+        for step in super::super::progress::SpawnStep::ALL {
+            assert!(
+                frame.contains(step.id()),
+                "{} has no row:\n{frame}",
+                step.id()
+            );
+        }
+        assert_eq!(frame.matches("WAITING").count(), 4, "{frame}");
+    }
+
+    /// **A step nobody bounded says nothing about a deadline**, where a check
+    /// says what its own is. Inverted — asserting the running row contains
+    /// `timeout` — this fails, which is the whole distinction: a spawn's
+    /// worktree has no configured ceiling, and `timeout 0s` would report one it
+    /// does not have.
+    #[test]
+    fn an_unbounded_step_claims_no_deadline() {
+        let mut run = spawn_run();
+        run.started("worktree");
+        run.tick(4_200);
+        let frame = text(&run);
+        assert!(frame.contains("RUNNING"), "{frame}");
+        assert!(!frame.contains("timeout"), "{frame}");
+        assert!(frame.contains("4.2s"), "{frame}");
+    }
+
+    /// **The live rows end on the words the final table ends on.** A spawn
+    /// answers in `CLASSIFIED` / `CREATED` / `CLAIMED` / `STARTED`, not in
+    /// `PASS` — a reader who watched four rows go by is handed the same four.
+    #[test]
+    fn a_finished_spawn_row_says_what_the_answer_will_say() {
+        let mut run = spawn_run();
+        for step in super::super::progress::SpawnStep::ALL {
+            run.started(step.id());
+            run.finished(
+                step.id(),
+                Verdict::Word(step.done(), Role::BeaconGreen),
+                None,
+            );
+        }
+        let frame = text(&run);
+        for word in ["CLASSIFIED", "CREATED", "CLAIMED", "STARTED"] {
+            assert!(frame.contains(word), "{word} is missing:\n{frame}");
+        }
+        assert!(!frame.contains("PASS"), "{frame}");
     }
 }

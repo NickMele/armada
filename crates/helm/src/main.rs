@@ -94,7 +94,7 @@ fn main() -> ExitCode {
                 Style::decide(parsed.color, terminal.stderr_is_tty, no_color),
                 terminal,
             );
-            match dispatch(
+            let answered = dispatch(
                 other,
                 &cwd,
                 home.as_deref(),
@@ -102,7 +102,18 @@ fn main() -> ExitCode {
                 progress.as_mut(),
                 style,
                 terminal,
-            ) {
+            );
+            // **The entrypoint gives the lines back, on both paths.** A verb
+            // that returned early — a worktree that would not be created, a
+            // lease that never came — would otherwise leave its viewport
+            // holding the bottom of the terminal while the error printed into
+            // it. Doing it here rather than at each `?` is the same rule that
+            // puts `$HOME` and the cwd here: the terminal is the entrypoint's,
+            // and a verb should not have to remember it owns one
+            // (`ARCHITECTURE.md` §1.4). `finish` is idempotent, so a verb that
+            // ends its own table early still may.
+            progress.finish();
+            match answered {
                 Ok(output) => emit(output, json, style, terminal, home.as_deref()),
                 Err(error) => fail(error, json, style),
             }
@@ -309,6 +320,7 @@ fn dispatch(
                     asking
                         .as_mut()
                         .map(|ask| ask as &mut dyn armada_helm::ask::Ask),
+                    progress,
                 )
             }
             args::FleetInvocation::Ls {

@@ -40,7 +40,7 @@ use std::path::PathBuf;
 
 use crate::app::{self, App};
 use crate::args::Check;
-use crate::render::progress::{Planned, Progress};
+use crate::render::progress::{Planned, Progress, Shape, Verdict};
 use crate::verbs::{load_config, Output};
 
 /// How long the loop sleeps between turns when it has nothing else to do.
@@ -414,10 +414,10 @@ fn execute<R: Run, C: Clock, F: Fetch>(
         .iter()
         .map(|plan| Planned {
             id: plan.id.as_str(),
-            timeout_ms: plan.timeout_ms,
+            timeout_ms: Some(plan.timeout_ms),
         })
         .collect();
-    progress.begin(&planned, app.ctx.now.mono());
+    progress.begin(Shape::Check, &planned, app.ctx.now.mono());
     drop(planned);
 
     let mut loop_state = Loop {
@@ -629,7 +629,7 @@ fn perform<R: Run, C: Clock, F: Fetch>(
                 .map(|e| e.message.as_str())
                 .or(result.reason.as_deref());
             it.progress
-                .finished(result.id.as_str(), result.status, detail);
+                .finished(result.id.as_str(), Verdict::Status(result.status), detail);
             it.rows.insert(result.id.clone(), result);
             Ok(())
         }

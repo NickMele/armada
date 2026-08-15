@@ -165,16 +165,43 @@ fn color_never_and_an_ordinary_pipe_are_byte_identical() {
 /// on stdout breaks the single consumer the envelope exists for. Here neither
 /// stream is a terminal, so there is nothing to animate for — and stderr stays
 /// empty rather than filling a log with carriage returns.
+///
+/// **`fleet spawn` is here because it draws the same live table**
+/// (`render/live.rs`), and a second verb reaching for the viewport is exactly
+/// how a rule that held for one verb stops holding. The spawn is a `--dry-run`
+/// with the workflow named: no model call, no token, no session, nothing
+/// created — which is the whole of what this assertion needs, since the
+/// question is what reaches the two streams and not what the verb built.
 #[test]
 fn a_captured_run_gets_no_progress_on_either_stream() {
     let _serialised = serialised();
     let machine = Machine::new();
     let repo = machine.repo("main", CONFIG);
     machine.run(&repo, &["manifest", "init"]);
+    // The starter workflows, in the scratch home — `spawn` refuses a workflow
+    // its guild does not hold.
+    machine.run(&repo, &["guild", "init"]);
 
     for args in [
         &["manifest", "check"][..],
         &["manifest", "check", "--json"][..],
+        &[
+            "fleet",
+            "spawn",
+            "add a thing",
+            "--workflow",
+            "feature",
+            "--dry-run",
+        ][..],
+        &[
+            "fleet",
+            "spawn",
+            "add a thing",
+            "--workflow",
+            "feature",
+            "--dry-run",
+            "--json",
+        ][..],
     ] {
         let output = machine.run(&repo, args);
         assert!(
