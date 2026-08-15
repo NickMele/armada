@@ -355,25 +355,13 @@ fn kill(envelope: &Envelope<KillData>, style: Style, width: usize) -> String {
             time_cell(None),
         ]);
         table = table.row(vec![
-            token(
-                killed.worktree.word(),
-                match killed.worktree {
-                    Disposition::Removed => Role::BeaconGreen,
-                    _ => Role::SteelGrey,
-                },
-            ),
+            token(killed.worktree.word(), disposition_role(killed.worktree)),
             Cell::painted(killed.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&format!("worktree {}", killed.worktree_path))),
             time_cell(None),
         ]);
         table = table.row(vec![
-            token(
-                killed.branch.word(),
-                match killed.branch {
-                    Disposition::Kept => Role::FlareOrange,
-                    _ => Role::SteelGrey,
-                },
-            ),
+            token(killed.branch.word(), disposition_role(killed.branch)),
             Cell::painted(killed.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&format!("branch {}", killed.branch_name))),
             time_cell(None),
@@ -1201,6 +1189,30 @@ fn time_cell(ms: Option<u64>) -> Cell {
 /// reader tells "this workspace owns nothing" from "nobody looked", which is the
 /// distinction `render.rs`'s own tests are most explicit about. Letting the
 /// table drop `DETAIL` would delete that sentence rather than tidy it.
+/// One colour per [`Disposition`], for every row that prints one.
+///
+/// **Matched exhaustively and on purpose.** This replaced two hand-written
+/// matches — one on the worktree row, one on the branch row — that covered
+/// different variants and each closed with a `_` arm. `Removed` fell through
+/// the branch row's wildcard to grey, so `armada fleet kill` printed the same
+/// word in the same column in two colours and the reader was left inferring a
+/// distinction that did not exist.
+///
+/// `ARCHITECTURE.md` §1.2 states the rule for the scheduler's enums — *never
+/// add a `_ =>` arm, it converts a compile error into silence* — and this is
+/// that failure in the renderer. Adding a fourth `Disposition` must not compile
+/// until someone has decided what colour it is.
+fn disposition_role(disposition: Disposition) -> Role {
+    match disposition {
+        // Armada did the thing it said it would.
+        Disposition::Removed => Role::BeaconGreen,
+        // Left alone at your request — worth noticing, not worth alarm.
+        Disposition::Kept => Role::FlareOrange,
+        // Already gone. Not a failure, and not an action either.
+        Disposition::Gone => Role::SteelGrey,
+    }
+}
+
 fn detail_cell(style: Style, text: Option<&str>) -> Cell {
     match text.filter(|t| !t.is_empty()) {
         Some(text) => Cell::muted(text),
