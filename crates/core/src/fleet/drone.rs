@@ -5,10 +5,16 @@
 //! anything starts, and a subprocess.
 //!
 //! ```text
-//! claude --session-id <uuid> --print --output-format stream-json --verbose <prompt>
-//! claude --resume     <uuid> --print --output-format stream-json --verbose <answer>
-//! claude --resume     <uuid>                                               # boarding
+//! claude --session-id <uuid> <posture> --print --output-format stream-json --verbose <prompt>
+//! claude --resume     <uuid> <posture> --print --output-format stream-json --verbose <answer>
+//! claude --resume     <uuid>                                                          # boarding
 //! ```
+//!
+//! **`<posture>` is [`Posture`], and until it existed no Job could finish.** A
+//! headless Drone that reaches a state-mutating tool call with no permission
+//! for it is asked for one, and it has no terminal to answer with — so it waits
+//! until the wall clock takes it. Read [`Posture`] for what is granted, what is
+//! refused, and why each is on the side it is on.
 //!
 //! **A Drone runs detached and Armada does not wait for it.** That is the whole
 //! point of Fleet: five Jobs at once with one thing to watch. It is the same
@@ -35,7 +41,7 @@
 
 use super::job::Spend;
 use crate::error::{ArmadaError, ErrClass};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// The program every Drone is.
 pub const CLAUDE: &str = "claude";
@@ -45,13 +51,13 @@ pub const CLAUDE: &str = "claude";
 /// `--session-id` is what makes the caller the one who assigns identity, which
 /// is the whole of PHASES.md §9.1 F1: the uuid exists before the process, so the
 /// transcript's location is known before there is a transcript.
-pub fn spawn_argv(uuid: &str, prompt: &str) -> Vec<String> {
+pub fn spawn_argv(uuid: &str, prompt: &str, posture: &Posture) -> Vec<String> {
     let mut argv = vec![
         CLAUDE.to_string(),
         "--session-id".to_string(),
         uuid.to_string(),
     ];
-    argv.extend(headless());
+    argv.extend(headless(posture));
     argv.push(prompt.to_string());
     argv
 }
@@ -61,9 +67,9 @@ pub fn spawn_argv(uuid: &str, prompt: &str) -> Vec<String> {
 /// **An answer is a continuation, not a new run**, so the budget is not reset
 /// and the session is resumed rather than minted. Resetting the ceiling here
 /// would make budgets unenforceable for any Job that asks a question.
-pub fn resume_argv(uuid: &str, prompt: &str) -> Vec<String> {
+pub fn resume_argv(uuid: &str, prompt: &str, posture: &Posture) -> Vec<String> {
     let mut argv = vec![CLAUDE.to_string(), "--resume".to_string(), uuid.to_string()];
-    argv.extend(headless());
+    argv.extend(headless(posture));
     argv.push(prompt.to_string());
     argv
 }
@@ -84,8 +90,8 @@ pub const CONTINUE: &str = "Continue from where you left off.";
 
 /// The argv for **resuming** a Job nobody said anything to —
 /// `armada fleet resume`.
-pub fn continue_argv(uuid: &str) -> Vec<String> {
-    resume_argv(uuid, CONTINUE)
+pub fn continue_argv(uuid: &str, posture: &Posture) -> Vec<String> {
+    resume_argv(uuid, CONTINUE, posture)
 }
 
 /// The argv `armada fleet board` prints, and execs under `--exec`.
@@ -114,15 +120,278 @@ pub fn board_argv(uuid: &str) -> Vec<String> {
 ///
 /// [`STREAM_JSON_NEEDS`] states the requirement as data so that the test below,
 /// and `doctor`, both read the same source.
-fn headless() -> Vec<String> {
-    let mut argv = vec![
-        "--print".to_string(),
-        "--output-format".to_string(),
-        STREAM_JSON.to_string(),
-    ];
+///
+/// **The posture comes first and the prompt comes last, and the order is load
+/// bearing.** `--allowedTools` and `--disallowedTools` are variadic — measured
+/// 2026-08-15, `claude --allowedTools Edit --unknown-xyz` answers `error:
+/// unknown option '--unknown-xyz'`, so the list stops at the next `--` word and
+/// nowhere else. Emitting the posture *after* `--verbose` would put the prompt
+/// immediately behind a variadic list, and the Job's task would be read as one
+/// more tool name. Emitting it before `--print` puts a flag behind every list
+/// there is. [`the_prompt_never_follows_a_variadic_list`] holds it there.
+fn headless(posture: &Posture) -> Vec<String> {
+    let mut argv = posture.argv();
+    argv.push("--print".to_string());
+    argv.push("--output-format".to_string());
+    argv.push(STREAM_JSON.to_string());
     argv.extend(STREAM_JSON_NEEDS.iter().map(|flag| (*flag).to_string()));
     argv
 }
+
+/// **What a Drone may do unattended.**
+///
+/// A Drone runs headless under `--print`, in its own git worktree on its own
+/// `armada/<job>` branch, with nobody watching. Claude Code's default posture
+/// asks a person before the first state-mutating tool call — and a Drone has no
+/// terminal to answer with, so it waits until the wall clock takes it. That is
+/// what `STALLED` was: not a Job that went wrong, a Job that was never given
+/// permission to start.
+///
+/// **Three decisions, and the first one is the fix.**
+///
+/// 1. **[`MODE`] is what happens when the posture does not cover something.**
+///    `dontAsk` denies and carries on; every other mode that could grant enough
+///    to work — `acceptEdits`, `manual` — still *prompts* for the tool calls it
+///    does not cover, which is the stall arriving one flag later. A Drone that
+///    is refused a command reports being refused; a Drone that is asked reports
+///    nothing at all, and that difference is the whole bug.
+/// 2. **[`ALLOW`] grants the tool classes the work is made of**, including
+///    `Bash` whole. The set of commands a repository's checks are spelled with
+///    is unbounded — `cargo test`, `npm run check`, `make`, `./scripts/ci` —
+///    and every build system left off an enumeration is a Job that cannot
+///    verify its own work.
+/// 3. **[`DENY`] subtracts what escapes the worktree**, and deny beats allow.
+///    The worktree is what makes granting `Bash` reasonable: a Drone cannot
+///    reach the user's checkout, so the only capabilities worth naming are the
+///    ones whose effect is not confined to a directory.
+///
+/// **`--dangerously-skip-permissions` is never any of this.** It would hand an
+/// unattended model the caller's whole toolbelt, which is exactly what
+/// `--strict-mcp-config` and `--disable-slash-commands` were added to prevent
+/// one argv over ([`super::classify::argv`]).
+///
+/// **What this posture does not reach.** A deny rule is matched against each
+/// subcommand of a compound command, but `bash -c "git push"` is one command
+/// whose text is an argument, and the rule matches `bash` rather than what is
+/// inside the quotes. The list narrows the blast radius; it is not a sandbox,
+/// and the thing that actually bounds a Drone is the worktree it is confined
+/// to. Stated rather than papered over, for the same reason the `--verbose`
+/// residual is stated in `docs/traps.md`.
+///
+/// **It is a preference, so it is the guild's.** `armada_guild::permissions`
+/// reads `~/.armada/guild/permissions.yml` and returns one of these; a guild
+/// without that file gets [`Posture::default`], because a user who has never
+/// thought about it must still get working Jobs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Posture {
+    /// What Claude Code does with a tool call the two lists do not settle.
+    #[serde(default = "default_mode")]
+    pub mode: String,
+    /// The tools a Drone may use. **Replaces** the default rather than adding
+    /// to it — a posture you can only add to is one whose real contents are
+    /// nowhere written down.
+    #[serde(default = "default_allow")]
+    pub allow: Vec<String>,
+    /// The rules that are refused however broadly [`Posture::allow`] grants.
+    /// Deny beats allow, so these are subtracted from it.
+    #[serde(default = "default_deny")]
+    pub deny: Vec<String>,
+}
+
+fn default_mode() -> String {
+    MODE.to_string()
+}
+
+fn default_allow() -> Vec<String> {
+    ALLOW.iter().map(|rule| (*rule).to_string()).collect()
+}
+
+fn default_deny() -> Vec<String> {
+    DENY.iter().map(|rule| (*rule).to_string()).collect()
+}
+
+impl Default for Posture {
+    fn default() -> Self {
+        Posture {
+            mode: default_mode(),
+            allow: default_allow(),
+            deny: default_deny(),
+        }
+    }
+}
+
+impl Posture {
+    /// The flags this posture is, in the order [`headless`] needs them.
+    ///
+    /// **An empty list emits no flag at all.** `--allowedTools` with nothing
+    /// after it would consume whatever came next as its first value, and what
+    /// comes next is another flag or the Job's prompt.
+    pub fn argv(&self) -> Vec<String> {
+        let mut argv = vec!["--permission-mode".to_string(), self.mode.clone()];
+        for (flag, rules) in [(ALLOWED, &self.allow), (DISALLOWED, &self.deny)] {
+            if rules.is_empty() {
+                continue;
+            }
+            argv.push(flag.to_string());
+            argv.extend(rules.iter().cloned());
+        }
+        argv
+    }
+
+    /// Why this posture cannot be used, if it cannot.
+    ///
+    /// **Three things a hand-edited `permissions.yml` gets wrong**, and each is
+    /// silent rather than loud without this.
+    ///
+    /// A mode Claude Code does not have is a usage error a detached Drone dies
+    /// of unseen. A rule starting with `-` is read as a flag, which ends the
+    /// tool list early and hands the rest to argument parsing. And a rule whose
+    /// space or comma is *outside* parentheses is read as two rules —
+    /// `--allowedTools` is documented as taking a *"comma or space-separated
+    /// list"*, and its own example, `"Bash(git *) Edit"`, is one argument
+    /// holding two rules, one of which contains a space of its own. So the
+    /// separator is paren-aware and `Bash(git push:*)` is a single rule;
+    /// `Edit Write` written as one list entry is not.
+    pub fn wrong(&self) -> Option<String> {
+        if !MODES.contains(&self.mode.as_str()) {
+            return Some(format!(
+                "`{}` is not a permission mode — Claude Code offers {}",
+                self.mode,
+                MODES.join(", ")
+            ));
+        }
+        for rule in self.allow.iter().chain(&self.deny) {
+            if rule.trim().is_empty() {
+                return Some("a rule is blank".to_string());
+            }
+            if rule.starts_with('-') {
+                return Some(format!("`{rule}` starts with `-`, so it reads as a flag"));
+            }
+            let mut depth = 0usize;
+            for character in rule.chars() {
+                match character {
+                    '(' => depth += 1,
+                    ')' => depth = depth.saturating_sub(1),
+                    ' ' | ',' if depth == 0 => {
+                        return Some(format!(
+                            "`{rule}` separates outside its parentheses, so it is two \
+                             rules rather than one — write one rule per entry"
+                        ))
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None
+    }
+}
+
+/// What Claude Code does with a tool call the posture does not settle.
+///
+/// **`dontAsk`, because the alternative is the bug.** Every other mode that
+/// grants enough to work still prompts for what it does not cover, and a
+/// prompt is a stall when there is no terminal. Read off `claude --help` on
+/// 2026-08-15; [`MODES`] is the choice list it printed.
+pub const MODE: &str = "dontAsk";
+
+/// Every value `--permission-mode` accepts, measured 2026-08-15:
+///
+/// ```text
+/// claude --permission-mode bogus
+/// -> error: option '--permission-mode <mode>' argument 'bogus' is invalid.
+///    Allowed choices are acceptEdits, auto, bypassPermissions, manual, dontAsk, plan.
+/// ```
+///
+/// **Free, and checked at argument-parse time** — which is why [`Posture::wrong`]
+/// can refuse a bad mode before a Drone is started rather than after one has
+/// died of it.
+pub const MODES: [&str; 6] = [
+    "acceptEdits",
+    "auto",
+    "bypassPermissions",
+    "manual",
+    "dontAsk",
+    "plan",
+];
+
+/// The tool classes the work a Job is given is made of.
+///
+/// | Rule | Why it is granted |
+/// |---|---|
+/// | `Read`, `Glob`, `Grep` | reading the repository is the whole first half of any Job |
+/// | `Edit`, `Write`, `NotebookEdit` | the change itself, and Claude Code confines these to the session's directory — which is the worktree |
+/// | `TodoWrite` | the Drone's own scratchpad; it touches nothing outside the session |
+/// | `Bash` | **the tool whole**, because the repository's checks are spelled in a language Armada does not know |
+///
+/// **`Bash` whole is the deliberate one.** An allowlist of commands would be an
+/// enumeration of every build system there is, and each one missing is a Job
+/// that edits code it cannot test. [`DENY`] is what makes that affordable: the
+/// escapes are a finite list and the checks are not.
+pub const ALLOW: [&str; 8] = [
+    "Read",
+    "Glob",
+    "Grep",
+    "Edit",
+    "Write",
+    "NotebookEdit",
+    "TodoWrite",
+    "Bash",
+];
+
+/// What a Drone may not do however broadly [`ALLOW`] grants — **the things
+/// whose effect is not confined to the worktree**.
+///
+/// | Rule | Why it is refused |
+/// |---|---|
+/// | `Bash(git push:*)` | the one git operation nobody can undo for everybody else |
+/// | `Bash(git remote:*)` | repointing the remote makes every later push escape somewhere new |
+/// | `Bash(git config:*)` | `--global` writes the user's own git identity, which is in no worktree |
+/// | `Bash(git worktree:*)` | the other Jobs' worktrees are this one's siblings; removing one kills a Drone still working |
+/// | `Bash(git checkout:*)`, `Bash(git switch:*)` | leaving `armada/<job>` is how a Drone's commits land on somebody else's branch |
+/// | `Bash(git branch:*)` | `-D` deletes another Job's branch, and this Job's branch already exists |
+/// | `Bash(sudo:*)` | root is the definition of escaping a directory |
+/// | `Bash(gh:*)` | the GitHub CLI opens pull requests, pushes and deletes repositories — none of it local |
+/// | `Bash(armada:*)` | writes the user's **real** `~/.armada/` — other Jobs, other worktrees, the guild |
+/// | `Bash(claude:*)` | a Drone spawning its own sessions is spend no budget counts, in the user's real `~/.claude/` |
+/// | `Bash(npm publish:*)` and its four siblings | publishing is irreversible and public |
+///
+/// **What is deliberately *not* here.** `rm`, `git reset --hard` and
+/// `git commit --amend` all destroy work, and all of it is the Drone's own, in
+/// the Drone's own worktree, on the Drone's own branch. A posture that forbade
+/// them would be protecting the Job from itself — which is what the worktree is
+/// already for, and which would cost the Drone the ability to clean up after a
+/// bad attempt.
+///
+/// **Giving a Drone Armada's own tools deliberately** is
+/// `docs/reserved/008-armada-injects-its-own-skills.md`, and it arrives as MCP
+/// rather than as a shell command. Denying the CLI here is what keeps that
+/// decision open instead of making it by accident.
+pub const DENY: [&str; 16] = [
+    "Bash(git push:*)",
+    "Bash(git remote:*)",
+    "Bash(git config:*)",
+    "Bash(git worktree:*)",
+    "Bash(git checkout:*)",
+    "Bash(git switch:*)",
+    "Bash(git branch:*)",
+    "Bash(sudo:*)",
+    "Bash(gh:*)",
+    "Bash(armada:*)",
+    "Bash(claude:*)",
+    "Bash(npm publish:*)",
+    "Bash(pnpm publish:*)",
+    "Bash(yarn publish:*)",
+    "Bash(cargo publish:*)",
+    "Bash(docker push:*)",
+];
+
+/// The flag [`ALLOW`] is passed as. Variadic — see [`headless`].
+pub const ALLOWED: &str = "--allowedTools";
+
+/// The flag [`DENY`] is passed as. Deny beats allow, and Claude Code decides
+/// that, not Armada.
+pub const DISALLOWED: &str = "--disallowedTools";
 
 /// The output format a Drone's turn is read from.
 pub const STREAM_JSON: &str = "stream-json";
@@ -154,7 +423,7 @@ pub const STREAM_JSON_NEEDS: [&str; 1] = ["--verbose"];
 /// The uuid is a fixed sentinel, so the probe reuses one transcript rather than
 /// leaving a new one behind on every run.
 pub fn probe_argv() -> Vec<String> {
-    let mut argv = spawn_argv(PROBE_SESSION, "");
+    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default());
     argv.pop();
     argv.push("--input-format".to_string());
     argv.push(STREAM_JSON.to_string());
@@ -173,7 +442,7 @@ pub const PROBE_SESSION: &str = "00000000-0000-4000-8000-0000000a2ada";
 /// added after: a Job that spawns, records a worktree and a port block, and
 /// whose Drone dies on a usage error nobody sees until `fleet ls` says
 /// `STALLED`.
-pub const FLAGS: [&str; 9] = [
+pub const FLAGS: [&str; 12] = [
     "--session-id",
     "--resume",
     "--print",
@@ -186,6 +455,12 @@ pub const FLAGS: [&str; 9] = [
     // unattended model the caller's whole toolbelt.
     "--strict-mcp-config",
     "--disable-slash-commands",
+    // [`Posture`]'s three, which are the only ones that *grant* anything. Their
+    // disappearance is the opposite failure and the more visible one: a Drone
+    // back to asking a terminal that is not there, which is `STALLED`.
+    "--permission-mode",
+    ALLOWED,
+    DISALLOWED,
 ];
 
 /// What one turn reported.
@@ -368,17 +643,34 @@ mod tests {
 
     const UUID: &str = "15bfa340-33b1-4f81-bd7f-688f0f01dbb0";
 
+    /// A posture small enough to write out in full, so the argv tests below
+    /// assert on the *whole* vector rather than on a prefix of it.
+    fn narrow() -> Posture {
+        Posture {
+            mode: "dontAsk".to_string(),
+            allow: vec!["Edit".to_string(), "Bash".to_string()],
+            deny: vec!["Bash(git push:*)".to_string()],
+        }
+    }
+
     /// **The argv PHASES.md §8.5 names, exactly.** A test asserting on anything
     /// less specific than the whole vector would pass with `--session-id`
     /// missing, which is the bug that loses a Job's transcript.
     #[test]
     fn a_first_turn_assigns_the_session_id_before_anything_starts() {
         assert_eq!(
-            spawn_argv(UUID, "reproduce the flake"),
+            spawn_argv(UUID, "reproduce the flake", &narrow()),
             [
                 "claude",
                 "--session-id",
                 UUID,
+                "--permission-mode",
+                "dontAsk",
+                "--allowedTools",
+                "Edit",
+                "Bash",
+                "--disallowedTools",
+                "Bash(git push:*)",
                 "--print",
                 "--output-format",
                 "stream-json",
@@ -386,6 +678,186 @@ mod tests {
                 "reproduce the flake",
             ]
         );
+    }
+
+    /// **A Drone is granted something, and this is the assertion that says so.**
+    /// Every flag in the argv before this change either withheld capability or
+    /// described the output; nothing granted any, which is why a Drone stalled
+    /// on the first `git commit` it reached.
+    #[test]
+    fn a_drone_is_granted_permission_to_do_the_work_it_was_given() {
+        let argv = spawn_argv(UUID, "fix the flake", &Posture::default());
+        assert!(
+            argv.iter().any(|word| word == "--permission-mode"),
+            "{argv:?} grants nothing, so the first state-mutating call stalls"
+        );
+        // Editing and committing are the job; both are granted.
+        for granted in ["Edit", "Write", "Bash"] {
+            assert!(
+                argv.iter().any(|word| word == granted),
+                "{granted} ungranted"
+            );
+        }
+        // Pushing is not; and neither is the user's own `~/.armada/`.
+        for refused in ["Bash(git push:*)", "Bash(armada:*)"] {
+            assert!(argv.iter().any(|word| word == refused), "{refused} allowed");
+        }
+    }
+
+    /// **The mode is the fix, and it is the one that cannot be swapped
+    /// casually.** `acceptEdits` grants the edits and still *prompts* for the
+    /// `cargo test` after them; `manual` prompts for everything. A prompt with
+    /// no terminal behind it is the stall this whole module exists to end, so
+    /// the default mode must be one that answers itself.
+    #[test]
+    fn the_default_mode_never_asks_a_terminal_that_is_not_there() {
+        assert_eq!(MODE, "dontAsk");
+        assert!(MODES.contains(&MODE), "{MODE} is not a mode the CLI offers");
+        assert_eq!(Posture::default().mode, MODE);
+        assert!(
+            !MODE.starts_with("bypass") && MODE != "auto",
+            "the posture must be stated, not delegated to a classifier"
+        );
+    }
+
+    /// **Never `--dangerously-skip-permissions`, by any spelling.** An
+    /// unattended model with the caller's whole toolbelt is what
+    /// `--strict-mcp-config` and `--disable-slash-commands` were added to
+    /// prevent, and undoing that one flag over is the easiest mistake here.
+    #[test]
+    fn nothing_a_drone_runs_bypasses_permissions_altogether() {
+        let posture = Posture::default();
+        let argvs = [
+            spawn_argv(UUID, "go", &posture),
+            resume_argv(UUID, "go", &posture),
+            continue_argv(UUID, &posture),
+            probe_argv(),
+            board_argv(UUID),
+        ];
+        for argv in argvs {
+            for word in &argv {
+                assert!(
+                    !word.contains("dangerously") && word != "bypassPermissions",
+                    "{argv:?} skips permission checks"
+                );
+            }
+        }
+        assert!(!FLAGS.iter().any(|flag| flag.contains("dangerously")));
+    }
+
+    /// **The prompt is never behind a variadic list**, which would make the
+    /// Job's task read as one more tool name.
+    ///
+    /// Measured 2026-08-15 — `claude --allowedTools Edit --unknown-xyz` answers
+    /// `error: unknown option '--unknown-xyz'`, so the list ends at the next
+    /// `--` word and at nothing else. This asserts there is always such a word
+    /// between the last rule and the prompt, for every posture shape including
+    /// the two where a list is empty.
+    #[test]
+    fn the_prompt_never_follows_a_variadic_list() {
+        let postures = [
+            Posture::default(),
+            narrow(),
+            Posture {
+                mode: MODE.to_string(),
+                allow: vec![],
+                deny: vec!["Bash(git push:*)".to_string()],
+            },
+            Posture {
+                mode: MODE.to_string(),
+                allow: vec!["Bash".to_string()],
+                deny: vec![],
+            },
+            Posture {
+                mode: MODE.to_string(),
+                allow: vec![],
+                deny: vec![],
+            },
+        ];
+        for posture in postures {
+            for argv in [
+                spawn_argv(UUID, "a prompt", &posture),
+                resume_argv(UUID, "a prompt", &posture),
+            ] {
+                let variadic = argv
+                    .iter()
+                    .rposition(|word| word == ALLOWED || word == DISALLOWED);
+                if let Some(at) = variadic {
+                    let after = argv[at + 1..]
+                        .iter()
+                        .position(|word| word.starts_with("--"))
+                        .expect("no flag closes the list, so the prompt joins it");
+                    assert!(
+                        at + 1 + after < argv.len() - 1,
+                        "{argv:?} ends its tool list on the prompt"
+                    );
+                }
+                assert_eq!(argv.last().unwrap(), "a prompt");
+            }
+        }
+    }
+
+    /// An empty list emits no flag, because `--allowedTools` with nothing after
+    /// it consumes whatever came next — and what comes next is `--print`.
+    #[test]
+    fn an_empty_list_emits_no_flag_rather_than_a_flag_with_nothing_after_it() {
+        let posture = Posture {
+            mode: MODE.to_string(),
+            allow: vec![],
+            deny: vec![],
+        };
+        assert_eq!(posture.argv(), ["--permission-mode", MODE]);
+    }
+
+    /// The three ways a hand-edited `permissions.yml` is wrong, each caught
+    /// before a Drone is started rather than after one has died of it.
+    #[test]
+    fn a_posture_that_would_not_parse_as_argv_is_refused_by_name() {
+        assert_eq!(Posture::default().wrong(), None);
+        let with = |allow: &[&str], mode: &str| Posture {
+            mode: mode.to_string(),
+            allow: allow.iter().map(|r| r.to_string()).collect(),
+            deny: vec![],
+        };
+        assert!(with(&[], "acceptEdits").wrong().is_none());
+        assert!(with(&[], "yolo")
+            .wrong()
+            .unwrap()
+            .contains("not a permission mode"));
+        // A space *inside* the parentheses is one rule — the CLI's own example
+        // is `"Bash(git *) Edit"`, so the separator is paren-aware.
+        assert!(with(&["Bash(git push:*)", "Bash(git *)"], MODE)
+            .wrong()
+            .is_none());
+        // Outside them it is two rules typed as one, and the second half is
+        // read as a tool name nothing has.
+        for two in ["Edit Write", "Edit,Write", "Bash(git *) Edit"] {
+            assert!(
+                with(&[two], MODE).wrong().unwrap().contains("two rules"),
+                "`{two}` was accepted as one rule"
+            );
+        }
+        assert!(with(&["--print"], MODE)
+            .wrong()
+            .unwrap()
+            .contains("reads as a flag"));
+        assert!(with(&["  "], MODE).wrong().unwrap().contains("blank"));
+    }
+
+    /// **Every rule the shipped default names is one the argv can carry.** The
+    /// defaults are hand-written constants, and a separator typed outside the
+    /// parentheses of one of them would split a deny rule into two rules that
+    /// deny nothing.
+    #[test]
+    fn the_shipped_default_is_a_posture_the_argv_can_actually_carry() {
+        assert_eq!(Posture::default().wrong(), None);
+        // And every deny rule is a `Bash(...)` rule, because the tools that are
+        // *not* Bash are already confined to the session's own directory —
+        // there is nothing to subtract from them.
+        for rule in DENY {
+            assert!(rule.starts_with("Bash("), "`{rule}` is not a Bash rule");
+            assert!(rule.ends_with(":*)"), "`{rule}` matches one spelling only");
+        }
     }
 
     /// **`stream-json` requires `--verbose`, and the binary refuses without
@@ -399,7 +871,10 @@ mod tests {
     /// remembering to come back.
     #[test]
     fn every_stream_json_argv_carries_what_the_cli_requires_with_it() {
-        for argv in [spawn_argv(UUID, "go"), resume_argv(UUID, "carry on")] {
+        for argv in [
+            spawn_argv(UUID, "go", &Posture::default()),
+            resume_argv(UUID, "carry on", &Posture::default()),
+        ] {
             assert!(
                 argv.iter().any(|word| word == STREAM_JSON),
                 "{argv:?} does not stream"
@@ -419,7 +894,18 @@ mod tests {
     #[test]
     fn boarding_carries_none_of_the_headless_flags() {
         let argv = board_argv(UUID);
-        for flag in ["--print", "--output-format", "--verbose"] {
+        for flag in [
+            "--print",
+            "--output-format",
+            "--verbose",
+            // **And no posture either.** Boarding hands the conversation to a
+            // person at a terminal, and a terminal is exactly the thing that
+            // can answer a permission prompt. Granting there would take the
+            // decision away from the one party entitled to make it.
+            "--permission-mode",
+            ALLOWED,
+            DISALLOWED,
+        ] {
             assert!(!argv.iter().any(|word| word == flag), "{argv:?} has {flag}");
         }
     }
@@ -430,7 +916,7 @@ mod tests {
     #[test]
     fn the_doctor_probe_is_the_spawn_argv_with_nothing_to_say() {
         let probe = probe_argv();
-        let real = spawn_argv(PROBE_SESSION, "go");
+        let real = spawn_argv(PROBE_SESSION, "go", &Posture::default());
 
         // Every flag of the real argv, in the same order.
         let flags = |argv: &[String]| -> Vec<String> {
@@ -468,9 +954,9 @@ mod tests {
     /// disappearing.
     #[test]
     fn every_flag_the_drone_uses_is_one_doctor_checks_for() {
-        let used: Vec<String> = spawn_argv(UUID, "go")
+        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default())
             .into_iter()
-            .chain(resume_argv(UUID, "go"))
+            .chain(resume_argv(UUID, "go", &Posture::default()))
             .chain(super::super::classify::argv("go"))
             .chain(probe_argv())
             .filter(|word| word.starts_with("--"))
@@ -495,13 +981,20 @@ mod tests {
     /// the answer was an answer to.
     #[test]
     fn continuing_a_job_resumes_the_session_rather_than_minting_one() {
-        let argv = resume_argv(UUID, "yes, raise it to 90s");
+        let argv = resume_argv(UUID, "yes, raise it to 90s", &narrow());
         assert_eq!(
             argv,
             [
                 "claude",
                 "--resume",
                 UUID,
+                "--permission-mode",
+                "dontAsk",
+                "--allowedTools",
+                "Edit",
+                "Bash",
+                "--disallowedTools",
+                "Bash(git push:*)",
                 "--print",
                 "--output-format",
                 "stream-json",
@@ -523,9 +1016,12 @@ mod tests {
     /// text and a shell has already had its turn with it.
     #[test]
     fn the_prompt_is_one_argument_however_many_words_it_has() {
-        let argv = spawn_argv(UUID, "add rate limiting to the API --json");
+        let argv = spawn_argv(UUID, "add rate limiting to the API --json", &narrow());
         assert_eq!(argv.last().unwrap(), "add rate limiting to the API --json");
-        assert_eq!(argv.len(), 8);
+        assert_eq!(argv.len(), 15);
+        // And a prompt that *looks* like a flag is still the prompt, because a
+        // flag closes the tool list before it and nothing reopens one.
+        assert_eq!(argv[argv.len() - 2], "--verbose");
     }
 
     /// **The measured values from the spike** (PHASES.md §9.1 F2), read back off

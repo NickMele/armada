@@ -79,10 +79,17 @@ fn stub_home() -> &'static Path {
                  # Records the vector it was actually given, then either writes a\n\
                  # turn or stays alive. It never talks to anything.\n\
                  out=\"$ARMADA_STUB_ARGV/$ARMADA_JOB_UUID.argv\"\n\
-                 : > \"$out\"\n\
+                 : > \"$out.partial\"\n\
                  # NUL-separated: a prompt is several lines, so a newline\n\
                  # separator would split one argument into four.\n\
-                 for a in \"$@\"; do printf '%s\\0' \"$a\" >> \"$out\"; done\n\
+                 for a in \"$@\"; do printf '%s\\0' \"$a\" >> \"$out.partial\"; done\n\
+                 # **Renamed rather than written in place.** The reader polls\n\
+                 # for the file, and appending one argument at a time means a\n\
+                 # poll that lands mid-loop reads a vector with its tail\n\
+                 # missing. That was survivable while the argv was six words\n\
+                 # and became a routine failure at thirty; `mv` within one\n\
+                 # directory is atomic, so a file that exists is a whole one.\n\
+                 mv \"$out.partial\" \"$out\"\n\
                  case \"$*\" in\n\
                  *{STAY_ALIVE}*) sleep 30; exit 0 ;;\n\
                  esac\n\
@@ -121,7 +128,7 @@ fn stub_home() -> &'static Path {
 /// The Drone is detached, so this polls rather than sleeping a fixed span: a
 /// fixed one is either flaky or slow.
 fn recorded_argv(uuid: &str) -> Vec<String> {
-    let path = stub_home().join("argv").join(format!("{uuid}.argv"));
+    let path = argv_path(uuid);
     for _ in 0..300 {
         if let Ok(bytes) = std::fs::read(&path) {
             if !bytes.is_empty() {
@@ -138,6 +145,36 @@ fn recorded_argv(uuid: &str) -> Vec<String> {
         "the stub Drone never recorded an argv at {}",
         path.display()
     );
+}
+
+/// Where a Job's recorded argv lands. One file per Job, so each turn overwrites
+/// the last.
+fn argv_path(uuid: &str) -> PathBuf {
+    stub_home().join("argv").join(format!("{uuid}.argv"))
+}
+
+/// Forget the turn a Job has already recorded, so the next [`recorded_argv`] is
+/// about the **next** turn.
+///
+/// **Required before observing a resumed turn, and it is not politeness.** Every
+/// turn of one Job writes the same path, and the Drone is detached — so a reader
+/// that polls "until the file is non-empty" is answered instantly by the turn
+/// before the one it is asking about. That was survivable while the stub
+/// truncated the file in place and left a window of emptiness to lose the race
+/// in; it is a wrong answer rather than a flake now that the file appears whole
+/// or not at all.
+fn forget_argv(uuid: &str) {
+    let _ = std::fs::remove_file(argv_path(uuid));
+}
+
+/// The permission words a Drone on a machine with no `permissions.yml` carries.
+///
+/// **Read off the constants rather than retyped**, so that a rule added to the
+/// shipped posture does not need this file edited — the assertions here are
+/// about the vector reaching `execve` intact, not about the contents of the
+/// list, which `armada_core::fleet::drone`'s own tests pin.
+fn shipped_posture() -> Vec<String> {
+    armada_core::fleet::drone::Posture::default().argv()
 }
 
 /// A harness that answers by argv, and remembers every vector it was handed.
@@ -529,20 +566,113 @@ fn the_drone_is_executed_with_the_session_id_the_job_was_minted_with() {
     // The prompt is one argument however many words it has, and it is asserted
     // separately — so it comes off before the vector is compared.
     let prompt = argv.pop().expect("a prompt");
+    let mut expected = vec!["--session-id".to_string(), data.uuid.clone()];
+    expected.extend(shipped_posture());
+    expected.extend(
+        ["--print", "--output-format", "stream-json", "--verbose"]
+            .iter()
+            .map(|word| word.to_string()),
+    );
     assert_eq!(
-        argv,
-        [
-            "--session-id",
-            &data.uuid,
-            "--print",
-            "--output-format",
-            "stream-json",
-            "--verbose",
-        ],
+        argv, expected,
         "argv[0] is not recorded by `$@`, so the vector starts at the flags"
     );
     assert!(prompt.contains("add rate limiting to the API"), "{prompt}");
     assert!(prompt.contains("feature"), "{prompt}");
+}
+
+/// **A Drone is granted permission, and this is where that is proved.**
+///
+/// The bug this test exists for shipped with every argv assertion in the
+/// repository passing: nothing in the Drone's vector granted a capability, so a
+/// headless Drone hit Claude Code's permission prompt on its first
+/// state-mutating Bash call, had no terminal to answer it, and sat there until
+/// its wall-clock ceiling took it. This asserts on what `execve` received.
+#[test]
+fn the_drone_execve_receives_permission_to_edit_and_commit() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("fix the flake"));
+    let argv = recorded_argv(&data.uuid);
+
+    assert!(
+        argv.iter().any(|word| word == "--permission-mode"),
+        "the Drone was granted nothing, so it stalls on the first commit: {argv:?}"
+    );
+    for granted in ["Edit", "Write", "Bash"] {
+        assert!(argv.iter().any(|w| w == granted), "{granted} not granted");
+    }
+    for refused in ["Bash(git push:*)", "Bash(armada:*)"] {
+        assert!(argv.iter().any(|w| w == refused), "{refused} not refused");
+    }
+    assert!(
+        !argv.iter().any(|w| w.contains("dangerously")),
+        "permission checks were skipped rather than stated: {argv:?}"
+    );
+}
+
+/// **The guild's posture reaches `execve`, and the default does not override
+/// it.** Every layer between `permissions.yml` and the operating system is
+/// exercised here — the file, the parse, `Where::posture`, the argv builder and
+/// the spawn — because each of them is somewhere the guild's words could be
+/// silently replaced by the shipped ones.
+#[test]
+fn a_guilds_permissions_file_is_what_the_drone_is_actually_run_with() {
+    let scratch = Scratch::new();
+    std::fs::write(
+        scratch.home.path().join(".armada/guild/permissions.yml"),
+        "mode: acceptEdits\nallow:\n  - Read\n  - Edit\ndeny:\n  - Bash(rm:*)\n",
+    )
+    .unwrap();
+
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("fix the flake"));
+    let argv = recorded_argv(&data.uuid);
+
+    let at = |word: &str| argv.iter().position(|w| w == word);
+    assert_eq!(
+        argv[at("--permission-mode").expect("a mode") + 1],
+        "acceptEdits",
+        "the guild's mode was replaced by the shipped one: {argv:?}"
+    );
+    assert!(argv.iter().any(|w| w == "Bash(rm:*)"), "{argv:?}");
+    // The shipped lists are *replaced*, not added to. `Bash` whole is the
+    // clearest witness: it is in the default allow list and not in this one.
+    assert!(
+        !argv.iter().any(|w| w == "Bash"),
+        "the shipped allow list leaked into a guild that replaced it: {argv:?}"
+    );
+    assert!(
+        !argv.iter().any(|w| w == "Bash(git push:*)"),
+        "the shipped deny list leaked into a guild that replaced it: {argv:?}"
+    );
+}
+
+/// **A `permissions.yml` that cannot be used refuses the spawn rather than
+/// quietly widening it.** Falling back to the shipped posture there would run a
+/// Drone with permissions the user did not write, straight after they narrowed
+/// them on purpose — and the Job would look like it had worked.
+#[test]
+fn a_broken_permissions_file_refuses_the_spawn_rather_than_widening_it() {
+    let scratch = Scratch::new();
+    std::fs::write(
+        scratch.home.path().join(".armada/guild/permissions.yml"),
+        "mode: yolo\n",
+    )
+    .unwrap();
+
+    let run = scratch.harness();
+    let error = fleet::spawn(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &task("fix the flake"),
+        None,
+        &mut armada_helm::render::progress::Silent,
+    )
+    .expect_err("a posture that cannot be used is not a Job that starts");
+    assert_eq!(error.class, armada_core::error::ErrClass::BadConfig);
+    assert!(error.r#where.ends_with("permissions.yml"), "{error:?}");
 }
 
 /// **The Drone's group is recorded where Manifest's reaper looks.** That is what
@@ -1492,6 +1622,9 @@ fn resuming_a_paused_job_continues_the_same_session_detached() {
         &task(&format!("add rate limiting {STAY_ALIVE}")),
     );
     fleet::pause(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+    // The spawn's turn is already on disk under this uuid; drop it, so what is
+    // read below is the resumed turn and not the one before it.
+    forget_argv(&data.uuid);
 
     let output = fleet::resume(&run, &FrozenClock::new(), &scratch.place(), &data.name)
         .expect("a paused Job resumes");
@@ -1694,6 +1827,10 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
     )
     .unwrap();
 
+    // The spawn's turn is already on disk under this uuid; drop it, so what is
+    // read below is the answer's turn and not the one before it.
+    forget_argv(&data.uuid);
+
     let began = Instant::now();
     let output = fleet::answer(
         &run,
@@ -1711,16 +1848,15 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
 
     let mut argv = recorded_argv(&data.uuid);
     let prompt = argv.pop().unwrap();
+    let mut expected = vec!["--resume".to_string(), data.uuid.clone()];
+    expected.extend(shipped_posture());
+    expected.extend(
+        ["--print", "--output-format", "stream-json", "--verbose"]
+            .iter()
+            .map(|word| word.to_string()),
+    );
     assert_eq!(
-        argv,
-        [
-            "--resume",
-            &data.uuid,
-            "--print",
-            "--output-format",
-            "stream-json",
-            "--verbose",
-        ],
+        argv, expected,
         "an answer minted a session instead of resuming one"
     );
     assert_eq!(prompt, "yes, raise it to 90s");

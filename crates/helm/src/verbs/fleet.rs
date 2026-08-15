@@ -84,6 +84,22 @@ impl Where {
         home::stream(&self.armada_home, uuid)
     }
 
+    /// **What a Drone started from here may do unattended.**
+    ///
+    /// Read from this machine's guild on every spawn, resume and answer, and
+    /// deliberately not cached on the record. A posture is a preference, and a
+    /// preference you changed should take effect on the next Drone rather than
+    /// on the next Job — freezing it at spawn would mean a person who narrowed
+    /// their permissions after a surprise still had every running Job's next
+    /// turn ignore them.
+    ///
+    /// A machine with no guild at all gets the shipped default, for the same
+    /// reason a guild with no `permissions.yml` does: a Job must work before
+    /// anybody has configured anything.
+    pub fn posture(&self) -> Result<armada_core::fleet::drone::Posture, ArmadaError> {
+        armada_guild::permissions::read(Guild::at(&self.armada_home).root())
+    }
+
     /// A path as a person writes it.
     pub fn shown(&self, path: &Path) -> String {
         home::tilde(path, &self.home)
@@ -406,7 +422,11 @@ pub fn spawn<R: Run, C: Clock>(
         place,
         &record,
         &path,
-        argv::spawn_argv(&uuid, &prompt(&workflow, &step, &options.task)),
+        argv::spawn_argv(
+            &uuid,
+            &prompt(&workflow, &step, &options.task),
+            &place.posture()?,
+        ),
     )?);
     store.save(&record)?;
     progress.tick(now.mono());
@@ -1279,7 +1299,7 @@ pub fn resume<R: Run, C: Clock>(
         place,
         &record,
         &path,
-        argv::continue_argv(&record.uuid),
+        argv::continue_argv(&record.uuid, &place.posture()?),
     )?);
     store.save(&record)?;
 
@@ -1512,7 +1532,7 @@ pub fn answer<R: Run, C: Clock>(
         place,
         &record,
         &place.expand(&record.worktree),
-        argv::resume_argv(&record.uuid, said),
+        argv::resume_argv(&record.uuid, said, &place.posture()?),
     )?);
     store.save(&record)?;
 

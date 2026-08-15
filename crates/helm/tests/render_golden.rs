@@ -1152,6 +1152,14 @@ fn guild_ls_matches_its_fixture() {
                     284,
                 ),
                 item(
+                    "permissions",
+                    "permissions.yml",
+                    "permissions.yml",
+                    "permissions.yml",
+                    "dontAsk, 8 allowed, 16 denied",
+                    2688,
+                ),
+                item(
                     "schema",
                     "workflow.schema.json",
                     "workflows/workflow.schema.json",

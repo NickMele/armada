@@ -220,6 +220,13 @@ impl Role {
         match kind {
             Kind::Memory => Role::SignalAmber,
             Kind::Skill | Kind::Subagent | Kind::Workflow | Kind::Hook => Role::RadarCyan,
+            // **`permissions` is amber with the memory fragments**, and not
+            // grey with the other three YAML files. It is a decision you made
+            // about what an unattended agent may do on your machine, which
+            // makes it the half of a guild that is *you* — and it is the row a
+            // reader scanning this listing after a Job did something surprising
+            // came for.
+            Kind::Permissions => Role::SignalAmber,
             Kind::Settings | Kind::Plugins | Kind::Mcp | Kind::Schema => Role::SteelGrey,
         }
     }

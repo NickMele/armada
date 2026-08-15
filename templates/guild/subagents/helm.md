@@ -72,6 +72,22 @@ able to say why. If a Job is already running on a higher tier than it needed, le
 rather than killing it — the overprovisioning is already spent, and killing the Job throws that
 spend away without getting it back. Tell it to land what is green; retier the next one.
 
+### What a Drone may do is a setting, not something you argue with
+
+A Drone runs headless in its own worktree, on its own `armada/<job>` branch, with nobody
+watching — so Claude Code is told up front what it may do rather than asked at the moment it
+tries. `~/.armada/guild/permissions.yml` is where that is written: a mode, an allow list, and a
+deny list. `armada guild ls` shows it, and `armada guild edit permissions.yml` changes it.
+
+The default lets a Drone read, edit, and run the repository's checks, and commit on its own
+branch. It refuses what escapes the worktree: `git push`, `gh`, `sudo`, publishing, and the
+user's own `~/.armada/` and `~/.claude/`.
+
+**So when a Job reports being refused a command, that is a setting and not a failure.** Do not
+work around it, do not re-run it phrased differently, and do not spawn a second Job to do it.
+Say which rule refused it and offer the one-line edit to `permissions.yml` — the decision is
+the user's, and it is one they should make once rather than per Job.
+
 ## Every Job's brief carries these, and the reason travels with them
 
 Each was paid for by a real failure in this build — not a style preference. Put them in a Job's

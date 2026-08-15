@@ -6,6 +6,12 @@
 //! | Four workflows | M4's loop has nothing to run without them (`PLAN.md` §14.6) | `templates/guild/workflows/` |
 //! | `onboard-repo` | The guild's first real content, and the loop that writes a repo's `armada.yml` with you (§13.4) | `templates/guild/skills/onboard-repo/` |
 //! | `helm.md` | Without it M3 has an orchestrator with no persona to run (§15.4) | `templates/guild/subagents/` |
+//! | `permissions.yml` | What a Drone may do unattended — shipped written out so the posture is readable rather than compiled in ([`crate::permissions`]) | `templates/guild/` |
+//!
+//! **`permissions.yml` is the one starter Armada also has a copy of in code.**
+//! [`armada_core::fleet::drone::Posture::default`] is what a guild without the
+//! file gets, and `permissions::tests` holds the two against each other so they
+//! cannot drift.
 //!
 //! # Copied, not confirmed
 //!
@@ -58,8 +64,13 @@ pub const WORKFLOWS: [Starter; 4] = [
 ];
 
 /// Everything else `guild init` copies: the schema the workflows are checked
-/// against, the starter skill, and the starter persona.
-pub const OTHERS: [Starter; 3] = [
+/// against, the starter skill, the starter persona, and the Drone permission
+/// posture.
+pub const OTHERS: [Starter; 4] = [
+    Starter {
+        path: crate::permissions::FILE,
+        body: include_str!("../../../templates/guild/permissions.yml"),
+    },
     Starter {
         path: "workflows/workflow.schema.json",
         body: include_str!("../../../templates/guild/workflows/workflow.schema.json"),
@@ -77,6 +88,16 @@ pub const OTHERS: [Starter; 3] = [
 /// Every starter, in the order they are written.
 pub fn all() -> Vec<Starter> {
     WORKFLOWS.iter().chain(OTHERS.iter()).copied().collect()
+}
+
+/// The starter at a guild-relative path.
+///
+/// **By name rather than by index.** Two tests below reached into `OTHERS[0]`
+/// for the workflow schema, and adding a fourth starter at the front of the
+/// list made both of them assert about a different file — which they did
+/// notice, but only because the new file happened not to be JSON.
+pub fn starter(path: &str) -> Option<Starter> {
+    all().into_iter().find(|starter| starter.path == path)
 }
 
 /// The workflow name a starter path belongs to — `workflows/bug.yml` is `bug`.
@@ -136,6 +157,13 @@ fn with_ceilings(body: &str, ceilings: Ceilings) -> String {
 mod tests {
     use super::*;
 
+    /// The workflow schema, **found by name**. See [`starter`].
+    fn schema_body() -> &'static str {
+        starter("workflows/workflow.schema.json")
+            .expect("the schema is shipped")
+            .body
+    }
+
     /// **Every starter PHASES.md §8.4 names, present and non-empty.** The list
     /// is what `guild init` copies; a starter dropped from it is a milestone
     /// that ships an orchestrator with no persona or a loop with nothing to
@@ -151,6 +179,7 @@ mod tests {
             "workflows/workflow.schema.json",
             "skills/onboard-repo/SKILL.md",
             "subagents/helm.md",
+            "permissions.yml",
         ] {
             assert!(paths.contains(&expected), "`{expected}` is not shipped");
         }
@@ -213,7 +242,7 @@ mod tests {
     /// be pointed at.
     #[test]
     fn the_workflow_schema_is_valid_json_and_lists_every_predicate() {
-        let schema: serde_json::Value = serde_json::from_str(OTHERS[0].body).unwrap();
+        let schema: serde_json::Value = serde_json::from_str(schema_body()).unwrap();
         let predicates = schema["$defs"]["predicate"]["enum"].as_array().unwrap();
         for predicate in [
             "always",
@@ -237,7 +266,7 @@ mod tests {
     /// shipped schema, which nothing else would catch.
     #[test]
     fn no_starter_uses_a_predicate_the_schema_does_not_define() {
-        let schema: serde_json::Value = serde_json::from_str(OTHERS[0].body).unwrap();
+        let schema: serde_json::Value = serde_json::from_str(schema_body()).unwrap();
         let predicates = schema["$defs"]["predicate"]["enum"].as_array().unwrap();
         for starter in WORKFLOWS {
             let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(starter.body).unwrap();

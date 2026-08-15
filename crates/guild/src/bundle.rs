@@ -265,7 +265,7 @@ fn validate(unpacked: &Path) -> Result<Inventory, ArmadaError> {
         }
     }
 
-    for name in ["plugins.yml", "mcp.yml"] {
+    for name in ["plugins.yml", "mcp.yml", crate::permissions::FILE] {
         let path = unpacked.join(name);
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
