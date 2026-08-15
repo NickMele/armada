@@ -24,6 +24,7 @@
 //! an intended trade with a reserved-not-built resolution (PLAN.md §3).
 
 use armada_core::error::{ArmadaError, ErrClass};
+use armada_core::failure::Fault;
 use armada_core::scope::Lens;
 
 use crate::render::help::Topic;
@@ -594,6 +595,14 @@ pub struct ParseFailure {
     /// And, when it is reported as text, whether to paint it. Carried out for
     /// the same reason `json` is: re-scanning argv would be a second grammar.
     pub color: ColorChoice,
+    /// **Whose mistake this was**, for the failure log
+    /// ([`armada_core::failure::Fault`]).
+    ///
+    /// Carried out with the failure rather than re-derived from the message,
+    /// for the third time the same reason: reading the refusal back out of its
+    /// own prose would be a second grammar, and the only place that knows
+    /// whether Armada meant to say no is the line that said it.
+    pub fault: Fault,
 }
 
 /// `armada manifest check`, with the flags PLAN.md §3.2 gives it.
@@ -834,7 +843,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
                 *color = choice;
                 index += consumed;
             }
-            flag if flag.starts_with('-') => return Err(failure(unknown_flag(flag), json)),
+            flag if flag.starts_with('-') => return Err(unknown_flag_in(flag, json)),
             _ => break,
         }
     }
@@ -850,7 +859,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
     if module != "manifest" {
         let name = module.as_str();
         if name.starts_with('-') {
-            return Err(failure(unknown_flag(name), json));
+            return Err(unknown_flag_in(name, json));
         }
         let rest = &args[index + 1..];
         // **The two machine verbs and the Guild module, before the fallthrough.**
@@ -868,21 +877,26 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             _ => {}
         }
         let json = json || rest.iter().any(|a| a == "--json");
-        let message = match RESERVED_TOP_LEVEL.iter().find(|(n, _)| *n == name) {
+        let reserved = RESERVED_TOP_LEVEL.iter().find(|(n, _)| *n == name);
+        let message = match reserved {
             Some((_, milestone)) => format!("`armada {name}` is not built yet — {milestone}"),
             None => format!("unknown command `{name}`"),
         };
-        return Err(failure(
-            ArmadaError {
-                class: ErrClass::BadInvocation,
-                r#where: name.to_string(),
-                message,
-                next_action: Some(
-                    "`armada --help` lists the modules and verbs that are built".to_string(),
-                ),
-            },
-            json,
-        ));
+        let error = ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: name.to_string(),
+            message,
+            next_action: Some(
+                "`armada --help` lists the modules and verbs that are built".to_string(),
+            ),
+        };
+        // **Refusing a reserved name is meant; calling a name unknown is meant
+        // only when it is** — see [`unknown`]. This is the site that once
+        // answered `unknown command `guild verify``.
+        return Err(match reserved {
+            Some(_) => refused(error, json),
+            None => unknown(error, json, name),
+        });
     }
 
     // A module with no verb is as incomplete as a bare `armada`, and gets that
@@ -954,7 +968,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         // not implement. Otherwise `armada manifest check` in a repo declaring a `check:`
         // command would dispatch to it — and the one guarantee the project
         // exists to provide is that the verbs mean the same thing everywhere.
-        name if BUILTIN_VERBS.contains(&name) => Err(failure(
+        name if BUILTIN_VERBS.contains(&name) => Err(refused(
             ArmadaError {
                 class: ErrClass::BadInvocation,
                 r#where: verb.clone(),
@@ -969,7 +983,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             // `armada --json manifest check` does.
             json || rest.iter().any(|a| a == "--json"),
         )),
-        name if name.starts_with('-') => Err(failure(unknown_flag(name), json)),
+        name if name.starts_with('-') => Err(unknown_flag_in(name, json)),
         name => Ok(Invocation::Dispatch {
             name: name.to_string(),
             argv: rest.to_vec(),
@@ -1045,7 +1059,7 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
             // that same list can never name a flag this arm does not also
             // refuse, or leave out one it does.
             _ if RESERVED_CHECK_FLAGS.contains(&arg) => {
-                return Err(failure(
+                return Err(refused(
                     ArmadaError {
                         class: ErrClass::BadInvocation,
                         r#where: arg.to_string(),
@@ -1058,7 +1072,7 @@ fn check(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Check, 
                     parsed.json,
                 ));
             }
-            flag if flag.starts_with('-') => return Err(failure(unknown_flag(flag), parsed.json)),
+            flag if flag.starts_with('-') => return Err(unknown_flag_in(flag, parsed.json)),
             word => positionals.push(word.to_string()),
         }
     }
@@ -1176,7 +1190,7 @@ fn flags(
                 _ => return Err(failure(needs_a_value(flag), json)),
             },
             flag if allowed.contains(&flag) => parsed.switches.push(flag.to_string()),
-            flag if flag.starts_with('-') => return Err(failure(unknown_flag(flag), json)),
+            flag if flag.starts_with('-') => return Err(unknown_flag_in(flag, json)),
             word => parsed.positionals.push(word.to_string()),
         }
     }
@@ -1353,7 +1367,7 @@ fn mcp(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocatio
 
     if name != "serve" {
         let json = json || tail.iter().any(|a| a == "--json");
-        return Err(failure(
+        return Err(unknown(
             ArmadaError {
                 class: ErrClass::BadInvocation,
                 r#where: format!("mcp {name}"),
@@ -1361,6 +1375,7 @@ fn mcp(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocatio
                 next_action: Some("`armada mcp serve` is the only one".to_string()),
             },
             json,
+            &format!("mcp {name}"),
         ));
     }
 
@@ -1396,19 +1411,21 @@ fn guild(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
 
     if !GUILD_BUILT.contains(&name) {
         let json = json || tail.iter().any(|a| a == "--json");
-        let message = match RESERVED_GUILD_VERBS.iter().find(|(n, _)| *n == name) {
+        let reserved = RESERVED_GUILD_VERBS.iter().find(|(n, _)| *n == name);
+        let message = match reserved {
             Some((_, summary)) => format!("`armada guild {name}` is not built yet — {summary}"),
             None => format!("unknown verb `armada guild {name}`"),
         };
-        return Err(failure(
-            ArmadaError {
-                class: ErrClass::BadInvocation,
-                r#where: format!("guild {name}"),
-                message,
-                next_action: Some("`armada guild --help` lists what is built".to_string()),
-            },
-            json,
-        ));
+        let error = ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: format!("guild {name}"),
+            message,
+            next_action: Some("`armada guild --help` lists what is built".to_string()),
+        };
+        return Err(match reserved {
+            Some(_) => refused(error, json),
+            None => unknown(error, json, &format!("guild {name}")),
+        });
     }
 
     // **A verb's page, before its flags are read.** `--help` on a built verb is
@@ -1584,7 +1601,7 @@ fn failures(
 
     if !FAILURES_VERBS.contains(&verb) {
         let json = json || rest.iter().any(|a| a == "--json");
-        return Err(failure(
+        return Err(unknown(
             ArmadaError {
                 class: ErrClass::BadInvocation,
                 r#where: format!("failures {verb}"),
@@ -1592,6 +1609,7 @@ fn failures(
                 next_action: Some("`armada failures --help` lists them".to_string()),
             },
             json,
+            &format!("failures {verb}"),
         ));
     }
 
@@ -1686,7 +1704,7 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
 
     if !FLEET_VERBS.contains(&name) {
         let json = json || tail.iter().any(|a| a == "--json");
-        return Err(failure(
+        return Err(unknown(
             ArmadaError {
                 class: ErrClass::BadInvocation,
                 r#where: format!("fleet {name}"),
@@ -1694,6 +1712,7 @@ fn fleet(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocat
                 next_action: Some("`armada fleet --help` lists them".to_string()),
             },
             json,
+            &format!("fleet {name}"),
         ));
     }
 
@@ -2235,7 +2254,7 @@ fn only_flags(rest: &[String], json: bool, allowed: &[&str]) -> Result<(), Parse
         {
             continue;
         }
-        return Err(failure(unknown_flag(arg), json));
+        return Err(unknown_flag_in(arg, json));
     }
     Ok(())
 }
@@ -2280,7 +2299,7 @@ fn common(
             "--all" => all = true,
             "--dry-run" if allowed.contains(&"--dry-run") => common.dry_run = true,
             flag if allowed.contains(&flag) => {}
-            other => return Err(failure(unknown_flag(other), common.json)),
+            other => return Err(unknown_flag_in(other, common.json)),
         }
     }
 
@@ -2305,7 +2324,68 @@ fn failure(error: ArmadaError, json: bool) -> ParseFailure {
         error,
         json,
         color: ColorChoice::default(),
+        // **Unmarked is Armada's**, so a refusal nobody thought about is
+        // written down rather than silently dropped
+        // ([`armada_core::failure::Fault`]).
+        fault: Fault::Armadas,
     }
+}
+
+/// A refusal Armada **meant**, about a name it recognised: a reserved verb or
+/// flag, answered by name.
+///
+/// The refusal is the CLI working, so it is not written into the failure log —
+/// `armada manifest check --detach` answering *`--detach` is not built yet* is
+/// the behaviour that was asked for, and a row telling him to go and fix it is
+/// the log misreporting a success.
+fn refused(error: ArmadaError, json: bool) -> ParseFailure {
+    ParseFailure {
+        fault: Fault::Callers,
+        ..failure(error, json)
+    }
+}
+
+/// A refusal that says **unknown** — and the audit of that claim.
+///
+/// `path` is the thing as it is typed after `armada`: `bogus`, `guild bogus`,
+/// `fleet nonesuch`. Saying it is unknown is a refusal Armada meant *only if it
+/// is true*, so this asks [`claimed`] rather than believing the site — and a
+/// site that reaches here about a name Armada does claim has contradicted its
+/// own roster, which is a bug and is recorded as one.
+///
+/// **That is the seam's own test.** `unknown command `guild verify`` — a verb
+/// the help page advertises under NOT BUILT YET, answered as a typo — is
+/// exactly this contradiction, and it is the failure this filter must keep
+/// catching while it drops `unknown verb `armada guild bogus`` beside it. The
+/// two are one line apart in the parser and tell the same story to a class
+/// filter; only the roster tells them apart.
+fn unknown(error: ArmadaError, json: bool, path: &str) -> ParseFailure {
+    match claimed(path) {
+        true => failure(error, json),
+        false => refused(error, json),
+    }
+}
+
+/// Whether `path` is a name Armada claims — built, or reserved and refused by
+/// name.
+///
+/// **One roster, asked of every table there is**, for the reason
+/// [`every_verb`] exists at all: the alternative is each refusal site trusting
+/// the one table it happens to have in hand, which is precisely how a reserved
+/// verb came to be answered as a typo.
+fn claimed(path: &str) -> bool {
+    every_verb().iter().any(|verb| verb == path)
+        || RESERVED_TOP_LEVEL.iter().any(|(name, _)| *name == path)
+        || BUILTIN_VERBS
+            .iter()
+            .any(|verb| format!("manifest {verb}") == path)
+        || RESERVED_GUILD_VERBS
+            .iter()
+            .any(|(name, _)| format!("guild {name}") == path)
+        || FAILURES_VERBS
+            .iter()
+            .any(|verb| format!("failures {verb}") == path)
+        || path == "failures"
 }
 
 /// The last `--color` in a verb's own flags, or `current` if it names none.
@@ -2359,6 +2439,20 @@ fn bad_color(given: Option<&str>) -> ArmadaError {
         next_action: Some(
             "`--color auto` is the default: colour at a terminal, none through a pipe".to_string(),
         ),
+    }
+}
+
+/// `unknown flag`, and the same audit [`unknown`] applies to a name.
+///
+/// A flag Armada does not have is a typo and the refusal is meant. A flag
+/// Armada *reserved* and answered as unknown is the flag half of the
+/// `guild verify` bug, so [`RESERVED_CHECK_FLAGS`] is asked before the claim is
+/// allowed to stand.
+fn unknown_flag_in(flag: &str, json: bool) -> ParseFailure {
+    let error = unknown_flag(flag);
+    match RESERVED_CHECK_FLAGS.contains(&flag) {
+        true => failure(error, json),
+        false => refused(error, json),
     }
 }
 
@@ -3044,6 +3138,90 @@ mod tests {
                 err.message
             );
         }
+    }
+
+    /// **The six commands that filled a real log in thirteen minutes**, and
+    /// which of them Armada now writes down.
+    ///
+    /// Five are refusals Armada meant — two reserved flags, two reserved verbs,
+    /// one name nobody claims — and a row telling him to go and fix
+    /// *`--detach` is not built yet* is the log reporting a feature as a bug.
+    /// The sixth is the one that matters: `unknown command `guild verify``,
+    /// about a verb the help page advertises under NOT BUILT YET, is Armada
+    /// contradicting its own roster, and it stays recorded.
+    ///
+    /// The sixth cannot be typed any more — `fix/reserved-verbs-refuse` closed
+    /// it, and [`every_reserved_name_the_help_lists_is_refused_as_not_built_yet`]
+    /// keeps it closed — so it is asserted against [`unknown`] directly, which
+    /// is the seam that would have caught it and the reason the seam is there
+    /// rather than on the class.
+    ///
+    /// [`every_reserved_name_the_help_lists_is_refused_as_not_built_yet`]: self::every_reserved_name_the_help_lists_is_refused_as_not_built_yet
+    #[test]
+    fn a_refusal_armada_meant_is_not_written_into_the_failure_log() {
+        for line in [
+            vec!["guild", "bogus"],
+            vec!["bogus"],
+            vec!["manifest", "check", "--detach"],
+            vec!["manifest", "check", "--status"],
+            vec!["manifest", "render"],
+            vec!["guild", "verify"],
+        ] {
+            let failed = parse(&args(&line)).unwrap_err();
+            assert_eq!(
+                failed.fault,
+                Fault::Callers,
+                "`armada {}` was recorded as a failure to fix: {}",
+                line.join(" "),
+                failed.error.message
+            );
+        }
+
+        // And the bug that must survive the filter: the parser calling a name
+        // unknown when its own roster claims it.
+        let contradiction = unknown(unknown_flag("x"), false, "guild verify");
+        assert_eq!(
+            contradiction.fault,
+            Fault::Armadas,
+            "`unknown command `guild verify`` stopped being recorded"
+        );
+        assert_eq!(
+            unknown(unknown_flag("x"), false, "manifest render").fault,
+            Fault::Armadas
+        );
+        assert_eq!(
+            unknown(unknown_flag("x"), false, "guild bogus").fault,
+            Fault::Callers
+        );
+    }
+
+    /// **The roster the audit asks is the roster the help page draws**, in both
+    /// directions — a built verb and a reserved one are both names Armada
+    /// claims, and a name it claims may never be answered as a typo.
+    #[test]
+    fn every_name_armada_claims_is_one_it_may_not_call_unknown() {
+        for verb in every_verb() {
+            assert!(claimed(&verb), "`{verb}` is built and not claimed");
+        }
+        for (name, _) in RESERVED_GUILD_VERBS {
+            assert!(claimed(&format!("guild {name}")), "guild {name}");
+        }
+        for verb in BUILTIN_VERBS {
+            assert!(claimed(&format!("manifest {verb}")), "manifest {verb}");
+        }
+        assert!(!claimed("bogus"));
+        assert!(!claimed("guild bogus"));
+    }
+
+    /// A failure Armada could not have meant is recorded, and that is the
+    /// default rather than a decision somebody has to remember to take.
+    #[test]
+    fn a_failure_nobody_marked_is_still_armadas_own() {
+        assert_eq!(failure(unknown_flag("--nope"), false).fault, Fault::Armadas);
+        // A `--color` Armada offers and then cannot read is not a typo: the
+        // flag is real, so the refusal could be Armada's own bug.
+        let bad = parse(&args(&["manifest", "status", "--color", "purple"])).unwrap_err();
+        assert_eq!(bad.fault, Fault::Armadas, "{}", bad.error.message);
     }
 
     /// And the other direction: a name that is not claimed answers `unknown`,

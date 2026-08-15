@@ -44,6 +44,22 @@
 //! `armada failures clear` is the end of it. Deciding at write time is
 //! irreversible; deciding at read time is one keystroke.
 //!
+//! ## The one thing that is filtered, and why it is not a class
+//!
+//! Twelve entries after a day of real use, and not one of them was a bug. Every
+//! one was `bad_invocation`: two reserved flags refusing by name, three
+//! reserved verbs refusing by name, and a verb somebody typed as `bogus`. The
+//! sharpest of them is `--detach is not built yet` — **a reserved name refusing
+//! by name is a feature**, asked for deliberately, and recording it as a failure
+//! to be fixed is the log misreporting a success.
+//!
+//! **The fix is still not a class filter**, for the reason above: a wrong class
+//! is a symptom. The distinction that does the work is [`Fault`] — *did Armada
+//! do something wrong, or did the caller ask for something that does not
+//! exist?* A refusal Armada authored, about a name it recognised, is the CLI
+//! working and is not written down. Everything else is, exactly as before,
+//! including every failure nobody thought to mark.
+//!
 //! ## Privacy: no absolute `$HOME` is ever written
 //!
 //! Recorded failures carry paths, and this repository is public permanently.
@@ -63,6 +79,52 @@ use std::path::Path;
 /// machine do not collide. A collision merges two rows, which is the mild
 /// failure of the two available.
 const ID_LEN: usize = 8;
+
+/// **Whose mistake this was** — the one filter the log applies, and the seam
+/// [`records`] turns on.
+///
+/// # Why this, and not the class, and not the site
+///
+/// The site was the whole filter and it was not enough. It keeps out a failing
+/// test suite — that is an *answer*, and it leaves through the envelope — but
+/// the parser's refusals reach the reporter the same way a panic does, so
+/// `armada manifest check --detach` filled the log with a row saying Armada
+/// refused a name it reserved on purpose. That is not a failure to come back
+/// to; it is the answer to the question that was asked.
+///
+/// The class cannot draw the line: every one of those rows is
+/// `bad_invocation`, and so is `armada failures show <a typo>`, which is a
+/// prefix Armada might well be resolving wrongly. **A wrong class is itself a
+/// symptom**, which is the argument that kept a class filter out of this module
+/// in the first place, and it has not weakened.
+///
+/// So the line is drawn where the caller drew it: *did Armada do something
+/// wrong, or did the caller ask for something that does not exist?* Only a
+/// refusal site can answer that, because only it knows whether it recognised
+/// what it was refusing.
+///
+/// # Unmarked is recorded
+///
+/// [`Fault::Armadas`] is the default, so a refusal nobody marked is written
+/// down. The failure mode of this seam is therefore noise — one extra row,
+/// deduplicated, one `clear` away — rather than a bug that never gets reported.
+/// That direction is not negotiable: the whole feature exists because a real
+/// failure went unrecorded once.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Fault {
+    /// **Armada could not answer.** Recorded.
+    #[default]
+    Armadas,
+    /// **Armada answered, by refusing on purpose a request it understood** — a
+    /// reserved verb, a reserved flag, a name it does not claim. Not recorded.
+    ///
+    /// A site claims this about itself, and a site that claims it wrongly is
+    /// the bug shape this exists to keep catching: `unknown command `guild
+    /// verify`` about a verb the help page advertises under NOT BUILT YET is
+    /// Armada contradicting its own roster, and the parser verifies the claim
+    /// against that roster before it is allowed to stand.
+    Callers,
+}
 
 /// Where an entry stands with you.
 ///
@@ -191,6 +253,51 @@ pub struct Entry {
 
 fn state_word<S: serde::Serializer>(state: &State, out: S) -> Result<S::Ok, S::Error> {
     out.serialize_str(state.word())
+}
+
+/// **Whether this failure is written down at all** — the whole of the filter,
+/// in one function, so that a second one has nowhere to grow.
+///
+/// Two gates, and both are about whether the row could ever be acted on:
+///
+/// - [`Fault::Callers`] — Armada refused on purpose, so there is nothing to
+///   fix. See [`Fault`].
+/// - [`scratch`] — the failure happened in a worktree that will be deleted, so
+///   the one field promotion needs is a directory that will not be there.
+///
+/// Called on the error path, so it touches no disk and asks no `git`: both
+/// answers are already in hand by the time anything has gone wrong.
+pub fn records(fault: Fault, cwd: &Path) -> bool {
+    fault == Fault::Armadas && !scratch(cwd)
+}
+
+/// Whether this directory is a throwaway worktree rather than somewhere a
+/// person works.
+///
+/// **A failure from an agent's worktree does not belong in the machine's log**,
+/// and the reason is not that it is uninteresting — it is that the entry cannot
+/// survive its own subject. `~/.armada/failures.jsonl` is one file for the
+/// machine and the row's `cwd` is what `armada failures fix` branches the Job
+/// from; a worktree under `.claude/worktrees/` or under `~/.armada/workspaces/`
+/// is removed when the work that made it ends, so by the time anybody reads the
+/// row it names a directory that is gone. The Job cannot start there and the
+/// failure cannot be reproduced there.
+///
+/// **An agent has a channel a person actually reads** — the report it hands
+/// back — and it is a better one than a row in somebody else's log. What this
+/// keeps out is a day of a fleet's `bad_invocation`s crowding out the one
+/// failure that happened where he was sitting.
+///
+/// **A substring test on the path, deliberately.** The alternative is asking
+/// `git` whether this is a linked worktree, which is a subprocess on the error
+/// path — in the one code path whose entire premise is that something has
+/// already gone wrong. Both directories are Armada's and Claude Code's own
+/// conventions rather than a guess about the filesystem.
+pub fn scratch(cwd: &Path) -> bool {
+    let path = cwd.display().to_string();
+    ["/.claude/worktrees/", "/.armada/workspaces/"]
+        .iter()
+        .any(|marker| path.contains(marker) || path.ends_with(marker.trim_end_matches('/')))
 }
 
 /// The line to append for a failure that has just been reported.
@@ -636,6 +743,57 @@ mod tests {
             task.contains("may itself be wrong"),
             "the class is handed over as a claim, not a diagnosis:\n{task}"
         );
+    }
+
+    /// **The four rows that should never have been written**, and the one that
+    /// always should. Every one of these was in a real log after a day of use.
+    #[test]
+    fn a_refusal_armada_meant_is_not_a_failure_to_come_back_to() {
+        let repo = Path::new("/scratch/home/code/api");
+        for refused in ["--detach is not built yet", "unknown verb `guild bogus`"] {
+            assert!(
+                !records(Fault::Callers, repo),
+                "`{refused}` was written down as something to fix"
+            );
+        }
+        assert!(records(Fault::Armadas, repo));
+    }
+
+    /// **Unmarked is recorded**, which is the direction the whole feature
+    /// exists to protect: a refusal nobody thought about is noise, and a
+    /// failure nobody recorded is the bug that started this.
+    #[test]
+    fn the_default_fault_is_armadas_own() {
+        assert_eq!(Fault::default(), Fault::Armadas);
+        assert!(records(
+            Fault::default(),
+            Path::new("/scratch/home/code/api")
+        ));
+    }
+
+    /// A worktree that will be deleted is not somewhere a Job can be branched
+    /// from a week later, so the row would name a directory that is gone.
+    #[test]
+    fn a_failure_from_a_throwaway_worktree_is_not_the_machines_to_keep() {
+        for throwaway in [
+            "/scratch/home/code/api/.claude/worktrees/agent-a1b2c3",
+            "/scratch/home/.armada/workspaces/api/rate-limit",
+        ] {
+            assert!(scratch(Path::new(throwaway)), "{throwaway}");
+            assert!(
+                !records(Fault::Armadas, Path::new(throwaway)),
+                "{throwaway}"
+            );
+        }
+        // And a repository that merely has the words in it is not scratch:
+        // the marker is a path segment, not a spelling.
+        for real in [
+            "/scratch/home/code/api",
+            "/scratch/home/code/claude-worktrees-demo",
+            "/scratch/home/.armada",
+        ] {
+            assert!(!scratch(Path::new(real)), "{real}");
+        }
     }
 
     /// The word the STATUS column prints obeys the one-spelling rule every
