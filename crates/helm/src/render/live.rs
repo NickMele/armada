@@ -289,6 +289,9 @@ pub struct Live {
     style: Style,
     terminal: ratatui::Terminal<ratatui::backend::CrosstermBackend<Stderr>>,
     width: usize,
+    // **Carried from the last successful draw, not re-asked for at
+    // `finish`.** See `crate::ask::terminal::clear_viewport`.
+    area: Option<ratatui::layout::Rect>,
 }
 
 impl Live {
@@ -313,6 +316,7 @@ impl Live {
             style,
             terminal: inner,
             width: terminal.usable_width(),
+            area: None,
         };
         live.draw();
         Some(live)
@@ -340,16 +344,28 @@ impl Live {
                 )
             })
             .collect();
-        let _ = self.terminal.draw(|f| {
+        if let Ok(completed) = self.terminal.draw(|f| {
             let area = f.area();
             f.render_widget(ratatui::widgets::Paragraph::new(lines), area);
-        });
+        }) {
+            self.area = Some(completed.area);
+        }
     }
 
     /// Give the lines back, leaving nothing behind — the final table arrives on
     /// a clean stream, exactly as it did after the spinner erased its line.
-    pub fn finish(mut self) {
-        let _ = self.terminal.clear();
+    ///
+    /// **Cleared from the area the last draw handed back, not re-asked for.**
+    /// `ratatui::Terminal::clear()` queries the terminal for the cursor
+    /// position it should restore; asked here, at teardown, that query's
+    /// reply is what a run that has just finished can least afford to wait
+    /// on or get wrong — see `crate::ask::terminal::clear_viewport`, which is
+    /// the one place this crate still needs to ask, and the last live phase
+    /// already answered it.
+    pub fn finish(self) {
+        if let Some(area) = self.area {
+            crate::ask::terminal::clear_viewport(std::io::stderr(), area);
+        }
     }
 }
 

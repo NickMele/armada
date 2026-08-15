@@ -196,12 +196,15 @@ pub fn ask(question: &str, options: &[Choice], default: usize, style: Style) -> 
     .ok()?;
 
     let mut selection = Selection::new(options.len(), default);
+    // **Carried out of the loop rather than re-asked for at the end.** Every
+    // successful `draw` already hands back exactly the `Rect` teardown needs;
+    // asking the terminal again is the query `terminal::clear_viewport` exists
+    // to avoid.
+    let mut area = None;
     let answer = loop {
-        if terminal
-            .draw(|frame| draw(frame, question, options, selection, style))
-            .is_err()
-        {
-            break None;
+        match terminal.draw(|frame| draw(frame, question, options, selection, style)) {
+            Ok(completed) => area = Some(completed.area),
+            Err(_) => break None,
         }
         match event::read() {
             Err(_) => break None,
@@ -216,7 +219,12 @@ pub fn ask(question: &str, options: &[Choice], default: usize, style: Style) -> 
         }
     };
 
-    let _ = terminal.clear();
+    // **Nothing to give back if nothing was ever drawn.** `area` is `None`
+    // only when the very first `draw` failed, and a widget that never
+    // appeared leaves nothing on screen to clear.
+    if let Some(area) = area {
+        super::terminal::clear_viewport(std::io::stderr(), area);
+    }
     drop(restore);
     answer
 }
@@ -254,11 +262,21 @@ fn draw(
     // The widest label, so the asides line up in a column rather than trailing
     // each option at a different place — the same reason `render/table.rs`
     // exists at all.
+    //
+    // **Bounded by what the row has left to spend on it.** A caller hands
+    // over labels sized for its own guess at the row's furniture; this is the
+    // one place that knows the furniture for certain — the indent, the
+    // cursor, the option number (a second digit once there are ten options or
+    // more), the gap, and the widest aside anybody offered. Padding a label
+    // past what that leaves pushes the aside past the edge of the terminal,
+    // which is what `armada failures`' own `done` row did the day its list
+    // first reached ten entries: `stop looking` came back `stop lookin`.
     let widest = options
         .iter()
         .map(|choice| choice.label.chars().count())
         .max()
-        .unwrap_or(0);
+        .unwrap_or(0)
+        .min(room_for_label(frame.area().width as usize, options));
 
     let lines: Vec<Line> = options
         .iter()
@@ -279,6 +297,33 @@ fn draw(
     );
 }
 
+/// What a row has left for its label, once its own furniture is spent.
+///
+/// **Computed from the whole list, not from one row**, because every label is
+/// padded to the same width — a room that varied per row would make some rows
+/// fit and others not, for a reason nothing on screen would explain. The
+/// option number is sized off `options.len()` rather than assumed to be one
+/// digit: the tenth option is already two.
+fn room_for_label(width: usize, options: &[Choice]) -> usize {
+    let digits = options.len().to_string().len();
+    let widest_aside = options
+        .iter()
+        .map(|choice| choice.aside.chars().count())
+        .max()
+        .unwrap_or(0);
+    // "  {caret} " (4) + the number and its space (digits + 1) + the gap and
+    // the aside, when any option has one (2 + widest_aside).
+    let furniture = 4
+        + digits
+        + 1
+        + if widest_aside > 0 {
+            2 + widest_aside
+        } else {
+            0
+        };
+    width.saturating_sub(furniture)
+}
+
 /// One option's line: the cursor, its number, its label, and what it does.
 fn row<'a>(
     index: usize,
@@ -293,7 +338,14 @@ fn row<'a>(
     // the same rule that spells every status out in words rather than
     // signalling it (`render/palette.rs`).
     let caret = if on { style.caret() } else { " " };
-    let label = format!("{:<widest$}", choice.label);
+    // **Truncated to `widest` before it is padded to it.** `widest` is
+    // already bounded to what the row has left (see `room_for_label`), so a
+    // label longer than that would otherwise be padded past the edge it was
+    // just clamped to avoid.
+    let label = format!(
+        "{:<widest$}",
+        crate::render::term::truncate(&choice.label, widest)
+    );
     let mut spans = vec![
         Span::styled(format!("  {caret} "), painted(style, Role::SignalAmber)),
         Span::styled(format!("{} ", index + 1), painted(style, Role::SteelGrey)),
@@ -428,5 +480,65 @@ mod tests {
     fn the_viewport_is_exactly_the_lines_it_draws() {
         assert_eq!(height(2), 6);
         assert_eq!(height(3), 7);
+    }
+
+    /// **The option number is not always one digit.** A list of nine options
+    /// or fewer numbers every row with one; the tenth grows a second, and the
+    /// room left for the label has to shrink by exactly that much or the row
+    /// it belongs to overruns.
+    #[test]
+    fn room_for_label_shrinks_once_the_option_number_grows_a_digit() {
+        let nine = vec![Choice::bare("x"); 9];
+        let ten = vec![Choice::bare("x"); 10];
+        assert_eq!(room_for_label(100, &nine), room_for_label(100, &ten) + 1);
+    }
+
+    /// **The room accounts for the widest aside, not each row's own.** A row
+    /// with a short aside still has to line up under one with a long one, so
+    /// the budget is set by whichever option carries the most.
+    #[test]
+    fn room_for_label_is_set_by_the_widest_aside() {
+        let options = vec![
+            Choice::new("a", "short"),
+            Choice::new("b", "a much longer aside"),
+        ];
+        assert_eq!(
+            room_for_label(100, &options),
+            100 - (4 + 1 + 1 + 2 + "a much longer aside".len())
+        );
+    }
+
+    /// **A row never draws past what `room_for_label` allowed**, whatever a
+    /// caller's own label turns out to be. This is what a label padded to a
+    /// `widest` computed without this bound used to violate: `armada
+    /// failures`' `done` row, the day its list first reached ten entries,
+    /// where `stop looking` came back `stop lookin`.
+    #[test]
+    fn a_row_never_draws_past_the_room_it_was_given() {
+        let width = 40;
+        let options = vec![
+            Choice::new(&"x".repeat(200), "stop looking"),
+            Choice::bare("done"),
+        ];
+        let widest = options
+            .iter()
+            .map(|choice| choice.label.chars().count())
+            .max()
+            .unwrap_or(0)
+            .min(room_for_label(width, &options));
+        for (index, choice) in options.iter().enumerate() {
+            let line = row(
+                index,
+                choice,
+                Selection::new(options.len(), 1),
+                widest,
+                Style::plain(),
+            );
+            assert!(
+                line.width() <= width,
+                "row {index} drew {} at width {width}",
+                line.width()
+            );
+        }
     }
 }

@@ -76,11 +76,21 @@ pub fn ls<R: Run, C: Clock>(
 const DONE: (&str, &str) = ("done", "stop looking");
 
 /// Columns a navigable row spends on something other than the detail: the
-/// selector's indent, cursor, option number and their spaces (6), the gap
+/// selector's indent, cursor, the option number and their spaces, the gap
 /// before the aside (2), the two spaces after the status and the two after the
 /// id (4), and the widest aside any row carries — [`DONE`]'s, which is longer
 /// than any age.
-const ROW_FURNITURE: usize = 6 + 2 + 4 + DONE.1.len();
+///
+/// **The option number's width is not fixed at one digit.** `total_options`
+/// is `entries.len() + 1` — [`DONE`] is always appended after [`rows`]
+/// returns — because the tenth option and every one after it number two
+/// digits, and a row's budget that assumed one silently overran by the width
+/// of the second: found by capturing the render at a real terminal once the
+/// log first held ten entries, where `stop looking` came back `stop lookin`.
+fn row_furniture(total_options: usize) -> usize {
+    let digits = total_options.to_string().len();
+    4 + digits + 1 + 2 + 4 + DONE.1.len()
+}
 
 /// The entries this lens shows.
 fn shown(entries: Vec<Entry>, all: bool) -> Vec<Entry> {
@@ -166,7 +176,7 @@ fn rows(entries: &[Entry], look: Look) -> Vec<Choice> {
     let room = look
         .terminal
         .usable_width()
-        .saturating_sub(widest + id + ROW_FURNITURE);
+        .saturating_sub(widest + id + row_furniture(entries.len() + 1));
     entries
         .iter()
         .map(|entry| {
@@ -459,6 +469,13 @@ mod tests {
     /// widest and then draws its own indent, cursor, number and aside, so this
     /// measures the whole line as it will be drawn — including [`DONE`]'s
     /// aside, which is longer than any age and is what once fell off the end.
+    ///
+    /// **Twelve entries, not two.** [`DONE`] is always the last option, so with
+    /// ten or fewer entries it is also always a one-digit option — the case
+    /// that hid this exact bug: `row_furniture` assumed one digit, the
+    /// eleventh entry's list made [`DONE`] option thirteen, and `stop looking`
+    /// came back `stop lookin` at a real terminal before this test ever saw a
+    /// list that long.
     #[test]
     fn a_row_and_everything_the_selector_draws_around_it_fits_the_terminal() {
         let mut long = entry("a1b2c3d4");
@@ -466,7 +483,8 @@ mod tests {
                         was supposed to have been created on, nor the repository"
             .to_string();
         long.state = State::Cleared;
-        let entries = [long, entry("ff001122")];
+        let mut entries = vec![long];
+        entries.extend((0..11).map(|i| entry(&format!("ff00{i:04}"))));
 
         for width in [
             crate::render::term::Terminal::MIN_WIDTH,
@@ -485,10 +503,13 @@ mod tests {
                 .map(|option| option.label.chars().count())
                 .max()
                 .unwrap_or(0);
+            // The option number is not always one digit — twelve entries plus
+            // `done` is thirteen options, and the tenth one already needs two.
+            let digits = options.len().to_string().len();
             for option in &options {
                 // Indent, cursor, space, number, space, the padded label, two
                 // spaces, the aside — the line `ask::select::row` builds.
-                let drawn = 6 + widest + 2 + option.aside.chars().count();
+                let drawn = 4 + digits + 1 + widest + 2 + option.aside.chars().count();
                 assert!(
                     drawn <= look.terminal.usable_width(),
                     "at {width} columns a row draws {drawn}: {}",

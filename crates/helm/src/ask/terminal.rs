@@ -6,9 +6,11 @@
 //! the text area's until the selector needed them too, which is the moment to
 //! move something rather than reach across for it.
 
+use ratatui::crossterm::cursor::MoveTo;
 use ratatui::crossterm::event::{DisableBracketedPaste, EnableBracketedPaste};
 use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
+use ratatui::layout::Rect;
 use ratatui::style::Style as RataStyle;
 
 use crate::render::palette::Role;
@@ -67,6 +69,34 @@ impl Drop for Restore {
         let _ = disable_raw_mode();
         let _ = std::panic::take_hook();
     }
+}
+
+/// Give an inline viewport's rows back, **without asking where the cursor is**.
+///
+/// `ratatui::Terminal::clear()` asks: for an inline viewport it queries the
+/// cursor position so it can restore it afterward, on top of the query
+/// `Terminal::with_options` already sent to anchor the viewport in the first
+/// place. A query is a write to the terminal and a blocking read of its
+/// reply, and the reply can arrive late, not at all, or after something else
+/// has already moved on — a `script(1)` session with nothing on the other end
+/// to answer it, a slow pty. Answered late, the stale reply is read by
+/// whatever asks next and is mistaken for *its* answer, which is how a
+/// widget's teardown ends up anchored on coordinates that were never its own:
+/// blank lines where the reserved rows still sit in the scrollback, and the
+/// next line drawn from wherever that stale reply happened to say the cursor
+/// was.
+///
+/// `area` needs no query because it is already known — every widget that
+/// calls this already has it, handed back by its own last successful
+/// `Terminal::draw`. Clearing from its top-left down and leaving the cursor
+/// there is where a query that got answered in time would have landed
+/// anyway: the widget's rows erased, ready for whatever gets written next.
+pub fn clear_viewport<W: std::io::Write>(mut stream: W, area: Rect) {
+    let _ = execute!(
+        stream,
+        MoveTo(area.x, area.y),
+        Clear(ClearType::FromCursorDown)
+    );
 }
 
 #[cfg(test)]

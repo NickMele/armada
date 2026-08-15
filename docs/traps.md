@@ -1306,3 +1306,33 @@ whenever stderr is not a terminal, which `cargo test` never is.
 **If you assume otherwise:** you will conclude that live progress does not work, and "fix" a
 verb that was already reporting correctly — or, worse, replace the viewport with appended lines
 and break the contract in `PLAN.md` §3.1.1 that keeps a captured stderr clean.
+
+## `ratatui::Terminal::clear()` re-queries the cursor — a second `ESC [ 6 n`, at teardown
+
+Measured 2026-08-15, darwin 27.0. This is not the `script(1)` artefact above — it reproduces at a
+real terminal, through a pty harness that answers every DSR query correctly (`pyte`-driven, not a
+fixed reply), and it is what `armada failures`, the Bridge's *"Which workflow is this?"* and
+`armada manifest check` all actually showed at a real prompt.
+
+`Terminal::with_options` sends one `ESC [ 6 n` to anchor an inline viewport's first row — the
+query the entry above is about. `Terminal::clear()`, called by every widget when it gives the
+viewport's rows back, sends a **second** one: it queries the cursor position again so it can
+restore it after clearing. A `Live`/`select::ask` session that opens and closes several widgets
+in a run sends one of these per teardown, each a write and a blocking read with a 2s timeout, and
+each an opportunity for the reply to arrive late or to be read by whichever `event::read()` call
+happens to be waiting next — reproduced by holding a keypress until just after the query is
+answered: the widget renders correctly right up to that point, then the reserved lines stay
+blank and whatever prints next lands at the column the stale reply implied instead of at the
+margin. `armada manifest check`'s report matches this exactly — the live phase is correct, only
+the *completion* is wrong — because it has nothing else touching the terminal to blame.
+
+The fix does not patch the query: it removes the second one. Every successful `Terminal::draw`
+already hands back the viewport's `Rect` in its `CompletedFrame`, so a widget that keeps the last
+one can clear from it directly — `MoveTo` plus `Clear(FromCursorDown)` — instead of asking
+`clear()` to ask the terminal again. `ask::terminal::clear_viewport` is that: used by
+`ask/select.rs`, `ask/editor.rs` and `render/live.rs`, which each build their own `Terminal` and
+so each needed the call site changed — there is no one function all three already shared.
+
+**If you assume otherwise:** a harness that never answers the query (`script(1)`, or a fixed fake
+reply that does not track the real cursor) hides this entirely — the widget fails to open at all
+and falls back to the non-widget path, which looks clean for the wrong reason.

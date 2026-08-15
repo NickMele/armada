@@ -123,13 +123,17 @@ pub fn read(style: Style, initial: &str) -> Answer {
     // opened; one that fails later is a terminal that went away mid-answer, and
     // there is nothing left to fall back to.
     let mut drawn = false;
+    let mut area = None;
     let answer = loop {
-        if terminal.draw(|frame| draw(frame, &buffer, style)).is_err() {
-            break if drawn {
-                Answer::Kept
-            } else {
-                Answer::Unavailable
-            };
+        match terminal.draw(|frame| draw(frame, &buffer, style)) {
+            Ok(completed) => area = Some(completed.area),
+            Err(_) => {
+                break if drawn {
+                    Answer::Kept
+                } else {
+                    Answer::Unavailable
+                }
+            }
         }
         drawn = true;
         match event::read() {
@@ -165,8 +169,12 @@ pub fn read(style: Style, initial: &str) -> Answer {
     };
 
     // The box goes and the answer is left in the scrollback by the caller, so
-    // the transcript reads as one conversation rather than as a form.
-    let _ = terminal.clear();
+    // the transcript reads as one conversation rather than as a form. Cleared
+    // from the area the last draw already handed back, not re-asked for —
+    // see `terminal::clear_viewport`.
+    if let Some(area) = area {
+        super::terminal::clear_viewport(std::io::stderr(), area);
+    }
     drop(restore);
     answer
 }
