@@ -48,6 +48,11 @@ a guild is [`guild/init.md`](guild/init.md) `--force`, which says so in the word
    top-level section per module** ([`PLAN.md`](../PLAN.md) §4.3.1). This file **never syncs**
    ([`PLAN.md`](../PLAN.md) §13.1). A file written before the sections existed is moved into
    them here, and the run says which keys moved.
+5. **Projects the guild** onto Claude Code's load path
+   ([`guild/project.md`](guild/project.md)) — **whichever of the three answers brought it
+   here**. A guild in `~/.armada/guild/` that nothing has projected is one Claude Code cannot
+   see, and this verb's promise is a working setup rather than a directory. Any file you had
+   already written is left exactly as it is and reported; nothing here overwrites your own work.
 
 ## Output
 
@@ -65,6 +70,7 @@ interview prompt as it was put, and the verdict. Frozen byte for byte by
 Do you already have a guild?  > 3 build one now
 
   imported from ~/.claude/, 19 skills, 12 hooks, 4 plugins, CLAUDE.md
+  projected into ~/.claude/, 20 placed
 
 1/5  How should agents write to you?
      Tone, length, and what to lead with. Every agent reads this before it says
@@ -109,4 +115,4 @@ Full table and the one rule behind it: [`reference.md`](reference.md).
 
 ## See also
 
-[`doctor.md`](doctor.md) · [`guild/init.md`](guild/init.md) · [`manifest/init.md`](manifest/init.md)
+[`doctor.md`](doctor.md) · [`guild/init.md`](guild/init.md) · [`guild/project.md`](guild/project.md) · [`manifest/init.md`](manifest/init.md)

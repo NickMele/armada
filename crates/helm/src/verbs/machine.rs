@@ -111,6 +111,7 @@ pub fn run(
                 results,
                 guild: None,
                 imported: Vec::new(),
+                projected: None,
                 asked: Vec::new(),
                 questions: QUESTIONS.len(),
                 answered: 0,
@@ -220,6 +221,15 @@ pub fn run(
         }
     }
 
+    // **Whichever way the guild arrived, it ends up where Claude Code reads
+    // it.** This verb's done-when is *a machine that has never seen Armada gets
+    // a working setup* (`PHASES.md` §8.4), and a guild in `~/.armada/guild/`
+    // that nothing has projected is not one. The build branch has already
+    // projected — `guild init` ends on it — and re-projecting finds every file
+    // byte-identical and writes nothing, so the fact is gathered once here
+    // rather than in four branches that would drift apart.
+    let projected = guild::projected(place);
+
     Ok(Output::MachineInit(Box::new(Envelope::ok(
         "init",
         None,
@@ -232,6 +242,7 @@ pub fn run(
                 chosen,
             }),
             imported,
+            projected,
             asked,
             questions,
             answered,

@@ -812,6 +812,14 @@ pub struct MachineInitData {
     /// What the import adopted, as the facts of one line.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub imported: Vec<String>,
+    /// Where the guild was put so that Claude Code reads it.
+    ///
+    /// **Its own field and its own line**, rather than another fact appended to
+    /// [`MachineInitData::imported`]: that line is already five facts long and a
+    /// sixth runs past eighty columns, and this one answers a different
+    /// question — not *what came in* but *what is now in effect*.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub projected: Option<Projection>,
     /// The interview prompts that were put to the person.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub asked: Vec<Asked>,
@@ -2144,6 +2152,7 @@ mod tests {
                 chosen: 3,
             }),
             imported: vec!["imported from ~/.claude/".to_string()],
+            projected: None,
             asked: vec![Asked {
                 number: 1,
                 of: 5,

@@ -362,6 +362,21 @@ fn a_second_machine_pulls_the_first_machines_guild() {
     assert_eq!(files(&guild_of(&first)), files(&guild_of(&second)));
     assert!(guild_of(&second).join("subagents/helm.md").is_file());
 
+    // **And a working setup, not a directory.** The done-when says *a working
+    // setup*, and a guild in `~/.armada/guild/` that nothing has projected is
+    // one Claude Code cannot see (`PHASES.md` §8.4).
+    assert!(
+        second
+            .home
+            .path()
+            .join(".claude/skills/onboard-repo/SKILL.md")
+            .is_file(),
+        "the cloned guild was never put on Claude Code's load path: {:?}",
+        files(&second.home.path().join(".claude"))
+    );
+    assert!(second.home.path().join(".claude/agents/helm.md").is_file());
+    assert_eq!(envelope(&cloned)["data"]["projected"]["at"], "~/.claude/");
+
     // Machine two edits, commits and pushes; machine one pulls and sees it.
     std::fs::write(guild_of(&second).join("voice.md"), "answer first\n").unwrap();
     let sent = second.run(&elsewhere, &["guild", "push", "--json"]);

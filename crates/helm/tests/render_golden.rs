@@ -830,6 +830,17 @@ fn armada_init_matches_its_fixture() {
                 "4 plugins".to_string(),
                 "CLAUDE.md".to_string(),
             ],
+            // **The line that says the guild is in effect.** Whichever of the
+            // three answers brought it here, `armada init` ends with it where
+            // Claude Code reads it — a machine that has never seen Armada gets a
+            // working setup, not a directory.
+            projected: Some(Projection {
+                at: "~/.claude/".to_string(),
+                results: Vec::new(),
+                facts: vec!["20 placed".to_string()],
+                kept: 0,
+                headline: None,
+            }),
             asked: vec![Asked {
                 number: 1,
                 of: 5,

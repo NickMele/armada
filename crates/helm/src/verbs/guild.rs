@@ -511,7 +511,7 @@ fn projection(place: &Where, projected: &projector::Projected) -> Projection {
 /// because `~/.claude/` is read-only would be reporting the wrong failure. It
 /// comes back as `None`, and `armada doctor` is the check that says the guild
 /// is not projected.
-fn projected(place: &Where) -> Option<Projection> {
+pub fn projected(place: &Where) -> Option<Projection> {
     let guild = place.guild();
     if !guild.exists() {
         return None;

@@ -925,6 +925,19 @@ fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize
         ));
     }
 
+    // **What is now in effect, on its own line.** Whichever of the three
+    // answers brought the guild here, `armada init` ends with it where Claude
+    // Code reads it — and a machine that has never seen Armada getting a
+    // *working* setup is this verb's whole done-when (`PHASES.md` §8.4).
+    if let Some(projected) = &data.projected {
+        let mut facts = vec![format!("projected into {}", projected.at)];
+        facts.extend(projected.facts.clone());
+        out.push_str(&format!(
+            "  {}\n",
+            style.paint(Role::SteelGrey, &facts.join(style.between()))
+        ));
+    }
+
     for asked in &data.asked {
         out.push('\n');
         // **The trailing space goes.** Live, it is where the cursor sits; in
