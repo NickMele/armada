@@ -15,7 +15,7 @@ usually asking which one applies.
 
 | id | title | status | module | hook |
 |---|---|---|---|---|
-| [001](001-raised-items-need-identity.md) | Raised items need identity | RESERVED | helm | An item Helm surfaces in prose has no id to acknowledge against |
+| [001](001-raised-items-need-identity.md) | Raised items need identity | BUILT | helm | One id space over four origins — an inbox entry resolves under `failures show`, `fleet inbox` draws an `ID`, and `fleet answer <id>` acknowledges the row; **the acknowledgement vocabulary is the half deferred** |
 | [002](002-tasks.md) | Tasks | BUILT | helm | `armada task` / `armada tasks` — capture a thing to do without spending anything on it yet, then start it as a Job |
 | [003](003-bridge-command-centre.md) | The Bridge as the command centre | RESERVED | helm | One screen for Fleet, Manifest and Guild, not three |
 | [004](004-guild-inventory.md) | Seeing what is in your guild | BUILT | guild | `armada guild ls` / `show` — no verb showed you what you had |

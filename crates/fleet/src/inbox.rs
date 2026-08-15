@@ -148,6 +148,86 @@ impl Entry {
     pub fn is_legacy(&self) -> bool {
         self.job_uuid.is_none() && self.closed.is_none()
     }
+
+    /// This entry in the **item** shape every listing in Armada already shares.
+    ///
+    /// # This is `001`'s one id space, and it is a projection rather than a move
+    ///
+    /// `docs/reserved/001-raised-items-need-identity.md` asks that *every item
+    /// Helm surfaces is an inbox entry with an id*. Three of the four kinds of
+    /// item already were — a recorded failure, a filed report and a written
+    /// task share `~/.armada/failures.jsonl`, one id space, one `show` and one
+    /// promotion ([`armada_core::failure::Origin`]). The inbox was the fourth
+    /// and the only one outside, so an id off `armada fleet inbox` resolved
+    /// nowhere else and an id off `armada failures` resolved nowhere here.
+    ///
+    /// **The inbox is not moved into that file**, and the reason is mechanical
+    /// rather than aesthetic: Helm's Stop hook greps `~/.armada/inbox.jsonl`
+    /// for unread entries and its monitor runs `tail -F` on that exact path
+    /// (`armada_core::helm`). Merging the two stores would break the mechanism
+    /// that makes a raised item reach anybody at all, in exchange for tidier
+    /// bytes. So the **writing** stays where it is and the **reading** is
+    /// unified: this projection is what lets one `read` produce one list, and
+    /// one resolver refuse an ambiguous prefix across every item on the
+    /// machine.
+    ///
+    /// # What each field is, and the two that are deliberately empty
+    ///
+    /// - **`id` is the first eight characters of the entry's uuid**, the width
+    ///   [`crate::jobs::short`] settled on and the width the `ID` column draws.
+    ///   Every other origin's id is an eight-character fingerprint, so a
+    ///   thirty-six-character uuid in the same column would be one id space
+    ///   with two shapes, which reads as two.
+    /// - **`state` is [`State::Fixing`] while it is open.** Not `Open`: a
+    ///   raised item is not a row nobody has started, it is a row with a Drone
+    ///   stopped in front of it — which is exactly what `FIXING` means
+    ///   elsewhere, *a Job is on it*. An answered or closed entry is `Cleared`,
+    ///   which is what keeps it out of the counts of what is still yours.
+    /// - **`job` is the Job's name**, so the one action `show` offers is
+    ///   `armada fleet show <job>` — and the name is a label here exactly as it
+    ///   is everywhere else (`docs/reserved/005-inbox-label-not-identity.md`);
+    ///   the identity is `job_uuid` and this projection is a read.
+    /// - **`class` and `where` are empty**, for [`Origin::Reported`]'s reason:
+    ///   they are Armada's own attribution and Armada attributed nothing. A
+    ///   Drone asked a question; nothing was classified because nothing failed.
+    /// - **`argv` and `cwd` are empty**, and the screen draws `-` for both.
+    ///   They are *the command that was typed* and *where it was typed*, and
+    ///   nobody typed anything — a Drone raised this while you were elsewhere.
+    ///   Putting `armada fleet answer <id>` in the `argv` cell was tried and
+    ///   reverted: under a column headed `TYPED` it reads as a command you ran,
+    ///   which is a fact the row would be inventing. What to type belongs on
+    ///   the summary line, where it is an offer rather than a record.
+    pub fn as_entry(&self) -> armada_core::failure::Entry {
+        use armada_core::failure::{Entry as Item, Origin, State};
+        Item {
+            id: crate::jobs::short(&self.uuid).to_string(),
+            state: match self.is_open() {
+                true => State::Fixing,
+                false => State::Cleared,
+            },
+            origin: Origin::Raised,
+            class: None,
+            r#where: String::new(),
+            message: self.body.clone(),
+            next: None,
+            argv: String::new(),
+            cwd: String::new(),
+            workspace: None,
+            // **One, always.** Two Drones asking the same question are two
+            // questions — they are stopped in two worktrees and each needs its
+            // own answer — so nothing here folds, and a count that could only
+            // ever be `1` is the honest value rather than a hidden zero.
+            count: 1,
+            first_at: self.raised_at.clone(),
+            last_at: self.raised_at.clone(),
+            last_ms: self.raised_ms,
+            // Filled by `armada_core::failure::age` against a clock, exactly as
+            // it is for every other origin. This module is pure.
+            age_s: 0,
+            job: Some(self.job.clone()),
+            diagnostics: None,
+        }
+    }
 }
 
 /// One line of the file: an entry raised, answered, closed, or given the

@@ -33,11 +33,10 @@ use armada_core::envelope::{
     ComponentsData, DispatchData, DoctorData, Envelope, Evidence, FailureData, FailuresData,
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxData, InboxRow,
-    InitData,
-    InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem, Projection,
-    Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, SettingRow, SettingsData,
-    Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, TickData, TickRow,
-    TransitionRow, Unreclaimed, UpDryRun, VerifyData,
+    InitData, InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem,
+    Projection, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, SettingRow,
+    SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, TickData,
+    TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -2577,6 +2576,54 @@ fn failure_show_matches_its_fixture() {
         },
     )));
     assert_render("failure-show", &output);
+}
+
+/// `armada failures show <an inbox entry's id>` — **the fourth origin on the
+/// screen the other three already share.**
+///
+/// `docs/reserved/001-raised-items-need-identity.md` asks that every item Helm
+/// surfaces have an id, and three of the four already did. This is what the
+/// fourth looks like once it is in the same id space, and the fixture pins the
+/// two things that are different about it:
+///
+/// - **No hand-over block.** Every other origin ends with *the task a Job would
+///   be given*; a raised item's Job already exists and is stopped in front of
+///   the question, so there is nothing to hand over and the heading would be
+///   describing a Job that is already running.
+/// - **`armada fleet answer`, twice, where `fix` and `clear` would go.** Both
+///   of those refuse a raised item, and a row whose only offered actions cannot
+///   work is exactly the defect
+///   `docs/reserved/005-inbox-label-not-identity.md` records.
+///
+/// **`FIXING`, not `OPEN`.** A raised item is not a row nobody has started; it
+/// is a row with a Drone on it, which is what that word already means here.
+#[test]
+fn failure_show_of_a_raised_item_matches_its_fixture() {
+    let entry = armada_fleet::inbox::Entry {
+        uuid: "4f2a91c8-6b03-4d17-8e5a-91c30b6f2d84".to_string(),
+        job_uuid: Some("c19d0a34-3069-4f6a-9d1e-2b7c8a5f0e11".to_string()),
+        job: "nightly-flake".to_string(),
+        kind: armada_fleet::inbox::Kind::NeedsHuman,
+        raised_at: "2026-08-09T14:02:11Z".to_string(),
+        raised_ms: 0,
+        body: "raise the CI timeout to 90s, or drop the flaky test?".to_string(),
+        answered: None,
+        closed: None,
+    }
+    .as_entry();
+    let task = armada_core::failure::task(&entry);
+    assert_eq!(task, "", "a raised item has no task to hand over");
+
+    let output = Output::Failure(Box::new(Envelope::ok(
+        "failures show",
+        None,
+        Status::Ok,
+        FailureData {
+            results: vec![entry],
+            task,
+        },
+    )));
+    assert_render("failure-show-raised", &output);
 }
 
 /// `armada report` — a filing, with everything Armada gathered so that nobody

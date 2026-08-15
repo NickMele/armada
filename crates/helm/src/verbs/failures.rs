@@ -24,7 +24,7 @@
 use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::{Envelope, FailureData, FailuresData};
 use armada_core::error::{ArmadaError, ErrClass, Status};
-use armada_core::failure::{self, Entry, Line, State};
+use armada_core::failure::{self, Entry, Line, Listing, State};
 
 use crate::ask::{Ask, Choice};
 use crate::render::progress::Progress;
@@ -49,9 +49,20 @@ pub use crate::verbs::guild::Look;
 /// exists to forbid. The split is [`Origin::is_fault`], one function, so a
 /// fourth origin cannot arrive without deciding which listing it belongs in.
 ///
-/// **`show` takes either.** An id is an id: `armada failures show <a task>`
-/// answers rather than refusing, because a reader who has the id in hand has
-/// already told you which row they mean.
+/// **`show` takes any of them.** An id is an id: `armada failures show <a
+/// task>` answers rather than refusing, because a reader who has the id in hand
+/// has already told you which row they mean. Since
+/// `docs/reserved/001-raised-items-need-identity.md` that includes an inbox
+/// entry's id, which is the fourth kind of item and the only one that was ever
+/// outside this id space.
+///
+/// **There is no `Lens::Raised`, and its absence is the decision.** A raised
+/// item is in [`read`]'s output — so it resolves, and `show` answers about it —
+/// and it is in neither listing, because it already has one:
+/// `armada fleet inbox`. Drawing the same row in two tables is how two tables
+/// start disagreeing about it, and `armada fleet inbox` is where the answering
+/// happens. One id space is not the same claim as one listing, and `001` asks
+/// for the first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lens {
     /// `armada failures` — what went wrong, observed or reported.
@@ -62,8 +73,17 @@ pub enum Lens {
 
 impl Lens {
     /// Whether this entry is one of the rows this listing is about.
+    ///
+    /// **Matched on [`Listing`] rather than on a `bool`.** This read
+    /// `entry.origin.is_fault() == matches!(self, Lens::Failures)`, which
+    /// silently meant *anything that is not a fault is a task* — so the moment
+    /// a fourth origin existed, a raised item appeared under `armada tasks`
+    /// offering to `start` a Job for a row whose Job is already running.
     const fn shows(self, entry: &Entry) -> bool {
-        entry.origin.is_fault() == matches!(self, Lens::Failures)
+        match (entry.origin.listing(), self) {
+            (Listing::Faults, Lens::Failures) | (Listing::Written, Lens::Tasks) => true,
+            (Listing::Faults | Listing::Written | Listing::Raised, _) => false,
+        }
     }
 
     /// The verb the envelope names, and the prefix every sub-verb's name takes.
@@ -401,7 +421,11 @@ pub fn clear<C: Clock>(
         // **By id, across both lenses.** A person holding an id has already
         // said which row they mean, and refusing it because they typed the
         // other verb would be Armada knowing better than the id it printed.
-        Some(id) => vec![resolve(&entries, id)?],
+        Some(id) => {
+            let entry = resolve(&entries, id)?;
+            already_has_a_job(&entry, "cleared")?;
+            vec![entry]
+        }
         None => entries
             .into_iter()
             .filter(|entry| lens.shows(entry) && entry.state != State::Cleared)
@@ -474,6 +498,7 @@ pub fn fix<R: Run, C: Clock>(
     progress: &mut dyn Progress,
 ) -> Result<Output, ArmadaError> {
     let entry = resolve(&read(now, place)?, id)?;
+    already_has_a_job(&entry, "promoted")?;
     let spawn = crate::args::Spawn {
         json: false,
         task: failure::task(&entry),
@@ -528,9 +553,46 @@ fn listing(verb: &str, results: Vec<Entry>) -> Output {
 }
 
 /// The log, with every entry's age filled in against this clock.
+/// The log, with every entry's age filled in against this clock — **and the
+/// inbox folded in beside it, so there is one id space.**
+///
+/// # Why the inbox is read here
+///
+/// `docs/reserved/001-raised-items-need-identity.md`: *every item Helm surfaces
+/// is an inbox entry with an id.* Three origins were already one id space; the
+/// inbox was the fourth kind of item and the only one outside it, so
+/// `armada failures show <an inbox id>` answered *no recorded failure is called
+/// that* about an id printed on the screen the reader had just read.
+///
+/// **The unification is in the reader, not the store.** The inbox stays in its
+/// own file because Helm's Stop hook and its monitor are pointed at that exact
+/// path (`armada_core::helm`); breaking the delivery mechanism to tidy the
+/// storage would be the wrong half. What one reader gives is what the complaint
+/// actually asked for: one `resolve`, one refusal when a prefix is ambiguous
+/// across every item on the machine, and one `show`.
+///
+/// # No migration, and that is the point
+///
+/// `armada_fleet::inbox::read` is called rather than `fleet`'s `entries`, which
+/// migrates legacy rows and needs the Job index to do it. This is a read on the
+/// path of `armada failures`, `armada tasks` and every `show` — it must not pull
+/// in the Job store, and a legacy row projects as a closed item that resolves by
+/// id and appears in no listing, which is the correct treatment of a row nobody
+/// can act on (`docs/reserved/005-inbox-label-not-identity.md`).
+///
+/// **An unreadable inbox does not fail this read.** `armada failures` answers
+/// about the failure log; a machine whose inbox is corrupt should still be able
+/// to ask what broke, and the ids it cannot offer are the ids of items it could
+/// not have listed anyway.
 fn read<C: Clock>(now: &C, place: &Where) -> Result<Vec<Entry>, ArmadaError> {
     let mut entries =
         armada_manifest::failures::read(&armada_manifest::failures::path(&place.armada_home))?;
+    entries.extend(
+        armada_fleet::inbox::read(&place.inbox())
+            .unwrap_or_default()
+            .iter()
+            .map(armada_fleet::inbox::Entry::as_entry),
+    );
     failure::age(&mut entries, now.wall_ms());
     Ok(entries)
 }
@@ -566,6 +628,45 @@ fn resolve(entries: &[Entry], id: &str) -> Result<Entry, ArmadaError> {
                     .join(", ")
             ),
             next_action: Some("give more of the id".to_string()),
+        }),
+    }
+}
+
+/// **Refuse a raised item where a Job would be spawned or a line appended.**
+///
+/// The id space is one (`docs/reserved/001-raised-items-need-identity.md`), so
+/// every verb here can now be handed an inbox entry's id — and two of them have
+/// nothing honest to do with it:
+///
+/// - **`fix` / `start` would spawn a second Job** for a row whose Job already
+///   exists and is stopped in front of the question. Two Drones on one question
+///   is two answers to give.
+/// - **`clear` would append to `failures.jsonl`** a line about an id that file
+///   has never held, which is a row that reads as cleared and is not. An entry
+///   stops being open by being answered or by its Job ending
+///   (`docs/reserved/005-inbox-label-not-identity.md`), and both of those are
+///   written to the inbox by the verb that owns it.
+///
+/// **Refused rather than silently forwarded**, because `armada failures clear`
+/// and `armada fleet answer` are not the same act: one discards a row and the
+/// other unblocks an agent. Doing the second when the first was asked for is
+/// worse than saying no.
+///
+/// The message names what would have happened, and `next_action` is the verb
+/// that does work — which is the whole of what a person with the id in hand
+/// needs.
+fn already_has_a_job(entry: &Entry, verb: &str) -> Result<(), ArmadaError> {
+    match entry.origin.listing() {
+        Listing::Faults | Listing::Written => Ok(()),
+        Listing::Raised => Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: entry.id.clone(),
+            message: format!(
+                "`{}` is a question {} asked, not something to be {verb}",
+                entry.id,
+                entry.job.as_deref().unwrap_or("a Job")
+            ),
+            next_action: Some(format!("`armada fleet answer {} \"…\"`", entry.id)),
         }),
     }
 }

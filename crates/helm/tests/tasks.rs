@@ -454,3 +454,176 @@ fn no_absolute_home_path_reaches_the_store_from_a_task() {
         "an absolute $HOME reached disk:\n{written}"
     );
 }
+
+// ------------------------------------------------- one id space, four origins
+//
+// `docs/reserved/001-raised-items-need-identity.md`. Three origins already
+// shared `~/.armada/failures.jsonl`; the inbox was the fourth kind of item and
+// the only one outside, so an id off `armada fleet inbox` resolved nowhere else
+// and an id off `armada failures` resolved nowhere there.
+
+/// Plant one open inbox entry, the way a Drone's `fleet.ask_human` writes it.
+///
+/// **Written as a line rather than through the API**, because the file is what
+/// the reader reads and a helper that used the writer would not prove the two
+/// agree on the shape.
+fn plant_inbox(machine: &Machine, uuid: &str, job: &str, body: &str) {
+    let path = machine.home.path().join(".armada/inbox.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        format!(
+            "{{\"type\":\"raised\",\"uuid\":\"{uuid}\",\
+             \"job_uuid\":\"c19d0a34-3069-4f6a-9d1e-2b7c8a5f0e11\",\
+             \"job\":\"{job}\",\"kind\":\"needs_human\",\
+             \"raised_at\":\"2026-08-09T14:02:11Z\",\"raised_ms\":1,\
+             \"body\":\"{body}\"}}\n"
+        ),
+    )
+    .unwrap();
+}
+
+/// **An inbox entry resolves in the same id space, and is listed in neither
+/// lens** — the two halves of `001`'s unification, and the second is what keeps
+/// it from being a fifth store wearing a fourth listing.
+///
+/// A raised item has its own listing already: `armada fleet inbox`. Drawing the
+/// same row in `armada tasks` as well is how two tables start disagreeing about
+/// it. One id space is not the same claim as one listing, and `001` asks for
+/// the first.
+#[test]
+fn an_inbox_entry_resolves_by_id_and_is_listed_in_neither_lens() {
+    let machine = Machine::new();
+    let repo = machine.repo("orders", "version: 1\nname: orders\n");
+    let task = capture(&machine, &repo, "rename the port allocator");
+    plant_inbox(
+        &machine,
+        "4f2a91c8-6b03-4d17-8e5a-91c30b6f2d84",
+        "nightly-flake",
+        "raise the CI timeout to 90s?",
+    );
+
+    // **Four characters of the id**, which is what a person retypes off the
+    // table — and it resolves through a verb that has never read the inbox.
+    let shown = machine.run(&repo, &["failures", "show", "4f2a", "--json"]);
+    assert!(shown.status.success(), "{}", why(&shown));
+    let payload: serde_json::Value = serde_json::from_str(&stdout(&shown)).unwrap();
+    let row = &payload["data"]["results"][0];
+    assert_eq!(row["id"], "4f2a91c8", "{payload}");
+    assert_eq!(row["origin"], "raised", "{payload}");
+    assert_eq!(row["message"], "raise the CI timeout to 90s?", "{payload}");
+    assert_eq!(row["job"], "nightly-flake", "{payload}");
+    // **No task**, because its Job exists and is stopped in front of the
+    // question. There is nothing to hand over.
+    assert_eq!(payload["data"]["task"], "", "{payload}");
+
+    // Inverted from both sides, the rule this suite already holds for tasks and
+    // failures: absent from each listing, present in the id space.
+    for verb in ["tasks", "failures"] {
+        let listed: serde_json::Value =
+            serde_json::from_str(&stdout(&machine.run(&repo, &[verb, "--json"]))).unwrap();
+        let ids: Vec<String> = listed["data"]["results"]
+            .as_array()
+            .expect("results[]")
+            .iter()
+            .map(|row| row["id"].as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            !ids.contains(&"4f2a91c8".to_string()),
+            "a raised item was drawn in `armada {verb}`: {listed}"
+        );
+    }
+    // And the assertion that makes the one above mean something: the store the
+    // listing does read is still being read.
+    let tasks: serde_json::Value =
+        serde_json::from_str(&stdout(&machine.run(&repo, &["tasks", "--json"]))).unwrap();
+    assert_eq!(tasks["data"]["results"][0]["id"], task.as_str(), "{tasks}");
+}
+
+/// **A raised item is refused by the two verbs that would lie about it**, and
+/// the refusal names the verb that works.
+///
+/// `start` would spawn a second Job for a question a Drone is already stopped
+/// in front of; `clear` would append a line to `failures.jsonl` about an id
+/// that file has never held, producing a row that reads as cleared and is not.
+/// Silently forwarding either to `armada fleet answer` would be worse: clearing
+/// a row and unblocking an agent are different acts.
+#[test]
+fn a_raised_item_is_refused_by_start_and_clear_and_told_where_to_go() {
+    let machine = Machine::new();
+    let repo = machine.repo("orders", "version: 1\nname: orders\n");
+    plant_inbox(
+        &machine,
+        "4f2a91c8-6b03-4d17-8e5a-91c30b6f2d84",
+        "nightly-flake",
+        "raise the CI timeout to 90s?",
+    );
+
+    for verb in [
+        vec!["tasks", "start", "4f2a", "--json"],
+        vec!["failures", "fix", "4f2a", "--json"],
+        vec!["failures", "clear", "4f2a", "--json"],
+        vec!["tasks", "clear", "4f2a", "--json"],
+    ] {
+        let refused = machine.run(&repo, &verb);
+        assert_eq!(
+            refused.status.code(),
+            Some(2),
+            "`{}` should be a bad_invocation: {}",
+            verb.join(" "),
+            why(&refused)
+        );
+        let payload: serde_json::Value = serde_json::from_str(&stdout(&refused)).unwrap();
+        assert_eq!(payload["error"]["class"], "bad_invocation", "{payload}");
+        assert!(
+            payload["error"]["next_action"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("armada fleet answer 4f2a91c8"),
+            "the refusal should name the verb that works: {payload}"
+        );
+    }
+
+    // **Inverted**: the same verbs still work on a row that is theirs, so the
+    // refusal above is about the origin and not about the id being unknown.
+    let task = capture(&machine, &repo, "rename the port allocator");
+    let cleared = machine.run(&repo, &["tasks", "clear", &task, "--json"]);
+    assert!(cleared.status.success(), "{}", why(&cleared));
+}
+
+/// **`clear --all` never reaches a raised item**, whichever lens asks. It
+/// sweeps what the listing drew, and the listing draws none of them — so the
+/// one mistake an append-only log cannot make quiet stays impossible.
+#[test]
+fn clearing_everything_leaves_the_inbox_untouched() {
+    let machine = Machine::new();
+    let repo = machine.repo("orders", "version: 1\nname: orders\n");
+    capture(&machine, &repo, "rename the port allocator");
+    plant_inbox(
+        &machine,
+        "4f2a91c8-6b03-4d17-8e5a-91c30b6f2d84",
+        "nightly-flake",
+        "raise the CI timeout to 90s?",
+    );
+    let before = std::fs::read_to_string(machine.home.path().join(".armada/inbox.jsonl")).unwrap();
+
+    for verb in [["tasks", "clear", "--all"], ["failures", "clear", "--all"]] {
+        let swept = machine.run(&repo, &verb);
+        assert!(swept.status.success(), "{}", why(&swept));
+    }
+
+    assert_eq!(
+        std::fs::read_to_string(machine.home.path().join(".armada/inbox.jsonl")).unwrap(),
+        before,
+        "a clear --all wrote to the inbox"
+    );
+    // And the raised item is still open and still resolvable, which is the fact
+    // the byte comparison above is a proxy for.
+    let shown = machine.run(&repo, &["failures", "show", "4f2a", "--json"]);
+    assert!(shown.status.success(), "{}", why(&shown));
+    let payload: serde_json::Value = serde_json::from_str(&stdout(&shown)).unwrap();
+    assert_eq!(
+        payload["data"]["results"][0]["state"], "FIXING",
+        "{payload}"
+    );
+}

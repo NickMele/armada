@@ -210,6 +210,128 @@ pub enum Origin {
     /// [`Origin::Reported`] at all: the row is not a defect, so the listing it
     /// belongs in is a different question even though the store is the same.
     Written,
+    /// **A Drone asked for you** — an inbox entry, read through the same lens as
+    /// everything else here.
+    ///
+    /// # This one is not in `failures.jsonl`
+    ///
+    /// Every other origin is a line in the failure log. This one is
+    /// `~/.armada/inbox.jsonl`, projected into [`Entry`]'s shape at read time
+    /// by `armada_fleet::inbox::Entry::as_entry`. Two files and one id space,
+    /// and that is the decision rather than an accident:
+    ///
+    /// - **One id space is what `001` asks for.** *"Every item Helm surfaces is
+    ///   an inbox entry with an id, whether it renders in the Bridge, in a
+    ///   table, or mid-sentence."* An id an item can be named by is the whole
+    ///   ask; which file holds the item is not mentioned, because it is not the
+    ///   complaint.
+    /// - **Two files is forced, and cheaply.** Helm's Stop hook greps the inbox
+    ///   for unread entries and its monitor runs `tail -F` on that exact path
+    ///   (`crate::helm`). Merging the stores would break the mechanism that
+    ///   makes a raised item reach anybody, in order to tidy where bytes live.
+    ///
+    /// So the store is where the writing happens and the **reader** is where
+    /// the unification happens: one `read`, one `resolve`, one refusal when a
+    /// prefix is ambiguous across all four origins.
+    ///
+    /// # Nothing here went wrong, and nobody wrote it down
+    ///
+    /// It is the fourth answer to *who noticed*, and it is the only one where
+    /// the answer is **an agent**. That is why it needs its own word rather
+    /// than borrowing [`Origin::Written`]: a written task is yours to start
+    /// whenever you like, and a raised item has a Drone stopped in front of it,
+    /// waiting.
+    ///
+    /// # `001`'s first open question: does Helm need telling?
+    ///
+    /// > *"If you mark a thing done, does the Drone that raised it resume on
+    /// > that fact, or is the acknowledgement purely yours? Both are defensible
+    /// > and they are different products."*
+    ///
+    /// **Both, and the origin decides which** — so it is one rule rather than
+    /// two products, and the rule is already on this enum.
+    ///
+    /// | Origin | Who is waiting | So acknowledgement… |
+    /// |---|---|---|
+    /// | [`Observed`](Origin::Observed) | nobody | is purely yours |
+    /// | [`Reported`](Origin::Reported) | nobody | is purely yours |
+    /// | [`Written`](Origin::Written) | nobody | is purely yours |
+    /// | **[`Raised`](Origin::Raised)** | **a Drone, stopped** | **resumes it** |
+    ///
+    /// The question only looks like a coin flip while *item* is one word for
+    /// four things. Three of these were recorded and nothing is blocked on
+    /// them: a failure Armada wrote down does not un-happen when you clear it,
+    /// and a task you drop was never started. There is no second party, so
+    /// telling one would mean inventing one.
+    ///
+    /// A raised item is the opposite case and it is not a near miss. A Drone
+    /// stopped *because* it raised this, and it is holding a worktree, a
+    /// session and a budget while it waits. **Acknowledging it and resuming it
+    /// are the same act**, which is what `armada fleet answer` has always done
+    /// — the answer is the next turn's prompt. An acknowledgement that were
+    /// "purely yours" here would leave an agent parked on a question you had
+    /// already answered, which is a worse version of the complaint that opened
+    /// this section.
+    ///
+    /// **This is also why a raised item's acknowledgement carries a body and
+    /// the other three do not.** You cannot resume an agent with a tick. That
+    /// asymmetry is the answer showing up in the shape of the verb, rather than
+    /// a decision anyone had to impose.
+    ///
+    /// # `001`'s second open question: where does the keystroke live?
+    ///
+    /// > *"Inside the Helm session, in the Bridge, or in a notification — and a
+    /// > session that is a plain Claude Code conversation has nowhere obvious to
+    /// > put one."*
+    ///
+    /// **Not in the Helm session. Helm renders ids; the acknowledging happens
+    /// wherever there is already a keystroke** — `armada fleet inbox`'s table,
+    /// `armada failures`' and `armada tasks`' selector, and the Bridge when it
+    /// is built (`docs/reserved/003-bridge-command-centre.md`).
+    ///
+    /// `001` half-suspected this — *"which may mean the answer is that Helm
+    /// renders ids and the acknowledging happens elsewhere"* — and the
+    /// suspicion is right, for a reason that is a fact about the medium rather
+    /// than a preference. A Helm session is a plain Claude Code conversation.
+    /// Armada owns no terminal inside it and binds no keys; the surface it has
+    /// is text. Building a keystroke there would mean building a terminal
+    /// there, which is the Bridge, which is a different item.
+    ///
+    /// **What text can do is print an id, and that turns out to be the whole
+    /// of the complaint.** *"I did the second one"* is a sentence because
+    /// *the second one* is the only handle the reader was given. `armada fleet
+    /// answer 4f2a "…"` is not a sentence — it is a line you can copy, and it
+    /// says which row without a conversation about which row. The id is the
+    /// interface between Helm's prose and every surface that does have a
+    /// keystroke, which is why one id space was the part worth building first.
+    Raised,
+}
+
+/// **Which listing an origin belongs in** — the whole of the split, in one
+/// type, so that a fifth origin cannot be added without deciding which question
+/// it answers.
+///
+/// `armada failures` asks *what is broken*, `armada tasks` asks *what did I say
+/// I would do*, and `armada fleet inbox` asks *what is the fleet waiting on me
+/// for*. A single flat list of all three is one list nobody reads; several id
+/// spaces is the thing `docs/reserved/001-raised-items-need-identity.md`
+/// forbids. So it is **one id space and three lenses over it**, and this is the
+/// function that maps one to the other.
+///
+/// **Returned rather than answered as a `bool`**, which is what this replaced.
+/// `is_fault()` could only ever split two ways, so the moment a third listing
+/// existed every caller of it was silently deciding *not-a-fault means a task*
+/// — and a raised item would have been listed under `armada tasks`, promoted
+/// with `tasks start`, and offered `tasks clear`. A `bool` cannot be matched
+/// exhaustively; this can (`ARCHITECTURE.md` §1.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Listing {
+    /// `armada failures` — something went wrong.
+    Faults,
+    /// `armada tasks` — you decided to do something.
+    Written,
+    /// `armada fleet inbox` — an agent is waiting on you.
+    Raised,
 }
 
 impl Origin {
@@ -219,23 +341,26 @@ impl Origin {
             Origin::Observed => "observed",
             Origin::Reported => "reported",
             Origin::Written => "written",
+            Origin::Raised => "raised",
+        }
+    }
+
+    /// Which of the three listings this origin's rows belong in.
+    pub const fn listing(self) -> Listing {
+        match self {
+            Origin::Observed | Origin::Reported => Listing::Faults,
+            Origin::Written => Listing::Written,
+            Origin::Raised => Listing::Raised,
         }
     }
 
     /// Whether this origin describes something that went **wrong**.
     ///
-    /// **The whole of the split between the two listings**, in one function so
-    /// that a third origin cannot be added without deciding which question it
-    /// answers. `armada failures` asks *what is broken* and `armada tasks` asks
-    /// *what did I say I would do*; a single flat list of all three is one
-    /// list nobody reads, and two id spaces is the thing
-    /// `docs/reserved/001-raised-items-need-identity.md` forbids — so it is one
-    /// store, one id space, and two lenses over it.
+    /// Read off [`Origin::listing`] rather than matched again, so there is one
+    /// place the question is decided and one place a new origin has to answer
+    /// it.
     pub const fn is_fault(self) -> bool {
-        match self {
-            Origin::Observed | Origin::Reported => true,
-            Origin::Written => false,
-        }
+        matches!(self.listing(), Listing::Faults)
     }
 }
 
@@ -979,10 +1104,19 @@ pub fn age(entries: &mut [Entry], now_ms: u64) {
 /// Every string in it has already been through [`tilde`], so a Job's transcript
 /// — which leaves this machine — cannot carry an absolute home path out of the
 /// log.
+///
+/// **A raised item has no task, and the empty string says so.** Every other
+/// origin is a row waiting for a Job to be spawned on it; a raised item's Job
+/// already exists and is stopped in front of the question. There is nothing to
+/// hand over, so the caller renders no hand-over block and offers `armada fleet
+/// answer` where it would otherwise offer `fix` or `start`. Returning a prompt
+/// nobody could send would put a paragraph on the screen under the heading *the
+/// task a Job would be given*, about a Job that is already running.
 pub fn task(entry: &Entry) -> String {
     match entry.origin {
         Origin::Reported => return report_task(entry),
         Origin::Written => return written_task(entry),
+        Origin::Raised => return String::new(),
         Origin::Observed => {}
     }
     let mut out = format!(
@@ -1466,8 +1600,55 @@ mod tests {
         assert!(Origin::Observed.is_fault());
         assert!(Origin::Reported.is_fault());
         assert!(!Origin::Written.is_fault());
-        for origin in [Origin::Observed, Origin::Reported, Origin::Written] {
+        assert!(!Origin::Raised.is_fault());
+        for origin in [
+            Origin::Observed,
+            Origin::Reported,
+            Origin::Written,
+            Origin::Raised,
+        ] {
             assert_eq!(origin.word(), origin.word().to_lowercase());
+        }
+    }
+
+    /// **Every origin names exactly one listing**, and the two that are not
+    /// faults name different ones.
+    ///
+    /// This is the assertion `is_fault()` could not make. *Not a fault* was
+    /// read everywhere as *a written task*, so a raised item would have been
+    /// listed under `armada tasks`, promoted with `tasks start` and offered
+    /// `tasks clear` — three wrong words for a row whose Job already exists and
+    /// is waiting on an answer.
+    #[test]
+    fn each_origin_belongs_to_one_listing_and_the_two_non_faults_differ() {
+        assert_eq!(Origin::Observed.listing(), Listing::Faults);
+        assert_eq!(Origin::Reported.listing(), Listing::Faults);
+        assert_eq!(Origin::Written.listing(), Listing::Written);
+        assert_eq!(Origin::Raised.listing(), Listing::Raised);
+        assert_ne!(Origin::Written.listing(), Origin::Raised.listing());
+    }
+
+    /// **The stored word survives a round trip**, for every origin, because the
+    /// file outlives the process that wrote it. `raised` is the one that has
+    /// never been written to `failures.jsonl` — it is projected out of the
+    /// inbox at read time — and it round-trips anyway, so that a future writer
+    /// cannot be the thing that discovers it does not.
+    #[test]
+    fn every_origin_round_trips_through_the_name_it_is_stored_under() {
+        for (origin, stored) in [
+            (Origin::Observed, "observed"),
+            (Origin::Reported, "reported"),
+            (Origin::Written, "written"),
+            (Origin::Raised, "raised"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&origin).unwrap(),
+                format!("\"{stored}\"")
+            );
+            assert_eq!(
+                serde_json::from_str::<Origin>(&format!("\"{stored}\"")).unwrap(),
+                origin
+            );
         }
     }
 

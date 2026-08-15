@@ -2272,7 +2272,10 @@ fn an_entry_is_answered_by_its_own_id_rather_than_by_its_jobs_name() {
     let data = spawn(&scratch, &run, &task("add rate limiting"));
     await_turn(&scratch, &data.uuid);
 
-    for (id, body) in [("aaaa1111-e", "raise the CI timeout?"), ("bbbb2222-e", "or drop the flaky test?")] {
+    for (id, body) in [
+        ("aaaa1111-e", "raise the CI timeout?"),
+        ("bbbb2222-e", "or drop the flaky test?"),
+    ] {
         armada_fleet::inbox::raise(
             &scratch.inbox(),
             id,
