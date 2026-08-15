@@ -155,6 +155,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::MachineInit(init) => init.json,
         Invocation::Doctor { json, .. } => *json,
         Invocation::Bridge(bridge) => bridge.json,
+        Invocation::Helm(helm) => helm.json,
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Mcp { json } => *json,
@@ -302,6 +303,34 @@ fn dispatch(
             exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
             boot_id: armada_manifest::machine::boot_id(&run, cwd).ok_or_else(no_boot_id)?,
         });
+    }
+
+    // **Helm is machine-scoped for Fleet's reason and one of its own.** Its
+    // whole subject is the fleet across every repository, and routing it through
+    // workspace resolution would refuse to start the orchestrator from any
+    // directory that is not a workspace — which is most directories, including
+    // the one a person opens a terminal in.
+    if let Invocation::Helm(options) = &invocation {
+        let place = verbs::helm::Where {
+            home: home.to_path_buf(),
+            armada_home: armada_manifest::machine::armada_home(home),
+            claude_home: home.join(".claude"),
+            // Read once, at the entrypoint, like `$HOME` and the cwd: the
+            // toolbelt's registration names *this* binary, and a bare `armada`
+            // there resolves against the session's own `PATH`
+            // (`ARCHITECTURE.md` §1.4).
+            exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
+            boot_id: armada_manifest::machine::boot_id(&run, cwd).ok_or_else(no_boot_id)?,
+        };
+        return helm(
+            &place,
+            options,
+            &verbs::helm::Options {
+                agent: options.agent.clone(),
+                new: options.new,
+            },
+            terminal,
+        );
     }
 
     // **Fleet is machine-scoped too, and for its own reason.** A Job's worktree
@@ -511,8 +540,94 @@ fn dispatch(
         | Invocation::Guild(_)
         | Invocation::Fleet(_)
         | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),
-        Invocation::Bridge(_) => unreachable!("machine-scoped, and handled above"),
+        Invocation::Bridge(_) | Invocation::Helm(_) => {
+            unreachable!("machine-scoped, and handled above")
+        }
     }
+}
+
+/// `armada helm` — assemble the launch, and enter it only if asked twice.
+///
+/// **Two conditions, and both must hold before a session is opened**: `--exec`
+/// on the line, and a terminal on the other end. Neither alone is enough.
+///
+/// | Guard | Stops |
+/// |---|---|
+/// | `--exec` | a script, an alias or a mistyped `armada helm` opening a session |
+/// | a terminal | a CI job, a test harness or a pipeline reaching the flag |
+///
+/// The cost of getting this wrong is not a wasted run: a Claude Code session
+/// spends a real budget against a real account for as long as it is open, and
+/// nothing downstream of `exec` can refund it. So the default is to report the
+/// command and start nothing, which is free and is what `--json` is for.
+///
+/// **`mark_started` is written before the exec and not after**, because there is
+/// no after: the process is replaced, so a flag set on the far side of the call
+/// is a flag that is never set. Writing it first means a launch that fails to
+/// exec has recorded a conversation that does not exist — which `--new` fixes in
+/// one word, and which is the cheaper of the two mistakes by a wide margin. The
+/// other order loses the conversation every single day.
+fn helm(
+    place: &verbs::helm::Where,
+    options: &args::Helm,
+    wanted: &verbs::helm::Options,
+    terminal: render::term::Terminal,
+) -> Result<Output, ArmadaError> {
+    let output = verbs::helm::run(&SystemClock, place, wanted)?;
+    if !options.exec {
+        return Ok(output);
+    }
+    // **Refused rather than degraded.** A caller who typed `--exec` into a pipe
+    // asked for a conversation, and answering with the report they would have
+    // got anyway looks like Armada ignoring the flag.
+    if !terminal.can_ask() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: verbs::helm::ENTER.to_string(),
+            message: "Helm is a conversation, and this is not a terminal".to_string(),
+            next_action: Some(
+                "run `armada helm --exec` at a terminal; `armada helm --json` reports \
+                 the command without starting anything"
+                    .to_string(),
+            ),
+        });
+    }
+    let Output::Helm(envelope) = &output else {
+        unreachable!("`verbs::helm::run` answers with `Output::Helm`");
+    };
+    helm_exec(place, &envelope.data)?;
+    Ok(output)
+}
+
+/// Become the session. Returns only if the exec **failed**.
+fn helm_exec(
+    place: &verbs::helm::Where,
+    data: &armada_core::envelope::HelmData,
+) -> Result<(), ArmadaError> {
+    verbs::helm::mark_started(
+        place,
+        &armada_core::helm::Session {
+            uuid: data.uuid.clone(),
+            agent: data.agent.clone(),
+            started: true,
+        },
+    )?;
+
+    // **The vector, never a re-split line.** A `$HOME` with a space in it is
+    // ordinary on macOS, and splitting the printed command back into words would
+    // hand `claude` a `--mcp-config` that is two arguments — an orchestrator
+    // with an empty toolbelt, on exactly the machines where it is hardest to
+    // reproduce.
+    let error = std::process::Command::new(&data.argv[0])
+        .args(&data.argv[1..])
+        .exec();
+
+    Err(ArmadaError {
+        class: ErrClass::Environment,
+        r#where: data.argv.join(" "),
+        message: format!("could not enter Helm: {error}"),
+        next_action: Some("install Claude Code, or put it on PATH".to_string()),
+    })
 }
 
 /// `armada bridge` — one frame, or the screen.

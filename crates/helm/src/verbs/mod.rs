@@ -14,6 +14,7 @@ pub mod dispatch;
 pub mod doctor;
 pub mod fleet;
 pub mod guild;
+pub mod helm;
 pub mod init;
 pub mod machine;
 pub mod preflight;
@@ -26,9 +27,9 @@ use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
-    GuildInitData, GuildSyncData, InboxData, InitData, InitDryRun, KillData, MachineInitData,
-    McpData, ProbeData, Projection, ReportData, ScanData, ServicesData, SkillsData, SpawnData,
-    StatusData, UpDryRun, VerdictData, VerifyData,
+    GuildInitData, GuildSyncData, HelmData, InboxData, InitData, InitDryRun, KillData,
+    MachineInitData, McpData, ProbeData, Projection, ReportData, ScanData, ServicesData,
+    SkillsData, SpawnData, StatusData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -87,6 +88,9 @@ pub enum Output {
     FleetLs(Box<Envelope<FleetLsData>>),
     /// `armada bridge` — one frame of the live screen.
     Bridge(Box<Envelope<BridgeData>>),
+    /// `armada helm` — the assembled launch. **Nothing has been started**; the
+    /// envelope reports the command that would start it.
+    Helm(Box<Envelope<HelmData>>),
     /// `armada fleet board`.
     Board(Box<Envelope<BoardData>>),
     /// `armada fleet kill`.
@@ -137,6 +141,7 @@ impl Output {
             Output::Spawn(e) => e.to_json(),
             Output::FleetLs(e) => e.to_json(),
             Output::Bridge(e) => e.to_json(),
+            Output::Helm(e) => e.to_json(),
             Output::Board(e) => e.to_json(),
             Output::Kill(e) => e.to_json(),
             Output::Inbox(e) => e.to_json(),
@@ -193,6 +198,7 @@ impl Output {
             Output::Spawn(e) => e.exit_code(),
             Output::FleetLs(e) => e.exit_code(),
             Output::Bridge(e) => e.exit_code(),
+            Output::Helm(e) => e.exit_code(),
             Output::Board(e) => e.exit_code(),
             Output::Kill(e) => e.exit_code(),
             Output::Inbox(e) => e.exit_code(),

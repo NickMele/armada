@@ -376,6 +376,37 @@ Two answers, because neither is sufficient alone:
   limitation is stated rather than papered over: the check narrows the class, it does not close
   it.
 
+### There is no `--mcp` flag. The corpus specified one, and it does not exist
+
+Read off `claude --help` on 2026-08-15, while building [`armada helm`](commands/helm/helm.md).
+
+[`PLAN.md`](PLAN.md) §15.1 and `commands/helm/helm.md` both wrote Helm's launch as:
+
+```
+claude --agent helm --mcp armada --resume <helm-session-uuid>
+```
+
+**`--mcp` is not an option Claude Code has.** The flag that registers MCP servers is
+`--mcp-config <configs...>`, and it takes JSON files or strings rather than a server name — so
+there is nothing for a bare name to refer to. Written as specified, the argv would have been
+rejected at parse time, or worse, accepted with `armada` read as a prompt.
+
+**The corpus is a design document, not an option list, and this is the difference stated as an
+incident.** Every argv in `docs/commands/**` is a claim about another program's interface, and
+the only thing that settles one is the program. Three flags in Helm's launch were checked
+against `claude --help` before a line of it was written, and one of the four named in the design
+was wrong.
+
+The answer is the same shape as the `--verbose` entry above and shares its machinery:
+`helm::FLAGS` states every flag the launch uses as data, and `armada doctor` holds all six
+against `claude --help`. It is free and starts no session.
+
+**No session probe for Helm, and that is deliberate.** The Drone's probe is safe because a
+headless turn with closed stdin makes no API call; Helm is interactive and has no equivalent
+that is provably free. A check that might open the reader's orchestrator — against their
+account, on a machine they were only asking about — is not worth the coverage, so `doctor` asks
+`--help` and `plugin validate` and nothing else.
+
 ### `ps -o lstart=` answers for a zombie, so a start-time probe outlives the process
 
 Measured 2026-08-14 on darwin 27.0.0, by an assertion that failed: `armada-fleet`'s

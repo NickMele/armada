@@ -2,7 +2,7 @@
 
 [1m[38;2;255;169;64mUSAGE[0m
   armada <module> <verb> [flags]  [38;2;156;163;175mthe verbs Armada owns[0m
-  armada                          [38;2;156;163;175menter Helm, the agent you talk to[0m
+  armada helm                     [38;2;156;163;175menter Helm, the agent you talk to[0m
 
 [1m[38;2;255;169;64mMANIFEST — what a workspace is and how to operate it[0m
   config <scan|verify>  [38;2;156;163;175mreport the evidence, then verify what was written[0m
@@ -32,7 +32,8 @@
   inbox                  [38;2;156;163;175mwhat the fleet needs from you[0m
   kill [<job>]           [38;2;156;163;175mend a Job and release everything it owns[0m
 
-[1m[38;2;255;169;64mTHE BRIDGE — what you watch while the fleet works[0m
+[1m[38;2;255;169;64mHELM AND THE BRIDGE — where you talk, and what you watch[0m
+  helm    [38;2;156;163;175mthe one agent you talk to: wire the toolbelt, report the launch[0m
   bridge  [38;2;156;163;175mthe live screen: every Job, its state, its spend, who needs you[0m
 
 [1m[38;2;255;169;64mTHIS MACHINE[0m
@@ -46,7 +47,6 @@
   -V, --version   [38;2;156;163;175mthe version[0m
 
 [1m[38;2;255;169;64mNOT BUILT YET[0m
-  armada helm                                 [38;2;156;163;175mM3[0m
   armada guild edit, verify                   [38;2;156;163;175mM2[0m
   armada manifest render, agents-md, explain  [38;2;156;163;175mreserved[0m
   armada manifest check --detach, --status    [38;2;156;163;175mreserved[0m

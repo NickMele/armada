@@ -1,0 +1,9 @@
+  [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mWIRED[0m         [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;61;220;132mWRITTEN[0m    [38;2;76;159;232mtoolbelt[0m      [38;2;156;163;175m~/.armada/helm/mcp.json[0m
+  [38;2;61;220;132mWRITTEN[0m    [38;2;76;159;232mmonitor[0m       [38;2;156;163;175m~/.armada/helm/plugin[0m
+  [38;2;61;220;132mWRITTEN[0m    [38;2;76;159;232mbackstop[0m      [38;2;156;163;175m~/.armada/helm/stop-inbox.sh[0m
+  [38;2;156;163;175mUNCHANGED[0m  [38;2;76;159;232mconversation[0m  [38;2;156;163;175m~/.armada/helm/session.json[0m
+
+  [1m[38;2;255;169;64menter with[0m claude --agent helm --mcp-config ~/.armada/helm/mcp.json --plugin-dir ~/.armada/helm/plugin --settings ~/.armada/helm/settings.json --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0
+
+[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175mhelm · conversation new · nothing started; `armada helm --exec` enters it[0m

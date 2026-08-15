@@ -23,6 +23,7 @@ pub mod envelope;
 pub mod error;
 pub mod fleet;
 pub mod glob;
+pub mod helm;
 pub mod id;
 pub mod lease;
 pub mod lifecycle;

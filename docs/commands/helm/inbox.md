@@ -2,8 +2,10 @@
 
 How a Drone that needs you actually reaches you.
 
-> **Status: not built — M3.** Both mechanisms below were **verified in the M0 spike**
-> ([`PHASES.md`](../../PHASES.md) §9.1 F3).
+> **Status: built — M3.** Both mechanisms were **verified in the M0 spike**
+> ([`PHASES.md`](../../PHASES.md) §9.1 F3), and [`armada helm`](helm.md) now writes both. They
+> are still configuration rather than code: what Armada produces is a plugin directory and a
+> settings file, and neither is a process Armada runs.
 
 If the orchestrator is the only thing you talk to, the system's success rests on this one
 question. Get it wrong and a Job sits blocked for an hour while you talk about something
@@ -45,9 +47,14 @@ so events arrive mid-turn.
 
 ```json
 [{ "name": "armada-inbox",
-   "command": "tail -F ~/.armada/inbox.jsonl",
+   "command": "tail -F /Users/you/.armada/inbox.jsonl",
    "description": "Fleet events needing you" }]
 ```
+
+Written to `~/.armada/helm/plugin/monitors/monitors.json` and loaded with `--plugin-dir`, which
+needs no marketplace and no install step. **The path is absolute rather than `~/…`**: a
+monitor's command is not necessarily run through a shell that expands a tilde, and a monitor
+tailing a file called `~` reports nothing forever.
 
 **Constraint:** monitors run in *interactive CLI sessions only*. That fits exactly — the
 Helm is interactive and Drones are headless — but it means a monitor can never be a
@@ -58,6 +65,19 @@ Drone-side mechanism.
 A hook returning `{"decision":"block","reason":"…"}` refuses to let the turn end while anything
 is unread, and feeds the entries in. The orchestrator then finishes with *"and while we were
 talking, rate-limit went green"* before handing control back to you.
+
+Written to `~/.armada/helm/stop-inbox.sh` and registered by `--settings` — **for that session and
+not for the machine**. The same hook in `~/.claude/settings.json` would fire in every session on
+the machine, including a Drone's, and a Drone held open until the inbox is read is a Drone that
+cannot finish the work the inbox is about.
+
+**It reports a count and names the verb; it never pastes the entries.** That is
+[`PLAN.md`](../../PLAN.md) §15.2's first rule arriving at the backstop: a hook that inlined every
+unread body would put raw Drone output into Helm's window at the end of every single turn, which
+is exactly how a context fills in three days. `fleet.inbox` is one tool call away.
+
+**Nine lines of `/bin/sh`, and no `jq`.** A hook that depends on a tool the machine may not have
+is a backstop that silently stops backing anything up.
 
 The two overlap on purpose: the monitor is timely, the hook is **complete**. Neither alone
 gives both.

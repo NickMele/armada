@@ -53,10 +53,10 @@ pub mod term;
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
     ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData,
-    GuildBundleData, GuildInitData, GuildSyncData, Headline, InboxData, InitData, InitDryRun,
-    KillData, MachineInitData, McpData, ProbeData, Projection, ReportData, ResultRow, ScanData,
-    ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData,
-    VerifyData,
+    GuildBundleData, GuildInitData, GuildSyncData, Headline, HelmData, InboxData, InitData,
+    InitDryRun, KillData, MachineInitData, McpData, ProbeData, Projection, ReportData, ResultRow,
+    ScanData, ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData,
+    VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;
@@ -105,6 +105,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Spawn(envelope) => spawn(envelope, style, width),
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
         Output::Bridge(envelope) => bridge(envelope, style, width),
+        Output::Helm(envelope) => helm(envelope, style, width),
         Output::Board(envelope) => board(envelope, style, width),
         Output::Kill(envelope) => kill(envelope, style, width),
         Output::Inbox(envelope) => inbox(envelope, style, width),
@@ -649,6 +650,71 @@ fn frame_facts(data: &BridgeData) -> Vec<String> {
         facts.push(format!("{} hidden", data.hidden));
     }
     facts
+}
+
+/// `armada helm` — what was wired, and the command that would enter it.
+///
+/// **Four rows and then a command, in that order.** The rows are what changed on
+/// the machine, which is what a reader has to be able to audit; the command is
+/// what they would run, and it comes last because it is the thing they act on.
+///
+/// **`DETAIL` is the path and nothing else.** The first draft put the prose
+/// beside it — *"live push: every inbox line arrives mid-turn"* — and at eighty
+/// columns the path was what got truncated, which is the half a reader cannot
+/// look up anywhere else. `WIRED` already names the role, `armada helm --help`
+/// explains it, and the sentence stays in the envelope for a caller that wants
+/// it. A cell that elides the one auditable fact in the row is worse than a
+/// terse one.
+///
+/// **The command is on a line of its own rather than in a cell**, for the same
+/// reason [`board`]'s `DETAIL` column is fixed: a truncated launch command is
+/// not a shorter answer, it is the wrong one, and this verb exists to produce a
+/// line somebody reads and pastes. It runs past eighty columns, which
+/// `config scan`'s hand-over line already does and for the identical reason.
+fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut table = Table::new(columns("wired", "detail", false)).indent(2);
+
+    for row in &data.results {
+        table = table.row(vec![
+            token(
+                row.state.word(),
+                match row.state {
+                    Wiring::Written => Role::BeaconGreen,
+                    Wiring::Unchanged => Role::SteelGrey,
+                },
+            ),
+            Cell::painted(row.what.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&row.at)),
+        ]);
+    }
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    // **The command, whole, and never elided.** It is the one line here meant to
+    // be copied, and a `…` in the middle of it produces an argv that starts an
+    // unconfigured session rather than one that starts nothing.
+    out.push_str(&format!(
+        "  {} {}\n\n",
+        style.strong(Role::SignalAmber, "enter with"),
+        data.argv.join(" ")
+    ));
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            data.agent.clone(),
+            format!("conversation {}", data.conversation.word().to_lowercase()),
+            // **Said out loud, because the absence of a session is the point.**
+            // A reader who assumed `armada helm` had opened one would sit
+            // waiting for a prompt that is never coming.
+            format!(
+                "nothing started; `armada helm {}` enters it",
+                crate::verbs::helm::ENTER
+            ),
+        ],
+    ));
+    out
 }
 
 /// `armada fleet board` — the two facts needed to enter a Job.

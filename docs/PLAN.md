@@ -3665,6 +3665,15 @@ The reasoning, since this one has a real cost either way:
 MCP server as its toolbelt, resuming the same conversation each day. Typing `armada` with no
 arguments enters it; `armada helm` is the explicit spelling.
 
+> **What M3 built, and the one line of this it did not.** `armada helm` assembles the launch,
+> wires the inbox and remembers the conversation. **Entering the session is behind `--exec`, and
+> the bare word is not wired to it** ([`commands/helm/helm.md`](commands/helm/helm.md)). The
+> reasoning is the one this section already applies to naming: `armada` is the most typeable
+> thing on the machine, and the cost of a mistake there is not a stray page but a Claude Code
+> session nobody meant to open, spending against a real account until somebody notices. Giving
+> the bare word to Helm is still the intended end state; it wants a deliberate decision rather
+> than arriving as a side effect of building the verb.
+
 Its toolbelt is `fleet.*` and `manifest.*` — spawn, status, probe, answer, kill, and the
 workspace verbs. Its job is **decompose, delegate, aggregate, report**. Classification is not
 its job (§14.2).
