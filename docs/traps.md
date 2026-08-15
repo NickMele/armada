@@ -919,3 +919,24 @@ hand. It reads exactly like a bug in the argv, which is where an hour goes.
 **This is a property of the harness, not of char.** A real invocation runs under the user's own
 `$HOME` and finds the plugin. The integration suite passes `DOCKER_CONFIG` through explicitly;
 nothing in `crates/` compensates for it, and nothing should.
+
+## Two golden snapshots fail under parallel load and pass alone
+
+`status_matches_its_snapshot` and `up_and_down_match_their_snapshots` (both in
+`crates/helm/tests/golden.rs`) each failed once during a full `cargo test --workspace`, and each
+passed when run alone and on the next full run. Both compare a whole envelope, and both carry a
+`port_block`.
+
+**Do not treat a single failure in either as a real defect.** Re-run before believing it. An
+agent spent an hour this morning diagnosing a different intermittent failure that turned out to
+be four stray `armada-test-*` docker networks left behind by an earlier session, and reported it
+as pre-existing breakage in the code it was sent to fix.
+
+**What is actually unproven** is whether these two share something — a scratch `$HOME`, a port
+claim, or the machine-global store — that makes them order-dependent when the suite runs
+concurrently. Nobody has looked. Until somebody does, this is a known-flaky note and not a
+diagnosis, and writing it down is what stops the next agent rediscovering it at full price.
+
+**If you assume otherwise:** you will either chase a phantom or, worse, "fix" a golden fixture
+to match a run that was wrong — and golden fixtures have no update flag precisely so that
+adopting one is a deliberate act.
