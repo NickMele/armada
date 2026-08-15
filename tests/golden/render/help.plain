@@ -2,7 +2,7 @@ armada — one vocabulary for a repo's stack, and the agents working in it
 
 USAGE
   armada <module> <verb> [flags]  the verbs Armada owns
-  armada                          enter Helm, the agent you talk to
+  armada helm                     enter Helm, the agent you talk to
 
 MANIFEST — what a workspace is and how to operate it
   config <scan|verify>  report the evidence, then verify what was written
@@ -32,7 +32,8 @@ FLEET — the agents you do not talk to: Jobs, worktrees, budgets
   inbox                  what the fleet needs from you
   kill [<job>]           end a Job and release everything it owns
 
-THE BRIDGE — what you watch while the fleet works
+HELM AND THE BRIDGE — where you talk, and what you watch
+  helm    the one agent you talk to: wire the toolbelt, report the launch
   bridge  the live screen: every Job, its state, its spend, who needs you
 
 THIS MACHINE
@@ -46,7 +47,6 @@ GLOBAL FLAGS
   -V, --version   the version
 
 NOT BUILT YET
-  armada helm                                 M3
   armada guild edit, verify                   M2
   armada manifest render, agents-md, explain  reserved
   armada manifest check --detach, --status    reserved

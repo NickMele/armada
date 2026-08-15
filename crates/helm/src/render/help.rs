@@ -118,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 25] = [
+const PAGES: [Page; 26] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -653,6 +653,48 @@ const PAGES: [Page; 25] = [
             "--filter takes a word, or job=, workflow=, state=, task=, needs=you.",
         ],
     },
+    Page {
+        path: "helm",
+        synopsis: "helm",
+        summary: "the one agent you talk to: wire the toolbelt, report the launch",
+        usage: &["armada helm [--agent <name>] [--new]", "armada helm --json"],
+        // **The flag is listed, and listed as refused.** Leaving it off the page
+        // would make `armada helm --exec` read as a typo worth retrying, which
+        // is the reading the refusal itself is written against.
+        flags: &[
+            (
+                crate::verbs::helm::ENTER,
+                "become the session — refused for now; see NOTES",
+            ),
+            ("--new", "start a fresh conversation instead of resuming"),
+            (
+                "--agent <name>",
+                "a persona from ~/.armada/guild/subagents/",
+            ),
+        ],
+        examples: &[
+            (
+                "armada helm",
+                "wire the inbox and the toolbelt; print the command; start nothing",
+            ),
+            (
+                "armada helm --json",
+                "the same, with argv as a vector a script can run",
+            ),
+            (
+                "armada helm --new",
+                "put yesterday's conversation down and mint another",
+            ),
+        ],
+        notes: &[
+            "It starts nothing. The launch is assembled and verified, and entering",
+            "is switched off until the Bridge is fixed: --exec is refused and no",
+            "path in this binary opens a session. Run the printed command to enter.",
+            "It is the same conversation each day; the id lives in ~/.armada/helm/.",
+            "Its toolbelt is fleet.* and manifest.*; classification is Fleet's job.",
+            "There is no `helm` binary. Kubernetes owns that name on PATH.",
+        ],
+    },
 ];
 
 /// The page for what a caller typed after `armada`, or `None`.
@@ -698,22 +740,24 @@ pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
 /// The verbs of one module, as `(synopsis, summary)` — the shape every list of
 /// verbs on every page takes.
 fn verbs_of(module: &str) -> Vec<(&'static str, &'static str)> {
-    // **The Bridge is top-level and is not a machine verb.** `armada init` and
-    // `armada doctor` describe this laptop; the Bridge describes the fleet
-    // running on it, and filing it under `THIS MACHINE` would put it beside two
-    // verbs it has nothing in common with. It gets its own heading, so the one
-    // page a reader meets Armada on says what the screen is for.
-    const BRIDGE: &str = "bridge";
-    if module == "bridge-section" {
-        return PAGES
+    // **Helm and the Bridge are top-level and are not machine verbs.** `armada
+    // init` and `armada doctor` describe this laptop; these two describe the
+    // fleet running on it, and filing them under `THIS MACHINE` would put them
+    // beside two verbs they have nothing in common with. They share a heading,
+    // so the one page a reader meets Armada on says what each is for — and says
+    // it in the pair the design keeps insisting on: Helm is where you talk, the
+    // Bridge is what you watch (PLAN.md §15.1).
+    const ORCHESTRATION: [&str; 2] = ["helm", "bridge"];
+    if module == "orchestration" {
+        return ORCHESTRATION
             .iter()
-            .filter(|page| page.path == BRIDGE)
+            .filter_map(|path| PAGES.iter().find(|page| page.path == *path))
             .map(|page| (page.synopsis, page.summary))
             .collect();
     }
     PAGES
         .iter()
-        .filter(|page| page.module() == module && page.path != BRIDGE)
+        .filter(|page| page.module() == module && !ORCHESTRATION.contains(&page.path))
         .map(|page| (page.synopsis, page.summary))
         .collect()
 }
@@ -730,9 +774,13 @@ fn root(style: Style, terminal: Terminal) -> String {
 
     out.push_str(&heading(style, "USAGE"));
     out.push_str(
+        // **`armada helm`, spelled out.** PLAN.md §15.1 gives the bare word to
+        // Helm eventually; until it does, a USAGE line promising that `armada`
+        // alone enters the orchestrator would be this page describing a build
+        // that does not exist — which is the one thing a help page may never do.
         &two_column(&[
             ("armada <module> <verb> [flags]", "the verbs Armada owns"),
-            ("armada", "enter Helm, the agent you talk to"),
+            ("armada helm", "enter Helm, the agent you talk to"),
         ])
         .render(style, width),
     );
@@ -763,9 +811,9 @@ fn root(style: Style, terminal: Terminal) -> String {
     out.push('\n');
     out.push_str(&heading(
         style,
-        "THE BRIDGE \u{2014} what you watch while the fleet works",
+        "HELM AND THE BRIDGE \u{2014} where you talk, and what you watch",
     ));
-    out.push_str(&two_column(&verbs_of("bridge-section")).render(style, width));
+    out.push_str(&two_column(&verbs_of("orchestration")).render(style, width));
 
     out.push('\n');
     out.push_str(&heading(style, "THIS MACHINE"));
@@ -1036,13 +1084,19 @@ fn not_built(style: Style, width: usize) -> String {
     let manifest_verbs = not_built_verbs();
     let guild_verbs: Vec<&str> = RESERVED_GUILD_VERBS.iter().map(|(name, _)| *name).collect();
 
-    let mut out = Table::new(vec![Column::fixed(""), Column::flexible("")])
+    let mut table = Table::new(vec![Column::fixed(""), Column::flexible("")])
         .headerless()
-        .indent(2)
-        .row(vec![
+        .indent(2);
+    // **The row is skipped when nothing is in it**, rather than printing
+    // `armada ` with an empty list. Every top-level name is built as of M3, and
+    // the table still exists for the next one that is not.
+    if !modules.is_empty() {
+        table = table.row(vec![
             Cell::plain(format!("armada {}", modules.join(", "))),
             Cell::muted("M3"),
-        ])
+        ]);
+    }
+    let mut out = table
         .row(vec![
             Cell::plain(format!("armada guild {}", guild_verbs.join(", "))),
             Cell::muted("M2"),

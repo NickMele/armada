@@ -1469,6 +1469,102 @@ pub struct BoardData {
     pub command: String,
 }
 
+/// `armada helm` — the conversation, the toolbelt, and the command that enters
+/// it.
+///
+/// **The command is assembled and reported; nothing is started.** Entering the
+/// session is `--exec`'s, and it is a separate act on purpose: a verb that
+/// opened a Claude Code session as a side effect of being run could be reached
+/// by a script, by a test and by a mistyped line, and each of those spends a
+/// real budget against a real account (`commands/helm/helm.md`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HelmData {
+    /// Which persona, as `--agent` spells it.
+    pub agent: String,
+    /// The conversation's id.
+    pub uuid: String,
+    /// Whether entering it would resume or mint.
+    pub conversation: Conversation,
+    /// The command, assembled — what `--exec` would become.
+    ///
+    /// **A vector rather than a line, and the render is what joins it.** A
+    /// `$HOME` with a space in it is ordinary on macOS, and a consumer that had
+    /// to split a string back into words would break on exactly those machines
+    /// — including Armada's own `--exec`, which is the one consumer that must
+    /// not.
+    pub argv: Vec<String>,
+    /// What was wired, one row each.
+    pub results: Vec<Wired>,
+    /// Whether this invocation entered the session. **Always false**: the
+    /// `--exec` path replaces the process, so an envelope that said `true` is
+    /// one nothing could ever have written.
+    pub launched: bool,
+}
+
+/// Whether entering Helm continues yesterday's conversation or starts one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Conversation {
+    /// It has never run. This launch mints it with `--session-id`.
+    New,
+    /// It has run before, and `--resume` continues it — which is the whole of
+    /// "the same conversation each day" (PLAN.md §15.1).
+    Resumed,
+}
+
+impl Conversation {
+    /// The word, in both audiences.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Conversation::New => "NEW",
+            Conversation::Resumed => "RESUMED",
+        }
+    }
+}
+
+/// One piece of configuration `armada helm` put in place.
+///
+/// **Configuration rather than code, which is PLAN.md §15.3's whole claim.**
+/// Neither of the inbox's two mechanisms is a process Armada runs: one is a
+/// monitor a session-scoped plugin declares, the other is a `Stop` hook the
+/// session's own settings register. What Armada writes is the four documents
+/// that say so.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Wired {
+    /// What it is — `toolbelt`, `monitor`, `backstop`, `conversation`.
+    pub what: String,
+    /// Where it went, as a person writes it.
+    pub at: String,
+    /// Whether this run wrote it or found it already correct.
+    pub state: Wiring,
+    /// What it does, in the words a reader needs to decide whether it matters.
+    pub detail: String,
+}
+
+/// What became of one piece of Helm's configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Wiring {
+    /// This run wrote it.
+    Written,
+    /// It was already exactly these bytes.
+    ///
+    /// **Reported rather than silent.** A reader who has just edited one of
+    /// these files by hand needs to see that Armada overwrote it, and the only
+    /// way that fact is visible is if the ordinary case says `unchanged`.
+    Unchanged,
+}
+
+impl Wiring {
+    /// The word, in both audiences.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Wiring::Written => "WRITTEN",
+            Wiring::Unchanged => "UNCHANGED",
+        }
+    }
+}
+
 /// `armada fleet kill` — what each Job released, and what became of its tree.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct KillData {

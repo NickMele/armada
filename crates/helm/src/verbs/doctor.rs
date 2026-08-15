@@ -53,6 +53,7 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     // is what made a real reader ask which rows belonged together.
     let mut results = preflight::run(runner, &place.cwd, true).results;
     results.push(drone_argv(runner, &place.cwd));
+    results.push(helm_argv(runner, &place.cwd, &place.armada_home));
     results.push(directories(&place.armada_home));
     results.extend(drift(runner, &guild));
     results.extend(fragments(&guild));
@@ -197,6 +198,146 @@ fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
 /// starts a session and exits at EOF, so anything approaching this is a wedged
 /// binary or a hook that hangs.
 const PROBE: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// **Would Helm actually start?**
+///
+/// The same question [`drone_argv`] asks, arriving at the other argv Armada
+/// builds — and it is asked here for a sharper reason. A Drone that will not
+/// start shows up as a Job that stalls, and `armada fleet ls` says so. A Helm
+/// that will not start shows up as *nothing*, because Helm is how the reader
+/// would have asked.
+///
+/// **Two questions, and neither opens a session or spends a token.**
+///
+/// 1. **Every flag the launch uses is still offered**, read off `claude --help`.
+///    That is the shape of the failure Fleet already shipped once: an argv every
+///    test agreed on and the binary rejects at argument-parse time
+///    (`docs/traps.md`).
+/// 2. **The monitor's plugin still validates**, via `claude plugin validate` —
+///    the tool's own manifest checker, which reads a directory and starts
+///    nothing. A plugin Claude Code will not load is an inbox with no live push
+///    and no error anywhere; the `Stop` hook would still be a backstop, so the
+///    failure is *quietly slower* rather than visible, which is exactly the kind
+///    that survives for months.
+///
+/// **There is deliberately no session probe here.** The Drone's probe is safe
+/// because a headless turn with closed stdin makes no API call; Helm is
+/// interactive, and there is no equivalent that is provably free. A check that
+/// might open the reader's orchestrator — against their account, on a machine
+/// they were only asking about — is not worth the coverage.
+///
+/// The plugin half is **skipped rather than failed** when `armada helm` has
+/// never run: there is nothing to validate, and a `doctor` that reported a
+/// problem for a verb the reader has not used yet would be noise.
+fn helm_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
+    use armada_core::fleet::drone::CLAUDE;
+    use armada_core::helm;
+
+    let help = runner.call(
+        &RunRequest::new(
+            vec![CLAUDE.to_string(), "--help".to_string()],
+            cwd.to_path_buf(),
+        )
+        .timeout(PROBE),
+    );
+    let Some(help) = help.ok().filter(|output| output.ok()) else {
+        // Already reported by the tooling check above; saying it twice is noise.
+        return Finding::needs(
+            "helm argv",
+            Problem::Offline,
+            "`claude --help` did not answer, so the launch was not checked",
+            "check `claude --help` runs",
+        );
+    };
+
+    let missing: Vec<&str> = helm::FLAGS
+        .iter()
+        .copied()
+        .filter(|flag| !help.stdout.contains(flag))
+        .collect();
+    if !missing.is_empty() {
+        return Finding::needs(
+            "helm argv",
+            Problem::Missing,
+            format!(
+                "`claude` no longer offers {}: Helm would not start",
+                missing.join(", ")
+            ),
+            "pin an older claude, or report this to Armada",
+        );
+    }
+
+    let plugin = armada_home.join(helm::DIRECTORY).join("plugin");
+    if !plugin.join(".claude-plugin/plugin.json").is_file() {
+        return Finding::settled(
+            "helm argv",
+            Settled::Ok,
+            format!(
+                "{} flags accepted; run `armada helm` to wire the inbox",
+                helm::FLAGS.len()
+            ),
+        );
+    }
+
+    let validated = runner.call(
+        &RunRequest::new(
+            vec![
+                CLAUDE.to_string(),
+                "plugin".to_string(),
+                "validate".to_string(),
+                plugin.display().to_string(),
+            ],
+            cwd.to_path_buf(),
+        )
+        .timeout(PROBE),
+    );
+    match validated {
+        Ok(output) if output.ok() => Finding::settled(
+            "helm argv",
+            Settled::Ok,
+            // **The row says what was checked and that entering is off**, in
+            // that order, because both are true and a reader who saw only the
+            // first would conclude `armada helm` opens a session.
+            //
+            // **It gives the state and not the reason**, which is the one place
+            // that phrasing is not read from
+            // [`ENTER_IS_OFF`](crate::verbs::helm::ENTER_IS_OFF) — and
+            // deliberately. A `doctor` detail is a table cell about sixty-five
+            // columns wide; the full sentence truncates to *"entering switched
+            // off until t…"*, and half a reason mid-word is worse than a short
+            // one. The reason is on `armada helm --help` and in the refusal
+            // itself, which are the two surfaces a reader reaches for next.
+            format!(
+                "{} flags accepted, monitor validates; entering is off",
+                helm::FLAGS.len()
+            ),
+        ),
+        Ok(output) => Finding::needs(
+            "helm argv",
+            Problem::Missing,
+            format!(
+                "`claude` will not load Helm's monitor: {}",
+                complaint(&output).unwrap_or_else(|| "no reason given".to_string())
+            ),
+            "`armada helm` rewrites it; report this to Armada if it persists",
+        ),
+        Err(_) => Finding::needs(
+            "helm argv",
+            Problem::Offline,
+            "`claude plugin validate` would not run",
+            "check `claude` runs",
+        ),
+    }
+}
+
+/// The first line of a refusal, whichever stream it came out on.
+fn complaint(output: &armada_core::ctx::RunOutput) -> Option<String> {
+    format!("{}{}", output.stderr, output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
+}
 
 /// `~/.armada/` and its three directories.
 ///
@@ -603,6 +744,176 @@ mod tests {
                 timed_out: false,
             })
         }
+    }
+
+    /// A `claude` whose `--help` offers `flags`, and whose `plugin validate`
+    /// answers `plugin_ok`.
+    struct Helm {
+        flags: String,
+        plugin_ok: bool,
+        /// Every argv it was given, so a test can prove no session was ever
+        /// asked for.
+        seen: std::cell::RefCell<Vec<Vec<String>>>,
+    }
+
+    impl Helm {
+        fn healthy() -> Helm {
+            Helm {
+                flags: armada_core::helm::FLAGS.join(" "),
+                plugin_ok: true,
+                seen: std::cell::RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl Run for Helm {
+        fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+            self.seen.borrow_mut().push(request.argv.clone());
+            let argv: Vec<&str> = request.argv.iter().map(String::as_str).collect();
+            match argv.as_slice() {
+                ["claude", "--help"] => Ok(RunOutput {
+                    code: Some(0),
+                    signal: None,
+                    stdout: self.flags.clone(),
+                    stderr: String::new(),
+                    timed_out: false,
+                }),
+                ["claude", "plugin", "validate", ..] => Ok(RunOutput {
+                    code: Some(if self.plugin_ok { 0 } else { 1 }),
+                    signal: None,
+                    stdout: String::new(),
+                    stderr: match self.plugin_ok {
+                        true => String::new(),
+                        false => "✖ monitors/monitors.json: not an array\n".to_string(),
+                    },
+                    timed_out: false,
+                }),
+                _ => panic!("`doctor` asked `claude` for {argv:?}"),
+            }
+        }
+    }
+
+    /// A `~/.armada/helm/plugin` that `armada helm` has already written.
+    fn a_wired_machine() -> tempfile::TempDir {
+        let home = tempfile::tempdir().unwrap();
+        let manifest = home
+            .path()
+            .join(armada_core::helm::DIRECTORY)
+            .join("plugin/.claude-plugin");
+        std::fs::create_dir_all(&manifest).unwrap();
+        std::fs::write(
+            manifest.join("plugin.json"),
+            armada_core::helm::plugin_json(),
+        )
+        .unwrap();
+        home
+    }
+
+    /// **The check that would have caught the Drone's missing `--verbose`,
+    /// arriving at Helm's argv.** Every flag the launch uses is held against
+    /// what the installed binary says it offers.
+    #[test]
+    fn a_claude_that_offers_every_flag_the_launch_uses_is_ok() {
+        let run = Helm::healthy();
+        let finding = helm_argv(&run, Path::new("/tmp"), Path::new("/nonexistent"));
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.detail.contains("6 flags accepted"), "{finding:?}");
+    }
+
+    /// **`doctor` never opens a Helm session, and this is the assertion that
+    /// says so.** The Drone's probe is free because a headless turn with closed
+    /// stdin makes no API call; Helm is interactive and has no such probe, so
+    /// the only things `claude` may ever be asked here are `--help` and `plugin
+    /// validate` — neither of which starts a session or spends a token.
+    #[test]
+    fn checking_helm_never_asks_claude_to_start_anything() {
+        let home = a_wired_machine();
+        let run = Helm::healthy();
+        helm_argv(&run, Path::new("/tmp"), home.path());
+
+        let asked = run.seen.borrow().clone();
+        assert_eq!(asked.len(), 2, "{asked:?}");
+        for argv in &asked {
+            assert!(
+                argv.as_slice() == ["claude", "--help"]
+                    || argv[..3] == ["claude", "plugin", "validate"],
+                "`doctor` ran {argv:?}, which is not a free question"
+            );
+            for spending in ["--session-id", "--resume", "--print", "--agent"] {
+                assert!(
+                    !argv.iter().any(|word| word == spending),
+                    "`doctor` would open a session: {argv:?}"
+                );
+            }
+        }
+    }
+
+    /// A flag the launch needs going missing is the failure this exists for: a
+    /// Helm that will not start reports as nothing at all, because Helm is how
+    /// the reader would have asked.
+    #[test]
+    fn a_flag_helm_needs_going_missing_is_a_finding() {
+        let run = Helm {
+            flags: armada_core::helm::FLAGS
+                .iter()
+                .filter(|flag| **flag != "--mcp-config")
+                .copied()
+                .collect::<Vec<_>>()
+                .join(" "),
+            ..Helm::healthy()
+        };
+        let finding = helm_argv(&run, Path::new("/tmp"), Path::new("/nonexistent"));
+        assert_eq!(finding.status, Health::Missing);
+        assert!(finding.detail.contains("--mcp-config"), "{finding:?}");
+    }
+
+    /// **A monitor Claude Code will not load is quietly slower rather than
+    /// broken**, because the `Stop` hook still backs it up — which is exactly the
+    /// kind of failure that survives for months if nothing reports it.
+    #[test]
+    fn a_monitor_claude_code_would_not_load_is_a_finding() {
+        let home = a_wired_machine();
+        let run = Helm {
+            plugin_ok: false,
+            ..Helm::healthy()
+        };
+        let finding = helm_argv(&run, Path::new("/tmp"), home.path());
+        assert_eq!(finding.status, Health::Missing);
+        assert!(finding.detail.contains("monitors.json"), "{finding:?}");
+    }
+
+    /// **`doctor` says entering is off, and the row still fits its column.**
+    /// Both halves are the assertion: a reader who saw only *"6 flags accepted"*
+    /// would conclude `armada helm` opens a session, and a row that says so and
+    /// then truncates mid-word has told them nothing either.
+    #[test]
+    fn the_healthy_row_says_the_launch_is_checked_and_entering_is_off() {
+        let home = a_wired_machine();
+        let run = Helm::healthy();
+        let finding = helm_argv(&run, Path::new("/tmp"), home.path());
+
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.detail.contains("monitor validates"), "{finding:?}");
+        assert!(finding.detail.contains("entering is off"), "{finding:?}");
+        // The `DETAIL` column a `doctor` row draws into. Measured against the
+        // real render: the full reason truncates here, which is why this row
+        // carries the state and sends the reader to `armada helm --help`.
+        assert!(
+            finding.detail.len() <= 64,
+            "the row truncates: {} columns — {finding:?}",
+            finding.detail.len()
+        );
+    }
+
+    /// A machine that has never run `armada helm` has no monitor to validate,
+    /// and is told to run the verb rather than reported as a problem.
+    #[test]
+    fn a_machine_that_has_never_run_helm_is_ok_and_says_what_to_run() {
+        let run = Helm::healthy();
+        let finding = helm_argv(&run, Path::new("/tmp"), Path::new("/nonexistent"));
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.detail.contains("armada helm"), "{finding:?}");
+        assert_eq!(run.seen.borrow().len(), 1, "it validated a plugin anyway");
     }
 
     /// **The probe is what `doctor` runs, and it must be the Drone's own

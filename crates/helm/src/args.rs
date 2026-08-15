@@ -130,6 +130,8 @@ pub enum Invocation {
     },
     /// `armada bridge` — the live screen.
     Bridge(Box<Bridge>),
+    /// `armada helm` — assemble the orchestrator's launch.
+    Helm(Box<Helm>),
     /// `armada guild <verb>`.
     Guild(Box<GuildInvocation>),
     /// `armada fleet <verb>`.
@@ -285,6 +287,24 @@ impl Default for Bridge {
             once: false,
         }
     }
+}
+
+/// `armada helm`, with the flags `commands/helm/helm.md` gives it.
+///
+/// **`--exec` is a field rather than the default**, and that is the whole safety
+/// property of this verb. Assembling the launch costs nothing; entering the
+/// session spends a real budget against a real account for as long as it stays
+/// open — so the spend is behind a flag nothing but a person types.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Helm {
+    /// Emit the envelope.
+    pub json: bool,
+    /// Start a fresh conversation instead of resuming yesterday's.
+    pub new: bool,
+    /// A persona other than `helm`, from `~/.armada/guild/subagents/`.
+    pub agent: Option<String>,
+    /// **Become the session.** Off by default; see the struct's note.
+    pub exec: bool,
 }
 
 /// `armada init`, with the flags `docs/commands/init.md` gives it.
@@ -488,8 +508,13 @@ pub const BUILTIN_VERBS: [&str; 12] = [
 /// **M2 emptied three rows out of this table** — `init`, `doctor` and `guild`
 /// are built, and moved to [`TOP_LEVEL_VERBS`] and [`GUILD_BUILT`]. **M3's first
 /// third emptied a fourth**: `fleet` is built, and its verbs are in
-/// [`FLEET_VERBS`].
-pub const RESERVED_TOP_LEVEL: [(&str, &str); 1] = [("helm", "M3 — the one agent you do talk to")];
+/// [`FLEET_VERBS`]. **M3's last third emptied the table**: `helm` is built.
+///
+/// **Kept rather than deleted**, because the mechanism is what matters and not
+/// the current contents: the next claimed-and-unbuilt top-level name goes here
+/// and is answered by name, rather than as a typo, without anybody rebuilding
+/// the machinery that does it.
+pub const RESERVED_TOP_LEVEL: [(&str, &str); 0] = [];
 
 /// Fleet's verbs.
 ///
@@ -504,7 +529,7 @@ pub const FLEET_VERBS: [&str; 6] = ["spawn", "ls", "board", "answer", "inbox", "
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 3] = ["init", "doctor", "bridge"];
+pub const TOP_LEVEL_VERBS: [&str; 4] = ["init", "doctor", "bridge", "helm"];
 
 /// The Guild verbs this milestone built. The rest answer "not built yet".
 pub const GUILD_BUILT: [&str; 6] = ["init", "project", "pull", "push", "export", "import"];
@@ -640,6 +665,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "init" => return machine_init(rest, json, color),
             "doctor" => return doctor(rest, json, color),
             "bridge" => return bridge(rest, json, color),
+            "helm" => return helm(rest, json, color),
             "guild" => return guild(rest, json, color),
             "fleet" => return fleet(rest, json, color),
             "mcp" => return mcp(rest, json, color),
@@ -1053,6 +1079,40 @@ fn bridge(
         filter: parsed.value("--filter"),
         interval_s,
         once: parsed.on("--once") || parsed.json,
+    })))
+}
+
+/// `armada helm` — the one agent you talk to.
+///
+/// **A verb, and never the bare word.** PLAN.md §15.1 says typing `armada` with
+/// no arguments enters Helm, and that remains the intended end state; it is
+/// deliberately not wired here. The bare word is the most typeable thing on the
+/// machine, and the cost of getting it wrong is not a stray help page — it is a
+/// Claude Code session nobody meant to open, spending against a real account
+/// until somebody notices. Until entering is something a reader has asked for
+/// twice, `armada` alone stays the orientation page.
+///
+/// **There is still no `helm` binary**, and there never will be. Kubernetes owns
+/// that name and Armada runs on machines that have it (PLAN.md §15.1).
+fn helm(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocation, ParseFailure> {
+    if wants_help(rest) {
+        if let Some(topic) = help_page("", "helm") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+    let parsed = flags(
+        rest,
+        json,
+        color,
+        "helm",
+        &["--new", "--exec"],
+        &["--agent"],
+    )?;
+    Ok(Invocation::Helm(Box::new(Helm {
+        json: parsed.json,
+        new: parsed.on("--new"),
+        agent: parsed.value("--agent"),
+        exec: parsed.on("--exec"),
     })))
 }
 
@@ -1854,6 +1914,54 @@ mod tests {
             parse(&[]).unwrap().invocation,
             Invocation::Help(Topic::Bare)
         );
+    }
+
+    /// **And it is not Helm**, which is a stronger claim than the one above and
+    /// is the reason this second assertion exists rather than being folded into
+    /// it. PLAN.md §15.1 gives the bare word to Helm eventually; wiring it there
+    /// is a decision, and the failure mode of taking it by accident is a Claude
+    /// Code session nobody asked for, spending against a real account.
+    #[test]
+    fn the_bare_word_is_not_wired_to_the_orchestrator() {
+        assert!(
+            !matches!(parse(&[]).unwrap().invocation, Invocation::Helm(_)),
+            "bare `armada` would open a session"
+        );
+    }
+
+    /// The verb, and its three flags.
+    #[test]
+    fn helm_takes_a_persona_a_fresh_conversation_and_the_flag_that_spends() {
+        let Invocation::Helm(helm) = parse(&args(&[
+            "helm", "--json", "--new", "--agent", "skeptic", "--exec",
+        ]))
+        .unwrap()
+        .invocation
+        else {
+            panic!("`armada helm` did not parse as Helm")
+        };
+        assert!(helm.json && helm.new && helm.exec);
+        assert_eq!(helm.agent.as_deref(), Some("skeptic"));
+    }
+
+    /// **`--exec` is off unless it is typed**, which is the whole safety
+    /// property of this verb: assembling the launch costs nothing and entering
+    /// the session costs a real budget.
+    #[test]
+    fn helm_does_not_enter_a_session_unless_it_was_asked_to() {
+        let Invocation::Helm(helm) = parse(&args(&["helm"])).unwrap().invocation else {
+            panic!()
+        };
+        assert!(!helm.exec, "`armada helm` alone would open a session");
+        assert!(!helm.new);
+        assert_eq!(helm.agent, None);
+    }
+
+    /// `--agent` needs a name. A bare flag that silently ran the default persona
+    /// would run the wrong conversation and say nothing about it.
+    #[test]
+    fn helm_refuses_an_agent_flag_with_nothing_after_it() {
+        assert!(parse(&args(&["helm", "--agent"])).is_err());
     }
 
     #[test]

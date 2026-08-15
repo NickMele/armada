@@ -1302,6 +1302,80 @@ fn bridge_filtered_matches_its_fixture() {
     assert_render("bridge-filtered", &output);
 }
 
+/// `armada helm` — what was wired, and the command that would enter it.
+///
+/// **The fixture's job here is the last line.** This verb starts nothing, and
+/// the one way a reader learns that is by being told: a render that reported
+/// four `WRITTEN` rows and a launch command, without saying no session was
+/// opened, reads exactly like a Helm that is now running. The layout is frozen
+/// so that sentence cannot quietly leave.
+///
+/// **The command is never elided**, which is why it sits on its own line rather
+/// than in a cell. A truncated launch command is not a shorter answer; it is an
+/// argv that starts an unconfigured session.
+#[test]
+fn helm_matches_its_fixture() {
+    use armada_core::envelope::{Conversation, HelmData, Wired, Wiring};
+
+    let wired = |what: &str, at: &str, detail: &str| Wired {
+        what: what.to_string(),
+        at: at.to_string(),
+        state: Wiring::Written,
+        detail: detail.to_string(),
+    };
+
+    let output = Output::Helm(Box::new(Envelope::ok(
+        "helm",
+        None,
+        Status::Ok,
+        HelmData {
+            agent: "helm".to_string(),
+            uuid: "15bfa340-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
+            conversation: Conversation::New,
+            argv: vec![
+                "claude".to_string(),
+                "--agent".to_string(),
+                "helm".to_string(),
+                "--mcp-config".to_string(),
+                "~/.armada/helm/mcp.json".to_string(),
+                "--plugin-dir".to_string(),
+                "~/.armada/helm/plugin".to_string(),
+                "--settings".to_string(),
+                "~/.armada/helm/settings.json".to_string(),
+                "--session-id".to_string(),
+                "15bfa340-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
+            ],
+            results: vec![
+                wired(
+                    "toolbelt",
+                    "~/.armada/helm/mcp.json",
+                    "armada over stdio: fleet.* and manifest.*",
+                ),
+                wired(
+                    "monitor",
+                    "~/.armada/helm/plugin",
+                    "live push: every inbox line arrives mid-turn",
+                ),
+                wired(
+                    "backstop",
+                    "~/.armada/helm/stop-inbox.sh",
+                    "Stop hook: a turn does not end while the inbox is unread",
+                ),
+                Wired {
+                    state: Wiring::Unchanged,
+                    ..wired(
+                        "conversation",
+                        "~/.armada/helm/session.json",
+                        "not started yet: the next launch mints it",
+                    )
+                },
+            ],
+            launched: false,
+        },
+    )));
+    assert_render("helm", &output);
+}
+
 /// `armada fleet spawn`, against the layout `render_pending.rs` held for M3.
 ///
 /// **The confidence is on the screen**, which is the one thing PLAN.md §14.2

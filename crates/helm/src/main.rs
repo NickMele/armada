@@ -155,6 +155,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::MachineInit(init) => init.json,
         Invocation::Doctor { json, .. } => *json,
         Invocation::Bridge(bridge) => bridge.json,
+        Invocation::Helm(helm) => helm.json,
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Mcp { json } => *json,
@@ -302,6 +303,33 @@ fn dispatch(
             exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
             boot_id: armada_manifest::machine::boot_id(&run, cwd).ok_or_else(no_boot_id)?,
         });
+    }
+
+    // **Helm is machine-scoped for Fleet's reason and one of its own.** Its
+    // whole subject is the fleet across every repository, and routing it through
+    // workspace resolution would refuse to start the orchestrator from any
+    // directory that is not a workspace — which is most directories, including
+    // the one a person opens a terminal in.
+    if let Invocation::Helm(options) = &invocation {
+        let place = verbs::helm::Where {
+            home: home.to_path_buf(),
+            armada_home: armada_manifest::machine::armada_home(home),
+            claude_home: home.join(".claude"),
+            // Read once, at the entrypoint, like `$HOME` and the cwd: the
+            // toolbelt's registration names *this* binary, and a bare `armada`
+            // there resolves against the session's own `PATH`
+            // (`ARCHITECTURE.md` §1.4).
+            exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
+            boot_id: armada_manifest::machine::boot_id(&run, cwd).ok_or_else(no_boot_id)?,
+        };
+        return helm(
+            &place,
+            options,
+            &verbs::helm::Options {
+                agent: options.agent.clone(),
+                new: options.new,
+            },
+        );
     }
 
     // **Fleet is machine-scoped too, and for its own reason.** A Job's worktree
@@ -511,8 +539,37 @@ fn dispatch(
         | Invocation::Guild(_)
         | Invocation::Fleet(_)
         | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),
-        Invocation::Bridge(_) => unreachable!("machine-scoped, and handled above"),
+        Invocation::Bridge(_) | Invocation::Helm(_) => {
+            unreachable!("machine-scoped, and handled above")
+        }
     }
+}
+
+/// `armada helm` — assemble the launch, and refuse to enter it.
+///
+/// **There is no exec here, and that is the point.** The verb writes the
+/// configuration, reports the command and returns; `--exec` is recognised and
+/// refused by [`verbs::helm::entering_is_off`]. No path in this binary starts a
+/// Claude Code session.
+///
+/// **Refused before the verb runs, not after.** A refusal that had already
+/// written four configuration files would have changed the machine in order to
+/// say no — the same rule `armada doctor --fix` follows, and the rule the
+/// no-guild refusal inside the verb follows one level down.
+///
+/// **This is a gate on entering, not a rollback.** Everything the exec path
+/// needs is built, tested and one call away: the argv is in the envelope, and
+/// `verbs::helm::mark_started` is the record-writer it has to call first —
+/// first, because the process is replaced and there is no after.
+fn helm(
+    place: &verbs::helm::Where,
+    options: &args::Helm,
+    wanted: &verbs::helm::Options,
+) -> Result<Output, ArmadaError> {
+    if options.exec {
+        return Err(verbs::helm::entering_is_off());
+    }
+    verbs::helm::run(&SystemClock, place, wanted)
 }
 
 /// `armada bridge` — one frame, or the screen.
