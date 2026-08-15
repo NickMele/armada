@@ -693,6 +693,11 @@ pub fn ls<R: Run, C: Clock>(
             workflow: record.workflow.clone(),
             state: observed.state,
             detail: detail(&record, observed.state, waiting),
+            // **Carried, never re-read.** The Bridge draws a `TASK` column and
+            // is a renderer over this listing — a second pass over the Job index
+            // to fill one column would be the second source
+            // `commands/helm/bridge.md` rules out.
+            task: record.task.clone(),
             runtime_s: run_time / 1_000,
             cost_usd: observed.spend.cost_usd,
             tokens: observed.spend.tokens,

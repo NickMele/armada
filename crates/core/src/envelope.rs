@@ -1400,6 +1400,15 @@ pub struct JobRow {
     /// say. Empty when there is nothing to add.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub detail: String,
+    /// The task, in the words it was given in.
+    ///
+    /// **The Job record's own field, carried rather than re-derived.** The
+    /// Bridge draws a `TASK` column (`commands/helm/bridge.md`) and renders the
+    /// same data `ls` does — a second read of `~/.armada/jobs/` to fill one
+    /// column would be the second source that page rules out. `ls` itself does
+    /// not draw it: its `DETAIL` answers *what is it doing now*, and the task
+    /// answers *what was it asked to do*.
+    pub task: String,
     /// How long it has been alive, in seconds.
     pub runtime_s: u64,
     /// Dollars, summed off the turns' `total_cost_usd`.

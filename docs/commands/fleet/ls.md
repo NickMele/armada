@@ -60,8 +60,13 @@ and the renderer follows it.
 **A Job that has not run yet gets a placeholder in both number columns**, not `$0.00` and
 `0s`: a zero reads as a measurement, and nothing has been measured.
 
-`--json` returns one result per Job with `uuid`, `name`, `workflow`, `state`, `runtime_s`,
-`cost_usd`, `tokens`, `turns`, `budget_remaining` and `needs_attention`.
+`--json` returns one result per Job with `uuid`, `name`, `workflow`, `state`, `detail`, `task`,
+`runtime_s`, `cost_usd`, `tokens`, `turns`, `budget_remaining` and `needs_attention`.
+
+**`task` is carried and not drawn here.** The table's `DETAIL` answers *what is it doing now*;
+`task` is the words the Job was given, which [`../helm/bridge.md`](../helm/bridge.md) draws as
+its own column. The Bridge is a renderer over this listing, so the field travels with the
+listing rather than sending the Bridge back to `~/.armada/jobs/` for a second read.
 
 ## Dependencies
 

@@ -1082,6 +1082,10 @@ fn fleet_ls_matches_its_fixture() {
             workflow: workflow.to_string(),
             state,
             detail: detail.to_string(),
+            // Carried by the listing and drawn by the Bridge, never by `ls` —
+            // `DETAIL` answers what a Job is doing now, the task answers what it
+            // was asked to do.
+            task: format!("the {name} task"),
             runtime_s,
             cost_usd,
             tokens: 120_000,

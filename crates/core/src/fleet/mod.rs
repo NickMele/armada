@@ -13,6 +13,7 @@
 //! are (`ARCHITECTURE.md` §1.1) and because a Drone's argv is the one thing no
 //! test may execute for real (PHASES.md §8.5).
 
+pub mod bridge;
 pub mod classify;
 pub mod drone;
 pub mod job;
@@ -57,6 +58,23 @@ pub enum JobState {
 }
 
 impl JobState {
+    /// Every state, in the order `glossary.md` lists them.
+    ///
+    /// **A named set rather than a hand-typed list per caller.** The Bridge's
+    /// `--filter state=` refuses a word that is not one of these, and a list
+    /// that lived at that call site would go stale the first time an eighth
+    /// state is added — which is the same argument that makes every `match` on
+    /// this enum exhaustive.
+    pub const ALL: [JobState; 7] = [
+        JobState::Queued,
+        JobState::Running,
+        JobState::Paused,
+        JobState::Stalled,
+        JobState::Blocked,
+        JobState::Aborted,
+        JobState::Done,
+    ];
+
     /// The word, in both audiences.
     pub const fn word(self) -> &'static str {
         match self {
