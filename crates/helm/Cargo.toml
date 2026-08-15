@@ -27,6 +27,22 @@ path = "src/lib.rs"
 name = "armada"
 path = "src/main.rs"
 
+# `arm` is the same program under a shorter name, so that `cargo install` puts
+# the short spelling on PATH rather than leaving every machine to carry a shell
+# alias the next one will not have.
+#
+# **A second `[[bin]]` rather than a symlink or an alias**, for the reason the
+# suite has one binary at all: a symlink is not installed by `cargo install`,
+# and an alias lives in a shell rc that no `armada` verb can see or repair. Both
+# names then behave identically by construction rather than by upkeep.
+#
+# **The name was checked before it was taken**, which is the rule `helm` set:
+# nothing called `arm` ships on macOS or Linux, so this shadows nothing a person
+# depends on. Shortening a name is never worth taking one that is already in use.
+[[bin]]
+name = "arm"
+path = "src/main.rs"
+
 [dependencies]
 armada-manifest = { path = "../manifest" }
 # Guild and Manifest are siblings that may not name each other

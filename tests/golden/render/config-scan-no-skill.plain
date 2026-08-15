@@ -35,4 +35,4 @@ no armada.yml here, this is evidence and not a config
 Evidence only. Armada does not guess which of these you actually run.
 
   next, no onboarding skill in your guild — `armada guild init`
-    claude --append-system-prompt "$(cat ~/.armada/guild/skills/onboard-repo/SKILL.md)"
+    claude --append-system-prompt "$(cat ~/.armada/guild/skills/onboard-repo/SKILL.md)" "Onboard this repository for Armada."

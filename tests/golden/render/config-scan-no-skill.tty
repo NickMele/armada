@@ -35,4 +35,4 @@
 [1m[38;2;255;169;64mEvidence only.[0m [38;2;156;163;175mArmada does not guess which of these you actually run.[0m
 
   [38;2;255;169;64mnext[0m · [38;2;156;163;175mno onboarding skill in your guild — `armada guild init`[0m
-    [38;2;156;163;175mclaude --append-system-prompt "$(cat ~/.armada/guild/skills/onboard-repo/SKILL.md)"[0m
+    [38;2;156;163;175mclaude --append-system-prompt "$(cat ~/.armada/guild/skills/onboard-repo/SKILL.md)" "Onboard this repository for Armada."[0m

@@ -164,13 +164,36 @@ pub fn skill_home_path(name: &str) -> String {
 /// onboarding instructions, rather than being reduced to them. Verified against
 /// the installed CLI's own option list rather than assumed — which is how the
 /// Drone once shipped without `--verbose` (`docs/traps.md`).
+///
+/// **The opening turn is part of the argv, and leaving it out was the second
+/// version's bug.** `--append-system-prompt` gives the session instructions; it
+/// does not give it anything to do. Armada handed the reader a brand-new
+/// session that knew how to onboard a repository and had not been asked to,
+/// so it sat at an empty prompt — the same hand-over failing for a second
+/// reason, one level further in than `unknown command /onboard-repo`.
+///
+/// `claude [options] [command] [prompt]` takes the first turn as a positional,
+/// which is why [`OPENING`] goes last and unflagged. **Checking that a flag is
+/// accepted is not checking that the session does anything**, and that gap is
+/// exactly what the `--verbose` trap taught; the assertion that belongs here is
+/// on the opening turn being present, which is what the tests below make.
 pub fn skill_argv(body: &str) -> Vec<String> {
     vec![
         armada_core::fleet::drone::CLAUDE.to_string(),
         "--append-system-prompt".to_string(),
         body.to_string(),
+        OPENING.to_string(),
     ]
 }
+
+/// The first turn of a handed-over session — what the reader would have typed.
+///
+/// **Phrased as the person, not as Armada.** It is delivered as their turn, and
+/// the skill's own `description` triggers on *"someone asks to onboard,
+/// configure or set up a repo for Armada"* — so this says that, in those words,
+/// rather than instructing the agent in a voice the transcript will attribute
+/// to the user.
+pub const OPENING: &str = "Onboard this repository for Armada.";
 
 /// The same hand-over, written as a line a person can paste.
 ///
@@ -181,9 +204,10 @@ pub fn skill_argv(body: &str) -> Vec<String> {
 /// …)` is what a person would type to achieve exactly the argv above.
 pub fn skill_command_line(name: &str) -> String {
     format!(
-        "{} --append-system-prompt \"$(cat {})\"",
+        "{} --append-system-prompt \"$(cat {})\" \"{}\"",
         armada_core::fleet::drone::CLAUDE,
-        skill_home_path(name)
+        skill_home_path(name),
+        OPENING
     )
 }
 
@@ -291,7 +315,22 @@ mod tests {
             "the instructions did not reach the session: {:?}",
             argv[2]
         );
-        assert_eq!(argv.len(), 3);
+        // **The opening turn, and this assertion is the one that was missing.**
+        // The version before this asserted the flag and the prose and stopped
+        // at `argv.len() == 3` — so it went green against a hand-over that
+        // opened a session with instructions and nothing to act on, and the
+        // reader got a brand-new prompt sitting there doing nothing. A flag
+        // being accepted is not the session doing something.
+        assert_eq!(
+            argv[3], OPENING,
+            "the session was given instructions but never asked to start: {argv:?}"
+        );
+        assert_eq!(argv.len(), 4);
+        assert!(
+            !argv[3].starts_with('-'),
+            "the opening turn is positional, and a leading dash makes it a flag: {:?}",
+            argv[3]
+        );
         assert!(
             !argv.iter().any(|word| word.starts_with('/')),
             "a slash command is what did not work: {argv:?}"
@@ -319,6 +358,14 @@ mod tests {
         // matter and a readability one — and `~` is what a person would type.
         assert!(!printed.contains("/Users/"), "{printed}");
         assert!(!printed.contains("/home/"), "{printed}");
+        // **The opening turn is in both renderings or in neither.** A reader who
+        // pastes the printed line and a reader Armada exec's for must land in
+        // the same session; a printed command that opens an idle prompt is the
+        // bug this pair exists to keep out of exactly one of the two.
+        assert!(
+            printed.ends_with(&format!("\"{OPENING}\"")),
+            "the printed hand-over opens an idle session: {printed}"
+        );
     }
 
     /// `has_skill` and the path that reads it must never disagree: the check
