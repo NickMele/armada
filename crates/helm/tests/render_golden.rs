@@ -33,8 +33,7 @@ use armada_core::envelope::{
     DoctorData, Envelope, Finding, FleetLsData, GrantedCommand, GuildChoice, GuildSyncData,
     Headline, InitData, JobRow, MachineInitData, PortReport, Problem, Projection, Released,
     ResolvedSkillView, ResultRow, ScanData, ServicesData, Settled, SkillsData, SpawnData,
-    StatusData, Sync, SyncItem,
-    Unreclaimed, UpDryRun, VerifyData,
+    StatusData, Sync, SyncItem, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;

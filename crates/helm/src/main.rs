@@ -511,7 +511,7 @@ fn dispatch(
         | Invocation::Guild(_)
         | Invocation::Fleet(_)
         | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),
-        | Invocation::Bridge(_) => unreachable!("machine-scoped, and handled above"),
+        Invocation::Bridge(_) => unreachable!("machine-scoped, and handled above"),
     }
 }
 
@@ -589,6 +589,11 @@ fn bridge(
                     ..args::Spawn::default()
                 },
                 Some(&mut at_the_terminal(style, terminal).interactive()),
+                // **Silent: the Bridge owns the screen.** A live table drawn
+                // under the alt screen would fight the frame for the same
+                // cells. The new Job appears in the next frame instead, which
+                // is the Bridge's own answer to "what is happening".
+                &mut render::progress::Silent,
             )
         }
 

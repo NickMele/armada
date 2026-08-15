@@ -25,10 +25,10 @@ use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
-    ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData, GuildInitData,
-    GuildSyncData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, ProbeData,
-    Projection, ReportData, ScanData, ServicesData, SkillsData, SpawnData, StatusData, UpDryRun,
-    VerdictData, VerifyData,
+    ComponentsData, DispatchData, DoctorData, Envelope, FleetLsData, GuildBundleData,
+    GuildInitData, GuildSyncData, InboxData, InitData, InitDryRun, KillData, MachineInitData,
+    McpData, ProbeData, Projection, ReportData, ScanData, ServicesData, SkillsData, SpawnData,
+    StatusData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;

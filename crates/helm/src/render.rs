@@ -55,7 +55,8 @@ use armada_core::envelope::{
     ComponentsData, DispatchData, Disposition, DoctorData, Envelope, Finding, FleetLsData,
     GuildBundleData, GuildInitData, GuildSyncData, Headline, InboxData, InitData, InitDryRun,
     KillData, MachineInitData, McpData, ProbeData, Projection, ReportData, ResultRow, ScanData,
-    ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData, VerifyData,
+    ServicesData, SkillsData, SpawnData, StatusData, Unreclaimed, UpDryRun, VerdictData,
+    VerifyData,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::JobState;

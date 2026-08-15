@@ -118,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 23] = [
+const PAGES: [Page; 25] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",

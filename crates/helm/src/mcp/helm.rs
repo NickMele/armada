@@ -333,6 +333,10 @@ impl Toolbelt {
                 // trip on the path of every spawn, to ask a question the caller
                 // is better placed to answer than its user is.
                 None,
+                // **Silent, because stdout is the transport.** A live table
+                // drawn here would corrupt the JSON-RPC stream, and there is no
+                // terminal on the other end of an MCP call to draw one on.
+                &mut Silent,
             )
         })
         .await
