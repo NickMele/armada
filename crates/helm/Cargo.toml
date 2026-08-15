@@ -71,6 +71,49 @@ ratatui = { version = "0.30", default-features = false, features = [
     "layout-cache",
 ] }
 
+# **The MCP server's whole dependency budget, and the only async in the repo**
+# (`docs/commands/helm/mcp.md`). MCP is a wire protocol with a versioned
+# specification, a lifecycle, and an extension — `io.modelcontextprotocol/tasks`
+# — that `armada manifest check` needs because a real run lasts well past ten
+# minutes. Hand-rolling JSON-RPC over stdio would be small; hand-rolling the
+# Tasks extension's durable handles, TTL expiry and mid-flight input would not,
+# and a bespoke polling protocol is the thing the specification exists to stop
+# anyone inventing.
+#
+# **v3.1.2, verified on crates.io rather than taken from the doc.** `traps.md`
+# recorded "v3.x, re-check before starting" because this SDK moves fast; the
+# check found 3.1.2 current, `task_manager` present, and the base protocol
+# stateless as of spec revision `2026-07-28` — which is why nothing here holds a
+# session.
+#
+# Default features off. No `client` (Armada serves, it does not call), no
+# `auth`, and no HTTP transport of any kind: `--stdio` is the transport Claude
+# Code uses and the server lives as long as whatever registered it.
+rmcp = { version = "3.1.2", default-features = false, features = [
+    "server",
+    "macros",
+    "schemars",
+    "transport-io",
+] }
+# `schemars` names the tool inputs' JSON Schema, and `rmcp` re-exports the same
+# version — pinned here anyway so a derive in this crate cannot silently compile
+# against a second one.
+schemars = "1"
+serde = { workspace = true }
+# **The runtime `rmcp` is written against, and nothing more.** `rt` for the
+# single-threaded executor `mcp serve` builds, `io-std` for the stdio transport,
+# `sync`/`time` for what the Tasks extension's manager already uses. No
+# `rt-multi-thread`: a stateless server handling one request at a time on stdio
+# has nothing to schedule across cores, and the verbs underneath are blocking by
+# design.
+tokio = { version = "1", default-features = false, features = [
+    "rt",
+    "io-std",
+    "sync",
+    "time",
+    "macros",
+] }
+
 [dev-dependencies]
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 tempfile = "3"

@@ -132,6 +132,16 @@ pub enum Invocation {
     Guild(Box<GuildInvocation>),
     /// `armada fleet <verb>`.
     Fleet(Box<FleetInvocation>),
+    /// `armada mcp serve` — the toolbelt, over stdio.
+    ///
+    /// **No fields but `--json`.** `--stdio` is the only transport and the
+    /// default, so there is nothing for the invocation to carry: which toolbelt
+    /// is served is decided by the environment rather than by the line
+    /// (`commands/helm/mcp.md`).
+    Mcp {
+        /// Emit the envelope of the shutdown rather than human output.
+        json: bool,
+    },
 }
 
 /// One of Fleet's verbs, and its own flags.
@@ -497,6 +507,7 @@ pub fn every_verb() -> Vec<String> {
         .chain(GUILD_BUILT.iter().map(|verb| format!("guild {verb}")))
         .chain(FLEET_VERBS.iter().map(|verb| format!("fleet {verb}")))
         .chain(TOP_LEVEL_VERBS.iter().map(|verb| (*verb).to_string()))
+        .chain(std::iter::once("mcp serve".to_string()))
         .collect()
 }
 
@@ -587,6 +598,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "doctor" => return doctor(rest, json, color),
             "guild" => return guild(rest, json, color),
             "fleet" => return fleet(rest, json, color),
+            "mcp" => return mcp(rest, json, color),
             _ => {}
         }
         let json = json || rest.iter().any(|a| a == "--json");
@@ -959,6 +971,50 @@ fn doctor(
         json: parsed.json,
         fix: parsed.on("--fix"),
     })
+}
+
+/// `armada mcp serve`.
+///
+/// **A module with one verb, and it still takes the verb.** `armada mcp` alone
+/// is as incomplete as `armada fleet` alone, and `serve` is written out so that
+/// the second thing this module ever grows — a registration helper, a `list` —
+/// is a sibling rather than a breaking change to a bare `armada mcp`.
+fn mcp(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocation, ParseFailure> {
+    let Some(verb) = rest.first() else {
+        return Ok(Invocation::Help(Topic::Mcp));
+    };
+    if is_help(verb) {
+        return Ok(Invocation::Help(Topic::Mcp));
+    }
+    let tail = &rest[1..];
+    let name = verb.as_str();
+
+    if name != "serve" {
+        let json = json || tail.iter().any(|a| a == "--json");
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: format!("mcp {name}"),
+                message: format!("unknown verb `armada mcp {name}`"),
+                next_action: Some("`armada mcp serve` is the only one".to_string()),
+            },
+            json,
+        ));
+    }
+
+    if wants_help(tail) {
+        if let Some(topic) = help_page("mcp", "serve") {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+
+    // **`--stdio` is accepted and is also the default**, which is why nothing
+    // reads its value. It is in the grammar because a registration file that
+    // spells the transport out is a registration file somebody can read, and
+    // because the day there is a second transport this flag already means what
+    // it says (`commands/helm/mcp.md`).
+    let parsed = flags(tail, json, color, "mcp serve", &["--stdio"], &[])?;
+    Ok(Invocation::Mcp { json: parsed.json })
 }
 
 /// `armada guild <verb>`.

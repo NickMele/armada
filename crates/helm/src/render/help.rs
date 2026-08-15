@@ -51,6 +51,8 @@ pub enum Topic {
     Guild,
     /// `armada fleet`, or `armada fleet --help`.
     Fleet,
+    /// `armada mcp`, or `armada mcp --help`.
+    Mcp,
     /// One verb's own page, keyed by what the caller types after `armada` —
     /// `"manifest check"`, `"fleet spawn"`, `"doctor"`.
     ///
@@ -116,7 +118,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 22] = [
+const PAGES: [Page; 23] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -462,6 +464,25 @@ const PAGES: [Page; 22] = [
         ],
     },
     Page {
+        path: "mcp serve",
+        synopsis: "serve",
+        summary: "serve Armada's tools over stdio, until the client hangs up",
+        usage: &["armada mcp serve [--stdio] [--json]"],
+        flags: &[(
+            "--stdio",
+            "serve over stdio (the default, and the only one)",
+        )],
+        examples: &[(
+            "claude mcp add armada -- armada mcp serve",
+            "register it with Claude Code, which is what normally starts it",
+        )],
+        notes: &[
+            "Which toolbelt is served is decided by ARMADA_JOB and not by a flag.",
+            "Inside a Job it is report, ask and verdict; a Drone cannot spawn.",
+            "Every tool answers the same `--json` envelope the CLI does.",
+        ],
+    },
+    Page {
         path: "fleet ls",
         synopsis: "ls",
         summary: "what is running, what it has spent, and who needs you",
@@ -616,6 +637,7 @@ pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
         Topic::Manifest => manifest(style, terminal),
         Topic::Guild => guild(style, terminal),
         Topic::Fleet => fleet(style, terminal),
+        Topic::Mcp => mcp(style, terminal),
         Topic::Verb(path) => match PAGES.iter().find(|page| page.path == path) {
             Some(page) => verb(page, style, terminal),
             // Unreachable through `args::parse`, which only produces a `Verb`
@@ -776,6 +798,34 @@ fn fleet(style: Style, terminal: Terminal) -> String {
          it spent, and you can pick it up later with `board`.\n\n\
          Board does not attach. It hands you the conversation to drive yourself, in the\n\
          Job's own worktree \u{2014} Armada owns no terminal.\n",
+    );
+    out
+}
+
+/// **The module page for the one module nobody types.** It exists because
+/// `armada mcp` has to answer something, and because the person reading it is
+/// almost certainly debugging a registration that is not working — so the page
+/// says what registers it and which toolbelt it will serve, rather than
+/// explaining MCP.
+fn mcp(style: Style, terminal: Terminal) -> String {
+    let width = terminal.usable_width();
+    let mut out = format!(
+        "{}\n\n",
+        style.strong(
+            Role::SignalAmber,
+            "armada mcp \u{2014} Armada's toolbelt, for Helm and for a Drone"
+        )
+    );
+    out.push_str(&heading(style, "VERBS"));
+    out.push_str(&two_column(&verbs_of("mcp")).render(style, width));
+    out.push('\n');
+    out.push_str(&trailer("armada mcp"));
+    out.push_str(
+        "\nYou do not normally run this. Whatever starts an agent starts the server,\n\
+         and it lives as long as that session.\n\n\
+         Which tools it serves is decided by where it is started, not by a flag: a\n\
+         process inside a Job gets report, ask and verdict, and cannot spawn. Every\n\
+         other process gets the orchestrator's fleet and manifest verbs.\n",
     );
     out
 }

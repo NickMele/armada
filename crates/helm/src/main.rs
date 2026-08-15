@@ -156,6 +156,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Doctor { json, .. } => *json,
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
+        Invocation::Mcp { json } => *json,
         Invocation::Version | Invocation::Help(_) => false,
     }
 }
@@ -281,6 +282,25 @@ fn dispatch(
     })?;
 
     let run = RealRun;
+
+    // **The MCP server is machine-scoped, and for both of Fleet's reasons at
+    // once.** Its Fleet tools act on Jobs in worktrees that are not this
+    // directory, and its Manifest tools resolve a workspace per call — so
+    // resolving one here, before a single request has arrived, would refuse to
+    // start the server anywhere but inside a repository. It is also started by
+    // whatever registered it, from wherever that happened to be.
+    if let Invocation::Mcp { .. } = invocation {
+        return armada_helm::mcp::serve(armada_helm::mcp::world::World {
+            cwd: cwd.to_path_buf(),
+            home: home.to_path_buf(),
+            inherited,
+            // Read once, at the entrypoint, like `$HOME` and the cwd: the Fleet
+            // tools run `armada manifest init` in a worktree and have to know
+            // which binary they are (`ARCHITECTURE.md` §1.4).
+            exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
+            boot_id: armada_manifest::machine::boot_id(&run, cwd).ok_or_else(no_boot_id)?,
+        });
+    }
 
     // **Fleet is machine-scoped too, and for its own reason.** A Job's worktree
     // is not the directory the command was typed in, and `armada fleet ls`
@@ -479,7 +499,8 @@ fn dispatch(
         Invocation::MachineInit(_)
         | Invocation::Doctor { .. }
         | Invocation::Guild(_)
-        | Invocation::Fleet(_) => unreachable!("machine-scoped, and handled above"),
+        | Invocation::Fleet(_)
+        | Invocation::Mcp { .. } => unreachable!("machine-scoped, and handled above"),
     }
 }
 
