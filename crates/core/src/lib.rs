@@ -21,6 +21,7 @@ pub mod ctx;
 pub mod dispatch;
 pub mod envelope;
 pub mod error;
+pub mod fleet;
 pub mod glob;
 pub mod id;
 pub mod lease;

@@ -37,7 +37,9 @@ pub const PORT_CEILING: u16 = 32767;
 /// packed string that means parsing every row to answer it (PLAN.md §4.1.1,
 /// decision 3). The field names map 1:1 onto the payload's `from` and `to`, so
 /// no conversion exists to get wrong.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+// `Deserialize` because a Job's record on disk carries the block it was given
+// (`fleet::job`), and a record that cannot be read back is not durable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct PortBlock {
     /// First port, inclusive.
     pub from: u16,
