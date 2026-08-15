@@ -3253,9 +3253,16 @@ mod tests {
     /// **The six commands that filled a real log in thirteen minutes**, and
     /// which of them Armada now writes down.
     ///
-    /// Five are refusals Armada meant — two reserved flags, two reserved verbs,
+    /// Five were refusals Armada meant — two reserved flags, two reserved verbs,
     /// one name nobody claims — and a row telling him to go and fix
     /// *`--detach` is not built yet* is the log reporting a feature as a bug.
+    ///
+    /// **Two of the six cannot be typed as refusals any longer**: `check
+    /// --detach` and `--status` shipped in M4, and the lines that asserted them
+    /// are gone rather than rewritten, because a flag that parses has nothing
+    /// to say about which failures are worth writing down. What the filter has
+    /// to keep out is now the three that remain, and the principle is unchanged.
+    ///
     /// The sixth is the one that matters: `unknown command `guild verify``,
     /// about a verb the help page advertises under NOT BUILT YET, is Armada
     /// contradicting its own roster, and it stays recorded.
@@ -3272,8 +3279,6 @@ mod tests {
         for line in [
             vec!["guild", "bogus"],
             vec!["bogus"],
-            vec!["manifest", "check", "--detach"],
-            vec!["manifest", "check", "--status"],
             vec!["manifest", "render"],
             vec!["guild", "verify"],
         ] {

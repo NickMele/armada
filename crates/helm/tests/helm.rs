@@ -461,9 +461,10 @@ fn the_refusal_is_an_ordinary_error_with_a_class_and_a_next_action() {
     let envelope: Value = serde_json::from_slice(&out.stdout).expect("an envelope");
     let error = &envelope["error"];
     // **`bad_invocation`, the class this CLI already uses for a flag it knows
-    // and has not built** — `doctor --fix` and `check --detach` are both this.
-    // A class invented for the occasion would say the refusal is a different
-    // kind of thing from those two, and it is not.
+    // and has not built** — `doctor --fix` is this. `check --detach` was, until
+    // it shipped; a flag leaving the list changes nothing about the class the
+    // ones still on it answer with. A class invented for the occasion would say
+    // this refusal is a different kind of thing, and it is not.
     assert_eq!(error["class"], "bad_invocation");
     assert_eq!(error["where"], "helm --exec");
     assert!(error["next_action"].as_str().is_some_and(|n| !n.is_empty()));
