@@ -3808,6 +3808,76 @@ arriving from yours, and they should not be built as two lists.
 
 **Not scheduled.** It wants the Bridge to be worth looking at, which is M3.
 
+### 15.3.3 Reserved, not built: the Bridge as the command centre
+
+**The ask.** *"I feel like it should also have the ability for me to see the manifest and
+the guild information. Like, I should be able to access anything from the bridge as if it's
+a command centre."*
+
+**Why it is coherent rather than scope creep.** §15.1 defines the Bridge as a renderer over
+`fleet.*` that holds no state. Nothing in that definition is specific to Fleet — a renderer
+over `manifest.*` and `guild.*` is the same object pointed at different data, and the four
+modules already answer in one envelope (§3.1). The Bridge is where the user already is; making
+him leave it to run `armada manifest status` is the same defect as `NEEDS YOU: YES` with no
+reason attached — the data exists and the screen declines to show it.
+
+**The constraint that makes it hard, and it is the interesting one.** The Bridge is
+`ARCHITECTURE.md` §1.9-clean today precisely because it only reads Fleet. A screen that also
+renders Manifest and Guild must not become the place where the three meet and start referring
+to each other — Manifest and Guild are siblings and neither may reference the other. The
+renderer may read all three; it may never let them read *through* it. Whether that survives
+contact with a real layout is the open question.
+
+**Design questions this leaves open:**
+
+- **Navigation.** Fleet's rows are Jobs; Manifest's are components and checks; Guild's are
+  files. Three shapes with no natural common cursor, and a tab bar is the lazy answer rather
+  than the right one.
+- **Whether it stays read-only.** §15.1's Bridge watches. A command centre that can edit a
+  guild file or start a check is a different program with a different blast radius.
+- **What it costs to keep live.** The redraw loop polls Fleet cheaply. Manifest state is a
+  database read and Guild is a git worktree; neither wants a 250 ms cadence.
+
+**Not scheduled.** Explicitly deferred by the user when raised — *"we don't have to build this
+right now"* — and downstream of the Bridge's own bugs being fixed.
+
+### 15.3.4 Reserved, not built: seeing what is in your guild
+
+**The complaint.** *"Right now, I have the guild set up, but I don't really know what is in
+it. Like, I wish there was a way to view easily through the guild command what the skills are
+that are in the guild, what the Claude files are that are in the guild, basically anything, and
+be able to view and edit it."*
+
+**The diagnosis, and it is embarrassing in a useful way.** `armada guild` has seven verbs —
+`init`, `project`, `pull`, `push`, `export`, `import`, and the unbuilt `edit` and `verify` —
+and **not one of them shows you what you have.** Every verb moves the guild somewhere: onto
+this machine, into a repo, into a bundle, to the remote. The guild is the one thing in Armada
+that is supposed to *be* you, and it is the only thing with no way to look at it.
+
+A real guild already holds workflows, skills, subagents, `voice.md`, `how-i-work.md`,
+`expectations.md`, `settings.json` and hooks. `export` will write all of it to a bundle, which
+is the current answer to "what do I have" and is not an answer.
+
+**The shape of the fix.** A read verb that lists what the guild contains by kind, and can show
+one item's content — the same `STATUS · NAME · DETAIL · TIME` table every other listing uses,
+with `--json` for agents. `verify` (already reserved) is the *correctness* question; this is
+the prior *inventory* question, and inventory is the one you need first when a guild has
+drifted between machines.
+
+**Design questions this leaves open:**
+
+- **What a "kind" is.** Workflows and skills are structured and can be summarised. `voice.md`
+  is prose and can only be shown. A listing that flattens both to a filename is `ls` with extra
+  steps.
+- **Whether viewing and editing are one verb or two.** `edit` is already reserved as
+  open-validate-commit; a viewer that can also edit either absorbs it or duplicates it.
+- **What it says about drift.** The guild is a git worktree synced between machines. Whether
+  the inventory reports uncommitted or unpulled state is the difference between a listing and a
+  status.
+
+**Not scheduled**, but this is the strongest candidate of the reserved items: it is small, it
+is self-contained, and the user hit it in ordinary use rather than in the abstract.
+
 ### 15.4 The persona, and the four things it decides
 
 Helm *is* a persona plus a toolbelt. The persona is guild content — yours, editable, synced
