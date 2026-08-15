@@ -327,6 +327,7 @@ pub fn spawn<R: Run, C: Clock>(
         task: options.task.clone(),
         progress: Vec::new(),
         attempts: std::collections::BTreeMap::new(),
+        transitions: Vec::new(),
     };
 
     if options.dry_run {

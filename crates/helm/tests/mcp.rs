@@ -142,6 +142,7 @@ impl Machine {
             task: "make the flaky test stop being flaky".to_string(),
             progress: Vec::new(),
             attempts: BTreeMap::new(),
+            transitions: Vec::new(),
         };
         Store::at(&place.armada_home).save(&record).expect("saved");
         if !transcript.is_empty() {
