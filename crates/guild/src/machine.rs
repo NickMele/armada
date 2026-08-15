@@ -15,15 +15,20 @@
 //! forbids Armada writing a resolved secret to anything it writes — `machine.yml`
 //! included. What is recorded is *that there was one*, and where.
 //!
-//! # Manifest owns this file and Guild only adds a section to it
+//! # One section per module, and this module has exactly one
 //!
-//! `machine.yml` is `armada.yml`'s machine-side twin and its six capacity keys
-//! belong to Manifest (`PLAN.md` §4.3.1). Guild may not name Manifest
-//! (`ARCHITECTURE.md` §1.9), so this module does not read those keys, does not
-//! know what they are, and **preserves them by reading the document as YAML and
-//! putting back everything it did not touch**. That is not politeness; it is the
-//! only way two siblings can share a file without one of them owning the other's
-//! schema.
+//! `machine.yml` is `armada.yml`'s machine-side twin, and like it the file
+//! carries **one top-level section per module** (`PLAN.md` §4.3.1). This module
+//! reads and writes [`SECTION`] and nothing else: it does not know what the
+//! other sections are called, what is in them, or which module owns them, and it
+//! **preserves them by reading the document as YAML and putting back everything
+//! it did not touch**.
+//!
+//! That is not politeness; it is the only way two siblings can share a file
+//! without one of them owning the other's schema
+//! (`ARCHITECTURE.md` §1.9) — and the file was flat until a second module wrote
+//! to it, at which point the first module's `deny_unknown_fields` rejected the
+//! whole document and every one of its verbs stopped working.
 
 use crate::interview::Answers;
 use crate::secrets::Withheld;
@@ -167,15 +172,15 @@ mod tests {
         assert_eq!(read(home.path()).withheld, withheld());
     }
 
-    /// **Manifest's six keys survive.** Guild may not name Manifest, so it does
-    /// not know what those keys are — which means the only safe way to write
-    /// this file is to put back everything it did not touch.
+    /// **Another module's section survives untouched.** This module does not
+    /// know what is in it — which is exactly why the only safe way to write this
+    /// file is to put back everything it did not touch.
     #[test]
-    fn writing_guilds_section_leaves_manifests_keys_alone() {
+    fn writing_this_sections_leaves_every_other_section_alone() {
         let home = tempfile::tempdir().unwrap();
         std::fs::write(
             home.path().join("machine.yml"),
-            "cpu_slots: 6\nport_block_size: 20\n",
+            "somebody_else:\n  cpu_slots: 6\n  port_block_size: 20\n",
         )
         .unwrap();
 
@@ -183,8 +188,24 @@ mod tests {
 
         let text = std::fs::read_to_string(home.path().join("machine.yml")).unwrap();
         let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(&text).unwrap();
+        assert_eq!(parsed["somebody_else"]["cpu_slots"], 6);
+        assert_eq!(parsed["somebody_else"]["port_block_size"], 20);
+        assert_eq!(parsed["guild"]["withheld"][0]["key"], "env.GITHUB_TOKEN");
+    }
+
+    /// **A file that has not been migrated yet is still written correctly.**
+    /// Somebody has a pre-namespace `machine.yml` right now; whatever is at its
+    /// top level is not this module's, and a write must not lose it either.
+    #[test]
+    fn a_pre_namespace_files_top_level_keys_are_left_where_they_are() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(home.path().join("machine.yml"), "cpu_slots: 6\n").unwrap();
+
+        record(home.path(), &Answers::all_defaulted(), &withheld()).unwrap();
+
+        let text = std::fs::read_to_string(home.path().join("machine.yml")).unwrap();
+        let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(&text).unwrap();
         assert_eq!(parsed["cpu_slots"], 6);
-        assert_eq!(parsed["port_block_size"], 20);
         assert_eq!(parsed["guild"]["withheld"][0]["key"], "env.GITHUB_TOKEN");
     }
 
