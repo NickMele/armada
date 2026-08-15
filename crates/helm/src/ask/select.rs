@@ -278,10 +278,15 @@ fn draw(
         .unwrap_or(0)
         .min(room_for_label(frame.area().width as usize, options));
 
+    // **The aside truncates now that it no longer owns the row.** It used to be
+    // reserved whole and the label took what was left; that inverted which half
+    // a reader needs (see `room_for_label`). Trimming it here rather than in
+    // `row` keeps the width arithmetic in one place.
+    let aside = aside_room(frame.area().width as usize, options);
     let lines: Vec<Line> = options
         .iter()
         .enumerate()
-        .map(|(index, choice)| row(index, choice, selection, widest, style))
+        .map(|(index, choice)| row(index, choice, selection, widest, aside, style))
         .collect();
     frame.render_widget(Paragraph::new(lines), rows);
 
@@ -304,25 +309,56 @@ fn draw(
 /// fit and others not, for a reason nothing on screen would explain. The
 /// option number is sized off `options.len()` rather than assumed to be one
 /// digit: the tenth option is already two.
+/// The label's share of the row, and **the label never loses to the aside.**
+///
+/// The first version reserved the widest aside outright and gave the label
+/// whatever remained. A guild whose skills carry a hundred-and-fifty-character
+/// `description:` then drove `furniture` past the terminal width, the
+/// subtraction saturated at zero, and every label truncated to nothing — so
+/// `armada guild ls` drew a column of descriptions with no names against them.
+/// A reader cannot pick a row by a sentence it shares with four others.
+///
+/// **The label is the identity and the aside is the explanation**, so the aside
+/// is what gives way. The label gets what it asks for up to [`LABEL_CAP`], and
+/// never less than [`LABEL_FLOOR`] while the row has that much to give; the
+/// aside takes the remainder and truncates itself in [`aside_room`].
 fn room_for_label(width: usize, options: &[Choice]) -> usize {
     let digits = options.len().to_string().len();
-    let widest_aside = options
+    // "  {caret} " (4) + the number and its space (digits + 1).
+    let furniture = 4 + digits + 1;
+    let free = width.saturating_sub(furniture);
+
+    let widest_label = options
         .iter()
-        .map(|choice| choice.aside.chars().count())
+        .map(|choice| choice.label.chars().count())
         .max()
         .unwrap_or(0);
-    // "  {caret} " (4) + the number and its space (digits + 1) + the gap and
-    // the aside, when any option has one (2 + widest_aside).
-    let furniture = 4
-        + digits
-        + 1
-        + if widest_aside > 0 {
-            2 + widest_aside
-        } else {
-            0
-        };
+    let wanted = widest_label.min(LABEL_CAP);
+
+    // The floor only applies while the row can afford it — a very narrow
+    // terminal gets the label and nothing else rather than a guaranteed width
+    // it cannot honour.
+    wanted.max(LABEL_FLOOR.min(free)).min(free)
+}
+
+/// What the aside may use once the label has taken its share.
+///
+/// Zero when nothing is left, which drops the column rather than wrapping it —
+/// the same rule `render/table.rs` follows for an empty column.
+fn aside_room(width: usize, options: &[Choice]) -> usize {
+    let digits = options.len().to_string().len();
+    let furniture = 4 + digits + 1 + room_for_label(width, options) + 2;
     width.saturating_sub(furniture)
 }
+
+/// The most a label may take, however long the longest one is. A label wider
+/// than this is a name that has stopped being scannable, and the aside beside
+/// it is worth more than its tail.
+const LABEL_CAP: usize = 44;
+
+/// What a label keeps even when every aside is long. Enough for a padded kind
+/// and a file name — `SUBAGENT  helm.md` is 18.
+const LABEL_FLOOR: usize = 24;
 
 /// One option's line: the cursor, its number, its label, and what it does.
 fn row<'a>(
@@ -330,6 +366,7 @@ fn row<'a>(
     choice: &'a Choice,
     selection: Selection,
     widest: usize,
+    aside: usize,
     style: Style,
 ) -> Line<'a> {
     let on = selection.is_on(index);
@@ -358,9 +395,9 @@ fn row<'a>(
             },
         ),
     ];
-    if !choice.aside.is_empty() {
+    if !choice.aside.is_empty() && aside > 0 {
         spans.push(Span::styled(
-            format!("  {}", choice.aside),
+            format!("  {}", crate::render::term::truncate(&choice.aside, aside)),
             painted(style, Role::SteelGrey),
         ));
     }
@@ -485,26 +522,71 @@ mod tests {
     /// **The option number is not always one digit.** A list of nine options
     /// or fewer numbers every row with one; the tenth grows a second, and the
     /// room left for the label has to shrink by exactly that much or the row
+    /// **A long aside must never cost the label its name.**
+    ///
+    /// `armada guild ls` drew this exactly wrong the first time it met a real
+    /// guild: skills carry a `description:` of a hundred and fifty characters,
+    /// the widest aside was reserved outright, the subtraction saturated at
+    /// zero, and every row rendered as a description with no name against it.
+    /// A reader cannot pick `SKILL  gitnexus-pr-review` out of a column of
+    /// sentences that all begin "Use when the user".
+    #[test]
+    fn a_long_aside_never_starves_the_label() {
+        let options = vec![
+            Choice::new("MEMORY    voice.md", &"x".repeat(150)),
+            Choice::new("SUBAGENT  helm.md", &"y".repeat(150)),
+            Choice::new("done", "stop looking"),
+        ];
+        let width = 120;
+        let label = room_for_label(width, &options);
+        assert!(
+            label >= "SUBAGENT  helm.md".len(),
+            "the label was starved to {label} by an aside that should have given way"
+        );
+        // And the row still fits: the aside is what truncates now.
+        let widest = options
+            .iter()
+            .map(|choice| choice.label.chars().count())
+            .max()
+            .unwrap_or(0)
+            .min(label);
+        for (index, choice) in options.iter().enumerate() {
+            let line = row(
+                index,
+                choice,
+                Selection::new(options.len(), 1),
+                widest,
+                aside_room(width, &options),
+                Style::plain(),
+            );
+            assert!(line.width() <= width, "row {index} overflowed");
+        }
+    }
+
     /// it belongs to overruns.
     #[test]
-    fn room_for_label_shrinks_once_the_option_number_grows_a_digit() {
-        let nine = vec![Choice::bare("x"); 9];
-        let ten = vec![Choice::bare("x"); 10];
-        assert_eq!(room_for_label(100, &nine), room_for_label(100, &ten) + 1);
+    fn the_aside_shrinks_once_the_option_number_grows_a_digit() {
+        // **The aside pays for the second digit now, not the label.** It was
+        // the label's bill when the label took what the aside left over; the
+        // digit still has to come from somewhere, and the aside is the half
+        // that gives way (see `room_for_label`).
+        let nine = vec![Choice::new("x", "aside"); 9];
+        let ten = vec![Choice::new("x", "aside"); 10];
+        assert_eq!(aside_room(100, &nine), aside_room(100, &ten) + 1);
     }
 
     /// **The room accounts for the widest aside, not each row's own.** A row
     /// with a short aside still has to line up under one with a long one, so
     /// the budget is set by whichever option carries the most.
     #[test]
-    fn room_for_label_is_set_by_the_widest_aside() {
-        let options = vec![
-            Choice::new("a", "short"),
-            Choice::new("b", "a much longer aside"),
-        ];
+    fn room_for_label_is_not_set_by_the_widest_aside() {
+        let short = vec![Choice::new("MEMORY  voice.md", "short")];
+        let long = vec![Choice::new("MEMORY  voice.md", &"x".repeat(150))];
         assert_eq!(
-            room_for_label(100, &options),
-            100 - (4 + 1 + 1 + 2 + "a much longer aside".len())
+            room_for_label(120, &short),
+            room_for_label(120, &long),
+            "a longer aside changed what the label was allowed, which is the \
+             bug that drew `guild ls` as a column of descriptions with no names"
         );
     }
 
@@ -532,6 +614,7 @@ mod tests {
                 choice,
                 Selection::new(options.len(), 1),
                 widest,
+                aside_room(width, &options),
                 Style::plain(),
             );
             assert!(
