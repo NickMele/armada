@@ -81,7 +81,7 @@ you to do something. Frozen byte for byte by `tests/golden/render/doctor.plain`.
              -> armada guild project
 
   manifest.db
-    ok       2 workspaces, 0 orphans
+    ok       meta 1, workspaces 2, owned 3, leases 0; 0 reclaimable rows
 
 NEEDS ATTENTION  3 ok, 2 missing, 4 warnings
 ```
