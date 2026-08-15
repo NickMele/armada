@@ -194,10 +194,16 @@ pub fn start(
 
     let pgid = group.pgid();
     // **The handle is dropped and the child is not waited on**, which is the one
-    // place that is correct: a Drone is meant to outlive this process. `setsid`
-    // has already put it in its own session, so it is reparented to init, which
-    // reaps it — the zombie rule `docs/traps.md` states applies to children
-    // Armada keeps.
+    // place that is correct: a Drone is meant to outlive this process.
+    //
+    // **`setsid` does not reparent it, and assuming it did is what broke
+    // `stop`.** A new session changes which group and session the child is in,
+    // never who its parent is: this process stays the parent until it exits,
+    // and only then does init inherit the Drone and reap it. So between here
+    // and this invocation's exit, a Drone that dies is *this process's* zombie
+    // — which is why [`stop`] reaps by group before it reads the group as
+    // empty (`docs/traps.md`). The zombie rule holds for every child Armada
+    // starts, including the ones it lets go.
     drop(group);
 
     Ok(Handle {
@@ -242,6 +248,16 @@ pub fn alive(run: &impl Run, cwd: &Path, handle: Option<&Handle>, boot_id: &str)
 /// This runs **before** `armada manifest clean` in `armada fleet kill`: a live
 /// Drone mid-`docker compose up` would otherwise race the teardown of the very
 /// resources it is creating, and lose.
+///
+/// **The Drone may be this process's own abandoned child, and that changes the
+/// answer.** [`start`] drops the handle without waiting, so a Drone killed by
+/// an invocation that also started it is a zombie nobody has reaped — still a
+/// member of its process group, and Linux's group probe says so where darwin's
+/// says `EPERM`. `posix::stop_group` reaps by group before every reading for
+/// exactly this case; without that this returns [`Stopped::Survived`] on Linux
+/// for a Drone that died on the first SIGTERM. The answer is now the same one
+/// the *next* `armada` invocation would get, which used to be true only because
+/// init had reaped the zombie in between.
 pub fn stop(run: &impl Run, cwd: &Path, handle: Option<&Handle>, boot_id: &str) -> Stopped {
     let Some(handle) = handle else {
         return Stopped::NothingToStop;
@@ -421,18 +437,23 @@ mod tests {
             Stopped::Stopped
         );
 
-        // **The group is empty, and the pid is a zombie. Both are true, and they
-        // are different questions.** `stop_group` asks about the *group*, which
-        // has nobody left in it — so a second stop finds nothing, which is the
-        // assertion that proves the Drone really died. `ps` asks about the
-        // *pid*, and a signalled child stays a zombie until somebody reaps it,
-        // so `alive` still says yes inside the process that started it.
+        // **Whether the group has members and whether the pid still exists are
+        // different questions, and the reap is what makes them agree.** A
+        // signalled child stays a zombie until somebody waits on it; that
+        // zombie is still a member of its process group, and it still answers
+        // `ps -o lstart=` with the start time it had while running — so before
+        // the reap, `stop_group` and `alive` are answering about a corpse and
+        // both of them say "still there" on Linux.
         //
-        // It says no to the next `armada` invocation, which is the only caller
-        // that ever asks: by then this process has exited and init has reaped
-        // the zombie. Written out because an assertion made the obvious way
-        // (`!alive(…)`) fails here for a reason that looks like a bug in `stop`
-        // and is not. Recorded in `docs/traps.md`.
+        // `stop` therefore reaps by group before it reads either. This process
+        // is the Drone's parent — `setsid` moved it to a new session, not to a
+        // new parent — so the `waitpid` is ours to make, and after it the group
+        // is empty and the pid is gone on **both** platforms. That is what this
+        // second stop asserts: nothing to stop, for the same reason, everywhere.
+        //
+        // The old comment here recorded the darwin half of this and called the
+        // Linux half impossible to assert; it was the missing reap. Recorded in
+        // `docs/traps.md`.
         assert_eq!(
             stop(
                 &armada_manifest::process::RealRun,
