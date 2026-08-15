@@ -1181,6 +1181,15 @@ pub struct GuildInitData {
     pub withheld: Vec<String>,
     /// The files written — the three fragments and the starters.
     pub wrote: Vec<String>,
+    /// What a pre-namespace `machine.yml` had moved into its module's section,
+    /// when this run migrated one (`PLAN.md` §4.3.1).
+    ///
+    /// **Absent is the ordinary case**, and it means the file was already in the
+    /// current layout or there was none. Present, it names the keys that moved:
+    /// this file is hand-edited, and a count does not tell anyone which keys to
+    /// go and look at.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub migrated: Option<String>,
     /// The sync remote, if one was named.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote: Option<String>,
@@ -1973,6 +1982,7 @@ mod tests {
             imported: vec!["19 skills".to_string()],
             withheld: vec!["settings.json:env.GITHUB_TOKEN".to_string()],
             wrote: vec!["voice.md".to_string()],
+            migrated: None,
             remote: None,
             questions: 5,
             answered: 0,
@@ -1980,5 +1990,9 @@ mod tests {
         let json = serde_json::to_string(&data).unwrap();
         assert!(json.contains("env.GITHUB_TOKEN"), "{json}");
         assert!(!json.contains("remote"), "sync off is absent, not null");
+        assert!(
+            !json.contains("migrated"),
+            "the ordinary run migrated nothing, and says nothing: {json}"
+        );
     }
 }

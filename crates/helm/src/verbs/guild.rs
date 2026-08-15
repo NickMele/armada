@@ -147,6 +147,17 @@ pub fn init(
         .iter()
         .map(|w| format!("{}:{}", w.source, w.key))
         .collect();
+    // **The one place a pre-namespace `machine.yml` gets fixed, and it is
+    // here because this is the only crate allowed to ask both modules.**
+    // `machine.yml` carries one section per module, and a file written before
+    // the sections existed has one module's keys loose at the top level — which
+    // every other module's reader then has to tolerate. It is migrated on the
+    // write that was going to happen anyway rather than on a read, so no verb
+    // that merely looks at configuration rewrites it, and it is reported,
+    // because a file that changed under somebody without being mentioned is
+    // worse than one that did not change at all.
+    let migrated = armada_manifest::machine::migrate(&place.armada_home)
+        .map_err(|e| unwritable(&place.armada_home, &e))?;
     machine::record(&place.armada_home, &answers, &imported.withheld)
         .map_err(|e| unwritable(&place.armada_home, &e))?;
 
@@ -159,6 +170,7 @@ pub fn init(
             imported: imported.inventory.facts(),
             withheld,
             wrote,
+            migrated: migrated.map(|m| m.note()),
             remote: answers.remote.clone(),
             questions: QUESTIONS.len(),
             answered: answers.answered(),

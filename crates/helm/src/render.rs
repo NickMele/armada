@@ -971,6 +971,18 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
         detail_cell(style, Some(&ids(&data.wrote, KEEP))),
         time_cell(None),
     ]);
+    // **Only when it happened, and it happens once per machine.** A file Armada
+    // rewrote without saying so is a file the next reader cannot trust, and
+    // `machine.yml` is the one file here that is meant to be hand-edited. A row
+    // that appeared every run would be the row nobody reads.
+    if let Some(migrated) = &data.migrated {
+        table = table.row(vec![
+            token("migrated", Role::BeaconGreen),
+            Cell::plain("machine.yml"),
+            detail_cell(style, Some(migrated)),
+            time_cell(None),
+        ]);
+    }
     table = table.row(vec![
         token("guild", Role::BeaconGreen),
         Cell::plain("initialised"),
@@ -3178,11 +3190,30 @@ mod tests {
                     "how-i-work.md".to_string(),
                     "workflows/bug.yml".to_string(),
                 ],
+                migrated: None,
                 remote: remote.map(str::to_string),
                 questions: 5,
                 answered,
             },
         )))
+    }
+
+    /// **The migration row appears only when there was a migration**, and it
+    /// names the keys that moved: `machine.yml` is hand-edited, so "two keys
+    /// moved" leaves the reader with nothing to go and look at.
+    #[test]
+    fn guild_init_says_when_it_rewrote_machine_yml_and_nothing_when_it_did_not() {
+        let quiet = rendered(&a_guild_init(&[], None, 0), Style::plain());
+        assert!(!quiet.contains("migrated"), "{quiet}");
+
+        let mut output = a_guild_init(&[], None, 0);
+        if let Output::GuildInit(envelope) = &mut output {
+            envelope.data.migrated = Some("cpu_slots moved under `manifest:`".to_string());
+        }
+        let text = rendered(&output, Style::plain());
+        assert!(text.contains("migrated"), "{text}");
+        assert!(text.contains("machine.yml"), "{text}");
+        assert!(text.contains("cpu_slots"), "{text}");
     }
 
     /// **No row at all when nothing was withheld.** `withheld  0 values  no

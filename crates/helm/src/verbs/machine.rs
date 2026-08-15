@@ -13,7 +13,10 @@
 //! 3. **Ask the one question that matters:** *do you already have a guild?*
 //!    Pull it from a remote, import a bundle, or build one now. Only the third
 //!    reaches the five-question interview.
-//! 4. **Write `machine.yml`** — which never syncs (`PLAN.md` §13.1).
+//! 4. **Write `machine.yml`** — which never syncs (`PLAN.md` §13.1), and which
+//!    carries one top-level section per module (`PLAN.md` §4.3.1). A file
+//!    written before those sections existed is moved into them here, and the
+//!    checklist says which keys moved.
 //!
 //! # Nothing here ever touches a real `~/.armada/`
 //!
@@ -117,6 +120,23 @@ pub fn run(
     }
 
     results.push(create_layout(&place.armada_home, existed)?);
+
+    // **Step 4, on a machine that has been here before.** `machine.yml` carries
+    // one top-level section per module (`PLAN.md` §4.3.1) and a file written
+    // before those existed has one module's keys loose at the top. This verb is
+    // the documented repair for an `~/.armada/` that has drifted — `doctor`
+    // names it — so it is where such a file gets moved into the current layout,
+    // and it is reported rather than done quietly. Nothing is written when there
+    // is nothing to move, which is every ordinary run.
+    if let Some(migrated) = armada_manifest::machine::migrate(&place.armada_home)
+        .map_err(|e| unwritable(&place.armada_home, &e))?
+    {
+        results.push(Finding::settled(
+            "machine.yml",
+            Settled::Created,
+            migrated.note(),
+        ));
+    }
 
     // **A machine that already has a guild is never asked the question again.**
     // `--force` means "re-run against an existing `~/.armada/`" — which is the
@@ -537,6 +557,65 @@ mod tests {
                 .iter()
                 .any(|argv| argv.contains(&"clone".to_string())),
             "nothing was cloned"
+        );
+    }
+
+    /// **The repair for the machine that is broken right now.** A `machine.yml`
+    /// written before the sections existed keeps one module's keys at the top
+    /// level; a re-run moves them and says so, and a second re-run has nothing
+    /// to say because there is nothing left to move.
+    #[test]
+    fn a_rerun_moves_a_pre_namespace_machine_yml_into_its_sections_and_says_which_keys() {
+        let (_home, place) = scratch();
+        init(&place, &Options::default()).unwrap();
+        std::fs::write(
+            place.armada_home.join("machine.yml"),
+            "cpu_slots: 6\nguild:\n  withheld: []\n",
+        )
+        .unwrap();
+
+        let migrated = |output: &Output| {
+            data(output)
+                .results
+                .into_iter()
+                .find(|f| f.check == "machine.yml")
+        };
+        let forced = Options {
+            force: true,
+            ..Options::default()
+        };
+
+        let first = migrated(&init(&place, &forced).unwrap()).expect("nothing was migrated");
+        assert!(first.detail.contains("cpu_slots"), "{first:?}");
+
+        // Read back through the module that owns the section, so the assertion
+        // is that the file *works* rather than that it has a shape.
+        assert_eq!(
+            armada_manifest::machine::MachineConfig::read(&place.armada_home)
+                .unwrap()
+                .cpu_slots,
+            6
+        );
+        let text = std::fs::read_to_string(place.armada_home.join("machine.yml")).unwrap();
+        assert!(text.contains("guild:"), "the other section is gone: {text}");
+
+        assert!(
+            migrated(&init(&place, &forced).unwrap()).is_none(),
+            "a second run claimed to migrate an already-migrated file"
+        );
+    }
+
+    /// The ordinary run has no such file and must not draw a row about one.
+    #[test]
+    fn a_fresh_machine_reports_no_migration() {
+        let (_home, place) = scratch();
+        let output = init(&place, &Options::default()).unwrap();
+        assert!(
+            !data(&output)
+                .results
+                .iter()
+                .any(|f| f.check == "machine.yml"),
+            "a machine that never had one reported a migration"
         );
     }
 
