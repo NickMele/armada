@@ -34,8 +34,9 @@ empty** — which is the difference between a tool you configure once and one yo
 configuration.
 
 The importer **refuses to adopt credential-shaped values.** Anything that looks like a token
-goes to `machine.yml`, which never syncs. A secret that has reached a remote cannot be
-un-pushed, so this is built here rather than retrofitted.
+goes to the `guild:` section of `machine.yml`, which never syncs — **by key, never by value**
+([`PLAN.md`](../../PLAN.md) §13.1). A secret that has reached a remote cannot be un-pushed, so
+this is built here rather than retrofitted.
 
 `CLAUDE.md` is carved into `voice.md`, `expectations.md` and `how-i-work.md`. **Each opens with
 what it is for, not with where it came from** — its heading, who reads it and when, and what to
@@ -119,6 +120,19 @@ a tool you cannot fix at one in the morning.
 
 READY  guild at ~/.armada/guild, 1 answered, 4 kept as imported
 ```
+
+**A `migrated` row appears once, on a machine whose `machine.yml` predates the sections.**
+That file carries one top-level section per module ([`PLAN.md`](../../PLAN.md) §4.3.1); a file
+written before they existed has one module's keys loose at the top level, and this verb is
+already writing to it, so it moves them and says which:
+
+```
+  migrated  machine.yml  cpu_slots, port_block_size moved under `manifest:`
+```
+
+It is drawn only when the migration happened — it happens once per machine, and a row that
+appeared every run is the row nobody reads. Armada never rewrites this file on a *read*: a
+verb that only inspects your configuration leaves a hand-edited file exactly as it found it.
 
 **The `withheld` row appears only when something was withheld.** It used to be drawn either way,
 on the argument that "Armada looked and found nothing" and "nobody looked" are different facts.

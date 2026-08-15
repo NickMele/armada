@@ -1939,13 +1939,16 @@ it — that shape genuinely needs a daemon. Armada's does not.)
 ### 4.3.1 `~/.armada/machine.yml` — machine capacity, never committed
 
 ```yaml
-cpu_slots: 6            # default: max(1, num_cpus - 2)
-port_block_size: 10
-run_retention: 10       # runs kept; see the 10 MB per-check log cap (§3.1)
-check_timeout: 900      # per-check default, overridable per check (§4.1)
-acquire_timeout: 2400   # cumulative wait for leases before FAILED/aborted (§4.3)
-docker_timeout: 30      # Armada's own deadline on every docker call (§6)
-up_timeout: 600         # …except the ones that do work rather than ask (§6)
+manifest:                 # Manifest's section; every other module gets its own
+  cpu_slots: 6            # default: max(1, num_cpus - 2)
+  port_block_size: 10
+  run_retention: 10       # runs kept; see the 10 MB per-check log cap (§3.1)
+  check_timeout: 900      # per-check default, overridable per check (§4.1)
+  acquire_timeout: 2400   # cumulative wait for leases before FAILED/aborted (§4.3)
+  docker_timeout: 30      # Armada's own deadline on every docker call (§6)
+  up_timeout: 600         # …except the ones that do work rather than ask (§6)
+guild:                    # §13.1: the remote, and what the importer withheld
+  withheld: []
 ```
 
 **`up_timeout` is the seventh key, and it was specified with a value and no home.**
@@ -1964,8 +1967,42 @@ the home.
 **YAML, and it was TOML until M1.** The file was called `config.toml` then, and carrying a
 second document language for six integers meant a second parser in the dependency graph and a
 second set of quoting rules for whoever edits either file. One language, one parser
-(§4.1.1 decision 5). There are **no sections**: unlike `armada.yml` this file is one flat
-mapping, because it describes a machine rather than a stack of modules.
+(§4.1.1 decision 5).
+
+**One top-level section per module, exactly as `armada.yml` has** — and this file got it late,
+which cost a release. It was specified as one flat mapping "because it describes a machine
+rather than a stack of modules". That is true of the *subject* and false of the *writers*:
+`machine.yml` is machine-global, so every module that has a machine-local fact writes here, and
+Guild's `guild:` section (§13.1) duly landed beside Manifest's keys. Manifest's reader rejects
+unknown keys — deliberately, since Armada never writes this file and an unrecognised key is a
+typo far more often than it is version skew — so the sibling's section made **every Manifest
+verb fail to parse the file**. Two modules shared one document and neither owned its shape.
+
+Three rules follow, and the third is the one that makes the other two possible:
+
+| Rule | Why |
+|---|---|
+| A module reads **only its own section** | what is beside it belongs to somebody, and validating it is claiming to own it |
+| `deny_unknown_fields` **inside** that section | the typo guard is the reason the strictness exists; moving it in keeps `cpu_slot:` an error |
+| **Unknown top-level sections are ignored** | which is what lets neither sibling name the other's section (`ARCHITECTURE.md` §1.9) — Manifest never writes `guild`, Guild never writes `manifest`, and no exemption list exists to go stale |
+
+**The pre-namespace layout is read for one release**, on the same terms as the pre-M1 docker
+label namespace (`PHASES.md` §8.3): a file with the keys loose at the top level still loads, and
+is rewritten into the namespaced form on **the next write Armada was going to do anyway** —
+never on a read, so no verb that merely inspects configuration rewrites a hand-edited file. The
+run that migrates it says which keys moved. A user who has one must not have to hand-edit it,
+and the flat branch is removed a release later as a deliberate act rather than as a cleanup.
+
+Reading the flat form keeps the typo guard rather than trading it away, because the two cases
+are told apart by shape: a top-level key whose value is a **mapping** is a section and belongs
+to whichever module owns it; a top-level **scalar** in a pre-namespace file is one of this
+module's keys, or a typo of one. That is how a module recognises a sibling's section without
+naming it.
+
+**What the failure says.** A `machine.yml` a module cannot read is `environment`, exit 6 — the
+repo is fine and the machine's configuration is not — and the remedy **names the section that
+failed, not the leaf keys**. It used to list the seven keys by hand, which is a list that goes
+stale the first time an eighth is added and then sends the reader to fix the wrong thing.
 
 **`cpu_slots` defaults to `num_cpus - 2`, not `num_cpus`.** A budget that permits full
 saturation makes the machine feel dead even while the work is correctly bounded, because the
@@ -3092,13 +3129,33 @@ between your machines. **No part of it ever enters this repository.**
 ├── manifest.db            # NEVER SYNCS — ports, containers, leases on THIS machine
 ├── jobs/                  # NEVER SYNCS — the Job index
 ├── workspaces/            # NEVER SYNCS — the git worktrees themselves
-└── machine.yml            # NEVER SYNCS — paths, secrets, capacity
+└── machine.yml            # NEVER SYNCS — paths, secrets, capacity; one section per module
 ```
 
 **The line is not "content syncs, state does not".** The guild *is* state and it *does* sync.
 The line is: **what describes you syncs; what describes this machine and its running processes
 never does.** Syncing `manifest.db` to another machine would claim ports that do not exist
 there and record containers that were never started.
+
+**`machine.yml` is shared, and Guild owns exactly one section of it** (§4.3.1). Two facts land
+there, both about *this machine* rather than about you: the private remote the guild syncs to,
+and a record of every credential-shaped value the importer refused to adopt.
+
+```yaml
+guild:
+  remote: git@example.com:me/guild.git   # absent means sync off; export still works
+  withheld:                              # keys, never values (ARCHITECTURE.md §1.8)
+    - source: settings.json
+      key: env.GITHUB_TOKEN
+      because: key_name
+```
+
+Guild reads and writes `guild:` and nothing else. It does not know what the other sections are
+called or what is in them, and it **preserves them by reading the document as YAML and putting
+back everything it did not touch** — which is the only way two siblings can share a file
+without one of them owning the other's schema (`ARCHITECTURE.md` §1.9). The file was flat until
+this section arrived, and the module that read it strictly then rejected the whole document;
+§4.3.1 records the fix and the one-release migration.
 
 ### 13.2 Why it is not repository content
 

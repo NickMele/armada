@@ -44,8 +44,10 @@ a guild is [`guild/init.md`](guild/init.md) `--force`, which says so in the word
    - **Build one now** — imports `~/.claude/` first, then asks **five** questions
      ([`PLAN.md`](../PLAN.md) §13.4). Import does most of the work; the interview asks only
      what cannot be read from the machine, and every question has a default.
-4. **Writes `machine.yml`** — paths, capacity, and anything machine-specific. This file
-   **never syncs** ([`PLAN.md`](../PLAN.md) §13.1).
+4. **Writes `machine.yml`** — paths, capacity, and anything machine-specific, under **one
+   top-level section per module** ([`PLAN.md`](../PLAN.md) §4.3.1). This file **never syncs**
+   ([`PLAN.md`](../PLAN.md) §13.1). A file written before the sections existed is moved into
+   them here, and the run says which keys moved.
 
 ## Output
 
