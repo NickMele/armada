@@ -1,10 +1,10 @@
-  STATUS   CHECK        DETAIL                      TIME
-  ok       git          2.51.0                         -
-  ok       claude       2.0.14                         -
-  missing  docker       compose driver unavailable     -
-  stale    guild        3 commits behind origin        -
-  partial  guild        voice.md still as imported     -
-  ok       manifest.db  2 workspaces, 0 orphans        -
+  STATUS   CHECK        DETAIL
+  ok       git          2.51.0
+  ok       claude       2.0.14
+  missing  docker       compose driver unavailable
+  stale    guild        3 commits behind origin
+  partial  guild        voice.md still as imported
+  ok       manifest.db  2 workspaces, 0 orphans
 
 NEEDS ATTENTION  3 ok, 1 missing, 2 warnings
   -> install docker, or accept that compose repos will not start

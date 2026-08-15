@@ -1,8 +1,8 @@
-  STATUS   CHECK       DETAIL                      TIME
-  found    git         2.51.0                         -
-  found    claude      2.0.14                         -
-  missing  docker      not required by every repo     -
-  created  ~/.armada/  guild, jobs, workspaces        -
+  STATUS   CHECK       DETAIL
+  found    git         2.51.0
+  found    claude      2.0.14
+  missing  docker      not required by every repo
+  created  ~/.armada/  guild, jobs, workspaces
 
 Do you already have a guild?
   1 pull from a remote  2 import a bundle  3 build one now  > 3

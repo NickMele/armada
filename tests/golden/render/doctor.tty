@@ -1,10 +1,10 @@
-  [1m[38;2;107;114;128mSTATUS[0m   [1m[38;2;107;114;128mCHECK[0m        [1m[38;2;107;114;128mDETAIL[0m                      [1m[38;2;107;114;128mTIME[0m
-  [38;2;61;220;132mok[0m       git          [38;2;107;114;128m2.51.0[0m                         [38;2;107;114;128m—[0m
-  [38;2;61;220;132mok[0m       claude       [38;2;107;114;128m2.0.14[0m                         [38;2;107;114;128m—[0m
-  [38;2;255;92;92mmissing[0m  docker       [38;2;107;114;128mcompose driver unavailable[0m     [38;2;107;114;128m—[0m
-  [38;2;255;180;84mstale[0m    guild        [38;2;107;114;128m3 commits behind origin[0m        [38;2;107;114;128m—[0m
-  [38;2;255;180;84mpartial[0m  guild        [38;2;107;114;128mvoice.md still as imported[0m     [38;2;107;114;128m—[0m
-  [38;2;61;220;132mok[0m       manifest.db  [38;2;107;114;128m2 workspaces, 0 orphans[0m        [38;2;107;114;128m—[0m
+  [1m[38;2;107;114;128mSTATUS[0m   [1m[38;2;107;114;128mCHECK[0m        [1m[38;2;107;114;128mDETAIL[0m
+  [38;2;61;220;132mok[0m       git          [38;2;107;114;128m2.51.0[0m
+  [38;2;61;220;132mok[0m       claude       [38;2;107;114;128m2.0.14[0m
+  [38;2;255;92;92mmissing[0m  docker       [38;2;107;114;128mcompose driver unavailable[0m
+  [38;2;255;180;84mstale[0m    guild        [38;2;107;114;128m3 commits behind origin[0m
+  [38;2;255;180;84mpartial[0m  guild        [38;2;107;114;128mvoice.md still as imported[0m
+  [38;2;61;220;132mok[0m       manifest.db  [38;2;107;114;128m2 workspaces, 0 orphans[0m
 
 [1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;107;114;128m3 ok · 1 missing · 2 warnings[0m
   [38;2;107;114;128m→ install docker, or accept that compose repos will not start[0m

@@ -31,6 +31,20 @@ columns, same order, same words, minus the styling.
 receives frames of animation, and the one consumer the envelope exists for is the one that
 breaks.
 
+## Tables
+
+Every table is `STATUS · NAME · DETAIL · TIME`, status first and always a word.
+
+**A column no row filled is dropped, header and all.** A verb declares the four columns; the
+renderer decides which of them earned their width. `armada doctor` times nothing, so its `TIME`
+header used to stand over a column of placeholders — a header is a claim that something was
+measured, and four em dashes are not a measurement.
+
+The rule is about a **column**, never a row. A table where one row of five has a duration keeps
+`TIME` and shows the placeholder against the other four, because there the absence is the
+answer. That is also why `DETAIL` keeps its placeholder rather than emptying: `owns  resources
+—` is how a reader tells *this workspace owns nothing* from *nobody looked*.
+
 ## The banner
 
 ```

@@ -466,20 +466,22 @@ fn answer(envelope: &Envelope<AnswerData>, style: Style, width: usize) -> String
 ///
 /// **`armada init` and `armada doctor` share it because they are asking one
 /// question** — what is the state of this machine — and a reader who has met
-/// one has met the other. The `TIME` column is present and empty on every row:
-/// nothing here is timed, and the column stays so the four columns of the
-/// agreed layout are the same four columns everywhere (`render.rs`'s header).
-fn machine_table(rows: &[Finding], style: Style, width: usize) -> Table {
+/// one has met the other.
+///
+/// The `TIME` column is declared and never filled, because **nothing here is
+/// timed** — and `render/table.rs` therefore drops it. It stays declared rather
+/// than being left out at this call site so that the one rule about empty
+/// columns lives in the table and not in each verb's opinion of its own columns.
+fn machine_table(rows: &[Finding], style: Style) -> Table {
     let mut table = Table::new(columns("check", "detail", true)).indent(2);
     for row in rows {
         table = table.row(vec![
             token(row.status.word(), Role::for_health(row.status)),
             Cell::plain(row.check.clone()),
             detail_cell(style, Some(row.detail.as_str())),
-            time_cell(style, None),
+            time_cell(None),
         ]);
     }
-    let _ = width;
     table
 }
 
@@ -550,7 +552,7 @@ pub fn interview_prompt(asked: &armada_core::envelope::Asked, style: Style) -> S
 /// second call site cannot draw it under conditions the first refuses.
 fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut out = machine_table(&data.results, style, width).render(style, width);
+    let mut out = machine_table(&data.results, style).render(style, width);
 
     if let Some(choice) = &data.guild {
         let options: Vec<&str> = choice.options.iter().map(String::as_str).collect();
@@ -600,7 +602,7 @@ fn machine_init(envelope: &Envelope<MachineInitData>, style: Style, width: usize
 /// `armada doctor` — what this machine is missing.
 fn doctor(envelope: &Envelope<DoctorData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut out = machine_table(&data.results, style, width).render(style, width);
+    let mut out = machine_table(&data.results, style).render(style, width);
     out.push('\n');
     out.push_str(&match data.headline {
         Some(word) => headline(style, word, &data.tally),
@@ -626,7 +628,7 @@ fn guild_sync(envelope: &Envelope<GuildSyncData>, style: Style, width: usize) ->
             token(row.status.word(), Role::for_sync(row.status)),
             Cell::plain(row.item.clone()),
             detail_cell(style, Some(row.detail.as_str())),
-            time_cell(style, None),
+            time_cell(None),
         ]);
     }
     let mut out = table.render(style, width);
@@ -690,7 +692,7 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
         token("imported", Role::BeaconGreen),
         Cell::plain("~/.claude/"),
         detail_cell(style, Some(&data.imported.join(", "))),
-        time_cell(style, None),
+        time_cell(None),
     ]);
     // **Always a row, even when nothing was withheld.** "Armada looked and
     // found no credentials" and "nobody looked" read identically otherwise, and
@@ -714,13 +716,13 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
                 format!("{} -> machine.yml", ids(&data.withheld, KEEP))
             }),
         ),
-        time_cell(style, None),
+        time_cell(None),
     ]);
     table = table.row(vec![
         token("wrote", Role::BeaconGreen),
         Cell::plain(format::count(data.wrote.len(), "file")),
         detail_cell(style, Some(&ids(&data.wrote, KEEP))),
-        time_cell(style, None),
+        time_cell(None),
     ]);
     table = table.row(vec![
         token("guild", Role::BeaconGreen),
@@ -732,7 +734,7 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
                 None => "no remote: sync off, export still works",
             }),
         ),
-        time_cell(style, None),
+        time_cell(None),
     ]);
 
     let mut out = table.render(style, width);
@@ -779,7 +781,7 @@ fn guild_bundle(envelope: &Envelope<GuildBundleData>, style: Style, width: usize
         ),
         Cell::plain(data.path.clone()),
         detail_cell(style, Some(&data.contents.join(", "))),
-        time_cell(style, None),
+        time_cell(None),
     ]);
     // **Reported either way.** "The file that never syncs did not sync" is the
     // fact `--include-secrets` exists to make checkable, and a line that only
@@ -807,14 +809,14 @@ fn guild_bundle(envelope: &Envelope<GuildBundleData>, style: Style, width: usize
                 "machine.yml stays here"
             }),
         ),
-        time_cell(style, None),
+        time_cell(None),
     ]);
     for skipped in &data.skipped {
         table = table.row(vec![
             token("skipped", Role::SteelGrey),
             Cell::plain(skipped.clone()),
             detail_cell(style, Some("this machine has its own")),
-            time_cell(style, None),
+            time_cell(None),
         ]);
     }
     for conflict in &data.conflicts {
@@ -822,7 +824,7 @@ fn guild_bundle(envelope: &Envelope<GuildBundleData>, style: Style, width: usize
             token("conflict", Role::DistressRed),
             Cell::plain(conflict.clone()),
             detail_cell(style, Some("edited here, left alone")),
-            time_cell(style, None),
+            time_cell(None),
         ]);
     }
 
@@ -965,15 +967,28 @@ fn columns(name: &str, detail: &str, time: bool) -> Vec<Column> {
     columns
 }
 
-/// A cell holding a duration, or the placeholder when there is none.
-fn time_cell(style: Style, ms: Option<u64>) -> Cell {
+/// A cell holding a duration, or nothing when none was measured.
+///
+/// **[`Cell::nothing`] rather than a painted placeholder**, so the table can
+/// count the empties and drop a `TIME` column no row filled (`render/table.rs`).
+/// A verb that measures some of its rows still shows the placeholder against the
+/// rest, which is where it says something.
+fn time_cell(ms: Option<u64>) -> Cell {
     match ms {
         Some(ms) => Cell::muted(format::duration(ms)),
-        None => Cell::muted(style.nothing()),
+        None => Cell::nothing(),
     }
 }
 
-/// A cell holding text, or the placeholder when the text is empty.
+/// A cell holding text, or a **visible** placeholder when the text is empty.
+///
+/// **Deliberately not [`Cell::nothing`], unlike [`time_cell`] beside it**, and
+/// the difference is what the two absences mean. A missing duration is a
+/// measurement nobody took, so a `TIME` column nobody filled says nothing and
+/// goes. A missing detail is the row's answer — `owns  resources  —` is how a
+/// reader tells "this workspace owns nothing" from "nobody looked", which is the
+/// distinction `render.rs`'s own tests are most explicit about. Letting the
+/// table drop `DETAIL` would delete that sentence rather than tidy it.
 fn detail_cell(style: Style, text: Option<&str>) -> Cell {
     match text.filter(|t| !t.is_empty()) {
         Some(text) => Cell::muted(text),
@@ -1029,7 +1044,7 @@ fn init(envelope: &Envelope<InitData>, style: Style, width: usize) -> String {
             verdict(row.status),
             Cell::plain(row.id.clone()),
             detail_cell(style, row.error.as_ref().map(|e| e.message.as_str())),
-            time_cell(style, row.duration_ms),
+            time_cell(row.duration_ms),
         ]);
     }
     if !components.is_empty() {
@@ -1153,7 +1168,7 @@ fn services(envelope: &Envelope<ServicesData>, style: Style, width: usize, noun:
                 verdict(row.status),
                 Cell::plain(row.id.clone()),
                 detail_cell(style, detail.as_deref()),
-                time_cell(style, row.duration_ms),
+                time_cell(row.duration_ms),
             ],
             note,
         );
@@ -1468,7 +1483,7 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
                 verdict(row.status),
                 Cell::plain(row.id.clone()),
                 detail_cell(style, detail.as_deref()),
-                time_cell(style, row.duration_ms),
+                time_cell(row.duration_ms),
             ],
             note,
         );
@@ -2036,7 +2051,7 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
             verdict(row.status),
             Cell::plain(row.id.clone()),
             detail_cell(style, detail.as_deref()),
-            time_cell(style, row.duration_ms),
+            time_cell(row.duration_ms),
         ]);
     }
     // **A render-only word, because the envelope has no status that means
@@ -2047,7 +2062,7 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
         token("unchecked", Role::FlareOrange),
         Cell::plain("shell entries"),
         Cell::muted(format!("{}, no argv[0] to resolve", data.unchecked)),
-        time_cell(style, None),
+        time_cell(None),
     ]);
     out.push_str(&table.render(style, width));
     out.push('\n');
@@ -2070,7 +2085,7 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
                 verdict(row.status),
                 Cell::plain(row.id.clone()),
                 detail_cell(style, detail.as_deref()),
-                time_cell(style, row.duration_ms),
+                time_cell(row.duration_ms),
             ]);
         }
         out.push_str(&suite.render(style, width));
@@ -2771,8 +2786,7 @@ mod tests {
                     "no",
                     "credential-shaped",
                     "values",
-                    "found",
-                    "-"
+                    "found"
                 ]
             ),
             "{text}"
@@ -2832,7 +2846,7 @@ mod tests {
         let without = rendered(&a_bundle(false, &[]), Style::plain());
         assert!(has_row(
             &without,
-            &["secrets", "excluded", "machine.yml", "stays", "here", "-"]
+            &["secrets", "excluded", "machine.yml", "stays", "here"]
         ));
         assert!(without.contains("412 KB"), "{without}");
 

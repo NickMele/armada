@@ -15,6 +15,17 @@
 //! **Too narrow degrades by truncating a column, never by wrapping a row**
 //! (PHASES.md §8.3.1). A wrapped row stops lining up with its header, so the
 //! reader loses the alignment that was the only reason to draw a table.
+//!
+//! **A column that is empty in every row is dropped, header and all.** A header
+//! standing over nothing is the same claim an empty table makes — that something
+//! was measured — and it costs the columns beside it the width they would rather
+//! have. This is general and not a special case for one verb: `TIME` over four
+//! placeholders was where it was noticed, but `DETAIL`, `NOTE` and any column a
+//! verb declares and then never fills read exactly as badly.
+//!
+//! The rule is about a *column*, never a row: a table where one row of five has
+//! a duration keeps `TIME` and shows [`Cell::nothing`] against the other four,
+//! because there the placeholder is the answer.
 
 use super::palette::Role;
 use super::style::Style;
@@ -83,6 +94,10 @@ impl Column {
 pub struct Cell {
     text: String,
     role: Option<Role>,
+    /// Whether this cell holds *nothing* rather than a value that happens to be
+    /// short. Only [`Cell::nothing`] sets it, and it is what lets a column count
+    /// its empties without knowing which glyph stands for one.
+    nothing: bool,
 }
 
 impl Cell {
@@ -95,6 +110,7 @@ impl Cell {
         Cell {
             text: text.into(),
             role: None,
+            nothing: false,
         }
     }
 
@@ -103,6 +119,7 @@ impl Cell {
         Cell {
             text: text.into(),
             role: Some(role),
+            nothing: false,
         }
     }
 
@@ -114,6 +131,51 @@ impl Cell {
     /// Nothing to report in this column.
     pub fn empty() -> Cell {
         Cell::plain("")
+    }
+
+    /// **There is nothing here, and the reader should be told so.**
+    ///
+    /// Rendered as [`Style::nothing`] when the column survives, and counted as
+    /// an empty when the table decides whether the column survives at all. That
+    /// is the whole reason this is a constructor rather than
+    /// `Cell::muted(style.nothing())`: a table cannot tell a placeholder from a
+    /// one-character value once the glyph is in the string, so it could never
+    /// drop the column the placeholder fills.
+    ///
+    /// [`Style::nothing`]: super::style::Style::nothing
+    pub fn nothing() -> Cell {
+        Cell {
+            text: String::new(),
+            role: Some(Role::SteelGrey),
+            nothing: true,
+        }
+    }
+
+    /// Whether this cell would put any characters of its own on the line.
+    fn is_blank(&self) -> bool {
+        self.nothing || self.text.is_empty()
+    }
+
+    /// What actually goes on the line, once the audience is known.
+    fn shown(&self, style: Style) -> String {
+        if self.nothing {
+            style.nothing().to_string()
+        } else {
+            self.text.clone()
+        }
+    }
+
+    /// How many columns this cell needs, without knowing the audience.
+    ///
+    /// A placeholder is one column in both audiences — `style.rs` asserts that
+    /// of every decorative glyph that may sit in a cell — so measuring it does
+    /// not need a [`Style`] and the two renders cannot come out different widths.
+    fn width(&self) -> usize {
+        if self.nothing {
+            1
+        } else {
+            display_width(&self.text)
+        }
     }
 }
 
@@ -193,19 +255,24 @@ impl Table {
             return String::new();
         }
 
-        let widths = self.widths(width);
+        let kept = self.kept_columns();
+        let columns: Vec<&Column> = kept.iter().map(|index| &self.columns[*index]).collect();
+        let widths = self.widths(&kept, width);
         let mut out = String::new();
 
-        if self.headers && self.columns.iter().any(|c| !c.header.is_empty()) {
-            let header: Vec<Cell> = self
-                .columns
+        if self.headers && columns.iter().any(|c| !c.header.is_empty()) {
+            let header: Vec<Cell> = columns
                 .iter()
                 .map(|c| Cell::painted(c.header.to_uppercase(), Role::SteelGrey))
                 .collect();
-            out.push_str(&self.line(&header, &widths, style, true));
+            out.push_str(&self.line(&columns, &header, &widths, style, true));
         }
         for row in &self.rows {
-            out.push_str(&self.line(&row.cells, &widths, style, false));
+            let cells: Vec<Cell> = kept
+                .iter()
+                .map(|index| row.cells.get(*index).cloned().unwrap_or_else(Cell::empty))
+                .collect();
+            out.push_str(&self.line(&columns, &cells, &widths, style, false));
             if let Some(note) = &row.note {
                 // Under the second column: hanging off the row's name, not a
                 // row of its own. With one column there is no second, so it
@@ -225,14 +292,21 @@ impl Table {
     /// Trailing whitespace is not cosmetic here: it is what makes a diff of two
     /// captured outputs unreadable, and what a `grep -c ' $'` in someone's CI
     /// eventually complains about.
-    fn line(&self, cells: &[Cell], widths: &[usize], style: Style, bold: bool) -> String {
+    fn line(
+        &self,
+        columns: &[&Column],
+        cells: &[Cell],
+        widths: &[usize],
+        style: Style,
+        bold: bool,
+    ) -> String {
         let mut line = " ".repeat(self.indent);
         let last = widths.len().saturating_sub(1);
 
         for (index, width) in widths.iter().enumerate() {
             let blank = Cell::empty();
             let cell = cells.get(index).unwrap_or(&blank);
-            let text = truncate(&cell.text, *width);
+            let text = truncate(&cell.shown(style), *width);
             let pad = width.saturating_sub(display_width(&text));
 
             let painted = match (cell.role, bold) {
@@ -242,7 +316,7 @@ impl Table {
                 (None, false) => text.clone(),
             };
 
-            let align = self.columns.get(index).map_or(Align::Left, |c| c.align);
+            let align = columns.get(index).map_or(Align::Left, |c| c.align);
             match align {
                 Align::Right => {
                     line.push_str(&" ".repeat(pad));
@@ -271,18 +345,41 @@ impl Table {
         line
     }
 
+    /// Which columns survive: every one that some row put a character in.
+    ///
+    /// **The header does not count as content.** A `TIME` header standing over
+    /// four placeholders is the claim this rule exists to delete, and counting
+    /// its own header would make every column self-justifying.
+    ///
+    /// **Never all of them.** A table whose every column is empty still has
+    /// rows, and dropping the lot would print blank lines — so in that case the
+    /// declaration is kept and the emptiness is visible, which is the honest
+    /// outcome and also the one a caller can debug.
+    fn kept_columns(&self) -> Vec<usize> {
+        let kept: Vec<usize> = (0..self.columns.len())
+            .filter(|index| {
+                self.rows
+                    .iter()
+                    .any(|row| row.cells.get(*index).is_some_and(|cell| !cell.is_blank()))
+            })
+            .collect();
+        if kept.is_empty() {
+            return (0..self.columns.len()).collect();
+        }
+        kept
+    }
+
     /// Each column's natural width, then shrunk to fit.
     ///
     /// **Widest flexible column first, one column at a time.** Taking an equal
     /// share from each would squeeze a 9-character column that was already
     /// minimal in order to spare a 60-character path, which is backwards: the
     /// path is where the redundancy is.
-    fn widths(&self, available: usize) -> Vec<usize> {
-        let mut widths: Vec<usize> = self
-            .columns
+    fn widths(&self, kept: &[usize], available: usize) -> Vec<usize> {
+        let mut widths: Vec<usize> = kept
             .iter()
-            .enumerate()
-            .map(|(index, column)| {
+            .map(|index| {
+                let column = &self.columns[*index];
                 let header = if self.headers {
                     display_width(&column.header)
                 } else {
@@ -290,7 +387,7 @@ impl Table {
                 };
                 self.rows
                     .iter()
-                    .map(|row| row.cells.get(index).map_or(0, |c| display_width(&c.text)))
+                    .map(|row| row.cells.get(*index).map_or(0, Cell::width))
                     .chain(std::iter::once(header))
                     .max()
                     .unwrap_or(0)
@@ -307,11 +404,14 @@ impl Table {
             let Some(victim) = widths
                 .iter()
                 .enumerate()
-                .filter(|(index, width)| {
-                    self.columns.get(*index).is_some_and(|c| c.flexible) && **width > MIN_FLEXIBLE
+                .filter(|(at, width)| {
+                    kept.get(*at)
+                        .and_then(|index| self.columns.get(*index))
+                        .is_some_and(|c| c.flexible)
+                        && **width > MIN_FLEXIBLE
                 })
                 .max_by_key(|(_, width)| **width)
-                .map(|(index, _)| index)
+                .map(|(at, _)| at)
             else {
                 // Nothing left to give. The line overhangs, which is honest:
                 // truncating a fixed column would remove the answer.
@@ -438,6 +538,10 @@ mod tests {
 
     /// A row shorter than the column list is padded, not refused: a missing
     /// value is an ordinary fact about an envelope.
+    ///
+    /// The short row here fills `NOTE` on neither row, so the column goes with
+    /// it — the two rules compose, and the one that survives is the one about
+    /// *columns*.
     #[test]
     fn a_short_row_is_padded_rather_than_refused() {
         let text = Table::new(vec![
@@ -446,8 +550,66 @@ mod tests {
             Column::fixed("note"),
         ])
         .row(vec![Cell::plain("api"), Cell::plain("PASS")])
+        .row(vec![
+            Cell::plain("web"),
+            Cell::plain("PASS"),
+            Cell::plain("slow"),
+        ])
         .render(Style::plain(), 80);
-        assert_eq!(text, "ID   STATUS  NOTE\napi  PASS\n");
+        assert_eq!(text, "ID   STATUS  NOTE\napi  PASS\nweb  PASS    slow\n");
+    }
+
+    /// **The rule this file gained for `armada doctor`, stated generally.** A
+    /// column nobody filled is a header claiming something was measured, and it
+    /// costs the columns beside it the width they would rather have.
+    #[test]
+    fn a_column_no_row_filled_is_dropped_header_and_all() {
+        let table = Table::new(vec![
+            Column::fixed("check"),
+            Column::flexible("detail"),
+            Column::fixed("time").right(),
+        ])
+        .row(vec![
+            Cell::plain("git"),
+            Cell::plain("2.51.0"),
+            Cell::nothing(),
+        ])
+        .row(vec![
+            Cell::plain("claude"),
+            Cell::plain("2.0.14"),
+            Cell::nothing(),
+        ]);
+        assert_eq!(
+            table.render(Style::plain(), 80),
+            "CHECK   DETAIL\ngit     2.51.0\nclaude  2.0.14\n"
+        );
+    }
+
+    /// **A column one row filled keeps the placeholder on the others**, which is
+    /// the case the rule must not swallow: there the absence is the answer.
+    #[test]
+    fn a_column_one_row_filled_keeps_its_placeholders() {
+        let table = Table::new(vec![Column::fixed("check"), Column::fixed("time").right()])
+            .row(vec![Cell::plain("git"), Cell::nothing()])
+            .row(vec![Cell::plain("test"), Cell::plain("1.2s")]);
+        assert_eq!(
+            table.render(Style::plain(), 80),
+            "CHECK  TIME\ngit       -\ntest   1.2s\n"
+        );
+    }
+
+    /// A placeholder is one column in both audiences, so dropping it or keeping
+    /// it moves nothing. The pair property in `render_golden.rs` depends on it.
+    #[test]
+    fn a_placeholder_occupies_one_column_in_both_audiences() {
+        let table = Table::new(vec![Column::fixed("check"), Column::fixed("time").right()])
+            .row(vec![Cell::plain("git"), Cell::nothing()])
+            .row(vec![Cell::plain("test"), Cell::plain("1.2s")]);
+        let plain = table.render(Style::plain(), 80);
+        let painted = table.render(Style::painted(), 80);
+        for (a, b) in plain.lines().zip(painted.lines()) {
+            assert_eq!(display_width(a), display_width(b), "{a:?} vs {b:?}");
+        }
     }
 
     /// A headerless table is how a two-column list — a flag and what it does —
