@@ -3262,10 +3262,40 @@ fn gather<R: Run>(
             // `armada guild verify` finding rather than something to silently
             // allow here — it is reported as *not on disk* until that verb
             // exists to refuse it (`docs/reserved/016`).
-            let at = worktree.join(path);
+            // **A pattern, not only a path.** The shipped `design` workflow
+            // names its artifact `docs/design/*.md`, and `join` + `exists`
+            // looked for a file literally called `*.md` — so `articulate` could
+            // never pass, whatever the Drone wrote. Measured 2026-08-16: a Job
+            // wrote and committed `docs/design/hello-format.md`, the gate said
+            // the artifact was absent, and the Job retried until it hit its
+            // token ceiling. Every `design` Job was unpassable at that step.
+            //
+            // A literal path still takes the cheap route, which is both faster
+            // and the only thing that can answer for a name containing no
+            // wildcard at all.
+            let found = if gate::is_glob(path) {
+                let (dir, name) = gate::glob_parts(path);
+                std::fs::read_dir(worktree.join(dir))
+                    .map(|entries| {
+                        entries.filter_map(Result::ok).any(|entry| {
+                            entry
+                                .file_name()
+                                .to_str()
+                                .is_some_and(|found| gate::glob_matches(found, name))
+                        })
+                    })
+                    // **A directory that will not open is *not found*, not an
+                    // error.** The commonest reason is that the step has not
+                    // created it yet, which is exactly the answer the gate
+                    // wants; failing the run instead would turn a step's first
+                    // attempt into a fault.
+                    .unwrap_or(false)
+            } else {
+                worktree.join(path).exists()
+            };
             facts.artifact = Some(gate::Probed {
                 scope: path.clone(),
-                exit: i32::from(!at.exists()),
+                exit: i32::from(!found),
             });
         }
         gate::Needs::Branch => {
