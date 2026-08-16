@@ -41,6 +41,7 @@ usually asking which one applies.
 | [024](024-the-relay-does-not-fire.md) | The relay's watcher never ticks | BUG | fleet | The `Stop` hook **does** fire under `--print` — measured; the tick still never lands, so the fault is inside `stop.sh`'s watcher and every Job sits `SILENT` until somebody types `fleet tick` |
 | [025](025-a-drone-reached-outside-its-worktree.md) | A Drone reached outside its worktree | RESERVED | fleet | An unattended Drone ran `npx skills add -g` and installed third-party software on the operator's machine — **left open deliberately**: one incident is not a pattern, and the `HOME` form of the fix would move `~/.claude` out from under the Drone itself |
 | [026](026-a-job-never-reaches-done.md) | A Job never reaches `DONE` | BUG | fleet | `DONE` is legal, rendered and matched on in five places, and no Job has been in it — the `answer` half is **fixed**; what remains is that a Job resting `PAUSED` after its last step completes is never gated again, so `Next::Finish` is unreachable |
+| [028](028-specialised-drones.md) | Specialised Drones, and subagents a repository declares | RESERVED | cross-cutting | A repo declares its own subagents the way it declares skills, and Armada ships a fleet of specialised ones — a reviewer that cannot `Edit` is a mechanism where *"you are reviewing"* is only guidance |
 
 **Armada's task system exists** ([002](002-tasks.md)), so these can become its first rows — one
 file per row is what makes that a script rather than a rewrite. It is not run automatically:
