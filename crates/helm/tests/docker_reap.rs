@@ -25,15 +25,61 @@
 mod support;
 
 use serde_json::Value;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 use support::Machine;
 
+/// How long the daemon gets to answer `docker version` before it is treated as
+/// unreachable.
+///
+/// A healthy daemon answers in well under a second; the generous ceiling is for
+/// a loaded CI box, not for a sick daemon.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Whether a daemon is reachable **and answering**, which are not the same
+/// thing.
+///
+/// **This was the whole suite's hang.** The probe used `Command::output()`,
+/// which waits for the child to exit however long that takes — and a *wedged*
+/// Docker Desktop does not refuse a connection, it accepts one and never
+/// replies. So `docker version` blocked for ever, and the guard written to skip
+/// this suite when there is no daemon became the reason the run never finished.
+/// Two `cargo test --workspace` runs sat here for over ten minutes each, with
+/// four hung `docker version` children apiece and an empty log, while the check
+/// that spawned them reported `RUNNING`.
+///
+/// Absent and wedged must therefore fail the same way, because the caller's
+/// question — *can I run these tests?* — has the same answer for both. Only the
+/// probe is bounded: once a daemon has answered, the commands the tests
+/// themselves run are talking to something known to be alive.
 fn daemon_is_up() -> bool {
-    Command::new("docker")
+    let Ok(mut child) = Command::new("docker")
         .args(["version", "--format", "{{.Server.Version}}"])
-        .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        // Docker is not installed. Ordinary, and not a failure.
+        return false;
+    };
+
+    let deadline = Instant::now() + PROBE_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            // Timed out, or the wait itself failed. **Kill the child before
+            // giving up** — an abandoned `docker version` holds its pipe open
+            // and is exactly what accumulated on the measured machine.
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return false;
+            }
+        }
+    }
 }
 
 fn docker(args: &[&str]) -> String {
