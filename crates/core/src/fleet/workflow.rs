@@ -179,6 +179,21 @@ pub enum Runner {
 /// **Read off data Claude Code already emits** — `total_cost_usd`, `usage`,
 /// `num_turns` and `duration_api_ms` from the turn's `result` event
 /// (PHASES.md §9.1 F2). Fleet builds no accounting layer and estimates nothing.
+/// What a budget written before the cost ceiling existed reads as.
+///
+/// **A record on disk outlives the shape that wrote it.** `tokens` became
+/// `cost` on 2026-08-16, and without this every Job minted before that stopped
+/// deserialising — which `fleet ls` reported as *no Jobs*, silently, because a
+/// record it cannot read is a record it skips. Twenty-one of them on the
+/// author's own machine.
+///
+/// The value is `AUTONOMOUS`'s, because a Job that predates the ceiling was
+/// running under no cost limit at all and the honest replacement is the one a
+/// Job of its kind would be given today.
+fn default_cost() -> f64 {
+    10.00
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Budget {
     /// How many turns the **Job** may spend before the rope runs out.
@@ -196,6 +211,7 @@ pub struct Budget {
     /// but most tokens counted are cache reads, not work — a ceiling computed
     /// from tokens was a ceiling on context size rather than spend, and real
     /// Jobs halted at 1/240th of their allowed spend.
+    #[serde(default = "default_cost")]
     pub cost_usd: f64,
     /// Wall clock, in milliseconds.
     pub wall_clock_ms: u64,
@@ -456,6 +472,24 @@ pub fn override_budget(budget: Budget, pairs: &[String]) -> Result<Budget, Armad
 
 #[cfg(test)]
 mod tests {
+    /// **A Job minted before the cost ceiling existed still loads.**
+    ///
+    /// `tokens` became `cost` on 2026-08-16 and `cost_usd` had no default, so
+    /// every record written before it failed to deserialise. `fleet ls` does
+    /// not report a record it cannot read — it skips it — so twenty-one live
+    /// Jobs became `no Jobs` with no error anywhere. A silent empty answer is
+    /// the worst shape this failure could have taken.
+    #[test]
+    fn a_budget_written_before_the_cost_ceiling_still_reads() {
+        let old = r#"{"iterations":20,"tokens":2000000,"wall_clock_ms":7200000,"on_exhausted":"needs_human"}"#;
+        let budget: Budget = serde_json::from_str(old).expect("an old record still deserialises");
+        assert_eq!(budget.iterations, 20);
+        assert_eq!(
+            budget.cost_usd, 10.00,
+            "a Job that predates the ceiling gets the one its kind would be given today"
+        );
+    }
+
     use super::*;
 
     const BUG: &str = r#"

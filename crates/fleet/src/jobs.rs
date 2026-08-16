@@ -270,6 +270,7 @@ mod tests {
 
     fn job(name: &str, uuid: &str, state: JobState, created_ms: u64) -> Job {
         Job {
+            budget_set: Vec::new(),
             uuid: uuid.to_string(),
             name: name.to_string(),
             workflow: "feature".to_string(),

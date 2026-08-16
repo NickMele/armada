@@ -328,6 +328,7 @@ mod tests {
 
     fn job(state: JobState) -> Job {
         Job {
+            budget_set: Vec::new(),
             uuid: "u".to_string(),
             name: "n".to_string(),
             workflow: "w".to_string(),
