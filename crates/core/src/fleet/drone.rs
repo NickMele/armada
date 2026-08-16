@@ -347,7 +347,7 @@ impl Posture {
     /// after it would consume whatever came next as its first value, and what
     /// comes next is another flag or the Job's prompt.
     pub fn argv(&self) -> Vec<String> {
-        let mut argv = vec!["--permission-mode".to_string(), self.mode.clone()];
+        let mut argv = vec![PERMISSION_MODE.to_string(), self.mode.clone()];
         for (flag, rules) in [(ALLOWED, &self.allow), (DISALLOWED, &self.deny)] {
             if rules.is_empty() {
                 continue;
@@ -517,6 +517,18 @@ pub const DENY: [&str; 16] = [
     "Bash(docker push:*)",
 ];
 
+/// The flag [`MODE`] is passed as — and the flag Helm's launch passes its own
+/// mode as.
+///
+/// **Named once because two launches use it.** A Drone enters `dontAsk` and Helm
+/// enters `auto` ([`crate::helm::MODE`]), which is a difference in *value* and
+/// not in spelling; a second literal in `crate::helm` would be a second thing
+/// `armada doctor` had to be told to hold against `claude --help`, and the flag
+/// that went missing would be caught for one launch and not the other. Same
+/// reasoning as [`CLAUDE`] and [`APPEND`], which are re-exported for the same
+/// reason.
+pub const PERMISSION_MODE: &str = "--permission-mode";
+
 /// The flag [`ALLOW`] is passed as. Variadic — see [`headless`].
 pub const ALLOWED: &str = "--allowedTools";
 
@@ -589,7 +601,7 @@ pub const FLAGS: [&str; 13] = [
     // [`Posture`]'s three, which are the only ones that *grant* anything. Their
     // disappearance is the opposite failure and the more visible one: a Drone
     // back to asking a terminal that is not there, which is `STALLED`.
-    "--permission-mode",
+    PERMISSION_MODE,
     ALLOWED,
     DISALLOWED,
     // [`BRIEF`]'s, which grants nothing and withholds nothing — it says what the

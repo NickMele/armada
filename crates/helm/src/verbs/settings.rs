@@ -50,7 +50,7 @@ use crate::verbs::Output;
 /// List every setting Armada knows about.
 pub fn run(place: &Where) -> Result<Output, ArmadaError> {
     let mut settings = manifest_settings(&place.armada_home)?;
-    settings.push(helm_setting(&place.armada_home));
+    settings.extend(helm_settings(&place.armada_home));
     settings.extend(guild_settings(place));
 
     Ok(Output::Settings(Box::new(Envelope::ok(
@@ -94,19 +94,29 @@ fn manifest_settings(armada_home: &Path) -> Result<Vec<SettingRow>, ArmadaError>
     ])
 }
 
-/// Helm's one key, read the same way — [`crate::machine::read`] never errors;
-/// a `machine.yml` it cannot parse reads as `enter: false`, the safe default
-/// (see that module's own header for why a second reader does not raise a
-/// second error about the same file).
-fn helm_setting(armada_home: &Path) -> SettingRow {
-    // Exhaustive destructuring for the same reason as above: one field today,
-    // and a second one added there without being named here would not compile.
-    let crate::machine::HelmSection { enter } = crate::machine::read(armada_home);
-    machine_row(
-        "helm.enter",
-        if enter { "on" } else { "off" }.to_string(),
-        &shown(&armada_home.join("machine.yml")),
-    )
+/// Helm's two keys, read the same way — [`crate::machine::read`] never errors;
+/// a `machine.yml` it cannot parse reads as `enter: false` and the default
+/// mode, which are the safe values to fail toward (see that module's own header
+/// for why a second reader does not raise a second error about the same file).
+///
+/// **`helm.mode` is listed even though nothing writes it.** There is no
+/// purpose-named verb for it the way `armada helm enable` is one for
+/// `helm.enter`, so this listing is the only place a reader learns the key
+/// exists and what it is currently set to — which is the whole argument of
+/// `docs/reserved/018` for a read-only settings verb.
+fn helm_settings(armada_home: &Path) -> Vec<SettingRow> {
+    // Exhaustive destructuring for the same reason as above: a third field
+    // added there without being named here would not compile.
+    let crate::machine::HelmSection { enter, mode } = crate::machine::read(armada_home);
+    let at = shown(&armada_home.join("machine.yml"));
+    vec![
+        machine_row(
+            "helm.enter",
+            if enter { "on" } else { "off" }.to_string(),
+            &at,
+        ),
+        machine_row("helm.mode", mode, &at),
+    ]
 }
 
 /// The guild's config-shaped items — `armada guild ls`'s own inventory, asked

@@ -87,7 +87,7 @@ indistinguishable from an idle fleet.
 | `a` | Answer the selected Job's question | [`../fleet/answer.md`](../fleet/answer.md) |
 | `r` | Reap — opens a preview, reaps nothing until you confirm | [`../fleet/reap.md`](../fleet/reap.md) |
 | `/` | Filter | — |
-| `c` | Drop into Helm | [`helm.md`](helm.md) · **the Bridge does not exec on this key**, and it names `armada helm --exec` and whether it is on for this machine |
+| `c` | Drop into Helm | [`helm.md`](helm.md) · **the Bridge does not exec on this key**, and it names `armada helm` and whether entering is on for this machine |
 | `?` | Every binding, including the ones the key line could not carry | — |
 | `q`, `esc`, `ctrl-c` | Leave, printing the last frame | — |
 | `↑` `↓`, `k` `j` | Move the cursor | — |

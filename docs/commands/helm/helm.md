@@ -2,8 +2,8 @@
 
 The one agent you talk to.
 
-> **Status: shipped.** The launch is assembled and verified, the inbox is wired and the
-> conversation is remembered. **`--exec` enters it — once this machine has said yes.** It is off
+> **Status: shipped.** The launch is assembled and verified, the inbox is wired, the conversation
+> is remembered — and **`armada helm` enters it, once this machine has said yes.** Entering is off
 > by default; [`enable.md`](enable.md) is the switch, and a fresh install has not flipped it.
 
 **Helm is a conversation, not a screen.** It is a Claude Code session, which is the whole
@@ -18,7 +18,9 @@ below Helm moves either way.
 ## Synopsis
 
 ```sh
-armada helm [--agent <name>] [--new] [--json]
+armada helm [--agent <name>] [--new]
+armada helm --print-command
+armada helm --json
 ```
 
 ## Arguments
@@ -27,11 +29,23 @@ armada helm [--agent <name>] [--new] [--json]
 |---|---|---|---|
 | `--new` | flag | off | Start a fresh Helm conversation instead of resuming. |
 | `--agent <name>` | subagent name | `helm` | Use a different persona from `~/.armada/guild/subagents/`. |
-| `--exec` | flag | — | Become the session. **Gated by a machine switch**; see below. |
+| `--print-command` | flag | off | Print the launch command and **enter nothing**. |
+| `--exec` | flag | off | Become the session — the explicit spelling of the default. |
 
-## Assembling is free; entering is not
+Asking for `--print-command` and `--exec` in one line is `bad_invocation`: they ask for opposite
+things, and a precedence rule would silently drop one of the two.
 
-`armada helm` writes the configuration, reports the command, and **starts nothing by itself**.
+## Entering is what this verb does; the machine is what permits it
+
+| Invocation | What happens |
+|---|---|
+| `armada helm`, `helm.enter` on | enters the session |
+| `armada helm`, `helm.enter` off | refused by name, and nothing is written |
+| `armada helm --print-command` | the pasteable line; never enters |
+| `armada helm --json` | the envelope, `argv` and all; never enters |
+| `armada helm --exec` | enters — kept as an explicit synonym |
+
+Entering spends and assembling does not:
 
 | | Costs |
 |---|---|
@@ -39,41 +53,85 @@ armada helm [--agent <name>] [--new] [--json]
 | Entering the session | a real budget, against a real account, for as long as it is open |
 
 A verb that opened a Claude Code session as a side effect of being run can be reached by a
-script, by a shell alias, by a test harness and by a mistyped line, and each of those spends.
-
-**So `--exec` is refused unless this machine has said otherwise.** Whether it may become a
-session is `helm.enter` in `~/.armada/machine.yml` — off on a fresh install, flipped by
-[`armada helm enable`](enable.md) and put back by `armada helm disable`. Off, it is refused by
-name:
+script, by a shell alias, by a test harness and by a mistyped line, and each of those spends. So
+there is a lock: `helm.enter` in `~/.armada/machine.yml` — off on a fresh install, flipped by
+[`armada helm enable`](enable.md) and put back by `armada helm disable`. Off, entering is refused
+by name:
 
 ```
-armada helm --exec
+armada helm
 -> exit 2
-   bad_invocation  `armada helm --exec` is off on this machine: entering opens a Claude
-                   Code session, and this machine has not said yes to that yet
-   next: `armada helm enable` turns it on here; `armada helm` alone still only assembles
-         and prints the command
+   bad_invocation  entering is off on this machine: `armada helm` — and `armada helm --exec`,
+                   which is the same act spelled out — opens a Claude Code session, and this
+                   machine has not said yes to that yet
+   next: `armada helm enable` turns it on here; `armada helm --print-command` prints the
+         line to paste and enters nothing
 ```
+
+**There used to be a second lock, and it was the defect.** Entering was also behind `--exec`, so
+a reader who had already set `helm.enter: true` typed `armada helm`, was handed a command to
+paste, and reported it — *"it didn't dump me into a Claude Code session. It asked me to run the
+command, which was weird."* Flipping the machine switch **is** the yes. Asking for it a second
+time does not make the first answer more considered; it makes it look ignored.
+
+**The printed line was kept and moved rather than deleted.** It is how a person reads the argv
+without spending anything to see it, and what a caller opening the session somewhere else pastes.
+`--print-command` is where it lives now.
+
+**`--json` does not enter either**, for the same reason: a caller asking for the envelope is
+asking for output, and a process replaced by `claude` never prints one. Every script that reads
+`data.argv` is such a caller. `--exec --json` is how to say *enter anyway*.
 
 **Refused by name, never as an unknown flag.** A caller told *unknown flag* concludes Armada is
-broken or that they typed it wrong, and goes looking for the spelling that works. Told that it
-is off and how to turn it on, they either run `enable` or paste the printed command themselves —
-which is the honest option, and is what `next:` offers.
+broken or that they typed it wrong, and goes looking for the spelling that works. Told that it is
+off and how to turn it on, they either run `enable` or ask for the line and paste it themselves —
+both of which `next:` offers.
 
-**On, the process is replaced.** The argv, the documents and the conversation's record are
-built and verified exactly the same way whether the switch is on or off; `--exec` on a machine
-that has enabled it records that the conversation has started and then execs `claude`, and this
-process does not come back.
+**On, the process is replaced.** The argv, the documents and the conversation's record are built
+and verified exactly the same way on every row of that table; entering records that the
+conversation has started and then execs `claude`, and this process does not come back.
 
-The flag word and the reason live in one place each — `verbs::helm::ENTER` and
-`ENTER_IS_OFF` — which the parser, this page, the render's summary line and the refusal all
-read. A gate whose reason is retyped per call site says three different things by the third
-edit, and the one that reads as an accident is the one somebody works around.
+The flag words and the reason live in one place each — `verbs::helm::ENTER`, `PRINT` and
+`ENTER_IS_OFF` — which the parser, this page, the render's summary line and the refusal all read.
+A gate whose reason is retyped per call site says three different things by the third edit, and
+the one that reads as an accident is the one somebody works around.
 
-> **Bare `armada` does not enter Helm.** [`PLAN.md`](../../PLAN.md) §15.1 gives it the bare word
-> eventually and that remains the intended end state; it is deliberately not wired, because the
-> bare word is the most typeable thing on the machine and the failure mode of getting it wrong
-> is a session nobody meant to open. `armada` alone is the orientation page.
+> **Bare `armada` does not enter Helm.** [`../../reserved/020-the-tui-decided.md`](../../reserved/020-the-tui-decided.md)
+> §8 gives the bare word a menu of the modules instead, which supersedes
+> [`PLAN.md`](../../PLAN.md) §15.1 on that point. `armada helm` is how you enter.
+
+## What the session may do without asking
+
+Helm launches under `--permission-mode`, and the value is `helm.mode` in `~/.armada/machine.yml`
+— **`auto` by default**.
+
+| | Mode | Why |
+|---|---|---|
+| Helm | `auto` | you are at the terminal, so a prompt is a question that gets answered |
+| A Drone | `dontAsk` | nobody is there to answer, and a prompt is a stall that costs the whole Job |
+
+That contrast is the decision. **Passing no mode at all was the bug it replaced**: the launch
+inherited Claude Code's own default and the first real Helm session had to have every tool call
+approved by hand, which is not an orchestrator.
+
+Any of the six modes Claude Code offers may be set — `acceptEdits`, `auto`, `bypassPermissions`,
+`manual`, `dontAsk`, `plan`. Anything else is `bad_config`, named, before a launch is assembled:
+
+```
+armada helm
+-> exit 3
+   bad_config  machine.yml helm.mode
+               `yolo` is not a permission mode — Claude Code offers acceptEdits, auto,
+               bypassPermissions, manual, dontAsk, plan
+   next: set `helm.mode:` in ~/.armada/machine.yml to one of them (`auto` is the default),
+         then retry unchanged
+```
+
+**Checked here rather than at `exec`.** `--permission-mode` is validated at argument-parse time,
+so an unrecognised value is a session that dies the instant it is entered, printing Claude Code's
+usage error over whatever you were doing and naming no file. The list is the one
+`crates/core/src/fleet/drone.rs` already holds a Drone's posture against — one list, because
+there is one flag.
 
 ## How it works
 
@@ -82,10 +140,11 @@ Assembles one command, and prints it:
 ```sh
 claude --agent helm \
        --append-system-prompt "$(cat ~/.armada/helm/guild-voice.md)" \
-       --mcp-config ~/.armada/helm/mcp.json \
-       --plugin-dir ~/.armada/helm/plugin \
-       --settings   ~/.armada/helm/settings.json \
-       --session-id <uuid>          # the first launch, which mints it
+       --mcp-config      ~/.armada/helm/mcp.json \
+       --plugin-dir      ~/.armada/helm/plugin \
+       --settings        ~/.armada/helm/settings.json \
+       --permission-mode auto \
+       --session-id      <uuid>     # the first launch, which mints it
 ```
 
 `--resume <uuid>` replaces `--session-id <uuid>` on every launch after the first, which is the
@@ -174,7 +233,8 @@ Messaging a busy agent to ask how it is going costs you the thing you were measu
 
 ## Output
 
-Five rows and the command.
+**There is none on the path that enters** — the process is replaced before anything could be
+printed. This is `--print-command`'s (and `--json`'s) report: five rows and the command.
 
 ```
   STATUS     WIRED         DETAIL
@@ -186,7 +246,7 @@ Five rows and the command.
 
   enter with claude --agent helm --append-system-prompt "$(cat …)" --mcp-config …
 
-OK  helm · conversation new · nothing started; --exec is off on this machine
+OK  helm · conversation new · nothing started; entering is off on this machine — `armada helm enable`
 ```
 
 **The `voice` row is there on every launch, including the ones with nothing to say.** A launch
@@ -196,9 +256,9 @@ nobody has written yet the row reads `none yet — voice.md, expectations.md, ho
 Armada's words; armada guild edit voice.md`.
 
 The last line is load-bearing — and it names the actual state. On a machine that has run
-`armada helm enable` it reads `--exec is on — it will become the session` instead; either way,
-four `WRITTEN` rows and a launch command, without it, read exactly like a Helm that is now
-running.
+`armada helm enable` it reads `entering is on — armada helm alone enters` instead, which is how a
+reader who asked for the line learns the switch did take; either way, four `WRITTEN` rows and a
+launch command, without it, read exactly like a Helm that is now running.
 
 `--json` carries the same facts plus `argv` as a vector — a `$HOME` with a space in it is
 ordinary on macOS, and a consumer that had to split the printed line back into words would break
@@ -218,15 +278,16 @@ line above: the two differ only in the appended prompt, which is bytes in `argv`
 
 ## Exit codes
 
-`0` assembled — on a machine that has not enabled `--exec`, or on a launch that never passed it.
-On a machine that has, and passed `--exec`, this process is replaced by `claude` and the exit
-code is whatever the session exits with — there is no envelope from that launch, because nothing
-that could print one is still running.
+`0` assembled — `--print-command` or `--json`, on any machine. On the entering path this process
+is replaced by `claude` and the exit code is whatever the session exits with; there is no
+envelope from that launch, because nothing that could print one is still running.
 
-`2` `bad_invocation` — `--exec`, on a machine that has not run `armada helm enable`.
+`2` `bad_invocation` — entering, on a machine that has not run `armada helm enable`; or
+`--print-command` and `--exec` in the same line.
 
-`3` `bad_config` — no guild, no such persona, or a persona that is not on Claude Code's load
-path. The three are reported separately, because three different commands fix them.
+`3` `bad_config` — no guild, no such persona, a persona that is not on Claude Code's load path,
+or a `helm.mode` Claude Code does not have. They are reported separately, because different
+things fix them.
 
 Full table and the one rule behind it: [`reference.md`](../reference.md).
 

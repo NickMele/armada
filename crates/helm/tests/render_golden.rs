@@ -1163,6 +1163,14 @@ fn settings_matches_its_fixture() {
                     "on",
                     "~/.armada/machine.yml",
                 ),
+                // **The one Helm setting no verb writes**, which is why the
+                // listing is where a reader finds out it exists at all.
+                row(
+                    Locality::Machine,
+                    "helm.mode",
+                    "auto",
+                    "~/.armada/machine.yml",
+                ),
                 row(
                     Locality::Synced,
                     "guild.settings.json",
@@ -2103,6 +2111,11 @@ fn helm_matches_its_fixture() {
                 "~/.armada/helm/plugin".to_string(),
                 "--settings".to_string(),
                 "~/.armada/helm/settings.json".to_string(),
+                // The mode the session enters under. A Drone gets `dontAsk`
+                // because nobody is there to answer; this reader is sitting in
+                // front of it, so `auto` asks them the questions worth asking.
+                "--permission-mode".to_string(),
+                "auto".to_string(),
                 "--session-id".to_string(),
                 "15bfa340-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
             ],
@@ -2116,6 +2129,7 @@ fn helm_matches_its_fixture() {
                       --mcp-config ~/.armada/helm/mcp.json \
                       --plugin-dir ~/.armada/helm/plugin \
                       --settings ~/.armada/helm/settings.json \
+                      --permission-mode auto \
                       --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0"
                 .to_string(),
             results: vec![

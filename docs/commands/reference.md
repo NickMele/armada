@@ -74,7 +74,7 @@ and the three status enums. These pages use them without re-explaining them.
 | Page | Topic | Status |
 |---|---|---|
 | [`helm/helm.md`](helm/helm.md) | `armada helm` — the conversation | M3 |
-| [`helm/enable.md`](helm/enable.md) | `armada helm enable` · `disable` — the switch that gates `--exec` | M3 |
+| [`helm/enable.md`](helm/enable.md) | `armada helm enable` · `disable` — the switch that lets `armada helm` enter | M3 |
 | [`helm/bridge.md`](helm/bridge.md) | `armada bridge` — the live screen, and the palette | M3 |
 | [`helm/mcp.md`](helm/mcp.md) | The MCP toolbelt Helm drives | M3 |
 | [`helm/inbox.md`](helm/inbox.md) | How Fleet events reach you | M3 |

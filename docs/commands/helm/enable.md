@@ -1,6 +1,7 @@
 # `armada helm enable` · `armada helm disable`
 
-The switch that decides whether `armada helm --exec` may become a session, on this machine.
+The switch that decides whether `armada helm` may become a session, on this machine. **It is the
+whole authorization** — nothing downstream asks a second time.
 
 > **Status: shipped.**
 
@@ -17,11 +18,16 @@ Neither takes anything but the flags every verb shares — `--json` and `--color
 
 ## Why this exists
 
-`armada helm --exec` replaces this process with `claude`, which is the moment a real budget
-starts spending against a real account. A verb that did that unconditionally could be reached by
-a script, a shell alias, a test harness, or a mistyped line — and a fresh install must not be one
+`armada helm` replaces this process with `claude`, which is the moment a real budget starts
+spending against a real account. A verb that did that unconditionally could be reached by a
+script, a shell alias, a test harness, or a mistyped line — and a fresh install must not be one
 mistyped line away from opening a session nobody meant to open. So entering is gated by a switch,
 and the switch is off until a person turns it on.
+
+**One switch, and not two.** Entering used to be behind this *and* `--exec`, so a machine that had
+already said yes still printed a command to paste. Asking twice does not make the first answer
+more considered; it makes it look ignored. On, `armada helm` enters — and [`helm.md`](helm.md) is
+where the two flags that opt out of that live.
 
 ## Why a machine fact and not a guild preference
 
@@ -42,8 +48,8 @@ second time — the envelope's `changed` says whether anything was written.
 
 Neither touches the guild, the persona, or any of the documents `armada helm` wires up. Being
 *allowed* to open a session and being currently *able* to — a guild that exists, a persona that is
-projected — are different questions, answered by different commands. `armada helm --exec` needs
-both to be true.
+projected — are different questions, answered by different commands. Entering needs both to be
+true.
 
 **Off is the default**, which is also what a missing `machine.yml`, a missing `helm:` section, and
 a section that fails to parse all mean. A fresh install cannot open a session until this runs, on
@@ -52,7 +58,7 @@ every one of those paths and not only the ordinary one.
 ## Output
 
 ```
-OK  helm --exec is on on this machine
+OK  entering helm is on on this machine
 ```
 
 `--json` carries `entering` (the value after this run) and `changed` (whether it moved).
@@ -70,4 +76,4 @@ Full table and the one rule behind it: [`../reference.md`](../reference.md).
 
 ## See also
 
-[`helm.md`](helm.md) — what the switch gates, and what `--exec` refuses with when it is off.
+[`helm.md`](helm.md) — what the switch gates, and what `armada helm` refuses with when it is off.

@@ -1037,22 +1037,24 @@ fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
             data.agent.clone(),
             format!("conversation {}", data.conversation.word().to_lowercase()),
             // **Said out loud, because the absence of a session is the point.**
-            // A reader who assumed `armada helm` had opened one would sit
-            // waiting for a prompt that is never coming. Off reads from the one
-            // constant the refusal itself reads, so this line cannot drift from
-            // what typing `--exec` would actually get; on says so plainly,
-            // because a reader about to type `--exec` on this machine deserves
-            // to know it will not stop at printing the command.
+            // A reader who assumed this had opened one would sit waiting for a
+            // prompt that is never coming — and this render is now only ever
+            // reached by the two invocations that deliberately do not enter,
+            // `--print-command` and `--json`, so the sentence has to say which
+            // of the two situations they are in.
+            //
+            // Off reads from the one constant the refusal itself reads, so this
+            // line cannot drift from what typing `armada helm` would actually
+            // get. On, the machine would have entered had the line not asked
+            // for the command instead, and saying so is what stops a reader
+            // concluding the switch never took.
             match data.entering {
                 false => format!(
-                    "nothing started; {} is {}",
-                    crate::verbs::helm::ENTER,
-                    crate::verbs::helm::ENTER_IS_OFF
+                    "nothing started; entering is {} — `{}`",
+                    crate::verbs::helm::ENTER_IS_OFF,
+                    crate::verbs::helm::ENABLE
                 ),
-                true => format!(
-                    "nothing started; {} is on — it will become the session",
-                    crate::verbs::helm::ENTER
-                ),
+                true => "nothing started; entering is on — `armada helm` alone enters".to_string(),
             },
         ],
     ));
@@ -1075,8 +1077,11 @@ fn helm_switch(envelope: &Envelope<HelmSwitchData>, style: Style) -> String {
         style,
         envelope.status,
         &[format!(
-            "helm {} is {state} on this machine{changed}",
-            crate::verbs::helm::ENTER,
+            // **The act, not the flag.** `--exec` is a synonym for what
+            // `armada helm` already does, and naming it here would suggest the
+            // switch turns a *flag* on — which is exactly the reading that had
+            // a reader with `enter: true` waiting for a second lock to open.
+            "entering helm is {state} on this machine{changed}"
         )],
     )
 }

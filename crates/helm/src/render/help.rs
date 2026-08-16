@@ -1050,15 +1050,21 @@ const PAGES: [Page; 45] = [
     Page {
         path: "helm",
         synopsis: "helm",
-        summary: "the one agent you talk to: wire the toolbelt, report the launch",
+        summary: "the one agent you talk to: wire the toolbelt, enter the session",
         usage: &["armada helm [--agent <name>] [--new]", "armada helm --json"],
-        // **The flag is listed, and listed as gated.** Leaving it off the page
-        // would make `armada helm --exec` read as a typo worth retrying, which
-        // is the reading the refusal itself is written against.
+        // **Both flags are listed, and neither is the permission.** The switch
+        // is `helm.enter`; `--exec` spells out the default and
+        // `--print-command` opts out of it. Leaving either off the page would
+        // make it read as a typo worth retrying, which is the reading the
+        // refusal itself is written against.
         flags: &[
             (
+                crate::verbs::helm::PRINT,
+                "print the launch command and enter nothing",
+            ),
+            (
                 crate::verbs::helm::ENTER,
-                "become the session — off until `armada helm enable`; see NOTES",
+                "become the session — the explicit spelling of the default",
             ),
             ("--new", "start a fresh conversation instead of resuming"),
             (
@@ -1069,11 +1075,15 @@ const PAGES: [Page; 45] = [
         examples: &[
             (
                 "armada helm",
-                "wire the inbox and the toolbelt; print the command; start nothing",
+                "wire the inbox and the toolbelt, then enter the conversation",
+            ),
+            (
+                "armada helm --print-command",
+                "the line to paste, and no session",
             ),
             (
                 "armada helm --json",
-                "the same, with argv as a vector a script can run",
+                "the envelope, with argv as a vector a script can run",
             ),
             (
                 "armada helm --new",
@@ -1081,10 +1091,13 @@ const PAGES: [Page; 45] = [
             ),
         ],
         notes: &[
-            "It starts nothing by itself. The launch is assembled and verified;",
-            "--exec is what would enter it, and it is gated by a machine switch —",
-            "off on a fresh install. `armada helm enable` turns it on here;",
-            "`armada helm disable` puts it back. See their own --help.",
+            "Entering is gated by one machine switch and nothing else: helm.enter",
+            "in ~/.armada/machine.yml, off on a fresh install. `armada helm enable`",
+            "turns it on here; `armada helm disable` puts it back. Off, this verb is",
+            "refused by name. See their own --help.",
+            "--print-command and --json never enter, whatever the switch says.",
+            "The session runs under helm.mode (--permission-mode), auto by default:",
+            "you are at the terminal, so a prompt is a question you can answer.",
             "It is the same conversation each day; the id lives in ~/.armada/helm/.",
             "Its toolbelt is fleet.* and manifest.*; classification is Fleet's job.",
             "There is no `helm` binary. Kubernetes owns that name on PATH.",
@@ -1093,17 +1106,17 @@ const PAGES: [Page; 45] = [
     Page {
         path: "helm enable",
         synopsis: "enable",
-        summary: "let --exec become a session, on this machine",
+        summary: "let armada helm become a session, on this machine",
         usage: &["armada helm enable [--json]"],
         flags: &[],
         examples: &[
             (
                 "armada helm enable",
-                "then armada helm --exec becomes claude, on this machine",
+                "then armada helm becomes claude, on this machine",
             ),
             (
                 "armada helm enable && armada helm --exec",
-                "the whole sequence a script would run",
+                "the whole sequence a script would run, spelled out",
             ),
         ],
         notes: &[
@@ -1111,7 +1124,8 @@ const PAGES: [Page; 45] = [
             "that never syncs, because whether a session may open here is a fact",
             "about this machine and not a preference that travels with your",
             "guild to every machine it has ever been pulled onto.",
-            "Off is the default; a fresh install cannot exec until this runs.",
+            "This is the whole authorization: nothing downstream asks again.",
+            "Off is the default; a fresh install cannot enter until this runs.",
             "It does not touch the guild, the persona, or wire the inbox — that",
             "is still armada helm. armada helm disable puts the switch back.",
         ],
@@ -1124,7 +1138,7 @@ const PAGES: [Page; 45] = [
         flags: &[],
         examples: &[(
             "armada helm disable",
-            "armada helm --exec goes back to being refused, on this machine",
+            "armada helm goes back to being refused, on this machine",
         )],
         notes: &[
             "Writes the same boolean armada helm enable does, false. A machine",

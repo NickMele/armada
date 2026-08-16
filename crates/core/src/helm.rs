@@ -9,11 +9,12 @@
 //!
 //! ```text
 //! claude --agent helm
-//!        --mcp-config  ~/.armada/helm/mcp.json
-//!        --plugin-dir  ~/.armada/helm/plugin
-//!        --settings    ~/.armada/helm/settings.json
-//!        --session-id  <uuid>      # the first launch, which mints it
-//!        --resume      <uuid>      # every launch after that
+//!        --mcp-config      ~/.armada/helm/mcp.json
+//!        --plugin-dir      ~/.armada/helm/plugin
+//!        --settings        ~/.armada/helm/settings.json
+//!        --permission-mode auto     # `helm.mode` in machine.yml
+//!        --session-id      <uuid>   # the first launch, which mints it
+//!        --resume          <uuid>   # every launch after that
 //! ```
 //!
 //! **This module is where the bugs are, which is why it is pure.** A `--resume`
@@ -93,6 +94,62 @@ pub use crate::fleet::drone::CLAUDE;
 /// owes an orchestrator on the other — and that difference is argued where each
 /// prompt is assembled, not here.
 pub use crate::fleet::drone::APPEND;
+
+/// The flag [`MODE`] is passed as, and [`MODES`] is checked against — both
+/// defined one module over and re-exported, exactly as [`CLAUDE`] and [`APPEND`]
+/// are.
+///
+/// **One spelling and one list, because there is one flag.** A second copy of
+/// the six modes here would be a second thing to update when Claude Code adds a
+/// seventh, and the copy that was not updated is the one that refuses a mode the
+/// binary accepts — the defect `docs/glossary.md` exists to prevent, arriving as
+/// code.
+pub use crate::fleet::drone::{MODES, PERMISSION_MODE};
+
+/// What Helm does with a tool call the session's permissions do not settle.
+///
+/// **`auto`, and the contrast with a Drone's [`crate::fleet::drone::MODE`] is
+/// the argument.** A Drone runs `dontAsk` because there is nobody at the
+/// terminal: every mode that still prompts turns an uncovered tool call into a
+/// stall, and a Drone that stalls is `STALLED` with a bill and no work. Helm is
+/// the session a person is *sitting in front of*, so a prompt is a question that
+/// gets answered rather than a process that hangs — and the failure worth
+/// avoiding here is the opposite one. Launching with no mode at all left Helm on
+/// Claude Code's own default, which asked the reader to approve every tool call
+/// by hand; `auto` is the mode that grants the ordinary ones and still puts the
+/// unusual ones to the person who is right there.
+///
+/// **Not `bypassPermissions`, and not the Drone's `dontAsk`.** Both would spend
+/// the reader's presence rather than use it: the whole reason a terminal is
+/// worth more than an allowlist is that it can be asked.
+pub const MODE: &str = "auto";
+
+/// The refusal a `helm.mode` Claude Code has never heard of gets.
+///
+/// **`bad_config`, because it is a value in `~/.armada/machine.yml`** and the
+/// file is what has to change — which is also why `next_action` is required for
+/// this class and names the file, the key and the six values by name rather than
+/// saying *check your config*.
+///
+/// **Refused here rather than at `exec`.** `--permission-mode` is validated at
+/// argument-parse time (`docs/traps.md`), so a mode Claude Code does not have is
+/// a session that dies the instant it is entered, printing Claude Code's usage
+/// error over whatever the reader was doing. Checking a six-element list first
+/// costs nothing and names the file that is wrong.
+pub fn bad_mode(mode: &str) -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::BadConfig,
+        r#where: "machine.yml helm.mode".to_string(),
+        message: format!(
+            "`{mode}` is not a permission mode — Claude Code offers {}",
+            MODES.join(", ")
+        ),
+        next_action: Some(format!(
+            "set `helm.mode:` in ~/.armada/machine.yml to one of them (`{MODE}` is the \
+             default), then retry unchanged"
+        )),
+    }
+}
 
 /// The document [`voice`] assembles, written under `~/.armada/helm/`.
 ///
@@ -346,6 +403,14 @@ pub struct Launch {
     pub plugin_dir: String,
     /// `~/.armada/helm/settings.json`.
     pub settings: String,
+    /// What happens to a tool call the session's permissions do not settle —
+    /// `helm.mode` in `~/.armada/machine.yml`, [`MODE`] by default.
+    ///
+    /// **A value, not a default read here.** The machine file is the caller's to
+    /// read (`ARCHITECTURE.md` §1.4), and the caller is also where a mode this
+    /// module cannot vouch for is refused, by [`bad_mode`], before a single
+    /// document is written.
+    pub mode: String,
     /// The reader's own standing instructions, assembled by [`voice`].
     ///
     /// **[`None`] is a guild nobody has written yet**, not an error and not a
@@ -398,6 +463,16 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
         // never stops.
         "--settings".to_string(),
         launch.settings.clone(),
+        // **Passed explicitly, because the alternative was the bug.** Without
+        // this flag the session runs on whatever Claude Code's own default is,
+        // and the reader who first entered Helm had to approve every tool call
+        // by hand — a Helm that cannot call its own toolbelt without being
+        // asked twelve times is not an orchestrator. The value is the machine's
+        // ([`MODE`] by default) and the contrast with a Drone's `dontAsk` is
+        // argued there: a Drone has nobody to ask, and Helm has somebody
+        // sitting in front of it.
+        PERMISSION_MODE.to_string(),
+        launch.mode.clone(),
     ]);
     argv.push(
         match launch.session.resumable_as(&launch.agent) {
@@ -419,12 +494,17 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
 /// (`docs/traps.md`). A flag renamed or removed under Armada would otherwise
 /// surface as a Helm that will not start, in the one session the reader cannot
 /// ask Armada about — because Helm is how they ask.
-pub const FLAGS: [&str; 7] = [
+pub const FLAGS: [&str; 8] = [
     "--agent",
     APPEND,
     "--mcp-config",
     "--plugin-dir",
     "--settings",
+    // **The one flag here whose *value* is also checked**, and by the same list
+    // Claude Code checks it against ([`MODES`]). A rename of the flag is this
+    // array's business; a value the binary does not accept is [`bad_mode`]'s,
+    // one launch earlier.
+    PERMISSION_MODE,
     "--session-id",
     "--resume",
 ];
@@ -640,6 +720,7 @@ mod tests {
             mcp_config: "/scratch/.armada/helm/mcp.json".to_string(),
             plugin_dir: "/scratch/.armada/helm/plugin".to_string(),
             settings: "/scratch/.armada/helm/settings.json".to_string(),
+            mode: MODE.to_string(),
             voice: None,
         }
     }
@@ -683,10 +764,67 @@ mod tests {
                 "/scratch/.armada/helm/plugin",
                 "--settings",
                 "/scratch/.armada/helm/settings.json",
+                "--permission-mode",
+                "auto",
                 "--session-id",
                 UUID,
             ]
         );
+    }
+
+    /// **Helm launches under a mode, and it is not the Drone's.**
+    ///
+    /// The launch used to pass no `--permission-mode` at all, which left the
+    /// session on Claude Code's own default and made the reader approve every
+    /// tool call by hand on the first real Helm session. The contrast is the
+    /// decision: `dontAsk` for a Drone because there is nobody to ask, `auto`
+    /// here because there is somebody sitting in front of it.
+    #[test]
+    fn the_session_enters_under_a_mode_and_it_is_not_a_drones() {
+        let argv = launch_argv(&a_launch(false));
+        let at = argv
+            .iter()
+            .position(|word| word == PERMISSION_MODE)
+            .expect("the launch passes no permission mode at all");
+        assert_eq!(argv[at + 1], MODE);
+        assert_eq!(MODE, "auto");
+        assert_ne!(
+            MODE,
+            crate::fleet::drone::MODE,
+            "Helm entered under the mode written for a session nobody is watching"
+        );
+        assert!(MODES.contains(&MODE), "{MODE} is not a mode the CLI offers");
+    }
+
+    /// **The machine's mode reaches the argv**, rather than the default being
+    /// baked in one layer down where `helm.mode` could never change it.
+    #[test]
+    fn a_machine_that_chose_another_mode_gets_the_one_it_chose() {
+        let launch = Launch {
+            mode: "plan".to_string(),
+            ..a_launch(true)
+        };
+        let argv = launch_argv(&launch);
+        let at = argv.iter().position(|w| w == PERMISSION_MODE).unwrap();
+        assert_eq!(argv[at + 1], "plan");
+    }
+
+    /// A mode Claude Code has never heard of is refused **against the same list
+    /// the Drone's posture is refused against**, with the file and the key
+    /// named. Two lists of one thing is the defect this reuse prevents.
+    #[test]
+    fn a_mode_claude_code_does_not_have_is_refused_before_anything_is_written() {
+        let error = bad_mode("bogus");
+        assert_eq!(error.class, ErrClass::BadConfig);
+        assert_eq!(error.class.exit_code(), 3);
+        assert!(error.message.contains("bogus"), "{}", error.message);
+        for mode in MODES {
+            assert!(error.message.contains(mode), "{}", error.message);
+        }
+        let next = error.next_action.expect("bad_config requires one");
+        assert!(next.contains("machine.yml"), "{next}");
+        assert!(next.contains("helm.mode"), "{next}");
+        assert!(next.contains("retry unchanged"), "{next}");
     }
 
     /// **The second launch resumes, and this is the assertion the whole feature

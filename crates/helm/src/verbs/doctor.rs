@@ -898,9 +898,20 @@ mod tests {
         let run = Helm::healthy();
         let finding = helm_argv(&run, Path::new("/tmp"), Path::new("/nonexistent"));
         assert_eq!(finding.status, Health::Ok);
-        assert!(finding.detail.contains("7 flags accepted"), "{finding:?}");
-        // **`--append-system-prompt` is one of the seven, and this is the whole
-        // of the preflight for it.** It is what carries the reader's own
+        assert!(finding.detail.contains("8 flags accepted"), "{finding:?}");
+        // **`--permission-mode` is one of the eight**, and it is the flag whose
+        // absence from the launch was the second defect of that first real
+        // session: no mode at all meant Claude Code's default, which asked the
+        // reader to approve every tool call by hand. `doctor` holding it here
+        // proves only that the installed binary still *offers* it — the value
+        // Armada passes is `armada_core::helm::MODES`' business, one launch
+        // earlier.
+        assert!(
+            armada_core::helm::FLAGS.contains(&armada_core::helm::PERMISSION_MODE),
+            "the flag that decides what Helm may do without asking is not checked"
+        );
+        // **`--append-system-prompt` is another of the eight, and this is the
+        // whole of the preflight for it.** It is what carries the reader's own
         // `voice.md`, `expectations.md` and `how-i-work.md` into the session; a
         // release that renamed it would otherwise surface as a Helm that will
         // not start at all, in the one session the reader cannot ask Armada
@@ -989,7 +1000,7 @@ mod tests {
     }
 
     /// **`doctor` says entering is off, and the row still fits its column.**
-    /// Both halves are the assertion: a reader who saw only *"6 flags accepted"*
+    /// Both halves are the assertion: a reader who saw only *"8 flags accepted"*
     /// would conclude `armada helm` opens a session, and a row that says so and
     /// then truncates mid-word has told them nothing either.
     #[test]

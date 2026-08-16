@@ -5,6 +5,6 @@
   [38;2;61;220;132mWRITTEN[0m    [38;2;76;159;232mvoice[0m         [38;2;156;163;175m~/.armada/helm/guild-voice.md[0m
   [38;2;156;163;175mUNCHANGED[0m  [38;2;76;159;232mconversation[0m  [38;2;156;163;175m~/.armada/helm/session.json[0m
 
-  [1m[38;2;255;169;64menter with[0m claude --agent helm --append-system-prompt "$(cat ~/.armada/helm/guild-voice.md)" --mcp-config ~/.armada/helm/mcp.json --plugin-dir ~/.armada/helm/plugin --settings ~/.armada/helm/settings.json --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0
+  [1m[38;2;255;169;64menter with[0m claude --agent helm --append-system-prompt "$(cat ~/.armada/helm/guild-voice.md)" --mcp-config ~/.armada/helm/mcp.json --plugin-dir ~/.armada/helm/plugin --settings ~/.armada/helm/settings.json --permission-mode auto --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0
 
-[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175mhelm · conversation new · nothing started; --exec is off on this machine[0m
+[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175mhelm · conversation new · nothing started; entering is off on this machine — `armada helm enable`[0m
