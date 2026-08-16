@@ -442,6 +442,51 @@ impl Db {
             .map_err(|e| map_sqlite(&self.path, e))
     }
 
+    /// Every workspace id this store holds **any** state for, sorted.
+    ///
+    /// **[`Db::workspaces`] is not that set, and the difference is a measured
+    /// bug rather than a nicety.** The two tables have different preconditions
+    /// by design: a `workspaces` row is written by exactly one code path,
+    /// [`Db::claim_block`] under `armada manifest init`, and it records a *port
+    /// claim*; an `owned` row is written by `up`, by `check --detach` and by
+    /// `fleet spawn`, and it records a *resource that exists*. Those writers key
+    /// on `WorkspaceId::derive`, which is `sha1(realpath)` and needs no claim —
+    /// so a repository that declares no `ports:` and was never `init`ed
+    /// accumulates `owned` rows against a workspace that has no registry row at
+    /// all.
+    ///
+    /// Measured on this project's own checkout: `workspaces` held **0** rows
+    /// while `owned` held **6**, every one of them a `pgid` from
+    /// `check --detach`, four of them from a previous boot and therefore leaked.
+    /// `armada manifest status --all --json` returned `"results": []`, because
+    /// it enumerated the registry and then asked each of its zero rows what it
+    /// owned. The one verb whose job is finding stale resources could not see
+    /// six of them.
+    ///
+    /// **The union is the store's answer to give, not the caller's to
+    /// assemble.** `status` is the first caller; `clean`'s pass 1 and
+    /// `Db::peek_stats` both still enumerate the registry alone and are blind in
+    /// the same way, and a second hand-rolled union in each is how two verbs
+    /// come to disagree about what exists.
+    pub fn known_workspaces(&self) -> Result<Vec<WorkspaceId>, ArmadaError> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT id FROM workspaces
+                 UNION SELECT workspace FROM owned
+                 UNION SELECT workspace FROM leases WHERE workspace IS NOT NULL
+                 ORDER BY 1",
+            )
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(WorkspaceId::from_stored(row.get::<_, String>(0)?))
+            })
+            .map_err(|e| map_sqlite(&self.path, e))?;
+        rows.collect::<Result<_, _>>()
+            .map_err(|e| map_sqlite(&self.path, e))
+    }
+
     /// Register this workspace, claiming a port block if it needs one.
     ///
     /// The choice and the write happen inside **one** `BEGIN IMMEDIATE`, which
@@ -1457,6 +1502,71 @@ mod tests {
         let junk = home.path().join("manifest.db");
         std::fs::write(&junk, b"this is not a database").unwrap();
         assert_eq!(Db::peek_stats(&junk), None);
+    }
+
+    /// The measured shape, reproduced: an `owned` row against a workspace that
+    /// has no `workspaces` row at all.
+    ///
+    /// **This is not a corrupt store, it is the ordinary one.** `check
+    /// --detach` and `fleet spawn` both record a `pgid` keyed on a *derived*
+    /// workspace id and neither calls `claim_block`, so a repository that never
+    /// ran `armada manifest init` — this project's own checkout, measured with
+    /// `workspaces` at 0 rows and `owned` at 6 — reaches exactly this state.
+    /// Enumerate the registry and those six rows do not exist.
+    #[test]
+    fn a_workspace_is_known_by_what_it_owns_even_when_it_never_claimed_a_block() {
+        let (_home, mut db) = open();
+        db.claim_block(
+            &ws("aaaaaaaa"),
+            Path::new("/a"),
+            None,
+            Some(10),
+            armada_core::ports::PORT_BASE,
+            "t",
+        )
+        .unwrap();
+        db.record_owned(&OwnedRow {
+            workspace: ws("bbbbbbbb"),
+            kind: OwnedKind::Pgid,
+            reference: "61477".to_string(),
+            boot_id: Some("boot-1".to_string()),
+            pid_started_at: Some("whenever".to_string()),
+            component: None,
+        })
+        .unwrap();
+
+        assert_eq!(
+            db.workspaces()
+                .unwrap()
+                .into_iter()
+                .map(|row| row.id)
+                .collect::<Vec<_>>(),
+            vec![ws("aaaaaaaa")],
+            "the registry only ever knew about the claim"
+        );
+        assert_eq!(
+            db.known_workspaces().unwrap(),
+            vec![ws("aaaaaaaa"), ws("bbbbbbbb")],
+            "the union sees the workspace whose only trace is a process group"
+        );
+    }
+
+    /// A lease is state too, and a lease row's workspace is nullable — the
+    /// machine lease has none. Selecting `NULL` into a [`WorkspaceId`] would
+    /// produce a workspace called nothing, which `status` would then draw a
+    /// header for.
+    #[test]
+    fn the_machine_lease_is_not_a_workspace() {
+        let (_home, db) = open();
+        db.conn
+            .execute(
+                "INSERT INTO leases (workspace, kind, key, heartbeat_mono, boot_id, pid)
+                 VALUES (NULL, 'exclusive', 'machine', 1, 'boot-1', 42),
+                        ('cccccccc', 'exclusive', 'run', 1, 'boot-1', 43)",
+                [],
+            )
+            .unwrap();
+        assert_eq!(db.known_workspaces().unwrap(), vec![ws("cccccccc")]);
     }
 
     #[test]

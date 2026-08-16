@@ -179,6 +179,40 @@ pub struct ResultRow {
     /// [`leases`]: ResultRow::leases
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub owns: Vec<String>,
+    /// **The subset of [`owns`] Armada can prove is no longer live** — same
+    /// `<kind>:<reference>` grammar, so a reader intersects rather than
+    /// re-parses.
+    ///
+    /// [`commands/manifest/status.md`] has promised three states per resource —
+    /// live, stale and unowned — since it was written, and until this field
+    /// existed the payload could express exactly one of them. Measured on a real
+    /// machine: six `pgid` rows for one workspace, four of them from a previous
+    /// boot and therefore dead by definition, all six reported identically. A
+    /// reader could not tell the leak from the service.
+    ///
+    /// **Proof, not suspicion.** The rule is
+    /// [`crate::reap::pgid_is_ours`] — the same one `clean` kills on — so a row
+    /// lands here only when the boot id differs or the process's start time no
+    /// longer matches. A pgid Armada could not sample is left out: not provably
+    /// dead is not stale.
+    ///
+    /// Additive, so `schema_version` does not bump, and omitted when empty.
+    ///
+    /// [`owns`]: ResultRow::owns
+    /// [`commands/manifest/status.md`]: ../../../docs/commands/manifest/status.md
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stale: Vec<String>,
+    /// Runs of `armada manifest check --detach` that have not reached a verdict.
+    ///
+    /// **The half of "what is running" that lived only in `.armada/`.** A
+    /// detached run returns immediately and the only way to see it was
+    /// `check --status` with the run id in hand — so the verb whose first line
+    /// is *"what is running"* could not report the one thing this repository
+    /// actually leaves running. `docs/reserved/023-status-shows-what-is-running.md`.
+    ///
+    /// Additive, so `schema_version` does not bump, and omitted when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub runs: Vec<RunView>,
     /// What was reclaimed for this row.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub released: Option<Released>,
@@ -239,6 +273,8 @@ impl ResultRow {
             ports: BTreeMap::new(),
             leases: Vec::new(),
             owns: Vec::new(),
+            stale: Vec::new(),
+            runs: Vec::new(),
             released: None,
             waiting_on: None,
             reason: None,
@@ -549,6 +585,36 @@ pub struct DetachedView {
     /// The detached invocation's own output, workspace-relative. Where a
     /// failure that happened before the first check is written down.
     pub log: String,
+}
+
+/// One undecided run, as `armada manifest status` reports it.
+///
+/// **Deliberately not [`DetachedView`], which sits beside it in `check`.** That
+/// one answers *"is the group holding **this** run still there"* for a caller
+/// who already has the run id; this one is a row in a list of runs a caller has
+/// never heard of, so it carries the id and the state it is in. Sharing one
+/// struct would have forced `status` to report `alive: false` where the honest
+/// word is `DEAD` — a boolean where the vocabulary already has an enum.
+///
+/// **Only `RUNNING` and `DEAD` ever appear here**, because a run that reached a
+/// verdict is history rather than status and is left out entirely
+/// (`crates/helm/src/verbs/status.rs`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RunView {
+    /// The run id, exactly as `armada manifest check --status <id>` takes it.
+    pub run_id: String,
+    /// `RUNNING` when the recorded group is provably still this run, `DEAD`
+    /// when it is gone and the run never wrote a verdict.
+    pub status: Status,
+    /// The process group that run was detached into.
+    pub pgid: i32,
+    /// Where the detached invocation's own output went, workspace-relative —
+    /// the only place a failure from before the first check is written down.
+    pub log: String,
+    /// When it started, RFC 3339. **Only ever displayed**, for the same reason
+    /// [`crate::run::RunRecord::started_at`] is: a backwards NTP step would make
+    /// it lie about ordering.
+    pub started_at: String,
 }
 
 /// `--dry-run` on `armada manifest check`: what would run, and nothing changed.

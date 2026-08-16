@@ -37,6 +37,7 @@ usually asking which one applies.
 | [020](020-the-tui-decided.md) | The TUI, decided | RESERVED | helm | Nine decisions from a design session after real use — the menu, the Stop hook driving tick, and what bare `armada` becomes |
 | [021](021-the-work-hierarchy.md) | The work hierarchy | RESERVED | cross-cutting | Fleet is a collection, the Job is the state machine, and the five things that lead to work are Signals |
 | [022](022-docker-hygiene.md) | Armada cleans up after itself in Docker | BUILT | cross-cutting | 171 volumes and 12.0 GB, none of it Armada's — `doctor` reports the two shares apart, `armada manifest prune` can offer what is not Armada's, and a Job that **finishes** now releases what it holds |
+| [023](023-status-shows-what-is-running.md) | Status shows what is running | FIXED | manifest | `status` enumerated the port registry, so six leaked process groups against a workspace that never claimed a block were invisible; it now enumerates the union, names what is provably gone, and reports undecided detached runs |
 
 **Armada's task system exists** ([002](002-tasks.md)), so these can become its first rows — one
 file per row is what makes that a script rather than a rewrite. It is not run automatically:

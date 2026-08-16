@@ -4367,6 +4367,31 @@ fn workspace_block(
         out.push('\n');
     }
 
+    // **Runs first, because the verb's own first line is "what is running"** and
+    // a run is the only thing on this block that can still be doing something. A
+    // detached run used to be invisible here: it returned immediately and the
+    // only way to see it was `check --status` with the id in hand, so the
+    // question this table now answers had exactly one asker — someone who
+    // already knew the answer.
+    let mut active = Table::new(columns("run", "detail", false)).indent(2);
+    for run in &row.runs {
+        active = active.row(vec![
+            // The envelope's own `Status`, unchanged: `RUNNING` for a group that
+            // is provably still the run, `DEAD` for a run that stopped without
+            // deciding. `check --status` prints the same two words for the same
+            // two facts, which is the point of not inventing a third.
+            verdict(run.status),
+            Cell::plain(run.run_id.clone()),
+            // The log, because a `DEAD` run's only explanation is in it and a
+            // reader who has to reconstruct the path has to know the layout.
+            Cell::muted(format!("pgid {} · {}", run.pgid, run.log)),
+        ]);
+    }
+    if !active.is_empty() {
+        out.push_str(&active.render(style, width));
+        out.push('\n');
+    }
+
     let mut holds = Table::new(columns("resource", "detail", false)).indent(2);
 
     // **One row per resource, and the id is the whole point** (PLAN.md §3.1):
@@ -4378,12 +4403,28 @@ fn workspace_block(
     // eighty-column DETAIL cell, so the flexible column truncated — and the part
     // it cut was the trailing `+2`. The one fact that tells a reader whether they
     // need `--json` was the first thing to go. A row cannot lose its tail.
-    for id in row.owns.iter().take(KEEP) {
+    //
+    // **Stale before live, and the order is what survives the cap.** Only `KEEP`
+    // rows are drawn and the rest collapse into `+n more`, so an ordering that
+    // put a leaked process group fourth would hide the one row a reader can act
+    // on behind three that need nothing. Measured on this repository: six `pgid`
+    // rows for one workspace, four of them from a previous boot.
+    let ordered = row
+        .stale
+        .iter()
+        .chain(row.owns.iter().filter(|id| !row.stale.contains(*id)));
+    for id in ordered.take(KEEP) {
         // The envelope's `<kind>:<reference>` grammar, split back into the two
         // columns it was always two of.
         let (kind, reference) = id.split_once(':').unwrap_or(("resource", id));
         holds = holds.row(vec![
-            token("owns", Role::BeaconGreen),
+            match row.stale.contains(id) {
+                // The word `commands/manifest/status.md` has used for this state
+                // since it was written — recorded, and gone — rather than a
+                // fourth spelling of the same idea.
+                true => token("stale", Role::FlareOrange),
+                false => token("owns", Role::BeaconGreen),
+            },
             Cell::plain(kind),
             Cell::muted(reference),
         ]);
@@ -5673,7 +5714,7 @@ pub fn error_lines(error: &ArmadaError, style: Style) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use armada_core::envelope::{PortReport, Released};
+    use armada_core::envelope::{PortReport, Released, RunView};
     use armada_core::error::ErrClass;
     use armada_core::ports::PortBlock;
     use std::collections::BTreeMap;
@@ -5989,6 +6030,98 @@ mod tests {
         assert!(
             !text.contains("2 resources"),
             "a count is not an id: {text}"
+        );
+    }
+
+    /// **A run in flight gets a row, and it says `RUNNING`.**
+    ///
+    /// The verb's own first line is "what is running", and until this table
+    /// existed a detached run was visible only to `check --status` with the run
+    /// id in hand. The word is the envelope's `Status`, not a fourth spelling:
+    /// `check` prints the same one for the same fact.
+    #[test]
+    fn a_live_run_is_named_with_the_word_check_would_use() {
+        let mut row = ResultRow::new("a3f91c02", Status::Ok);
+        row.runs = vec![RunView {
+            run_id: "01M048YQMSD6YP48".to_string(),
+            status: Status::Running,
+            pgid: 4212,
+            log: ".armada/run/01M048YQMSD6YP48/detach.log".to_string(),
+            started_at: "2026-08-09T14:02:11Z".to_string(),
+        }];
+        let text = rendered(
+            &Output::Status(Box::new(Envelope::ok(
+                "status",
+                Some(workspace()),
+                Status::Ok,
+                StatusData {
+                    scope: "workspace".to_string(),
+                    results: vec![row],
+                    unreclaimed: Vec::new(),
+                },
+            ))),
+            Style::plain(),
+        );
+        assert!(
+            has_row(
+                &text,
+                &[
+                    "RUNNING",
+                    "01M048YQMSD6YP48",
+                    "pgid",
+                    "4212",
+                    "·",
+                    ".armada/run/01M048YQMSD6YP48/detach.log",
+                ]
+            ),
+            "{text}"
+        );
+        // The log, because a run that stops without deciding has its only
+        // explanation in it and a reader should not have to know the layout.
+        assert!(
+            text.contains(".armada/run/01M048YQMSD6YP48/detach.log"),
+            "{text}"
+        );
+    }
+
+    /// **A stale resource is drawn before the live ones, and the order is what
+    /// survives the cap.**
+    ///
+    /// Only [`KEEP`] rows are named. Sorted by id the leaked `pgid` measured on
+    /// this repository lands fourth of six and disappears into `+n more` — the
+    /// single row a reader can act on, hidden behind three that need nothing.
+    #[test]
+    fn a_stale_resource_is_named_first_so_the_cap_cannot_swallow_it() {
+        let mut row = ResultRow::new("a3f91c02", Status::Ok);
+        row.owns = vec![
+            "container:one".to_string(),
+            "container:two".to_string(),
+            "container:three".to_string(),
+            "pgid:61477".to_string(),
+        ];
+        row.stale = vec!["pgid:61477".to_string()];
+        let text = rendered(
+            &Output::Status(Box::new(Envelope::ok(
+                "status",
+                Some(workspace()),
+                Status::Ok,
+                StatusData {
+                    scope: "workspace".to_string(),
+                    results: vec![row],
+                    unreclaimed: Vec::new(),
+                },
+            ))),
+            Style::plain(),
+        );
+        assert!(has_row(&text, &["STALE", "pgid", "61477"]), "{text}");
+        assert!(
+            !has_row(&text, &["OWNS", "pgid", "61477"]),
+            "a resource is live or stale, never both: {text}"
+        );
+        // Still capped, and still saying how many it did not name.
+        assert!(
+            has_row(&text, &["OWNS", "resources", "+1", "more"]),
+            "{text}"
         );
     }
 

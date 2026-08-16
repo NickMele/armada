@@ -34,9 +34,9 @@ use armada_core::envelope::{
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxData, InboxRow,
     InitData, InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem,
-    Projection, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, SettingRow,
-    SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, TickData,
-    TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
+    Projection, Released, ResolvedSkillView, ResultRow, RunView, ScanData, ServicesData,
+    SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem,
+    TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -429,6 +429,30 @@ fn status_matches_its_fixture() {
         "network:armada-3d9cc7ba".to_string(),
         "pgid:4212".to_string(),
         "volume:pgdata".to_string(),
+    ];
+    // **The one stale row is fourth in `owns`, so the fixture pins the reorder
+    // and not merely the word.** The human render names three and counts the
+    // rest; left in sorted order the leaked group would fall into the `+2` and a
+    // reader would never see the only row they can act on.
+    row.stale = vec!["pgid:4212".to_string()];
+    // A run in flight and one that stopped without deciding, because those are
+    // the only two words this table ever prints and a fixture with one of them
+    // pins half a rule.
+    row.runs = vec![
+        RunView {
+            run_id: "01M048YQMSD6YP48".to_string(),
+            status: Status::Running,
+            pgid: 4212,
+            log: ".armada/run/01M048YQMSD6YP48/detach.log".to_string(),
+            started_at: "2026-08-09T14:02:11Z".to_string(),
+        },
+        RunView {
+            run_id: "01M048KKTG19V63A".to_string(),
+            status: Status::Dead,
+            pgid: 4098,
+            log: ".armada/run/01M048KKTG19V63A/detach.log".to_string(),
+            started_at: "2026-08-09T13:40:02Z".to_string(),
+        },
     ];
     let output = Output::Status(Box::new(Envelope::ok(
         "status",
