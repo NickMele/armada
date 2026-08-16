@@ -766,17 +766,29 @@ pub const STREAM_JSON_NEEDS: [&str; 1] = ["--verbose"];
 ///
 /// The uuid is a fixed sentinel, so the probe reuses one transcript rather than
 /// leaving a new one behind on every run.
-pub fn probe_argv() -> Vec<String> {
-    // **No `--settings`, because the probe must start nothing.** `doctor`'s
-    // free probe reaches EOF and exits; a `Stop` hook on it would relay an
-    // exchange that never happened. The flag is held against `claude --help`
-    // by [`FLAGS`], which is where a renamed flag is caught.
-    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default(), None);
+/// **`settings` is the real relay's flag, on a document that registers no
+/// hook.** `020` §1 puts a `Stop` hook on every Drone, and *"asserting on argv
+/// proves you built the string you meant, not that it works"* — so the probe
+/// carries the flag, and `armada doctor` hands it [`NO_HOOKS`] rather than a
+/// real hook: a probe that relayed would tick a fleet on behalf of an exchange
+/// that never happened.
+pub fn probe_argv(settings: Option<&str>) -> Vec<String> {
+    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default(), settings);
     argv.pop();
     argv.push("--input-format".to_string());
     argv.push(STREAM_JSON.to_string());
     argv
 }
+
+/// The settings document `armada doctor`'s probe is given: **the same shape a
+/// Drone's is, registering nothing.**
+///
+/// A probe pointed at a real relay would fire it, and the hook would tick a
+/// fleet about an exchange that never took place. An empty `hooks` object
+/// exercises exactly what the probe is for — whether this machine's `claude`
+/// accepts `--settings` alongside the rest of the Drone's argv — and starts
+/// nothing.
+pub const NO_HOOKS: &str = "{\n  \"hooks\": {}\n}\n";
 
 /// The session id [`probe_argv`] uses. Valid, so validation gets past it; fixed,
 /// so the probe leaves one transcript rather than one per run.
@@ -1095,7 +1107,7 @@ mod tests {
             spawn_argv(UUID, "go", &posture, None),
             resume_argv(UUID, "go", &posture, None),
             continue_argv(UUID, &posture, None),
-            probe_argv(),
+            probe_argv(None),
             board_argv(UUID),
         ];
         for argv in argvs {
@@ -1464,7 +1476,7 @@ mod tests {
     /// which is how a check ends up green on a Drone that cannot start.
     #[test]
     fn the_doctor_probe_is_the_spawn_argv_with_nothing_to_say() {
-        let probe = probe_argv();
+        let probe = probe_argv(None);
         let real = spawn_argv(PROBE_SESSION, "go", &Posture::default(), None);
 
         // Every flag of the real argv, in the same order.
@@ -1510,7 +1522,7 @@ mod tests {
             .into_iter()
             .chain(resume_argv(UUID, "go", &Posture::default(), Some("/s.json")))
             .chain(super::super::classify::argv("go"))
-            .chain(probe_argv())
+            .chain(probe_argv(None))
             .filter(|word| word.starts_with("--"))
             .collect();
         for flag in &used {

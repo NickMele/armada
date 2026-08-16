@@ -9,8 +9,41 @@ raised: a design session after real use, 2026-08-15
 # The TUI, decided
 
 **What this is.** Nine decisions taken in one session, after the user drove the Bridge for the
-first time and found it wanting. Each is his answer to a question with the trade stated. Nothing
-here is built; this is the brief for building it.
+first time and found it wanting. Each is his answer to a question with the trade stated.
+
+**Status: the functional half of §1, §2, §5, §6 and §7 is built.** What that means, section by
+section, is in the table below; everything not named there is still the brief for building it.
+
+| § | Built | What landed |
+|---|---|---|
+| 1 · the Stop hook ticks the Job | **yes** | every Drone carries `--settings` with a `Stop` hook that waits for its own process to go and then ticks |
+| 2 · the chain breaks silently | **yes** | the relay sweeps the **whole fleet**, and Helm's own `Stop` hook sweeps too — two mechanisms, [`PLAN.md`](../PLAN.md) §15.3's shape |
+| 5 · an action gets a state word | state machine only | `Acting` and `Job.doing`, written by `kill`, `reap` and `pause`; the rendering is not built |
+| 6 · `SILENT` and `STALLED` | **yes** | both are real Job states, told apart by the tick watermark and by whether the Drone said anything |
+| 7 · `QUEUED`, not `WAITING` | **yes** | `Status::Queued`, in the enum and in [`glossary.md`](../glossary.md)'s status table |
+
+## What §2 actually needed, and what it got
+
+The relay has three ways to be lost — a SIGKILL, a hook that could not run, a crash in between —
+and **no amount of care inside one hook fixes any of them.** What does:
+
+1. **Every relay sweeps every Job.** A Drone's hook runs `armada fleet tick` with no handle, so a
+   Job whose own relay was lost is picked up by the next Drone *anywhere on the machine* to
+   finish an exchange. A pass over an idle fleet is a directory listing, a transcript tail and a
+   `ps`, so the sweep costs nothing.
+2. **Helm's `Stop` hook sweeps as well.** You cannot talk to the orchestrator without ending a
+   turn, so asking Helm anything at all catches the fleet up. This is the same pairing
+   [`PLAN.md`](../PLAN.md) §15.3 already uses for the inbox: the monitor is timely, the hook is complete.
+
+**A read verb still does not tick, and that refusal is deliberate.** `armada fleet ls` advancing
+a Job behind the reader's back breaks [`PLAN.md`](../PLAN.md) §15.1 — §1 below rejects it by
+name. Reporting a Job as `STALLED` is honest; doing the work unasked is not. The repair for the
+symptom is that `STALLED` is now a word you can *see*, which it was not before.
+
+**The sweep costs one thing, and it is paid for**: five exchanges ending in the same second start
+five passes over the same records, and two passes gating one step would both `claude --resume`
+one session. `~/.armada/tick.lock` serialises them, and a second pass declines rather than
+queueing — the pass that holds the lock is walking the same records.
 
 It supersedes nothing and completes two reservations:
 [`003`](003-bridge-command-centre.md) — the Bridge as a command centre — and the parts of

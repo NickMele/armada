@@ -54,7 +54,7 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     // every fragment still as imported, and interleaving those with `manifest.db`
     // is what made a real reader ask which rows belonged together.
     let mut results = preflight::run(runner, &place.cwd, true).results;
-    results.push(drone_argv(runner, &place.cwd));
+    results.push(drone_argv(runner, &place.cwd, &place.armada_home));
     results.push(helm_argv(runner, &place.cwd, &place.armada_home));
     results.push(directories(&place.armada_home));
     results.extend(drift(runner, &guild));
@@ -119,8 +119,31 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
 /// and `stream-json`"* is one only the real validator can answer, and it answers
 /// it here for free. Probe 0 below is the one thing that must be settled before
 /// the binary is asked anything at all.
-fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
+fn drone_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
     use armada_core::fleet::drone as argv;
+
+    // **Probe 3: the relay's flag, on a document that registers no hook**
+    // (`020` §1). `--settings` is what carries a Drone's `Stop` hook, and its
+    // disappearance is the quietest failure of the lot: every Job still spawns,
+    // and none of them ever advances a step again. The document registers
+    // nothing, because a probe that fired a relay would tick the fleet about an
+    // exchange that never happened — and it is written under `~/.armada/`
+    // rather than beside the caller, since `doctor` runs in somebody's
+    // repository and must not leave a file in it.
+    //
+    // **Into a `~/.armada/` that already exists, and never creating one.**
+    // `doctor` is a read verb, and a machine with no `~/.armada/` is a finding
+    // three rows down — a probe that created the directory would answer the
+    // question `directories` is asking, and `armada init`'s whole first-run
+    // contract is that the directory is not there yet.
+    //
+    // **A path that will not take the file is not a finding either.** Failing
+    // `doctor` over a scratch write would report a machine as broken for a
+    // reason that has nothing to do with Claude Code; the probe simply runs
+    // without the flag, and every other check stands.
+    let no_hooks = armada_home.join(format!("probe-{}.json", argv::PROBE_SESSION));
+    let registered = (armada_home.is_dir() && std::fs::write(&no_hooks, argv::NO_HOOKS).is_ok())
+        .then(|| no_hooks.display().to_string());
 
     // **Probe 0: the brief cannot eat the flag behind it.** `--append-system-prompt`
     // takes a value, so a brief that were empty or flag-shaped would consume
@@ -130,7 +153,7 @@ fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
     // than only in a unit test because this is the vector this machine would
     // run, and because a probe whose flags had silently shifted by one would
     // then be validating a combination Armada does not use.
-    let probe = argv::probe_argv();
+    let probe = argv::probe_argv(registered.as_deref());
     if let Some(at) = probe.iter().position(|word| word == argv::APPEND) {
         let carried = probe.get(at + 1).map(String::as_str).unwrap_or("");
         if carried.trim().is_empty() || carried.starts_with('-') {
@@ -222,6 +245,11 @@ fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
             "report this to Armada: the doctor probe needs narrowing",
         );
     }
+
+    // The probe's scratch document goes with it: it is a fixed name beside the
+    // caller's directory, and leaving one behind on every `doctor` run would be
+    // litter in somebody's repository.
+    let _ = std::fs::remove_file(&no_hooks);
 
     Finding::settled(
         "drone argv",
@@ -1276,13 +1304,24 @@ mod tests {
     #[test]
     fn the_probe_runs_the_drones_own_argv_and_not_an_approximation() {
         let run = Watching(std::cell::RefCell::new(Vec::new()));
-        drone_argv(&run, Path::new("/tmp"));
+        drone_argv(&run, Path::new("/tmp"), Path::new("/tmp"));
 
         let probe = run.0.borrow().last().cloned().expect("a probe ran");
+        // **The relay's own settings, on the real path this check writes**
+        // (`020` §1). Passing `None` here would have let `--settings` vanish
+        // from the probe while `doctor` went on reporting the argv checked.
+        let registered = Path::new("/tmp").join(format!(
+            "probe-{}.json",
+            armada_core::fleet::drone::PROBE_SESSION
+        ));
         assert_eq!(
             probe,
-            armada_core::fleet::drone::probe_argv(),
+            armada_core::fleet::drone::probe_argv(Some(&registered.display().to_string())),
             "the probe drifted from the Drone's own argv"
+        );
+        assert!(
+            std::fs::read_to_string(&registered).is_err(),
+            "the probe left its scratch document behind"
         );
     }
 
@@ -1301,7 +1340,7 @@ mod tests {
         use armada_core::fleet::drone;
 
         let run = Watching(std::cell::RefCell::new(Vec::new()));
-        drone_argv(&run, Path::new("/tmp"));
+        drone_argv(&run, Path::new("/tmp"), Path::new("/tmp"));
         let probe = run.0.borrow().last().cloned().expect("a probe ran");
 
         let at = probe
@@ -1341,7 +1380,7 @@ mod tests {
         // And the guard is wired: a healthy `claude` with a real brief is Ok,
         // which is the only branch that reaches the flag check below it.
         assert_eq!(
-            drone_argv(&Claude::healthy(), Path::new("/tmp")).status,
+            drone_argv(&Claude::healthy(), Path::new("/tmp"), Path::new("/tmp")).status,
             Health::Ok
         );
     }
@@ -1352,7 +1391,7 @@ mod tests {
     #[test]
     fn the_argv_probe_has_nothing_to_say_and_so_cannot_spend_a_token() {
         let run = Watching(std::cell::RefCell::new(Vec::new()));
-        drone_argv(&run, Path::new("/tmp"));
+        drone_argv(&run, Path::new("/tmp"), Path::new("/tmp"));
         let probe = run.0.borrow().last().cloned().unwrap();
 
         assert_eq!(
@@ -1364,7 +1403,7 @@ mod tests {
             armada_core::fleet::drone::PROBE_SESSION,
             "a prompt",
             &armada_core::fleet::drone::Posture::default(),
-            None,
+            Some("/s.json"),
         );
         assert!(
             !probe.iter().any(|word| word == "a prompt"),
@@ -1379,7 +1418,7 @@ mod tests {
 
     #[test]
     fn a_claude_that_offers_every_flag_and_refuses_nothing_is_ok() {
-        let finding = drone_argv(&Claude::healthy(), Path::new("/tmp"));
+        let finding = drone_argv(&Claude::healthy(), Path::new("/tmp"), Path::new("/tmp"));
         assert_eq!(finding.status, Health::Ok);
         assert!(finding.remedy.is_none());
     }
@@ -1393,6 +1432,7 @@ mod tests {
                 flags: "--session-id --resume --print --output-format --model".to_string(),
                 ..Claude::healthy()
             },
+            Path::new("/tmp"),
             Path::new("/tmp"),
         );
         assert_eq!(finding.status, Health::Missing);
@@ -1453,6 +1493,7 @@ mod tests {
                 ..Claude::healthy()
             },
             Path::new("/tmp"),
+            Path::new("/tmp"),
         );
         assert_eq!(finding.status, Health::Missing);
         assert!(finding.detail.contains("--verbose"), "{}", finding.detail);
@@ -1481,7 +1522,7 @@ mod tests {
                 })
             }
         }
-        let finding = drone_argv(&Spending, Path::new("/tmp"));
+        let finding = drone_argv(&Spending, Path::new("/tmp"), Path::new("/tmp"));
         assert_eq!(finding.status, Health::Partial, "a spend was reported ok");
         assert!(
             finding.detail.contains("cost nothing"),
@@ -1507,7 +1548,7 @@ mod tests {
                 })
             }
         }
-        let finding = drone_argv(&Absent, Path::new("/tmp"));
+        let finding = drone_argv(&Absent, Path::new("/tmp"), Path::new("/tmp"));
         assert_eq!(finding.status, Health::Offline);
         assert!(
             !finding.status.is_failure(),
