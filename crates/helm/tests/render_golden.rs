@@ -2112,7 +2112,7 @@ fn helm_matches_its_fixture() {
             // here as `"$(cat …)"` and the fixture freezes that it never
             // appears any other way.
             command: "claude --agent helm --append-system-prompt \
-                      \"$(cat ~/.armada/helm/guild-voice.md)\" \
+                      \"$(cat ~/.armada/helm/system-prompt.md)\" \
                       --mcp-config ~/.armada/helm/mcp.json \
                       --plugin-dir ~/.armada/helm/plugin \
                       --settings ~/.armada/helm/settings.json \
@@ -2136,7 +2136,7 @@ fn helm_matches_its_fixture() {
                 ),
                 wired(
                     "voice",
-                    "~/.armada/helm/guild-voice.md",
+                    "~/.armada/helm/system-prompt.md",
                     "voice.md, how-i-work.md: your words, and they outrank the persona",
                 ),
                 Wired {

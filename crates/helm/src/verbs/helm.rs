@@ -540,7 +540,7 @@ fn wire(
     // is not there.
     let appended = helm::appended(voice.map(|voice| voice.prompt.as_str()));
     wired.push(Wired {
-        what: "system prompt".to_string(),
+        what: "voice".to_string(),
         at: place.shown(&paths.voice),
         state: write(&paths.voice, &format!("{appended}\n"))?,
         detail: match voice {
