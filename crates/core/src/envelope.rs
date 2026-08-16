@@ -1715,6 +1715,41 @@ pub struct FleetLsData {
     pub needs_you: usize,
     /// What the listed Jobs have cost between them.
     pub spent_usd: f64,
+    /// The rate-limit window the fleet is working inside, when one of the Jobs
+    /// has seen it and it has not reset yet.
+    ///
+    /// **A fact about the account rather than about any row**, which is why it
+    /// sits beside `results` and not in one. Every Job's transcript carries the
+    /// window its own last turn passed through;
+    /// [`crate::fleet::drone::window`] picks the one still in force.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<Window>,
+}
+
+/// The rate-limit window a fleet is working inside.
+///
+/// **What stops you working, which outranks what it cost**
+/// (`docs/reserved/020-the-tui-decided.md` §4). Claude Code has reported this on
+/// every exchange since the spike measured it (PHASES.md §9.1 F2) and Armada
+/// discarded it; this is the payload that carries it to a surface.
+///
+/// **Both fields are measurements, and both are optional for the same reason:**
+/// the service sends what it has. A percentage arrives once the window crosses a
+/// threshold, a reset arrives whenever the headers carry one, and a renderer
+/// draws the ones that are there rather than filling in the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Window {
+    /// How much of the window is used, as whole percent, floored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub used_percent: Option<u8>,
+    /// How long until it resets, in seconds.
+    ///
+    /// **Relative rather than absolute**, which is the form every other duration
+    /// in this corpus takes — `runtime_s`, `waiting_s`, `on_step_s` — because
+    /// the reader's question is *how long until I can work again* and an epoch
+    /// second is that question left as an exercise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resets_in_s: Option<u64>,
 }
 
 /// One Job, as `ls` reports it.
@@ -1797,6 +1832,20 @@ pub struct BridgeData {
     /// questions the screen exists to answer, so the count of what is missing
     /// travels with it.
     pub hidden: usize,
+    /// The rate-limit window the fleet is working inside.
+    ///
+    /// **Carried from the listing, never re-read.** It is [`FleetLsData`]'s own
+    /// field for the same reason `results` is: the Bridge is a renderer over
+    /// Fleet, and a frame that went to the transcripts itself would be the
+    /// second source `commands/helm/bridge.md` rules out — and, worse, the
+    /// Bridge reading a Drone's stream directly is exactly the
+    /// `ARCHITECTURE.md` §1.9 erosion `020` names as the real risk.
+    ///
+    /// **Unfiltered, deliberately.** Every other number here is over the rows on
+    /// the screen; this one is a fact about the account, and `state=RUNNING`
+    /// does not change how much of a five-hour window is gone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<Window>,
 }
 
 /// `armada fleet show` — **one Job, and why it wants you.**

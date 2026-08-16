@@ -34,7 +34,7 @@ usually asking which one applies.
 | [017](017-what-you-have-not-tried-yet.md) | What you have not tried yet | BUILT | cross-cutting | `armada untried` — fifteen features landed in a day and nothing could say which had ever been run |
 | [018](018-a-place-for-settings.md) | A place for settings | BUILT | cross-cutting | `armada settings` — read-only, reusing Manifest's, Helm's and Guild's own readers; **no writer**, which is the half that stays open |
 | [019](019-the-brief-a-drone-reports-through.md) | The brief a Drone reports through | BUILT | fleet | `drone::BRIEF` — a Drone talks to Helm, not to you, so it is handed the tools' contract rather than your register; **it may name tools [011](011-what-a-drone-may-do-unattended.md)'s posture denies**, which is the risk left open |
-| [020](020-the-tui-decided.md) | The TUI, decided | RESERVED | helm | Nine decisions from a design session after real use — the menu, the Stop hook driving tick, and what bare `armada` becomes |
+| [020](020-the-tui-decided.md) | The TUI, decided | RESERVED | helm | Nine decisions from a design session after real use; **six of nine are built** — the Stop hook drives tick, the pane says what a Drone said, counts replaced the aggregate word, the window position leads the spend, and the table grew an id and a wide layout. **The three left are the ones that change a surface**: one signals listing, the menu, and the cmux handoff |
 | [021](021-the-work-hierarchy.md) | The work hierarchy | RESERVED | cross-cutting | Fleet is a collection, the Job is the state machine, and the five things that lead to work are Signals |
 
 **Armada's task system exists** ([002](002-tasks.md)), so these can become its first rows — one

@@ -849,11 +849,20 @@ pub fn ls<R: Run, C: Clock>(
     let wall = now.wall_ms();
 
     let mut rows: Vec<JobRow> = Vec::new();
+    // **Every window this fleet has seen, kept so one can be chosen.** The
+    // event is per-transcript — each Job's last turn reports the window *it*
+    // passed through — but the window is the account's, so the choice is over
+    // the whole listing and is made once, below, by
+    // [`armada_core::fleet::drone::window`].
+    let mut windows: Vec<armada_core::fleet::drone::RateLimit> = Vec::new();
     for record in place.store().all()? {
         if !all && record.state.is_over() {
             continue;
         }
-        let (observed, _, _) = look(run, place, &record, wall);
+        let (observed, reading, _) = look(run, place, &record, wall);
+        if let Some(limit) = reading.rate_limit {
+            windows.push(limit);
+        }
         // **By uuid, and never for a Job that is over.** The first is the
         // defect `005` records; the second is its first consequence, and it is
         // asserted here as well as written at the close because `--all` draws
@@ -913,6 +922,17 @@ pub fn ls<R: Run, C: Clock>(
             results: rows,
             needs_you,
             spent_usd,
+            // **Turned into a countdown here, in the shell, because this is
+            // where the clock is.** The core picks which window is in force and
+            // the payload carries `resets_in_s`, so neither the renderer nor a
+            // `--json` consumer has to know what epoch second it is to read the
+            // one number that says when you can work again.
+            window: armada_core::fleet::drone::window(&windows, wall / 1_000).map(|limit| {
+                armada_core::envelope::Window {
+                    used_percent: limit.percent(),
+                    resets_in_s: limit.resets_at.map(|at| at.saturating_sub(wall / 1_000)),
+                }
+            }),
         },
     ))))
 }

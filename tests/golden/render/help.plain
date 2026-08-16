@@ -1,4 +1,4 @@
-armada — one vocabulary for a repo's stack, and the agents working in it
+armada — agents that work while you do not
 
 USAGE
   armada <module> <verb> [flags]  the verbs Armada owns

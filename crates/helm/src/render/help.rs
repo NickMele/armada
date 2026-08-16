@@ -1223,9 +1223,14 @@ fn root(style: Style, terminal: Terminal) -> String {
     let width = terminal.usable_width();
     let mut out = format!(
         "{}\n\n",
+        // **What the tool does for you, not what it is made of.** The line here
+        // was *"one vocabulary for a repo's stack, and the agents working in
+        // it"* — a true statement of an internal design goal, and one that told
+        // a first reader nothing about why they would run this
+        // (`020` §"Also decided").
         style.strong(
             Role::SignalAmber,
-            "armada — one vocabulary for a repo's stack, and the agents working in it"
+            "armada — agents that work while you do not"
         )
     );
 

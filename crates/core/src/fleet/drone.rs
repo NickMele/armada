@@ -613,7 +613,7 @@ pub struct Turn {
 }
 
 /// The rate-limit window a turn passed through.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RateLimit {
     /// `allowed`, `allowed_warning`, `rejected` — whatever the event said.
     pub status: String,
@@ -621,6 +621,49 @@ pub struct RateLimit {
     pub kind: String,
     /// When it resets, as seconds since the epoch.
     pub resets_at: Option<u64>,
+    /// How much of the window has been used, as a fraction of one.
+    ///
+    /// **Measured, and reported rather than computed.** Claude Code fills this
+    /// from the `anthropic-ratelimit-unified-<window>-utilization` header and
+    /// renders it as `floor(utilization * 100)%` in its own usage line, which is
+    /// the same arithmetic [`RateLimit::percent`] does here. That is what separates this
+    /// number from the progress bar PHASES.md §9.1 F2 bans: nobody is estimating
+    /// how far along a Job is, the service is stating how much of a window is
+    /// gone.
+    ///
+    /// **`None` is the ordinary case and not a failure.** The field only rides
+    /// along once a threshold is crossed — the `allowed_warning` shape — so a
+    /// window well inside its limits reports its reset and no percentage, and
+    /// the render says what it has rather than inventing the rest.
+    pub utilization: Option<f64>,
+}
+
+impl RateLimit {
+    /// The whole percent of the window used, floored — Claude Code's own
+    /// arithmetic, so the two tools cannot report the same window differently.
+    pub fn percent(&self) -> Option<u8> {
+        self.utilization
+            .filter(|used| used.is_finite() && *used >= 0.0)
+            .map(|used| (used * 100.0).floor().clamp(0.0, 100.0) as u8)
+    }
+}
+
+/// The window a fleet is working inside, out of everything its Jobs have seen.
+///
+/// **The furthest reset wins, and an expired one is dropped.** Every Job's
+/// transcript carries the window *that Job's* last turn passed through, and a
+/// Job that finished four hours ago is holding a window that has since rolled
+/// over. Within one window the reset is a constant, so the greatest `resets_at`
+/// is the most recently observed window — and one that has already reset
+/// describes nothing a reader can act on, which is the whole reason §4 puts this
+/// ahead of spend.
+///
+/// **A window with no reset at all is not a window.** It cannot be aged out, so
+/// it would sit on the screen forever after the account's limits moved on.
+pub fn window(seen: &[RateLimit], now_s: u64) -> Option<&RateLimit> {
+    seen.iter()
+        .filter(|limit| limit.resets_at.is_some_and(|at| at > now_s))
+        .max_by_key(|limit| limit.resets_at)
 }
 
 /// Everything a Job's transcript says about what it has spent and how far it
@@ -755,6 +798,11 @@ fn read_rate_limit(event: &serde_json::Value) -> Option<RateLimit> {
             .get("resetsAt")
             .or_else(|| info.get("resets_at"))
             .and_then(serde_json::Value::as_u64),
+        // **Read, never derived.** There is no second spelling to fall back on
+        // the way `resetsAt` has one: Claude Code emits this key and only this
+        // key, and a missing one means the window has not crossed a threshold
+        // yet rather than that Armada should work the number out itself.
+        utilization: info.get("utilization").and_then(serde_json::Value::as_f64),
     })
 }
 
@@ -1312,6 +1360,58 @@ mod tests {
         assert_eq!(limit.status, "allowed");
         assert_eq!(limit.kind, "five_hour");
         assert_eq!(limit.resets_at, Some(1_754_748_131));
+        // Well inside the limits, so the service sends no percentage — and
+        // nothing here fills one in.
+        assert_eq!(limit.utilization, None);
+        assert_eq!(limit.percent(), None);
+    }
+
+    /// **The window position is read off the event, not worked out.** Claude
+    /// Code sends `utilization` as a fraction once a threshold is crossed and
+    /// renders it as `floor(u * 100)%`; this is the same number, so the two
+    /// tools cannot describe one window differently. What it is *not* is
+    /// PHASES.md §9.1 F2's banned progress bar — nobody is estimating how far
+    /// along a Job is.
+    #[test]
+    fn a_warned_window_carries_the_percentage_the_service_measured() {
+        const WARNED: &str = r#"
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"five_hour","resetsAt":1754748131,"utilization":0.7194}}
+"#;
+        let limit = read(WARNED).rate_limit.expect("a window");
+        assert_eq!(limit.status, "allowed_warning");
+        assert_eq!(limit.utilization, Some(0.7194));
+        // Floored, exactly as Claude Code floors it: 71%, never 72%.
+        assert_eq!(limit.percent(), Some(71));
+    }
+
+    /// **The furthest reset wins and an expired one is dropped.** Each Job's
+    /// transcript holds the window *that Job's* last turn passed through, so a
+    /// fleet is holding several observations of one account — and a Job that
+    /// finished four hours ago is holding a window that has since rolled over.
+    #[test]
+    fn the_fleets_window_is_the_freshest_one_that_has_not_reset_yet() {
+        let seen = |kind: &str, at: Option<u64>| RateLimit {
+            status: "allowed".to_string(),
+            kind: kind.to_string(),
+            resets_at: at,
+            utilization: None,
+        };
+        let now = 1_754_740_000;
+        let stale = seen("five_hour", Some(now - 3_600));
+        let fresh = seen("five_hour", Some(now + 7_200));
+        let fresher = seen("five_hour", Some(now + 9_000));
+
+        assert_eq!(
+            window(&[stale.clone(), fresher.clone(), fresh.clone()], now),
+            Some(&fresher)
+        );
+        // Every window has already reset: there is nothing to say, and saying
+        // the stale one would put a number on the screen that stopped being
+        // true hours ago.
+        assert_eq!(window(std::slice::from_ref(&stale), now), None);
+        // A window with no reset cannot be aged out, so it never qualifies.
+        assert_eq!(window(&[seen("five_hour", None)], now), None);
+        assert_eq!(window(&[], now), None);
     }
 
     /// **A Drone that has not finished a turn yet reads as empty, not as

@@ -64,6 +64,32 @@ pub fn elapsed(ms: u64) -> String {
     format!("{}h", ms / HOUR)
 }
 
+/// How long until something happens — `2h14m`, `43m`, `50s`.
+///
+/// **Finer than [`elapsed`] above an hour, and that is the whole difference.**
+/// The two read the same clock and answer opposite questions. `elapsed` rounds a
+/// Job's age to one unit because *how long has this been going* does not get
+/// better with minutes on it; a countdown is read to decide whether to wait, and
+/// `1h` for anything between an hour and two is exactly the precision that
+/// decision cannot be made at. `020` §4 writes it `2h14m` for that reason.
+///
+/// **No space, unlike [`duration`]**, because this appears inside a summary line
+/// whose separator is a space-padded middle dot: `resets 2h 14m` would read as
+/// two facts.
+pub fn countdown(ms: u64) -> String {
+    const SECOND: u64 = 1_000;
+    const MINUTE: u64 = 60 * SECOND;
+    const HOUR: u64 = 60 * MINUTE;
+
+    if ms < MINUTE {
+        return format!("{}s", ms / SECOND);
+    }
+    if ms < HOUR {
+        return format!("{}m", ms / MINUTE);
+    }
+    format!("{}h{:02}m", ms / HOUR, (ms % HOUR) / MINUTE)
+}
+
 /// Dollars, as the agreed layout writes them: `$2.10`.
 ///
 /// **Two decimal places always**, so a column of them lines up on the point
@@ -129,6 +155,23 @@ mod tests {
         assert_eq!(duration(0), "0.0s");
         assert_eq!(duration(1), "0.0s");
         assert_eq!(duration(50), "0.1s");
+    }
+
+    /// **A countdown keeps its minutes past the hour, and that is why it is not
+    /// [`elapsed`].** `020` §4 writes the window reset `2h14m`; `elapsed` would
+    /// draw `2h`, which is the same answer for anything between one hour and
+    /// two and therefore no answer to *should I wait*.
+    #[test]
+    fn a_countdown_keeps_the_minutes_that_elapsed_throws_away() {
+        assert_eq!(countdown(8_040_000), "2h14m");
+        assert_eq!(elapsed(8_040_000), "2h", "the two are the same function");
+        assert_eq!(countdown(2_580_000), "43m");
+        assert_eq!(countdown(50_000), "50s");
+        // No sixty, and no bare `3h` where the minutes happen to be zero: a
+        // column of `2h14m` and `3h00m` is one shape.
+        assert_eq!(countdown(3_599_000), "59m");
+        assert_eq!(countdown(3_600_000), "1h00m");
+        assert_eq!(countdown(0), "0s");
     }
 
     /// The minute and hour boundaries, where an off-by-one shows as `0m 60s`.

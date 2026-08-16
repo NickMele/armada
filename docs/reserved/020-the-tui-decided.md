@@ -9,12 +9,50 @@ raised: a design session after real use, 2026-08-15
 # The TUI, decided
 
 **What this is.** Nine decisions taken in one session, after the user drove the Bridge for the
-first time and found it wanting. Each is his answer to a question with the trade stated. Nothing
-here is built; this is the brief for building it.
+first time and found it wanting. Each is his answer to a question with the trade stated. This is
+the brief for building it, and each section now says whether it has been.
 
 It supersedes nothing and completes two reservations:
 [`003`](003-bridge-command-centre.md) — the Bridge as a command centre — and the parts of
 [`001`](001-raised-items-need-identity.md) about where a raised item is acknowledged.
+
+## What is built
+
+**Six of the nine, plus five of the six notes under "Also decided".** What is left is the three
+that change a *surface* rather than a render, and each is its own piece of work — one of them
+changes what bare `armada` means.
+
+| Decision | State |
+|---|---|
+| §1 the Stop hook ticks the Job | **built** |
+| §2 the detail pane's `SAID` row | **built** |
+| §3 one signals listing, origin a filter | open — needs [`021`](021-the-work-hierarchy.md)'s rename first |
+| §4 window usage first, dollars second | **built** |
+| §5 `ABORTING` / `REAPING` / `PAUSING` | **built** |
+| §6 counts, never an aggregate word | **built** |
+| §7 `QUEUED`, not `WAITING` | **built** |
+| §8 the menu, and what bare `armada` becomes | open |
+| §9 Helm opens beside you, in cmux | open |
+| the wide layout · `NEEDS YOU` carries the question | **built** |
+| `SILENT` and `STALLED` as real states | **built** |
+| the id is shown | **built** |
+| a new Job is spawned detached | **built** |
+| the tagline | **built** |
+
+**One departure from what is written below, and the arithmetic forced it.** The wide layout
+sheds `WORKFLOW`, then `TURNS`, and then — where this page names only those two — **`TASK`**,
+before `NEEDS YOU` truncates. Measured against the Bridge's own fixture, a table carrying both
+flexible columns needs eighty-one columns, so at eighty it would overhang the screen rather than
+truncate inside it and one of the two had to go. It is `TASK`, because a Job's handle is already
+two significant words of its task, and because `NEEDS YOU` is the only column that is ever a call
+to action. The trade, stated: an eighty-column Bridge with something waiting on you shows the
+question and not the task.
+
+**And one thing this page assumed that the event does not carry.** `window 71%` is measured, but
+the percentage rides along only once the window crosses a threshold — Claude Code sends
+`utilization` on the `allowed_warning` shape and not on every event. So the line draws the
+percentage when it has one and the reset alone when it does not, rather than computing a number
+nobody measured. That is the same rule that keeps a progress bar off this screen.
 
 ## 1 · The Drone's Stop hook ticks the Job
 
