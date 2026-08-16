@@ -181,7 +181,7 @@ fn local_home(home: Option<&str>) -> Option<&str> {
 /// reporting `target/` and the untracked `.claude/*.local` files — whose entire
 /// purpose is to hold the strings this check hunts for. Asking git removes that
 /// class of bug: what is not tracked is not published, so it is not a leak.
-fn tracked(root: &Path) -> Result<Vec<String>, String> {
+pub(crate) fn tracked(root: &Path) -> Result<Vec<String>, String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(root)

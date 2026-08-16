@@ -6,7 +6,7 @@ module: cross-cutting
 raised: real use, 2026-08-15
 ---
 
-# 021 — Armada cleans up after itself in Docker
+# 022 — Armada cleans up after itself in Docker
 
 > **Built.** Four pieces: two rows in `armada doctor`, a finding about the ownership store,
 > `armada manifest prune`, and a Job that releases what it holds when it *finishes*. What follows
