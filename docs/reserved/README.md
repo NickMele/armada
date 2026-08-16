@@ -45,6 +45,7 @@ usually asking which one applies.
 | [028](028-specialised-drones.md) | Specialised Drones, and subagents a repository declares | RESERVED | cross-cutting | A repo declares its own subagents the way it declares skills, and Armada ships a fleet of specialised ones — a reviewer that cannot `Edit` is a mechanism where *"you are reviewing"* is only guidance |
 | [029](029-a-job-of-its-own-done.md) | A Job says what done means | RESERVED | fleet | Done is the workflow's, so two Jobs on one workflow finish the same way however different the tasks were — and a prose goal self-assessed by a Drone is the false pass [PLAN.md](../PLAN.md) §14.3 exists to refuse |
 | [030](030-armada-helps-write-the-prompt.md) | Armada helps write the prompt, and you approve it | RESERVED | cross-cutting | Classification already pays for a turn; a bad task is the most expensive failure Armada has. Approve, edit or skip — and no terminal means no rewrite |
+| [031](031-mcp-and-skills-under-review.md) | The MCP server and the skills, under review | RESERVED | cross-cutting | The server is sound and the boundary that matters is not the server's — a Drone rewrote the operator's real `~/.claude/settings.json` through `Bash`, `Bash(arm:*)` reaches the `fleet spawn` that `Bash(armada:*)` denies, and the workflows name seven skills of which five exist nowhere |
 
 **Armada's task system exists** ([002](002-tasks.md)), so these can become its first rows — one
 file per row is what makes that a script rather than a rewrite. It is not run automatically:
