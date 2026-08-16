@@ -134,11 +134,7 @@ impl Where {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).ok()?;
         }
-        std::fs::write(
-            &settings,
-            argv::settings_json(&hook.display().to_string()),
-        )
-        .ok()?;
+        std::fs::write(&settings, argv::settings_json(&hook.display().to_string())).ok()?;
         Some(settings.display().to_string())
     }
 
@@ -1383,19 +1379,19 @@ fn tear_down<R: Run, C: Clock>(
         let disposition = match (ending.keep_worktree, path.exists()) {
             (_, false) => Disposition::Gone,
             (true, true) => Disposition::Kept,
-            (false, true) => match {
+            (false, true) => {
                 doing = stage(&store, record, doing.as_ref(), "worktree", now.wall_ms());
-                worktree::remove(run, &repo_root, &path)
-            } {
-                Ok(()) => Disposition::Removed,
-                Err(error) => {
-                    // Reported, never raised. The Job is ended either way, and a
-                    // `kill` that bailed out here would need a second `kill` to
-                    // do the same thing again.
-                    failure.get_or_insert(error);
-                    Disposition::Kept
+                match worktree::remove(run, &repo_root, &path) {
+                    Ok(()) => Disposition::Removed,
+                    Err(error) => {
+                        // Reported, never raised. The Job is ended either way,
+                        // and a `kill` that bailed out here would need a second
+                        // `kill` to do the same thing again.
+                        failure.get_or_insert(error);
+                        Disposition::Kept
+                    }
                 }
-            },
+            }
         };
 
         let branch = if ending.keep_branch || disposition != Disposition::Removed {

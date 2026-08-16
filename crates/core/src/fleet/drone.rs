@@ -61,7 +61,12 @@ pub const CLAUDE: &str = "claude";
 /// `--session-id` is what makes the caller the one who assigns identity, which
 /// is the whole of PHASES.md §9.1 F1: the uuid exists before the process, so the
 /// transcript's location is known before there is a transcript.
-pub fn spawn_argv(uuid: &str, prompt: &str, posture: &Posture, settings: Option<&str>) -> Vec<String> {
+pub fn spawn_argv(
+    uuid: &str,
+    prompt: &str,
+    posture: &Posture,
+    settings: Option<&str>,
+) -> Vec<String> {
     let mut argv = vec![
         CLAUDE.to_string(),
         "--session-id".to_string(),
@@ -1520,7 +1525,12 @@ mod tests {
         // is a flag `doctor` would go on validating while nothing used it.
         let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default(), Some("/s.json"))
             .into_iter()
-            .chain(resume_argv(UUID, "go", &Posture::default(), Some("/s.json")))
+            .chain(resume_argv(
+                UUID,
+                "go",
+                &Posture::default(),
+                Some("/s.json"),
+            ))
             .chain(super::super::classify::argv("go"))
             .chain(probe_argv(None))
             .filter(|word| word.starts_with("--"))

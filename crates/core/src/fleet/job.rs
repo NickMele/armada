@@ -786,13 +786,15 @@ pub fn observe(
     let due = finished > record.ticked_turns && !errored;
     let state = observe_state(
         record.state,
-        ceiling.is_some(),
-        finished,
-        errored,
-        alive,
-        due,
-        record.pending.is_some(),
-        record.said_something(),
+        &Seen {
+            exhausted: ceiling.is_some(),
+            finished,
+            errored,
+            alive,
+            due,
+            gating: record.pending.is_some(),
+            said: record.said_something(),
+        },
     );
     Observed {
         state,
@@ -800,6 +802,29 @@ pub fn observe(
         ceiling,
         due,
     }
+}
+
+/// Everything [`observe_state`] is given, in one place.
+///
+/// **A struct rather than eight positional arguments**, and not only to please
+/// a lint: five of them are booleans, and a caller that transposed `due` and
+/// `alive` would compile, pass most tests, and report a live Drone as stalled.
+/// Named fields make that transposition impossible to write.
+struct Seen {
+    /// It has reached one of the Job's ceilings.
+    exhausted: bool,
+    /// How many turns the transcript holds.
+    finished: usize,
+    /// The last of them ended badly.
+    errored: bool,
+    /// Its process group is provably still Armada's.
+    alive: bool,
+    /// An exchange has ended that no tick has gated.
+    due: bool,
+    /// A gate is open on it — a detached check, or a question in the inbox.
+    gating: bool,
+    /// Its Drone has said something through its tools on this step.
+    said: bool,
 }
 
 /// The state half of [`observe`], written out so every case is visible.
@@ -812,17 +837,16 @@ pub fn observe(
 /// tick has already gated this exchange and left the Job resting on a gate it
 /// started. Everything else that used to land here — the Drone that exited with
 /// nobody watching — is `STALLED` or `SILENT`, which is the whole of the repair.
-#[allow(clippy::fn_params_excessive_bools)]
-fn observe_state(
-    recorded: JobState,
-    exhausted: bool,
-    finished: usize,
-    errored: bool,
-    alive: bool,
-    due: bool,
-    gating: bool,
-    said: bool,
-) -> JobState {
+fn observe_state(recorded: JobState, seen: &Seen) -> JobState {
+    let &Seen {
+        exhausted,
+        finished,
+        errored,
+        alive,
+        due,
+        gating,
+        said,
+    } = seen;
     match recorded {
         // **A finished Job is not re-observed.** `DONE` and `ABORTED` are the
         // two a verb wrote deliberately, and a killed Job whose transcript
@@ -1213,7 +1237,7 @@ mod tests {
     /// **The resting state is real and much shorter than it looked.** A Job
     /// rests between turns for as long as it takes the `Stop` hook to relay —
     /// and if nothing relays, that is not rest, it is what `STALLED` now names.
-    #[test]
+    ///
     /// The fixture's Drone reported nothing, so the word is `SILENT`; which of
     /// the two it is, is the next test's subject. What matters here is that
     /// neither of them is `RUNNING` any more.

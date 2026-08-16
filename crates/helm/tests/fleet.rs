@@ -2818,7 +2818,11 @@ fn once_answers_with_the_frame_it_read() {
     // to count. Since `020` §6 a Job whose exchange ended with nothing relaying
     // is `SILENT` rather than `RUNNING`, and this test's subject is the frame
     // agreeing with the listing — not which of the two words applies.
-    let data = spawn(&scratch, &run, &task(&format!("add rate limiting {STAY_ALIVE}")));
+    let data = spawn(
+        &scratch,
+        &run,
+        &task(&format!("add rate limiting {STAY_ALIVE}")),
+    );
     scratch.watch(&data.uuid);
 
     let output =
