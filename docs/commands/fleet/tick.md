@@ -11,6 +11,34 @@ advance, retry or stop.
 process group that was gone, which is what a person hit on their first real spawn. This is the
 thing that observes it.
 
+## Who runs it
+
+**Every Drone runs it, when its own exchange ends** — the relay of
+[`020`](../../reserved/020-the-tui-decided.md) §1. Each Drone is started with a `--settings`
+document registering a `Stop` hook; the hook waits for its own process to actually go, then runs
+`armada fleet tick`. *"An agent can forget to report progress, but it cannot forget to stop"*
+([`PLAN.md`](../../PLAN.md) §15.3), and the exchange ending **is** the event.
+
+**The hook waits, and it has to.** A `Stop` hook fires while its session is still alive; a tick
+from inside it would find a live process group and decline to gate — correctly, because gating a
+live exchange starts a check against a worktree still being written to.
+
+**It ticks the whole fleet rather than its own Job, and that is the backstop.** A relay is lost
+three ways — a SIGKILL, a hook that could not run, a crash in between — and none of them can be
+fixed from inside the hook that was lost. What fixes them is that the *next* Drone anywhere on
+the machine to finish an exchange sweeps every Job, including that one. **Helm's own `Stop` hook
+sweeps too**, so asking the orchestrator anything at all catches the fleet up.
+
+**A read verb still never ticks.** `armada fleet ls` advancing a Job behind your back would break
+[`PLAN.md`](../../PLAN.md) §15.1; what it does instead is *report* the Job as `STALLED`
+([`ls.md`](ls.md)), which is the honest half of the same repair.
+
+**One pass at a time on a machine.** Five exchanges ending together would start five passes, and
+two passes gating one step would both `claude --resume` one session. `~/.armada/tick.lock`
+serialises them; a second pass **declines** rather than queueing, because the pass holding the
+lock is walking the same records and a queued one would only repeat it. A lock left behind by a
+killed pass is taken over after ten minutes, so nothing can stop the fleet permanently.
+
 ## Synopsis
 
 ```sh
@@ -60,7 +88,8 @@ the same thing again with no idea what failed.
 
 Armada owns no long-lived process and M4 does not add one. A pass is idempotent and cheap, so a
 timer, a `Stop` hook, [`../helm/bridge.md`](../helm/bridge.md) or a person typing it are all valid
-drivers — `--watch` is one of them rather than the only one. A daemon would need its own lease,
+drivers — `--watch` is one of them rather than the only one, and the `Stop` hook is the one that
+actually runs on every exchange. A daemon would need its own lease,
 its own crash recovery and its own answer to *"what happened while it was down"*, all to replace
 a command you can simply run again.
 

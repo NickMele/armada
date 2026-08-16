@@ -1728,6 +1728,7 @@ fn fleet_ls_matches_its_fixture() {
                 wall_clock_ms: 1_860_000,
             },
             needs_attention,
+            acting: None,
         }
     }
 
@@ -2054,6 +2055,7 @@ fn bridge_matches_its_fixture() {
                 wall_clock_ms: 1_860_000,
             },
             needs_attention,
+            acting: None,
         }
     }
 
@@ -2148,6 +2150,7 @@ fn bridge_filtered_matches_its_fixture() {
             tokens: 388_000,
             wall_clock_ms: 2_520_000,
         },
+        acting: None,
         needs_attention: false,
     }];
 

@@ -26,15 +26,15 @@ armada fleet reap --job <job> [--job <job>]… [--yes] [--json]
 | State | Reap |
 |---|---|
 | `DONE`, `ABORTED` | **taken** — genuinely finished, and nothing further will happen to them |
-| `STALLED`, `BLOCKED` | listed and left — a Job whose Drone died is one you may want to start again |
+| `STALLED`, `SILENT`, `BLOCKED` | listed and left — a Job whose Drone died is one you may want to start again |
 | `PAUSED` | listed and left — it *means* needs-you, and [`resume.md`](resume.md) is the other thing you might do with it |
 | `RUNNING` | **never offered** |
 | `QUEUED` | never offered — it has spent nothing, holds nothing, and is about to start |
 
 **Observed rather than recorded**, which is what makes the verb useful at all. A record that
 still says `RUNNING` with a dead process group is exactly the Job this exists to find — it holds
-a port block nothing can use and nothing else reports — and it observes as `STALLED` or `PAUSED`,
-so it is offered. A Job only observes as `RUNNING` while its group is provably still Armada's
+a port block nothing can use and nothing else reports — and it observes as `STALLED`, `SILENT` or
+`PAUSED`, so it is offered. A Job only observes as `RUNNING` while its group is provably still Armada's
 ([`../../PLAN.md`](../../PLAN.md) §14.1).
 
 ## The preview is the feature
