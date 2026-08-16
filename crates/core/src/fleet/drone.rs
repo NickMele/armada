@@ -447,6 +447,18 @@ pub const MODES: [&str; 6] = [
 /// enumeration of every build system there is, and each one missing is a Job
 /// that edits code it cannot test. [`DENY`] is what makes that affordable: the
 /// escapes are a finite list and the checks are not.
+///
+/// **No rule here names `mcp__armada__*`, and [`BRIEF`] tells a Drone to report
+/// through three tools spelled exactly that way.** Under [`MODE`]'s `dontAsk` an
+/// uncovered tool is denied rather than asked about, so a Drone could be refused
+/// the very tools its brief instructs it to use — and refused silently, which is
+/// 011's original bug one layer up. It is **not proved**: whether an MCP tool
+/// absent from [`ALLOWED`] is denied or merely not pre-approved is Claude Code's
+/// behaviour, and the only honest test spawns a real Drone and spends a token,
+/// which PHASES.md §8.5 forbids. This list is the reader's decision
+/// (`docs/reserved/011`), so the risk is recorded in
+/// `docs/reserved/019-the-brief-a-drone-reports-through.md` rather than fixed in
+/// passing here.
 pub const ALLOW: [&str; 8] = [
     "Read",
     "Glob",
@@ -938,7 +950,10 @@ mod tests {
     #[test]
     fn the_brief_and_the_task_both_reach_the_argv() {
         for (argv, turn) in [
-            (spawn_argv(UUID, "fix the flake", &narrow()), "fix the flake"),
+            (
+                spawn_argv(UUID, "fix the flake", &narrow()),
+                "fix the flake",
+            ),
             (resume_argv(UUID, "yes, 90s", &narrow()), "yes, 90s"),
             (continue_argv(UUID, &narrow()), CONTINUE),
         ] {
