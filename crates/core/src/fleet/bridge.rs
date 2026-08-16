@@ -898,7 +898,7 @@ mod tests {
             turns: 3,
             budget_remaining: Remaining {
                 iterations: 9,
-                tokens: 1,
+                cost_usd: 1.0,
                 wall_clock_ms: 1,
             },
             needs_attention: needs,

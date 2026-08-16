@@ -18,7 +18,7 @@ armada fleet spawn "<task>" [--workflow <name>] [--name <name>] [--budget <k=v>.
 | `"<task>"` | string | — | What to do, in your words. Required. |
 | `--workflow <name>` | workflow id | **classified** | Override classification. Names a file in `~/.armada/guild/workflows/`. |
 | `--name <name>` | string | derived from task | The Job's handle. Must be unique among live Jobs. |
-| `--budget <k=v>` | repeatable | from the workflow | Override one ceiling, e.g. `--budget max_tokens=200000`. |
+| `--budget <k=v>` | repeatable | from the workflow | Override one ceiling, e.g. `--budget max_cost=10.00`. |
 | `--confidence <0-1>` | float | `0.75` | Below this, stop and ask which workflow this is. `0` never asks. |
 | `-C <path>` | directory | cwd | Which repository to branch from. |
 | `--dry-run` | flag | off | Report the classification, worktree path, port block and budget. Starts nothing. |

@@ -18,8 +18,8 @@
   RECORDED  state     RUNNING, as a verb last wrote it
   ALIVE     drone     process group 48122
   GATED     step      implement advances on check_passes
-  SPENT     budget    4 of 15 turns, 119k of 400k tokens, $1.25
-  LEFT      budget    11 turns, 280k tokens, 25m
+  SPENT     budget    4 of 15 turns, $1.25 of $10.00, 119k tokens
+  LEFT      budget    11 turns, $8.75, 280k tokens, 25m
   SINCE     started   2026-08-09T14:02:11Z
   HELD      ports     5470-5479
   HELD      worktree  ~/.armada/workspaces/orders/release-merge

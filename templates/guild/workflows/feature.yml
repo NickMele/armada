@@ -15,7 +15,7 @@ ends_at: branch
 
 budget:
   iterations: 20
-  tokens: 600000
+  cost: 10.00
   wall_clock: 90m
   on_exhausted: needs_human
 

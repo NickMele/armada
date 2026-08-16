@@ -329,10 +329,10 @@ fn record(answers: &mut Answers, question: Question, given: &str) {
         3 => answers.how_i_work = Some(given.to_string()),
         // **One number each, and an unreadable one takes the default rather
         // than looping** — a loop is one a piped stdin cannot escape. Each is
-        // recorded on its own, so a refused token answer no longer costs the
+        // recorded on its own, so a refused cost answer no longer costs the
         // iteration and wall-clock answers that were typed correctly.
         4 => answers.iterations = interview::parse_iterations(given).ok(),
-        5 => answers.tokens = interview::parse_tokens(given).ok(),
+        5 => answers.cost_usd = interview::parse_cost(given).ok(),
         6 => answers.wall_clock_minutes = interview::parse_minutes(given).ok(),
         _ => answers.remote = Some(given.to_string()),
     }

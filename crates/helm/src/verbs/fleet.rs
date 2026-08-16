@@ -3946,7 +3946,7 @@ fn carved(
     let left = job::remaining(parent, spent, 0);
     workflow::Budget {
         iterations: declared.iterations.min(left.iterations),
-        tokens: declared.tokens.min(left.tokens),
+        cost_usd: declared.cost_usd.min(left.cost_usd),
         wall_clock_ms: declared.wall_clock_ms,
         on_exhausted: declared.on_exhausted,
     }
