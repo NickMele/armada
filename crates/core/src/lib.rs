@@ -40,6 +40,7 @@ pub mod scope;
 pub mod secrets;
 pub mod select;
 pub mod service;
+pub mod skill;
 pub mod template;
 pub mod untried;
 pub mod verify;

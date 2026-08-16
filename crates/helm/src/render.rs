@@ -56,7 +56,8 @@ use armada_core::envelope::{
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
     GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData,
     HelmSwitchData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData,
-    ProbeData, Projection, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData,
+    ProbeData, Projection, ProposeData, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData,
+    ServicesData,
     SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun,
     VerdictData, VerifyData, Wiring,
 };
@@ -131,6 +132,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Probe(envelope) => probe(envelope, style, width),
         Output::Report(envelope) => reported(envelope, style, width),
         Output::Ask(envelope) => asked(envelope, style, width),
+        Output::Propose(envelope) => proposed(envelope, style, width),
         Output::Verdict(envelope) => stepped(envelope, style, width),
         Output::Tick(envelope) => ticked(envelope, style, width),
     }
@@ -241,6 +243,33 @@ fn asked(envelope: &Envelope<AskData>, style: Style, width: usize) -> String {
                 None => "armada fleet answer <job> \"…\"".to_string(),
             },
         ],
+    ));
+    out
+}
+
+/// `fleet.propose` — what a Drone noticed, and the id it was filed under.
+///
+/// **The same table as [`asked`] with a different left-hand word**, because they
+/// are the same row in the same inbox and drawing them differently would suggest
+/// two places to look. What is not the same is the summary: [`asked`] offers the
+/// answer that unblocks a Drone, and this offers nothing to type at all — the
+/// Drone has already carried on, and the person reads it when they read it.
+fn proposed(envelope: &Envelope<ProposeData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let table = Table::new(columns("job", "detail", false))
+        .indent(2)
+        .row(vec![
+            token(&data.subject, Role::FlareOrange),
+            Cell::painted(data.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&data.proposal)),
+        ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[data.entry.clone(), "raised; nothing is waiting on it".to_string()],
     ));
     out
 }

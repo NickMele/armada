@@ -146,13 +146,40 @@ pub fn board_argv(uuid: &str) -> Vec<String> {
 /// turn that still knows the contract; one that did not would be a Drone whose
 /// instructions expired at its first question.
 fn headless(posture: &Posture) -> Vec<String> {
-    let mut argv = vec![APPEND.to_string(), BRIEF.to_string()];
+    let mut argv = vec![APPEND.to_string(), brief()];
     argv.extend(posture.argv());
     argv.push("--print".to_string());
     argv.push("--output-format".to_string());
     argv.push(STREAM_JSON.to_string());
     argv.extend(STREAM_JSON_NEEDS.iter().map(|flag| (*flag).to_string()));
     argv
+}
+
+/// **The whole of what a Drone is told before its task**: [`BRIEF`], then
+/// Armada's own skill.
+///
+/// # One appended prompt, never two
+///
+/// `claude --help` spells the flag `--append-system-prompt <prompt>` — singular,
+/// not variadic. A second occurrence is a Commander option with no collector, so
+/// the **last one wins and the first is dropped without a word**: a Drone would
+/// get its reporting contract and none of Armada's instructions, or the reverse,
+/// with nothing anywhere saying which. So the two are one string.
+///
+/// # Why they are two constants and not one
+///
+/// They answer different questions and were written for different reasons.
+/// [`BRIEF`] is *how you report* — the contract a worker owes an orchestrator,
+/// `docs/reserved/019`. [`crate::skill::BODY`] is *how you use Armada* —
+/// `docs/reserved/008` — and it goes to **Helm too**, where a reporting contract
+/// would make no sense. Merging them would mean Helm's launch carrying a
+/// paragraph about `fleet.verdict`, which Helm does not have.
+///
+/// **The brief comes first**, because it says who this session is; the skill is
+/// about the tools it holds, and a session has to be somebody before it can be
+/// told what it may do with them.
+fn brief() -> String {
+    format!("{BRIEF}\n\n{}", crate::skill::BODY)
 }
 
 /// The flag that carries an appended system prompt into a session.
@@ -592,10 +619,11 @@ pub const FLAGS: [&str; 13] = [
     "--permission-mode",
     ALLOWED,
     DISALLOWED,
-    // [`BRIEF`]'s, which grants nothing and withholds nothing — it says what the
-    // Drone owes. Its disappearance is the quietest failure of the three
-    // classes: every Job still runs, and every one of them reports at whatever
-    // length it likes into an orchestrator's window.
+    // [`brief`]'s, which grants nothing and withholds nothing — it says what the
+    // Drone owes and how it uses Armada. Its disappearance is the quietest
+    // failure of the three classes: every Job still runs, and every one of them
+    // reports at whatever length it likes into an orchestrator's window and
+    // edits `armada.yml` rather than proposing (`docs/reserved/008`).
     APPEND,
 ];
 

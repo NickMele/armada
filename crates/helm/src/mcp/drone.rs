@@ -21,7 +21,7 @@
 //! else's verdict rests on.
 
 use armada_core::error::{ArmadaError, ErrClass};
-use armada_core::fleet::Verdict;
+use armada_core::fleet::{Subject, Verdict};
 use armada_manifest::clock::SystemClock;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ServerCapabilities, ServerInfo};
@@ -34,7 +34,17 @@ use crate::verbs::fleet;
 
 /// Every tool a Drone is offered. **`fleet.spawn` is not among them and there is
 /// no path from here to it.**
-pub const TOOLS: [&str; 3] = ["fleet.report", "fleet.ask_human", "fleet.verdict"];
+///
+/// **`fleet.propose` is the fourth, added by `docs/reserved/008`**, and it is
+/// not a widening of what a Drone may *do*: it writes an inbox entry and changes
+/// nothing. The rule the list is built on is unchanged — a Drone acts on its own
+/// Job and can name no other.
+pub const TOOLS: [&str; 4] = [
+    "fleet.report",
+    "fleet.ask_human",
+    "fleet.propose",
+    "fleet.verdict",
+];
 
 /// How long `fleet.ask_human` waits before answering "still open".
 ///
@@ -101,6 +111,16 @@ pub struct AskArgs {
     /// The question, in full. It is what a person reads in the inbox, out of
     /// context and possibly hours later.
     pub question: String,
+}
+
+/// `fleet.propose`.
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+pub struct ProposeArgs {
+    /// What the proposal is about: `manifest` or `guild`.
+    pub subject: String,
+    /// What you would change, and what you saw that says so. It is read out of
+    /// context and possibly days later, so it has to stand on its own.
+    pub proposal: String,
 }
 
 /// `fleet.verdict`.
@@ -187,6 +207,49 @@ impl Toolbelt {
         .await
     }
 
+    /// Propose a change to the manifest or the guild, and carry on.
+    ///
+    /// **The description is the load-bearing half of `docs/reserved/008`.**
+    /// [`armada_core::skill::BODY`] tells a Drone that noticing is part of the
+    /// job; this is what it reads at the moment it reaches for a tool, so it has
+    /// to say the two things that decide between this and `fleet.ask_human`: it
+    /// does not wait, and it changes nothing.
+    #[tool(
+        name = "fleet.propose",
+        description = "Raise a change you think should be made to this repository's armada.yml \
+                       (subject `manifest`) or to the person's own guild (subject `guild`), \
+                       because you learned something it does not say. Do not edit armada.yml \
+                       yourself. It files one inbox entry with an id and returns at once — it \
+                       does not wait for an answer and you are not blocked on it, which is what \
+                       makes it different from fleet.ask_human. A proposal is not a change: \
+                       nothing happens until the person decides."
+    )]
+    async fn fleet_propose(&self, Parameters(args): Parameters<ProposeArgs>) -> CallToolResult {
+        let world = self.world.clone();
+        let job = match self.job() {
+            Ok(job) => job,
+            Err(error) => return super::answer::from("fleet propose", Err(error)),
+        };
+        let subject = match Subject::parse(&args.subject) {
+            Some(subject) => subject,
+            None => {
+                return super::answer::from(
+                    "fleet propose",
+                    Err(ArmadaError {
+                        class: ErrClass::BadInvocation,
+                        r#where: "subject".to_string(),
+                        message: format!("`{}` is not something to propose about", args.subject),
+                        next_action: Some("one of manifest, guild".to_string()),
+                    }),
+                )
+            }
+        };
+        run("fleet propose", move || {
+            fleet::propose(&SystemClock, &world.place(), &job, subject, &args.proposal)
+        })
+        .await
+    }
+
     /// Emit a step verdict.
     #[tool(
         name = "fleet.verdict",
@@ -244,8 +307,10 @@ impl ServerHandler for Toolbelt {
             ))
             .with_instructions(
                 "Armada's Drone toolbelt. You may report progress, ask the human a question, \
-                 and record a step verdict — all against your own Job and no other. You cannot \
-                 spawn work; if the task needs decomposing, say so with fleet.ask_human.",
+                 propose a change to the manifest or the guild, and record a step verdict — all \
+                 against your own Job and no other. You cannot spawn work; if the task needs \
+                 decomposing, say so with fleet.ask_human. Do not edit armada.yml to match \
+                 something you learned: propose it.",
             )
     }
 }
