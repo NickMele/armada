@@ -8,7 +8,7 @@ raised: a Job driven end to end, 2026-08-16
 
 # 024 — The relay does not fire under `--print`
 
-**The claim [`020`](020-the-tui-decided.md) §1 rests on is false for a Drone.** That section
+**The claim [`020`](020-the-tui-decided.md)'s first decision rests on is false for a Drone.** That section
 decided the Drone's `Stop` hook ticks the Job, and argued it from
 [`PLAN.md`](../PLAN.md) §15.3 — *"hooks are the spine — an agent can forget to report progress,
 but it cannot forget to stop."* It can, if nothing asks it to.
@@ -52,7 +52,7 @@ Two things follow, and the second is the sharper one:
 **Which of two causes this is has not been established, and the fix differs.** Either
 `--settings` hooks are not applied to a `--print` session at all, or `Stop` is not an event a
 `--print` session emits — it ends rather than stopping. The first is a wiring bug; the second
-means the whole mechanism needs a different event, and `020` §1's *"the exchange ending **is**
+means the whole mechanism needs a different event, and that decision's *"the exchange ending **is**
 the event"* is the sentence that would be wrong.
 
 Answering it costs one probe session and no guesswork: register a `Stop` hook that touches a
