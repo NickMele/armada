@@ -1,5 +1,5 @@
-  STATUS   ITEM               DETAIL
-  REFUSED  workflows/bug.yml  `steps` is a required property
+  ITEM               STATUS   DETAIL
+  workflows/bug.yml  REFUSED  `steps` is a required property
 
 FAILED  ~/.armada/guild, not committed, git still holds the version before it
 error: workflows/bug.yml does not validate: `steps` is a required property

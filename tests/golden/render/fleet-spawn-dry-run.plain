@@ -1,7 +1,7 @@
-  STATUS      STEP      DETAIL                           TIME
-  CLASSIFIED  workflow  feature, confidence 0.91         0.8s
-  WOULD       worktree  ~/.armada/workspaces/rate-limit     -
-  WOULD       ports     -                                   -
-  WOULD       drone     plan step                           -
+  STEP      STATUS      DETAIL                           TIME
+  workflow  CLASSIFIED  feature, confidence 0.91         0.8s
+  worktree  WOULD       ~/.armada/workspaces/rate-limit     -
+  ports     WOULD       -                                   -
+  drone     WOULD       plan step                           -
 
 SKIPPED  rate-limit, dry run, nothing was spawned

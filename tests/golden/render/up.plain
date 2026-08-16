@@ -1,16 +1,16 @@
 armada  3d9cc7ba                                                 ports 5460-5469
 
-  STATUS   SERVICE   DETAIL                                     TIME
-  UP       postgres  tcp pg (5460)                              1.9s
-  TIMEOUT  web       the ready-check did not pass within 60s  1m 00s
-           .armada/logs/web.log
+  SERVICE   STATUS   DETAIL                                     TIME
+  postgres  UP       tcp pg (5460)                              1.9s
+  web       TIMEOUT  the ready-check did not pass within 60s  1m 00s
+            .armada/logs/web.log
 
-  STATUS  PORT  DETAIL
-  UP      pg    5460
-  DOWN    web   5461
+  PORT  STATUS  DETAIL
+  pg    UP      5460
+  web   DOWN    5461
 
-  STATUS  RESOURCE  DETAIL
-  KEPT    ports     5460-5469
+  RESOURCE  STATUS  DETAIL
+  ports     KEPT    5460-5469
 
 PARTIAL  2 services, 1 up
 error: 1 of 2 services did not succeed

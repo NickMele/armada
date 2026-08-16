@@ -1,10 +1,10 @@
-  [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mITEM[0m                            [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;61;220;132mADDED[0m      templates.yml                   [38;2;156;163;175mArmada's[0m
-  [38;2;255;180;84mCHANGED[0m    subagents/helm.md               [38;2;156;163;175moperating knowledge[0m
-  [38;2;156;163;175mUNCHANGED[0m  workflows/workflow.schema.json  [38;2;156;163;175malready what Armada ships[0m
-  [38;2;156;163;175mUNCHANGED[0m  skills/onboard-repo/SKILL.md    [38;2;156;163;175moffered; --with-skills takes it[0m
-  [38;2;156;163;175mUNCHANGED[0m  voice.md                        [38;2;156;163;175myours — no release ever updates it[0m
-  [38;2;156;163;175mUNCHANGED[0m  expectations.md                 [38;2;156;163;175myours — no release ever updates it[0m
-  [38;2;156;163;175mUNCHANGED[0m  how-i-work.md                   [38;2;156;163;175myours — no release ever updates it[0m
+  [1m[38;2;156;163;175mITEM[0m                            [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mDETAIL[0m
+  templates.yml                   [38;2;61;220;132mADDED[0m      [38;2;156;163;175mArmada's[0m
+  subagents/helm.md               [38;2;255;180;84mCHANGED[0m    [38;2;156;163;175moperating knowledge[0m
+  workflows/workflow.schema.json  [38;2;156;163;175mUNCHANGED[0m  [38;2;156;163;175malready what Armada ships[0m
+  skills/onboard-repo/SKILL.md    [38;2;156;163;175mUNCHANGED[0m  [38;2;156;163;175moffered; --with-skills takes it[0m
+  voice.md                        [38;2;156;163;175mUNCHANGED[0m  [38;2;156;163;175myours — no release ever updates it[0m
+  expectations.md                 [38;2;156;163;175mUNCHANGED[0m  [38;2;156;163;175myours — no release ever updates it[0m
+  how-i-work.md                   [38;2;156;163;175mUNCHANGED[0m  [38;2;156;163;175myours — no release ever updates it[0m
 
 [1m[38;2;61;220;132mREADY[0m  [38;2;156;163;175m~/.armada/guild · no stamp -> 0.1.0 8f3a1c0d9e21 · base adopted from c401123abcde[0m

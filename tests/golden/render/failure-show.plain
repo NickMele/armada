@@ -1,15 +1,15 @@
-  STATUS  ID        DETAIL                                                  TIME
-  OPEN    a91f0c37  environment x4, `armada manifest clean` could not be …    9m
+  ID        STATUS  DETAIL                                                  TIME
+  a91f0c37  OPEN    environment x4, `armada manifest clean` could not be …    9m
 
 error: `armada manifest clean` could not be found to run
   where: ~/.cargo/bin/armada
   class: environment
   next:  reinstall armada, then retry unchanged
 
-  STATUS  FACT       DETAIL
-  SEEN    count      4 times, 2026-08-09T13:02:11Z to 2026-08-09T14:58:11Z
-  TYPED   command    armada bridge
-  IN      directory  ~/code/orders
+  FACT   STATUS     DETAIL
+  count  SEEN       4 times, 2026-08-09T13:02:11Z to 2026-08-09T14:58:11Z
+  TYPED  command    armada bridge
+  IN     directory  ~/code/orders
 
   the task a Job would be given:
     Armada failed with this, and the failure was recorded as `a91f0c37`:

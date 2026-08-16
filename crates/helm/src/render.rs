@@ -195,8 +195,8 @@ fn reported(envelope: &Envelope<ReportData>, style: Style, width: usize) -> Stri
     let table = Table::new(columns("job", "detail", false))
         .indent(2)
         .row(vec![
-            token("noted", Role::BeaconGreen),
             Cell::painted(data.job.clone(), Role::NavalBlue),
+            token("noted", Role::BeaconGreen),
             detail_cell(style, Some(&data.step)),
         ]);
     let mut out = table.render(style, width);
@@ -215,6 +215,7 @@ fn asked(envelope: &Envelope<AskData>, style: Style, width: usize) -> String {
     let table = Table::new(columns("job", "detail", false))
         .indent(2)
         .row(vec![
+            Cell::painted(data.job.clone(), Role::NavalBlue),
             token(
                 match data.answered {
                     Some(_) => "answered",
@@ -225,7 +226,6 @@ fn asked(envelope: &Envelope<AskData>, style: Style, width: usize) -> String {
                     None => Role::FlareOrange,
                 },
             ),
-            Cell::painted(data.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&data.question)),
         ]);
 
@@ -260,8 +260,8 @@ fn proposed(envelope: &Envelope<ProposeData>, style: Style, width: usize) -> Str
     let table = Table::new(columns("job", "detail", false))
         .indent(2)
         .row(vec![
-            token(&data.subject, Role::FlareOrange),
             Cell::painted(data.job.clone(), Role::NavalBlue),
+            token(&data.subject, Role::FlareOrange),
             detail_cell(style, Some(&data.proposal)),
         ]);
 
@@ -288,6 +288,7 @@ fn stepped(envelope: &Envelope<VerdictData>, style: Style, width: usize) -> Stri
     let mut table = Table::new(columns("scope", "detail", false)).indent(2);
     for piece in &data.evidence {
         table = table.row(vec![
+            Cell::painted(piece.scope.clone(), Role::NavalBlue),
             token(
                 &piece.kind,
                 match piece.exit {
@@ -295,7 +296,6 @@ fn stepped(envelope: &Envelope<VerdictData>, style: Style, width: usize) -> Stri
                     _ => Role::DistressRed,
                 },
             ),
-            Cell::painted(piece.scope.clone(), Role::NavalBlue),
             detail_cell(style, Some(&format!("exit {}", piece.exit))),
         ]);
     }
@@ -334,6 +334,7 @@ fn ticked(envelope: &Envelope<TickData>, style: Style, width: usize) -> String {
     let mut table = Table::new(columns("job", "detail", false)).indent(2);
     for row in &data.results {
         table = table.row(vec![
+            Cell::painted(row.job.clone(), Role::NavalBlue),
             token(
                 &row.did,
                 match row.did.as_str() {
@@ -343,7 +344,6 @@ fn ticked(envelope: &Envelope<TickData>, style: Style, width: usize) -> String {
                     _ => Role::SteelGrey,
                 },
             ),
-            Cell::painted(row.job.clone(), Role::NavalBlue),
             detail_cell(
                 style,
                 Some(&match &row.predicate {
@@ -551,14 +551,14 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
     // Past tense even under `--dry-run`: the workflow really is settled, either
     // by a call that really was made or by the `--workflow` you passed.
     table = table.row(vec![
-        token(progress::SpawnStep::Classify.done(), role),
         Cell::plain(progress::SpawnStep::Classify.id()),
+        token(progress::SpawnStep::Classify.done(), role),
         detail_cell(style, Some(&classified)),
         time_cell(data.classify_ms),
     ]);
     table = table.row(vec![
-        done_or_would(dry, progress::SpawnStep::Worktree.done(), Role::BeaconGreen),
         Cell::plain(progress::SpawnStep::Worktree.id()),
+        done_or_would(dry, progress::SpawnStep::Worktree.done(), Role::BeaconGreen),
         detail_cell(style, Some(&data.worktree)),
         // Nothing was prepared, so no interval is reported. `0.0s` next to
         // `WOULD` is a measurement of work that did not happen.
@@ -568,6 +568,7 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         }),
     ]);
     table = table.row(vec![
+        Cell::plain(progress::SpawnStep::Ports.id()),
         done_or_would(
             dry,
             progress::SpawnStep::Ports.done(),
@@ -576,7 +577,6 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
                 None => Role::SteelGrey,
             },
         ),
-        Cell::plain(progress::SpawnStep::Ports.id()),
         detail_cell(
             style,
             data.port_block
@@ -586,8 +586,8 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         time_cell(None),
     ]);
     table = table.row(vec![
-        done_or_would(dry, progress::SpawnStep::Drone.done(), Role::BeaconGreen),
         Cell::plain(progress::SpawnStep::Drone.id()),
+        done_or_would(dry, progress::SpawnStep::Drone.done(), Role::BeaconGreen),
         detail_cell(
             style,
             Some(&match dry {
@@ -958,8 +958,8 @@ fn bridge_columns(
         // colour**, for the reason `ask/select.rs` gives: a row told apart only
         // by being amber is a row a monochrome terminal cannot tell apart.
         Column::fixed(""),
-        Column::fixed("status"),
         Column::fixed("job"),
+        Column::fixed("status"),
         // **The id, because a generated handle is not readable.** `now-that` is
         // what naming two significant words out of a sentence produces, and it
         // is the id a person checks a row against — the same eight characters
@@ -1007,8 +1007,8 @@ fn bridge_columns(
                 true => Cell::painted(style.caret(), Role::SignalAmber),
                 false => Cell::empty(),
             },
-            job_status(row),
             Cell::painted(row.name.clone(), Role::NavalBlue),
+            job_status(row),
             // **Muted, because it is the fallback and not the handle** — the
             // same words and the same colour `fleet ls` uses for it.
             Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
@@ -1336,6 +1336,7 @@ fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
 
     for row in &data.results {
         table = table.row(vec![
+            Cell::painted(row.what.clone(), Role::NavalBlue),
             token(
                 row.state.word(),
                 match row.state {
@@ -1343,7 +1344,6 @@ fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
                     Wiring::Unchanged => Role::SteelGrey,
                 },
             ),
-            Cell::painted(row.what.clone(), Role::NavalBlue),
             detail_cell(style, Some(&row.at)),
         ]);
     }
@@ -1627,8 +1627,8 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
     // ordinary case and the two disagreeing is the whole diagnosis; a row that
     // appeared only on disagreement would teach nobody where to look.
     table = table.row(vec![
-        token("recorded", Role::SteelGrey),
         Cell::muted("state"),
+        token("recorded", Role::SteelGrey),
         detail_cell(
             style,
             Some(&format!(
@@ -1640,8 +1640,8 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
 
     table = table.row(match (data.drone_pgid, data.drone_alive) {
         (Some(pgid), true) => vec![
-            token("alive", Role::BeaconGreen),
             Cell::muted("drone"),
+            token("alive", Role::BeaconGreen),
             detail_cell(style, Some(&format!("process group {pgid}"))),
         ],
         // **Red only while something still expects it to be running.** A Drone
@@ -1649,6 +1649,7 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
         // and colouring that as a fault would make the colour mean nothing on
         // the one row where it has to mean something.
         (Some(pgid), false) => vec![
+            Cell::muted("drone"),
             token(
                 "gone",
                 match data.recorded_state.is_over() {
@@ -1656,15 +1657,14 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
                     false => Role::DistressRed,
                 },
             ),
-            Cell::muted("drone"),
             detail_cell(
                 style,
                 Some(&format!("process group {pgid} is not Armada's any more")),
             ),
         ],
         (None, _) => vec![
-            token("never", Role::SteelGrey),
             Cell::muted("drone"),
+            token("never", Role::SteelGrey),
             detail_cell(style, Some("no Drone was ever started")),
         ],
     });
@@ -1692,16 +1692,16 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
             said.push_str(", which is yours to answer");
         }
         table = table.row(vec![
-            token("gated", Role::SteelGrey),
             Cell::muted("step"),
+            token("gated", Role::SteelGrey),
             detail_cell(style, Some(&said)),
         ]);
     }
 
     table = table
         .row(vec![
-            token("spent", Role::SteelGrey),
             Cell::muted("budget"),
+            token("spent", Role::SteelGrey),
             detail_cell(
                 style,
                 // **Turns and exchanges are different units and are no longer
@@ -1719,8 +1719,8 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
             ),
         ])
         .row(vec![
-            token("left", Role::SteelGrey),
             Cell::muted("budget"),
+            token("left", Role::SteelGrey),
             detail_cell(
                 style,
                 // **No token figure, because there is no token ceiling.** This
@@ -1739,8 +1739,8 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
             ),
         ])
         .row(vec![
-            token("since", Role::SteelGrey),
             Cell::muted("started"),
+            token("since", Role::SteelGrey),
             detail_cell(style, Some(&data.created_at)),
         ]);
 
@@ -1749,25 +1749,25 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
     // gone is holding all of them with nothing working on them.
     if let Some(block) = data.port_block {
         table = table.row(vec![
-            token("held", Role::RadarCyan),
             Cell::muted("ports"),
+            token("held", Role::RadarCyan),
             detail_cell(style, Some(&style.span(block.from, block.to))),
         ]);
     }
     table
         .row(vec![
-            token("held", Role::RadarCyan),
             Cell::muted("worktree"),
+            token("held", Role::RadarCyan),
             detail_cell(style, Some(&data.worktree)),
         ])
         .row(vec![
-            token("held", Role::RadarCyan),
             Cell::muted("branch"),
+            token("held", Role::RadarCyan),
             detail_cell(style, Some(&data.branch)),
         ])
         .row(vec![
-            token("from", Role::SteelGrey),
             Cell::muted("repo"),
+            token("from", Role::SteelGrey),
             detail_cell(style, Some(&data.repo)),
         ])
 }
@@ -2027,6 +2027,7 @@ fn kill(envelope: &Envelope<KillData>, style: Style, width: usize) -> String {
 
     for killed in &data.results {
         table = table.row(vec![
+            Cell::painted(killed.job.clone(), Role::NavalBlue),
             token(
                 "cleaned",
                 match killed.error {
@@ -2034,7 +2035,6 @@ fn kill(envelope: &Envelope<KillData>, style: Style, width: usize) -> String {
                     None => Role::BeaconGreen,
                 },
             ),
-            Cell::painted(killed.job.clone(), Role::NavalBlue),
             detail_cell(style, Some(&released(style, killed))),
             time_cell(None),
         ]);
@@ -2186,8 +2186,8 @@ fn answer(envelope: &Envelope<AnswerData>, style: Style, width: usize) -> String
     let table = Table::new(columns("job", "detail", true))
         .indent(2)
         .row(vec![
-            token("answered", Role::BeaconGreen),
             Cell::painted(data.job.clone(), Role::NavalBlue),
+            token("answered", Role::BeaconGreen),
             detail_cell(style, Some(&data.answer)),
             // **No time, because nothing was waited for.** An answer starts a
             // turn and returns; what it costs lands in the transcript and is
@@ -2219,8 +2219,8 @@ fn pause(envelope: &Envelope<PauseData>, style: Style, width: usize) -> String {
     let table = Table::new(columns("job", "detail", true))
         .indent(2)
         .row(vec![
-            token("paused", Role::SignalAmber),
             Cell::painted(data.job.clone(), Role::NavalBlue),
+            token("paused", Role::SignalAmber),
             detail_cell(
                 style,
                 Some(&match data.stopped {
@@ -2260,8 +2260,8 @@ fn resume(envelope: &Envelope<ResumeData>, style: Style, width: usize) -> String
     let table = Table::new(columns("job", "detail", true))
         .indent(2)
         .row(vec![
-            token("resumed", Role::BeaconGreen),
             Cell::painted(data.job.clone(), Role::NavalBlue),
+            token("resumed", Role::BeaconGreen),
             detail_cell(
                 style,
                 Some(&match data.pgid {
@@ -2662,8 +2662,8 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
     let identity = Table::new(columns("id", "detail", true))
         .indent(2)
         .row(vec![
-            failure_state(entry.state),
             Cell::painted(entry.id.clone(), Role::NavalBlue),
+            failure_state(entry.state),
             // **The row from the listing, unchanged.** The table put the reader
             // here; opening with the same row in the same shape is what makes
             // the rest of the page read as *more about this* rather than as a
@@ -2714,8 +2714,8 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
 
     let mut facts = Table::new(columns("fact", "detail", false)).indent(2);
     facts = facts.row(vec![
-        token("seen", Role::SteelGrey),
         Cell::muted("count"),
+        token("seen", Role::SteelGrey),
         detail_cell(
             style,
             Some(&match entry.count {
@@ -2779,6 +2779,7 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
             let newest = diagnostics.recent.first().map_or(0, |run| run.at_ms);
             for run in &diagnostics.recent {
                 runs = runs.row(vec![
+                    Cell::painted(run.verb.clone(), Role::NavalBlue),
                     token(
                         run.word(),
                         match run.exit {
@@ -2786,7 +2787,6 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
                             _ => Role::FlareOrange,
                         },
                     ),
-                    Cell::painted(run.verb.clone(), Role::NavalBlue),
                     detail_cell(style, Some(&run.argv)),
                     Cell::muted(format::elapsed(newest.saturating_sub(run.at_ms))),
                 ]);
@@ -2908,8 +2908,8 @@ fn machine_table(rows: &[Finding], style: Style) -> Table {
     let mut table = Table::new(columns("check", "detail", true)).indent(2);
     for row in rows {
         table = table.row(vec![
-            token(row.status.word(), Role::for_health(row.status)),
             Cell::plain(row.check.clone()),
+            token(row.status.word(), Role::for_health(row.status)),
             detail_cell(style, Some(row.detail.as_str())),
             time_cell(None),
         ]);
@@ -3507,8 +3507,8 @@ fn settings(envelope: &Envelope<SettingsData>, style: Style, width: usize) -> St
     let mut table = Table::new(columns("name", "detail", true)).indent(2);
     for row in &data.settings {
         table = table.row(vec![
-            token(row.locality.word(), Role::for_locality(row.locality)),
             Cell::plain(row.name.clone()),
+            token(row.locality.word(), Role::for_locality(row.locality)),
             detail_cell(style, Some(&format!("{} — {}", row.value, row.at))),
             time_cell(None),
         ]);
@@ -3556,8 +3556,8 @@ fn guild_sync(envelope: &Envelope<GuildSyncData>, style: Style, width: usize) ->
     let mut table = Table::new(columns("item", "detail", true)).indent(2);
     for row in &data.results {
         table = table.row(vec![
-            token(row.status.word(), Role::for_sync(row.status)),
             Cell::plain(row.item.clone()),
+            token(row.status.word(), Role::for_sync(row.status)),
             detail_cell(style, Some(row.detail.as_str())),
             time_cell(None),
         ]);
@@ -3610,8 +3610,8 @@ fn guild_upgrade(envelope: &Envelope<GuildUpgradeData>, style: Style, width: usi
     let mut table = Table::new(columns("item", "detail", true)).indent(2);
     for row in &data.results {
         table = table.row(vec![
-            token(row.status.word(), Role::for_sync(row.status)),
             Cell::plain(row.item.clone()),
+            token(row.status.word(), Role::for_sync(row.status)),
             detail_cell(style, Some(row.detail.as_str())),
             time_cell(None),
         ]);
@@ -3713,8 +3713,8 @@ fn guild_project(envelope: &Envelope<Projection>, style: Style, width: usize) ->
     let mut table = Table::new(columns("item", "detail", true)).indent(2);
     for row in &data.results {
         table = table.row(vec![
-            token(row.status.word(), Role::for_sync(row.status)),
             Cell::plain(row.item.clone()),
+            token(row.status.word(), Role::for_sync(row.status)),
             detail_cell(style, Some(row.detail.as_str())),
             time_cell(None),
         ]);
@@ -3750,8 +3750,8 @@ fn guild_init(envelope: &Envelope<GuildInitData>, style: Style, width: usize) ->
     let data = &envelope.data;
     let mut table = Table::new(columns("step", "detail", true)).indent(2);
     table = table.row(vec![
-        token("imported", Role::BeaconGreen),
         Cell::plain("~/.claude/"),
+        token("imported", Role::BeaconGreen),
         detail_cell(style, Some(&data.imported.join(", "))),
         time_cell(None),
     ]);
@@ -3878,8 +3878,8 @@ fn guild_list(envelope: &Envelope<GuildListData>, style: Style, width: usize) ->
     let mut table = Table::new(columns("item", "detail", true)).indent(2);
     for row in &data.items {
         table = table.row(vec![
-            token(&row.kind, kind_role(&row.kind)),
             Cell::plain(row.name.clone()),
+            token(&row.kind, kind_role(&row.kind)),
             detail_cell(style, Some(row.detail.as_str())),
             time_cell(None),
         ]);
@@ -3954,8 +3954,8 @@ fn guild_change(envelope: &Envelope<GuildChangeData>, style: Style, width: usize
     let mut table = Table::new(columns("item", "detail", true))
         .indent(2)
         .row(vec![
-            token(data.outcome.word(), Role::for_guild_change(data.outcome)),
             Cell::plain(data.item.path.clone()),
+            token(data.outcome.word(), Role::for_guild_change(data.outcome)),
             detail_cell(style, Some(data.reading.as_str())),
             time_cell(None),
         ]);
@@ -4351,8 +4351,8 @@ fn verdict_cell(reached: progress::Verdict) -> Cell {
 /// The four columns, named for this verb.
 fn columns(name: &str, detail: &str, time: bool) -> Vec<Column> {
     let mut columns = vec![
-        Column::fixed("status"),
         Column::fixed(name),
+        Column::fixed("status"),
         Column::flexible(detail),
     ];
     if time {
@@ -4474,8 +4474,8 @@ fn init(envelope: &Envelope<InitData>, style: Style, width: usize) -> String {
     let mut components = Table::new(columns("component", "detail", true)).indent(2);
     for row in &data.results {
         components = components.row(vec![
-            verdict(row.status),
             Cell::plain(row.id.clone()),
+            verdict(row.status),
             detail_cell(style, row.error.as_ref().map(|e| e.message.as_str())),
             time_cell(row.duration_ms),
         ]);
@@ -4488,8 +4488,8 @@ fn init(envelope: &Envelope<InitData>, style: Style, width: usize) -> String {
     let mut ports = Table::new(columns("port", "detail", false)).indent(2);
     for (name, port) in &data.ports {
         ports = ports.row(vec![
-            token("claimed", Role::BeaconGreen),
             Cell::plain(name.clone()),
+            token("claimed", Role::BeaconGreen),
             Cell::painted(port.to_string(), Role::NavalBlue),
         ]);
     }
@@ -4519,15 +4519,15 @@ fn init_dry(envelope: &Envelope<InitDryRun>, style: Style, width: usize) -> Stri
     let mut table = Table::new(columns("resource", "detail", false)).indent(2);
     if let Some(block) = data.would_claim {
         table = table.row(vec![
-            token("would", Role::FlareOrange),
             Cell::plain("ports"),
+            token("would", Role::FlareOrange),
             Cell::painted(style.span(block.from, block.to), Role::NavalBlue),
         ]);
     }
     for step in &data.would_run {
         table = table.row(vec![
-            token("would", Role::FlareOrange),
             Cell::plain("setup"),
+            token("would", Role::FlareOrange),
             Cell::muted(step.clone()),
         ]);
     }
@@ -4593,8 +4593,8 @@ fn services(envelope: &Envelope<ServicesData>, style: Style, width: usize, noun:
             .filter(|_| !matches!(row.status, Status::Up | Status::Down));
         table = table.row_with_note(
             vec![
-                verdict(row.status),
                 Cell::plain(row.id.clone()),
+                verdict(row.status),
                 detail_cell(style, detail.as_deref()),
                 time_cell(row.duration_ms),
             ],
@@ -4610,8 +4610,8 @@ fn services(envelope: &Envelope<ServicesData>, style: Style, width: usize, noun:
     for row in &data.results {
         for (name, report) in &row.ports {
             ports = ports.row(vec![
-                token(port_word(report.state), Role::for_port(report.state)),
                 Cell::plain(name.clone()),
+                token(port_word(report.state), Role::for_port(report.state)),
                 Cell::painted(report.port.to_string(), Role::NavalBlue),
             ]);
         }
@@ -4630,8 +4630,8 @@ fn services(envelope: &Envelope<ServicesData>, style: Style, width: usize, noun:
         let kept = Table::new(columns("resource", "detail", false))
             .indent(2)
             .row(vec![
-                token("kept", Role::BeaconGreen),
                 Cell::plain("ports"),
+                token("kept", Role::BeaconGreen),
                 Cell::painted(style.span(block.from, block.to), Role::NavalBlue),
             ]);
         out.push_str(&kept.render(style, width));
@@ -4676,8 +4676,8 @@ fn up_dry(envelope: &Envelope<UpDryRun>, style: Style, width: usize) -> String {
             // name lands in the NAME column rather than at the head of DETAIL.
             let (service, detail) = line.split_once(": ").unwrap_or(("", line.as_str()));
             table = table.row(vec![
-                token(word, Role::FlareOrange),
                 Cell::plain(service),
+                token(word, Role::FlareOrange),
                 Cell::muted(detail.trim()),
             ]);
         }
@@ -4760,11 +4760,11 @@ fn workspace_block(
     let mut components = Table::new(columns("port", "detail", false)).indent(2);
     for (name, report) in &row.ports {
         components = components.row(vec![
+            Cell::plain(name.clone()),
             // **Probed at report time, never remembered** (PLAN.md §3.1), and
             // spoken as the state of the component rather than of the socket:
             // `UP` is what a reader is asking about.
             token(port_word(report.state), Role::for_port(report.state)),
-            Cell::plain(name.clone()),
             Cell::painted(report.port.to_string(), Role::NavalBlue),
         ]);
     }
@@ -4782,12 +4782,12 @@ fn workspace_block(
     let mut active = Table::new(columns("run", "detail", false)).indent(2);
     for run in &row.runs {
         active = active.row(vec![
+            Cell::plain(run.run_id.clone()),
             // The envelope's own `Status`, unchanged: `RUNNING` for a group that
             // is provably still the run, `DEAD` for a run that stopped without
             // deciding. `check --status` prints the same two words for the same
             // two facts, which is the point of not inventing a third.
             verdict(run.status),
-            Cell::plain(run.run_id.clone()),
             // The log, because a `DEAD` run's only explanation is in it and a
             // reader who has to reconstruct the path has to know the layout.
             Cell::muted(format!("pgid {} · {}", run.pgid, run.log)),
@@ -4953,8 +4953,8 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
             .filter(|_| !matches!(row.status, Status::Pass | Status::Skipped));
         table = table.row_with_note(
             vec![
-                verdict(row.status),
                 Cell::plain(row.id.clone()),
+                verdict(row.status),
                 detail_cell(style, detail.as_deref()),
                 time_cell(row.duration_ms),
             ],
@@ -4973,8 +4973,8 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
         let reaped = Table::new(columns("reaped", "detail", false))
             .indent(2)
             .row(vec![
-                token("reaped", Role::SteelGrey),
                 Cell::plain(format::count(data.reaped_runs.len(), "run")),
+                token("reaped", Role::SteelGrey),
                 Cell::muted(ids(&data.reaped_runs, KEEP)),
             ]);
         out.push_str(&reaped.render(style, width));
@@ -4993,8 +4993,8 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
         let group = Table::new(columns("detached", "detail", false))
             .indent(2)
             .row(vec![
-                token(word, role),
                 Cell::plain(format!("pgid {}", detached.pgid)),
+                token(word, role),
                 Cell::muted(detached.log.clone()),
             ]);
         out.push_str(&group.render(style, width));
@@ -5085,8 +5085,8 @@ fn check_dry(envelope: &Envelope<CheckDryRun>, style: Style, width: usize) -> St
     let mut table = Table::new(columns("check", "detail", false)).indent(2);
     for line in &data.would_run {
         table = table.row(vec![
-            token("would", Role::FlareOrange),
             Cell::plain(line.clone()),
+            token("would", Role::FlareOrange),
             Cell::muted(style.nothing()),
         ]);
     }
@@ -5136,8 +5136,8 @@ fn clean(envelope: &Envelope<CleanData>, style: Style, width: usize) -> String {
     for row in &data.results {
         let released = row.released.as_ref().map(tally).unwrap_or_default();
         table = table.row(vec![
-            verdict(row.status),
             Cell::plain(row.id.clone()),
+            verdict(row.status),
             detail_cell(style, released.as_deref()),
         ]);
     }
@@ -5226,8 +5226,8 @@ fn prune(envelope: &Envelope<PruneData>, style: Style, width: usize) -> String {
             detail.push_str(&format!(" — {note}"));
         }
         table = table.row(vec![
-            verdict(row.status),
             Cell::plain(row.reference.clone()),
+            verdict(row.status),
             detail_cell(style, Some(detail.as_str())),
         ]);
     }
@@ -5249,8 +5249,8 @@ fn prune(envelope: &Envelope<PruneData>, style: Style, width: usize) -> String {
             .headerless();
         for note in &notes {
             aside = aside.row(vec![
-                token("note", Role::FlareOrange),
                 Cell::nothing(),
+                token("note", Role::FlareOrange),
                 Cell::muted(note.clone()),
             ]);
         }
@@ -5287,8 +5287,8 @@ fn clean_dry(envelope: &Envelope<CleanDryRun>, style: Style, width: usize) -> St
     ] {
         for line in lines {
             table = table.row(vec![
-                token("would", Role::FlareOrange),
                 Cell::plain(word),
+                token("would", Role::FlareOrange),
                 Cell::muted(line.clone()),
             ]);
         }
@@ -5347,8 +5347,8 @@ fn scan(envelope: &Envelope<ScanData>, style: Style, width: usize) -> String {
         let mut found = data.results.iter().filter(|row| row.id == kind).peekable();
         if found.peek().is_none() {
             kinds = kinds.row(vec![
-                token("absent", Role::SteelGrey),
                 Cell::plain(kind),
+                token("absent", Role::SteelGrey),
                 detail_cell(style, None),
             ]);
             continue;
@@ -5737,8 +5737,8 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
             .map(|e| e.message.clone())
             .or_else(|| row.reason.clone());
         table = table.row(vec![
-            verdict(row.status),
             Cell::plain(row.id.clone()),
+            verdict(row.status),
             detail_cell(style, detail.as_deref()),
             time_cell(row.duration_ms),
         ]);
@@ -5748,8 +5748,8 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
     // established either way — so it is derived from `data.unchecked` and
     // spelled lowercase, exactly as `claimed` and `owns` are.
     table = table.row(vec![
-        token("unchecked", Role::FlareOrange),
         Cell::plain("shell entries"),
+        token("unchecked", Role::FlareOrange),
         Cell::muted(format!("{}, no argv[0] to resolve", data.unchecked)),
         time_cell(None),
     ]);
@@ -5771,8 +5771,8 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
                 .map(|e| e.message.clone())
                 .or_else(|| row.reason.clone());
             suite = suite.row(vec![
-                verdict(row.status),
                 Cell::plain(row.id.clone()),
+                verdict(row.status),
                 detail_cell(style, detail.as_deref()),
                 time_cell(row.duration_ms),
             ]);
@@ -5834,8 +5834,8 @@ fn skills(envelope: &Envelope<SkillsData>, style: Style, width: usize) -> String
     let mut table = Table::new(columns("skill", "detail", false)).indent(2);
     for row in &data.results {
         table = table.row(vec![
-            token("declared", Role::BeaconGreen),
             Cell::plain(row.id.clone()),
+            token("declared", Role::BeaconGreen),
             detail_cell(style, row.reason.as_deref()),
         ]);
     }
@@ -5850,23 +5850,23 @@ fn skills(envelope: &Envelope<SkillsData>, style: Style, width: usize) -> String
         let mut grants = Table::new(columns("name", "detail", false)).indent(2);
         for granted in &skill.uses {
             grants = grants.row(vec![
-                token("grants", Role::RadarCyan),
                 Cell::plain(granted.name.clone()),
+                token("grants", Role::RadarCyan),
                 detail_cell(style, Some(granted.cmd.as_str())),
             ]);
         }
         for scope in &skill.verify {
             grants = grants.row(vec![
-                token("verifies", Role::BeaconGreen),
                 Cell::plain("check"),
+                token("verifies", Role::BeaconGreen),
                 Cell::muted(scope.clone()),
             ]);
         }
         grants = grants.row(vec![
             // **`reads` and never `holds`.** Armada holds the path and reads
             // nothing; the row says what the *skill's* reader will open.
-            token("reads", Role::SteelGrey),
             Cell::plain("doc"),
+            token("reads", Role::SteelGrey),
             Cell::muted(skill.doc.clone()),
         ]);
         for glob in &skill.touches {
@@ -5874,8 +5874,8 @@ fn skills(envelope: &Envelope<SkillsData>, style: Style, width: usize) -> String
                 // Advisory, and the word says so: `touches:` feeds the scope
                 // lens and lets a review step notice edits far outside it. It
                 // is not enforced anywhere.
-                token("touches", Role::FlareOrange),
                 Cell::plain("glob"),
+                token("touches", Role::FlareOrange),
                 Cell::muted(glob.clone()),
             ]);
         }
@@ -5922,11 +5922,11 @@ fn components(envelope: &Envelope<ComponentsData>, style: Style, width: usize) -
     for component in &data.components {
         let checks = component.checks.join(", ");
         table = table.row(vec![
+            Cell::plain(component.name.clone()),
             match component.runs {
                 true => token("runs", Role::BeaconGreen),
                 false => token("declared", Role::SteelGrey),
             },
-            Cell::plain(component.name.clone()),
             detail_cell(style, (!checks.is_empty()).then_some(checks.as_str())),
         ]);
     }
@@ -5976,8 +5976,8 @@ fn commands(envelope: &Envelope<CommandsData>, style: Style, width: usize) -> St
     let mut table = Table::new(columns("command", "detail", false)).indent(2);
     for command in &data.commands {
         table = table.row(vec![
-            token("declared", Role::BeaconGreen),
             Cell::plain(command.name.clone()),
+            token("declared", Role::BeaconGreen),
             detail_cell(style, Some(crate::verbs::commands::detail(command))),
         ]);
     }
@@ -6037,32 +6037,33 @@ fn commands(envelope: &Envelope<CommandsData>, style: Style, width: usize) -> St
 /// The rows a preview *keeps* rather than reclaims already read conditionally
 /// (`KEPT`, `UNSWEPT`), so only the reclaiming ones needed the word.
 fn reaped(plan: &ReapPlan, dry: bool, style: Style, width: usize) -> String {
-    let mut table = Table::new(columns("reaped", "detail", false)).indent(2);
+    let col_name = if dry { "would" } else { "reaped" };
+    let mut table = Table::new(columns(col_name, "detail", false)).indent(2);
     for id in &plan.workspaces {
         table = table.row(vec![
-            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain("workspace"),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::muted(format!("{id}, directory gone")),
         ]);
     }
     for target in &plan.resources {
         table = table.row(vec![
-            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain(target.kind.to_string()),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::muted(format!("{}, {}", target.reference, target.workspace)),
         ]);
     }
     for lease in &plan.leases {
         table = table.row(vec![
-            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::plain("lease"),
+            done_or_would(dry, "reaped", Role::BeaconGreen),
             Cell::muted(format!("{lease}, heartbeat cold")),
         ]);
     }
     for report in &plan.reported {
         table = table.row(vec![
-            token("kept", Role::FlareOrange),
             Cell::plain(report.kind.to_string()),
+            token("kept", Role::FlareOrange),
             Cell::muted(format!(
                 "{}, {}, {}",
                 report.reference,
@@ -6075,8 +6076,8 @@ fn reaped(plan: &ReapPlan, dry: bool, style: Style, width: usize) -> String {
     }
     for skipped in &plan.skipped {
         table = table.row(vec![
-            token("unswept", Role::FlareOrange),
             Cell::plain("resources"),
+            token("unswept", Role::FlareOrange),
             Cell::muted(skipped.clone()),
         ]);
     }
@@ -6472,8 +6473,8 @@ mod tests {
             has_row(
                 &text,
                 &[
-                    "RUNNING",
                     "01M048YQMSD6YP48",
+                    "RUNNING",
                     "pgid",
                     "4212",
                     "·",
@@ -6612,12 +6613,12 @@ mod tests {
         // Through `has_row`, because column widths belong to the golden
         // fixtures: pinning them here too fails twice for one change and says
         // nothing the fixture did not.
-        assert!(has_row(&text, &["UP", "api", "5460"]), "{text}");
-        assert!(has_row(&text, &["DOWN", "web", "5461"]), "{text}");
+        assert!(has_row(&text, &["api", "UP", "5460"]), "{text}");
+        assert!(has_row(&text, &["web", "DOWN", "5461"]), "{text}");
         // **The header names what the rows actually are.** These come from
         // `results[].ports`, keyed by port name — so a `COMPONENT` heading
         // called `api` a component when the component was something else.
-        assert!(text.contains("STATUS  PORT  DETAIL"), "{text}");
+        assert!(text.contains("PORT  STATUS  DETAIL"), "{text}");
     }
 
     /// **Wrapped and never cut**, which is the one rule `config scan` has: a

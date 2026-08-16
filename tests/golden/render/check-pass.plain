@@ -1,9 +1,9 @@
 run 01M00WRY00CYTZ44                                                    4 checks
 
-  STATUS  CHECK              DETAIL  TIME
-  PASS    armada:boundaries  -       0.3s
-  PASS    armada:docs        -       0.5s
-  PASS    armada:fmt         -       0.3s
-  PASS    armada:lint        -       2.6s
+  CHECK              STATUS  DETAIL  TIME
+  armada:boundaries  PASS    -       0.3s
+  armada:docs        PASS    -       0.5s
+  armada:fmt         PASS    -       0.3s
+  armada:lint        PASS    -       2.6s
 
 PASS  4 passed, 0 failed

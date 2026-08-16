@@ -1,11 +1,11 @@
-  [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mJOB[0m            [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;61;220;132mADVANCED[0m  [38;2;76;159;232mrate-limit[0m     [38;2;156;163;175mfix · check_passes — `fix` passed; it is on `land`[0m
-  [38;2;156;163;175mWAITING[0m   [38;2;76;159;232mbad-parse[0m      [38;2;156;163;175mreproduce · failing_test_exists — check run 01M00WRY…[0m
-  [38;2;255;92;92mRETRIED[0m   [38;2;76;159;232mxlsx-report[0m    [38;2;156;163;175mfix · check_passes — `fix` did not pass (the suite i…[0m
-  [38;2;156;163;175mWORKING[0m   [38;2;76;159;232mcarina-schema[0m  [38;2;156;163;175mplan — its Drone is still working[0m
-  [38;2;255;169;64mASKED[0m     [38;2;76;159;232mrelease-merge[0m  [38;2;156;163;175mapproval · human_approves — does this look right to …[0m
-  [38;2;255;92;92mHALTED[0m    [38;2;76;159;232mflaky-suite[0m    [38;2;156;163;175mreview · review_clean — `review` cannot be gated: `r…[0m
-  [38;2;61;220;132mFINISHED[0m  [38;2;76;159;232mnightly-flake[0m  [38;2;156;163;175mland · branch_exists — `land` was its last step[0m
-  [38;2;156;163;175mIDLE[0m      [38;2;76;159;232mport-sweep[0m     [38;2;156;163;175mimplement — it is waiting on you[0m
+  [1m[38;2;156;163;175mJOB[0m            [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;76;159;232mrate-limit[0m     [38;2;61;220;132mADVANCED[0m  [38;2;156;163;175mfix · check_passes — `fix` passed; it is on `land`[0m
+  [38;2;76;159;232mbad-parse[0m      [38;2;156;163;175mWAITING[0m   [38;2;156;163;175mreproduce · failing_test_exists — check run 01M00WRY…[0m
+  [38;2;76;159;232mxlsx-report[0m    [38;2;255;92;92mRETRIED[0m   [38;2;156;163;175mfix · check_passes — `fix` did not pass (the suite i…[0m
+  [38;2;76;159;232mcarina-schema[0m  [38;2;156;163;175mWORKING[0m   [38;2;156;163;175mplan — its Drone is still working[0m
+  [38;2;76;159;232mrelease-merge[0m  [38;2;255;169;64mASKED[0m     [38;2;156;163;175mapproval · human_approves — does this look right to …[0m
+  [38;2;76;159;232mflaky-suite[0m    [38;2;255;92;92mHALTED[0m    [38;2;156;163;175mreview · review_clean — `review` cannot be gated: `r…[0m
+  [38;2;76;159;232mnightly-flake[0m  [38;2;61;220;132mFINISHED[0m  [38;2;156;163;175mland · branch_exists — `land` was its last step[0m
+  [38;2;76;159;232mport-sweep[0m     [38;2;156;163;175mIDLE[0m      [38;2;156;163;175mimplement — it is waiting on you[0m
 
 [1m[38;2;61;220;132mTICK[0m  [38;2;156;163;175m4 Jobs moved · 8 looked at[0m

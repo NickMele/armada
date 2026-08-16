@@ -1,11 +1,11 @@
 run 01M00WRY00CYTZ44                                                    4 checks
 
-  STATUS   CHECK              DETAIL                 TIME
-  PASS     armada:boundaries  -                      0.3s
-  PASS     armada:docs        -                      0.5s
-  SKIPPED  armada:e2e         no matching files         -
-  FAILED   armada:test        3 failed, 214 passed  26.8s
-           .armada/run/01M00WRY00CYTZ44/logs/armada.test.log
+  CHECK              STATUS   DETAIL                 TIME
+  armada:boundaries  PASS     -                      0.3s
+  armada:docs        PASS     -                      0.5s
+  armada:e2e         SKIPPED  no matching files         -
+  armada:test        FAILED   3 failed, 214 passed  26.8s
+                     .armada/run/01M00WRY00CYTZ44/logs/armada.test.log
 
 FAILED  2 passed, 1 failed, 1 skipped
 error: 1 of 4 checks did not pass

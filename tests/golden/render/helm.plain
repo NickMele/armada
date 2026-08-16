@@ -1,9 +1,9 @@
-  STATUS     WIRED         DETAIL
-  WRITTEN    toolbelt      ~/.armada/helm/mcp.json
-  WRITTEN    monitor       ~/.armada/helm/plugin
-  WRITTEN    backstop      ~/.armada/helm/stop-inbox.sh
-  WRITTEN    voice         ~/.armada/helm/system-prompt.md
-  UNCHANGED  conversation  ~/.armada/helm/session.json
+  WIRED         STATUS     DETAIL
+  toolbelt      WRITTEN    ~/.armada/helm/mcp.json
+  monitor       WRITTEN    ~/.armada/helm/plugin
+  backstop      WRITTEN    ~/.armada/helm/stop-inbox.sh
+  voice         WRITTEN    ~/.armada/helm/system-prompt.md
+  conversation  UNCHANGED  ~/.armada/helm/session.json
 
   enter with claude --agent helm --append-system-prompt "$(cat ~/.armada/helm/system-prompt.md)" --mcp-config ~/.armada/helm/mcp.json --plugin-dir ~/.armada/helm/plugin --settings ~/.armada/helm/settings.json --permission-mode auto --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0
 

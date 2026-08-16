@@ -1,12 +1,12 @@
 no armada.yml here, this is evidence and not a config
 
-  STATUS  KIND             DETAIL
-  FOUND   lockfile         pnpm-lock.yaml, pnpm@9
-  FOUND   package scripts  14 in package.json
-  FOUND   compose          docker-compose.yml, 3 services
-  FOUND   ci               .github/workflows/ci.yml, 6 steps
-  ABSENT  pyproject        -
-  ABSENT  makefile         -
+  KIND       STATUS           DETAIL
+  FOUND      lockfile         pnpm-lock.yaml, pnpm@9
+  FOUND      package scripts  14 in package.json
+  FOUND      compose          docker-compose.yml, 3 services
+  FOUND      ci               .github/workflows/ci.yml, 6 steps
+  pyproject  ABSENT           -
+  makefile   ABSENT           -
 
   package.json scripts, verbatim and not interpreted
     dev         next dev

@@ -1,15 +1,15 @@
-  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mID[0m        [1m[38;2;156;163;175mDETAIL[0m                                                  [1m[38;2;156;163;175mTIME[0m
-  [38;2;255;180;84mOPEN[0m    [38;2;76;159;232ma91f0c37[0m  [38;2;156;163;175menvironment x4, `armada manifest clean` could not be …[0m    [38;2;156;163;175m9m[0m
+  [1m[38;2;156;163;175mID[0m        [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mDETAIL[0m                                                  [1m[38;2;156;163;175mTIME[0m
+  [38;2;76;159;232ma91f0c37[0m  [38;2;255;180;84mOPEN[0m    [38;2;156;163;175menvironment x4, `armada manifest clean` could not be …[0m    [38;2;156;163;175m9m[0m
 
 [1m[38;2;255;92;92merror:[0m `armada manifest clean` could not be found to run
   where: ~/.cargo/bin/armada
   class: environment
   next:  reinstall armada, then retry unchanged
 
-  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mFACT[0m       [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;156;163;175mSEEN[0m    [38;2;156;163;175mcount[0m      [38;2;156;163;175m4 times, 2026-08-09T13:02:11Z to 2026-08-09T14:58:11Z[0m
-  [38;2;156;163;175mTYPED[0m   [38;2;156;163;175mcommand[0m    [38;2;156;163;175marmada bridge[0m
-  [38;2;156;163;175mIN[0m      [38;2;156;163;175mdirectory[0m  [38;2;156;163;175m~/code/orders[0m
+  [1m[38;2;156;163;175mFACT[0m   [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;156;163;175mcount[0m  [38;2;156;163;175mSEEN[0m       [38;2;156;163;175m4 times, 2026-08-09T13:02:11Z to 2026-08-09T14:58:11Z[0m
+  [38;2;156;163;175mTYPED[0m  [38;2;156;163;175mcommand[0m    [38;2;156;163;175marmada bridge[0m
+  [38;2;156;163;175mIN[0m     [38;2;156;163;175mdirectory[0m  [38;2;156;163;175m~/code/orders[0m
 
 [38;2;156;163;175m  the task a Job would be given:[0m
     Armada failed with this, and the failure was recorded as `a91f0c37`:

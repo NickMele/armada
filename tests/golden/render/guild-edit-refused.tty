@@ -1,5 +1,5 @@
-  [1m[38;2;156;163;175mSTATUS[0m   [1m[38;2;156;163;175mITEM[0m               [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;255;180;84mREFUSED[0m  workflows/bug.yml  [38;2;156;163;175m`steps` is a required property[0m
+  [1m[38;2;156;163;175mITEM[0m               [1m[38;2;156;163;175mSTATUS[0m   [1m[38;2;156;163;175mDETAIL[0m
+  workflows/bug.yml  [38;2;255;180;84mREFUSED[0m  [38;2;156;163;175m`steps` is a required property[0m
 
 [1m[38;2;255;92;92mFAILED[0m  [38;2;156;163;175m~/.armada/guild · not committed, git still holds the version before it[0m
 [1m[38;2;255;92;92merror:[0m workflows/bug.yml does not validate: `steps` is a required property

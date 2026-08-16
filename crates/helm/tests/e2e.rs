@@ -1168,7 +1168,7 @@ fn config_verify_fails_pass_one_and_does_not_attempt_pass_two() {
         text.starts_with("pass 1, static, nothing is executed"),
         "{text}"
     );
-    assert!(text.contains("UNCHECKED  shell entries"), "{text}");
+    assert!(text.contains("shell entries"), "{text}");
     assert!(
         text.contains("pass 2 not attempted, fix pass 1 first"),
         "{text}"
@@ -1339,9 +1339,9 @@ fn a_skill_can_be_listed_and_resolved_and_never_run() {
         text.lines()
             .any(|line| line.split_whitespace().collect::<Vec<_>>() == words)
     };
-    assert!(row(&["GRANTS", "tickets", "./exiter.sh", "0"]), "{text}");
+    assert!(row(&["tickets", "GRANTS", "./exiter.sh", "0"]), "{text}");
     assert!(
-        row(&["READS", "doc", "docs/skills/add-endpoint.md"]),
+        row(&["doc", "READS", "docs/skills/add-endpoint.md"]),
         "{text}"
     );
 

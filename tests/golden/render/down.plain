@@ -1,13 +1,13 @@
 armada  3d9cc7ba                                                 ports 5460-5469
 
-  STATUS  SERVICE   DETAIL  TIME
-  DOWN    web       -       0.3s
-  DOWN    postgres  -       1.1s
+  SERVICE   STATUS  DETAIL  TIME
+  web       DOWN    -       0.3s
+  postgres  DOWN    -       1.1s
 
-  STATUS  PORT  DETAIL
-  DOWN    pg    5460
+  PORT  STATUS  DETAIL
+  pg    DOWN    5460
 
-  STATUS  RESOURCE  DETAIL
-  KEPT    ports     5460-5469
+  RESOURCE  STATUS  DETAIL
+  ports     KEPT    5460-5469
 
 DOWN  2 services, 2 down

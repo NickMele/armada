@@ -1,12 +1,12 @@
 [38;2;255;180;84mno armada.yml here[0m · [38;2;156;163;175mthis is evidence and not a config[0m
 
-  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mKIND[0m             [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;61;220;132mFOUND[0m   lockfile         [38;2;156;163;175mpnpm-lock.yaml, pnpm@9[0m
-  [38;2;61;220;132mFOUND[0m   package scripts  [38;2;156;163;175m14 in package.json[0m
-  [38;2;61;220;132mFOUND[0m   compose          [38;2;156;163;175mdocker-compose.yml, 3 services[0m
-  [38;2;61;220;132mFOUND[0m   ci               [38;2;156;163;175m.github/workflows/ci.yml, 6 steps[0m
-  [38;2;156;163;175mABSENT[0m  pyproject        [38;2;156;163;175m—[0m
-  [38;2;156;163;175mABSENT[0m  makefile         [38;2;156;163;175m—[0m
+  [1m[38;2;156;163;175mKIND[0m       [1m[38;2;156;163;175mSTATUS[0m           [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;61;220;132mFOUND[0m      lockfile         [38;2;156;163;175mpnpm-lock.yaml, pnpm@9[0m
+  [38;2;61;220;132mFOUND[0m      package scripts  [38;2;156;163;175m14 in package.json[0m
+  [38;2;61;220;132mFOUND[0m      compose          [38;2;156;163;175mdocker-compose.yml, 3 services[0m
+  [38;2;61;220;132mFOUND[0m      ci               [38;2;156;163;175m.github/workflows/ci.yml, 6 steps[0m
+  pyproject  [38;2;156;163;175mABSENT[0m           [38;2;156;163;175m—[0m
+  makefile   [38;2;156;163;175mABSENT[0m           [38;2;156;163;175m—[0m
 
   [38;2;255;169;64mpackage.json scripts[0m · [38;2;156;163;175mverbatim and not interpreted[0m
     [38;2;92;225;230mdev[0m         [38;2;156;163;175mnext dev[0m
