@@ -367,20 +367,37 @@ pub struct PruneCandidate {
     pub bytes: Option<u64>,
     /// Whose it is — **the field that decides everything below**.
     pub owner: Ownership,
+    /// Whether a workspace that still exists is using it.
+    ///
+    /// **Armada owning a thing is not the same as Armada being finished with
+    /// it.** A worktree somebody is working in right now has containers and
+    /// volumes that are labelled, reclaimable in principle and in use in fact —
+    /// and this project's founding premise is five of those at once. So a
+    /// resource in use is offered, listed and **not ticked**: a person may still
+    /// choose it, and enter on an unread screen may not.
+    pub in_use: bool,
 }
 
 /// What a prune would open with ticked.
 ///
-/// **Armada's own may be ticked. Nothing else may be, ever.** This is a function
-/// rather than a line in a render so that the rule is testable in one place and
-/// cannot be re-decided by a second caller: the measured machine had 171
-/// unlabelled volumes, Armada created none of them, and one of them may be a
-/// database. A default that ticked them would make the safe keypress — enter —
-/// the destructive one.
+/// **Armada's own, and only when nothing is using them.** Everything else opens
+/// unticked.
+///
+/// This is a function rather than a line in a render so that the rule is
+/// testable in one place and cannot be re-decided by a second caller. Two things
+/// keep a box empty, and they are different failures:
+///
+/// - **It is not Armada's.** The measured machine had 171 unlabelled volumes,
+///   Armada created none of them, and one of them may be a database. A default
+///   that ticked them would make the safe keypress — enter — the destructive one.
+/// - **It is Armada's and in use.** A worktree somebody is working in has
+///   labelled resources that are reclaimable in principle; taking them by
+///   default would stop a colleague's stack mid-run, which is the exact failure
+///   `clean --all`'s live-lease skip already exists to prevent.
 pub fn default_ticks(candidates: &[PruneCandidate]) -> Vec<bool> {
     candidates
         .iter()
-        .map(|candidate| candidate.owner == Ownership::Armada)
+        .map(|candidate| candidate.owner == Ownership::Armada && !candidate.in_use)
         .collect()
 }
 
@@ -630,6 +647,7 @@ mod tests {
             reference: reference.to_string(),
             bytes: Some(1_000),
             owner,
+            in_use: false,
         }
     }
 
@@ -642,6 +660,18 @@ mod tests {
             candidate("his-database", Ownership::Unlabelled),
         ];
         assert_eq!(default_ticks(&candidates), vec![true, false]);
+    }
+
+    /// **Owning a thing is not being finished with it.** Five worktrees at once
+    /// is this project's premise, and a default that took a live one's volumes
+    /// would stop a colleague's stack mid-run.
+    #[test]
+    fn armadas_own_but_in_use_opens_unticked() {
+        let live = PruneCandidate {
+            in_use: true,
+            ..candidate("armada-live", Ownership::Armada)
+        };
+        assert_eq!(default_ticks(&[live]), vec![false]);
     }
 
     /// Inverted: a list of nothing but the user's own volumes opens with every

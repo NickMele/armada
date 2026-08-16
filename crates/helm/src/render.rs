@@ -56,9 +56,9 @@ use armada_core::envelope::{
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
     GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData,
     HelmSwitchData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData,
-    ProbeData, Projection, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData,
-    SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun,
-    VerdictData, VerifyData, Wiring,
+    ProbeData, Projection, PruneData, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData,
+    ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed,
+    UpDryRun, VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, Listing, State as FailureState};
@@ -90,6 +90,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::UpDryRun(envelope) => up_dry(envelope, style, width),
         Output::Down(envelope) => services(envelope, style, width, "service"),
         Output::Clean(envelope) => clean(envelope, style, width),
+        Output::Prune(envelope) => prune(envelope, style, width),
         Output::CleanDryRun(envelope) => clean_dry(envelope, style, width),
         Output::Status(envelope) => status(envelope, style, width),
         Output::Check(envelope) => check(envelope, style, width),
@@ -4716,6 +4717,84 @@ fn tally(released: &armada_core::envelope::Released) -> Option<String> {
         parts.push("ports released".to_string());
     }
     (!parts.is_empty()).then(|| parts.join(", "))
+}
+
+/// `armada manifest prune` — what could go, what did, and **whose it was**.
+///
+/// # The owner is a column, not a footnote
+///
+/// Every other reclaiming verb draws rows that are all Armada's, so whose a
+/// thing is has never needed saying. Here it is the only fact that matters: the
+/// measured machine had 171 volumes holding 12.0 GB and **none of them were
+/// Armada's**, so a table that did not say so would read as a list of things
+/// Armada is offering to delete. It is folded into the detail rather than given
+/// a column of its own, because `STATUS · NAME · DETAIL` is the agreed layout
+/// and a fifth column would push the name into truncation on an 80-column
+/// terminal.
+///
+/// # `SKIPPED` is the ordinary outcome and is not a failure
+///
+/// On a preview every row is `SKIPPED`, and on a real run most rows still are —
+/// because most of what is on the daemon is not Armada's. The summary carries
+/// what was freed so the reader is not left counting rows.
+fn prune(envelope: &Envelope<PruneData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = header(style, envelope.workspace.as_ref(), None, None, width);
+
+    let mut table = Table::new(columns("volume", "detail", false)).indent(2);
+    for row in &data.results {
+        let mut detail = armada_core::disk::format_maybe(row.bytes);
+        if let Some(note) = &row.detail {
+            detail.push_str(&format!(" — {note}"));
+        }
+        table = table.row(vec![
+            verdict(row.status),
+            Cell::plain(row.reference.clone()),
+            detail_cell(style, Some(detail.as_str())),
+        ]);
+    }
+    out.push_str(&table.render(style, width));
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    // **What was withheld is said before the summary, never after it.** A reader
+    // who asked for a prune and got a preview needs the rule that stopped it,
+    // and a line under the total reads as a footnote to a finished job.
+    let mut notes = Vec::new();
+    for line in data.withheld.iter().chain(data.skipped.iter()) {
+        notes.push(line.clone());
+    }
+    if !notes.is_empty() {
+        let mut aside = Table::new(columns("", "detail", false))
+            .indent(2)
+            .headerless();
+        for note in &notes {
+            aside = aside.row(vec![
+                token("note", Role::FlareOrange),
+                Cell::nothing(),
+                Cell::muted(note.clone()),
+            ]);
+        }
+        out.push_str(&aside.render(style, width));
+        out.push('\n');
+    }
+
+    let mut facts = vec![match data.freed {
+        Some(0) => "nothing was removed".to_string(),
+        Some(bytes) => format!("{} freed", armada_core::disk::format_size(bytes)),
+        // One unreadable size keeps the total unknown rather than under-stating
+        // it, which is this whole module's rule about sizes.
+        None => "removed, total size unknown".to_string(),
+    }];
+    let mine = data
+        .results
+        .iter()
+        .filter(|row| row.owner == armada_core::disk::Ownership::Armada)
+        .count();
+    facts.push(format!("{} of {} armada's", mine, data.results.len()));
+    out.push_str(&summary(style, envelope.status, &facts));
+    out
 }
 
 fn clean_dry(envelope: &Envelope<CleanDryRun>, style: Style, width: usize) -> String {

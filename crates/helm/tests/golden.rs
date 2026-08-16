@@ -294,7 +294,21 @@ fn run_verb(
     scenario: &Scenario,
     verb: impl FnOnce(&mut app::App<NoDocker, FrozenClock, RealFetch>) -> Result<Output, ArmadaError>,
 ) -> String {
-    let run = NoDocker;
+    run_verb_with(scenario, NoDocker, verb)
+}
+
+/// The same, with a runner the test chooses.
+///
+/// **Split out so a verb that reads the daemon can be snapshotted without one.**
+/// `prune` is the only verb whose whole payload comes from `docker system df`,
+/// and the suite's standing rule is that no test may remove a real docker
+/// resource on this machine — so the daemon is a fake that answers with measured
+/// output and records what it was asked to remove.
+fn run_verb_with<R: Run>(
+    scenario: &Scenario,
+    run: R,
+    verb: impl FnOnce(&mut app::App<R, FrozenClock, RealFetch>) -> Result<Output, ArmadaError>,
+) -> String {
     let workspace = discovery::resolve(&run, &scenario.repo).unwrap();
     let ctx = Ctx {
         workspace: Some(workspace),
@@ -663,3 +677,99 @@ manifest:
       cmd: echo
       help: Echo whatever it is given
 ";
+
+/// `armada manifest prune`, against a daemon holding what his machine held.
+///
+/// **No real docker resource is touched.** [`PrunableDocker`] answers the two
+/// `docker system df` forms with output measured on darwin against Docker
+/// 29.6.2, and answers `docker volume rm` by recording it — so the snapshot is
+/// the real verb's payload and the suite still cannot delete anything.
+///
+/// The scenario is the one that made the verb necessary: a machine whose volumes
+/// are mostly **not Armada's**. Nothing is confirmed, so nothing is removed, and
+/// the payload's job is to say what could be and whose it is.
+#[test]
+fn prune_matches_its_snapshot() {
+    let scenario = scenario(CONFIG);
+    run_verb(&scenario, |app| verbs::init::run(app, false));
+    let json = run_verb_with(&scenario, PrunableDocker, |app| {
+        verbs::prune::run(
+            app,
+            armada_helm::args::Common {
+                json: true,
+                dry_run: false,
+                lens: Lens::Workspace,
+            },
+            verbs::prune::Filters { yes: false },
+            &mut armada_helm::ask::Defaults,
+            // No terminal, which is what an agent gets — and what makes this
+            // the invocation that must never remove anything unlabelled.
+            false,
+        )
+    });
+    assert_golden("prune", &json);
+}
+
+/// A daemon that answers, and **cannot remove anything**.
+///
+/// The `df` payloads are verbatim measurements. `volume rm` answers success
+/// without touching docker, which is what lets the snapshot cover the removing
+/// path too if one is ever added — and what keeps the suite unable to destroy a
+/// volume the machine's owner created.
+struct PrunableDocker;
+
+impl PrunableDocker {
+    const SUMMARY: &'static str = concat!(
+        r#"{"Active":"0","Reclaimable":"0B","Size":"0B","TotalCount":"0","Type":"Images"}"#,
+        "\n",
+        r#"{"Active":"0","Reclaimable":"12.01GB (100%)","Size":"12.01GB","TotalCount":"2","Type":"Local Volumes"}"#,
+    );
+
+    const VERBOSE: &'static str = concat!(
+        r#"{"Images":[],"Containers":[],"BuildCache":[],"Volumes":["#,
+        r#"{"Name":"someone-elses_pgdata","Size":"12.01GB"},"#,
+        r#"{"Name":"armada-orphan_pgdata","Size":"79.02MB"}]}"#,
+    );
+}
+
+impl Run for PrunableDocker {
+    fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+        let argv: Vec<&str> = request.argv.iter().map(String::as_str).collect();
+        let stdout = match argv.as_slice() {
+            ["docker", "system", "df", "-v", ..] => Self::VERBOSE.to_string(),
+            ["docker", "system", "df", ..] => Self::SUMMARY.to_string(),
+            ["docker", "version", ..] => "29.6.2".to_string(),
+            // The owner lookup, in the current namespace only — the legacy one
+            // answers empty, as it does on a machine with nothing pre-M1 left.
+            ["docker", "volume", "ls", .., filter] if filter.contains("armada.workspace") => {
+                "armada-orphan_pgdata\n".to_string()
+            }
+            // **Labels read through `inspect`, never off `df -v`'s comma-joined
+            // string.** The workspace path here does not exist, so the volume is
+            // Armada's and idle.
+            ["docker", "inspect", ..] => concat!(
+                "armada-orphan_pgdata\t{\"armada.workspace\":\"deadbeef\",",
+                "\"armada.workspace_path\":\"/nonexistent/gone\",",
+                "\"armada.namespace\":\"ns-1\"}\n"
+            )
+            .to_string(),
+            ["docker", ..] => String::new(),
+            _ => return RealRun.call(request),
+        };
+        Ok(RunOutput {
+            code: Some(0),
+            signal: None,
+            stdout,
+            stderr: String::new(),
+            timed_out: false,
+        })
+    }
+
+    fn call_with_tick(
+        &self,
+        request: &RunRequest,
+        _tick: &mut dyn FnMut(),
+    ) -> Result<RunOutput, SpawnError> {
+        self.call(request)
+    }
+}

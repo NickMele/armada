@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "verb": "prune",
+  "workspace": null,
+  "status": "SKIPPED",
+  "error": null,
+  "data": {
+    "results": [
+      {
+        "status": "SKIPPED",
+        "reference": "armada-orphan_pgdata",
+        "kind": "volumes",
+        "owner": "armada",
+        "bytes": 79020000,
+        "detail": "would go"
+      },
+      {
+        "status": "SKIPPED",
+        "reference": "someone-elses_pgdata",
+        "kind": "volumes",
+        "owner": "unlabelled",
+        "bytes": 12010000000,
+        "detail": "not armada's"
+      }
+    ],
+    "freed": 0,
+    "withheld": [
+      "no terminal to ask at; `--yes` removes armada's own",
+      "1 of these is not armada's; only a person can remove it"
+    ]
+  }
+}

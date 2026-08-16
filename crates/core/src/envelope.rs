@@ -661,6 +661,77 @@ pub struct CleanDryRun {
     pub would_report: Vec<String>,
 }
 
+/// `armada manifest prune` — what could go, what did, and what was never
+/// offered.
+///
+/// # The preview is the verb
+///
+/// Every other reclaiming verb in Armada acts on resources Armada created and
+/// can prove it owns. This one can reach further, and that is the whole reason
+/// it is a separate verb rather than a flag: **an unlabelled volume was not made
+/// by Armada, and one of them may be a database somebody cares about.** Deleting
+/// it is unrecoverable and nothing here can tell which it was.
+///
+/// So the shape is `armada fleet reap`'s — rows toggle, enter confirms, esc
+/// touches nothing — and the defaults carry the safety rule:
+/// `armada_core::disk::default_ticks` ticks Armada's own and nothing else.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct PruneData {
+    /// Every candidate, whether or not this run acted on it.
+    ///
+    /// **The unlabelled ones are listed even when they can never be removed on
+    /// this run** — under `--json`, in a pipe, in a script. That is the point of
+    /// listing them: the reader asked what is using the disk, and the answer is
+    /// mostly resources that are not Armada's. Refusing to *say so* because
+    /// Armada may not *delete* them would answer a question nobody asked.
+    pub results: Vec<PruneRow>,
+    /// Bytes this run actually freed, when every removed resource had a readable
+    /// size.
+    ///
+    /// [`None`] rather than a partial sum, for the reason
+    /// `armada_core::disk` gives throughout: a total quietly missing a
+    /// contributor reads as a complete answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freed: Option<u64>,
+    /// What this run was **not** allowed to touch, and why — so a caller that
+    /// expected a prune and got a preview is told which rule stopped it rather
+    /// than being left to infer it from an empty list.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub withheld: Vec<String>,
+    /// Enumerations that could not be performed, in the same channel and for the
+    /// same reason [`ReapPlan::skipped`] keeps one: a list that is empty because
+    /// nothing could be listed is indistinguishable from a tidy machine.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<String>,
+}
+
+/// One thing `prune` found.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PruneRow {
+    /// **`CLEAN` when it is gone, `SKIPPED` when it is still there.**
+    ///
+    /// Two words, both already in the vocabulary, and no third one for "would
+    /// have gone": a preview is simply a run in which every row is `SKIPPED`,
+    /// and [`PruneRow::detail`] says whether it was ticked. Inventing an
+    /// `OFFERED` status would put a word in the terminal-state enum that maps to
+    /// no exit code and describes no outcome.
+    pub status: Status,
+    /// What docker knows it by.
+    pub reference: String,
+    /// What kind of thing.
+    pub kind: crate::disk::DiskKind,
+    /// Whose it is — **the field the whole verb turns on**.
+    pub owner: crate::disk::Ownership,
+    /// What removing it would free, when docker reported a size Armada could
+    /// read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
+    /// Why this row ended the way it did, when that is not obvious from the
+    /// status alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
 /// `--dry-run` on `init`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct InitDryRun {

@@ -213,7 +213,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
     match invocation {
         Invocation::Init(common) | Invocation::Status(common) => common.json,
         Invocation::Services { json, .. } => *json,
-        Invocation::Clean { common, .. } => common.json,
+        Invocation::Clean { common, .. } | Invocation::Prune { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
         Invocation::Config { json, .. }
@@ -852,6 +852,21 @@ fn dispatch(
                 force_rebuild,
             },
         ),
+        Invocation::Prune { common, yes } => {
+            // **The terminal is read here and nowhere below.** `prune` turns on
+            // whether a person can be asked *on this run*, and that is a fact
+            // about the entrypoint's streams — a verb that sniffed them itself
+            // would be reading ambient state, and would also be untestable.
+            let interactive = terminal.can_ask() && !common.json;
+            let mut asking = at_the_terminal(style, terminal);
+            verbs::prune::run(
+                &mut app,
+                common,
+                verbs::prune::Filters { yes },
+                &mut asking,
+                interactive,
+            )
+        }
         Invocation::Check(check) => verbs::check::run(&mut app, &check, progress),
         Invocation::Dispatch { name, argv, json } => {
             verbs::dispatch::run(&mut app, &name, &argv, json)
