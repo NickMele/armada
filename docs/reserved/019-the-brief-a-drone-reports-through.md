@@ -14,6 +14,14 @@ raised: real use, 2026-08-15 — a Drone reported at whatever length it liked, a
 > [`crates/helm/src/mcp/drone.rs`](../../crates/helm/src/mcp/drone.rs). What follows is the
 > design — whose voice a Drone speaks in, and the one risk this leaves open in
 > [011](011-what-a-drone-may-do-unattended.md).
+>
+> **`BRIEF` is no longer the whole of what `headless` appends.**
+> [008](008-armada-injects-its-own-skills.md) landed alongside it and shares the flag:
+> `drone::brief()` joins `BRIEF` — *how you report* — with `skill::BODY` — *how you use Armada* —
+> because `--append-system-prompt <prompt>` is singular and a second occurrence would keep only
+> the last. They stay two constants: this one is a worker's contract with an orchestrator and
+> Helm has no use for it, while `008`'s skill goes to Helm too. A test holds the split, so a
+> sentence does not end up in both and get bought twice on every turn.
 
 **The gap.** `armada helm` assembles the reader's `voice.md`, `expectations.md` and
 `how-i-work.md` into an appended system prompt, so Helm speaks in the reader's register. A Drone

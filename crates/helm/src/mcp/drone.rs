@@ -221,8 +221,8 @@ impl Toolbelt {
                        because you learned something it does not say. Do not edit armada.yml \
                        yourself. It files one inbox entry with an id and returns at once — it \
                        does not wait for an answer and you are not blocked on it, which is what \
-                       makes it different from fleet.ask_human. A proposal is not a change: \
-                       nothing happens until the person decides."
+                       makes it different from mcp__armada__fleet_ask_human. A proposal is not a \
+                       change: nothing happens until the person decides."
     )]
     async fn fleet_propose(&self, Parameters(args): Parameters<ProposeArgs>) -> CallToolResult {
         let world = self.world.clone();
@@ -309,8 +309,8 @@ impl ServerHandler for Toolbelt {
                 "Armada's Drone toolbelt. You may report progress, ask the human a question, \
                  propose a change to the manifest or the guild, and record a step verdict — all \
                  against your own Job and no other. You cannot spawn work; if the task needs \
-                 decomposing, say so with fleet.ask_human. Do not edit armada.yml to match \
-                 something you learned: propose it.",
+                 decomposing, say so with mcp__armada__fleet_ask_human. Do not edit armada.yml \
+                 to match something you learned: propose it.",
             )
     }
 }
@@ -374,7 +374,13 @@ mod tests {
     /// nothing.
     #[test]
     fn the_brief_names_every_tool_on_this_belt_as_the_model_sees_it() {
-        let brief = armada_core::fleet::drone::BRIEF;
+        // **The whole appended prompt, not one constant of it.** `fleet.propose`
+        // is named by `armada_core::skill::BODY` and the other three by
+        // `BRIEF`; they ride in one `--append-system-prompt` because the flag is
+        // singular, and a test reading half of it would go green against a
+        // Drone offered a tool nothing had told it about.
+        let brief = armada_core::fleet::drone::brief();
+        let brief = brief.as_str();
         for tool in TOOLS {
             let seen = format!(
                 "mcp__{}__{}",

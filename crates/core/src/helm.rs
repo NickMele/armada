@@ -888,7 +888,10 @@ mod tests {
         );
         let at = argv.iter().position(|word| word == APPEND).unwrap();
         let prompt = &argv[at + 1];
-        assert!(prompt.contains("fleet.propose"), "Armada's half is missing");
+        assert!(
+            prompt.contains("mcp__armada__fleet_propose"),
+            "Armada's half is missing"
+        );
         assert!(
             prompt.contains("under 150 words"),
             "the reader's half is missing"
@@ -896,7 +899,7 @@ mod tests {
         // Armada first: a byte-identical prefix on every launch is the half a
         // prompt cache can keep. Precedence is settled in the prose, not here.
         assert!(
-            prompt.find("fleet.propose") < prompt.find("under 150 words"),
+            prompt.find("mcp__armada__fleet_propose") < prompt.find("under 150 words"),
             "{prompt}"
         );
     }
@@ -984,7 +987,7 @@ mod tests {
             "{line}"
         );
         assert!(
-            !line.contains("fleet.propose"),
+            !line.contains("mcp__armada__fleet_propose"),
             "the prose was inlined: {line}"
         );
         // Every other word of the argv survives verbatim, so the printed line is

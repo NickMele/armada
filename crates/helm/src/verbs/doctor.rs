@@ -1080,7 +1080,16 @@ mod tests {
             .iter()
             .position(|word| word == drone::APPEND)
             .expect("the validator never saw the brief");
-        assert_eq!(probe[at + 1], drone::BRIEF, "{probe:?}");
+        // **Both halves of the one appended prompt reach the validator**: the
+        // reporting contract (`docs/reserved/019`) and Armada's own skill
+        // (`docs/reserved/008`), in that order. Asserted as a prefix and a
+        // suffix rather than an equality, because the flag is singular and the
+        // two are joined into one value.
+        assert!(probe[at + 1].starts_with(drone::BRIEF), "{probe:?}");
+        assert!(
+            probe[at + 1].ends_with(armada_core::skill::BODY),
+            "the validator never saw Armada's own skill"
+        );
         // The flag behind it survived, which is the collision this probe is
         // extended to cover: a swallowed `--permission-mode` is a Drone with no
         // posture, and `docs/reserved/011` is what that costs.
@@ -1174,14 +1183,14 @@ mod tests {
     #[test]
     fn a_claude_that_no_longer_appends_a_system_prompt_takes_every_drone_with_it() {
         assert!(
-            armada_core::fleet::drone::FLAGS.contains(&armada_core::skill::APPEND),
+            armada_core::fleet::drone::FLAGS.contains(&armada_core::fleet::drone::APPEND),
             "the flag that carries Armada's own skill is not checked at all"
         );
         let finding = drone_argv(
             &Claude {
                 flags: armada_core::fleet::drone::FLAGS
                     .iter()
-                    .filter(|flag| **flag != armada_core::skill::APPEND)
+                    .filter(|flag| **flag != armada_core::fleet::drone::APPEND)
                     .copied()
                     .collect::<Vec<_>>()
                     .join(" "),
@@ -1191,7 +1200,7 @@ mod tests {
         );
         assert_eq!(finding.status, Health::Missing);
         assert!(
-            finding.detail.contains(armada_core::skill::APPEND),
+            finding.detail.contains(armada_core::fleet::drone::APPEND),
             "{}",
             finding.detail
         );

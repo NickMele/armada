@@ -8,9 +8,15 @@ raised: real use — user request
 
 # 008 — Armada injects its own skills
 
-> **Built.** `armada_core::skill`, the `--append-system-prompt` on both the Drone's argv and
-> Helm's launch, and the `fleet.propose` tool. What follows is the design, and the last section
-> is what was deliberately left.
+> **Built.** `armada_core::skill`, carried by the `--append-system-prompt` on both the Drone's
+> argv and Helm's launch, and the `fleet.propose` tool. What follows is the design, and the last
+> section is what was deliberately left.
+>
+> **It shares one flag with [019](019-the-brief-a-drone-reports-through.md), which landed
+> alongside it.** A Drone's appended prompt is `BRIEF` — *how you report* — and then this skill —
+> *how you use Armada*; `armada_core::fleet::drone::brief()` joins them, and `APPEND` is defined
+> once beside the brief. They are two constants because `019` is a worker's contract with an
+> orchestrator and Helm has no use for it, while this goes to Helm too.
 
 **The ask, and it generalises past where it started.** *"Armada should inject custom skills into
 Helm and the subagents that are dispatched so that they can properly use Armada if needed,
@@ -32,9 +38,13 @@ how to talk, the repository says what it is.
 | In the skill | Because it cannot be inferred |
 |---|---|
 | Armada arrives as MCP tools, and the `armada` CLI is denied on purpose | a session that cannot find a tool reaches for the shell, and the shell writes the user's **real** `~/.armada/` ([011](011-what-a-drone-may-do-unattended.md)) |
-| evidence is an exit code, never an assertion | `fleet.verdict` refuses a `PASS` without evidence and nothing said why |
 | a stale manifest is a **finding**, and findings are raised rather than fixed | this is the whole of this item. Nothing in a repository says that noticing is part of the work |
 | `fleet.propose` exists, returns at once, and is not `fleet.ask_human` | a tool description is read *after* a model has decided to reach for a tool; the skill is what makes it decide to |
+
+**Three, not four**: *evidence is an exit code, never an assertion* was in the first draft and
+came out again, because [019](019-the-brief-a-drone-reports-through.md)'s brief already says it
+and the two constants ride in one prompt. A sentence in both is a sentence bought twice on every
+turn of every Job, and a test holds the split.
 
 **The failure mode this item names is writing a lot of prose no agent reads**, so the skill is
 capped by a test at 4 KiB and is currently about two. It is prepended to the system prompt of
@@ -60,10 +70,15 @@ scan` hand-over and `armada_core::helm::voice` proved it for the user's own thre
 
 **One appended prompt, never two.** `claude --help` spells the flag `--append-system-prompt
 <prompt>` — singular. A second occurrence is a Commander option with no collector, so the last
-wins and the first is dropped without a word. Helm's launch therefore composes Armada's skill
-and the reader's voice into one string rather than emitting the flag twice, and the file it
-writes for `"$(cat …)"` was renamed `guild-voice.md` → `system-prompt.md`, because it is no
-longer only the guild's.
+wins and the first is dropped without a word. So each launch composes exactly one string:
+
+| Launch | Appends |
+|---|---|
+| a **Drone** | [019](019-the-brief-a-drone-reports-through.md)'s `BRIEF`, then this skill |
+| **Helm** | this skill, then the reader's own three fragments |
+
+The file Helm writes for `"$(cat …)"` was renamed `guild-voice.md` → `system-prompt.md`, because
+it is no longer only the guild's.
 
 ## May a Drone propose a guild change? Both, and the asymmetry is written down
 
