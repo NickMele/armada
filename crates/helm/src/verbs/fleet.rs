@@ -1155,18 +1155,88 @@ fn end<R: Run, C: Clock>(
     keep_branch: bool,
     keep_worktree: bool,
 ) -> Result<Output, ArmadaError> {
-    let store = place.store();
-    let wall = now.wall_ms();
     let mut results: Vec<Killed> = Vec::new();
     for mut record in targets {
+        results.push(tear_down(
+            run,
+            now,
+            place,
+            &mut record,
+            Ending {
+                // **`kill` gave up on this Job**, whatever it was doing, so the
+                // state it lands in says so.
+                state: JobState::Aborted,
+                keep_branch,
+                keep_worktree,
+                observe: true,
+            },
+        )?);
+    }
+
+    let error = results.iter().find_map(|killed| killed.error.clone());
+    let data = KillData { results };
+    Ok(Output::Kill(Box::new(match error {
+        Some(error) => Envelope::failed("fleet kill", None, error, data),
+        None => Envelope::ok("fleet kill", None, Status::Clean, data),
+    })))
+}
+
+/// How a teardown ends, which is the only thing that differs between its
+/// callers.
+#[derive(Debug, Clone, Copy)]
+struct Ending {
+    /// The state to write. `ABORTED` when somebody gave up on the Job,
+    /// `DONE` when it reached its last step — **and a teardown that wrote one
+    /// for the other would be the record lying about what happened**.
+    state: JobState,
+    /// Keep the commits. Always true for a Job that finished: its branch is the
+    /// entire reason it was run.
+    keep_branch: bool,
+    /// Keep the directory.
+    keep_worktree: bool,
+    /// Look at the Job and persist what was seen before ending it.
+    ///
+    /// `kill` needs this: it may be ending a Job that stalled or hit a ceiling
+    /// while nobody was looking, and after this the observation is no longer
+    /// derivable. The loop does not — it has just gated the step and written the
+    /// verdict, so a second observation would only be a chance to disagree with
+    /// itself.
+    observe: bool,
+}
+
+/// **One Job's teardown, and the one of it.**
+///
+/// The order is the point (`commands/fleet/kill.md`): the Drone first because it
+/// is still working, then `manifest clean` so resources are released while the
+/// config describing them is still present, then the worktree, then the branch.
+/// A second copy of this would be a second answer to what Armada orders and what
+/// it tolerates — so `kill`, `reap` and the loop's own finishing pass all arrive
+/// here, and differ only in [`Ending`].
+///
+/// **Nothing here is raised.** `kill`'s documented contract is that the Job is
+/// marked ended either way; what would not release is carried on the row, and
+/// ownership is recorded machine-globally so `armada manifest clean --all`
+/// reclaims the remainder.
+fn tear_down<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    record: &mut Job,
+    ending: Ending,
+) -> Result<Killed, ArmadaError> {
+    let store = place.store();
+    let wall = now.wall_ms();
+    {
         let path = place.expand(&record.worktree);
 
         // **What it was doing is recorded before it is ended.** A Job that
         // stalled or hit a ceiling while nobody was looking has that written
-        // down and raised here, because after this it is `ABORTED` and the
-        // observation is no longer derivable.
-        let (observed, _, _) = look(run, place, &record, wall);
-        settle(&mut record, &observed, place, now)?;
+        // down and raised here, because after this the observation is no longer
+        // derivable.
+        if ending.observe {
+            let (observed, _, _) = look(run, place, record, wall);
+            settle(record, &observed, place, now)?;
+        }
 
         // **Step one: the Drone.** It is still working, and everything below
         // takes away what it is working with.
@@ -1225,7 +1295,7 @@ fn end<R: Run, C: Clock>(
         // **A directory that is already gone is not a failure.** A Job whose
         // worktree somebody deleted by hand is exactly the Job the durable
         // record exists for (PLAN.md §14.1).
-        let disposition = match (keep_worktree, path.exists()) {
+        let disposition = match (ending.keep_worktree, path.exists()) {
             (_, false) => Disposition::Gone,
             (true, true) => Disposition::Kept,
             (false, true) => match worktree::remove(run, &repo_root, &path) {
@@ -1240,7 +1310,7 @@ fn end<R: Run, C: Clock>(
             },
         };
 
-        let branch = if keep_branch || disposition != Disposition::Removed {
+        let branch = if ending.keep_branch || disposition != Disposition::Removed {
             Disposition::Kept
         } else {
             match worktree::delete_branch(run, &repo_root, &record.branch) {
@@ -1251,7 +1321,7 @@ fn end<R: Run, C: Clock>(
             }
         };
 
-        results.push(Killed {
+        let killed = Killed {
             job: record.name.clone(),
             uuid: record.uuid.clone(),
             released: cleaned.released,
@@ -1261,7 +1331,7 @@ fn end<R: Run, C: Clock>(
             branch,
             branch_name: record.branch.clone(),
             error: failure,
-        });
+        };
 
         // **The Job is marked ended whatever happened above.** A `kill` that
         // left a Job live because one container refused to stop would need a
@@ -1270,9 +1340,17 @@ fn end<R: Run, C: Clock>(
         // Its spend is settled from the transcript on the way out, because the
         // transcript is about to be the only thing left that knows.
         record.spend = drone::transcript(&place.stream(&record.uuid)).spend;
-        record.state = JobState::Aborted;
+        record.state = ending.state;
         record.port_block = None;
-        store.save(&record)?;
+        // **A Job whose worktree is gone must not go on claiming it.** The
+        // record is what `armada fleet show` reads a held worktree from, and a
+        // Job that reads as holding a directory nothing can open is the same
+        // shape of lie as a `RUNNING` Job with a dead Drone — which this fleet
+        // has already shown a reader once.
+        if disposition == Disposition::Removed {
+            record.worktree = String::new();
+        }
+        store.save(record)?;
 
         // **Its inbox entries end with it.** Both of the user's Jobs reached
         // `ABORTED` and five entries stayed open against Jobs that no longer
@@ -1283,18 +1361,91 @@ fn end<R: Run, C: Clock>(
         // **After the save, and never instead of it.** A `kill` that failed
         // here must still have ended the Job; an entry left open is a stale
         // row, an unsaved record is a Job nothing can end.
-        close_entries(place, &record)?;
+        close_entries(place, record)?;
+        Ok(killed)
     }
-
-    let error = results.iter().find_map(|killed| killed.error.clone());
-    let data = KillData { results };
-    Ok(Output::Kill(Box::new(match error {
-        Some(error) => Envelope::failed("fleet kill", None, error, data),
-        None => Envelope::ok("fleet kill", None, Status::Clean, data),
-    })))
 }
 
 // --------------------------------------------------------------- pause/resume
+
+/// Release what a Job holds because it has **finished**.
+///
+/// # The happy path was the leak
+///
+/// Every other way a Job ends reclaimed what it held. `spawn`'s rollback did,
+/// `kill` did, `reap` did — and the loop, on the one path a Job takes when it
+/// *succeeds*, did not. So a Job that failed was tidied up and a Job that worked
+/// left its containers, its networks, its **named volumes**, its port block and
+/// its worktree behind for ever. Nobody runs `clean` afterwards, which is how a
+/// machine comes to hold 171 volumes and 12.0 GB.
+///
+/// # What a finished Job keeps, and why
+///
+/// | | `kill` / `reap` | finishing |
+/// |---|---|---|
+/// | containers, networks, **volumes**, images | released | released |
+/// | port block | released | released |
+/// | **branch** | deleted | **kept — it is the whole reason the Job was run** |
+/// | **worktree** | removed | removed **only when there is nothing in it to lose** |
+///
+/// **The branch is never touched.** A Job that reached its last step produced
+/// commits, and those commits are the deliverable; deleting the branch would
+/// make the loop's success indistinguishable from its failure.
+///
+/// # The worktree goes, unless removing it would destroy work
+///
+/// This was the decision, and both answers were arguable.
+///
+/// *Keep it and let `reap` take it* has a real case: `reap` exists for exactly
+/// this, it already offers a `DONE` Job and already ticks it by default, and a
+/// reader who wants to see what the Job did has somewhere to look. It loses on
+/// the evidence, and the evidence is this project's own: **nobody runs the
+/// deferred verb.** That is the identical argument the user made about `clean`,
+/// and answering it with "run `reap`" would be answering "why is my disk full"
+/// with a command he was already not running.
+///
+/// *Remove it always* is what `kill` does, and it is wrong here for one reason:
+/// [`worktree::remove`] forces, and forcing is right when a caller asked for it
+/// by name and wrong when a background pass decided it. Uncommitted work
+/// destroyed by a loop nobody was watching is work nobody agreed to lose.
+///
+/// **So it goes when git says the tree is clean, and stays when it is not** —
+/// and the row says which, because a directory that survives with nothing
+/// explaining it reads as a broken removal. A Job whose tree is dirty stays
+/// offered to `armada fleet reap`, where taking it is a deliberate act in front
+/// of a preview. [`worktree::holds_uncommitted_work`] answers `true` when it
+/// cannot tell, for the same reason the reaper never removes on an errno that is
+/// not `ENOENT`.
+///
+/// **A `FAILED` or halted Job never reaches here.** `Next::Halt` leaves a Job
+/// `PAUSED` and asks a person; its worktree is the evidence for the question it
+/// just raised, and this function is only ever called on `Next::Finish`.
+fn release_on_finish<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    record: &mut Job,
+) -> Result<Killed, ArmadaError> {
+    let path = place.expand(&record.worktree);
+    // **A tree that is not there is not dirty**, and `tear_down` reports it as
+    // `Gone` rather than removing anything.
+    let keep_worktree = path.is_dir() && worktree::holds_uncommitted_work(run, &path);
+    tear_down(
+        run,
+        now,
+        place,
+        record,
+        Ending {
+            state: JobState::Done,
+            keep_branch: true,
+            keep_worktree,
+            // The loop has just gated the step and written the verdict. A second
+            // observation here could only disagree with the one already
+            // recorded.
+            observe: false,
+        },
+    )
+}
 
 /// `armada fleet pause` — stop the Drone, keep the Job.
 ///
@@ -2527,17 +2678,37 @@ fn gate_step<R: Run, C: Clock>(
         }
         advance::Next::Finish => {
             record.pending = None;
-            record.state = JobState::Done;
-            close_entries(place, &record)?;
-            place.store().save(&record)?;
-            Ok(tick_row(
+            // **A Job releases what it holds when it ends.** Everything below
+            // is the same teardown `kill` runs, in the same order, differing
+            // only in where it lands and what it keeps.
+            let ended = release_on_finish(run, now, place, &mut record)?;
+            let mut why = format!("`{step_id}` was its last step");
+            if let Some(summary) = ended.released.summary() {
+                why.push_str(&format!("; released {summary}"));
+            }
+            match ended.worktree {
+                Disposition::Removed => why.push_str(", and its worktree"),
+                // **Said out loud, because it is the reason a directory is
+                // still there.** A reader who finds a finished Job's worktree
+                // on disk with nothing explaining it concludes the removal is
+                // broken; a reader told it holds uncommitted work goes and
+                // looks at it, which is the right next move.
+                Disposition::Kept => why.push_str(
+                    ", and kept its worktree: it holds uncommitted work, so `armada fleet reap` \
+                     is where removing it is a deliberate act",
+                ),
+                Disposition::Gone => {}
+            }
+            let mut row = tick_row(
                 &record,
                 TICK_FINISHED,
-                format!("`{step_id}` was its last step"),
+                why,
                 predicate,
                 evidence,
                 Some(Verdict::Pass),
-            ))
+            );
+            row.released = Some(ended.released);
+            Ok(row)
         }
         advance::Next::Hand { why } => {
             record.pending = None;
@@ -2672,6 +2843,7 @@ fn tick_row(
         predicate,
         evidence,
         why,
+        released: None,
     }
 }
 

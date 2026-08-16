@@ -1824,6 +1824,9 @@ fn fleet_tick_matches_its_fixture() {
             predicate: predicate.map(str::to_string),
             evidence: Vec::new(),
             why: why.to_string(),
+            // Absent on every pass but the one that ends a Job, so absent here:
+            // this fixture freezes the ordinary rows.
+            released: None,
         }
     }
 

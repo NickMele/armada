@@ -70,6 +70,50 @@ pub fn remove(run: &impl Run, repo_root: &Path, path: &Path) -> Result<(), Armad
     call(run, repo_root, argv, "could not remove the worktree")
 }
 
+/// What a worktree still holds that removing it would destroy.
+///
+/// **`remove` above forces, so nothing else can be the guard.** `--force` is
+/// right for `kill`, where a Job was given up on mid-turn and has a dirty tree
+/// by definition and the caller asked by name. It is not right for a removal
+/// that happens *automatically* when a Job finishes: that one nobody asked for,
+/// and uncommitted work destroyed by a background pass is work nobody can get
+/// back and nobody agreed to lose.
+///
+/// So this is the question an automatic caller has to ask first. It is
+/// deliberately conservative in both directions:
+///
+/// - **Untracked files count.** A Drone that wrote a scratch file nobody added
+///   is the ordinary case, and `--force` deletes it with the directory.
+/// - **git failing to answer counts as dirty.** A tree Armada could not inspect
+///   is not a tree Armada may throw away — the same rule
+///   `armada_core::reap` holds for a path that will not `stat`, and for the same
+///   reason: the failure mode of guessing wrong in the other direction is
+///   unrecoverable.
+///
+/// `--porcelain` because it is the only stable spelling; the human `git status`
+/// is explicitly not a format to parse.
+pub fn holds_uncommitted_work(run: &impl Run, path: &Path) -> bool {
+    let argv = [
+        "git",
+        "status",
+        "--porcelain",
+        // Untracked files, but not the contents of an ignored directory:
+        // `node_modules` is not work somebody loses.
+        "--untracked-files=normal",
+    ]
+    .iter()
+    .map(|word| word.to_string())
+    .collect();
+    let Ok(output) = run.call(&RunRequest::new(argv, path.to_path_buf()).timeout(GIT_TIMEOUT))
+    else {
+        return true;
+    };
+    if !output.ok() {
+        return true;
+    }
+    !output.stdout.trim().is_empty()
+}
+
 /// Delete a Job's branch.
 ///
 /// **`-D`, and only ever on the `armada/` namespace** ([`branch_for`]). A Job's
@@ -196,6 +240,76 @@ mod tests {
                 timed_out: false,
             })
         }
+    }
+
+    // ------------------------------------------- what a worktree still holds
+
+    /// The guard that stands between an automatic removal and somebody's work.
+    ///
+    /// **`remove` forces**, so nothing else can be the guard — and forcing is
+    /// right when a person asked by name and wrong when a background pass
+    /// decided.
+    #[test]
+    fn a_clean_tree_holds_nothing_and_a_dirty_one_does() {
+        let clean = FakeRun::ok();
+        assert!(!holds_uncommitted_work(&clean, Path::new("/wt")));
+
+        let dirty = FakeRun {
+            stdout: " M src/lib.rs\n".to_string(),
+            ..FakeRun::ok()
+        };
+        assert!(holds_uncommitted_work(&dirty, Path::new("/wt")));
+    }
+
+    /// **Untracked files count.** A Drone that wrote a scratch file nobody added
+    /// is the ordinary case, and `--force` would delete it with the directory.
+    #[test]
+    fn an_untracked_file_is_work_somebody_could_lose() {
+        let untracked = FakeRun {
+            stdout: "?? notes.md\n".to_string(),
+            ..FakeRun::ok()
+        };
+        assert!(holds_uncommitted_work(&untracked, Path::new("/wt")));
+    }
+
+    /// **A tree Armada could not inspect is not a tree Armada may throw away.**
+    /// The same rule the reaper holds for a path that will not `stat`, and for
+    /// the same reason: guessing wrong in this direction is unrecoverable.
+    #[test]
+    fn a_git_that_will_not_answer_counts_as_holding_work() {
+        assert!(holds_uncommitted_work(
+            &FakeRun::refusing("not a git repository"),
+            Path::new("/wt")
+        ));
+
+        struct Missing;
+        impl Run for Missing {
+            fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+                Err(SpawnError {
+                    program: request.argv[0].clone(),
+                    kind: armada_core::ctx::SpawnErrorKind::NotFound,
+                    message: "no such file".to_string(),
+                })
+            }
+        }
+        assert!(holds_uncommitted_work(&Missing, Path::new("/wt")));
+    }
+
+    /// `--porcelain`, because the human `git status` is explicitly not a format
+    /// to parse — and asked **in the worktree**, which is the only directory
+    /// whose answer is about this Job.
+    #[test]
+    fn the_question_is_asked_in_porcelain_and_in_the_worktree() {
+        let run = FakeRun::ok();
+        holds_uncommitted_work(&run, Path::new("/wt"));
+        let argv = run.argv();
+        assert_eq!(argv[0], "git");
+        assert_eq!(argv[1], "status");
+        assert!(argv.contains(&"--porcelain".to_string()), "{argv:?}");
+        assert!(
+            argv.iter().any(|a| a.starts_with("--untracked-files")),
+            "untracked files decide this, so they have to be asked for: {argv:?}"
+        );
     }
 
     /// **`-b` is not optional**, and this is the assertion that keeps it there:

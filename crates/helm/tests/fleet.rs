@@ -438,8 +438,13 @@ impl Run for Harness {
             [_, "manifest", "init", "--json"] => ok(
                 r#"{"schema_version":2,"verb":"init","workspace":"3d9cc7ba","status":"READY","error":null,"data":{"port_block":{"from":5470,"to":5479},"claimed_at":"t","reaped":{},"results":[]}}"#,
             ),
+            // **A volume in the reply, deliberately.** A named volume outlives
+            // `down` and outlives its container, so it is the resource a
+            // teardown most easily leaves behind — and a fixture releasing
+            // zero of them could never tell a `clean` that reclaims volumes
+            // from one that quietly does not.
             [_, "manifest", "clean", "--json"] => ok(
-                r#"{"schema_version":2,"verb":"clean","status":"CLEAN","error":null,"data":{"reaped":{},"results":[{"id":"a","status":"CLEAN","released":{"processes":0,"containers":3,"networks":0,"volumes":0,"images":0,"port_block":true,"files":0}}]}}"#,
+                r#"{"schema_version":2,"verb":"clean","status":"CLEAN","error":null,"data":{"reaped":{},"results":[{"id":"a","status":"CLEAN","released":{"processes":0,"containers":3,"networks":1,"volumes":2,"images":0,"port_block":true,"files":0}}]}}"#,
             ),
             ["git", ..] => ok(""),
             other => Err(SpawnError {
@@ -3941,6 +3946,85 @@ fn a_finished_exchange_advances_the_step_instead_of_leaving_the_job_running_for_
 
 /// **The done-when, less its `review` step** (PHASES.md §8.6).
 ///
+/// **A finished Job whose tree is dirty keeps its worktree, and says so.**
+///
+/// The other half of the guard, and the half that matters most. `worktree::remove`
+/// forces — right when a person asked for it by name, wrong when a background
+/// pass decided — so an automatic removal asks git first and stands down when
+/// the answer is that there is work in there.
+///
+/// **This is the failure the guard was written against**: a full disk fixed at
+/// the cost of somebody's uncommitted work. A loop nobody was watching must not
+/// be able to do that.
+#[test]
+fn a_finished_job_holding_uncommitted_work_keeps_its_worktree() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: land it\nends_at: branch\n\
+         budget:\n  iterations: 20\n  tokens: 600000\n  wall_clock: 90m\n  \
+         on_exhausted: needs_human\nsteps:\n\
+         \x20 - id: land\n    skill: land-branch\n    verify: { must: branch_exists }\n",
+    );
+
+    let run = scratch
+        .harness()
+        // The Drone left something uncommitted behind, which is ordinary.
+        .answering("status --porcelain --untracked-files", 0, " M src/lib.rs\n");
+
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("land the change")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
+    let last = rows.last().unwrap();
+    assert_eq!(last.did, "finished", "{rows:#?}");
+
+    // **The machine resources still go.** Keeping the directory is not a reason
+    // to keep the containers, the networks or the named volumes — those are not
+    // work anybody can lose.
+    let released = last.released.as_ref().expect("it released its resources");
+    assert_eq!(released.volumes, 2, "a dirty tree kept the volumes too");
+    assert!(released.port_block);
+
+    // **And the worktree stays.**
+    assert!(
+        run.at_index(&["worktree", "remove"]).is_none(),
+        "uncommitted work was destroyed by a pass nobody was watching: {:#?}",
+        run.calls()
+    );
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert!(
+        !record.worktree.is_empty(),
+        "the record forgot a worktree that is still there"
+    );
+    assert!(
+        scratch.place().expand(&record.worktree).is_dir(),
+        "the directory is gone despite the guard"
+    );
+
+    // **Said out loud.** A directory that survives with nothing explaining it
+    // reads as a broken removal; a reader told why goes and looks at it.
+    assert!(
+        last.why.contains("uncommitted work"),
+        "the row does not say why the worktree is still there: {}",
+        last.why
+    );
+    assert!(
+        last.why.contains("reap"),
+        "the row does not say where removing it is a deliberate act: {}",
+        last.why
+    );
+}
+
 /// A bug workflow reproduces a failure, writes a test that fails first, fixes
 /// it, gets `check` green and lands on a local branch — with **no human turn in
 /// the middle**. Every gate is decided by an external command: a search of the
@@ -4013,6 +4097,81 @@ fn a_bug_workflow_reproduces_fixes_and_lands_with_no_human_turn_in_the_middle() 
     assert_eq!(record.state, JobState::Done);
     assert_eq!(record.step, "land");
     assert_eq!(record.verdict, Some(armada_core::fleet::Verdict::Pass));
+
+    // **A Job releases what it holds when it ends**, rather than waiting for
+    // somebody to run `clean`. Nobody runs it, which is how a machine comes to
+    // hold 171 named volumes and 12.0 GB — a volume outlives `down` and
+    // outlives its container by design, so nothing else would ever have
+    // reclaimed these.
+    let released = last
+        .released
+        .as_ref()
+        .unwrap_or_else(|| panic!("the finishing pass released nothing: {rows:#?}"));
+    assert_eq!(released.volumes, 2, "the named volumes were left behind");
+    assert_eq!(released.containers, 3);
+    assert_eq!(released.networks, 1);
+    assert!(released.port_block, "the block was not handed back");
+
+    // **And it is on the row a person reads**, not only in the payload: a
+    // reclaim that is not reported is one nobody can audit (`reap.rs`).
+    assert!(
+        last.why.contains("2 volumes"),
+        "the row does not say what went: {}",
+        last.why
+    );
+
+    // The block is gone from the record too, so the next `spawn` does not
+    // believe it is still taken.
+    assert_eq!(record.port_block, None);
+
+    // **The worktree goes, because there was nothing in it to lose.** The happy
+    // path was the leak: every other way a Job ended reclaimed its worktree and
+    // the one path a Job takes when it *succeeds* did not, so a Job that worked
+    // left its directory behind for ever.
+    assert!(
+        run.at_index(&["worktree", "remove"]).is_some(),
+        "finishing left the worktree behind: {:#?}",
+        run.calls()
+    );
+    assert!(
+        !scratch.place().expand(&data.uuid).is_dir()
+            || !scratch.place().expand(&record.worktree).is_dir(),
+        "the worktree is still on disk"
+    );
+
+    // **git was asked first, and that is the guard.** `worktree::remove` forces,
+    // which is right when a person asked by name and wrong when a background
+    // pass decided — so an automatic removal asks whether there is uncommitted
+    // work before it destroys any.
+    assert!(
+        run.at_index(&["status", "--porcelain"]).is_some(),
+        "the worktree was removed without asking whether it held work: {:#?}",
+        run.calls()
+    );
+    assert!(
+        run.at_index(&["status", "--porcelain"]).unwrap()
+            < run.at_index(&["worktree", "remove"]).unwrap(),
+        "the tree was removed before anything asked what was in it"
+    );
+
+    // **The branch survives, and that is the difference from `kill`.** A Job
+    // that finished produced commits, and those commits are the deliverable —
+    // deleting the branch would make success indistinguishable from failure.
+    assert!(
+        run.at_index(&["branch", "-D"]).is_none(),
+        "finishing deleted the branch: {:#?}",
+        run.calls()
+    );
+
+    // **And the record does not go on claiming a directory that is gone.** A
+    // Job reading as holding a worktree nothing can open is the same shape of
+    // lie as a `RUNNING` Job with a dead Drone, which this fleet has already
+    // shown a reader once.
+    assert!(
+        record.worktree.is_empty(),
+        "the record still claims a worktree that was removed: {:?}",
+        record.worktree
+    );
 
     // **Nothing asked a person anything.** That is the clause the milestone
     // turns on, and an inbox entry is the only way it could have.

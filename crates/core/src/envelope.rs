@@ -400,6 +400,46 @@ pub struct Released {
     pub files: usize,
 }
 
+impl Released {
+    /// What went, as a clause for a sentence — or [`None`] when nothing did.
+    ///
+    /// **Reclaiming is reported, never silent** (`reap.rs`), and a Job that
+    /// finishes now reclaims — so the pass that ended it has to say what it
+    /// took. [`None`] rather than `"nothing"` so the caller can leave the clause
+    /// off entirely: *"`review` was its last step; released nothing"* is noise
+    /// on the ordinary Job that held no services at all.
+    ///
+    /// **Volumes are named even though they are the least familiar of these**,
+    /// because they are the one that leaks: a named volume outlives `down` and
+    /// outlives its container by design, so it is the count a reader most needs
+    /// to see go down.
+    pub fn summary(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        for (count, singular) in [
+            (self.processes, "process group"),
+            (self.containers, "container"),
+            (self.networks, "network"),
+            (self.volumes, "volume"),
+            (self.images, "image"),
+            (self.files, "file"),
+        ] {
+            if count > 0 {
+                parts.push(match count {
+                    1 => format!("1 {singular}"),
+                    n => format!("{n} {singular}s"),
+                });
+            }
+        }
+        if self.port_block {
+            parts.push("its port block".to_string());
+        }
+        match parts.is_empty() {
+            true => None,
+            false => Some(parts.join(", ")),
+        }
+    }
+}
+
 /// `armada manifest init`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct InitData {
@@ -2542,6 +2582,19 @@ pub struct TickRow {
     pub evidence: Vec<Evidence>,
     /// Why, in words, for the screen and the inbox.
     pub why: String,
+    /// What the Job released **because it ended**, on the pass that ended it.
+    ///
+    /// **A Job that finishes releases what it holds, rather than waiting for
+    /// somebody to run `clean`.** `armada fleet kill` already reports this as
+    /// [`Killed::released`], and the two paths reach the same state — the
+    /// difference was only that one of them was reported and the other left a
+    /// named volume alive with nothing on screen to say so. A named volume
+    /// outlives `down`, outlives its container, and is what 171 of came to
+    /// 12.0 GB on the machine this was written for.
+    ///
+    /// Absent on every other pass, because nothing was released on one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub released: Option<Released>,
 }
 
 /// `fleet.verdict` — how a step ended (PLAN.md §14.3).
