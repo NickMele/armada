@@ -174,11 +174,6 @@ pub enum Runner {
     Fleet,
 }
 
-/// The ceilings, per workflow (PLAN.md §14.3).
-///
-/// **Read off data Claude Code already emits** — `total_cost_usd`, `usage`,
-/// `num_turns` and `duration_api_ms` from the turn's `result` event
-/// (PHASES.md §9.1 F2). Fleet builds no accounting layer and estimates nothing.
 /// What a budget written before the cost ceiling existed reads as.
 ///
 /// **A record on disk outlives the shape that wrote it.** `tokens` became
@@ -194,6 +189,11 @@ fn default_cost() -> f64 {
     10.00
 }
 
+/// The ceilings, per workflow (PLAN.md §14.3).
+///
+/// **Read off data Claude Code already emits** — `total_cost_usd`, `usage`,
+/// `num_turns` and `duration_api_ms` from the turn's `result` event
+/// (PHASES.md §9.1 F2). Fleet builds no accounting layer and estimates nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Budget {
     /// How many turns the **Job** may spend before the rope runs out.
