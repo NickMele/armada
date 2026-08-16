@@ -574,13 +574,13 @@ pub fn monitors_json(inbox: &str) -> String {
 /// would fire it in every session on the machine — including a Drone's, and a
 /// Drone held open until the inbox is read is a Drone that cannot finish the
 /// work the inbox is about.
+/// **The document is Fleet's now, and this is a re-export.** A Drone registers
+/// a `Stop` hook of its own (`020` §1), and two hand-written copies of the same
+/// JSON would be two shapes by the third edit. `ARCHITECTURE.md` §1.9 decides
+/// which way the call goes: Helm may reference Fleet, Fleet may not reference
+/// Helm, so the shared document lives in the lower module.
 pub fn settings_json(hook: &str) -> String {
-    format!(
-        "{{\n  \"hooks\": {{\n    \"Stop\": [\n      {{\n        \"hooks\": [\n          \
-         {{\n            \"type\": \"command\",\n            \"command\": {}\n          }}\n        \
-         ]\n      }}\n    ]\n  }}\n}}\n",
-        quote(hook)
-    )
+    crate::fleet::drone::settings_json(hook)
 }
 
 /// What the `Stop` hook runs: **nine lines of shell, and no daemon**.
@@ -600,19 +600,39 @@ pub fn settings_json(hook: &str) -> String {
 /// **No `jq` and no `python`.** A hook that depends on a tool the machine may
 /// not have is a backstop that silently stops backing anything up, so this is
 /// `grep -c` and `printf` against a file of one JSON document per line.
-pub fn stop_hook(inbox: &str) -> String {
+/// **It also sweeps the fleet, which is `020` §2's backstop.**
+///
+/// Every Drone's own `Stop` hook ticks the fleet when its exchange ends
+/// (`crate::fleet::drone::stop_hook`), and that relay has three ways to be
+/// lost: a SIGKILL, a hook that could not run, a crash in between. Helm's turn
+/// ending is the second event that is guaranteed to happen — you cannot talk to
+/// the orchestrator without one — so the moment you ask Helm anything at all,
+/// every Job the relay dropped is caught up. That is the same two-mechanism
+/// shape §15.3 already uses here: the monitor pushes, the hook backstops.
+///
+/// **Backgrounded, and it must be.** A hook's answer holds the turn open; a
+/// fleet-wide tick reads transcripts, runs a `ps` and may start a check, and
+/// Helm's reply is not waiting on any of that. The sweep is fire-and-forget and
+/// its result arrives the ordinary way — in the inbox, on the next screen.
+///
+/// `exe` is the absolute path of the running `armada`, never the bare word, for
+/// `crate::fleet::drone::stop_hook`'s reason.
+pub fn stop_hook(inbox: &str, exe: &str) -> String {
     format!(
         "#!/bin/sh\n\
          # Written by `armada helm`. Regenerated on every launch; edit the verb, not this.\n\
          # The backstop of PLAN.md §15.3: a turn does not end while the inbox is unread.\n\
+         # And of `020` §2: a turn of Helm's catches up every Job the relay dropped.\n\
          inbox={inbox}\n\
+         {armada} fleet tick >/dev/null 2>&1 &\n\
          [ -f \"$inbox\" ] || exit 0\n\
          unread=$(grep -c '\"answered\":false' \"$inbox\" 2>/dev/null || echo 0)\n\
          [ \"$unread\" -gt 0 ] || exit 0\n\
          printf '{{\"decision\":\"block\",\"reason\":\"%s unread inbox %s. \
          Call fleet.inbox, then report what needs the user.\"}}\\n' \\\n\
          \"$unread\" \"$([ \"$unread\" -eq 1 ] && echo entry || echo entries)\"\n",
-        inbox = shell_quote(inbox)
+        inbox = shell_quote(inbox),
+        armada = shell_quote(exe),
     )
 }
 

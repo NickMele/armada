@@ -61,13 +61,13 @@ pub const CLAUDE: &str = "claude";
 /// `--session-id` is what makes the caller the one who assigns identity, which
 /// is the whole of PHASES.md §9.1 F1: the uuid exists before the process, so the
 /// transcript's location is known before there is a transcript.
-pub fn spawn_argv(uuid: &str, prompt: &str, posture: &Posture) -> Vec<String> {
+pub fn spawn_argv(uuid: &str, prompt: &str, posture: &Posture, settings: Option<&str>) -> Vec<String> {
     let mut argv = vec![
         CLAUDE.to_string(),
         "--session-id".to_string(),
         uuid.to_string(),
     ];
-    argv.extend(headless(posture));
+    argv.extend(headless(posture, settings));
     argv.push(prompt.to_string());
     argv
 }
@@ -77,9 +77,14 @@ pub fn spawn_argv(uuid: &str, prompt: &str, posture: &Posture) -> Vec<String> {
 /// **An answer is a continuation, not a new run**, so the budget is not reset
 /// and the session is resumed rather than minted. Resetting the ceiling here
 /// would make budgets unenforceable for any Job that asks a question.
-pub fn resume_argv(uuid: &str, prompt: &str, posture: &Posture) -> Vec<String> {
+pub fn resume_argv(
+    uuid: &str,
+    prompt: &str,
+    posture: &Posture,
+    settings: Option<&str>,
+) -> Vec<String> {
     let mut argv = vec![CLAUDE.to_string(), "--resume".to_string(), uuid.to_string()];
-    argv.extend(headless(posture));
+    argv.extend(headless(posture, settings));
     argv.push(prompt.to_string());
     argv
 }
@@ -100,8 +105,8 @@ pub const CONTINUE: &str = "Continue from where you left off.";
 
 /// The argv for **resuming** a Job nobody said anything to —
 /// `armada fleet resume`.
-pub fn continue_argv(uuid: &str, posture: &Posture) -> Vec<String> {
-    resume_argv(uuid, CONTINUE, posture)
+pub fn continue_argv(uuid: &str, posture: &Posture, settings: Option<&str>) -> Vec<String> {
+    resume_argv(uuid, CONTINUE, posture, settings)
 }
 
 /// The argv `armada fleet board` prints, and execs under `--exec`.
@@ -151,9 +156,16 @@ pub fn board_argv(uuid: &str) -> Vec<String> {
 /// the session the flag is passed to, so a resumed turn that carries it is a
 /// turn that still knows the contract; one that did not would be a Drone whose
 /// instructions expired at its first question.
-fn headless(posture: &Posture) -> Vec<String> {
+/// **`--settings` carries the `Stop` hook, and it comes before `--print`** for
+/// the same reason the posture does: everything variadic has to be behind a
+/// flag that ends it, and the prompt is last.
+fn headless(posture: &Posture, settings: Option<&str>) -> Vec<String> {
     let mut argv = vec![APPEND.to_string(), brief()];
     argv.extend(posture.argv());
+    if let Some(path) = settings {
+        argv.push(SETTINGS.to_string());
+        argv.push(path.to_string());
+    }
     argv.push("--print".to_string());
     argv.push("--output-format".to_string());
     argv.push(STREAM_JSON.to_string());
@@ -585,6 +597,131 @@ pub const ALLOWED: &str = "--allowedTools";
 /// that, not Armada.
 pub const DISALLOWED: &str = "--disallowedTools";
 
+/// The flag that layers a Drone's own settings — and therefore its `Stop`
+/// hook — over the reader's, **for the length of one exchange**.
+///
+/// Registering the hook in `~/.claude/settings.json` instead would fire it in
+/// every session on the machine, including the reader's own and Helm's.
+pub const SETTINGS: &str = "--settings";
+
+/// How long the relay waits for its Drone to actually exit, in seconds.
+///
+/// **A cap rather than a deadline.** The hook cannot tick while the Drone it is
+/// relaying for is still alive — a Job with a live process group observes as
+/// `RUNNING` and is deliberately not gated ([`super::advance::attention`]) —
+/// so it waits, and an exchange that never ends would otherwise leave one
+/// `sh` per Job waiting forever. An hour is well past any real exchange, and a
+/// Drone still going at that point is a Job its own wall-clock ceiling will
+/// stop.
+pub const RELAY_CAP_S: u32 = 3_600;
+
+/// The `Stop` hook a Drone runs — **the event `020` §1 says nothing was
+/// watching**.
+///
+/// # What it is for
+///
+/// A Drone runs one exchange under `--print` and exits. That is correct, and it
+/// is why `spawn` can return and five Jobs can run at once. What was missing is
+/// anything that *observed the exchange ending*: `armada fleet tick` existed
+/// and nobody called it, so a Job sat `RUNNING` beside a dead Drone until
+/// somebody typed the verb. The reader lost eight hours to exactly that.
+///
+/// **The hook is the relay because a hook cannot be forgotten.** PLAN.md §15.3:
+/// *"an agent can forget to report progress, but it cannot forget to stop"*.
+/// This is that argument applied to the loop rather than to the inbox.
+///
+/// # Why it waits, and why the wait is not a daemon
+///
+/// **A `Stop` hook runs while its session is still alive.** Ticking from inside
+/// it would find a live process group, observe `RUNNING`, and decline to gate —
+/// correctly, because gating a live exchange starts a check against a worktree
+/// still being written to. Worse, advancing would `claude --resume` a session
+/// that has not closed.
+///
+/// So the hook backgrounds one `sh` that waits for the Drone's own process to
+/// go, and only then ticks. **It watches the process-group leader's pid**,
+/// which under `setsid` *is* the Drone — read from `ps` rather than passed in,
+/// because the hook is written before the process exists and therefore before
+/// its pid does. It is one short-lived shell per exchange, it holds no lease,
+/// it recovers nothing, and killing the Job's group kills it too — which is the
+/// difference between this and the daemon `020` §1 refuses.
+///
+/// # It ticks the **whole fleet**, and that is the backstop
+///
+/// `020` §2's failure modes — a SIGKILLed Drone, a hook that could not run, a
+/// crash between the two — all break *this Job's* relay, and no amount of care
+/// inside one hook fixes them. What does is that every relay sweeps every Job:
+/// a Job whose own hook was lost is picked up by the next Drone **anywhere on
+/// the machine** to finish an exchange. `armada fleet tick` is idempotent and
+/// cheap over an idle fleet — a directory listing, a transcript tail and a
+/// `ps` — so the sweep costs the fleet nothing and is the second mechanism
+/// PLAN.md §15.3 asks for.
+///
+/// **A read verb ticking would be the wrong repair.** `armada fleet ls`
+/// advancing a Job behind the reader's back breaks PLAN.md §15.1, and `020` §1
+/// rejects it by name; reporting a Job as `STALLED` is honest, doing the work
+/// unasked is not.
+///
+/// # Shell, and what it may depend on
+///
+/// **No `jq` and no `python`**, for the reason Helm's hook gives: a backstop
+/// that depends on a tool the machine may not have is a backstop that silently
+/// stops backing anything up. This is `ps`, `kill -0` and `sleep`.
+///
+/// `exe` is the absolute path of the running `armada` — **not the bare word.**
+/// A hook that resolved `armada` against the Drone's `PATH` is precisely `020`
+/// §2's second failure mode, and it is the only one of the three that is fixed
+/// rather than backstopped.
+pub fn stop_hook(exe: &str) -> String {
+    format!(
+        "#!/bin/sh\n\
+         # Written by Armada for one Job's Drone. Regenerated on every exchange;\n\
+         # edit the verb, not this. See `020` §1: the exchange ending is the event.\n\
+         armada={exe}\n\
+         leader=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')\n\
+         [ -n \"$leader\" ] || exit 0\n\
+         {{\n\
+         \x20 waited=0\n\
+         \x20 while [ \"$waited\" -lt {cap} ] && kill -0 \"$leader\" 2>/dev/null; do\n\
+         \x20   waited=$((waited + 1))\n\
+         \x20   sleep 1\n\
+         \x20 done\n\
+         \x20 kill -0 \"$leader\" 2>/dev/null || \"$armada\" fleet tick\n\
+         }} >/dev/null 2>&1 &\n\
+         exit 0\n",
+        exe = shell_quote(exe),
+        cap = RELAY_CAP_S,
+    )
+}
+
+/// The `--settings` document that registers [`stop_hook`].
+///
+/// **Fleet's, and Helm's is a re-export of it** — `crate::helm::settings_json`
+/// calls this rather than the other way round, because `ARCHITECTURE.md` §1.9
+/// says nothing points upward: Fleet may not reference Helm, and Helm may
+/// reference Fleet. One document, one shape, in the lower module.
+pub fn settings_json(hook: &str) -> String {
+    format!(
+        "{{\n  \"hooks\": {{\n    \"Stop\": [\n      {{\n        \"hooks\": [\n          \
+         {{\n            \"type\": \"command\",\n            \"command\": {}\n          }}\n        \
+         ]\n      }}\n    ]\n  }}\n}}\n",
+        json_quote(hook)
+    )
+}
+
+/// A string as a JSON scalar. Hand-written for the reason
+/// `crate::helm::quote` gives: these documents are written in reading order and
+/// a `serde_json::Value` map alphabetises them (`docs/traps.md`).
+fn json_quote(value: &str) -> String {
+    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
+/// A path as one shell word. A `$HOME` containing a space is ordinary on macOS.
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 /// The output format a Drone's turn is read from.
 pub const STREAM_JSON: &str = "stream-json";
 
@@ -615,7 +752,11 @@ pub const STREAM_JSON_NEEDS: [&str; 1] = ["--verbose"];
 /// The uuid is a fixed sentinel, so the probe reuses one transcript rather than
 /// leaving a new one behind on every run.
 pub fn probe_argv() -> Vec<String> {
-    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default());
+    // **No `--settings`, because the probe must start nothing.** `doctor`'s
+    // free probe reaches EOF and exits; a `Stop` hook on it would relay an
+    // exchange that never happened. The flag is held against `claude --help`
+    // by [`FLAGS`], which is where a renamed flag is caught.
+    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default(), None);
     argv.pop();
     argv.push("--input-format".to_string());
     argv.push(STREAM_JSON.to_string());
@@ -634,7 +775,11 @@ pub const PROBE_SESSION: &str = "00000000-0000-4000-8000-0000000a2ada";
 /// added after: a Job that spawns, records a worktree and a port block, and
 /// whose Drone dies on a usage error nobody sees until `fleet ls` says
 /// `STALLED`.
-pub const FLAGS: [&str; 13] = [
+pub const FLAGS: [&str; 14] = [
+    // The relay's, which carries the `Stop` hook that ticks the Job (`020`
+    // §1). Its disappearance is the quietest failure of all — every Job still
+    // spawns, and none of them ever advances a step again.
+    SETTINGS,
     "--session-id",
     "--resume",
     "--print",
@@ -857,7 +1002,7 @@ mod tests {
     #[test]
     fn a_first_turn_assigns_the_session_id_before_anything_starts() {
         assert_eq!(
-            spawn_argv(UUID, "reproduce the flake", &narrow()),
+            spawn_argv(UUID, "reproduce the flake", &narrow(), None),
             [
                 "claude",
                 "--session-id",
@@ -890,7 +1035,7 @@ mod tests {
     /// on the first `git commit` it reached.
     #[test]
     fn a_drone_is_granted_permission_to_do_the_work_it_was_given() {
-        let argv = spawn_argv(UUID, "fix the flake", &Posture::default());
+        let argv = spawn_argv(UUID, "fix the flake", &Posture::default(), None);
         assert!(
             argv.iter().any(|word| word == "--permission-mode"),
             "{argv:?} grants nothing, so the first state-mutating call stalls"
@@ -932,9 +1077,9 @@ mod tests {
     fn nothing_a_drone_runs_bypasses_permissions_altogether() {
         let posture = Posture::default();
         let argvs = [
-            spawn_argv(UUID, "go", &posture),
-            resume_argv(UUID, "go", &posture),
-            continue_argv(UUID, &posture),
+            spawn_argv(UUID, "go", &posture, None),
+            resume_argv(UUID, "go", &posture, None),
+            continue_argv(UUID, &posture, None),
             probe_argv(),
             board_argv(UUID),
         ];
@@ -980,8 +1125,8 @@ mod tests {
         ];
         for posture in postures {
             for argv in [
-                spawn_argv(UUID, "a prompt", &posture),
-                resume_argv(UUID, "a prompt", &posture),
+                spawn_argv(UUID, "a prompt", &posture, None),
+                resume_argv(UUID, "a prompt", &posture, None),
             ] {
                 let variadic = argv
                     .iter()
@@ -1017,11 +1162,11 @@ mod tests {
     fn the_brief_and_the_task_both_reach_the_argv() {
         for (argv, turn) in [
             (
-                spawn_argv(UUID, "fix the flake", &narrow()),
+                spawn_argv(UUID, "fix the flake", &narrow(), None),
                 "fix the flake",
             ),
             (resume_argv(UUID, "yes, 90s", &narrow()), "yes, 90s"),
-            (continue_argv(UUID, &narrow()), CONTINUE),
+            (continue_argv(UUID, &narrow(), None), CONTINUE),
         ] {
             let at = argv
                 .iter()
@@ -1257,8 +1402,8 @@ mod tests {
     #[test]
     fn every_stream_json_argv_carries_what_the_cli_requires_with_it() {
         for argv in [
-            spawn_argv(UUID, "go", &Posture::default()),
-            resume_argv(UUID, "carry on", &Posture::default()),
+            spawn_argv(UUID, "go", &Posture::default(), None),
+            resume_argv(UUID, "carry on", &Posture::default(), None),
         ] {
             assert!(
                 argv.iter().any(|word| word == STREAM_JSON),
@@ -1305,7 +1450,7 @@ mod tests {
     #[test]
     fn the_doctor_probe_is_the_spawn_argv_with_nothing_to_say() {
         let probe = probe_argv();
-        let real = spawn_argv(PROBE_SESSION, "go", &Posture::default());
+        let real = spawn_argv(PROBE_SESSION, "go", &Posture::default(), None);
 
         // Every flag of the real argv, in the same order.
         let flags = |argv: &[String]| -> Vec<String> {
@@ -1343,9 +1488,9 @@ mod tests {
     /// disappearing.
     #[test]
     fn every_flag_the_drone_uses_is_one_doctor_checks_for() {
-        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default())
+        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default(), None)
             .into_iter()
-            .chain(resume_argv(UUID, "go", &Posture::default()))
+            .chain(resume_argv(UUID, "go", &Posture::default(), None))
             .chain(super::super::classify::argv("go"))
             .chain(probe_argv())
             .filter(|word| word.starts_with("--"))
@@ -1427,9 +1572,9 @@ mod tests {
     #[test]
     fn every_headless_turn_carries_armadas_own_skill() {
         for argv in [
-            spawn_argv(UUID, "fix the flake", &Posture::default()),
-            resume_argv(UUID, "yes", &Posture::default()),
-            continue_argv(UUID, &Posture::default()),
+            spawn_argv(UUID, "fix the flake", &Posture::default(), None),
+            resume_argv(UUID, "yes", &Posture::default(), None),
+            continue_argv(UUID, &Posture::default(), None),
         ] {
             let at = argv
                 .iter()
@@ -1469,7 +1614,7 @@ mod tests {
     /// text and a shell has already had its turn with it.
     #[test]
     fn the_prompt_is_one_argument_however_many_words_it_has() {
-        let argv = spawn_argv(UUID, "add rate limiting to the API --json", &narrow());
+        let argv = spawn_argv(UUID, "add rate limiting to the API --json", &narrow(), None);
         assert_eq!(argv.last().unwrap(), "add rate limiting to the API --json");
         assert_eq!(argv.len(), 17);
         // And a prompt that *looks* like a flag is still the prompt, because a

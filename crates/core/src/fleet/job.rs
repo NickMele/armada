@@ -139,6 +139,100 @@ pub struct Job {
     /// Additive and defaulted, for the reason above.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub facts: std::collections::BTreeMap<String, String>,
+    /// How many finished turns the last `armada fleet tick` **gated**.
+    ///
+    /// **The watermark that makes `STALLED` provable** (`020` §1 and §6). A
+    /// Drone runs one exchange and exits; the transcript grows by one `result`
+    /// event each time. Comparing that count against this one answers the
+    /// question the old observation could not ask — *has anything observed the
+    /// exchange that just ended?* — and it is the difference between the
+    /// ordinary rest between turns and the eight hours a dead Job spent drawn
+    /// as `RUNNING`.
+    ///
+    /// **A count rather than a timestamp**, because the fact is *which*
+    /// exchange was seen and not *when* somebody looked. A timestamp would need
+    /// a grace period to avoid flapping, and a grace period is a number that
+    /// has to be right on a slow machine and on a fast one.
+    ///
+    /// Written by [`crate::fleet::advance`]'s driver and by nothing else.
+    /// Additive, so `schema_version` stays 1, and defaulted so every Job record
+    /// written before this field existed still parses — a record from before
+    /// this landed reads as `0`, which is *due a tick*, which is the honest
+    /// answer for a Job nothing has ever ticked.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub ticked_turns: usize,
+    /// What somebody is doing to this Job **right now**, while they do it
+    /// (`020` §5).
+    ///
+    /// **On disk, because the process doing it is not the process drawing it.**
+    /// The bug was a screen that said nothing for several seconds during an
+    /// abort that was working; the terminal running the abort was blocked
+    /// inside `armada manifest clean`, so the only thing that *could* have
+    /// reported it is another reader of the same record. Writing the transient
+    /// down is what makes a second surface able to say `ABORTING · docker 12s…`
+    /// at all.
+    ///
+    /// **Cleared when the action settles, and stale rather than wrong if the
+    /// process died mid-action.** A reader can tell: the Drone will not be
+    /// alive, so the row reads as an action that stopped rather than as one
+    /// still running.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doing: Option<Doing>,
+}
+
+/// `serde`'s `skip_serializing_if` needs a path, and `usize::eq` is not one.
+fn is_zero(count: &usize) -> bool {
+    *count == 0
+}
+
+/// One action with a duration, while it runs (`020` §5).
+///
+/// **The slow part is named, and that is the whole feature.** `ABORTING` alone
+/// says an abort is happening; `ABORTING · docker 12s…` says which of the four
+/// things an abort does is the one taking the time, which is the only question
+/// a reader watching a stalled screen actually has.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Doing {
+    /// Which action.
+    pub acting: super::Acting,
+    /// The slow part, as the reader is told it — `docker`, `worktree`,
+    /// `ports`. **`None` before the action has reached anything slow**, which
+    /// is honest rather than defaulted: naming a stage that has not started is
+    /// the same untruth as a progress bar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slow: Option<String>,
+    /// Wall clock milliseconds when [`Doing::slow`] was entered, so `12s…` is a
+    /// subtraction rather than a timer somebody has to keep.
+    pub since_ms: u64,
+}
+
+impl Doing {
+    /// Start an action that has not reached anything slow yet.
+    pub const fn started(acting: super::Acting, now_ms: u64) -> Doing {
+        Doing {
+            acting,
+            slow: None,
+            since_ms: now_ms,
+        }
+    }
+
+    /// Name the slow part, and restart its clock.
+    ///
+    /// **The clock is per stage, not per action.** *"12s"* against the whole
+    /// abort tells a reader nothing about whether docker is wedged; against the
+    /// docker stage it tells them exactly that.
+    pub fn at(&self, slow: &str, now_ms: u64) -> Doing {
+        Doing {
+            acting: self.acting,
+            slow: Some(slow.to_string()),
+            since_ms: now_ms,
+        }
+    }
+
+    /// How long the named stage has been running.
+    pub const fn elapsed_ms(&self, now_ms: u64) -> u64 {
+        now_ms.saturating_sub(self.since_ms)
+    }
 }
 
 /// What a step's gate is waiting on.
@@ -472,6 +566,45 @@ impl Job {
     pub const fn run_time_ms(&self, now_ms: u64) -> u64 {
         now_ms.saturating_sub(self.created_ms)
     }
+
+    /// The word a row's status column shows — **the action, when there is one**
+    /// (`020` §5).
+    ///
+    /// **Composed here rather than at each surface.** `ABORTING` is not a
+    /// [`JobState`] ([`super::Acting`] says why), so every renderer would
+    /// otherwise have to remember to prefer one over the other, and the one
+    /// that forgot would draw `RUNNING` over an abort — which is the exact
+    /// silence `020` §5 is about.
+    pub fn status_word(&self) -> &'static str {
+        match &self.doing {
+            Some(doing) => doing.acting.word(),
+            None => self.state.word(),
+        }
+    }
+
+    /// Whether this Drone has said anything through its tools **on the step it
+    /// is on** (`020` §6).
+    ///
+    /// **Three ways to have spoken, and all three are the Job's own record**:
+    /// an `attempted` transition, a progress note, or an open question. Nothing
+    /// here reads the transcript — PLAN.md §15.2 forbids it, and the point of
+    /// the word `SILENT` is precisely that the transcript is the *only* place
+    /// what it decided still exists.
+    ///
+    /// **Scoped to the current step rather than to the exchange**, and the cost
+    /// is stated: a Drone that reported on its first exchange of a step and
+    /// went quiet on its second is not `SILENT`. Scoping to the exchange would
+    /// need a per-turn timestamp Claude Code's `result` event does not carry,
+    /// and inventing one from the record's own clock would be a measurement
+    /// nobody took.
+    pub fn said_something(&self) -> bool {
+        self.pending.is_some()
+            || self
+                .transitions
+                .iter()
+                .any(|t| t.step == self.step && t.event == StepEvent::Attempted)
+            || self.progress.iter().any(|note| note.step == self.step)
+    }
 }
 
 /// A Drone's process group, and the two stamps that make it provable.
@@ -623,6 +756,13 @@ pub struct Observed {
     pub spend: Spend,
     /// The ceiling it has reached, if it has reached one.
     pub ceiling: Option<Ceiling>,
+    /// Whether an exchange has ended that **no tick has gated**.
+    ///
+    /// **Carried out of the observation rather than re-derived by the loop**,
+    /// for the reason `alive` is: folding it into a state is lossy, and a
+    /// second computation is a second answer that can disagree with this one.
+    /// It is the fact `020` §1 says nothing was watching.
+    pub due: bool,
 }
 
 /// Work out what a Job is doing.
@@ -639,11 +779,26 @@ pub fn observe(
     run_time_ms: u64,
 ) -> Observed {
     let ceiling = exhausted(&record.budget, &spend, run_time_ms);
-    let state = observe_state(record.state, ceiling.is_some(), finished, errored, alive);
+    // **An errored turn is not due a gate.** The exchange ended badly rather
+    // than ending; gating it would record a `FAILED` against work that was
+    // never finished, which is the same refusal `attention` already makes for a
+    // Drone that died before producing anything.
+    let due = finished > record.ticked_turns && !errored;
+    let state = observe_state(
+        record.state,
+        ceiling.is_some(),
+        finished,
+        errored,
+        alive,
+        due,
+        record.pending.is_some(),
+        record.said_something(),
+    );
     Observed {
         state,
         spend,
         ceiling,
+        due,
     }
 }
 
@@ -653,12 +808,20 @@ pub fn observe(
 /// `ARCHITECTURE.md` §1.2 gives for the scheduler: a Job state added later is a
 /// compile error here rather than a case that silently falls through to
 /// `RUNNING`.
+/// **`RUNNING` with no live Drone means exactly one thing now** (`020` §6): a
+/// tick has already gated this exchange and left the Job resting on a gate it
+/// started. Everything else that used to land here — the Drone that exited with
+/// nobody watching — is `STALLED` or `SILENT`, which is the whole of the repair.
+#[allow(clippy::fn_params_excessive_bools)]
 fn observe_state(
     recorded: JobState,
     exhausted: bool,
     finished: usize,
     errored: bool,
     alive: bool,
+    due: bool,
+    gating: bool,
+    said: bool,
 ) -> JobState {
     match recorded {
         // **A finished Job is not re-observed.** `DONE` and `ABORTED` are the
@@ -680,16 +843,44 @@ fn observe_state(
         JobState::Paused | JobState::Blocked => recorded,
         // **Nothing was ever produced and nothing is running.** The Drone died
         // before it finished a turn — the observation `STALLED` exists for.
-        JobState::Queued | JobState::Running | JobState::Stalled if finished == 0 => {
+        JobState::Queued | JobState::Running | JobState::Stalled | JobState::Silent
+            if finished == 0 =>
+        {
             JobState::Stalled
         }
         // A turn finished badly and nothing is running. Also stalled: the Job
         // needs somebody to look, which is exactly what the word claims.
-        JobState::Queued | JobState::Running | JobState::Stalled if errored => JobState::Stalled,
-        // **A turn finished cleanly and no Drone is running: the ordinary
-        // resting state** (PLAN.md §14.1), not an error and not a stall. What
-        // advances it to the next step is M4's loop.
-        JobState::Queued | JobState::Running | JobState::Stalled => JobState::Running,
+        JobState::Queued | JobState::Running | JobState::Stalled | JobState::Silent if errored => {
+            JobState::Stalled
+        }
+        // **An exchange ended, nothing gated it, and the Drone never said a
+        // word.** The worse of the two failures: there is no signal anywhere
+        // outside a transcript nothing may read (PLAN.md §15.2).
+        JobState::Queued | JobState::Running | JobState::Stalled | JobState::Silent
+            if due && !said =>
+        {
+            JobState::Silent
+        }
+        // **An exchange ended and nothing gated it.** This is the eight hours:
+        // the Drone is gone, the `Stop` hook did not relay, and until `020` §6
+        // this arm said `RUNNING`.
+        JobState::Queued | JobState::Running | JobState::Stalled | JobState::Silent if due => {
+            JobState::Stalled
+        }
+        // **A tick has this exchange and started a gate on it** — a detached
+        // `armada manifest check`, or a question in the inbox. That is the one
+        // remaining reason for a Job with no Drone to be `RUNNING`, and the
+        // pending record is the evidence for it.
+        JobState::Queued | JobState::Running | JobState::Stalled | JobState::Silent if gating => {
+            JobState::Running
+        }
+        // **A tick saw this exchange, started nothing, and no Drone came
+        // back.** Either the loop could not act or the Drone died between
+        // exchanges without producing a `result` — a SIGKILL is exactly this
+        // shape. Reported rather than rested on.
+        JobState::Queued | JobState::Running | JobState::Stalled | JobState::Silent => {
+            JobState::Stalled
+        }
     }
 }
 

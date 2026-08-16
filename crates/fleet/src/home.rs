@@ -35,6 +35,36 @@ pub fn stream(armada_home: &Path, uuid: &str) -> PathBuf {
     jobs(armada_home).join(format!("{uuid}.stream.jsonl"))
 }
 
+/// A Job's `Stop` hook: `~/.armada/jobs/<uuid>.stop.sh`.
+///
+/// **Beside the transcript rather than inside the worktree**, for the same
+/// reason: `armada fleet kill` drops the tree, and a hook that lived there
+/// would be pulled out from under a Drone that is still exiting.
+///
+/// **Per Job, not per machine.** The hook has to name the Job it relays for,
+/// and a single shared file would be rewritten under every running Drone every
+/// time another one spawned.
+pub fn stop_hook(armada_home: &Path, uuid: &str) -> PathBuf {
+    jobs(armada_home).join(format!("{uuid}.stop.sh"))
+}
+
+/// The `--settings` document that registers it:
+/// `~/.armada/jobs/<uuid>.settings.json`.
+pub fn drone_settings(armada_home: &Path, uuid: &str) -> PathBuf {
+    jobs(armada_home).join(format!("{uuid}.settings.json"))
+}
+
+/// The lock one `armada fleet tick` pass holds: `~/.armada/tick.lock`.
+///
+/// **One pass at a time, machine-wide.** Every Drone's `Stop` hook sweeps the
+/// whole fleet (`020` §2), so on a machine with five Jobs five passes can start
+/// within the same second — and two passes gating one step would both call
+/// `--resume` on one Claude Code session. The lock is what makes the sweep
+/// affordable.
+pub fn tick_lock(armada_home: &Path) -> PathBuf {
+    armada_home.join("tick.lock")
+}
+
 /// Where a Job's git worktree goes: `~/.armada/workspaces/<repo>/<name>`.
 ///
 /// The repository's name is a level of the path because two repositories may

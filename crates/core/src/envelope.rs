@@ -363,7 +363,8 @@ const fn implied_class(status: Status) -> Option<ErrClass> {
         | Status::Skipped
         | Status::Partial
         | Status::Running
-        | Status::Waiting => None,
+        | Status::Waiting
+        | Status::Queued => None,
     }
 }
 

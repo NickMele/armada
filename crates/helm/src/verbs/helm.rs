@@ -515,7 +515,7 @@ fn wire(
     });
     let hook = write_executable(
         &paths.stop_hook,
-        &helm::stop_hook(&inbox.display().to_string()),
+        &helm::stop_hook(&inbox.display().to_string(), &exe),
     )?;
     write(
         &paths.settings,
@@ -525,7 +525,7 @@ fn wire(
         what: "backstop".to_string(),
         at: place.shown(&paths.stop_hook),
         state: hook,
-        detail: "Stop hook: a turn does not end while the inbox is unread".to_string(),
+        detail: "Stop hook: the inbox is read, and the fleet is caught up".to_string(),
     });
     // **The appended system prompt, and it is now always written.** The document
     // is what `"$(cat …)"` in the printed command reads, so it has to be on disk
