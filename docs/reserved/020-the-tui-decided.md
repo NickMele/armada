@@ -9,12 +9,102 @@ raised: a design session after real use, 2026-08-15
 # The TUI, decided
 
 **What this is.** Nine decisions taken in one session, after the user drove the Bridge for the
-first time and found it wanting. Each is his answer to a question with the trade stated. Nothing
-here is built; this is the brief for building it.
+first time and found it wanting. Each is his answer to a question with the trade stated, and
+each section says whether it has been built.
+
+**Status: the functional half of §1, §2, §5, §6 and §7 is built.** What that means, section by
+section, is in the table below; everything not named there is still the brief for building it.
+
+| § | Built | What landed |
+|---|---|---|
+| 1 · the Stop hook ticks the Job | **yes** | every Drone carries `--settings` with a `Stop` hook that waits for its own process to go and then ticks |
+| 2 · the chain breaks silently | **yes** | the relay sweeps the **whole fleet**, and Helm's own `Stop` hook sweeps too — two mechanisms, [`PLAN.md`](../PLAN.md) §15.3's shape |
+| 5 · an action gets a state word | state machine only | `Acting` and `Job.doing`, written by `kill`, `reap` and `pause`; the rendering is not built |
+| 6 · `SILENT` and `STALLED` | **yes** | both are real Job states, told apart by the tick watermark and by whether the Drone said anything |
+| 7 · `QUEUED`, not `WAITING` | **yes** | `Status::Queued`, in the enum and in [`glossary.md`](../glossary.md)'s status table |
+
+## What §2 actually needed, and what it got
+
+The relay has three ways to be lost — a SIGKILL, a hook that could not run, a crash in between —
+and **no amount of care inside one hook fixes any of them.** What does:
+
+1. **Every relay sweeps every Job.** A Drone's hook runs `armada fleet tick` with no handle, so a
+   Job whose own relay was lost is picked up by the next Drone *anywhere on the machine* to
+   finish an exchange. A pass over an idle fleet is a directory listing, a transcript tail and a
+   `ps`, so the sweep costs nothing.
+2. **Helm's `Stop` hook sweeps as well.** You cannot talk to the orchestrator without ending a
+   turn, so asking Helm anything at all catches the fleet up. This is the same pairing
+   [`PLAN.md`](../PLAN.md) §15.3 already uses for the inbox: the monitor is timely, the hook is complete.
+
+**A read verb still does not tick, and that refusal is deliberate.** `armada fleet ls` advancing
+a Job behind the reader's back breaks [`PLAN.md`](../PLAN.md) §15.1 — §1 below rejects it by
+name. Reporting a Job as `STALLED` is honest; doing the work unasked is not. The repair for the
+symptom is that `STALLED` is now a word you can *see*, which it was not before.
+
+## The residual, stated rather than hidden
+
+**One link in the relay is not provable by any test in this repository**, and it is worth
+naming: that Claude Code runs a `Stop` hook registered through `--settings`. Proving it needs a
+real session, and no test here may start one ([`PHASES.md`](../PHASES.md) §8.5). Everything
+either side of it is proved:
+
+| Link | How |
+|---|---|
+| the spawned Drone's argv carries `--settings <path>` | asserted on what `execve` received, not on what Armada built |
+| that path holds a document registering an executable hook | the file is read back and parsed |
+| that hook, run for real, ticks the fleet once its Drone has gone | the generated script is executed as a child of a real process group that then exits |
+| a tick rescues a Job whose relay was lost | a Drone finishes an exchange, nothing relays, and the sweep advances the step |
+
+The unproved link is the same mechanism `armada helm` has used since M0 — [`PHASES.md`](../PHASES.md) §9.1 F3
+measured it — and `armada doctor` holds `--settings` against `claude --help` on every run, which
+is what catches it disappearing.
+
+**The sweep costs one thing, and it is paid for**: five exchanges ending in the same second start
+five passes over the same records, and two passes gating one step would both `claude --resume`
+one session. `~/.armada/tick.lock` serialises them, and a second pass declines rather than
+queueing — the pass that holds the lock is walking the same records.
 
 It supersedes nothing and completes two reservations:
 [`003`](003-bridge-command-centre.md) — the Bridge as a command centre — and the parts of
 [`001`](001-raised-items-need-identity.md) about where a raised item is acknowledged.
+
+## What is built
+
+**Six of the nine, plus five of the six notes under "Also decided".** What is left is the three
+that change a *surface* rather than a render, and each is its own piece of work — one of them
+changes what bare `armada` means.
+
+| Decision | State |
+|---|---|
+| §1 the Stop hook ticks the Job | **built** |
+| §2 the detail pane's `SAID` row | **built** |
+| §3 one signals listing, origin a filter | open — needs [`021`](021-the-work-hierarchy.md)'s rename first |
+| §4 window usage first, dollars second | **built** |
+| §5 `ABORTING` / `REAPING` / `PAUSING` | **built** |
+| §6 counts, never an aggregate word | **built** |
+| §7 `QUEUED`, not `WAITING` | **built** |
+| §8 the menu, and what bare `armada` becomes | open |
+| §9 Helm opens beside you, in cmux | open |
+| the wide layout · `NEEDS YOU` carries the question | **built** |
+| `SILENT` and `STALLED` as real states | **built** |
+| the id is shown | **built** |
+| a new Job is spawned detached | **built** |
+| the tagline | **built** |
+
+**One departure from what is written below, and the arithmetic forced it.** The wide layout
+sheds `WORKFLOW`, then `TURNS`, and then — where this page names only those two — **`TASK`**,
+before `NEEDS YOU` truncates. Measured against the Bridge's own fixture, a table carrying both
+flexible columns needs eighty-one columns, so at eighty it would overhang the screen rather than
+truncate inside it and one of the two had to go. It is `TASK`, because a Job's handle is already
+two significant words of its task, and because `NEEDS YOU` is the only column that is ever a call
+to action. The trade, stated: an eighty-column Bridge with something waiting on you shows the
+question and not the task.
+
+**And one thing this page assumed that the event does not carry.** `window 71%` is measured, but
+the percentage rides along only once the window crosses a threshold — Claude Code sends
+`utilization` on the `allowed_warning` shape and not on every event. So the line draws the
+percentage when it has one and the reset alone when it does not, rather than computing a number
+nobody measured. That is the same rule that keeps a progress bar off this screen.
 
 ## 1 · The Drone's Stop hook ticks the Job
 

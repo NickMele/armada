@@ -171,7 +171,9 @@ pub fn paint(
         return lines;
     }
 
-    lines.extend(render::bridge_table(&data, style, Some(screen.cursor.at())).spans(style, width));
+    lines.extend(
+        render::bridge_table(&data, style, Some(screen.cursor.at()), width).spans(style, width),
+    );
     if frame.rows.is_empty() {
         lines.push(vec![
             plain("  "),
@@ -621,6 +623,7 @@ mod tests {
                 wall_clock_ms: 1,
             },
             needs_attention: needs,
+            acting: None,
         }
     }
 
@@ -635,6 +638,7 @@ mod tests {
             spent_usd: 4.20,
             hidden: 0,
             filter: None,
+            window: None,
         }
     }
 
@@ -651,13 +655,19 @@ mod tests {
     }
 
     fn drawn(screen: &Screen) -> Vec<String> {
+        drawn_at(&frame(), screen, 80)
+    }
+
+    /// The same, at a stated width — for the layout that grows into a wide
+    /// terminal, which is the one thing a fixed-width helper cannot show.
+    fn drawn_at(frame: &Frame, screen: &Screen, width: usize) -> Vec<String> {
         text(&paint(
-            &frame(),
+            frame,
             screen,
             None,
             Status::Running,
             Style::plain(),
-            80,
+            width,
         ))
     }
 
@@ -710,7 +720,10 @@ mod tests {
         let all = drawn.join("\n");
         assert!(all.contains("ARMADA BRIDGE"), "{all}");
         assert!(all.contains("LIVE"), "{all}");
-        for header in ["STATUS", "JOB", "TASK", "RUN", "SPENT", "NEEDS YOU"] {
+        // **`TASK` is not in this list any more**, and its absence at eighty
+        // columns is the trade `render.rs`'s `SHED` states: a row needs you, so
+        // the question is on the line and the task is one keypress away.
+        for header in ["STATUS", "JOB", "ID", "RUN", "SPENT", "NEEDS YOU"] {
             assert!(all.contains(header), "no {header} column:\n{all}");
         }
         assert!(all.contains("RUNNING"), "{all}");
@@ -719,6 +732,196 @@ mod tests {
         assert!(all.contains("q quit"), "{all}");
         // **No progress column, deliberately** — nothing emits percent-complete.
         assert!(!all.contains("PROGRESS"), "{all}");
+    }
+
+    /// **The id is on every row, because a generated handle is not readable.**
+    /// `now-that` is what deriving two significant words out of a sentence
+    /// produces; the handle stays for typing and the id is what a person checks
+    /// a row against — and it is the same eight characters `armada fleet ls`
+    /// prints, so the two listings can be matched by eye.
+    #[test]
+    fn every_row_carries_the_short_id_that_fleet_ls_prints() {
+        let all = drawn(&Screen::default()).join("\n");
+        assert!(all.contains(" ID "), "no ID column:\n{all}");
+        for row in &frame().rows {
+            let short = armada_fleet::jobs::short(&row.uuid);
+            assert_eq!(short.chars().count(), 8, "the short form changed length");
+            assert!(
+                all.contains(short),
+                "`{short}` is not on the screen:\n{all}"
+            );
+        }
+    }
+
+    /// **The table grows into a wide terminal and sheds in a stated order**
+    /// (`020` §"Also decided"): `WORKFLOW` first, then `TURNS`, then `TASK`.
+    ///
+    /// The assertion is on the *order* rather than on three widths, because the
+    /// widths themselves depend on how long the Jobs happen to be called — what
+    /// must not change is that a column never survives one that outranks it.
+    #[test]
+    fn the_table_sheds_workflow_then_turns_then_task_as_the_terminal_narrows() {
+        let frame = frame();
+        let seen = |width: usize| {
+            let all = drawn_at(&frame, &Screen::default(), width).join("\n");
+            (
+                all.contains("WORKFLOW"),
+                all.contains("TURNS"),
+                all.contains("TASK"),
+            )
+        };
+        // Wide enough for everything.
+        assert_eq!(seen(200), (true, true, true), "a wide terminal sheds");
+        // Narrow enough for none of the three.
+        assert_eq!(seen(80), (false, false, false), "eighty carried an extra");
+
+        // And nothing survives a column that outranks it, at any width between.
+        let mut previous = (true, true, true);
+        for width in (60..=200).rev() {
+            let (workflow, turns, task) = seen(width);
+            assert!(
+                !(workflow && !turns) && !(turns && !task),
+                "at {width} the shed order broke: \
+                 workflow={workflow} turns={turns} task={task}"
+            );
+            let (was_workflow, was_turns, was_task) = previous;
+            assert!(
+                !(workflow && !was_workflow) && !(turns && !was_turns) && !(task && !was_task),
+                "a column came back at {width}, going narrower"
+            );
+            previous = (workflow, turns, task);
+        }
+    }
+
+    /// **No row overhangs the screen at any width**, which is what the shedding
+    /// is *for*: `ratatui` clips a line that is too long, and a clipped table is
+    /// one whose right-hand columns silently stop existing.
+    #[test]
+    fn no_row_overhangs_the_terminal_at_any_width() {
+        let frame = frame();
+        for width in [80, 100, 120, 160, 200] {
+            for line in drawn_at(&frame, &Screen::default(), width) {
+                assert!(
+                    line.chars().count() <= width,
+                    "a line is {} wide at {width}: {line}",
+                    line.chars().count()
+                );
+            }
+        }
+    }
+
+    /// **`NEEDS YOU` carries the question, not `YES`**, so most answers need no
+    /// second screen — and `YES` survives only where there is no question to
+    /// show, which is a Job whose state wants a person with nothing raised
+    /// against it.
+    #[test]
+    fn needs_you_shows_the_question_and_falls_back_to_yes_without_one() {
+        let asked = "the CI timeout is 30s and the flake needs 90s. Raise it?";
+        let mut asking = frame();
+        asking.rows[1].detail = asked.to_string();
+        let all = drawn_at(&asking, &Screen::default(), 200).join("\n");
+        assert!(
+            all.contains(asked),
+            "the question is not on the row:\n{all}"
+        );
+        assert!(
+            !all.contains("YES"),
+            "the question and `YES` are both drawn:\n{all}"
+        );
+
+        // The fallback: `detail` is the step, which `STEP` already says, so
+        // repeating it in this column would put one fact on the row twice.
+        let all = drawn_at(&frame(), &Screen::default(), 200).join("\n");
+        assert!(
+            all.contains("YES"),
+            "no fallback for a bare needs-you:\n{all}"
+        );
+    }
+
+    /// **Counts over several Jobs, and no word derived from the worst row**
+    /// (`020` §6). *"What's the point of an aggregate status when multiple jobs
+    /// are running?"* — a word taken off one row describes no Job in particular,
+    /// and the count of stalled Jobs is the fact it used to hide.
+    #[test]
+    fn several_jobs_are_counted_rather_than_summarised_by_one_word() {
+        let mut frame = frame();
+        frame
+            .rows
+            .push(row("xlsx-report", JobState::Stalled, false));
+        let all = drawn_at(&frame, &Screen::default(), 200).join("\n");
+        let line = all
+            .lines()
+            .find(|line| line.contains("3 jobs"))
+            .expect("a summary line");
+        assert!(line.contains("1 need you"), "{line}");
+        assert!(line.contains("1 stalled"), "{line}");
+        assert!(
+            !line.starts_with("RUNNING"),
+            "an aggregate word still leads the line: {line}"
+        );
+    }
+
+    /// **A single Job keeps its status word, because there it means something.**
+    /// It is that Job's state rather than a summary of anything, and dropping it
+    /// would take a fact off the line to satisfy a rule about a case this is not.
+    #[test]
+    fn one_job_keeps_the_status_word() {
+        let frame = Frame {
+            rows: vec![row("rate-limit", JobState::Running, false)],
+            needs_you: 0,
+            ..frame()
+        };
+        let all = drawn_at(&frame, &Screen::default(), 200).join("\n");
+        let line = all
+            .lines()
+            .find(|line| line.contains("1 job"))
+            .expect("a summary line");
+        assert!(line.starts_with("RUNNING"), "{line}");
+    }
+
+    /// **Window usage leads and spend follows** (`020` §4). Claude Code has
+    /// reported the reader's window position on every exchange since the spike
+    /// measured it and Armada discarded it; what stops him working outranks what
+    /// it cost.
+    ///
+    /// **And it is not the banned progress bar.** The percentage is the
+    /// service's own `utilization` floored, not a fraction of a turn count
+    /// (PHASES.md §9.1 F2) — which is also why it is absent rather than
+    /// estimated when the event did not carry one.
+    #[test]
+    fn the_window_is_drawn_ahead_of_the_spend_and_omits_what_was_not_measured() {
+        let mut frame = frame();
+        frame.window = Some(armada_core::envelope::Window {
+            used_percent: Some(71),
+            resets_in_s: Some(2 * 3_600 + 14 * 60),
+        });
+        let all = drawn_at(&frame, &Screen::default(), 200).join("\n");
+        let line = all
+            .lines()
+            .find(|line| line.contains("window"))
+            .expect("a summary line");
+        assert!(line.contains("window 71%"), "{line}");
+        assert!(line.contains("resets 2h14m"), "{line}");
+        assert!(
+            line.find("window").unwrap() < line.find("$4.20").unwrap(),
+            "spend is drawn ahead of the window: {line}"
+        );
+
+        // A window the service reported without a percentage says what it has.
+        frame.window = Some(armada_core::envelope::Window {
+            used_percent: None,
+            resets_in_s: Some(43 * 60),
+        });
+        let all = drawn_at(&frame, &Screen::default(), 200).join("\n");
+        let line = all
+            .lines()
+            .find(|line| line.contains("resets"))
+            .expect("a summary line");
+        assert!(line.contains("resets 43m"), "{line}");
+        assert!(
+            !line.contains('%'),
+            "a percentage nobody measured was drawn: {line}"
+        );
     }
 
     /// The caret sits on the selected row and on no other.
@@ -1174,6 +1377,7 @@ mod tests {
                 spent_usd: 0.0,
                 hidden: 0,
                 filter,
+                window: None,
             };
             let drawn = text(&paint(
                 &empty,

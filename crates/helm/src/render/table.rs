@@ -498,6 +498,28 @@ impl Table {
         kept
     }
 
+    /// The narrowest this table can be drawn without overhanging.
+    ///
+    /// **For a caller choosing how many columns to declare, not for this file.**
+    /// A table degrades by truncating its flexible columns and then stops; it
+    /// has no way to decide that `WORKFLOW` matters less than `NEEDS YOU`,
+    /// because that is a question about the verb rather than about widths. The
+    /// Bridge asks this, drops its lowest-priority column and asks again — the
+    /// same shape [`crate::render::bridge_keys`] uses on the key line, and for
+    /// the same reason: a wrapped or overhanging row loses the alignment that
+    /// was the only reason to draw a table.
+    ///
+    /// **It is [`Table::widths`] asked for zero columns**, rather than a second
+    /// measurement beside it: the answer to "how narrow can this get" is the
+    /// layout that function already produces when it has given away everything
+    /// it is willing to give, and computing it twice is how the two would come
+    /// to disagree.
+    pub fn minimum_width(&self) -> usize {
+        let kept = self.kept_columns();
+        let widths = self.widths(&kept, 0);
+        self.indent + GAP * kept.len().saturating_sub(1) + widths.iter().sum::<usize>()
+    }
+
     /// Each column's natural width, then shrunk to fit.
     ///
     /// **Widest flexible column first, one column at a time.** Taking an equal
@@ -795,6 +817,45 @@ mod tests {
         for (a, b) in plain.lines().zip(painted.lines()) {
             assert_eq!(display_width(a), display_width(b), "{a:?} vs {b:?}");
         }
+    }
+
+    /// **The narrowest a table can be drawn is the width it draws at when it is
+    /// given nothing.** A caller shedding its own columns has to be able to ask
+    /// that question before it decides, and asking it a second way is how the
+    /// answer would come to differ from what `render` actually does.
+    #[test]
+    fn the_minimum_width_is_the_width_the_table_draws_at_when_squeezed() {
+        let table = Table::new(vec![
+            Column::fixed("id"),
+            Column::flexible("log"),
+            Column::flexible("note"),
+        ])
+        .indent(2)
+        .row(vec![
+            Cell::plain("api:lint"),
+            Cell::plain(".armada/run/01J8X2/logs/api.lint.log"),
+            Cell::plain("the linter is slow on this package"),
+        ]);
+
+        let minimum = table.minimum_width();
+        // Two indent, two columns of gap between three columns, `api:lint` at
+        // its natural eight, and both flexible columns at their floor.
+        assert_eq!(minimum, 2 + 2 * 2 + 8 + 8 + 8);
+        for line in table.render(Style::plain(), minimum).lines() {
+            assert!(
+                display_width(line) <= minimum,
+                "{line:?} overhangs its own minimum"
+            );
+        }
+        // One column narrower and it overhangs, which is what makes this the
+        // *minimum* rather than a comfortable width.
+        assert!(
+            table
+                .render(Style::plain(), minimum - 1)
+                .lines()
+                .any(|line| display_width(line) > minimum - 1),
+            "the table fits below the width it calls its minimum"
+        );
     }
 
     /// A headerless table is how a two-column list — a flag and what it does —

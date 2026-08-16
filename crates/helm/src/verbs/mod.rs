@@ -21,6 +21,7 @@ pub mod init;
 pub mod machine;
 pub mod offer;
 pub mod preflight;
+pub mod prune;
 pub mod report;
 pub mod services;
 pub mod settings;
@@ -36,9 +37,9 @@ use armada_core::envelope::{
     CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
     GuildSyncData, GuildUpgradeData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun,
-    KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ReapPlanData, ReportData,
-    ResumeData, ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData,
-    TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
+    KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ProposeData, PruneData,
+    ReapPlanData, ReportData, ResumeData, ScanData, ServicesData, SettingsData, ShowData,
+    SkillsData, SpawnData, StatusData, TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -55,6 +56,8 @@ pub enum Output {
     InitDryRun(Box<Envelope<InitDryRun>>),
     /// `armada manifest clean`.
     Clean(Box<Envelope<CleanData>>),
+    /// `armada manifest prune`.
+    Prune(Box<Envelope<PruneData>>),
     /// `armada manifest clean --dry-run`.
     CleanDryRun(Box<Envelope<CleanDryRun>>),
     /// `armada manifest up`.
@@ -149,6 +152,10 @@ pub enum Output {
     Report(Box<Envelope<ReportData>>),
     /// The `fleet.ask_human` tool.
     Ask(Box<Envelope<AskData>>),
+    /// The `fleet.propose` tool — what a Drone noticed and is not blocked on
+    /// (`docs/reserved/008`). **No CLI verb**: nobody at a terminal proposes a
+    /// change to their own manifest, they make it.
+    Propose(Box<Envelope<ProposeData>>),
     /// The `fleet.verdict` tool.
     Verdict(Box<Envelope<VerdictData>>),
     /// `armada fleet tick` — one pass of the workflow loop.
@@ -162,6 +169,7 @@ impl Output {
             Output::Init(e) => e.to_json(),
             Output::InitDryRun(e) => e.to_json(),
             Output::Clean(e) => e.to_json(),
+            Output::Prune(e) => e.to_json(),
             Output::CleanDryRun(e) => e.to_json(),
             Output::Up(e) => e.to_json(),
             Output::UpDryRun(e) => e.to_json(),
@@ -206,6 +214,7 @@ impl Output {
             Output::Probe(e) => e.to_json(),
             Output::Report(e) => e.to_json(),
             Output::Ask(e) => e.to_json(),
+            Output::Propose(e) => e.to_json(),
             Output::Verdict(e) => e.to_json(),
             Output::Tick(e) => e.to_json(),
         }
@@ -234,6 +243,7 @@ impl Output {
             Output::Init(e) => e.exit_code(),
             Output::InitDryRun(e) => e.exit_code(),
             Output::Clean(e) => e.exit_code(),
+            Output::Prune(e) => e.exit_code(),
             Output::CleanDryRun(e) => e.exit_code(),
             Output::Up(e) => e.exit_code(),
             Output::UpDryRun(e) => e.exit_code(),
@@ -278,6 +288,7 @@ impl Output {
             Output::Probe(e) => e.exit_code(),
             Output::Report(e) => e.exit_code(),
             Output::Ask(e) => e.exit_code(),
+            Output::Propose(e) => e.exit_code(),
             Output::Verdict(e) => e.exit_code(),
             Output::Tick(e) => e.exit_code(),
         }

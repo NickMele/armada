@@ -63,12 +63,27 @@ indistinguishable from an idle fleet.
 
 | Column | Source | Notes |
 |---|---|---|
-| `JOB` | the Job index | The name, not the uuid — names are assigned at spawn and are what you type. |
 | `STATE` | Fleet Job state | `QUEUED` `RUNNING` `PAUSED` `STALLED` `BLOCKED` `ABORTED` `DONE` ([`../glossary.md`](../../glossary.md)). |
-| `TASK` | the spawn prompt | Truncated. The Bridge is a status view, not a reader. |
+| `JOB` | the Job index | The name, not the uuid — names are assigned at spawn and are what you type. |
+| `ID` | the Job index | **The eight characters `armada fleet ls` prints.** A derived handle like `now-that` is unreadable; the handle stays for typing and this is what a person trusts, and what matches a row against the other listing. |
+| `WORKFLOW` | the Job index | *Wide terminals only.* |
+| `STEP` | the record, plus how long it has been on it | A step and an elapsed time, never a fraction — *"three of five steps"* would be the banned progress bar written in words. |
+| `TASK` | the spawn prompt | Truncated, and *shed before `NEEDS YOU`*: a Job's handle is already two significant words of its task. |
 | `RUN` | wall clock since spawn | — |
+| `TURNS` | `num_turns`, summed over turns | *Wide terminals only.* A count, never a fraction of the ceiling. |
 | `SPENT` | `total_cost_usd`, summed over turns | Against the Job's ceiling, so exhaustion is visible before it happens ([`PLAN.md`](../../PLAN.md) §14.3). |
-| `NEEDS YOU` | the inbox | The only column that is ever a call to action. |
+| `NEEDS YOU` | the inbox | The only column that is ever a call to action, and **it carries the question** — the open entry's own words, so most answers need no second screen. `YES` only where a Job's state wants a person with nothing raised against it. |
+
+**The table grows into a wide terminal.** `WORKFLOW`, `TURNS` and `TASK` are carried when there
+is room and shed in that order when there is not — the same priority-drop the key line does, and
+for the same reason: a row that wraps stops lining up with its header, and a row that overhangs
+loses its right-hand columns to the viewport without saying so.
+
+**Which columns a given width carries depends on the fleet**, not on a threshold written down
+here: how wide a table needs to be depends on how long the Jobs happen to be called. Measured
+against the frame below, `TASK` returns at 81 columns, `TURNS` at 88 and `WORKFLOW` at 98 —
+which is why an eighty-column terminal, the one this page's output is drawn at, carries none of
+the three.
 
 > **There is no progress column, deliberately.** Nothing emits percent-complete: F2 gives cost,
 > tokens, turns and duration, none of which is progress toward a goal an agent has not finished
@@ -213,15 +228,15 @@ the difference between closing a view and losing what you were looking at.
 ```
   ARMADA BRIDGE
 
-  STATUS   JOB            TASK                 RUN  SPENT  NEEDS YOU
-  RUNNING  rate-limit     add gateway limiter  14m  $2.10  -
-  RUNNING  carina-schema  migrate schema        3m  $0.45  -
-  STALLED  xlsx-report    generate report      22m  $4.60  -
-  BLOCKED  release-merge  merge release         1h  $1.25  YES
+  STATUS   JOB            ID        STEP           RUN  SPENT  NEEDS YOU
+  RUNNING  rate-limit     c19d0a34  implement 12m  14m  $2.10  -
+  RUNNING  carina-schema  94b1fd2e  plan 3m         3m  $0.45  -
+  STALLED  xlsx-report    3d9cc7ba  reproduce      22m  $4.60  -
+  BLOCKED  release-merge  7f2ab618  implement 18m   1h  $1.25  the CI timeout i…
 
-RUNNING  4 jobs, 1 need you, $8.40 today
+4 jobs, 1 need you, 1 stalled, window 71%, resets 2h14m, $8.40 today
 
-  enter board  n new  p pause  x abort  a answer  / filter  r reap  q quit
+  enter board  d detail  n new  p pause  x abort  a answer  ? keys  q quit
 ```
 
 The live screen is this frame with a caret on the selected row, `LIVE` beside the title, and one
@@ -242,9 +257,33 @@ line under the table for the filter box or whatever the last key had to say back
 waiting on you. That is the same rule the rest of the CLI follows, and here it means the one
 column that is ever a call to action is only ever on the screen when there is one.
 
+### The summary line
+
+**Counts over several Jobs, and no word derived from any of them.** Every other summary in this
+CLI leads with a verdict about one thing; a fleet has no one thing to be a verdict about, and a
+word taken off the worst row — `RUNNING` above four rows of which one is stalled and one wants
+an answer — is true of one row and misleading about three. So `4 jobs · 1 need you · 1 stalled`,
+which cannot be wrong. **A single Job keeps its status word**, because there it is that Job's
+state rather than a summary of anything.
+
+**Window usage leads and spend follows.** `window 71% · resets 2h14m` is the rate-limit window
+the fleet is working inside, read off the `rate_limit_event` Claude Code sends on every exchange
+([`PHASES.md`](../../PHASES.md) §9.1 F2): what stops you working outranks what it cost.
+
+- **Both halves are measurements, and either can be missing.** The percentage is the service's
+  own `utilization`, floored the way Claude Code floors it, and it only rides along once a
+  window crosses a threshold. When it is absent the line says the reset and nothing else —
+  a percentage nobody measured is the one number this line may not carry.
+- **It is not the banned progress bar.** Nothing here is a fraction of a turn count. The service
+  is stating how much of a window is gone, which is exactly the kind of number
+  [`PLAN.md`](../../PLAN.md) §14.3's ceilings are built out of.
+- **It survives a filter**, unlike every other number on the line. The rows are what the filter
+  selected; the window is a fact about the account, and `state=RUNNING` does not change how much
+  of five hours is left.
+
 `--json` returns one result per Job with the same fields as
 [`../fleet/ls.md`](../fleet/ls.md), so a frame and a listing parse identically, plus `running`,
-`filter` and `hidden` — what the *frame* is showing, and what it is not.
+`filter`, `hidden` and `window` — what the *frame* is showing, and what it is not.
 
 ## Palette
 

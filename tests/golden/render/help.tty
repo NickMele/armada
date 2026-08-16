@@ -1,4 +1,4 @@
-[1m[38;2;255;169;64marmada — one vocabulary for a repo's stack, and the agents working in it[0m
+[1m[38;2;255;169;64marmada — agents that work while you do not[0m
 
 [1m[38;2;255;169;64mUSAGE[0m
   armada <module> <verb> [flags]  [38;2;156;163;175mthe verbs Armada owns[0m
@@ -15,6 +15,7 @@
   components            [38;2;156;163;175mwhat this repository can be filtered by[0m
   commands              [38;2;156;163;175mthe verbs this repository declares[0m
   clean                 [38;2;156;163;175mrelease what this workspace owns[0m
+  prune                 [38;2;156;163;175mreclaim docker disk, including disk that is not armada's[0m
   <name>                [38;2;156;163;175ma verb this repo declares; manifest commands lists them[0m
 
 [1m[38;2;255;169;64mGUILD — you, portable: voice, skills, hooks, workflows[0m

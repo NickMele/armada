@@ -56,9 +56,9 @@ use armada_core::envelope::{
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
     GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData,
     HelmSwitchData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData,
-    ProbeData, Projection, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData,
-    SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun,
-    VerdictData, VerifyData, Wiring,
+    ProbeData, Projection, ProposeData, PruneData, ReapPlanData, ReportData, ResultRow, ResumeData,
+    ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData,
+    Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, Listing, State as FailureState};
@@ -90,6 +90,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::UpDryRun(envelope) => up_dry(envelope, style, width),
         Output::Down(envelope) => services(envelope, style, width, "service"),
         Output::Clean(envelope) => clean(envelope, style, width),
+        Output::Prune(envelope) => prune(envelope, style, width),
         Output::CleanDryRun(envelope) => clean_dry(envelope, style, width),
         Output::Status(envelope) => status(envelope, style, width),
         Output::Check(envelope) => check(envelope, style, width),
@@ -131,6 +132,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Probe(envelope) => probe(envelope, style, width),
         Output::Report(envelope) => reported(envelope, style, width),
         Output::Ask(envelope) => asked(envelope, style, width),
+        Output::Propose(envelope) => proposed(envelope, style, width),
         Output::Verdict(envelope) => stepped(envelope, style, width),
         Output::Tick(envelope) => ticked(envelope, style, width),
     }
@@ -240,6 +242,36 @@ fn asked(envelope: &Envelope<AskData>, style: Style, width: usize) -> String {
                 Some(said) => said.clone(),
                 None => "armada fleet answer <job> \"…\"".to_string(),
             },
+        ],
+    ));
+    out
+}
+
+/// `fleet.propose` — what a Drone noticed, and the id it was filed under.
+///
+/// **The same table as [`asked`] with a different left-hand word**, because they
+/// are the same row in the same inbox and drawing them differently would suggest
+/// two places to look. What is not the same is the summary: [`asked`] offers the
+/// answer that unblocks a Drone, and this offers nothing to type at all — the
+/// Drone has already carried on, and the person reads it when they read it.
+fn proposed(envelope: &Envelope<ProposeData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let table = Table::new(columns("job", "detail", false))
+        .indent(2)
+        .row(vec![
+            token(&data.subject, Role::FlareOrange),
+            Cell::painted(data.job.clone(), Role::NavalBlue),
+            detail_cell(style, Some(&data.proposal)),
+        ]);
+
+    let mut out = table.render(style, width);
+    out.push('\n');
+    out.push_str(&summary(
+        style,
+        envelope.status,
+        &[
+            data.entry.clone(),
+            "raised; nothing is waiting on it".to_string(),
         ],
     ));
     out
@@ -728,7 +760,7 @@ fn bridge(envelope: &Envelope<BridgeData>, style: Style, width: usize) -> String
     // table describes both surfaces and the renderer decides which columns
     // earned their width (`docs/commands/render.md`), which is what stops the
     // screen and `--once` from becoming two layouts.
-    let table = bridge_table(data, style, None);
+    let table = bridge_table(data, style, None, width);
     out.push_str(&table.render(style, width));
     if table.is_empty() {
         // **An empty fleet says so.** A screen that drew nothing would be
@@ -764,66 +796,189 @@ fn bridge(envelope: &Envelope<BridgeData>, style: Style, width: usize) -> String
 /// `cursor` is the row under the caret, or `None` when nobody is watching — and
 /// a cursor column no row filled is dropped, header and all, which is why
 /// `--once` shows no empty gutter.
-pub fn bridge_table(data: &BridgeData, style: Style, cursor: Option<usize>) -> Table {
-    let mut table = Table::new(vec![
+///
+/// **The table grows into a wide terminal** (`020` §"Also decided"). Three
+/// columns are optional and are shed in [`SHED`]'s order as the width runs out,
+/// so a 200-column screen carries the workflow and the turn count and an
+/// 80-column one does not — one layout that fits both, rather than a layout
+/// designed for the narrowest terminal anybody might have.
+pub fn bridge_table(data: &BridgeData, style: Style, cursor: Option<usize>, width: usize) -> Table {
+    // Shed the lowest-priority optional column, re-measure, repeat. The width a
+    // table needs depends on its rows, so this cannot be a set of thresholds
+    // written down here — `x jobs at 92 columns` is a different answer from
+    // `x jobs whose names are all short at 92 columns`.
+    let mut shown: Vec<Optional> = SHED.to_vec();
+    loop {
+        let table = bridge_columns(data, style, cursor, &shown);
+        if shown.is_empty() || table.minimum_width() <= width {
+            return table;
+        }
+        shown.remove(0);
+    }
+}
+
+/// A column the Bridge's table carries only when there is room for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Optional {
+    /// Which workflow the Job is running.
+    Workflow,
+    /// How many turns it has taken.
+    Turns,
+    /// What it was asked to do.
+    Task,
+}
+
+/// The optional columns, **lowest priority first** — which is the order they are
+/// shed in as the terminal narrows.
+///
+/// **`WORKFLOW` goes first** because it is the one column a reader can predict:
+/// a fleet is usually running one or two workflows and the row's step already
+/// implies which. **`TURNS` second**, because it is a measurement worth having
+/// and worth nothing urgently — a Job approaching its ceiling shows up as a
+/// state word long before a person notices a number climbing.
+///
+/// **`TASK` last, and it is the departure from the note in `020`**, which lists
+/// only the first two before saying `NEEDS YOU` truncates. The arithmetic does
+/// not allow it: measured against the Bridge's own fixture at eighty columns, a
+/// table carrying both flexible columns needs eighty-one, so it would overhang
+/// the screen rather than truncate inside it and one of the two has to go.
+///
+/// **It is `TASK`, and the handle is why.** A Job's name is derived from its
+/// task — two significant words of it
+/// ([`armada_core::fleet::job::derive_name`]) — so
+/// `TASK` is the one column on the row that largely repeats another, and what it
+/// adds beyond the name is a truncation of a sentence the detail pane carries
+/// whole. `NEEDS YOU` is the only column that is ever a call to action, and it
+/// now carries the question rather than `YES`.
+///
+/// **The trade this leaves, stated:** an eighty-column Bridge with something
+/// waiting on you shows the question and not the task. A wide one shows both,
+/// which is the whole reason the layout grows.
+const SHED: [Optional; 3] = [Optional::Workflow, Optional::Turns, Optional::Task];
+
+fn bridge_columns(
+    data: &BridgeData,
+    style: Style,
+    cursor: Option<usize>,
+    shown: &[Optional],
+) -> Table {
+    let has = |which: Optional| shown.contains(&which);
+    let mut columns = vec![
         // The caret, for the surface that has one. **A character rather than a
         // colour**, for the reason `ask/select.rs` gives: a row told apart only
         // by being amber is a row a monochrome terminal cannot tell apart.
         Column::fixed(""),
         Column::fixed("status"),
         Column::fixed("job"),
-        // **The step, and how long it has been on it.** One column rather than
-        // two, and the width for it comes out of `TASK` — which is the trade,
-        // stated: the task is already a truncation of a sentence the detail pane
-        // carries whole, and the step is the fact no other column can be read
-        // for. `DETAIL` in `fleet ls` folds the step together with an open
-        // inbox body, so it is not a substitute.
-        //
-        // **A step and an elapsed time, and never a fraction.** *"On `implement`
-        // for 12m"* is measured; *"three of five steps"* would be the progress
-        // bar PHASES.md §9.1 F2 bans, drawn in words.
-        Column::fixed("step"),
-        Column::flexible("task"),
-        Column::fixed("run").right(),
-        Column::fixed("spent").right(),
-        // **The only column that is ever a call to action**, and the only one
-        // besides the caret that disappears when nothing fills it: a `NEEDS YOU`
-        // header over a column of placeholders claims somebody is waiting.
-        Column::fixed("needs you"),
-    ])
-    .indent(2);
+        // **The id, because a generated handle is not readable.** `now-that` is
+        // what naming two significant words out of a sentence produces, and it
+        // is the id a person checks a row against — the same eight characters
+        // `armada fleet ls` shows, so the two listings match by eye.
+        Column::fixed("id"),
+    ];
+    if has(Optional::Workflow) {
+        columns.push(Column::fixed("workflow"));
+    }
+    // **The step, and how long it has been on it.** One column rather than
+    // two, and the width for it comes out of `TASK` — which is the trade,
+    // stated: the task is already a truncation of a sentence the detail pane
+    // carries whole, and the step is the fact no other column can be read
+    // for. `DETAIL` in `fleet ls` folds the step together with an open
+    // inbox body, so it is not a substitute.
+    //
+    // **A step and an elapsed time, and never a fraction.** *"On `implement`
+    // for 12m"* is measured; *"three of five steps"* would be the progress
+    // bar PHASES.md §9.1 F2 bans, drawn in words.
+    columns.push(Column::fixed("step"));
+    if has(Optional::Task) {
+        columns.push(Column::flexible("task"));
+    }
+    columns.push(Column::fixed("run").right());
+    if has(Optional::Turns) {
+        columns.push(Column::fixed("turns").right());
+    }
+    columns.push(Column::fixed("spent").right());
+    // **The only column that is ever a call to action**, and the only one
+    // besides the caret that disappears when nothing fills it: a `NEEDS YOU`
+    // header over a column of placeholders claims somebody is waiting.
+    //
+    // **Flexible, because it now holds a sentence.** It carried `YES`, which
+    // told a reader that a Job wanted them and made them open a second screen to
+    // find out what for; it carries the question now, so most answers need no
+    // second screen — and it is the last column to be squeezed because every
+    // flexible column ahead of it has already been shed.
+    columns.push(Column::flexible("needs you"));
+
+    let mut table = Table::new(columns).indent(2);
 
     for (index, row) in data.results.iter().enumerate() {
-        table = table.row(vec![
+        let mut cells = vec![
             match cursor == Some(index) {
                 true => Cell::painted(style.caret(), Role::SignalAmber),
                 false => Cell::empty(),
             },
             job_state(row.state),
             Cell::painted(row.name.clone(), Role::NavalBlue),
-            step_cell(row),
-            detail_cell(style, Some(row.task.as_str())),
-            // A Job that has not run yet is a dash in both number columns, for
-            // the reason `fleet ls` gives: a zero reads as a measurement, and
-            // nothing has been measured.
-            Cell::muted(if row.state == JobState::Queued {
-                style.nothing().to_string()
-            } else {
-                format::elapsed(row.runtime_s * 1_000)
-            }),
-            Cell::muted(if row.cost_usd > 0.0 {
-                format::money(row.cost_usd)
-            } else {
-                style.nothing().to_string()
-            }),
-            if row.needs_attention {
-                Cell::painted("YES", Role::DistressRed)
-            } else {
-                Cell::nothing()
-            },
-        ]);
+            // **Muted, because it is the fallback and not the handle** — the
+            // same words and the same colour `fleet ls` uses for it.
+            Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
+        ];
+        if has(Optional::Workflow) {
+            cells.push(Cell::muted(row.workflow.clone()));
+        }
+        cells.push(step_cell(row));
+        if has(Optional::Task) {
+            cells.push(detail_cell(style, Some(row.task.as_str())));
+        }
+        // A Job that has not run yet is a dash in both number columns, for
+        // the reason `fleet ls` gives: a zero reads as a measurement, and
+        // nothing has been measured.
+        cells.push(Cell::muted(if row.state == JobState::Queued {
+            style.nothing().to_string()
+        } else {
+            format::elapsed(row.runtime_s * 1_000)
+        }));
+        if has(Optional::Turns) {
+            // **A count, never a fraction of a budget.** `4` is what the
+            // transcript reported; `4 of 12` would be a progress bar with the
+            // bar left off (PHASES.md §9.1 F2), and the ceiling is in the detail
+            // pane where the other three ceilings are.
+            cells.push(Cell::muted(match row.turns {
+                0 => style.nothing().to_string(),
+                turns => turns.to_string(),
+            }));
+        }
+        cells.push(Cell::muted(if row.cost_usd > 0.0 {
+            format::money(row.cost_usd)
+        } else {
+            style.nothing().to_string()
+        }));
+        cells.push(needs_you_cell(row));
+        table = table.row(cells);
     }
     table
+}
+
+/// What the `NEEDS YOU` column says, which is the question when there is one.
+///
+/// **The complaint this closes is a `YES` with no way to find out why.** The
+/// row's `detail` is `fleet ls`'s fold: an open inbox entry's body when one is
+/// open, and the step name when none is. Only the first is a question, and the
+/// second is already in `STEP` — so a cell that printed `detail` blindly would
+/// put the step in this column twice on exactly the rows a person is looking at.
+///
+/// **`YES` survives as the fallback rather than as the default.** A Job whose
+/// state needs a person without an entry to point at — `BLOCKED` with nothing
+/// raised — still needs them, and the word is [`JobState::needs_a_person`]'s
+/// answer said out loud rather than a new status word.
+fn needs_you_cell(row: &armada_core::envelope::JobRow) -> Cell {
+    if !row.needs_attention {
+        return Cell::nothing();
+    }
+    match row.detail.is_empty() || row.detail == row.step {
+        true => Cell::painted("YES", Role::DistressRed),
+        false => Cell::painted(row.detail.clone(), Role::DistressRed),
+    }
 }
 
 /// The step a Job is on, and how long it has been on it.
@@ -848,7 +1003,25 @@ fn step_cell(row: &armada_core::envelope::JobRow) -> Cell {
 
 /// The Bridge's summary line, painted, for `--once`.
 pub fn bridge_summary(data: &BridgeData, status: Status, style: Style) -> String {
-    summary(style, status, &frame_facts(data))
+    match aggregates(data) {
+        false => summary(style, status, &frame_facts(data)),
+        true => headlined_facts(style, &frame_facts(data)),
+    }
+}
+
+/// Whether this frame's leading word would be an aggregate over several Jobs.
+///
+/// **The objection, in his words: *"what's the point of an aggregate status when
+/// multiple jobs are running?"*** (`020` §6). A word derived from the worst row
+/// describes no Job in particular — `RUNNING` over four rows of which one is
+/// stalled and one wants an answer is true of one row and misleading about
+/// three. Counts cannot be wrong, so the counts stand alone.
+///
+/// **A single Job keeps its word, because there it means something**: it is that
+/// Job's state, not a summary of anything, and dropping it would take a fact off
+/// the line to satisfy a rule about a case this is not.
+fn aggregates(data: &BridgeData) -> bool {
+    data.results.len() > 1
 }
 
 /// The same line as **coloured pieces**, for the screen.
@@ -860,6 +1033,14 @@ pub fn bridge_summary(data: &BridgeData, status: Status, style: Style) -> String
 /// screen cannot take escape sequences, because `ratatui` prints an SGR string
 /// it finds in a value literally.
 pub fn bridge_summary_pieces(data: &BridgeData, status: Status, style: Style) -> Vec<Span> {
+    let facts = Span {
+        text: frame_facts(data).join(style.between()),
+        role: Some(Role::SteelGrey),
+        bold: false,
+    };
+    if aggregates(data) {
+        return vec![facts];
+    }
     vec![
         Span {
             text: status.to_string(),
@@ -871,11 +1052,7 @@ pub fn bridge_summary_pieces(data: &BridgeData, status: Status, style: Style) ->
             role: None,
             bold: false,
         },
-        Span {
-            text: frame_facts(data).join(style.between()),
-            role: Some(Role::SteelGrey),
-            bold: false,
-        },
+        facts,
     ]
 }
 
@@ -967,6 +1144,32 @@ fn frame_facts(data: &BridgeData) -> Vec<String> {
     let mut facts = vec![format::count(data.results.len(), "job")];
     if data.needs_you > 0 {
         facts.push(format!("{} need you", data.needs_you));
+    }
+    // **The count `020` §6 names, and the reason the aggregate word could go.**
+    // A stalled Job is the failure that cost him eight hours: it drew as
+    // `RUNNING` until `SILENT`/`STALLED` became real states, and a leading word
+    // taken off the worst row would hide it again the moment a second Job was
+    // running. Omitted at zero, like `need you`, so that seeing it means
+    // something.
+    let stalled = data
+        .results
+        .iter()
+        .filter(|row| row.state == JobState::Stalled)
+        .count();
+    if stalled > 0 {
+        facts.push(format!("{stalled} stalled"));
+    }
+    // **What stops you working, ahead of what it cost** (`020` §4). The window
+    // is the account's rather than the frame's, so it survives a filter — and
+    // both halves are omitted when the service did not send them, because a
+    // percentage nobody measured is the one thing this line may not carry.
+    if let Some(window) = data.window {
+        if let Some(used) = window.used_percent {
+            facts.push(format!("window {used}%"));
+        }
+        if let Some(resets_in_s) = window.resets_in_s {
+            facts.push(format!("resets {}", format::countdown(resets_in_s * 1_000)));
+        }
     }
     facts.push(format!("{} today", format::money(data.spent_usd)));
     if let Some(filter) = &data.filter {
@@ -3802,6 +4005,18 @@ fn headline(style: Style, headline: Headline, facts: &[String]) -> String {
     )
 }
 
+/// The same line with **no leading word at all** — counts, and nothing derived.
+///
+/// **One caller, and it is `020` §6.** Every other summary in this corpus leads
+/// with a verdict about one thing; the Bridge over several Jobs has no one thing
+/// to be a verdict about, and the honest line is the facts on their own.
+fn headlined_facts(style: Style, facts: &[String]) -> String {
+    format!(
+        "{}\n",
+        style.paint(Role::SteelGrey, &facts.join(style.between()))
+    )
+}
+
 fn headlined(style: Style, lead: &str, facts: &[String]) -> String {
     if facts.is_empty() {
         return format!("{lead}\n");
@@ -4340,6 +4555,31 @@ fn workspace_block(
         out.push('\n');
     }
 
+    // **Runs first, because the verb's own first line is "what is running"** and
+    // a run is the only thing on this block that can still be doing something. A
+    // detached run used to be invisible here: it returned immediately and the
+    // only way to see it was `check --status` with the id in hand, so the
+    // question this table now answers had exactly one asker — someone who
+    // already knew the answer.
+    let mut active = Table::new(columns("run", "detail", false)).indent(2);
+    for run in &row.runs {
+        active = active.row(vec![
+            // The envelope's own `Status`, unchanged: `RUNNING` for a group that
+            // is provably still the run, `DEAD` for a run that stopped without
+            // deciding. `check --status` prints the same two words for the same
+            // two facts, which is the point of not inventing a third.
+            verdict(run.status),
+            Cell::plain(run.run_id.clone()),
+            // The log, because a `DEAD` run's only explanation is in it and a
+            // reader who has to reconstruct the path has to know the layout.
+            Cell::muted(format!("pgid {} · {}", run.pgid, run.log)),
+        ]);
+    }
+    if !active.is_empty() {
+        out.push_str(&active.render(style, width));
+        out.push('\n');
+    }
+
     let mut holds = Table::new(columns("resource", "detail", false)).indent(2);
 
     // **One row per resource, and the id is the whole point** (PLAN.md §3.1):
@@ -4351,12 +4591,28 @@ fn workspace_block(
     // eighty-column DETAIL cell, so the flexible column truncated — and the part
     // it cut was the trailing `+2`. The one fact that tells a reader whether they
     // need `--json` was the first thing to go. A row cannot lose its tail.
-    for id in row.owns.iter().take(KEEP) {
+    //
+    // **Stale before live, and the order is what survives the cap.** Only `KEEP`
+    // rows are drawn and the rest collapse into `+n more`, so an ordering that
+    // put a leaked process group fourth would hide the one row a reader can act
+    // on behind three that need nothing. Measured on this repository: six `pgid`
+    // rows for one workspace, four of them from a previous boot.
+    let ordered = row
+        .stale
+        .iter()
+        .chain(row.owns.iter().filter(|id| !row.stale.contains(*id)));
+    for id in ordered.take(KEEP) {
         // The envelope's `<kind>:<reference>` grammar, split back into the two
         // columns it was always two of.
         let (kind, reference) = id.split_once(':').unwrap_or(("resource", id));
         holds = holds.row(vec![
-            token("owns", Role::BeaconGreen),
+            match row.stale.contains(id) {
+                // The word `commands/manifest/status.md` has used for this state
+                // since it was written — recorded, and gone — rather than a
+                // fourth spelling of the same idea.
+                true => token("stale", Role::FlareOrange),
+                false => token("owns", Role::BeaconGreen),
+            },
             Cell::plain(kind),
             Cell::muted(reference),
         ]);
@@ -4721,6 +4977,84 @@ fn tally(released: &armada_core::envelope::Released) -> Option<String> {
         parts.push("ports released".to_string());
     }
     (!parts.is_empty()).then(|| parts.join(", "))
+}
+
+/// `armada manifest prune` — what could go, what did, and **whose it was**.
+///
+/// # The owner is a column, not a footnote
+///
+/// Every other reclaiming verb draws rows that are all Armada's, so whose a
+/// thing is has never needed saying. Here it is the only fact that matters: the
+/// measured machine had 171 volumes holding 12.0 GB and **none of them were
+/// Armada's**, so a table that did not say so would read as a list of things
+/// Armada is offering to delete. It is folded into the detail rather than given
+/// a column of its own, because `STATUS · NAME · DETAIL` is the agreed layout
+/// and a fifth column would push the name into truncation on an 80-column
+/// terminal.
+///
+/// # `SKIPPED` is the ordinary outcome and is not a failure
+///
+/// On a preview every row is `SKIPPED`, and on a real run most rows still are —
+/// because most of what is on the daemon is not Armada's. The summary carries
+/// what was freed so the reader is not left counting rows.
+fn prune(envelope: &Envelope<PruneData>, style: Style, width: usize) -> String {
+    let data = &envelope.data;
+    let mut out = header(style, envelope.workspace.as_ref(), None, None, width);
+
+    let mut table = Table::new(columns("volume", "detail", false)).indent(2);
+    for row in &data.results {
+        let mut detail = armada_core::disk::format_maybe(row.bytes);
+        if let Some(note) = &row.detail {
+            detail.push_str(&format!(" — {note}"));
+        }
+        table = table.row(vec![
+            verdict(row.status),
+            Cell::plain(row.reference.clone()),
+            detail_cell(style, Some(detail.as_str())),
+        ]);
+    }
+    out.push_str(&table.render(style, width));
+    if !table.is_empty() {
+        out.push('\n');
+    }
+
+    // **What was withheld is said before the summary, never after it.** A reader
+    // who asked for a prune and got a preview needs the rule that stopped it,
+    // and a line under the total reads as a footnote to a finished job.
+    let mut notes = Vec::new();
+    for line in data.withheld.iter().chain(data.skipped.iter()) {
+        notes.push(line.clone());
+    }
+    if !notes.is_empty() {
+        let mut aside = Table::new(columns("", "detail", false))
+            .indent(2)
+            .headerless();
+        for note in &notes {
+            aside = aside.row(vec![
+                token("note", Role::FlareOrange),
+                Cell::nothing(),
+                Cell::muted(note.clone()),
+            ]);
+        }
+        out.push_str(&aside.render(style, width));
+        out.push('\n');
+    }
+
+    let mut facts = vec![match data.freed {
+        Some(0) => "nothing was removed".to_string(),
+        Some(bytes) => format!("{} freed", armada_core::disk::format_size(bytes)),
+        // One unreadable size keeps the total unknown rather than under-stating
+        // it, which is this whole module's rule about sizes.
+        None => "removed, total size unknown".to_string(),
+    }];
+    let mine = data
+        .results
+        .iter()
+        .filter(|row| row.owner == armada_core::disk::Ownership::Armada)
+        .count();
+    facts.push(format!("{} of {} armada's", mine, data.results.len()));
+    out.push_str(&summary(style, envelope.status, &facts));
+    out
 }
 
 fn clean_dry(envelope: &Envelope<CleanDryRun>, style: Style, width: usize) -> String {
@@ -5568,7 +5902,7 @@ pub fn error_lines(error: &ArmadaError, style: Style) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use armada_core::envelope::{PortReport, Released};
+    use armada_core::envelope::{PortReport, Released, RunView};
     use armada_core::error::ErrClass;
     use armada_core::ports::PortBlock;
     use std::collections::BTreeMap;
@@ -5884,6 +6218,98 @@ mod tests {
         assert!(
             !text.contains("2 resources"),
             "a count is not an id: {text}"
+        );
+    }
+
+    /// **A run in flight gets a row, and it says `RUNNING`.**
+    ///
+    /// The verb's own first line is "what is running", and until this table
+    /// existed a detached run was visible only to `check --status` with the run
+    /// id in hand. The word is the envelope's `Status`, not a fourth spelling:
+    /// `check` prints the same one for the same fact.
+    #[test]
+    fn a_live_run_is_named_with_the_word_check_would_use() {
+        let mut row = ResultRow::new("a3f91c02", Status::Ok);
+        row.runs = vec![RunView {
+            run_id: "01M048YQMSD6YP48".to_string(),
+            status: Status::Running,
+            pgid: 4212,
+            log: ".armada/run/01M048YQMSD6YP48/detach.log".to_string(),
+            started_at: "2026-08-09T14:02:11Z".to_string(),
+        }];
+        let text = rendered(
+            &Output::Status(Box::new(Envelope::ok(
+                "status",
+                Some(workspace()),
+                Status::Ok,
+                StatusData {
+                    scope: "workspace".to_string(),
+                    results: vec![row],
+                    unreclaimed: Vec::new(),
+                },
+            ))),
+            Style::plain(),
+        );
+        assert!(
+            has_row(
+                &text,
+                &[
+                    "RUNNING",
+                    "01M048YQMSD6YP48",
+                    "pgid",
+                    "4212",
+                    "·",
+                    ".armada/run/01M048YQMSD6YP48/detach.log",
+                ]
+            ),
+            "{text}"
+        );
+        // The log, because a run that stops without deciding has its only
+        // explanation in it and a reader should not have to know the layout.
+        assert!(
+            text.contains(".armada/run/01M048YQMSD6YP48/detach.log"),
+            "{text}"
+        );
+    }
+
+    /// **A stale resource is drawn before the live ones, and the order is what
+    /// survives the cap.**
+    ///
+    /// Only [`KEEP`] rows are named. Sorted by id the leaked `pgid` measured on
+    /// this repository lands fourth of six and disappears into `+n more` — the
+    /// single row a reader can act on, hidden behind three that need nothing.
+    #[test]
+    fn a_stale_resource_is_named_first_so_the_cap_cannot_swallow_it() {
+        let mut row = ResultRow::new("a3f91c02", Status::Ok);
+        row.owns = vec![
+            "container:one".to_string(),
+            "container:two".to_string(),
+            "container:three".to_string(),
+            "pgid:61477".to_string(),
+        ];
+        row.stale = vec!["pgid:61477".to_string()];
+        let text = rendered(
+            &Output::Status(Box::new(Envelope::ok(
+                "status",
+                Some(workspace()),
+                Status::Ok,
+                StatusData {
+                    scope: "workspace".to_string(),
+                    results: vec![row],
+                    unreclaimed: Vec::new(),
+                },
+            ))),
+            Style::plain(),
+        );
+        assert!(has_row(&text, &["STALE", "pgid", "61477"]), "{text}");
+        assert!(
+            !has_row(&text, &["OWNS", "pgid", "61477"]),
+            "a resource is live or stale, never both: {text}"
+        );
+        // Still capped, and still saying how many it did not name.
+        assert!(
+            has_row(&text, &["OWNS", "resources", "+1", "more"]),
+            "{text}"
         );
     }
 

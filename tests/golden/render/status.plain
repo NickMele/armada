@@ -5,10 +5,14 @@ armada  3d9cc7ba  /scratch/repo                                  ports 5460-5469
   CONFLICT  postgres  5462
   DOWN      web       5461
 
+  STATUS   RUN               DETAIL
+  RUNNING  01M048YQMSD6YP48  pgid 4212 · .armada/run/01M048YQMSD6YP48/detach.log
+  DEAD     01M048KKTG19V63A  pgid 4098 · .armada/run/01M048KKTG19V63A/detach.log
+
   STATUS    RESOURCE   DETAIL
+  STALE     pgid       4212
   OWNS      container  armada-3d9cc7ba-api
   OWNS      container  armada-3d9cc7ba-db
-  OWNS      network    armada-3d9cc7ba
   OWNS      resources  +2 more
   HELD      lease      run:3d9cc7ba
   REPORTED  release    psql -c 'DROP DATABASE app_3d9cc7ba'

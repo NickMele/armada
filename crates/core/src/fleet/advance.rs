@@ -95,11 +95,23 @@ pub fn attention(record: &Job, observed: &Observed, alive: bool) -> Attention {
         JobState::Paused | JobState::Blocked => Attention::Idle {
             why: "it is waiting on you",
         },
+        // **A stall with an ungated exchange behind it is the one this
+        // milestone catches** (`020` §1 and §2). The Drone finished an exchange
+        // and exited; nothing relayed the event — a SIGKILL, a hook that could
+        // not run, a crash in between. Whoever ticks next picks it up, which is
+        // what makes the sweep a backstop rather than a second daemon.
+        JobState::Stalled | JobState::Silent if observed.due => Attention::Gate,
         // **Nothing was ever produced.** `settle` raises this to the inbox the
         // first time it is seen; gating a step whose Drone died before it
         // finished a turn would record a `FAILED` against work nobody did.
         JobState::Stalled => Attention::Idle {
             why: "its Drone stopped without finishing a turn",
+        },
+        // A Drone that ended an exchange saying nothing, and whose exchange has
+        // already been gated. There is nothing further to gate — what it needs
+        // is somebody to read `019`'s brief, not another pass.
+        JobState::Silent => Attention::Idle {
+            why: "its Drone ended an exchange without reporting anything",
         },
         // Minted and nothing started. `spawn` starts the first Drone, so a
         // Job resting here has not been spawned yet.
@@ -319,6 +331,8 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            ticked_turns: 0,
+            doing: None,
         }
     }
 
@@ -327,6 +341,26 @@ mod tests {
             state,
             spend: crate::fleet::job::Spend::default(),
             ceiling,
+            due: false,
+        }
+    }
+
+    /// **The failure `020` §2 says the relay has three ways of hitting.** A
+    /// Drone SIGKILLed, a hook that could not run, a crash between exit and
+    /// tick — all three land the Job here, and the next pass over the fleet is
+    /// what rescues it. Without this arm the sweep would look at a `STALLED`
+    /// Job, agree it is stalled, and move on forever.
+    #[test]
+    fn a_stall_with_an_ungated_exchange_behind_it_is_gated_by_the_next_pass() {
+        for state in [JobState::Stalled, JobState::Silent] {
+            let record = job(state);
+            let mut seen = observed(state, None);
+            seen.due = true;
+            assert_eq!(
+                attention(&record, &seen, false),
+                Attention::Gate,
+                "{state} with an ungated exchange was left for dead"
+            );
         }
     }
 

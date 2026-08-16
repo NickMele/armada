@@ -185,7 +185,7 @@ fn the_first_launch_is_assembled_and_nothing_is_started() {
 ///
 /// `armada helm` prints one line for a person to paste. It cannot paste twenty
 /// kilobytes of their own prose, so the appended prompt is written to
-/// `~/.armada/helm/guild-voice.md` and the line reads it back with `"$(cat …)"`
+/// `~/.armada/helm/system-prompt.md` and the line reads it back with `"$(cat …)"`
 /// — which reproduces the argv byte for byte, or the two renderings of one
 /// hand-over disagree in the one place a reader has no way to check.
 #[test]
@@ -196,10 +196,10 @@ fn the_line_a_reader_pastes_reproduces_the_launch_exactly() {
     let envelope = helm_json(&machine, &[]);
     let argv = argv_of(&envelope);
     let command = envelope["data"]["command"].as_str().expect("the line");
-    let document = helm_home(&machine).join("guild-voice.md");
+    let document = helm_home(&machine).join("system-prompt.md");
 
     assert!(
-        command.contains("--append-system-prompt \"$(cat ~/.armada/helm/guild-voice.md)\""),
+        command.contains("--append-system-prompt \"$(cat ~/.armada/helm/system-prompt.md)\""),
         "{command}"
     );
     assert!(
@@ -228,7 +228,7 @@ fn the_line_a_reader_pastes_reproduces_the_launch_exactly() {
 /// everything, and that is how the instruction sat unread in the persona for as
 /// long as it did.
 #[test]
-fn an_unwritten_guild_injects_nothing_and_says_so() {
+fn an_unwritten_guild_injects_none_of_the_readers_words_and_says_so() {
     let machine = Machine::new();
     a_machine_ready_for_helm(&machine);
     let guild = machine.home.path().join(".armada/guild");
@@ -244,29 +244,34 @@ fn an_unwritten_guild_injects_nothing_and_says_so() {
     let envelope = helm_json(&machine, &[]);
     let argv = argv_of(&envelope);
     assert!(
-        !argv.iter().any(|word| word == "--append-system-prompt"),
-        "Armada's own example text was made binding: {argv:?}"
-    );
-    assert!(
         !argv
             .iter()
             .any(|word| word.contains("Lead with the answer")),
-        "{argv:?}"
+        "Armada's own example text was made binding: {argv:?}"
     );
+    // **The flag is there, carrying Armada's own skill and nothing of theirs**
+    // (`docs/reserved/008`). It used to be absent entirely, which is what this
+    // test asserted; Armada's instructions to the agents it runs do not wait on
+    // the reader describing themselves.
+    let at = argv
+        .iter()
+        .position(|word| word == "--append-system-prompt")
+        .unwrap_or_else(|| panic!("{argv:?}"));
+    assert_eq!(argv[at + 1], armada_core::skill::BODY);
 
     let row = envelope["data"]["results"]
         .as_array()
         .unwrap()
         .iter()
         .find(|row| row["what"] == "voice")
-        .expect("a launch that appended nothing still says so");
+        .expect("a launch that appended none of their words still says so");
     let detail = row["detail"].as_str().unwrap();
-    assert!(detail.contains("none yet"), "{detail}");
+    assert!(detail.contains("none of yours yet"), "{detail}");
     assert!(detail.contains("armada guild edit voice.md"), "{detail}");
-    assert!(
-        !helm_home(&machine).join("guild-voice.md").exists(),
-        "a document was written for a voice that does not exist"
-    );
+    // **The document is written either way**, because `"$(cat …)"` in the
+    // printed line has to find it — it used to be removed here, back when an
+    // unwritten guild meant no flag and nothing to substitute.
+    assert!(helm_home(&machine).join("system-prompt.md").exists());
 }
 
 /// A fragment the reader deleted, or one that is nothing but whitespace, is

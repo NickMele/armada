@@ -22,16 +22,16 @@
 use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
-    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ReapCandidate,
-    ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow, TransitionRow,
-    VerdictData,
+    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
+    ReapCandidate, ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow,
+    TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
 use armada_core::fleet::drone::Reading;
 use armada_core::fleet::job::{self, Handle, Job, Observed, Spend};
 use armada_core::fleet::workflow::{self, Workflow};
-use armada_core::fleet::{advance, drone as argv, gate, JobState, Verdict};
+use armada_core::fleet::{advance, drone as argv, gate, Acting, JobState, Subject, Verdict};
 use armada_fleet::drone;
 use armada_fleet::jobs::Store;
 use armada_fleet::{home, inbox, manifest, own, worktree};
@@ -104,6 +104,60 @@ impl Where {
     /// A path as a person writes it.
     pub fn shown(&self, path: &Path) -> String {
         home::tilde(path, &self.home)
+    }
+
+    /// Write this Job's `Stop` hook and the settings document that registers
+    /// it, and answer with what `--settings` should be handed.
+    ///
+    /// **Rewritten before every exchange rather than written once at spawn**,
+    /// for the reason `armada helm` rewrites its own wiring on every launch:
+    /// the hook names the `armada` binary on this machine, and a machine whose
+    /// Armada moved would otherwise keep relaying through a path that is not
+    /// there. Regenerating is two small writes.
+    ///
+    /// **A hook that could not be written does not fail the exchange.** The
+    /// relay is one of two mechanisms (`020` §2) and the sweep is the other, so
+    /// a Job that starts without a relay still advances — later, and through
+    /// somebody else's tick, which is precisely what a backstop is for. Failing
+    /// the spawn instead would trade a slow Job for no Job.
+    fn relay(&self, uuid: &str) -> Option<String> {
+        let hook = home::stop_hook(&self.armada_home, uuid);
+        let settings = home::drone_settings(&self.armada_home, uuid);
+        let exe = self.exe.display().to_string();
+        std::fs::create_dir_all(hook.parent()?).ok()?;
+        std::fs::write(&hook, argv::stop_hook(&exe)).ok()?;
+        // **A `Stop` hook that is not executable is a relay that silently is
+        // not one** — Claude Code runs it as a command, and a file without the
+        // bit set fails to start with nothing on the machine reporting it.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).ok()?;
+        }
+        std::fs::write(&settings, argv::settings_json(&hook.display().to_string())).ok()?;
+        Some(settings.display().to_string())
+    }
+
+    /// The `--mcp-config` document that attaches Armada's own server, written
+    /// beside the relay and for the same reason.
+    ///
+    /// **Without it a Drone cannot report at all.** Measured 2026-08-16: a
+    /// Drone's session advertised 103 tools and none of them Armada's, so the
+    /// four `mcp__armada__fleet_*` tools its brief names — and that
+    /// `drone::ALLOW` grants — did not exist to be called. The Job did its
+    /// work, said so in prose, and stopped `SILENT`.
+    ///
+    /// The document is `helm::mcp_json`'s, unchanged: one server, one command,
+    /// and `ARMADA_JOB` in the environment is what makes `armada mcp serve`
+    /// answer with the Drone's belt rather than Helm's. A second document
+    /// spelling the same server differently is the drift `glossary.md` exists
+    /// to prevent.
+    fn drone_mcp(&self, uuid: &str) -> Option<String> {
+        let path = home::drone_mcp(&self.armada_home, uuid);
+        std::fs::create_dir_all(path.parent()?).ok()?;
+        let exe = self.exe.display().to_string();
+        std::fs::write(&path, armada_core::helm::mcp_json(&exe)).ok()?;
+        Some(path.display().to_string())
     }
 
     /// Turn a `~/…` back into a real path.
@@ -223,7 +277,19 @@ fn settle<C: Clock>(
             now,
             record,
             inbox::Kind::Blocked,
-            "its Drone stopped without finishing a turn",
+            "its Drone is gone and nothing ticked it",
+        )?;
+    } else if observed.state == JobState::Silent && was != JobState::Silent {
+        // **The same rule, and a different sentence** (`020` §6). A silent Job
+        // is not a stalled one: there is no signal to act on anywhere, which is
+        // the thing the reader has to be told rather than left to infer from a
+        // word that means the other failure.
+        raise(
+            place,
+            now,
+            record,
+            inbox::Kind::Blocked,
+            "its Drone ended an exchange without a verdict or a question",
         )?;
     }
     Ok(())
@@ -398,6 +464,8 @@ pub fn spawn<R: Run, C: Clock>(
         transitions: Vec::new(),
         pending: None,
         facts: options.set.clone(),
+        ticked_turns: 0,
+        doing: None,
     };
 
     if options.dry_run {
@@ -478,6 +546,10 @@ pub fn spawn<R: Run, C: Clock>(
             &uuid,
             &prompt(&workflow, &step, &options.task),
             &place.posture()?,
+            // **The relay, written before the first Drone starts** (`020` §1).
+            // Nothing observed an exchange ending until this line existed.
+            place.relay(&uuid).as_deref(),
+            place.drone_mcp(&uuid).as_deref(),
         ),
     )?);
     store.save(&record)?;
@@ -849,11 +921,20 @@ pub fn ls<R: Run, C: Clock>(
     let wall = now.wall_ms();
 
     let mut rows: Vec<JobRow> = Vec::new();
+    // **Every window this fleet has seen, kept so one can be chosen.** The
+    // event is per-transcript — each Job's last turn reports the window *it*
+    // passed through — but the window is the account's, so the choice is over
+    // the whole listing and is made once, below, by
+    // [`armada_core::fleet::drone::window`].
+    let mut windows: Vec<armada_core::fleet::drone::RateLimit> = Vec::new();
     for record in place.store().all()? {
         if !all && record.state.is_over() {
             continue;
         }
-        let (observed, _, _) = look(run, place, &record, wall);
+        let (observed, reading, _) = look(run, place, &record, wall);
+        if let Some(limit) = reading.rate_limit {
+            windows.push(limit);
+        }
         // **By uuid, and never for a Job that is over.** The first is the
         // defect `005` records; the second is its first consequence, and it is
         // asserted here as well as written at the close because `--all` draws
@@ -895,6 +976,11 @@ pub fn ls<R: Run, C: Clock>(
             turns: observed.spend.turns,
             budget_remaining: job::remaining(&record.budget, &observed.spend, run_time),
             needs_attention: wants_you,
+            // **Carried off the record, which is the only place it exists.**
+            // `observe` cannot derive it: an action with a duration is a thing
+            // somebody is doing, not a thing the transcript or the process
+            // table can be asked about.
+            acting: record.doing.clone(),
         });
     }
 
@@ -913,6 +999,17 @@ pub fn ls<R: Run, C: Clock>(
             results: rows,
             needs_you,
             spent_usd,
+            // **Turned into a countdown here, in the shell, because this is
+            // where the clock is.** The core picks which window is in force and
+            // the payload carries `resets_in_s`, so neither the renderer nor a
+            // `--json` consumer has to know what epoch second it is to read the
+            // one number that says when you can work again.
+            window: armada_core::fleet::drone::window(&windows, wall / 1_000).map(|limit| {
+                armada_core::envelope::Window {
+                    used_percent: limit.percent(),
+                    resets_in_s: limit.resets_at.map(|at| at.saturating_sub(wall / 1_000)),
+                }
+            }),
         },
     ))))
 }
@@ -1134,7 +1231,15 @@ pub fn kill<R: Run, C: Clock>(
             .collect(),
     };
 
-    end(run, now, place, targets, keep_branch, keep_worktree)
+    end(
+        run,
+        now,
+        place,
+        Acting::Aborting,
+        targets,
+        keep_branch,
+        keep_worktree,
+    )
 }
 
 /// End every one of these Jobs, and report what each released.
@@ -1151,22 +1256,114 @@ fn end<R: Run, C: Clock>(
     run: &R,
     now: &C,
     place: &Where,
+    acting: Acting,
     targets: Vec<Job>,
     keep_branch: bool,
     keep_worktree: bool,
 ) -> Result<Output, ArmadaError> {
-    let store = place.store();
-    let wall = now.wall_ms();
     let mut results: Vec<Killed> = Vec::new();
     for mut record in targets {
+        results.push(tear_down(
+            run,
+            now,
+            place,
+            &mut record,
+            Ending {
+                // **`kill` gave up on this Job**, whatever it was doing, so the
+                // state it lands in says so.
+                state: JobState::Aborted,
+                keep_branch,
+                keep_worktree,
+                observe: true,
+                acting: Some(acting),
+            },
+        )?);
+    }
+
+    let error = results.iter().find_map(|killed| killed.error.clone());
+    let data = KillData { results };
+    Ok(Output::Kill(Box::new(match error {
+        Some(error) => Envelope::failed("fleet kill", None, error, data),
+        None => Envelope::ok("fleet kill", None, Status::Clean, data),
+    })))
+}
+
+/// How a teardown ends, which is the only thing that differs between its
+/// callers.
+#[derive(Debug, Clone, Copy)]
+struct Ending {
+    /// The state to write. `ABORTED` when somebody gave up on the Job,
+    /// `DONE` when it reached its last step — **and a teardown that wrote one
+    /// for the other would be the record lying about what happened**.
+    state: JobState,
+    /// Keep the commits. Always true for a Job that finished: its branch is the
+    /// entire reason it was run.
+    keep_branch: bool,
+    /// Keep the directory.
+    keep_worktree: bool,
+    /// Look at the Job and persist what was seen before ending it.
+    ///
+    /// `kill` needs this: it may be ending a Job that stalled or hit a ceiling
+    /// while nobody was looking, and after this the observation is no longer
+    /// derivable. The loop does not — it has just gated the step and written the
+    /// verdict, so a second observation would only be a chance to disagree with
+    /// itself.
+    observe: bool,
+    /// The word a row shows while this teardown runs (`020` §5).
+    ///
+    /// **It differs by caller and nothing else does**: `kill` is `ABORTING`,
+    /// `reap` is `REAPING`, and the loop's own finishing pass is neither —
+    /// there is nothing to watch on a Job whose last step just passed, and a
+    /// `REAPING` on it would name an action nobody took.
+    acting: Option<Acting>,
+}
+
+/// **One Job's teardown, and the one of it.**
+///
+/// The order is the point (`commands/fleet/kill.md`): the Drone first because it
+/// is still working, then `manifest clean` so resources are released while the
+/// config describing them is still present, then the worktree, then the branch.
+/// A second copy of this would be a second answer to what Armada orders and what
+/// it tolerates — so `kill`, `reap` and the loop's own finishing pass all arrive
+/// here, and differ only in [`Ending`].
+///
+/// **Nothing here is raised.** `kill`'s documented contract is that the Job is
+/// marked ended either way; what would not release is carried on the row, and
+/// ownership is recorded machine-globally so `armada manifest clean --all`
+/// reclaims the remainder.
+fn tear_down<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    record: &mut Job,
+    ending: Ending,
+) -> Result<Killed, ArmadaError> {
+    let store = place.store();
+    let wall = now.wall_ms();
+    {
         let path = place.expand(&record.worktree);
 
         // **What it was doing is recorded before it is ended.** A Job that
         // stalled or hit a ceiling while nobody was looking has that written
-        // down and raised here, because after this it is `ABORTED` and the
-        // observation is no longer derivable.
-        let (observed, _, _) = look(run, place, &record, wall);
-        settle(&mut record, &observed, place, now)?;
+        // down and raised here, because after this the observation is no longer
+        // derivable.
+        if ending.observe {
+            let (observed, _, _) = look(run, place, record, wall);
+            settle(record, &observed, place, now)?;
+        }
+
+        // **The row says what is happening to it, from here on** (`020` §5).
+        // The abort that started this rule took several seconds inside docker
+        // and said nothing; every stage below now names itself in the record
+        // before it starts, so a second reader — the Bridge, another terminal —
+        // draws `ABORTING · docker 12s…` instead of a row that looks hung.
+        //
+        // **Written before the slow thing, not after.** A stage announced on
+        // completion is a stage nobody could see while it was the problem.
+        let started = ending
+            .acting
+            .map(|acting| job::Doing::started(acting, now.wall_ms()));
+        let mut doing = stage(&store, record, started.as_ref(), "drone", now.wall_ms());
 
         // **Step one: the Drone.** It is still working, and everything below
         // takes away what it is working with.
@@ -1200,6 +1397,8 @@ fn end<R: Run, C: Clock>(
         // is what `disposition` below is about to say.
         let cleaned = match path.is_dir() {
             true => {
+                // The stage the reader watched in silence for several seconds.
+                doing = stage(&store, record, doing.as_ref(), "docker", now.wall_ms());
                 manifest::clean(run, &place.exe, &path).unwrap_or_else(manifest::Cleaned::failed)
             }
             false => manifest::Cleaned::default(),
@@ -1225,22 +1424,27 @@ fn end<R: Run, C: Clock>(
         // **A directory that is already gone is not a failure.** A Job whose
         // worktree somebody deleted by hand is exactly the Job the durable
         // record exists for (PLAN.md §14.1).
-        let disposition = match (keep_worktree, path.exists()) {
+        let disposition = match (ending.keep_worktree, path.exists()) {
             (_, false) => Disposition::Gone,
             (true, true) => Disposition::Kept,
-            (false, true) => match worktree::remove(run, &repo_root, &path) {
-                Ok(()) => Disposition::Removed,
-                Err(error) => {
-                    // Reported, never raised. The Job is ended either way, and a
-                    // `kill` that bailed out here would need a second `kill` to
-                    // do the same thing again.
-                    failure.get_or_insert(error);
-                    Disposition::Kept
+            (false, true) => {
+                // The last stage, so its answer is not carried on — the write
+                // that settles the Job clears the transient a few lines below.
+                stage(&store, record, doing.as_ref(), "worktree", now.wall_ms());
+                match worktree::remove(run, &repo_root, &path) {
+                    Ok(()) => Disposition::Removed,
+                    Err(error) => {
+                        // Reported, never raised. The Job is ended either way,
+                        // and a `kill` that bailed out here would need a second
+                        // `kill` to do the same thing again.
+                        failure.get_or_insert(error);
+                        Disposition::Kept
+                    }
                 }
-            },
+            }
         };
 
-        let branch = if keep_branch || disposition != Disposition::Removed {
+        let branch = if ending.keep_branch || disposition != Disposition::Removed {
             Disposition::Kept
         } else {
             match worktree::delete_branch(run, &repo_root, &record.branch) {
@@ -1251,7 +1455,7 @@ fn end<R: Run, C: Clock>(
             }
         };
 
-        results.push(Killed {
+        let killed = Killed {
             job: record.name.clone(),
             uuid: record.uuid.clone(),
             released: cleaned.released,
@@ -1261,7 +1465,7 @@ fn end<R: Run, C: Clock>(
             branch,
             branch_name: record.branch.clone(),
             error: failure,
-        });
+        };
 
         // **The Job is marked ended whatever happened above.** A `kill` that
         // left a Job live because one container refused to stop would need a
@@ -1270,9 +1474,22 @@ fn end<R: Run, C: Clock>(
         // Its spend is settled from the transcript on the way out, because the
         // transcript is about to be the only thing left that knows.
         record.spend = drone::transcript(&place.stream(&record.uuid)).spend;
-        record.state = JobState::Aborted;
+        record.state = ending.state;
         record.port_block = None;
-        store.save(&record)?;
+        // **A Job whose worktree is gone must not go on claiming it.** The
+        // record is what `armada fleet show` reads a held worktree from, and a
+        // Job that reads as holding a directory nothing can open is the same
+        // shape of lie as a `RUNNING` Job with a dead Drone — which this fleet
+        // has already shown a reader once.
+        if disposition == Disposition::Removed {
+            record.worktree = String::new();
+        }
+        // **The transient is cleared by the write that settles the Job.** An
+        // action word left behind would say a kill is still running against a
+        // Job that is already `ABORTED` — the opposite of the silence `020` §5
+        // is about, and just as misleading.
+        record.doing = None;
+        store.save(record)?;
 
         // **Its inbox entries end with it.** Both of the user's Jobs reached
         // `ABORTED` and five entries stayed open against Jobs that no longer
@@ -1283,18 +1500,94 @@ fn end<R: Run, C: Clock>(
         // **After the save, and never instead of it.** A `kill` that failed
         // here must still have ended the Job; an entry left open is a stale
         // row, an unsaved record is a Job nothing can end.
-        close_entries(place, &record)?;
+        close_entries(place, record)?;
+        Ok(killed)
     }
-
-    let error = results.iter().find_map(|killed| killed.error.clone());
-    let data = KillData { results };
-    Ok(Output::Kill(Box::new(match error {
-        Some(error) => Envelope::failed("fleet kill", None, error, data),
-        None => Envelope::ok("fleet kill", None, Status::Clean, data),
-    })))
 }
 
 // --------------------------------------------------------------- pause/resume
+
+/// Release what a Job holds because it has **finished**.
+///
+/// # The happy path was the leak
+///
+/// Every other way a Job ends reclaimed what it held. `spawn`'s rollback did,
+/// `kill` did, `reap` did — and the loop, on the one path a Job takes when it
+/// *succeeds*, did not. So a Job that failed was tidied up and a Job that worked
+/// left its containers, its networks, its **named volumes**, its port block and
+/// its worktree behind for ever. Nobody runs `clean` afterwards, which is how a
+/// machine comes to hold 171 volumes and 12.0 GB.
+///
+/// # What a finished Job keeps, and why
+///
+/// | | `kill` / `reap` | finishing |
+/// |---|---|---|
+/// | containers, networks, **volumes**, images | released | released |
+/// | port block | released | released |
+/// | **branch** | deleted | **kept — it is the whole reason the Job was run** |
+/// | **worktree** | removed | removed **only when there is nothing in it to lose** |
+///
+/// **The branch is never touched.** A Job that reached its last step produced
+/// commits, and those commits are the deliverable; deleting the branch would
+/// make the loop's success indistinguishable from its failure.
+///
+/// # The worktree goes, unless removing it would destroy work
+///
+/// This was the decision, and both answers were arguable.
+///
+/// *Keep it and let `reap` take it* has a real case: `reap` exists for exactly
+/// this, it already offers a `DONE` Job and already ticks it by default, and a
+/// reader who wants to see what the Job did has somewhere to look. It loses on
+/// the evidence, and the evidence is this project's own: **nobody runs the
+/// deferred verb.** That is the identical argument the user made about `clean`,
+/// and answering it with "run `reap`" would be answering "why is my disk full"
+/// with a command he was already not running.
+///
+/// *Remove it always* is what `kill` does, and it is wrong here for one reason:
+/// [`worktree::remove`] forces, and forcing is right when a caller asked for it
+/// by name and wrong when a background pass decided it. Uncommitted work
+/// destroyed by a loop nobody was watching is work nobody agreed to lose.
+///
+/// **So it goes when git says the tree is clean, and stays when it is not** —
+/// and the row says which, because a directory that survives with nothing
+/// explaining it reads as a broken removal. A Job whose tree is dirty stays
+/// offered to `armada fleet reap`, where taking it is a deliberate act in front
+/// of a preview. [`worktree::holds_uncommitted_work`] answers `true` when it
+/// cannot tell, for the same reason the reaper never removes on an errno that is
+/// not `ENOENT`.
+///
+/// **A `FAILED` or halted Job never reaches here.** `Next::Halt` leaves a Job
+/// `PAUSED` and asks a person; its worktree is the evidence for the question it
+/// just raised, and this function is only ever called on `Next::Finish`.
+fn release_on_finish<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    record: &mut Job,
+) -> Result<Killed, ArmadaError> {
+    let path = place.expand(&record.worktree);
+    // **A tree that is not there is not dirty**, and `tear_down` reports it as
+    // `Gone` rather than removing anything.
+    let keep_worktree = path.is_dir() && worktree::holds_uncommitted_work(run, &path);
+    tear_down(
+        run,
+        now,
+        place,
+        record,
+        Ending {
+            state: JobState::Done,
+            keep_branch: true,
+            keep_worktree,
+            // The loop has just gated the step and written the verdict. A second
+            // observation here could only disagree with the one already
+            // recorded.
+            observe: false,
+            // Nothing to watch: the step has passed and the Job is `DONE`
+            // whatever this releases.
+            acting: None,
+        },
+    )
+}
 
 /// `armada fleet pause` — stop the Drone, keep the Job.
 ///
@@ -1343,6 +1636,13 @@ pub fn pause<R: Run, C: Clock>(
         });
     }
 
+    // **`PAUSING` while the Drone is being stopped** (`020` §5). A pause
+    // SIGTERMs a group and waits before escalating, which is the same several
+    // seconds of silence an abort had — and the same repair: the row says what
+    // is happening before the slow part starts.
+    let pausing = job::Doing::started(Acting::Pausing, now.wall_ms());
+    stage(&store, &mut record, Some(&pausing), "drone", now.wall_ms());
+
     // **The Drone goes, and nothing else does.** Ownership of the group is
     // forgotten in the same breath, because a group that is gone must not stay
     // in the machine-global store for `armada manifest clean` to find later and
@@ -1368,6 +1668,7 @@ pub fn pause<R: Run, C: Clock>(
     // write to it again until the Job is resumed.
     record.spend = drone::transcript(&place.stream(&record.uuid)).spend;
     record.state = JobState::Paused;
+    record.doing = None;
     store.save(&record)?;
 
     let failure = (stopped == drone::Stopped::Survived).then(|| ArmadaError {
@@ -1480,7 +1781,12 @@ pub fn resume<R: Run, C: Clock>(
         place,
         &record,
         &path,
-        argv::continue_argv(&record.uuid, &place.posture()?),
+        argv::continue_argv(
+            &record.uuid,
+            &place.posture()?,
+            place.relay(&record.uuid).as_deref(),
+            place.drone_mcp(&record.uuid).as_deref(),
+        ),
     )?);
     store.save(&record)?;
 
@@ -1590,7 +1896,7 @@ pub fn reap<R: Run, C: Clock>(
         targets.push(record);
     }
 
-    end(run, now, place, targets, false, false)
+    end(run, now, place, Acting::Reaping, targets, false, false)
 }
 
 // ---------------------------------------------------------------- inbox/answer
@@ -1791,7 +2097,13 @@ pub fn answer<R: Run, C: Clock>(
         place,
         &record,
         &place.expand(&record.worktree),
-        argv::resume_argv(&record.uuid, said, &place.posture()?),
+        argv::resume_argv(
+            &record.uuid,
+            said,
+            &place.posture()?,
+            place.relay(&record.uuid).as_deref(),
+            place.drone_mcp(&record.uuid).as_deref(),
+        ),
     )?);
     store.save(&record)?;
 
@@ -2055,6 +2367,100 @@ pub fn ask_human<C: Clock>(
     ))))
 }
 
+// --------------------------------------------------------------------- propose
+
+/// `fleet.propose` — **what a Drone noticed and is not blocked on**
+/// ([`docs/reserved/008`](../../../../docs/reserved/008-armada-injects-its-own-skills.md)).
+///
+/// # Why this is not `ask_human`, and not an `armada.yml` edit
+///
+/// `PLAN.md` §5's sandwich is *Armada reports facts, an agent authors, Armada
+/// verifies*. The middle layer was expected to know how to hold the tools, and a
+/// Drone that had learned something the manifest does not say had two bad
+/// options and no good one:
+///
+/// | It could | And that is |
+/// |---|---|
+/// | edit `armada.yml` itself | a claim nobody checked, landing inside a diff about something else — the one thing *Armada verifies* rules out |
+/// | call [`ask_human`] | a five-minute wait, against its own ceiling, for a decision it is not blocked on |
+/// | say nothing | what it did, because the third option did not exist |
+///
+/// So this raises and returns. **No wait, no poll, no ceiling spent** — the
+/// difference from [`ask_human`] is the whole reason it is a second verb rather
+/// than a flag on the first, because a proposal that waited would be a Drone
+/// stopping work to tell somebody something they can read tomorrow.
+///
+/// # It writes an inbox entry, and there is no fifth origin
+///
+/// `docs/reserved/001` settled that every item Helm surfaces is an entry with an
+/// id, across four origins and one id space. A proposal is
+/// [`armada_core::failure::Origin::Raised`] — *a Drone asked for you* — which it
+/// already is, because it is the inbox. Nothing new is stored, nothing new is
+/// resolved, and `armada fleet answer <id>`, `armada failures show <id>` and the
+/// Bridge all reach it on the day it is written.
+///
+/// # What Armada verifies here, and what it does not
+///
+/// It verifies that the subject is one of two words ([`Subject`]) and that the
+/// proposal is not empty. **It does not check whether the claim is true**, and
+/// could not: the Drone is the only thing that ran the command. Verification of
+/// the content is the person reading the row, or a Job they start from it —
+/// through a path that already exists. A proposal is not a change.
+pub fn propose<C: Clock>(
+    now: &C,
+    place: &Where,
+    handle: &str,
+    subject: Subject,
+    proposal: &str,
+) -> Result<Output, ArmadaError> {
+    let proposal = proposal.trim();
+    // **An empty proposal is refused rather than filed.** A row whose body says
+    // nothing is a row a person opens, learns nothing from, and cannot close
+    // with any confidence — and the inbox is append-only, so it is there for
+    // good. `bad_invocation` because the caller can fix it by saying what it
+    // noticed.
+    if proposal.is_empty() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: "proposal".to_string(),
+            message: "a proposal with no body is a row nobody can act on".to_string(),
+            next_action: Some(format!(
+                "say what about the {subject} you would change, and why"
+            )),
+        });
+    }
+    let record = place.store().find(handle)?;
+    // **`NEEDS_HUMAN` rather than a fourth [`inbox::Kind`].** The kind answers
+    // *why does the fleet want you*, and the answer here is the one it already
+    // has: a judgement call is yours. A `PROPOSAL` kind would be a second word
+    // for the same fact, and every table that draws the column would have to
+    // learn it to say nothing new.
+    let entry = raise(
+        place,
+        now,
+        &record,
+        inbox::Kind::NeedsHuman,
+        // **The subject is in the body, not beside it.** An inbox entry is read
+        // out of context and possibly hours later, and a bare sentence about a
+        // port would leave a reader guessing which file it was about. It is not
+        // a field because that would change the on-disk line shape for every
+        // entry ever written, to carry one word.
+        &format!("proposes a change to the {subject}: {proposal}"),
+    )?;
+
+    Ok(Output::Propose(Box::new(Envelope::ok(
+        "fleet propose",
+        None,
+        Status::Ok,
+        ProposeData {
+            job: record.name.clone(),
+            entry,
+            subject: subject.word().to_string(),
+            proposal: proposal.to_string(),
+        },
+    ))))
+}
+
 // --------------------------------------------------------------------- verdict
 
 /// `fleet.verdict` — how a step ended (PLAN.md §14.3).
@@ -2245,6 +2651,23 @@ pub fn tick<R: Run, C: Clock>(
     handle: Option<&str>,
     watch: bool,
 ) -> Result<Output, ArmadaError> {
+    // **One pass at a time on this machine** (`armada_fleet::pass`). Every
+    // Drone's `Stop` hook sweeps the whole fleet, so five exchanges ending
+    // together start five passes — and two passes gating one step would both
+    // `claude --resume` one session. Declining is the right answer rather than
+    // a slower yes: the pass that holds the lock is walking the same records.
+    let Some(_held) = armada_fleet::pass::take(&place.armada_home, &place.boot_id, now.wall_ms())?
+    else {
+        return Ok(Output::Tick(Box::new(Envelope::ok(
+            "fleet tick",
+            None,
+            Status::Ok,
+            TickData {
+                results: Vec::new(),
+                moved: 0,
+            },
+        ))));
+    };
     loop {
         let rows = pass(run, now, place, handle)?;
         let moved = rows.iter().filter(|row| did_something(&row.did)).count();
@@ -2401,6 +2824,12 @@ fn gate_step<R: Run, C: Clock>(
     // pass that advanced a step without persisting what the last exchange cost
     // would let a Job cross a ceiling and be gated anyway on the next pass.
     record.spend = observed.spend;
+    // **The watermark, moved here and nowhere else** (`020` §6). This is the
+    // one place an exchange is gated, so this is the one place that may record
+    // that it was — and it is recorded *before* the gate answers, because a
+    // pass that gated and then crashed has still consumed the exchange. The
+    // alternative, moving it only on success, re-gates the same turn forever.
+    record.ticked_turns = reading.turns.len();
 
     let flow = match read_workflow(place, &record.workflow) {
         Ok(flow) => flow,
@@ -2527,17 +2956,37 @@ fn gate_step<R: Run, C: Clock>(
         }
         advance::Next::Finish => {
             record.pending = None;
-            record.state = JobState::Done;
-            close_entries(place, &record)?;
-            place.store().save(&record)?;
-            Ok(tick_row(
+            // **A Job releases what it holds when it ends.** Everything below
+            // is the same teardown `kill` runs, in the same order, differing
+            // only in where it lands and what it keeps.
+            let ended = release_on_finish(run, now, place, &mut record)?;
+            let mut why = format!("`{step_id}` was its last step");
+            if let Some(summary) = ended.released.summary() {
+                why.push_str(&format!("; released {summary}"));
+            }
+            match ended.worktree {
+                Disposition::Removed => why.push_str(", and its worktree"),
+                // **Said out loud, because it is the reason a directory is
+                // still there.** A reader who finds a finished Job's worktree
+                // on disk with nothing explaining it concludes the removal is
+                // broken; a reader told it holds uncommitted work goes and
+                // looks at it, which is the right next move.
+                Disposition::Kept => why.push_str(
+                    ", and kept its worktree: it holds uncommitted work, so `armada fleet reap` \
+                     is where removing it is a deliberate act",
+                ),
+                Disposition::Gone => {}
+            }
+            let mut row = tick_row(
                 &record,
                 TICK_FINISHED,
-                format!("`{step_id}` was its last step"),
+                why,
                 predicate,
                 evidence,
                 Some(Verdict::Pass),
-            ))
+            );
+            row.released = Some(ended.released);
+            Ok(row)
         }
         advance::Next::Hand { why } => {
             record.pending = None;
@@ -2636,6 +3085,37 @@ fn halt<C: Clock>(
     ))
 }
 
+/// Name the slow part of an action, and write it where another reader can see
+/// it (`020` §5).
+///
+/// **A write per stage, and it is cheap on purpose.** Three small saves during
+/// an abort is the whole cost of a row that says which of `drone`, `docker` and
+/// `worktree` is taking the time — against an abort that said nothing at all
+/// for several seconds and was indistinguishable from a hung one.
+///
+/// **A failed write does not stop the action.** Reporting what an abort is
+/// doing must never be able to prevent the abort; if the record will not take
+/// the transient, the caller carries on and the reader is back where they were
+/// rather than worse off.
+///
+/// **`None` in, `None` out, and no write at all.** A teardown with no action
+/// word is the loop finishing a Job whose last step passed; there is nothing to
+/// watch there, and stamping `ABORTING` on it would name an action nobody took.
+fn stage(
+    store: &Store,
+    record: &mut Job,
+    doing: Option<&job::Doing>,
+    slow: &str,
+    now_ms: u64,
+) -> Option<job::Doing> {
+    let moved = doing?.at(slow, now_ms);
+    record.doing = Some(moved.clone());
+    // Best effort: reporting what a teardown is doing must never be able to
+    // stop the teardown.
+    let _ = store.save(record);
+    Some(moved)
+}
+
 /// Persist an observation only when it changed something.
 ///
 /// **A save per pass on an idle fleet would rewrite every record every two
@@ -2672,6 +3152,7 @@ fn tick_row(
         predicate,
         evidence,
         why,
+        released: None,
     }
 }
 
@@ -2720,7 +3201,13 @@ fn start_step<R: Run>(
         place,
         record,
         &path,
-        argv::resume_argv(&record.uuid, &ask, &place.posture()?),
+        argv::resume_argv(
+            &record.uuid,
+            &ask,
+            &place.posture()?,
+            place.relay(&record.uuid).as_deref(),
+            place.drone_mcp(&record.uuid).as_deref(),
+        ),
     )?);
     Ok(())
 }

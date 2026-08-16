@@ -11,6 +11,7 @@ VERBS
   components            what this repository can be filtered by
   commands              the verbs this repository declares
   clean                 release what this workspace owns
+  prune                 reclaim docker disk, including disk that is not armada's
   <name>                a verb this repo declares; manifest commands lists them
 
 NOT BUILT YET

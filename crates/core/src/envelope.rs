@@ -179,6 +179,40 @@ pub struct ResultRow {
     /// [`leases`]: ResultRow::leases
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub owns: Vec<String>,
+    /// **The subset of [`owns`] Armada can prove is no longer live** — same
+    /// `<kind>:<reference>` grammar, so a reader intersects rather than
+    /// re-parses.
+    ///
+    /// [`commands/manifest/status.md`] has promised three states per resource —
+    /// live, stale and unowned — since it was written, and until this field
+    /// existed the payload could express exactly one of them. Measured on a real
+    /// machine: six `pgid` rows for one workspace, four of them from a previous
+    /// boot and therefore dead by definition, all six reported identically. A
+    /// reader could not tell the leak from the service.
+    ///
+    /// **Proof, not suspicion.** The rule is
+    /// [`crate::reap::pgid_is_ours`] — the same one `clean` kills on — so a row
+    /// lands here only when the boot id differs or the process's start time no
+    /// longer matches. A pgid Armada could not sample is left out: not provably
+    /// dead is not stale.
+    ///
+    /// Additive, so `schema_version` does not bump, and omitted when empty.
+    ///
+    /// [`owns`]: ResultRow::owns
+    /// [`commands/manifest/status.md`]: ../../../docs/commands/manifest/status.md
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stale: Vec<String>,
+    /// Runs of `armada manifest check --detach` that have not reached a verdict.
+    ///
+    /// **The half of "what is running" that lived only in `.armada/`.** A
+    /// detached run returns immediately and the only way to see it was
+    /// `check --status` with the run id in hand — so the verb whose first line
+    /// is *"what is running"* could not report the one thing this repository
+    /// actually leaves running. `docs/reserved/023-status-shows-what-is-running.md`.
+    ///
+    /// Additive, so `schema_version` does not bump, and omitted when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub runs: Vec<RunView>,
     /// What was reclaimed for this row.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub released: Option<Released>,
@@ -239,6 +273,8 @@ impl ResultRow {
             ports: BTreeMap::new(),
             leases: Vec::new(),
             owns: Vec::new(),
+            stale: Vec::new(),
+            runs: Vec::new(),
             released: None,
             waiting_on: None,
             reason: None,
@@ -363,7 +399,8 @@ const fn implied_class(status: Status) -> Option<ErrClass> {
         | Status::Skipped
         | Status::Partial
         | Status::Running
-        | Status::Waiting => None,
+        | Status::Waiting
+        | Status::Queued => None,
     }
 }
 
@@ -398,6 +435,46 @@ pub struct Released {
     pub port_block: bool,
     /// Declared `owns.files` deleted — `--artifacts` only.
     pub files: usize,
+}
+
+impl Released {
+    /// What went, as a clause for a sentence — or [`None`] when nothing did.
+    ///
+    /// **Reclaiming is reported, never silent** (`reap.rs`), and a Job that
+    /// finishes now reclaims — so the pass that ended it has to say what it
+    /// took. [`None`] rather than `"nothing"` so the caller can leave the clause
+    /// off entirely: *"`review` was its last step; released nothing"* is noise
+    /// on the ordinary Job that held no services at all.
+    ///
+    /// **Volumes are named even though they are the least familiar of these**,
+    /// because they are the one that leaks: a named volume outlives `down` and
+    /// outlives its container by design, so it is the count a reader most needs
+    /// to see go down.
+    pub fn summary(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        for (count, singular) in [
+            (self.processes, "process group"),
+            (self.containers, "container"),
+            (self.networks, "network"),
+            (self.volumes, "volume"),
+            (self.images, "image"),
+            (self.files, "file"),
+        ] {
+            if count > 0 {
+                parts.push(match count {
+                    1 => format!("1 {singular}"),
+                    n => format!("{n} {singular}s"),
+                });
+            }
+        }
+        if self.port_block {
+            parts.push("its port block".to_string());
+        }
+        match parts.is_empty() {
+            true => None,
+            false => Some(parts.join(", ")),
+        }
+    }
 }
 
 /// `armada manifest init`.
@@ -510,6 +587,36 @@ pub struct DetachedView {
     pub log: String,
 }
 
+/// One undecided run, as `armada manifest status` reports it.
+///
+/// **Deliberately not [`DetachedView`], which sits beside it in `check`.** That
+/// one answers *"is the group holding **this** run still there"* for a caller
+/// who already has the run id; this one is a row in a list of runs a caller has
+/// never heard of, so it carries the id and the state it is in. Sharing one
+/// struct would have forced `status` to report `alive: false` where the honest
+/// word is `DEAD` — a boolean where the vocabulary already has an enum.
+///
+/// **Only `RUNNING` and `DEAD` ever appear here**, because a run that reached a
+/// verdict is history rather than status and is left out entirely
+/// (`crates/helm/src/verbs/status.rs`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RunView {
+    /// The run id, exactly as `armada manifest check --status <id>` takes it.
+    pub run_id: String,
+    /// `RUNNING` when the recorded group is provably still this run, `DEAD`
+    /// when it is gone and the run never wrote a verdict.
+    pub status: Status,
+    /// The process group that run was detached into.
+    pub pgid: i32,
+    /// Where the detached invocation's own output went, workspace-relative —
+    /// the only place a failure from before the first check is written down.
+    pub log: String,
+    /// When it started, RFC 3339. **Only ever displayed**, for the same reason
+    /// [`crate::run::RunRecord::started_at`] is: a backwards NTP step would make
+    /// it lie about ordering.
+    pub started_at: String,
+}
+
 /// `--dry-run` on `armada manifest check`: what would run, and nothing changed.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct CheckDryRun {
@@ -619,6 +726,77 @@ pub struct CleanDryRun {
     /// something one path emits, so they are reported here and named as such
     /// rather than dropped.
     pub would_report: Vec<String>,
+}
+
+/// `armada manifest prune` — what could go, what did, and what was never
+/// offered.
+///
+/// # The preview is the verb
+///
+/// Every other reclaiming verb in Armada acts on resources Armada created and
+/// can prove it owns. This one can reach further, and that is the whole reason
+/// it is a separate verb rather than a flag: **an unlabelled volume was not made
+/// by Armada, and one of them may be a database somebody cares about.** Deleting
+/// it is unrecoverable and nothing here can tell which it was.
+///
+/// So the shape is `armada fleet reap`'s — rows toggle, enter confirms, esc
+/// touches nothing — and the defaults carry the safety rule:
+/// `armada_core::disk::default_ticks` ticks Armada's own and nothing else.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct PruneData {
+    /// Every candidate, whether or not this run acted on it.
+    ///
+    /// **The unlabelled ones are listed even when they can never be removed on
+    /// this run** — under `--json`, in a pipe, in a script. That is the point of
+    /// listing them: the reader asked what is using the disk, and the answer is
+    /// mostly resources that are not Armada's. Refusing to *say so* because
+    /// Armada may not *delete* them would answer a question nobody asked.
+    pub results: Vec<PruneRow>,
+    /// Bytes this run actually freed, when every removed resource had a readable
+    /// size.
+    ///
+    /// [`None`] rather than a partial sum, for the reason
+    /// `armada_core::disk` gives throughout: a total quietly missing a
+    /// contributor reads as a complete answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freed: Option<u64>,
+    /// What this run was **not** allowed to touch, and why — so a caller that
+    /// expected a prune and got a preview is told which rule stopped it rather
+    /// than being left to infer it from an empty list.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub withheld: Vec<String>,
+    /// Enumerations that could not be performed, in the same channel and for the
+    /// same reason [`ReapPlan::skipped`] keeps one: a list that is empty because
+    /// nothing could be listed is indistinguishable from a tidy machine.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<String>,
+}
+
+/// One thing `prune` found.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PruneRow {
+    /// **`CLEAN` when it is gone, `SKIPPED` when it is still there.**
+    ///
+    /// Two words, both already in the vocabulary, and no third one for "would
+    /// have gone": a preview is simply a run in which every row is `SKIPPED`,
+    /// and [`PruneRow::detail`] says whether it was ticked. Inventing an
+    /// `OFFERED` status would put a word in the terminal-state enum that maps to
+    /// no exit code and describes no outcome.
+    pub status: Status,
+    /// What docker knows it by.
+    pub reference: String,
+    /// What kind of thing.
+    pub kind: crate::disk::DiskKind,
+    /// Whose it is — **the field the whole verb turns on**.
+    pub owner: crate::disk::Ownership,
+    /// What removing it would free, when docker reported a size Armada could
+    /// read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
+    /// Why this row ended the way it did, when that is not obvious from the
+    /// status alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// `--dry-run` on `init`.
@@ -1715,6 +1893,41 @@ pub struct FleetLsData {
     pub needs_you: usize,
     /// What the listed Jobs have cost between them.
     pub spent_usd: f64,
+    /// The rate-limit window the fleet is working inside, when one of the Jobs
+    /// has seen it and it has not reset yet.
+    ///
+    /// **A fact about the account rather than about any row**, which is why it
+    /// sits beside `results` and not in one. Every Job's transcript carries the
+    /// window its own last turn passed through;
+    /// [`crate::fleet::drone::window`] picks the one still in force.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<Window>,
+}
+
+/// The rate-limit window a fleet is working inside.
+///
+/// **What stops you working, which outranks what it cost**
+/// (`docs/reserved/020-the-tui-decided.md` §4). Claude Code has reported this on
+/// every exchange since the spike measured it (PHASES.md §9.1 F2) and Armada
+/// discarded it; this is the payload that carries it to a surface.
+///
+/// **Both fields are measurements, and both are optional for the same reason:**
+/// the service sends what it has. A percentage arrives once the window crosses a
+/// threshold, a reset arrives whenever the headers carry one, and a renderer
+/// draws the ones that are there rather than filling in the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Window {
+    /// How much of the window is used, as whole percent, floored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub used_percent: Option<u8>,
+    /// How long until it resets, in seconds.
+    ///
+    /// **Relative rather than absolute**, which is the form every other duration
+    /// in this corpus takes — `runtime_s`, `waiting_s`, `on_step_s` — because
+    /// the reader's question is *how long until I can work again* and an epoch
+    /// second is that question left as an exercise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resets_in_s: Option<u64>,
 }
 
 /// One Job, as `ls` reports it.
@@ -1770,6 +1983,22 @@ pub struct JobRow {
     pub budget_remaining: crate::fleet::job::Remaining,
     /// Whether it is waiting on you.
     pub needs_attention: bool,
+    /// What somebody is doing **to** this Job right now, if anything
+    /// (`reserved/020` §5).
+    ///
+    /// **The status column's word when it is `Some`**, and
+    /// [`crate::fleet::job::Job::status_word`] is where the two are composed —
+    /// a renderer that preferred [`Self::state`] would draw `RUNNING` over a
+    /// running abort, which is the silence `020` §5 is about.
+    ///
+    /// **On the row rather than only on the record**, because the process
+    /// drawing the row is not the process performing the action: the abort that
+    /// prompted this was blocked inside `armada manifest clean`, so the only
+    /// thing that could have reported it is another reader of the same listing.
+    ///
+    /// Additive, so `schema_version` stays 1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acting: Option<crate::fleet::job::Doing>,
 }
 
 /// `armada bridge` — one frame of the live screen.
@@ -1797,6 +2026,20 @@ pub struct BridgeData {
     /// questions the screen exists to answer, so the count of what is missing
     /// travels with it.
     pub hidden: usize,
+    /// The rate-limit window the fleet is working inside.
+    ///
+    /// **Carried from the listing, never re-read.** It is [`FleetLsData`]'s own
+    /// field for the same reason `results` is: the Bridge is a renderer over
+    /// Fleet, and a frame that went to the transcripts itself would be the
+    /// second source `commands/helm/bridge.md` rules out — and, worse, the
+    /// Bridge reading a Drone's stream directly is exactly the
+    /// `ARCHITECTURE.md` §1.9 erosion `020` names as the real risk.
+    ///
+    /// **Unfiltered, deliberately.** Every other number here is over the rows on
+    /// the screen; this one is a fact about the account, and `state=RUNNING`
+    /// does not change how much of a five-hour window is gone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<Window>,
 }
 
 /// `armada fleet show` — **one Job, and why it wants you.**
@@ -2025,11 +2268,11 @@ pub struct HelmData {
     ///
     /// **Not a second source of truth — derived from [`Self::argv`]** by
     /// `armada_core::helm::launch_line`, which replaces the appended system
-    /// prompt with `"$(cat ~/.armada/helm/guild-voice.md)"` and leaves every
-    /// other word alone. The reader's own `voice.md`, `expectations.md` and
-    /// `how-i-work.md` are inlined into the argv as bytes, which is what makes
-    /// them binding; joining that vector for the screen would print several
-    /// kilobytes of their own prose where the one pasteable line goes.
+    /// prompt with `"$(cat ~/.armada/helm/system-prompt.md)"` and leaves every
+    /// other word alone. Armada's own skill and the reader's `voice.md`,
+    /// `expectations.md` and `how-i-work.md` are inlined into the argv as bytes,
+    /// which is what makes them binding; joining that vector for the screen
+    /// would print several kilobytes of prose where the one pasteable line goes.
     pub command: String,
     /// What was wired, one row each.
     pub results: Vec<Wired>,
@@ -2501,6 +2744,27 @@ pub struct AskData {
     pub answered: Option<String>,
 }
 
+/// `fleet.propose` — what a Drone noticed, and the id it was filed under
+/// ([`docs/reserved/008`](../../../docs/reserved/008-armada-injects-its-own-skills.md)).
+///
+/// **The same shape as [`AskData`] less its answer**, and the missing field is
+/// the difference between the two tools. A question waits; a proposal does not.
+/// There is no `answered` here because the caller is not going to look — it has
+/// already carried on with the step it was on.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ProposeData {
+    /// The handle of the Job that noticed.
+    pub job: String,
+    /// The entry's own id, which is what `armada fleet answer` closes and what
+    /// `armada failures show` resolves. **One id space over four origins**
+    /// (`docs/reserved/001`): this is `Origin::Raised`, and there is no fifth.
+    pub entry: String,
+    /// What it is about — `manifest` or `guild`.
+    pub subject: String,
+    /// The proposal, in the Drone's own words.
+    pub proposal: String,
+}
+
 /// `armada fleet tick` — the workflow loop, one pass (PHASES.md §8.6).
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct TickData {
@@ -2542,6 +2806,19 @@ pub struct TickRow {
     pub evidence: Vec<Evidence>,
     /// Why, in words, for the screen and the inbox.
     pub why: String,
+    /// What the Job released **because it ended**, on the pass that ended it.
+    ///
+    /// **A Job that finishes releases what it holds, rather than waiting for
+    /// somebody to run `clean`.** `armada fleet kill` already reports this as
+    /// [`Killed::released`], and the two paths reach the same state — the
+    /// difference was only that one of them was reported and the other left a
+    /// named volume alive with nothing on screen to say so. A named volume
+    /// outlives `down`, outlives its container, and is what 171 of came to
+    /// 12.0 GB on the machine this was written for.
+    ///
+    /// Absent on every other pass, because nothing was released on one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub released: Option<Released>,
 }
 
 /// `fleet.verdict` — how a step ended (PLAN.md §14.3).

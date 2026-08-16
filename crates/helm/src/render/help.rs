@@ -120,7 +120,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 45] = [
+const PAGES: [Page; 46] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -355,6 +355,31 @@ const PAGES: [Page; 45] = [
         notes: &[
             "A declared owns.release: command is reported, never executed.",
             "--force-rebuild needs --orphaned, and takes nothing else.",
+        ],
+    },
+    Page {
+        path: "manifest prune",
+        synopsis: "prune",
+        summary: "reclaim docker disk, including disk that is not armada's",
+        usage: &[
+            "armada manifest prune [--json]",
+            "armada manifest prune --yes",
+            "armada manifest prune --dry-run",
+        ],
+        flags: &[
+            ("--dry-run", "list what could go; remove nothing"),
+            (
+                "--yes",
+                "skip the list and remove armada's own idle volumes only",
+            ),
+        ],
+        examples: &[],
+        notes: &[
+            "Every run opens a list first: rows toggle, enter confirms, esc removes nothing.",
+            "Armada's own idle volumes open ticked. Nothing else ever does.",
+            "A volume armada did not create goes only when a person ticks it, on that run.",
+            "No flag can authorise that, so --json and a pipe never remove one.",
+            "Volumes only. Images are docker image prune, which already does the right thing.",
         ],
     },
     // ---------------------------------------------------------------- Guild
@@ -1237,9 +1262,14 @@ fn root(style: Style, terminal: Terminal) -> String {
     let width = terminal.usable_width();
     let mut out = format!(
         "{}\n\n",
+        // **What the tool does for you, not what it is made of.** The line here
+        // was *"one vocabulary for a repo's stack, and the agents working in
+        // it"* — a true statement of an internal design goal, and one that told
+        // a first reader nothing about why they would run this
+        // (`020` §"Also decided").
         style.strong(
             Role::SignalAmber,
-            "armada — one vocabulary for a repo's stack, and the agents working in it"
+            "armada — agents that work while you do not"
         )
     );
 

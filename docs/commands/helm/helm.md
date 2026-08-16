@@ -139,7 +139,7 @@ Assembles one command, and prints it:
 
 ```sh
 claude --agent helm \
-       --append-system-prompt "$(cat ~/.armada/helm/guild-voice.md)" \
+       --append-system-prompt "$(cat ~/.armada/helm/system-prompt.md)" \
        --mcp-config      ~/.armada/helm/mcp.json \
        --plugin-dir      ~/.armada/helm/plugin \
        --settings        ~/.armada/helm/settings.json \
@@ -156,7 +156,8 @@ one it has seen is a second conversation wearing the first one's name.
 |---|---|
 | The persona | `~/.armada/guild/subagents/helm.md` — **yours**, editable, synced. Seeded from [`templates/guild/subagents/helm.md`](../../../templates/guild/subagents/helm.md); the five behaviours it fixes and why are in [`PLAN.md`](../../PLAN.md) §15.4. |
 | The toolbelt | [`mcp.md`](mcp.md) — `fleet.*` and `manifest.*`, registered as `--mcp-config` |
-| Your voice | `~/.armada/guild/voice.md`, `expectations.md` and `how-i-work.md` — **appended to the system prompt**, see below |
+| Armada's own skill | compiled into the binary — how to use Armada, and to raise a manifest change rather than make one ([`../../reserved/008-armada-injects-its-own-skills.md`](../../reserved/008-armada-injects-its-own-skills.md)) |
+| Your voice | `~/.armada/guild/voice.md`, `expectations.md` and `how-i-work.md` — **appended to the same system prompt**, after Armada's half, see below |
 | The conversation | `~/.armada/helm/session.json` — a uuid, the persona it belongs to, and whether it has run |
 | Awareness | [`inbox.md`](inbox.md) — a monitor plus a `Stop` hook, both written to `~/.armada/helm/` |
 
@@ -183,7 +184,7 @@ already made: a session cannot be relied on to find a file Armada could simply h
 | A fragment you have written | appended, under a heading naming the file it came from |
 | A fragment still holding Armada's example text | **skipped** — boilerplate made binding in your name is worse than none, and the persona's own defaults already cover it |
 | A fragment missing, unreadable or blank | skipped, the same way |
-| All three | no `--append-system-prompt` at all, and a row saying so |
+| All three still Armada's | none of your words appended, and a row saying so — the flag is still there, carrying Armada's own skill |
 | A fragment past **24 KB** | cut at a line boundary, with a note in the prompt and in the row |
 
 **Precedence is settled in the prose, not by position.** The appended half opens by saying these
@@ -206,14 +207,22 @@ Everything lands under `~/.armada/helm/`, which never syncs — every file in it
 | `plugin/` | a session-scoped plugin carrying one monitor |
 | `settings.json` | the `Stop` hook, registered for this session and not for the machine |
 | `stop-inbox.sh` | what that hook runs |
-| `guild-voice.md` | your three memory fragments, assembled — what `--append-system-prompt` carries |
+| `system-prompt.md` | Armada's own skill, then your three memory fragments — what `--append-system-prompt` carries |
 | `session.json` | the conversation |
 
-> **`guild-voice.md` is generated, and named so it cannot be mistaken for its sources.**
+> **`system-prompt.md` is generated, and named so it cannot be mistaken for its sources.**
 > `~/.armada/guild/voice.md` is yours, hand-edited and synced; this is rewritten on every launch
 > like `mcp.json` beside it. It exists so the printed command can read it back with `"$(cat …)"`
-> instead of pasting kilobytes of your prose. Edit the guild's files, not this one. On a machine
-> with nothing written yet it is not created — and a stale one is removed.
+> instead of pasting kilobytes into one line. Edit the guild's files, not this one.
+
+> **It holds two halves, and it was `guild-voice.md` until it held the second.** Armada's own
+> instructions to the agents it runs come first
+> ([`../../reserved/008-armada-injects-its-own-skills.md`](../../reserved/008-armada-injects-its-own-skills.md)),
+> then your fragments under the header that says yours win. **One flag, not two**: `claude
+> --help` spells it `--append-system-prompt <prompt>`, singular, so a second occurrence would
+> keep only the last and drop the first without a word. On a machine where nothing of yours is
+> written the file is still there, carrying Armada's half — which is why the row now says *none
+> of yours yet* rather than *none yet*.
 
 **Rewritten on every launch rather than written once**, because each names a path — the `armada`
 binary, the inbox — and a machine whose home directory moved would otherwise keep a registration
@@ -241,7 +250,7 @@ printed. This is `--print-command`'s (and `--json`'s) report: five rows and the 
   WRITTEN    toolbelt      ~/.armada/helm/mcp.json
   WRITTEN    monitor       ~/.armada/helm/plugin
   WRITTEN    backstop      ~/.armada/helm/stop-inbox.sh
-  WRITTEN    voice         ~/.armada/helm/guild-voice.md
+  WRITTEN    voice         ~/.armada/helm/system-prompt.md
   UNCHANGED  conversation  ~/.armada/helm/session.json
 
   enter with claude --agent helm --append-system-prompt "$(cat …)" --mcp-config …

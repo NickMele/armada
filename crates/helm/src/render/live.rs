@@ -53,8 +53,13 @@ const MAX_ROWS: usize = 24;
 /// Where one check has got to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum RowState {
-    /// Planned, not yet spawned.
-    Waiting,
+    /// Planned, **not yet reached** (`020` §7).
+    ///
+    /// **`QUEUED` and not `WAITING`.** The objection was exact: *"WAITING
+    /// sounds like it's waiting for something to happen but in fact the
+    /// workflow is just not at this step yet"* — and a row here is blocked on
+    /// nothing at all, so it has no `waiting_on` to name.
+    Queued,
     /// Spawned, at this monotonic reading.
     Running { since_mono: u64 },
     /// Answered.
@@ -68,13 +73,13 @@ enum RowState {
 impl RowState {
     /// The verdict this row shows now.
     ///
-    /// **The two unfinished states are `Status`es in either table.** `WAITING`
+    /// **The two unfinished states are `Status`es in either table.** `QUEUED`
     /// and `RUNNING` are the progress states PLAN.md §3.1 defines, and they mean
     /// the same thing for a check and for a spawn's worktree — only the word a
     /// row ends on is per-verb.
     fn reached(&self) -> Verdict {
         match self {
-            RowState::Waiting => Verdict::Status(Status::Waiting),
+            RowState::Queued => Verdict::Status(Status::Queued),
             RowState::Running { .. } => Verdict::Status(Status::Running),
             RowState::Done { reached, .. } => *reached,
         }
@@ -119,7 +124,7 @@ impl Run {
             .map(|planned| Row {
                 id: planned.id.to_string(),
                 timeout_ms: planned.timeout_ms,
-                state: RowState::Waiting,
+                state: RowState::Queued,
             })
             .collect();
         let index = rows
@@ -227,7 +232,7 @@ impl Run {
         for at in self.visible() {
             let row = &self.rows[at];
             let (detail, elapsed) = match &row.state {
-                RowState::Waiting => (None, None),
+                RowState::Queued => (None, None),
                 // **A running row says what its own deadline is.** Elapsed
                 // alone cannot be read: seven minutes is alarming against a
                 // one-minute budget and unremarkable against fifteen, and the
@@ -512,7 +517,12 @@ mod tests {
         for id in ["api:check0", "api:check1", "api:check2"] {
             assert!(frame.contains(id), "{id} has no row:\n{frame}");
         }
-        assert_eq!(frame.matches("WAITING").count(), 3, "{frame}");
+        assert_eq!(frame.matches("QUEUED").count(), 3, "{frame}");
+        assert_eq!(
+            frame.matches("WAITING").count(),
+            0,
+            "a step nobody has reached still says WAITING (`020` §7):\n{frame}"
+        );
     }
 
     /// The columns are the final table's columns, headed the same way.
@@ -710,7 +720,7 @@ mod tests {
                 step.id()
             );
         }
-        assert_eq!(frame.matches("WAITING").count(), 4, "{frame}");
+        assert_eq!(frame.matches("QUEUED").count(), 4, "{frame}");
     }
 
     /// **A step nobody bounded says nothing about a deadline**, where a check
