@@ -1,0 +1,37 @@
+# review — read the branch, write what would block landing it.
+#
+# **The workflow Fleet runs for you, rather than one you spawn.** A step gated
+# on `review_clean` names no runner — a `skill:` would make it the Drone's, and
+# a Drone grading its own work is the thing that predicate exists to prevent —
+# so Fleet spawns a Job running this one, in its own worktree at the branch
+# under review, with its own uuid, budget and record (PLAN.md §14.6).
+#
+# It is not in the four `armada fleet spawn` classifies into. Nothing stops you
+# running it by hand — `armada fleet spawn --workflow review "…"` — but the
+# thing that ordinarily starts it is another Job's gate.
+#
+# **What the parent's gate learns from it is that it finished cleanly**, which
+# is narrower than "no blocking findings" and deliberately recorded as such in
+# `docs/reserved/016` §2. A reviewer that finds something that should stop the
+# work says so through `mcp__armada__fleet_ask_human`: that stops this Job
+# short of `DONE`, and the parent waits on you rather than landing.
+name: review
+description: Read a branch against the task it claims to do, and write down what would block landing it.
+ends_at: branch
+
+budget:
+  iterations: 15
+  tokens: 500000
+  wall_clock: 90m
+  on_exhausted: needs_human
+
+steps:
+  # The findings on disk are the artifact, and `artifact_exists` is what makes
+  # "a reviewer looked" a fact rather than an assertion: a Job that read nothing
+  # cannot produce the file. Read them with `armada fleet board <job>` — they
+  # live in the reviewer's own worktree until it is killed.
+  - id: read
+    skill: review-diff
+    verify:
+      must: artifact_exists
+      artifact: REVIEW.md

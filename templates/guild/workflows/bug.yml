@@ -30,6 +30,10 @@ steps:
     scope: changed
     verify: { must: check_passes }
 
+  # No `skill:` — Fleet satisfies this one by spawning a Job that runs the
+  # `review` workflow over this branch, in a worktree of its own. A reviewer
+  # can only read what is committed, so the gate asks the Drone to commit
+  # before it starts one; `land` is what pushes the branch anywhere.
   - id: review
     verify: { must: review_clean }
 

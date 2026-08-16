@@ -5,9 +5,10 @@
 # The first step runs `plan` as a **sub-Job** — its own uuid, worktree, budget
 # and record — so the plan you approved is a durable artifact you can point at
 # later rather than a paragraph buried in a longer Job's transcript. The
-# parent's ceilings are suspended while it runs, because approval can take
-# hours and a wall clock that kept ticking would kill a Job because you went to
-# lunch (PLAN.md §14.6).
+# parent's wall clock is suspended while it runs, because approval can take
+# hours and a clock that kept ticking would kill a Job because you went to
+# lunch; its turns and tokens are shared, because what the child spends the
+# tree spent (PLAN.md §14.6).
 name: feature
 description: Plan it, get your approval, build it, have it reviewed, land it on a branch.
 ends_at: branch
@@ -33,11 +34,15 @@ steps:
     scope: changed
     verify: { must: check_passes }
 
-  # No `skill:` — Fleet satisfies this one by spawning a reviewer Job with the
-  # diff and the original task, in its own context. The Drone under review never
-  # calls `fleet.spawn`: a worker able to spawn workers is a fork bomb with a
-  # budget. An independent context is also the point — a reviewer sharing the
-  # implementer's context shares its blind spots.
+  # No `skill:` — Fleet satisfies this one by spawning a Job that runs the
+  # `review` workflow, in a worktree of its own at this branch. The Drone under
+  # review never calls `fleet.spawn`: a worker able to spawn workers is a fork
+  # bomb with a budget. An independent context is also the point — a reviewer
+  # sharing the implementer's context shares its blind spots.
+  #
+  # **The work has to be committed for a reviewer to read it.** A reviewer with
+  # its own worktree sees the branch, not what is still sitting uncommitted
+  # here, so the gate asks the Drone to commit before it starts one.
   - id: review
     verify: { must: review_clean }
 

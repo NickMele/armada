@@ -803,7 +803,8 @@ const PAGES: [Page; 46] = [
             "A Drone runs one exchange and exits. This is what notices, runs the",
             "step's verify: predicate, and writes the verdict it earns.",
             "A step advances only on evidence an external command produced.",
-            "review_clean and subjob_passed stop and ask: nothing can decide them.",
+            "review_clean and subjob_passed spawn a Job and wait on its verdict;",
+            "killing a Job kills the sub-Jobs it is waiting on.",
         ],
     },
     Page {

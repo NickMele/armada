@@ -3896,10 +3896,19 @@ A step names **exactly one** of `skill:` (a Drone does it), `workflow:` (a sub-J
 neither (Fleet satisfies it, as `review` does). Two is ambiguous about who runs the step, and
 the schema rejects it.
 
-**The parent's ceilings are suspended while a sub-Job runs.** They have to be: a plan step ends
-at `human_approves`, approval can take hours, and a wall clock that kept ticking would kill a
-Job because you went to lunch. The sub-Job carries its own workflow's ceilings, which is the
-whole reason they are per workflow (below).
+**The parent's wall clock is suspended while a sub-Job runs.** It has to be: a plan step ends
+at `human_approves`, approval can take hours, and a clock that kept ticking would kill a Job
+because you went to lunch. The sub-Job carries its own workflow's ceilings, which is the whole
+reason they are per workflow (below).
+
+**Its other two ceilings are not suspended — they are shared.** A child's `iterations` and
+`tokens` are the smaller of what its own workflow asks for and what the parent has left, and
+what it spends is added to the parent's ledger when it settles. Turns and tokens measure work,
+and work a child did is work the tree did; without that, a parent spends nothing of its own
+while a child runs and could start children until every one of their budgets was gone.
+[`reserved/016`](reserved/016-what-the-gate-cannot-prove.md) §2 has the rest of the decisions —
+what a reviewer is told, what `armada fleet kill` does to a live child, and where cycles are
+refused.
 
 **`guild verify` rejects cycles**, by the same argument that makes the check-id graph acyclic
 (§5): there is no correct behaviour for `feature → plan → feature`, so it is made

@@ -248,9 +248,16 @@ impl Ceilings {
     };
 
     /// The default for a named starter workflow.
+    ///
+    /// **`review` takes the advisory triple**, for the reason `design` and
+    /// `plan` do: it produces a document rather than a change, so its ceiling
+    /// is a runaway guard. What actually bounds a reviewer is smaller and is
+    /// decided elsewhere — a sub-Job's ceilings are carved out of what its
+    /// parent has left (`crates/helm/src/verbs/fleet.rs`, `carved`), and this
+    /// is the most it could ever be given.
     pub fn for_workflow(name: &str) -> Ceilings {
         match name {
-            "design" | "plan" => Ceilings::ADVISORY,
+            "design" | "plan" | "review" => Ceilings::ADVISORY,
             _ => Ceilings::AUTONOMOUS,
         }
     }

@@ -21,6 +21,25 @@ use serde::{Deserialize, Serialize};
 /// (PLAN.md §14.6), and therefore the four labels classification may return.
 pub const STARTERS: [&str; 4] = ["design", "plan", "feature", "bug"];
 
+/// The workflow a [`Predicate::ReviewClean`] step spawns a reviewer to run.
+///
+/// **Fleet's choice, not the workflow author's, and that is the point.** §14.6:
+/// *"`review_clean` is satisfied by Fleet, not by the Drone. Fleet spawns a
+/// second Job with the diff and the original task, in its own context."* A step
+/// gated on `review_clean` names no runner (`skill:` would make it the Drone's,
+/// and a Drone grading its own work is the thing the predicate exists to
+/// prevent), so the reviewer's workflow has to come from somewhere — and a
+/// constant is the only place that cannot be filled in by the Job under review.
+///
+/// **A step may still name `workflow:` to choose a different reviewer**, which
+/// is a person editing their own guild rather than an agent choosing its own
+/// examiner. It ships in `templates/guild/workflows/review.yml` and it is
+/// deliberately **not** in [`STARTERS`]: those are the four labels
+/// classification may return, and `armada fleet spawn "review this"` should
+/// classify as one of the four rather than start a reviewer with nothing to
+/// review.
+pub const REVIEWER: &str = "review";
+
 /// Where a completed run leaves the work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -316,6 +335,24 @@ pub fn parse(text: &str, label: &str) -> Result<Workflow, ArmadaError> {
                 "name the test under `verify.test:`",
             ));
         }
+        // **A sub-Job step has to say which workflow the sub-Job runs.** The
+        // predicate is *"a sub-Job running another workflow returned `PASS`"*
+        // and `workflow:` is the only key that names one; without it the gate
+        // would have to guess, and the two available guesses are both wrong —
+        // this workflow again is the cycle `guild verify` refuses, and a
+        // default like `review` is a step doing something other than what was
+        // written. Refused here for the reason `failing_test_exists` without a
+        // test is: a gate with nothing to look at holds vacuously.
+        if step.verify.must == Predicate::SubjobPassed && step.workflow.is_none() {
+            return Err(ArmadaError::bad_config(
+                ConfigWhere::Path {
+                    file: label.to_string(),
+                    path: format!("steps.{}.workflow", step.id),
+                },
+                "`subjob_passed` has no workflow to run",
+                "name it under `workflow:`, as `feature`'s plan step does",
+            ));
+        }
         if step.verify.must == Predicate::ArtifactExists && step.verify.artifact.is_none() {
             return Err(ArmadaError::bad_config(
                 ConfigWhere::Path {
@@ -521,6 +558,23 @@ steps:
             error.r#where,
             "workflows/bug.yml:steps.reproduce.verify.test"
         );
+    }
+
+    /// **A sub-Job step has to say which workflow the sub-Job runs**, for the
+    /// reason `failing_test_exists` has to name its test: the only two guesses
+    /// available are this workflow again — which is the cycle the schema
+    /// refuses — and a default, which is a step doing something other than what
+    /// was written.
+    #[test]
+    fn subjob_passed_without_a_workflow_is_refused() {
+        let error = parse(
+            "name: feature\nsteps:\n  - id: plan\n    verify: { must: subjob_passed }\n",
+            "workflows/feature.yml",
+        )
+        .expect_err("a sub-Job with no workflow is not a gate");
+        assert_eq!(error.class, ErrClass::BadConfig);
+        assert_eq!(error.r#where, "workflows/feature.yml:steps.plan.workflow");
+        assert!(error.next_action.is_some(), "bad_config carries the fix");
     }
 
     #[test]

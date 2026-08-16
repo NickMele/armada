@@ -293,6 +293,7 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            kin: Default::default(),
             ticked_turns: 0,
             doing: None,
         }

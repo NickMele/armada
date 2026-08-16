@@ -139,6 +139,16 @@ pub struct Job {
     /// Additive and defaulted, for the reason above.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub facts: std::collections::BTreeMap<String, String>,
+    /// Who spawned this Job, what its own children spent, and how long it stood
+    /// still while they did.
+    ///
+    /// **One field rather than four, because it is one subject** — and because
+    /// every part of it is empty for the Jobs a person spawns themselves, which
+    /// is most of them. [`Kin`] has the argument for each part.
+    ///
+    /// Additive and defaulted, so `schema_version` stays 1.
+    #[serde(default, skip_serializing_if = "Kin::is_empty")]
+    pub kin: Kin,
     /// How many finished turns the last `armada fleet tick` **gated**.
     ///
     /// **The watermark that makes `STALLED` provable** (`020` §1 and §6). A
@@ -180,9 +190,105 @@ pub struct Job {
     pub doing: Option<Doing>,
 }
 
-/// `serde`'s `skip_serializing_if` needs a path, and `usize::eq` is not one.
-fn is_zero(count: &usize) -> bool {
-    *count == 0
+/// `serde`'s `skip_serializing_if` needs a path, and neither `usize::eq` nor
+/// `u64::eq` is one.
+///
+/// **One generic function rather than one per width.** Two fields default to
+/// zero — [`Job::ticked_turns`] as a `usize` and [`Kin::suspended_ms`] as a
+/// `u64` — and a second copy of this named for the second type is a name
+/// collision waiting for a third.
+fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
+}
+
+/// A Job's family, and what having one costs it.
+///
+/// # Why the parent is on the child rather than the children on the parent
+///
+/// A Job is written once and read by everything, and the two questions asked of
+/// this relationship are asked in opposite directions: *"who started this?"* is
+/// asked of one record, and *"what did I start?"* is asked while walking the
+/// whole index anyway (`kill`, `tick`). A `children: Vec<String>` would have to
+/// be appended to the **parent's** record at the moment the child is minted —
+/// a second write, to a second file, in the window where a crash leaves an
+/// orphan nobody can find. The child's own record is written before its
+/// worktree exists ([`Job`]), so recording the parent there is free and cannot
+/// be half-done.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Kin {
+    /// The Job whose gate spawned this one, or `None` for a Job a person asked
+    /// for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<Parent>,
+    /// What this Job's **children** spent, summed as each one settled.
+    ///
+    /// **Rolled up, and that is what stops a child exhausting its parent in
+    /// silence.** A parent waiting on a sub-Job spends no turns of its own, so
+    /// a ceiling read off its transcript alone would never move however many
+    /// children it started; `observe` adds this to the transcript's sum, so
+    /// `budget.iterations` and `budget.tokens` bound the **whole tree** and not
+    /// just the part of it this session happened to talk to.
+    ///
+    /// **Counted once, when the child settles**, rather than sampled while it
+    /// runs — a running total re-read every two seconds would add the same turn
+    /// to the parent on every pass.
+    #[serde(default, skip_serializing_if = "Spend::is_zero")]
+    pub spend: Spend,
+    /// Milliseconds this Job has already stood still waiting on a child.
+    ///
+    /// **The wall clock is the one ceiling a sub-Job must not consume**
+    /// (PLAN.md §14.6): `feature`'s first step is a `plan` sub-Job that ends at
+    /// `human_approves`, approval can take hours, and a parent whose clock kept
+    /// ticking would be killed because somebody went to lunch. Turns and tokens
+    /// still roll up — those measure work, and the work was really done.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub suspended_ms: u64,
+    /// When the suspension now running began, in wall clock milliseconds.
+    ///
+    /// **Separate from [`Kin::suspended_ms`] because a wait is measured while
+    /// it happens, not after.** Folding only on settle would let a parent trip
+    /// its wall clock at minute ninety of a two-hour wait and be `PAUSED`
+    /// before the credit it was owed was ever written down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suspended_from_ms: Option<u64>,
+}
+
+impl Kin {
+    /// Whether this Job has no family and nothing to credit — the state every
+    /// record written before this field existed is in.
+    pub fn is_empty(&self) -> bool {
+        self.parent.is_none()
+            && self.spend.is_zero()
+            && self.suspended_ms == 0
+            && self.suspended_from_ms.is_none()
+    }
+
+    /// How much of this Job's life has been spent waiting on a child, by
+    /// `now_ms`.
+    pub fn suspended_by(&self, now_ms: u64) -> u64 {
+        self.suspended_ms.saturating_add(
+            self.suspended_from_ms
+                .map_or(0, |from| now_ms.saturating_sub(from)),
+        )
+    }
+}
+
+/// The Job whose gate started this one, and which of its attempts is waiting.
+///
+/// **The attempt is carried for [`Pending`]'s reason.** A `review` step that
+/// failed once and is being tried again has a *new* reviewer; the first one's
+/// record is still on disk, and a parent that could not tell them apart would
+/// read a verdict about the diff before the fix as though it were about the
+/// diff after it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Parent {
+    /// The parent's uuid — its identity, never its name
+    /// (`docs/reserved/005-inbox-label-not-identity.md`).
+    pub uuid: String,
+    /// The parent's step whose gate spawned this Job.
+    pub step: String,
+    /// Which attempt at that step it belongs to.
+    pub attempt: u32,
 }
 
 /// One action with a duration, while it runs (`020` §5).
@@ -253,10 +359,10 @@ pub struct Pending {
     pub attempt: u32,
 }
 
-/// The two things a gate waits on, each named by its own id.
+/// The three things a gate waits on, each named by its own id.
 ///
-/// **Two variants rather than one string with a `kind` beside it**, so a run id
-/// can never be read as an inbox entry: they are both opaque identifiers, and
+/// **Three variants rather than one string with a `kind` beside it**, so a run
+/// id can never be read as an inbox entry: they are all opaque identifiers, and
 /// the only thing that would catch the confusion is the type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -265,6 +371,14 @@ pub enum Waiting {
     Check(String),
     /// A question in the inbox, by entry id.
     Answer(String),
+    /// **A sub-Job**, by uuid — a reviewer for `review_clean`, or the workflow
+    /// a `workflow:` step names for `subjob_passed`.
+    ///
+    /// The uuid and not the name, because a name is a label the Job index
+    /// hands out again once the Job holding it is over
+    /// (`docs/reserved/005-inbox-label-not-identity.md`), and a gate that
+    /// resolved by name could read a stranger's verdict.
+    SubJob(String),
 }
 
 /// One thing a Drone said about its own progress.
@@ -563,8 +677,19 @@ impl Job {
     /// **Wall clock, because a Job outlives a boot.** Monotonic readings are
     /// meaningless across a reboot, and a Job's whole claim is that it survives
     /// one (`ARCHITECTURE.md` §1.1 makes the same distinction for run ids).
-    pub const fn run_time_ms(&self, now_ms: u64) -> u64 {
-        now_ms.saturating_sub(self.created_ms)
+    ///
+    /// **Less whatever it spent waiting on a sub-Job** ([`Kin::suspended_ms`]).
+    /// This is the number `budget.wall_clock_ms` is compared against, and
+    /// PLAN.md §14.6 is explicit that a parent's clock does not run while a
+    /// child does: `feature` waits on a `plan` sub-Job that ends at your
+    /// approval, and a clock that kept ticking would kill the Job because you
+    /// went to lunch. It is therefore **not** how long the Job has existed —
+    /// that is `now_ms - created_ms`, and no surface that means *"started at"*
+    /// should call this.
+    pub fn run_time_ms(&self, now_ms: u64) -> u64 {
+        now_ms
+            .saturating_sub(self.created_ms)
+            .saturating_sub(self.kin.suspended_by(now_ms))
     }
 
     /// The word a row's status column shows — **the action, when there is one**
@@ -664,6 +789,16 @@ pub struct Spend {
 }
 
 impl Spend {
+    /// Whether anything has been spent at all.
+    ///
+    /// **The cost is compared against zero exactly**, not within a tolerance: a
+    /// ledger that has never been added to holds a literal `0.0`, and a Job
+    /// that spent a hundredth of a cent has spent something.
+    #[allow(clippy::float_cmp)]
+    pub fn is_zero(&self) -> bool {
+        self.cost_usd == 0.0 && self.tokens == 0 && self.turns == 0 && self.api_ms == 0
+    }
+
     /// Add one turn's ledger to the total.
     pub fn add(&mut self, turn: &Spend) {
         self.cost_usd += turn.cost_usd;
@@ -778,6 +913,14 @@ pub fn observe(
     alive: bool,
     run_time_ms: u64,
 ) -> Observed {
+    // **What this Job's children spent is this Job's spend.** The transcript
+    // only holds what *this* session said, and a step satisfied by a sub-Job
+    // costs the parent no turns at all — so a parent whose reviewer failed
+    // four times would show a flat ledger and run for ever. Added here, in the
+    // one function every verb asks, rather than at each of them
+    // ([`Kin::spend`]).
+    let mut spend = spend;
+    spend.add(&record.kin.spend);
     let ceiling = exhausted(&record.budget, &spend, run_time_ms);
     // **An errored turn is not due a gate.** The exchange ended badly rather
     // than ending; gating it would record a `FAILED` against work that was
@@ -1170,6 +1313,7 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            kin: Default::default(),
             ticked_turns: 0,
             doing: None,
         }
@@ -1450,6 +1594,74 @@ mod tests {
         assert!(!handle.is_ours("boot-1", Some("t")));
     }
 
+    /// **What a child spent, the parent spent.** A parent waiting on a sub-Job
+    /// runs no turns of its own, so a ceiling read off its transcript alone
+    /// would never move however many children it started — which is a child
+    /// exhausting its parent in silence, the failure `docs/reserved/016` §2
+    /// asks to be designed out.
+    #[test]
+    fn what_a_sub_job_spent_counts_against_the_parents_ceilings() {
+        let mut record = watching(JobState::Running);
+        record.kin.spend = Spend {
+            cost_usd: 1.0,
+            tokens: 399_000,
+            turns: 8,
+            api_ms: 900,
+        };
+        let transcript = Spend {
+            cost_usd: 0.1,
+            tokens: 1_000,
+            turns: 2,
+            api_ms: 30,
+        };
+        let observed = observe(&record, transcript, 1, false, false, 1_000);
+        assert_eq!(observed.spend.tokens, 400_000);
+        assert_eq!(observed.spend.turns, 10);
+        // The Job's own budget is 400k tokens, and the child is what reached it.
+        assert_eq!(observed.ceiling, Some(Ceiling::Tokens));
+        assert_eq!(observed.state, JobState::Paused);
+    }
+
+    /// **The wall clock is the one ceiling a sub-Job does not consume**
+    /// (PLAN.md §14.6). `feature`'s first step is a `plan` sub-Job that ends at
+    /// your approval; approval takes hours, and a parent whose clock kept
+    /// ticking would be killed because you went to lunch.
+    #[test]
+    fn a_parent_does_not_spend_its_wall_clock_while_a_child_runs() {
+        let mut record = watching(JobState::Running);
+        record.created_ms = 0;
+        // An hour in, all of it waiting on a child that is still going.
+        record.kin.suspended_from_ms = Some(60_000);
+        assert_eq!(record.run_time_ms(3_600_000), 60_000);
+        assert_eq!(
+            exhausted(
+                &record.budget,
+                &Spend::default(),
+                record.run_time_ms(3_600_000)
+            ),
+            None
+        );
+
+        // The child settles: the wait is folded in and the clock runs again.
+        record.kin.suspended_from_ms = None;
+        record.kin.suspended_ms = 3_540_000;
+        assert_eq!(record.run_time_ms(3_600_000), 60_000);
+        assert_eq!(record.run_time_ms(3_660_000), 120_000);
+
+        // Without the credit the same Job is an hour into a 45-minute ceiling.
+        let mut plain = watching(JobState::Running);
+        plain.created_ms = 0;
+        assert_eq!(plain.run_time_ms(3_600_000), 3_600_000);
+        assert_eq!(
+            exhausted(
+                &plain.budget,
+                &Spend::default(),
+                plain.run_time_ms(3_600_000)
+            ),
+            Some(Ceiling::WallClock)
+        );
+    }
+
     /// Run time is wall clock, because a Job outlives a boot and a monotonic
     /// reading does not.
     #[test]
@@ -1478,6 +1690,7 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            kin: Default::default(),
             ticked_turns: 0,
             doing: None,
         };
@@ -1642,6 +1855,47 @@ mod tests {
         assert_eq!(back, job);
     }
 
+    /// **A sub-Job's parentage survives the record on disk.** It is what
+    /// `armada fleet kill` walks to find the children that must go with it, and
+    /// what the gate reads to know whose verdict it is waiting on — both of
+    /// them after a crash, a reboot or a week.
+    #[test]
+    fn a_sub_jobs_parentage_round_trips_through_its_record() {
+        let mut child = watching(JobState::Running);
+        child.kin = Kin {
+            parent: Some(Parent {
+                uuid: "8f2a1c40-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
+                step: "review".to_string(),
+                attempt: 2,
+            }),
+            spend: Spend {
+                tokens: 1_000,
+                ..Spend::default()
+            },
+            suspended_ms: 90_000,
+            suspended_from_ms: Some(1_000),
+        };
+        child.pending = Some(Pending {
+            step: "review".to_string(),
+            on: Waiting::SubJob("3d9cc7ba-0000-4000-8000-000000000001".to_string()),
+            attempt: 2,
+        });
+        let json = serde_json::to_string(&child).unwrap();
+        assert!(json.contains("sub_job"), "{json}");
+        assert_eq!(serde_json::from_str::<Job>(&json).unwrap(), child);
+    }
+
+    /// **A record written before `kin` existed still parses**, and writes
+    /// nothing new when there is nothing to say. Additive, so `schema_version`
+    /// stays 1.
+    #[test]
+    fn a_record_from_before_sub_jobs_existed_still_reads() {
+        let job = watching(JobState::Running);
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(!json.contains("kin"), "an absent field is absent: {json}");
+        assert_eq!(serde_json::from_str::<Job>(&json).unwrap(), job);
+    }
+
     /// **A record written before this field existed still parses.** Additive,
     /// so `schema_version` stays 1.
     #[test]
@@ -1689,6 +1943,7 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            kin: Default::default(),
             ticked_turns: 0,
             doing: None,
         };

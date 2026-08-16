@@ -464,6 +464,8 @@ pub fn spawn<R: Run, C: Clock>(
         transitions: Vec::new(),
         pending: None,
         facts: options.set.clone(),
+        // A Job a person asked for has no parent and nothing to credit.
+        kin: job::Kin::default(),
         ticked_turns: 0,
         doing: None,
     };
@@ -483,7 +485,11 @@ pub fn spawn<R: Run, C: Clock>(
     let started = now.mono();
     progress.tick(started);
     progress.started(SpawnStep::Worktree.id());
-    if let Err(error) = worktree::add(run, &repo_root, &path, &branch) {
+    // **From the repository's own `HEAD`.** A Job a person asked for starts
+    // where their checkout is; only a sub-Job names a start point, because only
+    // a sub-Job is about work that is already on another branch
+    // ([`spawn_child`]).
+    if let Err(error) = worktree::add(run, &repo_root, &path, &branch, None) {
         // **A failed spawn cleans up after itself** (`commands/fleet/spawn.md`).
         // A half-created worktree holding a claimed block is released before the
         // error returns — and if any of that also fails, ownership is recorded
@@ -765,9 +771,17 @@ fn read_workflow(place: &Where, name: &str) -> Result<Workflow, ArmadaError> {
         class: ErrClass::BadInvocation,
         r#where: name.to_string(),
         message: format!("no workflow called `{name}` in your guild"),
+        // **`upgrade` is named as well as `init`, and `review` is why.** A
+        // guild made before the reviewer workflow shipped has the four
+        // starters and not the fifth, and the Job that finds out is one whose
+        // `review_clean` gate has just gone looking for it — so a next action
+        // that only offered `init` would send somebody with a working guild to
+        // a verb that refuses to touch it (`docs/reserved/006`).
         next_action: Some(format!(
-            "`armada guild init` writes the starters: {}",
-            workflow::STARTERS.join(", ")
+            "`armada guild init` writes the starters ({}, {}); \
+             `armada guild upgrade` adds what a later release added",
+            workflow::STARTERS.join(", "),
+            workflow::REVIEWER
         )),
     })?;
     workflow::parse(&text, &relative)
@@ -1216,7 +1230,21 @@ pub fn kill<R: Run, C: Clock>(
     let store = place.store();
     let wall = now.wall_ms();
     let targets = match handle {
-        Some(handle) => vec![store.find(handle)?],
+        // **A Job's children go with it, and they go first**
+        // (`docs/reserved/016` §2). A killed parent's sub-Job would otherwise
+        // keep a Drone, a worktree and a port block, spending a budget for a
+        // verdict nothing will ever read — and it would go on reporting to a
+        // record that says `ABORTED`. Children first, because the teardown
+        // order inside [`end`] is the point: the child's Drone is stopped and
+        // its worktree released before the branch it was created from is.
+        Some(handle) => {
+            let named = store.find(handle)?;
+            let mut family = descendants(&store.all()?, &named.uuid);
+            family.retain(|child| !child.state.is_over());
+            family.reverse();
+            family.push(named);
+            family
+        }
         // **`--all-finished` asks the observation, not the record.** A Job whose
         // Drone finished while nobody was looking is finished, and a record that
         // still says `RUNNING` is only what a verb last wrote.
@@ -1473,7 +1501,17 @@ fn tear_down<R: Run, C: Clock>(
         //
         // Its spend is settled from the transcript on the way out, because the
         // transcript is about to be the only thing left that knows.
+        //
+        // **Plus what its sub-Jobs spent, which the transcript does not hold.**
+        // A parent's children run in sessions of their own, so re-deriving its
+        // ledger from its own transcript alone silently subtracts every one of
+        // them at the last moment — and this is the last moment: the figure
+        // written here is the one `armada fleet ls --all` shows for ever after.
+        // It cost the `feature` Job that finished with a `plan` sub-Job exactly
+        // the sub-Job's whole spend. `job::observe` sums the same two halves
+        // for a live Job ([`job::Kin::spend`]); this is that sum at the end.
         record.spend = drone::transcript(&place.stream(&record.uuid)).spend;
+        record.spend.add(&record.kin.spend);
         record.state = ending.state;
         record.port_block = None;
         // **A Job whose worktree is gone must not go on claiming it.** The
@@ -2088,7 +2126,13 @@ pub fn answer<R: Run, C: Clock>(
         .as_ref()
         .is_some_and(|pending| match &pending.on {
             job::Waiting::Answer(waiting_on) => waiting_on == &entry.uuid,
-            job::Waiting::Check(_) => false,
+            // **A sub-Job's gate is settled by the child's verdict and by
+            // nothing a person types.** The entry being answered here belongs
+            // to the *child* — a reviewer that raised a blocking finding — and
+            // answering it releases that Job, whose verdict this one then
+            // reads. Treating it as this gate's answer would settle the parent
+            // on a sentence rather than on the Job it is waiting for.
+            job::Waiting::Check(_) | job::Waiting::SubJob(_) => false,
         });
 
     inbox::answer(&place.inbox(), &entry.uuid, said)?;
@@ -2806,6 +2850,13 @@ fn did_something(did: &str) -> bool {
 }
 
 /// One pass over the Jobs in scope.
+///
+/// **A named Job means it and everything it started.** A parent waiting on a
+/// sub-Job moves only when the child does, and the child moves only when
+/// something ticks it — so `armada fleet tick <job> --watch` scoped to the
+/// parent alone would poll a Job whose answer was sitting one record away,
+/// waiting for a pass nobody was going to make. The parent comes first, because
+/// it is what was asked about.
 fn pass<R: Run, C: Clock>(
     run: &R,
     now: &C,
@@ -2814,7 +2865,12 @@ fn pass<R: Run, C: Clock>(
 ) -> Result<Vec<TickRow>, ArmadaError> {
     let store = place.store();
     let records = match handle {
-        Some(handle) => vec![store.find(handle)?],
+        Some(handle) => {
+            let named = store.find(handle)?;
+            let mut family = vec![named.clone()];
+            family.extend(descendants(&store.all()?, &named.uuid));
+            family
+        }
         None => {
             let mut all = store.all()?;
             all.sort_by(|a, b| a.name.cmp(&b.name));
@@ -2825,6 +2881,34 @@ fn pass<R: Run, C: Clock>(
         .into_iter()
         .map(|record| one(run, now, place, record))
         .collect()
+}
+
+/// Every Job started by this one, or by one of those, oldest first.
+///
+/// **Breadth first over the index in hand, rather than a query per record.**
+/// The whole index is already loaded by every caller, a chain is at most
+/// [`GENERATIONS`] deep, and a Job whose parent record has been deleted is
+/// simply not reached — which is the right answer: it is nobody's child any
+/// more, and `armada fleet ls` still lists it.
+fn descendants(all: &[Job], root: &str) -> Vec<Job> {
+    let mut found: Vec<Job> = Vec::new();
+    let mut frontier = vec![root.to_string()];
+    while let Some(uuid) = frontier.pop() {
+        for child in all
+            .iter()
+            .filter(|job| job.kin.parent.as_ref().is_some_and(|up| up.uuid == uuid))
+        {
+            // A record that somehow names itself, or a pair that name each
+            // other, would loop for ever otherwise — and this walks data on
+            // disk that a person can edit.
+            if found.iter().any(|seen| seen.uuid == child.uuid) || child.uuid == root {
+                continue;
+            }
+            found.push(child.clone());
+            frontier.push(child.uuid.clone());
+        }
+    }
+    found
 }
 
 /// What the loop did about one Job.
@@ -2939,16 +3023,51 @@ fn gate_step<R: Run, C: Clock>(
     // Taken out and put back so the gatherer may record a run it started while
     // still reading the rest of the record.
     let mut pending = record.pending.take();
-    let facts = gather(run, place, &record, &want, &step_id, reading, &mut pending);
+    let gathered = gather(
+        run,
+        now,
+        place,
+        &mut record,
+        &want,
+        &step_id,
+        reading,
+        &mut pending,
+    );
     record.pending = pending;
-    let outcome = gate::decide(&want, &facts?);
+    let predicate = Some(step.verify.must.word().to_string());
+    let facts = match gathered {
+        Ok(facts) => facts,
+        // **One Job's gate that cannot be gathered must not end the pass**, for
+        // the reason [`stalled`] gives about a worktree that is gone: a fleet
+        // of twenty would exit non-zero and move none of the other nineteen.
+        // The two failures that reach here are a machine one — `armada manifest
+        // check --detach` that would not start — and a guild one: a workflow
+        // whose sub-Job would run a workflow already above it
+        // ([`refuse_a_cycle`]). Both are somebody's to fix and neither is the
+        // rest of the fleet's problem.
+        Err(error) => {
+            place.store().save(&record)?;
+            return stalled(place, now, record, predicate, error);
+        }
+    };
+    let waiting_on_a_person = facts
+        .subjob
+        .as_ref()
+        .is_some_and(|child| child.state.needs_a_person());
+    let outcome = gate::decide(&want, &facts);
     // Whatever was started or read is recorded before anything acts on it: a
     // pass that started a check and then failed to save the run id would start
     // a second one on the next pass, for ever.
     place.store().save(&record)?;
 
     let attempts = job::step_failures(&record.transitions, &step_id).saturating_add(1);
-    let next = advance::after(&outcome, &flow, &step_id, attempts);
+    let next = advance::after(
+        &outcome,
+        &flow,
+        &step_id,
+        attempts,
+        record.kin.parent.is_some(),
+    );
     let evidence = match &outcome {
         gate::Outcome::Holds { evidence } | gate::Outcome::DoesNotHold { evidence, .. } => {
             evidence.clone()
@@ -2957,7 +3076,6 @@ fn gate_step<R: Run, C: Clock>(
         | gate::Outcome::AsksAPerson { .. }
         | gate::Outcome::CannotDecide { .. } => Vec::new(),
     };
-    let predicate = Some(step.verify.must.word().to_string());
 
     // **Nothing is settled until the verdict is written, and the verdict is
     // written by `fleet.verdict`.** This is the one caller that legitimately
@@ -2993,7 +3111,20 @@ fn gate_step<R: Run, C: Clock>(
             let verdict = record.verdict;
             Ok(tick_row(
                 &record,
-                TICK_WAITING,
+                // **A parent whose child is waiting on a person is `asked`, not
+                // `waiting`, and the difference is whether `--watch` ever
+                // returns.** `waiting` means *something will decide this on its
+                // own* — a detached check finishes — and the loop keeps looking.
+                // A sub-Job holding an unanswered inbox entry will not finish
+                // until somebody answers it, so a `--watch` that called that
+                // live would poll until the person it is waiting for gave up on
+                // it. Nothing is raised here: the child already raised the
+                // question, and a second entry about the same one is the
+                // dilution PLAN.md §15.4 warns about.
+                match waiting_on_a_person {
+                    true => TICK_ASKED,
+                    false => TICK_WAITING,
+                },
                 why,
                 predicate,
                 evidence,
@@ -3007,6 +3138,27 @@ fn gate_step<R: Run, C: Clock>(
                 return stalled(place, now, record, predicate, error);
             }
             place.store().save(&record)?;
+            // **A step no Drone runs is gated in the pass that enters it,
+            // because nothing will ever make it *due*.**
+            //
+            // `020` §6's watermark asks *has anything gated the exchange that
+            // just ended?* — `finished > ticked_turns` — and that question has
+            // no answer for a step Fleet satisfies: no Drone runs, so the
+            // transcript never grows, so `due` is false for ever. The Job would
+            // then be observed with no live Drone, nothing pending and nothing
+            // due, which `job::observe_state`'s last arm calls `STALLED` and
+            // `advance::attention` answers `Idle` — a Job dead in the water
+            // that even the sweep would step over. Measured, not assumed: a
+            // parent advanced into `review` observed
+            // `state=Stalled due=false -> Idle`.
+            //
+            // Gating it here is the honest fix rather than a second watermark:
+            // there is genuinely nothing to wait for, and the pass already
+            // holds everything the gate needs. It terminates because
+            // `Workflow::step_after` only ever moves forward.
+            if !runs_a_drone(&flow, &to) {
+                return gate_step(run, now, place, record, observed, reading);
+            }
             Ok(tick_row(
                 &record,
                 TICK_ADVANCED,
@@ -3193,6 +3345,25 @@ fn stage(
     Some(moved)
 }
 
+/// Whether a Drone runs this step.
+///
+/// **The one place [`workflow::Runner`] is read in the loop**, because two
+/// decisions turn on it and they must not disagree: whether [`start_step`]
+/// starts a Drone at all, and whether [`gate_step`] may leave the step for a
+/// later pass. A step nobody runs a Drone for produces no exchange, and a step
+/// that produces no exchange is never *due* a gate (`020` §6) — so a Job left
+/// resting on one is a Job nothing will ever look at again.
+///
+/// A step that is not in the workflow answers `false`, which sends it to
+/// `gate_step`'s own refusal — *"the workflow has no step called …"* — rather
+/// than starting a Drone on a step nobody declared.
+fn runs_a_drone(flow: &Workflow, step: &str) -> bool {
+    flow.steps
+        .iter()
+        .find(|candidate| candidate.id == step)
+        .is_some_and(|candidate| matches!(candidate.runner(), workflow::Runner::Drone(_)))
+}
+
 /// Persist an observation only when it changed something.
 ///
 /// **A save per pass on an idle fleet would rewrite every record every two
@@ -3239,6 +3410,26 @@ fn tick_row(
 /// session across every step (PLAN.md §14.1); starting the next step in a new
 /// one would throw away everything the last step established and pay to
 /// rediscover it.
+///
+/// # The step that starts no Drone
+///
+/// A step names at most one of `skill:` and `workflow:`, and
+/// [`workflow::Runner`] is what that means: a skill is a Drone's, a workflow is
+/// a sub-Job's, and **neither is Fleet's** — as `review` is, by spawning a
+/// reviewer. Starting this Job's Drone on one of those two would be asking the
+/// Job under review to review itself, at the cost of a turn against its own
+/// ceiling, and its answer would not be evidence in any case.
+///
+/// **Except on a retry, which is exactly when it is the Drone's to fix.** A
+/// gate that did not hold hands back words — *"there is nothing committed for a
+/// reviewer to read"*, *"the reviewer finished FAILED"* — and the only thing
+/// that can act on either is the session that did the work. So `failed` is what
+/// decides: nothing to say means nothing to start.
+///
+/// **The first step is never this**, because it is [`spawn`]'s and not this
+/// function's — and it must not be, for a reason below the workflow entirely:
+/// `--resume` needs a session that exists, and a Job whose first step started no
+/// Drone would have no session for any later step to resume.
 fn start_step<R: Run>(
     run: &R,
     place: &Where,
@@ -3247,6 +3438,13 @@ fn start_step<R: Run>(
     step: &str,
     failed: Option<&str>,
 ) -> Result<(), ArmadaError> {
+    if failed.is_none() && !runs_a_drone(flow, step) {
+        // The Job stays `RUNNING` with no Drone, and [`gate_step`] gates the
+        // step in this same pass — it has to, because a step with no exchange
+        // is never *due* one and would otherwise be observed as `STALLED`.
+        record.state = JobState::Running;
+        return Ok(());
+    }
     let path = place.expand(&record.worktree);
     if !path.is_dir() {
         return Err(ArmadaError {
@@ -3297,10 +3495,19 @@ fn start_step<R: Run>(
 /// here decides anything: every branch answers a question and hands the answer
 /// back for [`gate::decide`] to weigh, which is what keeps the decision testable
 /// with values and no filesystem.
-fn gather<R: Run>(
+///
+/// **Eight arguments, and each of them is a seam rather than a parameter**:
+/// three are the injected ones `ARCHITECTURE.md` §1.1 names — the process
+/// runner, the clock and where the machine is — and the rest are the record,
+/// what the gate wants, which step, the transcript already read, and the pending
+/// slot. Bundling them into a struct would name the tuple `GatherArgs` and move
+/// the same eight things one line up.
+#[allow(clippy::too_many_arguments)]
+fn gather<R: Run, C: Clock>(
     run: &R,
+    now: &C,
     place: &Where,
-    record: &Job,
+    record: &mut Job,
     want: &gate::Needs,
     step: &str,
     reading: &Reading,
@@ -3394,7 +3601,7 @@ fn gather<R: Run>(
                 .filter(|open| open.step == step && open.attempt == attempt)
                 .and_then(|open| match &open.on {
                     job::Waiting::Answer(entry) => Some(entry.clone()),
-                    job::Waiting::Check(_) => None,
+                    job::Waiting::Check(_) | job::Waiting::SubJob(_) => None,
                 });
             facts.answer = match asked {
                 None => None,
@@ -3404,10 +3611,359 @@ fn gather<R: Run>(
                     .and_then(|entry| entry.answered),
             };
         }
-        // Nothing to look at: neither is decidable, and `decide` says so.
-        gate::Needs::AnotherJob { .. } | gate::Needs::Unstated { .. } => {}
+        gate::Needs::SubJob { workflow, kind } => {
+            // **The commit first, and the reviewer only if there is one.** A
+            // worktree branched from a branch with nothing on it hands the
+            // reviewer an empty diff, and spawning a whole Job to read nothing
+            // is the same avoidable expense the `RedCheck` arm refuses one line
+            // up. `decide` is what turns the missing commit into words the
+            // parent's next turn is given.
+            if *kind == gate::SubJobKind::Review {
+                facts.branch = Some(committed(run, &worktree, &record.branch));
+                if !facts.branch.as_ref().is_some_and(gate::Probed::found) {
+                    return Ok(facts);
+                }
+            }
+            facts.subjob = subjob(run, now, place, record, step, workflow, *kind, pending)?;
+        }
+        // Nothing to look at: `decide` says why rather than guessing.
+        gate::Needs::Unstated { .. } => {}
     }
     Ok(facts)
+}
+
+/// Start the sub-Job this attempt needs, or read the one already running.
+///
+/// **One child per attempt, and the attempt travels with the uuid** — the same
+/// rule [`check`] states for a check run, for the same reason and with more at
+/// stake. A reviewer started for attempt one read the diff *before* the fix;
+/// settling attempt two with its verdict would pass a step on a reading of work
+/// that no longer exists.
+///
+/// **What it does on the way past is bookkeeping the parent cannot do
+/// afterwards**: it opens the wall-clock suspension when the child starts, and
+/// closes it — rolling the child's spend into the parent's ledger — the moment
+/// the child is over. Both are on the record before anything acts on the fact,
+/// because `gate_step` saves immediately after this returns.
+#[allow(clippy::too_many_arguments)]
+fn subjob<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    record: &mut Job,
+    step: &str,
+    workflow: &str,
+    kind: gate::SubJobKind,
+    pending: &mut Option<job::Pending>,
+) -> Result<Option<gate::SubjobFact>, ArmadaError> {
+    let attempt = job::step_failures(&record.transitions, step).saturating_add(1);
+    // **A pending check is not a pending sub-Job.** All three ids are opaque
+    // strings and only [`job::Waiting`] tells them apart.
+    let mine = pending
+        .as_ref()
+        .filter(|open| open.step == step && open.attempt == attempt)
+        .and_then(|open| match &open.on {
+            job::Waiting::SubJob(uuid) => Some(uuid.clone()),
+            job::Waiting::Check(_) | job::Waiting::Answer(_) => None,
+        });
+
+    let Some(uuid) = mine else {
+        let child = spawn_child(run, now, place, record, step, attempt, workflow, kind)?;
+        *pending = Some(job::Pending {
+            step: step.to_string(),
+            on: job::Waiting::SubJob(child.uuid.clone()),
+            attempt,
+        });
+        // **The parent's wall clock stops here.** PLAN.md §14.6: a plan sub-Job
+        // ends at your approval, approval takes hours, and a parent whose clock
+        // kept running would be killed because you went to lunch.
+        record.kin.suspended_from_ms.get_or_insert(now.wall_ms());
+        return Ok(None);
+    };
+
+    // A record that will not load is a child somebody deleted by hand. It is
+    // reported as *ended without a verdict* rather than as a missing file,
+    // because that is what it is from here: nothing is going to arrive.
+    let Ok(child) = place.store().load(&uuid) else {
+        return Ok(Some(gate::SubjobFact {
+            uuid: uuid.clone(),
+            name: job::short(&uuid),
+            state: JobState::Aborted,
+            verdict: None,
+        }));
+    };
+    let (observed, _, _) = look(run, place, &child, now.wall_ms());
+
+    if observed.state.is_over() {
+        // **Counted once, on the pass that sees it over.** `decide` settles the
+        // attempt from this same fact — `Holds` advances, `DoesNotHold` retries,
+        // and both clear `pending` — so this cannot be reached twice for one
+        // child. What it buys is a ceiling that bounds the whole tree: a parent
+        // spends no turns of its own while a sub-Job works, so without this its
+        // ledger would sit still however many children it started
+        // ([`job::Kin::spend`]).
+        record.kin.spend.add(&observed.spend);
+        // **And the cached total with it.** `record.spend` is what
+        // [`job::observe`] last answered, and `gate_step` set it from the
+        // transcript at the top of this pass — before there was a child spend
+        // to include. Leaving it would put a figure on disk that under-reports
+        // the Job by exactly what its children cost, which is the number a
+        // person reads off `armada fleet ls` between passes.
+        record.spend.add(&observed.spend);
+        if let Some(from) = record.kin.suspended_from_ms.take() {
+            record.kin.suspended_ms = record
+                .kin
+                .suspended_ms
+                .saturating_add(now.wall_ms().saturating_sub(from));
+        }
+    }
+
+    Ok(Some(gate::SubjobFact {
+        uuid: child.uuid.clone(),
+        name: child.name.clone(),
+        state: observed.state,
+        verdict: child.verdict,
+    }))
+}
+
+/// How many Jobs deep a chain of sub-Jobs may go.
+///
+/// **A rope, not a policy.** The thing that makes `feature → plan → feature`
+/// wrong is that it is a cycle, and cycles are refused by name below — this is
+/// the backstop for the other shape, a guild whose workflows fan out without
+/// ever repeating one. Three is what the shipped set needs and one more:
+/// `feature` starts a `plan`, and a `plan` that grew a `review` step would be
+/// the third.
+pub const GENERATIONS: usize = 3;
+
+/// Start the Job a gate is waiting on.
+///
+/// # Why this is not [`spawn`]
+///
+/// It does three fewer things and three more. It does not classify — the gate
+/// knows the workflow by name, and paying for a model call to be told what the
+/// workflow file already says is the one avoidable token in the loop. It does
+/// not report progress — nothing is watching a `tick`. It does not ask anybody
+/// anything, for the same reason.
+///
+/// And it carries three facts `spawn` has no way to express: **a parent**, so
+/// `kill` and the gate can find the child and the child cannot become an orphan
+/// nobody is waiting on; **a start point**, because a reviewer branched from the
+/// repository's `HEAD` would be reading the code as it was before the work; and
+/// **a carved budget**, so the child cannot spend what the parent has already
+/// spent.
+///
+/// The adapters underneath are the same ones `spawn` calls, in the same order,
+/// which is the part that must not be answered twice.
+#[allow(clippy::too_many_arguments)]
+fn spawn_child<R: Run, C: Clock>(
+    run: &R,
+    now: &C,
+    place: &Where,
+    parent: &Job,
+    step: &str,
+    attempt: u32,
+    named: &str,
+    kind: gate::SubJobKind,
+) -> Result<Job, ArmadaError> {
+    let store = place.store();
+    refuse_a_cycle(place, parent, named)?;
+    let flow = read_workflow(place, named)?;
+
+    let name = store.free_name(&format!("{}-{named}", parent.name))?;
+    let uuid = job::mint_uuid(&format!(
+        "{}|{step}|{attempt}|{named}|{}",
+        parent.uuid,
+        now.wall_ms()
+    ));
+    let path = home::worktree(&place.armada_home, &parent.repo, &name);
+    let branch = worktree::branch_for(&name);
+    let first = flow.first_step().id.clone();
+    let task = child_task(parent, kind);
+
+    let mut record = Job {
+        uuid: uuid.clone(),
+        name: name.clone(),
+        workflow: flow.name.clone(),
+        // **Not a guess and not a person's answer either.** A confidence here
+        // would be a number nobody measured; the workflow was named by the
+        // step, which is the same standing `Classification::overridden` has.
+        confidence: None,
+        repo: parent.repo.clone(),
+        repo_root: parent.repo_root.clone(),
+        worktree: place.shown(&path),
+        branch: branch.clone(),
+        port_block: None,
+        budget: carved(flow.budget, &parent.budget, &parent.spend),
+        state: JobState::Queued,
+        step: first.clone(),
+        verdict: None,
+        drone: None,
+        created_at: now.wall_rfc3339(),
+        created_ms: now.wall_ms(),
+        spend: Spend::default(),
+        task: task.clone(),
+        progress: Vec::new(),
+        attempts: std::collections::BTreeMap::new(),
+        transitions: Vec::new(),
+        pending: None,
+        // **The parent's `--set` facts, inherited.** A `${task.test}` the
+        // person named once at spawn means the same thing to a sub-Job working
+        // the same task, and a child that had to be told again would be a
+        // human turn in the middle of a workflow that promises none.
+        facts: parent.facts.clone(),
+        kin: job::Kin {
+            parent: Some(job::Parent {
+                uuid: parent.uuid.clone(),
+                step: step.to_string(),
+                attempt,
+            }),
+            ..job::Kin::default()
+        },
+        // Nothing has ticked it and nobody is doing anything to it: it is being
+        // minted right now.
+        ticked_turns: 0,
+        doing: None,
+    };
+    // Recorded before anything is created, for [`spawn`]'s reason: everything
+    // after this line can fail, and each of those failures leaves a Job on disk
+    // rather than an orphaned worktree holding a port block nobody can name.
+    store.save(&record)?;
+
+    let repo_root = place.expand(&parent.repo_root);
+    if let Err(error) = worktree::add(run, &repo_root, &path, &branch, Some(&parent.branch)) {
+        let _ = manifest::clean(run, &place.exe, &path);
+        let _ = worktree::remove(run, &repo_root, &path);
+        let _ = worktree::delete_branch(run, &repo_root, &branch);
+        record.state = JobState::Aborted;
+        record.verdict = Some(Verdict::Failed);
+        store.save(&record)?;
+        return Err(error);
+    }
+
+    record.port_block = manifest::init(run, &place.exe, &path)?;
+    record.state = JobState::Running;
+    store.save(&record)?;
+
+    record.drone = Some(start_drone(
+        run,
+        place,
+        &record,
+        &path,
+        argv::spawn_argv(
+            &uuid,
+            &prompt(&flow, &first, &task),
+            &place.posture()?,
+            // **Both of these are load-bearing for a sub-Job in particular.**
+            // Without the relay (`020` §1) nothing observes the child's
+            // exchange ending, so the child never advances and the parent waits
+            // on it for ever; without its own MCP config the child has no
+            // `mcp__armada__fleet_verdict` to report through, and its verdict
+            // is the entire thing the parent's gate reads.
+            place.relay(&uuid).as_deref(),
+            place.drone_mcp(&uuid).as_deref(),
+        ),
+    )?);
+    store.save(&record)?;
+    Ok(record)
+}
+
+/// What the child is told it is for.
+///
+/// **The reviewer is told the branch and the claim, and nothing about how the
+/// work went.** PLAN.md §14.6: *"a reviewer that shares the implementer's
+/// context shares its blind spots"* — so what it gets is what a colleague would
+/// get, the diff and the thing it was supposed to do, in a worktree of its own
+/// at that branch.
+fn child_task(parent: &Job, kind: gate::SubJobKind) -> String {
+    match kind {
+        gate::SubJobKind::Review => format!(
+            "Review the work `{}` did on `{}`. Your worktree is that branch: the commits it \
+             added are the change, and `git log` and `git show` are how you read them. Say \
+             what would block landing it.\n\nThe task it was given: {}",
+            parent.name, parent.branch, parent.task
+        ),
+        gate::SubJobKind::Workflow => parent.task.clone(),
+    }
+}
+
+/// The ceilings a child runs under.
+///
+/// **Iterations and tokens are the smaller of what the child's workflow asks
+/// for and what the parent has left; the wall clock is the child's own.** The
+/// first two measure work, and work a child does is work the tree did — 016 §2
+/// asks for the parent's ceilings to bound the child's, and a child that could
+/// spend a fresh 600k tokens is how a parent gets exhausted by something it
+/// never counted. The clock is different in kind: the parent's is **suspended**
+/// while the child runs ([`job::Kin::suspended_ms`]), so there is nothing of it
+/// to carve, and what bounds the elapsed time is the child's own declared
+/// ceiling.
+fn carved(
+    declared: workflow::Budget,
+    parent: &workflow::Budget,
+    spent: &Spend,
+) -> workflow::Budget {
+    let left = job::remaining(parent, spent, 0);
+    workflow::Budget {
+        iterations: declared.iterations.min(left.iterations),
+        tokens: declared.tokens.min(left.tokens),
+        wall_clock_ms: declared.wall_clock_ms,
+        on_exhausted: declared.on_exhausted,
+    }
+}
+
+/// Refuse a sub-Job that would run a workflow already running above it.
+///
+/// **The acyclicity `guild verify` would have enforced, enforced where the edge
+/// is actually taken.** `workflow.schema.json` says the graph *"must be
+/// acyclic; `armada guild verify` rejects a cycle"* — and that verb is not
+/// built (`AGENTS.md`), so `feature → plan → feature` would today be a fleet
+/// that grows until every ceiling in it is reached. Checked against the chain
+/// on disk rather than against the guild's documents, which is both cheaper —
+/// the chain is at most [`GENERATIONS`] records — and stricter: it catches a
+/// cycle somebody introduced by editing a workflow while a Job was running
+/// through it.
+fn refuse_a_cycle(place: &Where, parent: &Job, named: &str) -> Result<(), ArmadaError> {
+    let mut chain = vec![parent.workflow.clone()];
+    let mut above = parent.kin.parent.clone();
+    while let Some(link) = above {
+        let Ok(ancestor) = place.store().load(&link.uuid) else {
+            break;
+        };
+        chain.push(ancestor.workflow.clone());
+        above = ancestor.kin.parent.clone();
+    }
+    if chain.iter().any(|workflow| workflow == named) {
+        chain.reverse();
+        chain.push(named.to_string());
+        return Err(ArmadaError {
+            class: ErrClass::BadConfig,
+            r#where: format!("workflows/{named}.yml"),
+            message: format!("`{named}` would run inside itself: {}", chain.join(" → ")),
+            next_action: Some(format!(
+                "edit the `{named}` workflow, or the one that names it, so the two do not \
+                 depend on each other"
+            )),
+        });
+    }
+    if chain.len() >= GENERATIONS {
+        chain.reverse();
+        chain.push(named.to_string());
+        return Err(ArmadaError {
+            class: ErrClass::BadConfig,
+            r#where: format!("workflows/{named}.yml"),
+            message: format!(
+                "sub-Jobs are {GENERATIONS} deep already: {}",
+                chain.join(" → ")
+            ),
+            next_action: Some(
+                "flatten one of these workflows: a step that runs a workflow that runs a \
+                 workflow is work nobody can follow"
+                    .to_string(),
+            ),
+        });
+    }
+    Ok(())
 }
 
 /// Start a check for this step, or read the one already running.
@@ -3435,7 +3991,7 @@ fn check<R: Run>(
         .filter(|open| open.step == step && open.attempt == attempt)
         .and_then(|open| match &open.on {
             job::Waiting::Check(run) => Some(run.clone()),
-            job::Waiting::Answer(_) => None,
+            job::Waiting::Answer(_) | job::Waiting::SubJob(_) => None,
         });
 
     let Some(run_id) = mine else {

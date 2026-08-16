@@ -43,8 +43,14 @@ pub struct Starter {
     pub body: &'static str,
 }
 
-/// The four starter workflows (`PLAN.md` §14.6).
-pub const WORKFLOWS: [Starter; 4] = [
+/// The starter workflows (`PLAN.md` §14.6).
+///
+/// **Four a person spawns and one Fleet spawns.** `review` is not one of the
+/// four labels classification returns ([`armada_core::fleet::workflow::STARTERS`]);
+/// it ships because a `review_clean` step is satisfied by Fleet starting a Job
+/// to run it, and a guild without the file is a guild where `bug` and `feature`
+/// both stop at their review step.
+pub const WORKFLOWS: [Starter; 5] = [
     Starter {
         path: "workflows/design.yml",
         body: include_str!("../../../templates/guild/workflows/design.yml"),
@@ -61,12 +67,16 @@ pub const WORKFLOWS: [Starter; 4] = [
         path: "workflows/bug.yml",
         body: include_str!("../../../templates/guild/workflows/bug.yml"),
     },
+    Starter {
+        path: "workflows/review.yml",
+        body: include_str!("../../../templates/guild/workflows/review.yml"),
+    },
 ];
 
 /// Everything else `guild init` copies: the schema the workflows are checked
 /// against, the starter skill, the starter persona, and the Drone permission
 /// posture.
-pub const OTHERS: [Starter; 4] = [
+pub const OTHERS: [Starter; 5] = [
     Starter {
         path: crate::permissions::FILE,
         body: include_str!("../../../templates/guild/permissions.yml"),
@@ -78,6 +88,14 @@ pub const OTHERS: [Starter; 4] = [
     Starter {
         path: "skills/onboard-repo/SKILL.md",
         body: include_str!("../../../templates/guild/skills/onboard-repo/SKILL.md"),
+    },
+    // The skill the `review` workflow's one step names. It ships beside the
+    // workflow rather than being left to the repository, because a
+    // `review_clean` gate is Fleet's to satisfy on every machine — a reviewer
+    // whose skill does not resolve is one that reviews whatever it feels like.
+    Starter {
+        path: "skills/review-diff/SKILL.md",
+        body: include_str!("../../../templates/guild/skills/review-diff/SKILL.md"),
     },
     Starter {
         path: "subagents/helm.md",
