@@ -1237,6 +1237,38 @@ hand. It reads exactly like a bug in the argv, which is where an hour goes.
 `$HOME` and finds the plugin. The integration suite passes `DOCKER_CONFIG` through explicitly;
 nothing in `crates/` compensates for it, and nothing should.
 
+## A wedged Docker daemon fails tests that are not about Docker
+
+Measured on darwin, 2026-08-15, with several agents running the docker suites against one daemon
+at once. `docker version` — the cheapest call there is — did not return within 120 seconds, and
+`docker ps` did not either. The daemon was not down; it was accepting connections and not
+answering, which is the case
+[the CLI has no client-side timeout](#the-docker-cli-has-no-client-side-timeout) is about.
+
+**The failure surfaces somewhere else entirely.** `crates/helm/tests/owned_processes.rs`'s
+`a_group_stamped_by_another_boot_is_dropped_without_a_signal` spawns `sleep 60`, records it under
+a foreign `boot_id`, runs `armada manifest clean`, and asserts the group is **still alive** —
+because Armada must not signal a group it cannot prove is its own.
+
+```sh
+# healthy daemon: clean returns in a second or two, the sleeper is alive, the test passes
+# wedged daemon: clean burns its docker deadlines and takes 91s, the sleeper exits on its own
+cargo test -p armada-helm --test owned_processes a_group_stamped_by_another_boot
+# → "Armada signalled a group it could not prove was its own"
+```
+
+The assertion message is a lie in this case: Armada signalled nothing. The process died of old
+age while `clean` waited on docker.
+
+**If you assume otherwise:** you read the message, go looking for a regression in
+`reap::pgid_is_ours` or `stop_owned_processes`, and find nothing, because nothing is wrong there.
+Confirmed pre-existing by running the identical test at the branch point — 91.00s and the same
+failure, against 91.10s on the branch.
+
+**The tell is the duration.** Any test whose fixture has a lifetime shorter than the wall time of
+a docker-touching verb is measuring the daemon rather than the code. Check `docker version`
+before believing a failure in this class, and re-run once it answers.
+
 ## Two golden snapshots fail under parallel load and pass alone
 
 `status_matches_its_snapshot` and `up_and_down_match_their_snapshots` (both in
