@@ -17,15 +17,16 @@ They stack, and nothing points upward ([`ARCHITECTURE.md`](ARCHITECTURE.md) §1.
 | **Armada** | The whole suite — one binary, four modules, plus the skills, hooks and MCP server it ships. | A daemon. Nothing runs in the background between commands. |
 | **Manifest** | The workspace module: what a repository is, how it is configured, owned and reclaimed. Its file is `armada.yml`. | Merely "stack config". The ownership store is the part nothing else has — it is what lets a workspace be reclaimed after its directory is gone. |
 | **Guild** | You — voice, skills, hooks, subagents, workflows. Machine-global in `~/.armada/guild/`, synced between your machines. | Repository content. No part of it is ever committed to a project. |
-| **Fleet** | The module that mints Jobs and runs Drones: worktrees, classification, budgets, workflows. | A scheduler you talk to. You talk to Helm. |
+| **Fleet** | **Every Job on this machine, and the Drones executing them.** A collection. `ls`, `reap` and `inbox` are operations on that set; `spawn` adds to it. | A manager. Nothing in Fleet *drives* a Job — a Job drives itself (see **Job**). Nor a scheduler you talk to: you talk to Helm. |
 | **Helm** | The one agent you talk to. A Claude Code session running an orchestrator persona with Armada's MCP server as its toolbelt. | A binary. See *Why there is no `helm` on `PATH`* below. |
 
 ## The work
 
 | Term | Is | Is **not** |
 |---|---|---|
-| **Job** | The durable unit of work: a uuid, a git worktree, a port block, a transcript, a budget, and eventually a verdict. Survives crashes, reboots, and the death of its Drone. | A process. A Job with nothing running is the ordinary resting state. |
-| **Drone** | The process executing a Job. Temporary by design. | The work itself. Killing a Drone does not end its Job. |
+| **Signal** | Something raised that may or may not be acted on: a **task** you intend, a **report** you filed, a **failure** Armada noticed, an **untried** verb, a question a Drone **asked**. One store, one id space, one way to promote any of them into a Job. | A queue that drains on its own. A signal is raised and then ignored, dismissed, or promoted — and only the last of those makes work. |
+| **Job** | The durable unit of work: a uuid, a git worktree, a port block, a transcript, a budget, and eventually a verdict. Survives crashes, reboots, and the death of its Drone. **It is also the state machine**: it holds its workflow, the step it rests on and what it has spent, and `armada fleet tick` is one transition of it. | A process. A Job with nothing running is the ordinary resting state. Nor a thing something else drives — there is no manager above it, which is why no such word exists here. |
+| **Drone** | The process executing a Job. Temporary by design: it runs one exchange and exits. | The work itself. Killing a Drone does not end its Job, and a Job outlives every Drone it ever spawns. |
 | **Contract** | **The guarantee a verb makes** — what `armada manifest check` promises to do and what states it may end in. Used this way throughout [`PLAN.md`](PLAN.md) §3 and the `--json` envelope. | A task. That is a Job. |
 | **Skill** | Repo-local knowledge: a named grant plus a pointer to prose ([`PLAN.md`](PLAN.md) §4.8). The mechanical half lives in `armada.yml`; the prose is a markdown file Manifest never parses. A guild skill is the same idea, owned by you rather than the repo. | A script. It has no `cmd:` and cannot be run — only listed, resolved and rendered. |
 | **Workflow** | An ordered set of steps in your guild — `design`, `plan`, `feature`, `bug` — naming which skill runs each step and what verdict advances it ([`PLAN.md`](PLAN.md) §14.4). | Hardcoded. It is data, editable at one in the morning. |
@@ -76,6 +77,8 @@ again in six months.
 | **Session** | The unit of work. | Ambiguous once Job and Drone are distinguished: it named both the durable record and the running process, which is the conflation §14.1 exists to undo. Still correct for *a Claude Code session*, which is what a Job's conversation actually is. |
 | `helm`, as a binary | The orchestrator's command. | See below. |
 | **Coverage**, as a verb name | `armada coverage` — which of Armada's own verbs this machine has never run. | Already load-bearing: the CI job is named `coverage` and `AGENTS.md` gates the merge on its ratchet. A second meaning under one word is the exact defect this page exists to prevent — shipped as `armada untried` instead, and the file it counts into is `~/.armada/untried.jsonl`. |
+| **Pilot** | The thing that takes a Job and drives its Drone — a name for what `armada fleet tick` does. | The metaphor is exact, which is why it was tempting: a harbour pilot boards a ship she does not own, guides it through the part needing local knowledge, and steps off carrying no cargo. It was rejected because **a Pilot would hold no state**. Everything it would "own" — the workflow, the step, the budget, the verdict — the Job already holds, so the word would name a function rather than a thing, and the Job would still be what knows where it is. The question it was reaching for — *"Drones are ephemeral, so what drives the loop?"* — is answered by the Job driving itself. |
+| **Run** or **Voyage**, as the thing carrying a Job through its workflow | A first-class object between Job and Drone. | Same objection as **Pilot**, plus `run` is already taken: Manifest calls a `check` execution a run, with a run directory and a run id. |
 
 ## Why there is no `helm` on `PATH`
 
