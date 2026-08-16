@@ -189,14 +189,20 @@ fn shipped_posture() -> Vec<String> {
     armada_core::fleet::drone::Posture::default().argv()
 }
 
-/// The two words that carry a Drone what it owes, read off the constants for the
-/// same reason [`shipped_posture`] is: the prose belongs to `armada_core`'s own
-/// tests, and what these assertions are about is the pair reaching `execve`
-/// whole and in the right place.
+/// The two words that carry a Drone what it owes, read off the shipped assembler
+/// for the same reason [`shipped_posture`] is: the prose belongs to
+/// `armada_core`'s own tests, and what these assertions are about is the pair
+/// reaching `execve` whole and in the right place.
+///
+/// **`brief()` rather than `BRIEF`, since `docs/reserved/008`.** One
+/// `--append-system-prompt` carries the reporting contract and then Armada's own
+/// skill, because the flag is singular and a second occurrence would keep only
+/// the last. A fixture naming one constant would go green against an `execve`
+/// that lost the other.
 fn shipped_brief() -> Vec<String> {
     vec![
         armada_core::fleet::drone::APPEND.to_string(),
-        armada_core::fleet::drone::BRIEF.to_string(),
+        armada_core::fleet::drone::brief(),
     ]
 }
 
@@ -725,9 +731,19 @@ fn the_drone_execve_receives_both_its_brief_and_its_task() {
     // The prose itself, not a path to it and not an instruction to go and read
     // one — the repair `armada_guild::layout::skill_argv` made one file over.
     let brief = &argv[at + 1];
-    assert_eq!(brief, armada_core::fleet::drone::BRIEF, "{argv:?}");
+    assert_eq!(brief, &armada_core::fleet::drone::brief(), "{argv:?}");
     assert!(brief.contains("mcp__armada__fleet_verdict"), "{brief}");
     assert!(brief.contains("not evidence"), "{brief}");
+    // **Both halves reached `execve`.** The reporting contract
+    // (`docs/reserved/019`) and Armada's own skill (`docs/reserved/008`) share
+    // one flag; a Drone given only the first would edit `armada.yml` rather
+    // than proposing, and nothing on the vector would say so.
+    assert!(brief.contains("mcp__armada__fleet_propose"), "{brief}");
+    assert!(
+        brief.find("mcp__armada__fleet_verdict") < brief.find("mcp__armada__fleet_propose"),
+        "the skill overtook the brief, so the session is told what it may do \
+         before it is told who it is"
+    );
 
     // The flag behind the brief survived it, so the Drone still has a posture.
     assert_eq!(argv[at + 2], "--permission-mode", "{argv:?}");

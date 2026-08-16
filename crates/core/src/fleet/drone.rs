@@ -10,9 +10,15 @@
 //! claude --resume     <uuid>                                                                  # boarding
 //! ```
 //!
-//! **`<brief>` is [`BRIEF`], and until it existed a Drone reported at whatever
-//! length it liked.** Read [`BRIEF`] for whose voice a Drone speaks in, what it
-//! owes, and why the answer is not the one Helm got.
+//! **`<brief>` is one `--append-system-prompt` carrying two things**: [`BRIEF`],
+//! without which a Drone reported at whatever length it liked, and then
+//! [`crate::skill::BODY`], without which it edited `armada.yml` rather than
+//! saying what it had learned (`docs/reserved/019` and `docs/reserved/008`).
+//! [`brief`] is where they are joined and why they are not one constant.
+//!
+//! **Neither is on the boarding line.** Boarding hands the conversation to a
+//! person, and a person is the audience for neither *report in two sentences*
+//! nor *do not edit `armada.yml` silently*.
 //!
 //! **`<posture>` is [`Posture`], and until it existed no Job could finish.** A
 //! headless Drone that reaches a state-mutating tool call with no permission
@@ -146,13 +152,46 @@ pub fn board_argv(uuid: &str) -> Vec<String> {
 /// turn that still knows the contract; one that did not would be a Drone whose
 /// instructions expired at its first question.
 fn headless(posture: &Posture) -> Vec<String> {
-    let mut argv = vec![APPEND.to_string(), BRIEF.to_string()];
+    let mut argv = vec![APPEND.to_string(), brief()];
     argv.extend(posture.argv());
     argv.push("--print".to_string());
     argv.push("--output-format".to_string());
     argv.push(STREAM_JSON.to_string());
     argv.extend(STREAM_JSON_NEEDS.iter().map(|flag| (*flag).to_string()));
     argv
+}
+
+/// **The whole of what a Drone is told before its task**: [`BRIEF`], then
+/// Armada's own skill.
+///
+/// # One appended prompt, never two
+///
+/// `claude --help` spells the flag `--append-system-prompt <prompt>` — singular,
+/// not variadic. A second occurrence is a Commander option with no collector, so
+/// the **last one wins and the first is dropped without a word**: a Drone would
+/// get its reporting contract and none of Armada's instructions, or the reverse,
+/// with nothing anywhere saying which. So the two are one string.
+///
+/// # Why they are two constants and not one
+///
+/// They answer different questions and were written for different reasons.
+/// [`BRIEF`] is *how you report* — the contract a worker owes an orchestrator,
+/// `docs/reserved/019`. [`crate::skill::BODY`] is *how you use Armada* —
+/// `docs/reserved/008` — and it goes to **Helm too**, where a reporting contract
+/// would make no sense. Merging them would mean Helm's launch carrying a
+/// paragraph about `fleet.verdict`, which Helm does not have.
+///
+/// **The brief comes first**, because it says who this session is; the skill is
+/// about the tools it holds, and a session has to be somebody before it can be
+/// told what it may do with them.
+///
+/// **Public because it is the artefact, and the two constants are its parts.**
+/// A test holding [`BRIEF`] alone goes green against a prompt that lost the
+/// skill, which is exactly the silent half of `--append-system-prompt` being
+/// singular — so `armada doctor`'s probe assertion and the belt's own
+/// tool-naming test both read this.
+pub fn brief() -> String {
+    format!("{BRIEF}\n\n{}", crate::skill::BODY)
 }
 
 /// The flag that carries an appended system prompt into a session.
@@ -592,10 +631,11 @@ pub const FLAGS: [&str; 13] = [
     "--permission-mode",
     ALLOWED,
     DISALLOWED,
-    // [`BRIEF`]'s, which grants nothing and withholds nothing — it says what the
-    // Drone owes. Its disappearance is the quietest failure of the three
-    // classes: every Job still runs, and every one of them reports at whatever
-    // length it likes into an orchestrator's window.
+    // [`brief`]'s, which grants nothing and withholds nothing — it says what the
+    // Drone owes and how it uses Armada. Its disappearance is the quietest
+    // failure of the three classes: every Job still runs, and every one of them
+    // reports at whatever length it likes into an orchestrator's window and
+    // edits `armada.yml` rather than proposing (`docs/reserved/008`).
     APPEND,
 ];
 
@@ -801,7 +841,11 @@ mod tests {
                 "--session-id",
                 UUID,
                 APPEND,
-                BRIEF,
+                // **One appended prompt carrying both halves**: the reporting
+                // contract, then Armada's own skill (`docs/reserved/008`). The
+                // flag is singular, so a second occurrence would keep only the
+                // last.
+                &brief(),
                 "--permission-mode",
                 "dontAsk",
                 "--allowedTools",
@@ -961,10 +1005,26 @@ mod tests {
                 .iter()
                 .position(|word| word == APPEND)
                 .unwrap_or_else(|| panic!("{argv:?} carries no brief"));
-            // The value, and it is the brief itself rather than a path to it or
+            // The value, and it is the prose itself rather than a path to it or
             // an instruction to go and read one.
+            //
+            // **`starts_with` rather than `==` since `docs/reserved/008`**: the
+            // one appended prompt now carries [`BRIEF`] and then
+            // [`crate::skill::BODY`], because the flag is singular and a second
+            // occurrence would keep only the last. The equality this used to
+            // make is now two assertions, one per half — a `contains` alone
+            // would go green against an order that put the skill first, which
+            // would tell a session what it may do before telling it who it is.
             let brief = &argv[at + 1];
-            assert_eq!(brief, BRIEF, "{argv:?} appends something else");
+            assert!(
+                brief.starts_with(BRIEF),
+                "{argv:?} appends something else, or appends it out of order"
+            );
+            assert!(
+                brief.ends_with(crate::skill::BODY),
+                "the reporting contract reached the session and Armada's own \
+                 skill did not: {brief:?}"
+            );
             assert!(
                 !brief.trim().is_empty() && !brief.starts_with('-'),
                 "an empty or flag-shaped brief eats the flag after it: {argv:?}"
@@ -974,6 +1034,7 @@ mod tests {
             // The turn is still the last word, unflagged, and is not the brief.
             assert_eq!(argv.last().unwrap(), turn, "{argv:?} lost its turn");
             assert_ne!(argv.last().unwrap(), BRIEF);
+            assert_ne!(argv.last().unwrap(), &brief.clone());
             assert!(!turn.starts_with('-'), "the turn reads as a flag");
         }
     }
@@ -1236,7 +1297,11 @@ mod tests {
                 "--resume",
                 UUID,
                 APPEND,
-                BRIEF,
+                // **One appended prompt carrying both halves**: the reporting
+                // contract, then Armada's own skill (`docs/reserved/008`). The
+                // flag is singular, so a second occurrence would keep only the
+                // last.
+                &brief(),
                 "--permission-mode",
                 "dontAsk",
                 "--allowedTools",
@@ -1256,9 +1321,67 @@ mod tests {
 
     /// Boarding is interactive: no `--print`, because the whole point is that
     /// you drive it.
+    ///
+    /// **And no skill either.** Boarding hands the conversation to a person, and
+    /// *do not edit `armada.yml` silently, propose it instead* is an instruction
+    /// to an unattended agent — telling a person at a keyboard not to edit their
+    /// own repository would be Armada refusing them a thing it cannot refuse.
     #[test]
     fn boarding_is_the_interactive_resume_and_carries_no_prompt() {
         assert_eq!(board_argv(UUID), ["claude", "--resume", UUID]);
+    }
+
+    /// **The skill reaches every headless turn, first and resumed.**
+    ///
+    /// This is `docs/reserved/008`'s injection, asserted where the bugs are. A
+    /// Drone changes what a repository runs; until this flag existed nothing
+    /// told it that noticing a stale `armada.yml` was part of the job, so it
+    /// either edited the file inside a diff about something else or said nothing
+    /// at all.
+    ///
+    /// **Argv alone does not prove the flag is accepted**, which is the whole
+    /// lesson of the `--verbose` trap — so [`crate::skill::APPEND`] is also in
+    /// [`FLAGS`], and [`probe_argv`] is built from [`spawn_argv`], which is what
+    /// makes `armada doctor` exercise it against the real binary for free.
+    #[test]
+    fn every_headless_turn_carries_armadas_own_skill() {
+        for argv in [
+            spawn_argv(UUID, "fix the flake", &Posture::default()),
+            resume_argv(UUID, "yes", &Posture::default()),
+            continue_argv(UUID, &Posture::default()),
+        ] {
+            let at = argv
+                .iter()
+                .position(|word| word == APPEND)
+                .unwrap_or_else(|| panic!("no appended system prompt: {argv:?}"));
+            assert!(
+                argv[at + 1].contains(crate::skill::BODY),
+                "the brief reached the session and the skill did not, which is \
+                 what appending the flag twice would silently produce: {:?}",
+                argv[at + 1]
+            );
+            assert!(
+                argv[at + 1].starts_with(BRIEF),
+                "the reporting contract went missing: {:?}",
+                argv[at + 1]
+            );
+            // **One occurrence, never two.** `--append-system-prompt <prompt>`
+            // is singular in `claude --help`, so a second would keep only the
+            // last and drop the first without a word.
+            assert_eq!(argv.iter().filter(|word| *word == APPEND).count(), 1);
+            // **The prose is one argument, whatever is in it.** A body split
+            // across argv elements would be read as flags and tool names.
+            assert!(argv[at + 1].contains("mcp__armada__fleet_propose"));
+            // **Before `--print`**, so the value cannot be swallowed by the
+            // variadic tool lists that come before it.
+            assert!(
+                at + 1 < argv.iter().position(|word| word == "--print").unwrap(),
+                "{argv:?}"
+            );
+        }
+        // Inverted once: the assertions above would all hold vacuously against
+        // a boarding argv that has neither flag, and it must not have them.
+        assert!(!board_argv(UUID).iter().any(|word| word == APPEND));
     }
 
     /// The prompt is the last element and is never split. A task arrives as free

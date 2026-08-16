@@ -37,9 +37,9 @@ use armada_core::envelope::{
     CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
     GuildSyncData, GuildUpgradeData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun,
-    KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, PruneData, ReapPlanData,
-    ReportData, ResumeData, ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData,
-    StatusData, TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
+    KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ProposeData, PruneData,
+    ReapPlanData, ReportData, ResumeData, ScanData, ServicesData, SettingsData, ShowData,
+    SkillsData, SpawnData, StatusData, TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -152,6 +152,10 @@ pub enum Output {
     Report(Box<Envelope<ReportData>>),
     /// The `fleet.ask_human` tool.
     Ask(Box<Envelope<AskData>>),
+    /// The `fleet.propose` tool — what a Drone noticed and is not blocked on
+    /// (`docs/reserved/008`). **No CLI verb**: nobody at a terminal proposes a
+    /// change to their own manifest, they make it.
+    Propose(Box<Envelope<ProposeData>>),
     /// The `fleet.verdict` tool.
     Verdict(Box<Envelope<VerdictData>>),
     /// `armada fleet tick` — one pass of the workflow loop.
@@ -210,6 +214,7 @@ impl Output {
             Output::Probe(e) => e.to_json(),
             Output::Report(e) => e.to_json(),
             Output::Ask(e) => e.to_json(),
+            Output::Propose(e) => e.to_json(),
             Output::Verdict(e) => e.to_json(),
             Output::Tick(e) => e.to_json(),
         }
@@ -283,6 +288,7 @@ impl Output {
             Output::Probe(e) => e.exit_code(),
             Output::Report(e) => e.exit_code(),
             Output::Ask(e) => e.exit_code(),
+            Output::Propose(e) => e.exit_code(),
             Output::Verdict(e) => e.exit_code(),
             Output::Tick(e) => e.exit_code(),
         }

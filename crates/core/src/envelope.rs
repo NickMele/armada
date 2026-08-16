@@ -2136,11 +2136,11 @@ pub struct HelmData {
     ///
     /// **Not a second source of truth — derived from [`Self::argv`]** by
     /// `armada_core::helm::launch_line`, which replaces the appended system
-    /// prompt with `"$(cat ~/.armada/helm/guild-voice.md)"` and leaves every
-    /// other word alone. The reader's own `voice.md`, `expectations.md` and
-    /// `how-i-work.md` are inlined into the argv as bytes, which is what makes
-    /// them binding; joining that vector for the screen would print several
-    /// kilobytes of their own prose where the one pasteable line goes.
+    /// prompt with `"$(cat ~/.armada/helm/system-prompt.md)"` and leaves every
+    /// other word alone. Armada's own skill and the reader's `voice.md`,
+    /// `expectations.md` and `how-i-work.md` are inlined into the argv as bytes,
+    /// which is what makes them binding; joining that vector for the screen
+    /// would print several kilobytes of prose where the one pasteable line goes.
     pub command: String,
     /// What was wired, one row each.
     pub results: Vec<Wired>,
@@ -2610,6 +2610,27 @@ pub struct AskData {
     /// The answer, once a person has given one. `None` means it is still open.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub answered: Option<String>,
+}
+
+/// `fleet.propose` — what a Drone noticed, and the id it was filed under
+/// ([`docs/reserved/008`](../../../docs/reserved/008-armada-injects-its-own-skills.md)).
+///
+/// **The same shape as [`AskData`] less its answer**, and the missing field is
+/// the difference between the two tools. A question waits; a proposal does not.
+/// There is no `answered` here because the caller is not going to look — it has
+/// already carried on with the step it was on.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ProposeData {
+    /// The handle of the Job that noticed.
+    pub job: String,
+    /// The entry's own id, which is what `armada fleet answer` closes and what
+    /// `armada failures show` resolves. **One id space over four origins**
+    /// (`docs/reserved/001`): this is `Origin::Raised`, and there is no fifth.
+    pub entry: String,
+    /// What it is about — `manifest` or `guild`.
+    pub subject: String,
+    /// The proposal, in the Drone's own words.
+    pub proposal: String,
 }
 
 /// `armada fleet tick` — the workflow loop, one pass (PHASES.md §8.6).

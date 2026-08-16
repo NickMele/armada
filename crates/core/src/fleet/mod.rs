@@ -188,6 +188,78 @@ pub enum Verdict {
     NeedsHuman,
 }
 
+/// What a Drone's proposal is **about**
+/// ([`docs/reserved/008`](../../../../docs/reserved/008-armada-injects-its-own-skills.md)).
+///
+/// # `008`'s open question, answered: both, and the difference is written down
+///
+/// *"May a Drone propose a guild change, or only a manifest one?"* A guild is
+/// **the user** — their voice, their workflows, what they are willing to let an
+/// unattended agent do. A manifest is a repository's description of itself. The
+/// blast radius of an agent editing those two is not remotely the same.
+///
+/// **But nothing here edits either.** A proposal writes one inbox entry and
+/// changes nothing at all, so the question *may it* collapses into *is it worth
+/// reading* — and a Drone that has noticed the same workflow step fail in three
+/// repositories has noticed something about the person. Refusing that outright
+/// would lose it to keep a distinction the mechanism does not need.
+///
+/// So both are allowed, the asymmetry lives in
+/// [`crate::skill::BODY`] — which tells a Drone to be sparing with `guild`,
+/// because it is looking at one repository — and the enforcement is that
+/// **applying a proposal is somebody else's verb**. Armada verifies; it does not
+/// take an agent's word.
+///
+/// # Two, and a third is refused rather than guessed at
+///
+/// The same rule `Verdict` follows: a word outside the set is an error, not a
+/// nearest match. A proposal filed against a subject Armada has no concept of is
+/// a row nobody can act on, which is the whole complaint
+/// `docs/reserved/005-inbox-label-not-identity.md` was raised about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Subject {
+    /// This repository's `armada.yml` — a command, a check, a service, a port.
+    Manifest,
+    /// The person's own guild — a standing preference, a workflow step.
+    Guild,
+}
+
+impl Subject {
+    /// The word, as it is written and as it is read.
+    ///
+    /// **Lower case, unlike every status word in this module, and deliberately.**
+    /// `PASS` and `NEEDS_HUMAN` scream because they are *states* a table draws in
+    /// a STATUS column; this is a noun inside a sentence a person reads — *"a
+    /// Drone proposes a change to the manifest"* — and a shouted noun mid-prose
+    /// reads as a state that does not exist.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Subject::Manifest => "manifest",
+            Subject::Guild => "guild",
+        }
+    }
+
+    /// The word a caller wrote, as the enum.
+    ///
+    /// Case-insensitive for [`crate::fleet::Verdict`]'s reason — a model writing
+    /// `Manifest` meant `manifest`, and sending it round a loop over
+    /// capitalisation costs a turn to teach it nothing.
+    pub fn parse(word: &str) -> Option<Subject> {
+        match word.trim().to_ascii_lowercase().as_str() {
+            "manifest" => Some(Subject::Manifest),
+            "guild" => Some(Subject::Guild),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Subject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.word())
+    }
+}
+
 impl Verdict {
     /// The word, in both audiences. `NEEDS_HUMAN` carries its underscore into
     /// the render, because the payload spells it that way and one spelling is
@@ -330,5 +402,38 @@ mod tests {
         assert_eq!(Verdict::Failed.settles_to(), JobState::Running);
         assert_eq!(Verdict::Blocked.settles_to(), JobState::Blocked);
         assert_eq!(Verdict::NeedsHuman.settles_to(), JobState::Paused);
+    }
+
+    /// **Two subjects, read in any case, and nothing else is guessed at** — the
+    /// rule `word_to_verdict` follows, for the reason `docs/reserved/008` gives:
+    /// a proposal filed against a subject Armada has no concept of is a row
+    /// nobody can act on.
+    #[test]
+    fn a_proposal_is_about_the_manifest_or_the_guild_and_nothing_else() {
+        assert_eq!(Subject::parse("manifest"), Some(Subject::Manifest));
+        assert_eq!(Subject::parse("guild"), Some(Subject::Guild));
+        assert_eq!(Subject::parse("  Guild "), Some(Subject::Guild));
+        assert_eq!(Subject::parse("MANIFEST"), Some(Subject::Manifest));
+        // Inverted once: a parser that accepted everything would pass every
+        // assertion above.
+        assert_eq!(Subject::parse("armada.yml"), None);
+        assert_eq!(Subject::parse("workflow"), None);
+        assert_eq!(Subject::parse(""), None);
+    }
+
+    /// The word is lower case on purpose — it is a noun in a sentence, not a
+    /// state in a column — and it round-trips through its own parser so the
+    /// written form and the read form cannot drift.
+    #[test]
+    fn a_subjects_word_is_lower_case_and_parses_back_to_itself() {
+        for subject in [Subject::Manifest, Subject::Guild] {
+            let word = subject.word();
+            assert_eq!(word, word.to_ascii_lowercase(), "{word} is shouting");
+            assert_eq!(Subject::parse(word), Some(subject));
+            assert_eq!(
+                serde_json::to_string(&subject).unwrap(),
+                format!("\"{word}\"")
+            );
+        }
     }
 }

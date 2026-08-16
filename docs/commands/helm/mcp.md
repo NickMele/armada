@@ -35,16 +35,35 @@ Normally registered rather than run by hand — the orchestrator launches it, an
 | `manifest.up` / `.down` / `.status` / `.clean` | corresponding pages | Workspace operations. |
 | `manifest.explain` | [`../manifest/explain.md`](../manifest/explain.md) | Evidence a stack trace does not carry. **Not served**: the verb it would wrap is not built, and a tool that reimplemented one would be the thing §1.3 exists to stop. It lands with the verb. |
 | `manifest.skills` | [`../manifest/skills.md`](../manifest/skills.md) | What this repo knows about itself. Summaries only — Helm holds a routing table, not prose. |
-| `manifest.skill` | [`../manifest/skills.md`](../manifest/skills.md) | One skill resolved, **including the doc body**. A Drone calls this; Helm does not. |
+| `manifest.skill` | [`../manifest/skills.md`](../manifest/skills.md) | One skill resolved, **including the doc body**. |
 
-**Drones get a smaller toolbelt** — they may report and ask, not spawn. A Drone able to spawn
-Drones is a fork bomb with a budget.
+> **`manifest.skill` is on this belt and not on the Drone's**, and that sentence used to read *a
+> Drone calls this; Helm does not*, which the shipped belts have never done. The two routers are
+> two types (below) and the Drone's has only `fleet.*` — so a Drone cannot read this repository's
+> skills, cannot read its manifest, and learns what it learns from the commands it runs. That is
+> the half [`../../reserved/008-armada-injects-its-own-skills.md`](../../reserved/008-armada-injects-its-own-skills.md)
+> records as left open; widening the belt is a separate decision with a separate blast radius.
+
+**Drones get a smaller toolbelt** — they may report, ask, propose and settle a step, not spawn. A
+Drone able to spawn Drones is a fork bomb with a budget.
 
 | Drone tool | Effect |
 |---|---|
 | `fleet.report` | Append progress to its own Job record. |
 | `fleet.ask_human` | Raise an entry to the inbox and wait. |
+| `fleet.propose` | Raise a change to this repository's `armada.yml` or to the person's guild, and **carry on** ([`../../reserved/008-armada-injects-its-own-skills.md`](../../reserved/008-armada-injects-its-own-skills.md)). |
 | `fleet.verdict` | Emit a step verdict ([`PLAN.md`](../../PLAN.md) §14.3). |
+
+**`fleet.propose` is not `fleet.ask_human` with a different word**, and the difference is the
+wait. A question is something a Drone cannot proceed without an answer to, so it blocks; a
+proposal is something the person should know that the Drone is not blocked on, so it files one
+entry with an id and returns at once. Collapsing them would mean a Drone spending its own wall
+clock ceiling to tell somebody a check name looks stale.
+
+**A proposal is not a change.** It writes an inbox entry — `Origin::Raised`, the same id space
+as everything else `armada failures show` resolves — and nothing else. Applying it is the
+person's, through `armada guild edit` or an ordinary edit to `armada.yml`. Armada verifies; it
+does not accept an agent's word, which is why there is no verb here that writes either file.
 
 **The two belts are two types, not one list with a filter.** A filter is a line somebody
 eventually moves, and moving it has no visible consequence until a machine is full of Drones.
@@ -56,7 +75,7 @@ every child of a Job and by nothing else, so a Drone's own environment answers t
 flag is a thing a registration file can get wrong, and getting it wrong in one direction is the
 fork bomb.
 
-**A Drone names no Job.** Its three tools take the handle from that same variable rather than as
+**A Drone names no Job.** Its four tools take the handle from that same variable rather than as
 an argument, so a worker cannot write another worker's record — and therefore cannot rewrite the
 evidence somebody else's verdict rests on.
 

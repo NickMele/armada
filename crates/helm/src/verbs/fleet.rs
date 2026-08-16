@@ -22,16 +22,16 @@
 use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
-    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ReapCandidate,
-    ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow, TransitionRow,
-    VerdictData,
+    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
+    ReapCandidate, ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow,
+    TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
 use armada_core::fleet::drone::Reading;
 use armada_core::fleet::job::{self, Handle, Job, Observed, Spend};
 use armada_core::fleet::workflow::{self, Workflow};
-use armada_core::fleet::{advance, drone as argv, gate, JobState, Verdict};
+use armada_core::fleet::{advance, drone as argv, gate, JobState, Subject, Verdict};
 use armada_fleet::drone;
 use armada_fleet::jobs::Store;
 use armada_fleet::{home, inbox, manifest, own, worktree};
@@ -2202,6 +2202,100 @@ pub fn ask_human<C: Clock>(
             entry,
             question: question.to_string(),
             answered,
+        },
+    ))))
+}
+
+// --------------------------------------------------------------------- propose
+
+/// `fleet.propose` — **what a Drone noticed and is not blocked on**
+/// ([`docs/reserved/008`](../../../../docs/reserved/008-armada-injects-its-own-skills.md)).
+///
+/// # Why this is not `ask_human`, and not an `armada.yml` edit
+///
+/// `PLAN.md` §5's sandwich is *Armada reports facts, an agent authors, Armada
+/// verifies*. The middle layer was expected to know how to hold the tools, and a
+/// Drone that had learned something the manifest does not say had two bad
+/// options and no good one:
+///
+/// | It could | And that is |
+/// |---|---|
+/// | edit `armada.yml` itself | a claim nobody checked, landing inside a diff about something else — the one thing *Armada verifies* rules out |
+/// | call [`ask_human`] | a five-minute wait, against its own ceiling, for a decision it is not blocked on |
+/// | say nothing | what it did, because the third option did not exist |
+///
+/// So this raises and returns. **No wait, no poll, no ceiling spent** — the
+/// difference from [`ask_human`] is the whole reason it is a second verb rather
+/// than a flag on the first, because a proposal that waited would be a Drone
+/// stopping work to tell somebody something they can read tomorrow.
+///
+/// # It writes an inbox entry, and there is no fifth origin
+///
+/// `docs/reserved/001` settled that every item Helm surfaces is an entry with an
+/// id, across four origins and one id space. A proposal is
+/// [`armada_core::failure::Origin::Raised`] — *a Drone asked for you* — which it
+/// already is, because it is the inbox. Nothing new is stored, nothing new is
+/// resolved, and `armada fleet answer <id>`, `armada failures show <id>` and the
+/// Bridge all reach it on the day it is written.
+///
+/// # What Armada verifies here, and what it does not
+///
+/// It verifies that the subject is one of two words ([`Subject`]) and that the
+/// proposal is not empty. **It does not check whether the claim is true**, and
+/// could not: the Drone is the only thing that ran the command. Verification of
+/// the content is the person reading the row, or a Job they start from it —
+/// through a path that already exists. A proposal is not a change.
+pub fn propose<C: Clock>(
+    now: &C,
+    place: &Where,
+    handle: &str,
+    subject: Subject,
+    proposal: &str,
+) -> Result<Output, ArmadaError> {
+    let proposal = proposal.trim();
+    // **An empty proposal is refused rather than filed.** A row whose body says
+    // nothing is a row a person opens, learns nothing from, and cannot close
+    // with any confidence — and the inbox is append-only, so it is there for
+    // good. `bad_invocation` because the caller can fix it by saying what it
+    // noticed.
+    if proposal.is_empty() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: "proposal".to_string(),
+            message: "a proposal with no body is a row nobody can act on".to_string(),
+            next_action: Some(format!(
+                "say what about the {subject} you would change, and why"
+            )),
+        });
+    }
+    let record = place.store().find(handle)?;
+    // **`NEEDS_HUMAN` rather than a fourth [`inbox::Kind`].** The kind answers
+    // *why does the fleet want you*, and the answer here is the one it already
+    // has: a judgement call is yours. A `PROPOSAL` kind would be a second word
+    // for the same fact, and every table that draws the column would have to
+    // learn it to say nothing new.
+    let entry = raise(
+        place,
+        now,
+        &record,
+        inbox::Kind::NeedsHuman,
+        // **The subject is in the body, not beside it.** An inbox entry is read
+        // out of context and possibly hours later, and a bare sentence about a
+        // port would leave a reader guessing which file it was about. It is not
+        // a field because that would change the on-disk line shape for every
+        // entry ever written, to carry one word.
+        &format!("proposes a change to the {subject}: {proposal}"),
+    )?;
+
+    Ok(Output::Propose(Box::new(Envelope::ok(
+        "fleet propose",
+        None,
+        Status::Ok,
+        ProposeData {
+            job: record.name.clone(),
+            entry,
+            subject: subject.word().to_string(),
+            proposal: proposal.to_string(),
         },
     ))))
 }

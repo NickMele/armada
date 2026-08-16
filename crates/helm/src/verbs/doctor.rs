@@ -1308,7 +1308,16 @@ mod tests {
             .iter()
             .position(|word| word == drone::APPEND)
             .expect("the validator never saw the brief");
-        assert_eq!(probe[at + 1], drone::BRIEF, "{probe:?}");
+        // **Both halves of the one appended prompt reach the validator**: the
+        // reporting contract (`docs/reserved/019`) and Armada's own skill
+        // (`docs/reserved/008`), in that order. Asserted as a prefix and a
+        // suffix rather than an equality, because the flag is singular and the
+        // two are joined into one value.
+        assert!(probe[at + 1].starts_with(drone::BRIEF), "{probe:?}");
+        assert!(
+            probe[at + 1].ends_with(armada_core::skill::BODY),
+            "the validator never saw Armada's own skill"
+        );
         // The flag behind it survived, which is the collision this probe is
         // extended to cover: a swallowed `--permission-mode` is a Drone with no
         // posture, and `docs/reserved/011` is what that costs.
@@ -1388,6 +1397,48 @@ mod tests {
         assert_eq!(finding.status, Health::Missing);
         assert!(finding.detail.contains("--verbose"), "{}", finding.detail);
         assert!(finding.remedy.is_some(), "a finding without a remedy");
+    }
+
+    /// **The Drone's own `--append-system-prompt`, and this is the whole of the
+    /// preflight for it** (`docs/reserved/008`).
+    ///
+    /// It carries Armada's own skill into every headless turn — *do not edit
+    /// `armada.yml`, propose it* — and a `claude` that dropped the flag would
+    /// take every Job with it, because the flag is in the argv unconditionally.
+    /// Asserting the argv proves Armada built the string it meant to; this is
+    /// the half that proves the binary still accepts it, which is the rule the
+    /// `--verbose` trap wrote.
+    #[test]
+    fn a_claude_that_no_longer_appends_a_system_prompt_takes_every_drone_with_it() {
+        assert!(
+            armada_core::fleet::drone::FLAGS.contains(&armada_core::fleet::drone::APPEND),
+            "the flag that carries Armada's own skill is not checked at all"
+        );
+        let finding = drone_argv(
+            &Claude {
+                flags: armada_core::fleet::drone::FLAGS
+                    .iter()
+                    .filter(|flag| **flag != armada_core::fleet::drone::APPEND)
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                ..Claude::healthy()
+            },
+            Path::new("/tmp"),
+        );
+        assert_eq!(finding.status, Health::Missing);
+        assert!(
+            finding.detail.contains(armada_core::fleet::drone::APPEND),
+            "{}",
+            finding.detail
+        );
+        // Inverted once: the same probe against a `claude` that still offers it
+        // is `Ok`, so the finding is about the missing flag rather than about
+        // the fixture.
+        assert_eq!(
+            drone_argv(&Claude::healthy(), Path::new("/tmp")).status,
+            Health::Ok
+        );
     }
 
     /// **The specific failure this check was added after.** The flags all exist
