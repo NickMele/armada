@@ -80,6 +80,13 @@ wins and the first is dropped without a word. So each launch composes exactly on
 The file Helm writes for `"$(cat …)"` was renamed `guild-voice.md` → `system-prompt.md`, because
 it is no longer only the guild's.
 
+**Every tool the skill names is spelled `mcp__armada__fleet_propose`, never `fleet.propose`.**
+The server advertises the dotted name and Claude Code exposes it to the model with underscores
+([`traps.md`](../traps.md), *Claude Code renames a dotted tool*) — so a skill written with the
+documented spelling matches nothing the model can call, and the model answers that it has no such
+tool. The first draft got this wrong and the belt's own naming test caught it, once that test was
+pointed at the whole composed prompt rather than at `BRIEF` alone.
+
 ## May a Drone propose a guild change? Both, and the asymmetry is written down
 
 *A guild is the user* — their voice, their workflows, what they are willing to let an unattended
