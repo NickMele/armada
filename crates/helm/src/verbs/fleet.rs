@@ -699,9 +699,17 @@ fn read_workflow(place: &Where, name: &str) -> Result<Workflow, ArmadaError> {
         class: ErrClass::BadInvocation,
         r#where: name.to_string(),
         message: format!("no workflow called `{name}` in your guild"),
+        // **`upgrade` is named as well as `init`, and `review` is why.** A
+        // guild made before the reviewer workflow shipped has the four
+        // starters and not the fifth, and the Job that finds out is one whose
+        // `review_clean` gate has just gone looking for it — so a next action
+        // that only offered `init` would send somebody with a working guild to
+        // a verb that refuses to touch it (`docs/reserved/006`).
         next_action: Some(format!(
-            "`armada guild init` writes the starters: {}",
-            workflow::STARTERS.join(", ")
+            "`armada guild init` writes the starters ({}, {}); \
+             `armada guild upgrade` adds what a later release added",
+            workflow::STARTERS.join(", "),
+            workflow::REVIEWER
         )),
     })?;
     workflow::parse(&text, &relative)
