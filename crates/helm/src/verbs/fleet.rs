@@ -22,8 +22,8 @@
 use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
-    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ReapCandidate,
-    ProposeData, ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow,
+    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
+    ReapCandidate, ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow,
     TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};

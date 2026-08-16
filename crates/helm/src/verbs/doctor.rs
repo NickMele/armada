@@ -1162,6 +1162,48 @@ mod tests {
         assert!(finding.remedy.is_some(), "a finding without a remedy");
     }
 
+    /// **The Drone's own `--append-system-prompt`, and this is the whole of the
+    /// preflight for it** (`docs/reserved/008`).
+    ///
+    /// It carries Armada's own skill into every headless turn — *do not edit
+    /// `armada.yml`, propose it* — and a `claude` that dropped the flag would
+    /// take every Job with it, because the flag is in the argv unconditionally.
+    /// Asserting the argv proves Armada built the string it meant to; this is
+    /// the half that proves the binary still accepts it, which is the rule the
+    /// `--verbose` trap wrote.
+    #[test]
+    fn a_claude_that_no_longer_appends_a_system_prompt_takes_every_drone_with_it() {
+        assert!(
+            armada_core::fleet::drone::FLAGS.contains(&armada_core::skill::APPEND),
+            "the flag that carries Armada's own skill is not checked at all"
+        );
+        let finding = drone_argv(
+            &Claude {
+                flags: armada_core::fleet::drone::FLAGS
+                    .iter()
+                    .filter(|flag| **flag != armada_core::skill::APPEND)
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                ..Claude::healthy()
+            },
+            Path::new("/tmp"),
+        );
+        assert_eq!(finding.status, Health::Missing);
+        assert!(
+            finding.detail.contains(armada_core::skill::APPEND),
+            "{}",
+            finding.detail
+        );
+        // Inverted once: the same probe against a `claude` that still offers it
+        // is `Ok`, so the finding is about the missing flag rather than about
+        // the fixture.
+        assert_eq!(
+            drone_argv(&Claude::healthy(), Path::new("/tmp")).status,
+            Health::Ok
+        );
+    }
+
     /// **The specific failure this check was added after.** The flags all exist
     /// and the combination is refused; only asking the validator finds it.
     #[test]

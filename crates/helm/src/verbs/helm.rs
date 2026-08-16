@@ -341,9 +341,15 @@ fn voice(guild: &Guild) -> Option<helm::Voice> {
 /// verbose"* — was true for months with the instruction sitting unread in the
 /// persona. A row naming the files and the command that fills them turns that
 /// into something visible on every single launch.
+///
+/// **It says *none of yours* rather than *nothing*** since `docs/reserved/008`:
+/// the file at this path is no longer empty when the reader has written nothing,
+/// because Armada's own skill is in it, and a row saying `none yet` beside a
+/// document with two kilobytes in it would be the row lying about the file it
+/// names.
 fn no_voice_yet() -> String {
     format!(
-        "none yet — {} are Armada's words; `armada guild edit voice.md`",
+        "none of yours yet — {} are Armada's words; `armada guild edit voice.md`",
         armada_guild::memory::FRAGMENTS.join(", ")
     )
 }
@@ -521,28 +527,28 @@ fn wire(
         state: hook,
         detail: "Stop hook: a turn does not end while the inbox is unread".to_string(),
     });
-    // **The reader's own words, and a row either way.** The document is what
-    // `"$(cat …)"` in the printed command reads, so it has to be on disk before
-    // that line is printed — and when there is nothing to write, the stale one
-    // from a launch before they edited their guild is removed rather than left
-    // to make a printed command say something the argv does not.
+    // **The appended system prompt, and it is now always written.** The document
+    // is what `"$(cat …)"` in the printed command reads, so it has to be on disk
+    // before that line is printed and it has to be byte-identical to the argv
+    // element — a printed command that is not the argv is wrong in the one place
+    // a reader has no way to check.
+    //
+    // **It used to be removed when the reader had written nothing**, because
+    // then the launch emitted no flag at all. Since `docs/reserved/008` the
+    // launch always appends Armada's own skill, so there is always something to
+    // write, and a removal here would leave `"$(cat …)"` pointing at a file that
+    // is not there.
+    let appended = helm::appended(voice.map(|voice| voice.prompt.as_str()));
     wired.push(Wired {
-        what: "voice".to_string(),
-        at: match voice {
-            Some(_) => place.shown(&paths.voice),
-            None => place.shown(Guild::at(&place.armada_home).root()),
-        },
-        state: match voice {
-            Some(voice) => write(&paths.voice, &voice.document())?,
-            None => match paths.voice.exists() {
-                true => {
-                    let _ = std::fs::remove_file(&paths.voice);
-                    Wiring::Written
-                }
-                false => Wiring::Unchanged,
-            },
-        },
+        what: "system prompt".to_string(),
+        at: place.shown(&paths.voice),
+        state: write(&paths.voice, &format!("{appended}\n"))?,
         detail: match voice {
+            // **Armada's half is not mentioned when the reader has a half.** The
+            // row exists to answer *did my words reach the session*, which is
+            // the question the bug was about; naming Armada's own instructions
+            // beside them would put Armada's name on the line that is meant to
+            // be about theirs.
             Some(voice) => voice.said(),
             None => no_voice_yet(),
         },

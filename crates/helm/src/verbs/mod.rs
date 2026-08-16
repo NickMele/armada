@@ -37,9 +37,8 @@ use armada_core::envelope::{
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
     GuildSyncData, GuildUpgradeData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun,
     KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ProposeData,
-    ReapPlanData, ReportData,
-    ResumeData, ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData,
-    TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
+    ReapPlanData, ReportData, ResumeData, ScanData, ServicesData, SettingsData, ShowData,
+    SkillsData, SpawnData, StatusData, TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;

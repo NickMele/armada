@@ -10,9 +10,15 @@
 //! claude --resume     <uuid>                                                                  # boarding
 //! ```
 //!
-//! **`<brief>` is [`BRIEF`], and until it existed a Drone reported at whatever
-//! length it liked.** Read [`BRIEF`] for whose voice a Drone speaks in, what it
-//! owes, and why the answer is not the one Helm got.
+//! **`<brief>` is one `--append-system-prompt` carrying two things**: [`BRIEF`],
+//! without which a Drone reported at whatever length it liked, and then
+//! [`crate::skill::BODY`], without which it edited `armada.yml` rather than
+//! saying what it had learned (`docs/reserved/019` and `docs/reserved/008`).
+//! [`brief`] is where they are joined and why they are not one constant.
+//!
+//! **Neither is on the boarding line.** Boarding hands the conversation to a
+//! person, and a person is the audience for neither *report in two sentences*
+//! nor *do not edit `armada.yml` silently*.
 //!
 //! **`<posture>` is [`Posture`], and until it existed no Job could finish.** A
 //! headless Drone that reaches a state-mutating tool call with no permission
@@ -837,6 +843,10 @@ mod tests {
                 "Bash",
                 "--disallowedTools",
                 "Bash(git push:*)",
+                // Armada's own skill (`docs/reserved/008`), between the
+                // variadic lists and `--print`.
+                crate::skill::APPEND,
+                crate::skill::BODY,
                 "--print",
                 "--output-format",
                 "stream-json",
@@ -1272,6 +1282,11 @@ mod tests {
                 "Bash",
                 "--disallowedTools",
                 "Bash(git push:*)",
+                // **A resumed Job carries the skill too.** Instructions that
+                // reached only the first turn would be instructions a Job forgot
+                // at the moment a person got involved.
+                crate::skill::APPEND,
+                crate::skill::BODY,
                 "--print",
                 "--output-format",
                 "stream-json",
@@ -1284,9 +1299,61 @@ mod tests {
 
     /// Boarding is interactive: no `--print`, because the whole point is that
     /// you drive it.
+    ///
+    /// **And no skill either.** Boarding hands the conversation to a person, and
+    /// *do not edit `armada.yml` silently, propose it instead* is an instruction
+    /// to an unattended agent — telling a person at a keyboard not to edit their
+    /// own repository would be Armada refusing them a thing it cannot refuse.
     #[test]
     fn boarding_is_the_interactive_resume_and_carries_no_prompt() {
         assert_eq!(board_argv(UUID), ["claude", "--resume", UUID]);
+    }
+
+    /// **The skill reaches every headless turn, first and resumed.**
+    ///
+    /// This is `docs/reserved/008`'s injection, asserted where the bugs are. A
+    /// Drone changes what a repository runs; until this flag existed nothing
+    /// told it that noticing a stale `armada.yml` was part of the job, so it
+    /// either edited the file inside a diff about something else or said nothing
+    /// at all.
+    ///
+    /// **Argv alone does not prove the flag is accepted**, which is the whole
+    /// lesson of the `--verbose` trap — so [`crate::skill::APPEND`] is also in
+    /// [`FLAGS`], and [`probe_argv`] is built from [`spawn_argv`], which is what
+    /// makes `armada doctor` exercise it against the real binary for free.
+    #[test]
+    fn every_headless_turn_carries_armadas_own_skill() {
+        for argv in [
+            spawn_argv(UUID, "fix the flake", &Posture::default()),
+            resume_argv(UUID, "yes", &Posture::default()),
+            continue_argv(UUID, &Posture::default()),
+        ] {
+            let at = argv
+                .iter()
+                .position(|word| word == crate::skill::APPEND)
+                .unwrap_or_else(|| panic!("no appended system prompt: {argv:?}"));
+            assert_eq!(
+                argv[at + 1],
+                crate::skill::BODY,
+                "the flag is there and the prose is not — which is the shape of \
+                 an empty appended prompt, and reads as a session that was told \
+                 nothing"
+            );
+            // **The prose is one argument, whatever is in it.** A body split
+            // across argv elements would be read as flags and tool names.
+            assert!(argv[at + 1].contains("fleet.propose"));
+            // **Before `--print`**, so the value cannot be swallowed by the
+            // variadic tool lists that come before it.
+            assert!(
+                at + 1 < argv.iter().position(|word| word == "--print").unwrap(),
+                "{argv:?}"
+            );
+        }
+        // Inverted once: the assertions above would all hold vacuously against
+        // a boarding argv that has neither flag, and it must not have them.
+        assert!(!board_argv(UUID)
+            .iter()
+            .any(|word| word == crate::skill::APPEND));
     }
 
     /// The prompt is the last element and is never split. A task arrives as free

@@ -9,6 +9,7 @@
 //!
 //! ```text
 //! claude --agent helm
+//!        --append-system-prompt <armada's skill, then the reader's own words>
 //!        --mcp-config  ~/.armada/helm/mcp.json
 //!        --plugin-dir  ~/.armada/helm/plugin
 //!        --settings    ~/.armada/helm/settings.json
@@ -728,6 +729,11 @@ mod tests {
                 "claude",
                 "--agent",
                 "helm",
+                // **Armada's own skill, on every launch** (`docs/reserved/008`),
+                // and one flag rather than two — `--append-system-prompt` passed
+                // twice keeps only the last.
+                APPEND,
+                &appended(None),
                 "--mcp-config",
                 "/scratch/.armada/helm/mcp.json",
                 "--plugin-dir",
@@ -839,15 +845,60 @@ mod tests {
     /// made binding in the reader's name is worse than the persona's own
     /// defaults, which already produce a terse Helm.
     #[test]
-    fn an_unwritten_guild_adds_no_flag_and_no_empty_prompt() {
+    fn an_unwritten_guild_adds_no_words_of_the_readers_and_no_empty_prompt() {
         assert_eq!(voice(&[]), None);
         assert_eq!(
             voice(&[("voice.md", "   \n\n")]),
             None,
             "whitespace is not a voice"
         );
+        // **The flag is still there, and this is what `docs/reserved/008`
+        // changed.** It used to be absent, because the reader's words were the
+        // only thing it carried; Armada's instructions to the agents it runs do
+        // not depend on whether the user has got round to describing themselves.
         let argv = launch_argv(&a_launch(false));
-        assert!(!argv.iter().any(|word| word == APPEND), "{argv:?}");
+        let at = argv
+            .iter()
+            .position(|word| word == APPEND)
+            .unwrap_or_else(|| panic!("{argv:?}"));
+        assert_eq!(argv[at + 1], crate::skill::BODY);
+        // And none of the header that introduces the reader's own fragments,
+        // which would be Armada announcing words nobody wrote.
+        assert!(!argv[at + 1].contains(VOICE_HEADER), "{:?}", argv[at + 1]);
+    }
+
+    /// **One appended prompt carrying both halves, in that order.**
+    ///
+    /// `claude --help` spells the flag `--append-system-prompt <prompt>` —
+    /// singular — so a second occurrence keeps only the last and drops the first
+    /// without a word. That would hand Helm the reader's voice and none of
+    /// Armada's instructions, or the reverse, with nothing on screen saying
+    /// which.
+    #[test]
+    fn the_skill_and_the_readers_words_share_one_appended_prompt() {
+        let mut launch = a_launch(false);
+        let voice = voice(&[("voice.md", "Answer in under 150 words.")]).expect("written");
+        launch.voice = Some(voice.prompt.clone());
+
+        let argv = launch_argv(&launch);
+        assert_eq!(
+            argv.iter().filter(|word| *word == APPEND).count(),
+            1,
+            "a second occurrence silently drops the first: {argv:?}"
+        );
+        let at = argv.iter().position(|word| word == APPEND).unwrap();
+        let prompt = &argv[at + 1];
+        assert!(prompt.contains("fleet.propose"), "Armada's half is missing");
+        assert!(
+            prompt.contains("under 150 words"),
+            "the reader's half is missing"
+        );
+        // Armada first: a byte-identical prefix on every launch is the half a
+        // prompt cache can keep. Precedence is settled in the prose, not here.
+        assert!(
+            prompt.find("fleet.propose") < prompt.find("under 150 words"),
+            "{prompt}"
+        );
     }
 
     /// **Prose with no length bound meets a launch with one.** A single argv
@@ -893,10 +944,10 @@ mod tests {
     fn the_printed_line_reproduces_the_argv_it_stands_for() {
         let voice = a_voice();
         let argv = launch_argv(&a_spoken_launch());
-        let line = launch_line(&argv, "~/.armada/helm/guild-voice.md");
+        let line = launch_line(&argv, "~/.armada/helm/system-prompt.md");
 
         assert!(
-            line.contains("--append-system-prompt \"$(cat ~/.armada/helm/guild-voice.md)\""),
+            line.contains("--append-system-prompt \"$(cat ~/.armada/helm/system-prompt.md)\""),
             "{line}"
         );
         assert!(
@@ -920,12 +971,30 @@ mod tests {
     /// A launch with nothing to append prints exactly what it did before, so
     /// the substitution cannot appear on a machine that has no voice file.
     #[test]
-    fn a_silent_launch_prints_the_plain_argv() {
+    fn a_launch_prints_the_appended_prompt_as_a_file_and_never_inline() {
         let argv = launch_argv(&a_launch(false));
-        assert_eq!(
-            launch_line(&argv, "~/.armada/helm/guild-voice.md"),
-            argv.join(" ")
+        let line = launch_line(&argv, "~/.armada/helm/system-prompt.md");
+        // **Nothing of the prose is in the printed line.** It was the whole argv
+        // verbatim while an unwritten guild meant no flag at all; since
+        // `docs/reserved/008` there is always a prompt to substitute, and
+        // inlining two kilobytes would replace the one line this verb exists to
+        // produce with a screenful.
+        assert!(
+            line.contains("--append-system-prompt \"$(cat ~/.armada/helm/system-prompt.md)\""),
+            "{line}"
         );
+        assert!(
+            !line.contains("fleet.propose"),
+            "the prose was inlined: {line}"
+        );
+        // Every other word of the argv survives verbatim, so the printed line is
+        // the launch with one substitution rather than a second, looser command.
+        for word in argv.iter().filter(|word| !word.contains('\n')) {
+            assert!(
+                line.contains(word.as_str()),
+                "{word} is missing from {line}"
+            );
+        }
     }
 
     /// **Helm is interactive, so it carries none of the headless flags.**

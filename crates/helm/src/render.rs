@@ -57,9 +57,8 @@ use armada_core::envelope::{
     GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData,
     HelmSwitchData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData,
     ProbeData, Projection, ProposeData, ReapPlanData, ReportData, ResultRow, ResumeData, ScanData,
-    ServicesData,
-    SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed, UpDryRun,
-    VerdictData, VerifyData, Wiring,
+    ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData, Unreclaimed,
+    UpDryRun, VerdictData, VerifyData, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, Listing, State as FailureState};
@@ -269,7 +268,10 @@ fn proposed(envelope: &Envelope<ProposeData>, style: Style, width: usize) -> Str
     out.push_str(&summary(
         style,
         envelope.status,
-        &[data.entry.clone(), "raised; nothing is waiting on it".to_string()],
+        &[
+            data.entry.clone(),
+            "raised; nothing is waiting on it".to_string(),
+        ],
     ));
     out
 }
