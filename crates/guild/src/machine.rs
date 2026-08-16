@@ -1,12 +1,20 @@
 //! Guild's section of `~/.armada/machine.yml` — **the file that never syncs**.
 //!
-//! Two things land here, and they are both facts about *this machine* rather
+//! Three things land here, and they are all facts about *this machine* rather
 //! than about you (`PLAN.md` §13.1):
 //!
 //! | Key | Written by | Why it is machine-local |
 //! |---|---|---|
 //! | `guild.remote` | interview question 5 | the remote is reachable with *this* machine's credentials |
 //! | `guild.withheld` | the importer's secret guard | a record of what did not travel, so you can go and look |
+//! | `guild.last_offer_ms` | [`crate::offer`], the occasional pull-offer | when *this* machine last looked, which is meaningless anywhere else |
+//!
+//! **`last_offer_ms` is the clearest case in the file for why this section
+//! never syncs.** It is not a preference or a secret; it is a clock reading. If
+//! it synced, checking the guild from a laptop would silently suppress the
+//! offer on a desktop that has not looked in a month — the two machines do not
+//! even fetch from the same place at the same time, so one's "just checked" is
+//! not evidence about the other.
 //!
 //! # `withheld` records the key and never the value
 //!
@@ -50,6 +58,16 @@ pub struct GuildSection {
     /// Every value the importer refused to adopt. Keys only.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub withheld: Vec<Withheld>,
+    /// Wall-clock milliseconds since the epoch, the last time the occasional
+    /// pull-offer looked at the remote — successfully or not.
+    ///
+    /// **Absent means "never looked"**, which is due immediately
+    /// (`crate::offer::due`). Recorded on every real attempt, offline included,
+    /// so a machine that cannot reach the remote spaces its retries out by the
+    /// same interval rather than trying again on the very next command typed —
+    /// `docs/reserved/009` item 4's *"offline is normal, not a fault."*
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub last_offer_ms: Option<u64>,
 }
 
 /// Read Guild's section, or the default when the file or the section is absent.
@@ -101,10 +119,10 @@ pub fn write(armada_home: &Path, section: &GuildSection) -> std::io::Result<()> 
 const HEADER: &str = "\
 # ~/.armada/machine.yml — this machine, and nothing about you.
 #
-# NEVER SYNCS (PLAN.md §13.1). Paths, capacity, the guild's remote, and a record
-# of what the importer refused to adopt. `armada guild export` excludes it unless
-# you pass --include-secrets, and `armada guild import` ignores a bundle's copy
-# unless this machine has none.
+# NEVER SYNCS (PLAN.md §13.1). Paths, capacity, the guild's remote, a record
+# of what the importer refused to adopt, and when the pull-offer last looked.
+# `armada guild export` excludes it unless you pass --include-secrets, and
+# `armada guild import` ignores a bundle's copy unless this machine has none.
 #
 # `guild.withheld` names keys and never values. The values never moved: they are
 # still in the file the import read them from, on this machine, working.

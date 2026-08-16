@@ -110,6 +110,17 @@ fn main() -> ExitCode {
         }
         other => {
             let json = json_wanted(&other);
+            // **Computed before `dispatch` moves `other`, and read before
+            // `dispatch` moves `inherited`.** Both feed the occasional
+            // pull-offer (`docs/reserved/009` item 4) after `emit` writes this
+            // verb's own envelope: `offerable` excludes the guild's own verbs
+            // — asking "pull now?" right after `armada guild pull` just ran
+            // would be noise about the thing the caller was already doing —
+            // and `in_job` is the one guard `config scan`'s handover did not
+            // need, because a Job's Drone has nobody at the other end of
+            // stdin at all.
+            let offerable = !matches!(other, Invocation::Guild(_));
+            let in_job = inherited.contains_key("ARMADA_JOB");
             // **The colour decision, taken a second time for the second
             // stream.** Not a second decision: the same function, asked about
             // stderr. `armada manifest check | jq` is a piped stdout and a
@@ -162,6 +173,8 @@ fn main() -> ExitCode {
                         home.as_deref(),
                         &cwd,
                         editor.as_deref(),
+                        offerable,
+                        in_job,
                     )
                 }
                 // **A verb that could not answer is Armada's**, always. The
@@ -1722,6 +1735,7 @@ fn hand_over(
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit(
     output: Output,
     json: bool,
@@ -1730,6 +1744,8 @@ fn emit(
     home: Option<&std::path::Path>,
     cwd: &std::path::Path,
     editor: Option<&str>,
+    offerable: bool,
+    in_job: bool,
 ) -> ExitCode {
     // **`mcp serve` reports on stderr, and it is the one verb that must.**
     // stdout *is* the transport: it carried JSON-RPC frames until the moment
@@ -1771,6 +1787,33 @@ fn emit(
         // question is about what the reader has just seen, and a prompt that
         // arrives first is a prompt answered blind.
         hand_over(&output, style, terminal, home, cwd, editor);
+        // **The occasional pull-offer, last of all** — after the verb's own
+        // report and after its hand-over, so it never competes with either for
+        // what the reader reads first (`docs/reserved/009` item 4).
+        // `offerable` already excludes the guild's own verbs; `armada_guild::
+        // offer::eligible` (inside `maybe_offer`) excludes `--json`, no
+        // terminal and `ARMADA_JOB`, and its own elapsed-time gate is what
+        // keeps this off the hot path on every other invocation.
+        if offerable {
+            if let Some(home) = home {
+                let place = verbs::guild::Where {
+                    armada_home: armada_manifest::machine::armada_home(home),
+                    cwd: cwd.to_path_buf(),
+                    claude_home: home.join(".claude"),
+                };
+                let mut ask = at_the_terminal(style, terminal);
+                verbs::offer::maybe_offer(
+                    &RealRun,
+                    &SystemClock,
+                    &place,
+                    &mut ask,
+                    style,
+                    terminal,
+                    json,
+                    in_job,
+                );
+            }
+        }
     }
     // **A signal has no error class, so it does not get the class's code**
     // (`ARCHITECTURE.md` §1.6). The envelope above still says `aborted`,
