@@ -1325,9 +1325,20 @@ mod tests {
             "probe-{}.json",
             armada_core::fleet::drone::PROBE_SESSION
         ));
+        // **And the MCP config, on the real path this check writes**, for the
+        // same reason: a probe that lost `--mcp-config` would still be reported
+        // as the argv checked, while the flag that decides whether a Drone can
+        // report at all went unexercised.
+        let attached = Path::new("/tmp").join(format!(
+            "probe-{}.mcp.json",
+            armada_core::fleet::drone::PROBE_SESSION
+        ));
         assert_eq!(
             probe,
-            armada_core::fleet::drone::probe_argv(Some(&registered.display().to_string())),
+            armada_core::fleet::drone::probe_argv(
+                Some(&registered.display().to_string()),
+                Some(&attached.display().to_string()),
+            ),
             "the probe drifted from the Drone's own argv"
         );
         assert!(
@@ -1415,6 +1426,7 @@ mod tests {
             "a prompt",
             &armada_core::fleet::drone::Posture::default(),
             Some("/s.json"),
+            Some("/m.json"),
         );
         assert!(
             !probe.iter().any(|word| word == "a prompt"),
