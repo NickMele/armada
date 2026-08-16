@@ -160,6 +160,10 @@ impl Role {
             Status::Aborted => Role::AbortPink,
             Status::Running => Role::SignalAmber,
             Status::Waiting => Role::RadarCyan,
+            // **`QUEUED` shares radar cyan with `WAITING`** — it is the colour
+            // the palette already gives *not running yet*, and `020` §7 changed
+            // the word rather than the meaning of the row.
+            Status::Queued => Role::RadarCyan,
         }
     }
 
@@ -280,6 +284,12 @@ impl Role {
             JobState::Running => Role::SignalAmber,
             JobState::Paused => Role::StasisPurple,
             JobState::Stalled => Role::FlareOrange,
+            // **`SILENT` shares flare orange with `STALLED`**, because they are
+            // the same class of failure to a reader scanning a table — a Job
+            // that is not going to move on its own — and the word is what tells
+            // them apart. Minting a seventh colour to distinguish two rows that
+            // want the same reaction is how a palette stops meaning anything.
+            JobState::Silent => Role::FlareOrange,
             JobState::Blocked => Role::DistressRed,
             JobState::Aborted => Role::AbortPink,
             JobState::Done => Role::BeaconGreen,

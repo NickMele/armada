@@ -143,6 +143,60 @@ pub fn read_record(root: &Path, run: &RunId) -> Result<Option<RunRecord>, Armada
     read_json(&run_dir(root, run).join("state.json"), "the run record")
 }
 
+// ------------------------------------------------------------- the adoption
+
+/// The file a detaching parent leaves for the one child it spawned.
+///
+/// Named for what it is rather than for what holds it: the run directory is
+/// full of evidence, and this is the only thing in it that is a *claim*.
+const ADOPT: &str = "adopt";
+
+/// Offer the run to the child that is about to be spawned.
+///
+/// **Written before the child exists, and removed by whoever takes it first.**
+/// The environment cannot carry this claim on its own: PLAN.md §4.5 inherits
+/// Armada's environment wholesale to every child, so `ARMADA_DETACH_RUN`
+/// reaches the detached run's checks, their children, and anything those
+/// spawn — measured, an `armada manifest check` invoked from inside
+/// `cargo test --workspace` (`crates/helm/tests/dogfood.rs`) inherited it,
+/// adopted the outer run's id and **replaced its `state.json`** with a
+/// one-check record of its own. `--status` then read that record and reported
+/// `PASS · 1 passed` for a run that had five checks and was still running,
+/// which is the one wrong answer a merge gate acts on.
+///
+/// So the variable says *which* run, and this file says *whether you are the
+/// process it was handed to*. A grandchild inherits the first and can never
+/// find the second, because the child it was meant for took it at the top of
+/// its run.
+pub fn offer_adoption(root: &Path, run: &RunId) -> Result<(), ArmadaError> {
+    let path = run_dir(root, run).join(ADOPT);
+    std::fs::write(&path, b"").map_err(|e| environment(&path, "write", &e))
+}
+
+/// Whether the offer is still there, without taking it.
+///
+/// **A read, for the entrypoint's benefit.** `main::detach_handoff` decides
+/// whether to read stdin, and it decides before any verb has run; taking the
+/// offer there would consume it on invocations — `--status`, `--dry-run` —
+/// that never carry a run out. Its cost of being wrong is a grandchild
+/// blocking on a stdin nobody will close, which is exactly the same false
+/// positive.
+pub fn adoption_offered(root: &Path, run: &RunId) -> bool {
+    run_dir(root, run).join(ADOPT).exists()
+}
+
+/// Take the offer, if it is still there. **Exactly one caller ever gets it.**
+///
+/// `unlink(2)` is the whole of the mutual exclusion: it succeeds for the
+/// process that removed the entry and fails with `ENOENT` for every other, so
+/// two invocations racing for one run need no lock and no lease. Any other
+/// error is treated as "not mine" for the reason the whole guard exists — the
+/// safe answer is a run of one's own, and the unsafe one is writing over a run
+/// somebody else is deciding.
+pub fn claim_adoption(root: &Path, run: &RunId) -> bool {
+    std::fs::remove_file(run_dir(root, run).join(ADOPT)).is_ok()
+}
+
 /// Where a detached run's own output goes, and the reference a row reports.
 ///
 /// Workspace-relative for the same reason a check's log is
@@ -449,6 +503,43 @@ mod tests {
         let dir = workspace();
         assert!(read_record(dir.path(), &id(7)).unwrap().is_none());
         assert!(read_detached(dir.path(), &id(7)).unwrap().is_none());
+    }
+
+    /// **The offer is taken exactly once, and reading it does not take it.**
+    ///
+    /// The whole guard rests on this: `ARMADA_DETACH_RUN` reaches every process
+    /// under a detached run (PLAN.md §4.5), so the second caller here is the
+    /// `armada manifest check` that `cargo test` ran under `armada:test` — and
+    /// what it must not be able to do is adopt a run somebody else is already
+    /// deciding. The entrypoint's stdin guard only *looks*, because it looks on
+    /// invocations, `--status` among them, that carry no run out.
+    #[test]
+    fn the_offer_of_a_run_is_taken_by_exactly_one_caller() {
+        let dir = workspace();
+        let run = id(0);
+        prepare(dir.path(), &run).unwrap();
+
+        assert!(
+            !adoption_offered(dir.path(), &run),
+            "a run nobody detached is offering itself"
+        );
+        assert!(
+            !claim_adoption(dir.path(), &run),
+            "an offer that was never made was taken"
+        );
+
+        offer_adoption(dir.path(), &run).unwrap();
+        assert!(adoption_offered(dir.path(), &run));
+        // Twice, because a read that consumed would make the entrypoint's look
+        // and the run's claim race each other.
+        assert!(adoption_offered(dir.path(), &run));
+
+        assert!(claim_adoption(dir.path(), &run), "the child was refused");
+        assert!(
+            !claim_adoption(dir.path(), &run),
+            "a second caller took the same run"
+        );
+        assert!(!adoption_offered(dir.path(), &run));
     }
 
     /// The record a run wrote reads back as the record it wrote, which is what

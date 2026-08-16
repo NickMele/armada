@@ -27,4 +27,8 @@
   manifest.db
     OK       2 workspaces, 0 orphans
 
-NEEDS ATTENTION  3 ok, 2 missing, 4 warnings
+  docker disk
+    OK       12.0 GB reclaimable in 1 image, 171 volumes
+    OK       none of it is armada's; `docker volume prune` is yours
+
+NEEDS ATTENTION  5 ok, 2 missing, 4 warnings

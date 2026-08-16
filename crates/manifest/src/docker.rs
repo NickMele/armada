@@ -262,6 +262,51 @@ fn parse_inspect_line(line: &str, kind: Kind) -> Option<LabelledResource> {
     })
 }
 
+/// What the daemon is holding, in total.
+///
+/// **The `--format` template, never the human columns.** `docker system df` is a
+/// human report with a template bolted on: a renamed field makes the template
+/// exit non-zero, which Armada can report, while a renamed *column* shifts a
+/// whitespace split by one and reports a count as a size, which it cannot. The
+/// measured behaviour of both forms is in `docs/traps.md`.
+pub fn disk_usage(
+    run: &impl Run,
+    cwd: &Path,
+    timeout: Duration,
+    tick: &mut dyn FnMut(),
+) -> Result<armada_core::disk::DiskUsage, ArmadaError> {
+    let argv = ["docker", "system", "df", "--format", "{{json .}}"]
+        .iter()
+        .map(|word| word.to_string())
+        .collect();
+    Ok(armada_core::disk::parse_summary(&call(
+        run, cwd, timeout, argv, tick,
+    )?))
+}
+
+/// Every volume on the daemon with the size docker attributes to it.
+///
+/// **Sizes only.** The `-v` payload also carries a `Labels` field, and reading
+/// ownership out of it would save a call — but it arrives as a comma-joined
+/// string, and this module's standing rule is that a delimiter a value can
+/// contain is one that eventually attributes a resource to the wrong owner. So
+/// ownership comes from [`list_labelled`], which the daemon answers, and these
+/// two are matched by name.
+pub fn volume_sizes(
+    run: &impl Run,
+    cwd: &Path,
+    timeout: Duration,
+    tick: &mut dyn FnMut(),
+) -> Result<Vec<armada_core::disk::VolumeEntry>, ArmadaError> {
+    let argv = ["docker", "system", "df", "-v", "--format", "{{json .}}"]
+        .iter()
+        .map(|word| word.to_string())
+        .collect();
+    Ok(armada_core::disk::parse_verbose_volumes(&call(
+        run, cwd, timeout, argv, tick,
+    )?))
+}
+
 /// Every handle matching a **declared** `owns:` selector.
 ///
 /// This is a distinct path from [`list_labelled`], and deliberately so. A

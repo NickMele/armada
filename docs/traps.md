@@ -835,6 +835,147 @@ a delimited line. A workspace path may legally contain a tab or a newline, and
 that eventually attributes a resource to the wrong workspace, which is the
 failure the label exists to prevent.
 
+## Docker disk usage — `docker system df`
+
+Measured on darwin against **Docker 29.6.2**, 2026-08-15. Armada reports how much
+disk a stale workspace is holding, and `docker system df` is the only command that
+answers it without walking every resource by hand. The human table and the
+`--format` template are two different surfaces with two different shapes, and the
+verbose form is a third — so which one is parsed is a design decision, not a
+formatting preference.
+
+### The four `TYPE` values are literal strings, and one of them has a space in it
+
+```sh
+docker system df
+# TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+# Images          1         0         4.171MB   4.171MB (100%)
+# Containers      0         0         0B        0B
+# Local Volumes   171       0         12.01GB   12.01GB (100%)
+# Build Cache     0         0         0B        0B
+```
+
+The columns are TYPE / TOTAL / ACTIVE / SIZE / RECLAIMABLE, and the type names are
+`Images`, `Containers`, `Local Volumes`, `Build Cache`. **`Local Volumes` is two
+words** — it is not `Volumes`, and it is not lowercase.
+
+**If you assume otherwise:** a parser that keys the rows on `volumes` matches
+nothing and reports zero volume bytes, which is the single largest number on this
+machine — 12.01 GB of 12.02 GB total. Splitting the human row on whitespace is the
+same bug from the other direction: `Local Volumes` splits into two fields and every
+column after it shifts left by one, so TOTAL reads as `Volumes`.
+
+### `--format '{{json .}}'` emits one object per line — not an array — and every value is a string
+
+```sh
+docker system df --format '{{json .}}'
+# {"Active":"0","Reclaimable":"12.01GB (100%)","Size":"12.01GB","TotalCount":"171","Type":"Local Volumes"}
+```
+
+Four such lines, one per type. The keys are `Active`, `Reclaimable`, `Size`,
+`TotalCount`, `Type`. **All five values are strings, including the counts** —
+`"171"`, not `171`. And `Reclaimable` is a compound: a size *and* a percentage in
+one field, `"12.01GB (100%)"`.
+
+**If you assume otherwise:** `serde_json::from_str::<Vec<_>>` on the whole stdout
+fails, because the payload is four concatenated objects rather than a JSON array —
+it has to be read line by line. A struct typing `TotalCount` as `u64` fails to
+deserialise on every run. And `Reclaimable` parsed as a size yields garbage,
+because the trailing `(100%)` is part of the value.
+
+### `-v` is a different shape entirely, and its volume `Labels` is a comma-joined string
+
+```sh
+docker system df -v --format '{{json .}}'
+# a SINGLE object: {"Images":[…],"Containers":[…],"Volumes":[…],"BuildCache":[…]}
+# each volume row carries Name, Size, Labels, Mountpoint, Links, and others
+# "Labels":"com.docker.compose.project=abc,com.docker.compose.volume=api_pgdata"
+```
+
+Adding `-v` does not add detail to the non-verbose shape — it replaces it. The
+four top-level keys are arrays, and **`Labels` on a volume row is a single
+comma-joined `k=v` string**, not the object `docker inspect` returns.
+
+**If you assume otherwise:** you read ownership out of that string by splitting on
+`,` and then `=`. The entry above — "…and `inspect` keeps labels in two different
+places" — already records that a label value may legally contain a delimiter, and
+`armada.workspace_path` is a real path, so a value containing a comma or an equals
+sign attributes a volume to the wrong workspace. That is the exact failure the
+label exists to prevent, arriving through the one surface that flattens labels back
+into text.
+
+**So ownership is read via `docker volume ls --filter label=…` or `docker
+inspect`, and `df -v` is used only for the SIZE, matched by `Name`.**
+
+### Every size is a human string, base 1000, and there is no raw-byte field anywhere
+
+```sh
+# unit spellings observed across 171 volumes and 1 image:  B  kB  MB
+# examples seen:  0B   138.3kB   72MB   4.171MB   12.01GB
+```
+
+Lowercase `k`, capital `B`. Docker's humaniser is **base 1000**, so `kB` is 1000
+bytes and not 1024; `GB`, `TB`, `PB` follow the same rule. No field in either
+payload carries the raw byte count, so the string is the only number there is.
+
+**If you assume otherwise:** you parse `kB` as 1024 and every reported figure is
+2.4 % low by the gigabyte, which is small enough to survive review and large enough
+to make a reclaim estimate wrong. Matching units case-insensitively is the other
+half of the trap: `MB` and `mB` are the same to a lowercased match, and `B` is a
+suffix of all of them, so a naive "ends with B" test strips the unit off `138.3kB`
+and reads 138.3 bytes.
+
+### A `--format` template naming a field that does not exist fails loudly — which is the reason to use one
+
+```sh
+docker system df --format '{{json .Nope}}'
+# rc 1, nothing on stdout, and on stderr:
+# template parsing error: template: :1:7: executing "" at <.Nope>: can't evaluate
+# field Nope in type *formatter.diskUsageImagesContext
+```
+
+**This is the good case and it is why the template is parsed rather than the human
+columns.** A renamed or removed field is an *error*, not a silently shifted column
+— the failure announces itself on the first run after a docker upgrade instead of
+producing a plausible wrong number. Note the type in the message is
+`diskUsageImagesContext` even though the run covered all four types, so the type
+name is not a reliable hint about which row failed.
+
+### `docker system df` requires the daemon — there is no client-side answer
+
+```sh
+DOCKER_HOST=unix:///nonexistent.sock docker system df
+# rc 1
+# failed to connect to the docker API at unix:///nonexistent.sock; check if the
+# path is correct and if the daemon is running: dial unix /nonexistent.sock:
+# connect: no such file or directory
+```
+
+**If you assume otherwise:** you place a disk-usage line beside something that
+works offline. The entry "`docker compose config` succeeds with no daemon — `up`
+is where it fails" records the client-side counterpart; `df` has no such half. A
+dead daemon fails the whole reading, and it is an environment failure to report,
+not a zero to display.
+
+### Both forms returned in ~0.34 s with 171 volumes — and still need Armada's own timeout
+
+```sh
+docker system df        # ~0.34 s wall, 171 volumes
+docker system df -v     # ~0.34 s wall, 171 volumes
+```
+
+Cheap enough to run on a read-only check without thinking about it. But the entry
+"The docker CLI has no client-side timeout" applies here unchanged — **`df` has no
+deadline flag either**, so a hung daemon hangs it for as long as Armada is willing
+to wait, and 0.34 s of typical cost says nothing about the tail.
+
+### The standing conclusion
+
+**`docker system df` output is not a stable API.** So Armada parses the
+`--format '{{json .}}'` template rather than the human columns, treats a size it
+cannot parse as *unknown* rather than as zero, and never lets a parse failure turn
+into a confident `0 B`. A reported zero must mean the daemon said zero.
+
 ## Docker Compose
 
 Measured on darwin against **Docker Compose v5.3.1**, 2026-08-09. Thirteen entries. All but two
@@ -1095,6 +1236,38 @@ hand. It reads exactly like a bug in the argv, which is where an hour goes.
 **This is a property of the harness, not of char.** A real invocation runs under the user's own
 `$HOME` and finds the plugin. The integration suite passes `DOCKER_CONFIG` through explicitly;
 nothing in `crates/` compensates for it, and nothing should.
+
+## A wedged Docker daemon fails tests that are not about Docker
+
+Measured on darwin, 2026-08-15, with several agents running the docker suites against one daemon
+at once. `docker version` — the cheapest call there is — did not return within 120 seconds, and
+`docker ps` did not either. The daemon was not down; it was accepting connections and not
+answering, which is the case
+[the CLI has no client-side timeout](#the-docker-cli-has-no-client-side-timeout) is about.
+
+**The failure surfaces somewhere else entirely.** `crates/helm/tests/owned_processes.rs`'s
+`a_group_stamped_by_another_boot_is_dropped_without_a_signal` spawns `sleep 60`, records it under
+a foreign `boot_id`, runs `armada manifest clean`, and asserts the group is **still alive** —
+because Armada must not signal a group it cannot prove is its own.
+
+```sh
+# healthy daemon: clean returns in a second or two, the sleeper is alive, the test passes
+# wedged daemon: clean burns its docker deadlines and takes 91s, the sleeper exits on its own
+cargo test -p armada-helm --test owned_processes a_group_stamped_by_another_boot
+# → "Armada signalled a group it could not prove was its own"
+```
+
+The assertion message is a lie in this case: Armada signalled nothing. The process died of old
+age while `clean` waited on docker.
+
+**If you assume otherwise:** you read the message, go looking for a regression in
+`reap::pgid_is_ours` or `stop_owned_processes`, and find nothing, because nothing is wrong there.
+Confirmed pre-existing by running the identical test at the branch point — 91.00s and the same
+failure, against 91.10s on the branch.
+
+**The tell is the duration.** Any test whose fixture has a lifetime shorter than the wall time of
+a docker-touching verb is measuring the daemon rather than the code. Check `docker version`
+before believing a failure in this class, and re-run once it answers.
 
 ## Two golden snapshots fail under parallel load and pass alone
 

@@ -213,7 +213,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
     match invocation {
         Invocation::Init(common) | Invocation::Status(common) => common.json,
         Invocation::Services { json, .. } => *json,
-        Invocation::Clean { common, .. } => common.json,
+        Invocation::Clean { common, .. } | Invocation::Prune { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
         Invocation::Config { json, .. }
@@ -825,7 +825,7 @@ fn dispatch(
         fetch: RealFetch,
     };
     let mut app = app::build(ctx, home, inherited)?;
-    app.handoff = detach_handoff(&app.inherited);
+    app.handoff = detach_handoff(&app.inherited, app.ctx.workspace.as_ref());
 
     match invocation {
         Invocation::Init(common) => verbs::init::run(&mut app, common.dry_run),
@@ -852,6 +852,21 @@ fn dispatch(
                 force_rebuild,
             },
         ),
+        Invocation::Prune { common, yes } => {
+            // **The terminal is read here and nowhere below.** `prune` turns on
+            // whether a person can be asked *on this run*, and that is a fact
+            // about the entrypoint's streams — a verb that sniffed them itself
+            // would be reading ambient state, and would also be untestable.
+            let interactive = terminal.can_ask() && !common.json;
+            let mut asking = at_the_terminal(style, terminal);
+            verbs::prune::run(
+                &mut app,
+                common,
+                verbs::prune::Filters { yes },
+                &mut asking,
+                interactive,
+            )
+        }
         Invocation::Check(check) => verbs::check::run(&mut app, &check, progress),
         Invocation::Dispatch { name, argv, json } => {
             verbs::dispatch::run(&mut app, &name, &argv, json)
@@ -1546,7 +1561,7 @@ fn look(style: Style, terminal: render::term::Terminal) -> verbs::guild::Look {
 /// ambient (`ARCHITECTURE.md` §1.4). The verb underneath gets a `String` on
 /// [`app::App::handoff`] exactly as it gets the environment on `inherited`.
 ///
-/// Two guards, and both are about never blocking:
+/// Three guards, and all of them are about never blocking:
 ///
 /// - **`ARMADA_DETACH_RUN` must hold a real run id.** Nothing else in Armada
 ///   reads stdin at startup, and an unconditional read would hang every ordinary
@@ -1555,6 +1570,16 @@ fn look(style: Style, terminal: render::term::Terminal) -> verbs::guild::Look {
 ///   `verbs::check::adopted_run` — which validates for its own reason, the id
 ///   becoming a path — and a malformed value takes the ordinary resolving path
 ///   in both places instead of one each.
+/// - **The run must still be offering itself.** The variable is inherited
+///   wholesale by everything the run spawns (PLAN.md §4.5), so a real id at any
+///   depth below the detached child is the ordinary case rather than a strange
+///   one — measured, an `armada manifest check` run from inside `cargo test`
+///   had it. Such a process is not the child the parent wrote a payload for,
+///   and reading stdin on its behalf means either swallowing input meant for
+///   something else or blocking on a pipe with a writer that is not going to
+///   close it. `runs::adoption_offered` is a read and never takes the offer:
+///   the taking belongs to the run that carries it out, and `--status` must
+///   not write.
 /// - **stdin must not be a terminal.** Armada sets that variable and Armada
 ///   reads it back, so a person who exported it by hand is not a detached child
 ///   — and the honest answer for them is an ordinary run, not a wait on input
@@ -1564,11 +1589,17 @@ fn look(style: Style, terminal: render::term::Terminal) -> verbs::guild::Look {
 /// Why the payload travels this way at all — rather than in a file, in Armada's
 /// own environment, or in argv — is [`armada_helm::secrets`], which is also the
 /// only thing that can read it back.
-fn detach_handoff(inherited: &BTreeMap<String, String>) -> Option<String> {
+fn detach_handoff(
+    inherited: &BTreeMap<String, String>,
+    workspace: Option<&armada_core::workspace::Workspace>,
+) -> Option<String> {
     use std::io::{IsTerminal, Read};
-    inherited
+    let run = inherited
         .get(armada_helm::verbs::check::DETACH_RUN_VAR)
         .and_then(|value| armada_core::run::RunId::parse(value).ok())?;
+    if !armada_manifest::runs::adoption_offered(&workspace?.root, &run) {
+        return None;
+    }
     let mut stdin = std::io::stdin();
     if stdin.is_terminal() {
         return None;

@@ -18,6 +18,7 @@
 pub mod compose;
 pub mod config;
 pub mod ctx;
+pub mod disk;
 pub mod dispatch;
 pub mod envelope;
 pub mod error;
@@ -40,6 +41,7 @@ pub mod scope;
 pub mod secrets;
 pub mod select;
 pub mod service;
+pub mod skill;
 pub mod template;
 pub mod untried;
 pub mod verify;

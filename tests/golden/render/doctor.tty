@@ -27,4 +27,8 @@
   [1m[38;2;255;169;64mmanifest.db[0m
     [38;2;61;220;132mOK[0m       [38;2;156;163;175m2 workspaces, 0 orphans[0m
 
-[1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;156;163;175m3 ok · 2 missing · 4 warnings[0m
+  [1m[38;2;255;169;64mdocker disk[0m
+    [38;2;61;220;132mOK[0m       [38;2;156;163;175m12.0 GB reclaimable in 1 image, 171 volumes[0m
+    [38;2;61;220;132mOK[0m       [38;2;156;163;175mnone of it is armada's; `docker volume prune` is yours[0m
+
+[1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;156;163;175m5 ok · 2 missing · 4 warnings[0m

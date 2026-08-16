@@ -10,9 +10,15 @@
 //! claude --resume     <uuid>                                                                  # boarding
 //! ```
 //!
-//! **`<brief>` is [`BRIEF`], and until it existed a Drone reported at whatever
-//! length it liked.** Read [`BRIEF`] for whose voice a Drone speaks in, what it
-//! owes, and why the answer is not the one Helm got.
+//! **`<brief>` is one `--append-system-prompt` carrying two things**: [`BRIEF`],
+//! without which a Drone reported at whatever length it liked, and then
+//! [`crate::skill::BODY`], without which it edited `armada.yml` rather than
+//! saying what it had learned (`docs/reserved/019` and `docs/reserved/008`).
+//! [`brief`] is where they are joined and why they are not one constant.
+//!
+//! **Neither is on the boarding line.** Boarding hands the conversation to a
+//! person, and a person is the audience for neither *report in two sentences*
+//! nor *do not edit `armada.yml` silently*.
 //!
 //! **`<posture>` is [`Posture`], and until it existed no Job could finish.** A
 //! headless Drone that reaches a state-mutating tool call with no permission
@@ -55,13 +61,18 @@ pub const CLAUDE: &str = "claude";
 /// `--session-id` is what makes the caller the one who assigns identity, which
 /// is the whole of PHASES.md §9.1 F1: the uuid exists before the process, so the
 /// transcript's location is known before there is a transcript.
-pub fn spawn_argv(uuid: &str, prompt: &str, posture: &Posture) -> Vec<String> {
+pub fn spawn_argv(
+    uuid: &str,
+    prompt: &str,
+    posture: &Posture,
+    settings: Option<&str>,
+) -> Vec<String> {
     let mut argv = vec![
         CLAUDE.to_string(),
         "--session-id".to_string(),
         uuid.to_string(),
     ];
-    argv.extend(headless(posture));
+    argv.extend(headless(posture, settings));
     argv.push(prompt.to_string());
     argv
 }
@@ -71,9 +82,14 @@ pub fn spawn_argv(uuid: &str, prompt: &str, posture: &Posture) -> Vec<String> {
 /// **An answer is a continuation, not a new run**, so the budget is not reset
 /// and the session is resumed rather than minted. Resetting the ceiling here
 /// would make budgets unenforceable for any Job that asks a question.
-pub fn resume_argv(uuid: &str, prompt: &str, posture: &Posture) -> Vec<String> {
+pub fn resume_argv(
+    uuid: &str,
+    prompt: &str,
+    posture: &Posture,
+    settings: Option<&str>,
+) -> Vec<String> {
     let mut argv = vec![CLAUDE.to_string(), "--resume".to_string(), uuid.to_string()];
-    argv.extend(headless(posture));
+    argv.extend(headless(posture, settings));
     argv.push(prompt.to_string());
     argv
 }
@@ -94,8 +110,8 @@ pub const CONTINUE: &str = "Continue from where you left off.";
 
 /// The argv for **resuming** a Job nobody said anything to —
 /// `armada fleet resume`.
-pub fn continue_argv(uuid: &str, posture: &Posture) -> Vec<String> {
-    resume_argv(uuid, CONTINUE, posture)
+pub fn continue_argv(uuid: &str, posture: &Posture, settings: Option<&str>) -> Vec<String> {
+    resume_argv(uuid, CONTINUE, posture, settings)
 }
 
 /// The argv `armada fleet board` prints, and execs under `--exec`.
@@ -145,14 +161,54 @@ pub fn board_argv(uuid: &str) -> Vec<String> {
 /// the session the flag is passed to, so a resumed turn that carries it is a
 /// turn that still knows the contract; one that did not would be a Drone whose
 /// instructions expired at its first question.
-fn headless(posture: &Posture) -> Vec<String> {
-    let mut argv = vec![APPEND.to_string(), BRIEF.to_string()];
+/// **`--settings` carries the `Stop` hook, and it comes before `--print`** for
+/// the same reason the posture does: everything variadic has to be behind a
+/// flag that ends it, and the prompt is last.
+fn headless(posture: &Posture, settings: Option<&str>) -> Vec<String> {
+    let mut argv = vec![APPEND.to_string(), brief()];
     argv.extend(posture.argv());
+    if let Some(path) = settings {
+        argv.push(SETTINGS.to_string());
+        argv.push(path.to_string());
+    }
     argv.push("--print".to_string());
     argv.push("--output-format".to_string());
     argv.push(STREAM_JSON.to_string());
     argv.extend(STREAM_JSON_NEEDS.iter().map(|flag| (*flag).to_string()));
     argv
+}
+
+/// **The whole of what a Drone is told before its task**: [`BRIEF`], then
+/// Armada's own skill.
+///
+/// # One appended prompt, never two
+///
+/// `claude --help` spells the flag `--append-system-prompt <prompt>` — singular,
+/// not variadic. A second occurrence is a Commander option with no collector, so
+/// the **last one wins and the first is dropped without a word**: a Drone would
+/// get its reporting contract and none of Armada's instructions, or the reverse,
+/// with nothing anywhere saying which. So the two are one string.
+///
+/// # Why they are two constants and not one
+///
+/// They answer different questions and were written for different reasons.
+/// [`BRIEF`] is *how you report* — the contract a worker owes an orchestrator,
+/// `docs/reserved/019`. [`crate::skill::BODY`] is *how you use Armada* —
+/// `docs/reserved/008` — and it goes to **Helm too**, where a reporting contract
+/// would make no sense. Merging them would mean Helm's launch carrying a
+/// paragraph about `fleet.verdict`, which Helm does not have.
+///
+/// **The brief comes first**, because it says who this session is; the skill is
+/// about the tools it holds, and a session has to be somebody before it can be
+/// told what it may do with them.
+///
+/// **Public because it is the artefact, and the two constants are its parts.**
+/// A test holding [`BRIEF`] alone goes green against a prompt that lost the
+/// skill, which is exactly the silent half of `--append-system-prompt` being
+/// singular — so `armada doctor`'s probe assertion and the belt's own
+/// tool-naming test both read this.
+pub fn brief() -> String {
+    format!("{BRIEF}\n\n{}", crate::skill::BODY)
 }
 
 /// The flag that carries an appended system prompt into a session.
@@ -442,24 +498,41 @@ pub const MODES: [&str; 6] = [
 /// | `Edit`, `Write`, `NotebookEdit` | the change itself, and Claude Code confines these to the session's directory — which is the worktree |
 /// | `TodoWrite` | the Drone's own scratchpad; it touches nothing outside the session |
 /// | `Bash` | **the tool whole**, because the repository's checks are spelled in a language Armada does not know |
+/// | `Skill` | a workflow step names the skill that runs it, so a Drone that cannot invoke one cannot perform its step |
+/// | `mcp__armada__fleet_*` | the four tools [`BRIEF`] instructs the Drone to report through |
 ///
 /// **`Bash` whole is the deliberate one.** An allowlist of commands would be an
 /// enumeration of every build system there is, and each one missing is a Job
 /// that edits code it cannot test. [`DENY`] is what makes that affordable: the
 /// escapes are a finite list and the checks are not.
 ///
-/// **No rule here names `mcp__armada__*`, and [`BRIEF`] tells a Drone to report
-/// through three tools spelled exactly that way.** Under [`MODE`]'s `dontAsk` an
-/// uncovered tool is denied rather than asked about, so a Drone could be refused
-/// the very tools its brief instructs it to use — and refused silently, which is
-/// 011's original bug one layer up. It is **not proved**: whether an MCP tool
-/// absent from [`ALLOWED`] is denied or merely not pre-approved is Claude Code's
-/// behaviour, and the only honest test spawns a real Drone and spends a token,
-/// which PHASES.md §8.5 forbids. This list is the reader's decision
-/// (`docs/reserved/011`), so the risk is recorded in
-/// `docs/reserved/019-the-brief-a-drone-reports-through.md` rather than fixed in
-/// passing here.
-pub const ALLOW: [&str; 8] = [
+/// **The last five entries are a fix, and this is the evidence for it.** They
+/// were absent, and the open question recorded here was whether an uncovered
+/// tool is *denied* under [`MODE`]'s `dontAsk` or merely not pre-approved — not
+/// provable in a test, because the only honest one spawns a real Drone and
+/// spends a token (`PHASES.md` §8.5).
+///
+/// **Real use answered it.** A Drone was handed a brief naming the
+/// `reproduce-failure` skill and reported that it could not access the skill it
+/// had been told it had — with `Skill` absent from this list. An allowlist that
+/// omits a tool denies it. The same mechanism governs the MCP tools, which is
+/// why a Drone had already been observed answering its operator in *prose*
+/// rather than calling `fleet_ask_human` (`docs/reserved/020` §2): it was not
+/// ignoring the brief, it was refused the tools the brief names, silently. That
+/// is 011's original bug one layer up, which
+/// `docs/reserved/019-the-brief-a-drone-reports-through.md` recorded as a risk
+/// and which is now closed.
+///
+/// **The four MCP tools are named individually rather than by a
+/// `mcp__armada` wildcard.** `crates/helm/src/mcp/drone.rs` serves exactly these
+/// four, so the enumeration is complete today — and it stays correct if that
+/// router ever gains a fifth, because [`BRIEF`] promises *"you cannot spawn
+/// Jobs"* and a wildcard would quietly grant whatever is added next.
+///
+/// The **client's** spelling, not the server's: Claude Code exposes
+/// `fleet.report` as `mcp__armada__fleet_report`, and the dotted name matches
+/// nothing the model can call (`docs/traps.md`).
+pub const ALLOW: [&str; 13] = [
     "Read",
     "Glob",
     "Grep",
@@ -468,6 +541,11 @@ pub const ALLOW: [&str; 8] = [
     "NotebookEdit",
     "TodoWrite",
     "Bash",
+    "Skill",
+    "mcp__armada__fleet_report",
+    "mcp__armada__fleet_verdict",
+    "mcp__armada__fleet_ask_human",
+    "mcp__armada__fleet_propose",
 ];
 
 /// What a Drone may not do however broadly [`ALLOW`] grants — **the things
@@ -524,6 +602,146 @@ pub const ALLOWED: &str = "--allowedTools";
 /// that, not Armada.
 pub const DISALLOWED: &str = "--disallowedTools";
 
+/// The flag that layers a Drone's own settings — and therefore its `Stop`
+/// hook — over the reader's, **for the length of one exchange**.
+///
+/// Registering the hook in `~/.claude/settings.json` instead would fire it in
+/// every session on the machine, including the reader's own and Helm's.
+pub const SETTINGS: &str = "--settings";
+
+/// How long the relay waits for its Drone to actually exit, in seconds.
+///
+/// **A cap rather than a deadline.** The hook cannot tick while the Drone it is
+/// relaying for is still alive — a Job with a live process group observes as
+/// `RUNNING` and is deliberately not gated ([`super::advance::attention`]) —
+/// so it waits, and an exchange that never ends would otherwise leave one
+/// `sh` per Job waiting forever. An hour is well past any real exchange, and a
+/// Drone still going at that point is a Job its own wall-clock ceiling will
+/// stop.
+pub const RELAY_CAP_S: u32 = 3_600;
+
+/// The `Stop` hook a Drone runs — **the event `020` §1 says nothing was
+/// watching**.
+///
+/// # What it is for
+///
+/// A Drone runs one exchange under `--print` and exits. That is correct, and it
+/// is why `spawn` can return and five Jobs can run at once. What was missing is
+/// anything that *observed the exchange ending*: `armada fleet tick` existed
+/// and nobody called it, so a Job sat `RUNNING` beside a dead Drone until
+/// somebody typed the verb. The reader lost eight hours to exactly that.
+///
+/// **The hook is the relay because a hook cannot be forgotten.** PLAN.md §15.3:
+/// *"an agent can forget to report progress, but it cannot forget to stop"*.
+/// This is that argument applied to the loop rather than to the inbox.
+///
+/// # Why it waits, and why the wait is not a daemon
+///
+/// **A `Stop` hook runs while its session is still alive.** Ticking from inside
+/// it would find a live process group, observe `RUNNING`, and decline to gate —
+/// correctly, because gating a live exchange starts a check against a worktree
+/// still being written to. Worse, advancing would `claude --resume` a session
+/// that has not closed.
+///
+/// So the hook backgrounds one `sh` that waits for the Drone's own process to
+/// go, and only then ticks. **It watches the process-group leader's pid**,
+/// which under `setsid` *is* the Drone — read from `ps` rather than passed in,
+/// because the hook is written before the process exists and therefore before
+/// its pid does. It is one short-lived shell per exchange, it holds no lease,
+/// it recovers nothing, and killing the Job's group kills it too — which is the
+/// difference between this and the daemon `020` §1 refuses.
+///
+/// # It ticks the **whole fleet**, and that is the backstop
+///
+/// `020` §2's failure modes — a SIGKILLed Drone, a hook that could not run, a
+/// crash between the two — all break *this Job's* relay, and no amount of care
+/// inside one hook fixes them. What does is that every relay sweeps every Job:
+/// a Job whose own hook was lost is picked up by the next Drone **anywhere on
+/// the machine** to finish an exchange. `armada fleet tick` is idempotent and
+/// cheap over an idle fleet — a directory listing, a transcript tail and a
+/// `ps` — so the sweep costs the fleet nothing and is the second mechanism
+/// PLAN.md §15.3 asks for.
+///
+/// **A read verb ticking would be the wrong repair.** `armada fleet ls`
+/// advancing a Job behind the reader's back breaks PLAN.md §15.1, and `020` §1
+/// rejects it by name; reporting a Job as `STALLED` is honest, doing the work
+/// unasked is not.
+///
+/// # Shell, and what it may depend on
+///
+/// **No `jq` and no `python`**, for the reason Helm's hook gives: a backstop
+/// that depends on a tool the machine may not have is a backstop that silently
+/// stops backing anything up. This is `ps`, `kill -0` and `sleep`.
+///
+/// `exe` is the absolute path of the running `armada` — **not the bare word.**
+/// A hook that resolved `armada` against the Drone's `PATH` is precisely `020`
+/// §2's second failure mode, and it is the only one of the three that is fixed
+/// rather than backstopped.
+/// # `ps`, not `kill -0`, and that is the trap this file already records
+///
+/// **A Drone that has exited is its parent's zombie until the parent goes**
+/// (`docs/traps.md`; `armada_fleet::drone::start` says the same thing from the
+/// other side — *"`setsid` does not reparent it, and assuming it did is what
+/// broke `stop`"*). `kill -0` on a zombie **succeeds**, because the pid is
+/// still a process-table entry, so a relay that waited on `kill -0` would wait
+/// out its whole cap on every single exchange and never tick once.
+///
+/// So the wait asks `ps` for the process *state* and treats `Z` — and an empty
+/// answer, which is a process that has been reaped — as gone. A zombie has
+/// exited: its files are flushed and its session is closed, which is everything
+/// the next `claude --resume` needs.
+pub fn stop_hook(exe: &str) -> String {
+    format!(
+        "#!/bin/sh\n\
+         # Written by Armada for one Job's Drone. Regenerated on every exchange;\n\
+         # edit the verb, not this. See `020` §1: the exchange ending is the event.\n\
+         armada={exe}\n\
+         leader=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')\n\
+         [ -n \"$leader\" ] || exit 0\n\
+         {{\n\
+         \x20 waited=0\n\
+         \x20 while [ \"$waited\" -lt {cap} ]; do\n\
+         \x20   state=$(ps -o state= -p \"$leader\" 2>/dev/null | tr -d ' ')\n\
+         \x20   case \"$state\" in '' | Z*) break ;; esac\n\
+         \x20   waited=$((waited + 1))\n\
+         \x20   sleep 1\n\
+         \x20 done\n\
+         \x20 [ \"$waited\" -lt {cap} ] && \"$armada\" fleet tick\n\
+         }} >/dev/null 2>&1 &\n\
+         exit 0\n",
+        exe = shell_quote(exe),
+        cap = RELAY_CAP_S,
+    )
+}
+
+/// The `--settings` document that registers [`stop_hook`].
+///
+/// **Fleet's, and Helm's is a re-export of it** — `crate::helm::settings_json`
+/// calls this rather than the other way round, because `ARCHITECTURE.md` §1.9
+/// says nothing points upward: Fleet may not reference Helm, and Helm may
+/// reference Fleet. One document, one shape, in the lower module.
+pub fn settings_json(hook: &str) -> String {
+    format!(
+        "{{\n  \"hooks\": {{\n    \"Stop\": [\n      {{\n        \"hooks\": [\n          \
+         {{\n            \"type\": \"command\",\n            \"command\": {}\n          }}\n        \
+         ]\n      }}\n    ]\n  }}\n}}\n",
+        json_quote(hook)
+    )
+}
+
+/// A string as a JSON scalar. Hand-written for the reason
+/// `crate::helm::quote` gives: these documents are written in reading order and
+/// a `serde_json::Value` map alphabetises them (`docs/traps.md`).
+fn json_quote(value: &str) -> String {
+    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
+/// A path as one shell word. A `$HOME` containing a space is ordinary on macOS.
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 /// The output format a Drone's turn is read from.
 pub const STREAM_JSON: &str = "stream-json";
 
@@ -553,13 +771,29 @@ pub const STREAM_JSON_NEEDS: [&str; 1] = ["--verbose"];
 ///
 /// The uuid is a fixed sentinel, so the probe reuses one transcript rather than
 /// leaving a new one behind on every run.
-pub fn probe_argv() -> Vec<String> {
-    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default());
+/// **`settings` is the real relay's flag, on a document that registers no
+/// hook.** `020` §1 puts a `Stop` hook on every Drone, and *"asserting on argv
+/// proves you built the string you meant, not that it works"* — so the probe
+/// carries the flag, and `armada doctor` hands it [`NO_HOOKS`] rather than a
+/// real hook: a probe that relayed would tick a fleet on behalf of an exchange
+/// that never happened.
+pub fn probe_argv(settings: Option<&str>) -> Vec<String> {
+    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default(), settings);
     argv.pop();
     argv.push("--input-format".to_string());
     argv.push(STREAM_JSON.to_string());
     argv
 }
+
+/// The settings document `armada doctor`'s probe is given: **the same shape a
+/// Drone's is, registering nothing.**
+///
+/// A probe pointed at a real relay would fire it, and the hook would tick a
+/// fleet about an exchange that never took place. An empty `hooks` object
+/// exercises exactly what the probe is for — whether this machine's `claude`
+/// accepts `--settings` alongside the rest of the Drone's argv — and starts
+/// nothing.
+pub const NO_HOOKS: &str = "{\n  \"hooks\": {}\n}\n";
 
 /// The session id [`probe_argv`] uses. Valid, so validation gets past it; fixed,
 /// so the probe leaves one transcript rather than one per run.
@@ -573,7 +807,11 @@ pub const PROBE_SESSION: &str = "00000000-0000-4000-8000-0000000a2ada";
 /// added after: a Job that spawns, records a worktree and a port block, and
 /// whose Drone dies on a usage error nobody sees until `fleet ls` says
 /// `STALLED`.
-pub const FLAGS: [&str; 13] = [
+pub const FLAGS: [&str; 14] = [
+    // The relay's, which carries the `Stop` hook that ticks the Job (`020`
+    // §1). Its disappearance is the quietest failure of all — every Job still
+    // spawns, and none of them ever advances a step again.
+    SETTINGS,
     "--session-id",
     "--resume",
     "--print",
@@ -592,10 +830,11 @@ pub const FLAGS: [&str; 13] = [
     "--permission-mode",
     ALLOWED,
     DISALLOWED,
-    // [`BRIEF`]'s, which grants nothing and withholds nothing — it says what the
-    // Drone owes. Its disappearance is the quietest failure of the three
-    // classes: every Job still runs, and every one of them reports at whatever
-    // length it likes into an orchestrator's window.
+    // [`brief`]'s, which grants nothing and withholds nothing — it says what the
+    // Drone owes and how it uses Armada. Its disappearance is the quietest
+    // failure of the three classes: every Job still runs, and every one of them
+    // reports at whatever length it likes into an orchestrator's window and
+    // edits `armada.yml` rather than proposing (`docs/reserved/008`).
     APPEND,
 ];
 
@@ -795,13 +1034,17 @@ mod tests {
     #[test]
     fn a_first_turn_assigns_the_session_id_before_anything_starts() {
         assert_eq!(
-            spawn_argv(UUID, "reproduce the flake", &narrow()),
+            spawn_argv(UUID, "reproduce the flake", &narrow(), None),
             [
                 "claude",
                 "--session-id",
                 UUID,
                 APPEND,
-                BRIEF,
+                // **One appended prompt carrying both halves**: the reporting
+                // contract, then Armada's own skill (`docs/reserved/008`). The
+                // flag is singular, so a second occurrence would keep only the
+                // last.
+                &brief(),
                 "--permission-mode",
                 "dontAsk",
                 "--allowedTools",
@@ -824,7 +1067,7 @@ mod tests {
     /// on the first `git commit` it reached.
     #[test]
     fn a_drone_is_granted_permission_to_do_the_work_it_was_given() {
-        let argv = spawn_argv(UUID, "fix the flake", &Posture::default());
+        let argv = spawn_argv(UUID, "fix the flake", &Posture::default(), None);
         assert!(
             argv.iter().any(|word| word == "--permission-mode"),
             "{argv:?} grants nothing, so the first state-mutating call stalls"
@@ -866,10 +1109,10 @@ mod tests {
     fn nothing_a_drone_runs_bypasses_permissions_altogether() {
         let posture = Posture::default();
         let argvs = [
-            spawn_argv(UUID, "go", &posture),
-            resume_argv(UUID, "go", &posture),
-            continue_argv(UUID, &posture),
-            probe_argv(),
+            spawn_argv(UUID, "go", &posture, None),
+            resume_argv(UUID, "go", &posture, None),
+            continue_argv(UUID, &posture, None),
+            probe_argv(None),
             board_argv(UUID),
         ];
         for argv in argvs {
@@ -914,8 +1157,8 @@ mod tests {
         ];
         for posture in postures {
             for argv in [
-                spawn_argv(UUID, "a prompt", &posture),
-                resume_argv(UUID, "a prompt", &posture),
+                spawn_argv(UUID, "a prompt", &posture, None),
+                resume_argv(UUID, "a prompt", &posture, None),
             ] {
                 let variadic = argv
                     .iter()
@@ -951,20 +1194,36 @@ mod tests {
     fn the_brief_and_the_task_both_reach_the_argv() {
         for (argv, turn) in [
             (
-                spawn_argv(UUID, "fix the flake", &narrow()),
+                spawn_argv(UUID, "fix the flake", &narrow(), None),
                 "fix the flake",
             ),
-            (resume_argv(UUID, "yes, 90s", &narrow()), "yes, 90s"),
-            (continue_argv(UUID, &narrow()), CONTINUE),
+            (resume_argv(UUID, "yes, 90s", &narrow(), None), "yes, 90s"),
+            (continue_argv(UUID, &narrow(), None), CONTINUE),
         ] {
             let at = argv
                 .iter()
                 .position(|word| word == APPEND)
                 .unwrap_or_else(|| panic!("{argv:?} carries no brief"));
-            // The value, and it is the brief itself rather than a path to it or
+            // The value, and it is the prose itself rather than a path to it or
             // an instruction to go and read one.
+            //
+            // **`starts_with` rather than `==` since `docs/reserved/008`**: the
+            // one appended prompt now carries [`BRIEF`] and then
+            // [`crate::skill::BODY`], because the flag is singular and a second
+            // occurrence would keep only the last. The equality this used to
+            // make is now two assertions, one per half — a `contains` alone
+            // would go green against an order that put the skill first, which
+            // would tell a session what it may do before telling it who it is.
             let brief = &argv[at + 1];
-            assert_eq!(brief, BRIEF, "{argv:?} appends something else");
+            assert!(
+                brief.starts_with(BRIEF),
+                "{argv:?} appends something else, or appends it out of order"
+            );
+            assert!(
+                brief.ends_with(crate::skill::BODY),
+                "the reporting contract reached the session and Armada's own \
+                 skill did not: {brief:?}"
+            );
             assert!(
                 !brief.trim().is_empty() && !brief.starts_with('-'),
                 "an empty or flag-shaped brief eats the flag after it: {argv:?}"
@@ -974,6 +1233,7 @@ mod tests {
             // The turn is still the last word, unflagged, and is not the brief.
             assert_eq!(argv.last().unwrap(), turn, "{argv:?} lost its turn");
             assert_ne!(argv.last().unwrap(), BRIEF);
+            assert_ne!(argv.last().unwrap(), &brief.clone());
             assert!(!turn.starts_with('-'), "the turn reads as a flag");
         }
     }
@@ -989,6 +1249,65 @@ mod tests {
     /// (`docs/traps.md`), and a prompt written with the documented name matches
     /// nothing at all. `crates/helm/src/mcp/drone.rs` holds these names against
     /// the router that actually serves them.
+    /// **Every tool the brief instructs a Drone to use must be granted.**
+    ///
+    /// This is the assertion that would have caught the bug: `BRIEF` named three
+    /// `mcp__armada__*` tools that [`ALLOW`] did not grant, so a Drone was
+    /// refused — silently, under `dontAsk` — the only means it had of reporting
+    /// anything. Observed in real use as a Drone answering its operator in prose
+    /// and as a Job that never advanced.
+    ///
+    /// Derived from `BRIEF` rather than restated, so a tool added to the brief
+    /// with no matching grant fails here rather than in a Job hours later.
+    #[test]
+    fn every_tool_the_brief_names_is_one_the_drone_is_granted() {
+        let named: Vec<&str> = BRIEF
+            .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .filter(|w| w.starts_with("mcp__"))
+            .collect();
+        assert!(
+            !named.is_empty(),
+            "the brief names no tools — this test would pass vacuously"
+        );
+        for tool in named {
+            assert!(
+                ALLOW.contains(&tool),
+                "the brief tells a Drone to use `{tool}`, which ALLOW does not grant — \
+                 under MODE `{MODE}` an uncovered tool is denied, and silently"
+            );
+        }
+    }
+
+    /// The skill tool, kept separate because nothing in `BRIEF` names it: a
+    /// workflow step names its skill, and the brief is workflow-agnostic.
+    ///
+    /// A Drone was handed *"use the `reproduce-failure` skill"* and reported it
+    /// could not access the skill it had been told it had. That is the
+    /// measurement this list was missing.
+    #[test]
+    fn a_drone_may_invoke_a_skill_its_step_names() {
+        assert!(
+            ALLOW.contains(&"Skill"),
+            "a workflow step names the skill that runs it; without this the step cannot run"
+        );
+    }
+
+    /// A wildcard would grant whatever the router gains next, and `BRIEF`
+    /// promises a Drone cannot spawn Jobs.
+    #[test]
+    fn the_mcp_grants_are_named_individually_rather_than_by_wildcard() {
+        for tool in ALLOW.iter().filter(|t| t.starts_with("mcp__")) {
+            assert!(
+                !tool.ends_with('*') && tool.matches("__").count() == 2,
+                "`{tool}` is not one fully-qualified tool name"
+            );
+        }
+        assert!(
+            !ALLOW.contains(&"mcp__armada__fleet_spawn"),
+            "the brief promises a Drone cannot spawn Jobs"
+        );
+    }
+
     #[test]
     fn the_brief_states_the_contract_rather_than_asking_for_brevity() {
         for tool in [
@@ -1115,8 +1434,8 @@ mod tests {
     #[test]
     fn every_stream_json_argv_carries_what_the_cli_requires_with_it() {
         for argv in [
-            spawn_argv(UUID, "go", &Posture::default()),
-            resume_argv(UUID, "carry on", &Posture::default()),
+            spawn_argv(UUID, "go", &Posture::default(), None),
+            resume_argv(UUID, "carry on", &Posture::default(), None),
         ] {
             assert!(
                 argv.iter().any(|word| word == STREAM_JSON),
@@ -1162,8 +1481,8 @@ mod tests {
     /// which is how a check ends up green on a Drone that cannot start.
     #[test]
     fn the_doctor_probe_is_the_spawn_argv_with_nothing_to_say() {
-        let probe = probe_argv();
-        let real = spawn_argv(PROBE_SESSION, "go", &Posture::default());
+        let probe = probe_argv(None);
+        let real = spawn_argv(PROBE_SESSION, "go", &Posture::default(), None);
 
         // Every flag of the real argv, in the same order.
         let flags = |argv: &[String]| -> Vec<String> {
@@ -1201,11 +1520,19 @@ mod tests {
     /// disappearing.
     #[test]
     fn every_flag_the_drone_uses_is_one_doctor_checks_for() {
-        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default())
+        // **The relay-carrying form, because that is the one a Job runs**
+        // (`020` §1). A `--settings` absent from every argv the test looked at
+        // is a flag `doctor` would go on validating while nothing used it.
+        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default(), Some("/s.json"))
             .into_iter()
-            .chain(resume_argv(UUID, "go", &Posture::default()))
+            .chain(resume_argv(
+                UUID,
+                "go",
+                &Posture::default(),
+                Some("/s.json"),
+            ))
             .chain(super::super::classify::argv("go"))
-            .chain(probe_argv())
+            .chain(probe_argv(None))
             .filter(|word| word.starts_with("--"))
             .collect();
         for flag in &used {
@@ -1223,12 +1550,115 @@ mod tests {
         }
     }
 
+    /// **The relay is registered or the Job never advances** (`020` §1). The
+    /// flag and its path travel together and both come before `--print`, so
+    /// neither can be swallowed by a variadic list.
+    #[test]
+    fn a_drone_carries_the_settings_that_register_its_stop_hook() {
+        let argv = spawn_argv(UUID, "go", &Posture::default(), Some("/j/s.json"));
+        let at = argv
+            .iter()
+            .position(|word| word == SETTINGS)
+            .expect("no --settings, so nothing observes this exchange ending");
+        assert_eq!(argv[at + 1], "/j/s.json");
+        let print = argv.iter().position(|w| w == "--print").expect("--print");
+        assert!(at < print, "the relay is behind a variadic list: {argv:?}");
+        assert_eq!(argv.last().unwrap(), "go", "the prompt is still last");
+
+        // **Inverted**: no path, no flag — an empty `--settings` would consume
+        // whatever came next, which is `--print`.
+        assert!(!spawn_argv(UUID, "go", &Posture::default(), None)
+            .iter()
+            .any(|word| word == SETTINGS));
+    }
+
+    /// **The relay ticks the whole fleet, not one Job** — which is what makes
+    /// it `020` §2's backstop as well as §1's relay. A Job whose own hook was
+    /// lost is picked up by the next Drone anywhere on the machine to finish.
+    #[test]
+    fn the_relay_sweeps_the_fleet_rather_than_its_own_job() {
+        let hook = stop_hook("/opt/armada/bin/armada");
+        assert!(
+            hook.contains("fleet tick\n"),
+            "the relay does not tick:\n{hook}"
+        );
+        assert!(
+            !hook.contains("fleet tick '") && !hook.contains("fleet tick \""),
+            "the relay ticks one Job, so nothing rescues the rest:\n{hook}"
+        );
+    }
+
+    /// **The absolute binary, never the bare word.** `020` §2's second failure
+    /// mode is a hook with no `armada` on its `PATH`, and it is the only one of
+    /// the three that is fixed rather than backstopped.
+    #[test]
+    fn the_relay_names_the_binary_it_was_written_by() {
+        let hook = stop_hook("/opt/armada/bin/armada");
+        assert!(hook.contains("armada='/opt/armada/bin/armada'"), "{hook}");
+        // A `$HOME` with a space in it is ordinary on macOS and must stay one
+        // shell word.
+        assert!(stop_hook("/Users/a b/bin/armada").contains("'/Users/a b/bin/armada'"));
+    }
+
+    /// **It waits for its own Drone before ticking, and this is not optional.**
+    /// A `Stop` hook runs while its session is alive; a tick from inside it
+    /// would find a live process group, decline to gate — correctly — and the
+    /// whole relay would be a no-op that looked wired.
+    #[test]
+    fn the_relay_waits_for_its_drone_to_go_before_it_ticks() {
+        let hook = stop_hook("/bin/armada");
+        assert!(hook.contains("ps -o pgid= -p $$"), "{hook}");
+        // **`ps -o state=`, never `kill -0`.** A Drone that exited is a zombie
+        // until its parent goes, and `kill -0` says a zombie is alive — a relay
+        // written that way waits out its cap on every exchange and never ticks.
+        assert!(hook.contains("ps -o state= -p \"$leader\""), "{hook}");
+        assert!(
+            !hook.contains("kill -0"),
+            "the relay cannot tell a zombie from a live Drone:\n{hook}"
+        );
+        assert!(
+            hook.contains(&RELAY_CAP_S.to_string()),
+            "the wait is unbounded, so a hung Drone leaks a shell forever:\n{hook}"
+        );
+        // Backgrounded and detached from the hook's own streams: a hook that
+        // held stdout open holds the turn open.
+        assert!(hook.contains(">/dev/null 2>&1 &"), "{hook}");
+    }
+
+    /// **No `jq` and no `python`**, for Helm's hook's reason: a backstop that
+    /// depends on a tool the machine may not have is one that silently stops
+    /// backing anything up.
+    #[test]
+    fn the_relay_depends_on_nothing_a_machine_might_not_have() {
+        let hook = stop_hook("/bin/armada");
+        assert!(hook.starts_with("#!/bin/sh\n"));
+        for absent in ["jq", "python", "setsid", "pgrep", "flock"] {
+            assert!(
+                !hook.contains(absent),
+                "the relay depends on `{absent}`:\n{hook}"
+            );
+        }
+    }
+
+    /// The settings document registers the hook as a `Stop` command, and it is
+    /// the document Helm re-exports rather than a second shape.
+    #[test]
+    fn the_settings_document_registers_the_hook_as_a_stop_command() {
+        let json = settings_json("/j/stop.sh");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(
+            parsed["hooks"]["Stop"][0]["hooks"][0]["command"],
+            serde_json::json!("/j/stop.sh")
+        );
+        assert_eq!(json, crate::helm::settings_json("/j/stop.sh"));
+    }
+
     /// **`--resume`, never a second `--session-id`.** Minting where continuing
     /// was meant starts a Job's next turn as its first, with none of the context
     /// the answer was an answer to.
     #[test]
     fn continuing_a_job_resumes_the_session_rather_than_minting_one() {
-        let argv = resume_argv(UUID, "yes, raise it to 90s", &narrow());
+        let argv = resume_argv(UUID, "yes, raise it to 90s", &narrow(), None);
         assert_eq!(
             argv,
             [
@@ -1236,7 +1666,11 @@ mod tests {
                 "--resume",
                 UUID,
                 APPEND,
-                BRIEF,
+                // **One appended prompt carrying both halves**: the reporting
+                // contract, then Armada's own skill (`docs/reserved/008`). The
+                // flag is singular, so a second occurrence would keep only the
+                // last.
+                &brief(),
                 "--permission-mode",
                 "dontAsk",
                 "--allowedTools",
@@ -1256,16 +1690,74 @@ mod tests {
 
     /// Boarding is interactive: no `--print`, because the whole point is that
     /// you drive it.
+    ///
+    /// **And no skill either.** Boarding hands the conversation to a person, and
+    /// *do not edit `armada.yml` silently, propose it instead* is an instruction
+    /// to an unattended agent — telling a person at a keyboard not to edit their
+    /// own repository would be Armada refusing them a thing it cannot refuse.
     #[test]
     fn boarding_is_the_interactive_resume_and_carries_no_prompt() {
         assert_eq!(board_argv(UUID), ["claude", "--resume", UUID]);
+    }
+
+    /// **The skill reaches every headless turn, first and resumed.**
+    ///
+    /// This is `docs/reserved/008`'s injection, asserted where the bugs are. A
+    /// Drone changes what a repository runs; until this flag existed nothing
+    /// told it that noticing a stale `armada.yml` was part of the job, so it
+    /// either edited the file inside a diff about something else or said nothing
+    /// at all.
+    ///
+    /// **Argv alone does not prove the flag is accepted**, which is the whole
+    /// lesson of the `--verbose` trap — so [`crate::skill::APPEND`] is also in
+    /// [`FLAGS`], and [`probe_argv`] is built from [`spawn_argv`], which is what
+    /// makes `armada doctor` exercise it against the real binary for free.
+    #[test]
+    fn every_headless_turn_carries_armadas_own_skill() {
+        for argv in [
+            spawn_argv(UUID, "fix the flake", &Posture::default(), None),
+            resume_argv(UUID, "yes", &Posture::default(), None),
+            continue_argv(UUID, &Posture::default(), None),
+        ] {
+            let at = argv
+                .iter()
+                .position(|word| word == APPEND)
+                .unwrap_or_else(|| panic!("no appended system prompt: {argv:?}"));
+            assert!(
+                argv[at + 1].contains(crate::skill::BODY),
+                "the brief reached the session and the skill did not, which is \
+                 what appending the flag twice would silently produce: {:?}",
+                argv[at + 1]
+            );
+            assert!(
+                argv[at + 1].starts_with(BRIEF),
+                "the reporting contract went missing: {:?}",
+                argv[at + 1]
+            );
+            // **One occurrence, never two.** `--append-system-prompt <prompt>`
+            // is singular in `claude --help`, so a second would keep only the
+            // last and drop the first without a word.
+            assert_eq!(argv.iter().filter(|word| *word == APPEND).count(), 1);
+            // **The prose is one argument, whatever is in it.** A body split
+            // across argv elements would be read as flags and tool names.
+            assert!(argv[at + 1].contains("mcp__armada__fleet_propose"));
+            // **Before `--print`**, so the value cannot be swallowed by the
+            // variadic tool lists that come before it.
+            assert!(
+                at + 1 < argv.iter().position(|word| word == "--print").unwrap(),
+                "{argv:?}"
+            );
+        }
+        // Inverted once: the assertions above would all hold vacuously against
+        // a boarding argv that has neither flag, and it must not have them.
+        assert!(!board_argv(UUID).iter().any(|word| word == APPEND));
     }
 
     /// The prompt is the last element and is never split. A task arrives as free
     /// text and a shell has already had its turn with it.
     #[test]
     fn the_prompt_is_one_argument_however_many_words_it_has() {
-        let argv = spawn_argv(UUID, "add rate limiting to the API --json", &narrow());
+        let argv = spawn_argv(UUID, "add rate limiting to the API --json", &narrow(), None);
         assert_eq!(argv.last().unwrap(), "add rate limiting to the API --json");
         assert_eq!(argv.len(), 17);
         // And a prompt that *looks* like a flag is still the prompt, because a

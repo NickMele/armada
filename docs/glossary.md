@@ -55,9 +55,28 @@ inherit the rule.
 
 | Enum | Owner | Values |
 |---|---|---|
-| **Status** | Manifest | `READY` `UP` `DOWN` `CLEAN` `PASS` `OK` `SKIPPED` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` `RUNNING` `WAITING` |
-| **Job state** | Fleet | `QUEUED` `RUNNING` `PAUSED` `STALLED` `BLOCKED` `ABORTED` `DONE` |
+| **Status** | Manifest | `READY` `UP` `DOWN` `CLEAN` `PASS` `OK` `SKIPPED` `PARTIAL` `FAILED` `ABORTED` `DEAD` `TIMEOUT` `RUNNING` `WAITING` `QUEUED` |
+| **Job state** | Fleet | `QUEUED` `RUNNING` `PAUSED` `STALLED` `SILENT` `BLOCKED` `ABORTED` `DONE` |
 | **Verdict** | Fleet | `PASS` `FAILED` `BLOCKED` `NEEDS_HUMAN` |
+| **Acting** | Fleet | `ABORTING` `REAPING` `PAUSING` |
+
+**Three of these words are new, and each replaces a silence.**
+
+- **`QUEUED` on Status**, for a step the run has not reached
+  ([`reserved/020`](reserved/020-the-tui-decided.md) §7). It used to say `WAITING`, and the
+  objection was exact: *"WAITING sounds like it's waiting for something to happen but in fact
+  the workflow is just not at this step yet"*. A `WAITING` row is blocked on something nameable
+  and carries a `waiting_on`; a `QUEUED` row is blocked on nothing, and has no `waiting_on`
+  because there is nothing to name. Neither is terminal and neither maps to an exit code.
+- **`SILENT` and a redefined `STALLED` on Job state** (`020` §6). Both were drawn as `RUNNING`,
+  which is how a dead Job read as alive for eight hours. `STALLED` is now *the Drone is gone and
+  nothing has ticked the Job*; `SILENT` is *a Drone ended its exchange with neither a verdict nor
+  a question*, so whatever it decided exists only in a transcript nothing reads.
+- **`Acting` is a fourth enum, and it is not a Job state** (`020` §5). It is what somebody is
+  doing **to** a Job while they do it, laid over the durable state in the same status column. An
+  abort that talked to docker for several seconds used to say nothing at all, so a working abort
+  and a hung one looked identical. A Job being aborted is still `RUNNING` on disk; folding the
+  two into one enum would leave a crash mid-abort claiming a state no verb ever reached.
 
 **Why Manifest's Status is not simply extended to cover Jobs.** `BLOCKED` is a legal Job state
 and a legal verdict, but it is deliberately not a Manifest terminal state: exit codes are
