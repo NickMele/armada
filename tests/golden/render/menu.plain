@@ -1,0 +1,8 @@
+  STATUS   MODULE    DETAIL                             VERB
+  READY    helm      resumes your conversation          armada helm
+  WAITING  fleet     4 jobs · 2 need you · 1 stalled    armada fleet ls
+  WAITING  inbox     2 questions waiting on you         armada fleet inbox
+  READY    manifest  armada.yml — this workspace        armada manifest status
+  READY    guild     19 skills · 2 hooks · 4 workflows  armada guild ls
+
+  `armada --help` lists every verb · `armada <module>` opens one

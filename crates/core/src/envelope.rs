@@ -1999,6 +1999,89 @@ pub struct JobRow {
     /// Additive, so `schema_version` stays 1.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acting: Option<crate::fleet::job::Doing>,
+    /// How long [`Self::acting`]'s named slow part has been running, in
+    /// seconds.
+    ///
+    /// **The pair [`Self::step`] and [`Self::on_step_s`] already are**, and for
+    /// the same reason: a duration is a subtraction against *the reader's*
+    /// clock, and the reader is this process. [`crate::fleet::job::Doing`]
+    /// records the wall-clock millisecond the stage was entered because that is
+    /// the only thing the *acting* process can honestly write down — it does not
+    /// know when anybody will look — so the subtraction happens here, where
+    /// somebody is looking.
+    ///
+    /// **`None` for two different silences, and both are honest.** There is no
+    /// action, or the action has not reached anything slow yet
+    /// ([`crate::fleet::job::Doing::slow`]); in neither case is there a stage
+    /// whose age means anything, and `0s` would be a measurement nobody took.
+    ///
+    /// Additive, so `schema_version` stays 1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acting_for_s: Option<u64>,
+}
+
+impl JobRow {
+    /// The word this row's status column shows — **the action, when there is
+    /// one** (`docs/reserved/020-the-tui-decided.md` §5).
+    ///
+    /// **Composed here rather than at each surface**, which is the whole reason
+    /// this is a method and not two fields a renderer picks between.
+    /// [`crate::fleet::job::Job::status_word`] makes the same choice over the
+    /// record; this makes it over the row, so `fleet ls`, the Bridge and
+    /// whatever draws a Job next cannot come to disagree about which of the two
+    /// words a row carries. A renderer reaching for [`Self::state`] on its own
+    /// would draw `RUNNING` over a running abort — the exact silence `020` §5
+    /// was written to end, where a working abort and a hung one looked
+    /// identical.
+    pub fn status_word(&self) -> &'static str {
+        match &self.acting {
+            Some(doing) => doing.acting.word(),
+            None => self.state.word(),
+        }
+    }
+
+    /// The slow part of the action, named, and how long it has been at it —
+    /// `("docker", Some(12))`.
+    ///
+    /// **Naming the stage is the feature.** `ABORTING` alone says an abort is
+    /// happening; `ABORTING · docker 12s` says which of the things an abort does
+    /// is the one taking the time, which is the only question a reader watching
+    /// a screen that has stopped moving actually has.
+    ///
+    /// **No bar and no spinner, here or anywhere on this screen** (PHASES.md
+    /// §9.1 F2). A stage name and an elapsed second are both measured; a
+    /// fraction of an abort would be a guess drawn as a measurement.
+    ///
+    /// `None` when there is no action, or when it has not reached anything slow
+    /// — a stage that has not started is not a stage to name.
+    pub fn acting_detail(&self) -> Option<(&str, Option<u64>)> {
+        let slow = self.acting.as_ref()?.slow.as_deref()?;
+        Some((slow, self.acting_for_s))
+    }
+}
+
+impl ShowData {
+    /// The word this Job's status column shows — **the action, when there is
+    /// one** (`docs/reserved/020-the-tui-decided.md` §5).
+    ///
+    /// **[`Self::state`] and not [`Self::recorded_state`] underneath**, because
+    /// this is the observed half: the pane keeps both words and this is the one
+    /// its own header row carries. The action sits over the observed state for
+    /// the same reason it sits over a row's — it is what somebody is doing now,
+    /// and now is what a status column answers.
+    pub fn status_word(&self) -> &'static str {
+        match &self.acting {
+            Some(doing) => doing.acting.word(),
+            None => self.state.word(),
+        }
+    }
+
+    /// The slow part of the action, named, with how long it has been at it.
+    /// `None` when there is no action or none of it is slow yet.
+    pub fn acting_detail(&self) -> Option<(&str, Option<u64>)> {
+        let slow = self.acting.as_ref()?.slow.as_deref()?;
+        Some((slow, self.acting_for_s))
+    }
 }
 
 /// `armada bridge` — one frame of the live screen.
@@ -2085,6 +2168,28 @@ pub struct ShowData {
     /// what a verb last wrote; the two agreeing is the ordinary case and the two
     /// disagreeing is the whole diagnosis.
     pub recorded_state: crate::fleet::JobState,
+    /// What somebody is doing **to** this Job right now, if anything
+    /// (`docs/reserved/020-the-tui-decided.md` §5).
+    ///
+    /// **Here for the reason it is on [`JobRow`]**, and the surface makes the
+    /// case sharper rather than weaker: the Bridge's detail pane is what opens
+    /// when a reader presses `d` on the row that just started saying `ABORTING`.
+    /// A pane that answered `RUNNING` to *"why has this stopped moving"* would
+    /// be the original silence, restated on the one screen somebody opened to
+    /// escape it.
+    ///
+    /// **Neither [`Self::state`] nor [`Self::recorded_state`] can carry it.**
+    /// Both are Job states and an action is not one — a Job being aborted is
+    /// still `RUNNING` on disk, deliberately, so that a crash mid-abort leaves
+    /// no Job claiming a state no verb ever reached.
+    ///
+    /// Additive, so `schema_version` stays 1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acting: Option<crate::fleet::job::Doing>,
+    /// How long [`Self::acting`]'s named slow part has been running, in
+    /// seconds. `None` when there is no action, or none of it is slow yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acting_for_s: Option<u64>,
     /// The process group the Drone was last started in, if one ever was.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub drone_pgid: Option<i32>,
@@ -2878,6 +2983,62 @@ pub struct Evidence {
     pub exit: i32,
 }
 
+/// Bare `armada` — the front door
+/// (`docs/reserved/020-the-tui-decided.md`'s menu decision).
+///
+/// **One row per module, and deliberately no headline.** There is no word here
+/// summarising the five, for the reason `020` refuses an aggregate over several
+/// Jobs: a word derived from the worst row describes nothing in particular. The
+/// counts and the facts are on the rows, where they are true.
+///
+/// **The absence of an aggregate is also what holds `ARCHITECTURE.md` §1.9.**
+/// The Bridge — and this, the other screen that touches everything — may *read*
+/// all four modules and must never become where they read *each other*. A
+/// summary word is the one field that would have to be computed from two
+/// modules at once, so leaving it out means there is no place in this payload
+/// where two modules meet. Every [`MenuRow`] is built from exactly one.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct MenuData {
+    /// The modules, **Helm first, because it is who you talk to.**
+    pub results: Vec<MenuRow>,
+}
+
+/// One module, as the front door reports it.
+///
+/// **`STATUS · NAME · DETAIL`, which is every table Armada draws.** There is no
+/// `TIME` here and the column drops, rather than being filled with a duration
+/// nobody measured.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MenuRow {
+    /// Which module — the word you would type.
+    pub module: String,
+    /// Its status word.
+    ///
+    /// **From [`crate::error::Status`] and from nothing new.** The vocabulary is
+    /// fixed (`docs/glossary.md`) and a front door is the last place to widen
+    /// it: a word invented here would be one every module's own verbs then
+    /// disagreed with.
+    pub status: crate::error::Status,
+    /// The one line worth knowing — counts, never a second status word.
+    ///
+    /// **A fact, and never an instruction.** *"no guild yet"* belongs here;
+    /// *"`armada init` creates one"* belongs in [`Self::verb`]. Keeping the two
+    /// apart is what stops the fact growing until the flexible column truncates
+    /// it — and a truncated command is not a shorter answer, it is the wrong
+    /// one (`commands/fleet/board.md` makes the same argument about a resume
+    /// line).
+    pub fact: String,
+    /// **What to type next given this row's state**, so the row is a thing you
+    /// can act on rather than a thing you have to look up.
+    ///
+    /// **It varies with the status, which is the whole of its usefulness.** A
+    /// column that always said `armada helm` would, on the row that says the
+    /// switch is off, be advertising the one command that refuses. The Bridge's
+    /// `p` key already works this way — *pause* over a running Job and *resume*
+    /// over a paused one — and for the same reason.
+    pub verb: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3408,5 +3569,81 @@ mod tests {
             !json.contains("migrated"),
             "the ordinary run migrated nothing, and says nothing: {json}"
         );
+    }
+
+    /// A row is `RUNNING` until somebody starts doing something to it, and then
+    /// it is the action (`docs/reserved/020-the-tui-decided.md` §5).
+    ///
+    /// **This is the bug, stated as a test.** An abort that talked to docker for
+    /// several seconds left the row saying `RUNNING`, so a working abort and a
+    /// hung one were the same screen. The state on disk is still `RUNNING` —
+    /// deliberately, because a crash mid-abort must not leave a Job claiming a
+    /// state no verb reached — so the row is the only place the two can be laid
+    /// over one another, and this is where the order is decided.
+    #[test]
+    fn a_row_being_acted_on_says_the_action_rather_than_its_state() {
+        let mut row = a_job_row();
+        assert_eq!(row.status_word(), "RUNNING");
+        assert_eq!(row.acting_detail(), None);
+
+        row.acting = Some(crate::fleet::job::Doing::started(
+            crate::fleet::Acting::Aborting,
+            1_000,
+        ));
+        assert_eq!(
+            row.status_word(),
+            "ABORTING",
+            "the state won over the action, which is the silence 020 §5 is about"
+        );
+        // **The action has not reached anything slow yet**, so there is nothing
+        // to name beside the word — and naming a stage that has not started is
+        // the same untruth as a progress bar.
+        assert_eq!(row.acting_detail(), None);
+
+        row.acting = row.acting.as_ref().map(|doing| doing.at("docker", 5_000));
+        row.acting_for_s = Some(12);
+        assert_eq!(row.status_word(), "ABORTING");
+        assert_eq!(
+            row.acting_detail(),
+            Some(("docker", Some(12))),
+            "the slow part is what a reader watching a stopped screen is asking about"
+        );
+    }
+
+    /// The word is the action's for every one of them, not only for the abort
+    /// that prompted the design.
+    #[test]
+    fn every_acting_word_reaches_the_row() {
+        for acting in crate::fleet::Acting::ALL {
+            let mut row = a_job_row();
+            row.acting = Some(crate::fleet::job::Doing::started(acting, 0));
+            assert_eq!(row.status_word(), acting.word());
+        }
+    }
+
+    /// A row in the ordinary case: `RUNNING`, nobody acting on it.
+    fn a_job_row() -> JobRow {
+        JobRow {
+            uuid: "c19d0a34-3069-4115-ad92-e81f486ce8b9".to_string(),
+            name: "rate-limit".to_string(),
+            workflow: "feature".to_string(),
+            state: crate::fleet::JobState::Running,
+            detail: "implement".to_string(),
+            step: "implement".to_string(),
+            on_step_s: Some(840),
+            task: "hold the rate limit".to_string(),
+            runtime_s: 840,
+            cost_usd: 2.10,
+            tokens: 120_000,
+            turns: 4,
+            budget_remaining: crate::fleet::job::Remaining {
+                iterations: 8,
+                tokens: 280_000,
+                wall_clock_ms: 1_860_000,
+            },
+            needs_attention: false,
+            acting: None,
+            acting_for_s: None,
+        }
     }
 }

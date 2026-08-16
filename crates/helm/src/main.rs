@@ -230,7 +230,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Failures(failures) => failures.json(),
         Invocation::Tasks(tasks) => tasks.json(),
-        Invocation::Untried { json, .. } => *json,
+        Invocation::Untried { json, .. } | Invocation::Menu { json } => *json,
         Invocation::Report { json, .. } | Invocation::Task { json, .. } => *json,
         Invocation::Mcp { json } => *json,
         Invocation::Version | Invocation::Help(_) => false,
@@ -498,6 +498,29 @@ fn dispatch(
             true => verbs::tasks::capture(&run, &SystemClock, &place, &what, argv),
             false => verbs::report::run(&run, &SystemClock, &place, &what, argv),
         };
+    }
+
+    // **Bare `armada` runs before workspace resolution, and it has to**
+    // (`docs/reserved/020`'s menu decision). It is the front door: most
+    // directories a person opens a terminal in are not workspaces, and a front
+    // door that refused in all of them would be the screen you cannot reach
+    // exactly when you do not know where you are. Manifest's row says so on its
+    // own row instead — which is also rule (2) of `verbs::menu`'s §1.9
+    // discipline, that no module's answer gates another's.
+    if let Invocation::Menu { .. } = invocation {
+        let place = verbs::fleet::Where {
+            home: home.to_path_buf(),
+            armada_home: armada_manifest::machine::armada_home(home),
+            cwd: cwd.to_path_buf(),
+            exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada")),
+            // **Empty rather than probed.** A boot id makes a Drone handle
+            // meaningful, and this screen reports how many Jobs there are rather
+            // than whether any process is still alive — the same reduction
+            // `armada untried` makes below, for the same reason.
+            boot_id: armada_manifest::machine::boot_id(&run, cwd).unwrap_or_default(),
+        };
+        let guild = armada_guild::layout::Guild::at(&armada_manifest::machine::armada_home(home));
+        return verbs::menu::ls(&run, &SystemClock, &place, &guild);
     }
 
     // **`armada untried` has fewer preconditions than any other verb**, and it
@@ -892,6 +915,7 @@ fn dispatch(
         | Invocation::Failures(_)
         | Invocation::Tasks(_)
         | Invocation::Untried { .. }
+        | Invocation::Menu { .. }
         | Invocation::Report { .. }
         | Invocation::Task { .. } => {
             unreachable!("machine-scoped, and handled above")
@@ -1140,6 +1164,11 @@ fn bridge(
     // different screen.
     let mut screen = armada_core::fleet::bridge::Screen {
         filter: filter.clone(),
+        // **Probed once, here, before the alt screen is taken** (`020` §9). It
+        // is a fact about the machine rather than about a keypress — a
+        // multiplexer does not appear halfway through a session — and a probe on
+        // the hot path would put a subprocess behind `↵`.
+        workspace: workspace_of(run, place),
         ..Default::default()
     };
 
@@ -1280,6 +1309,7 @@ fn on_screen(
     place: &verbs::fleet::Where,
     action: &armada_core::fleet::bridge::Action,
 ) -> armada_core::fleet::bridge::Done {
+    use armada_core::ctx::Run;
     use armada_core::fleet::bridge::{Action, Done, Mode, Reap, ReapRow};
 
     /// One failure, as the line the screen shows. **The class and the locator
@@ -1375,6 +1405,65 @@ fn on_screen(
         // full-screen view is its own piece of work and not this one's — so
         // `c` names the verb to run instead, and names it correctly whichever
         // way `armada helm enable`/`disable` last left it.
+        // **`↵` opens the Job beside the screen and the fleet stays up**
+        // (`020` §9). The verb that already knows where a Job lives answers
+        // first, so this is not a second read of the Job index; what it adds is
+        // one argv and a line under the table.
+        //
+        // **Every failure is a notice, exactly as an abort's is.** Handing a
+        // path to a workspace is a thing that can fail — a worktree that was
+        // reaped, a cmux that will not start — and tearing down the view of four
+        // Jobs to report one thing about a fifth is the defect this whole screen
+        // was rebuilt to stop doing.
+        Action::Open(target) => {
+            let opened = verbs::fleet::board(place, &target.uuid).and_then(|output| {
+                let Output::Board(envelope) = &output else {
+                    return Ok(target.job.clone());
+                };
+                let data = &envelope.data;
+                let cwd = place.expand(&data.worktree);
+                // Said by name rather than as whatever cmux reports about a
+                // path it was handed, for the reason `board --exec` says it:
+                // an errno cannot tell a missing directory from a missing
+                // program.
+                if !cwd.is_dir() {
+                    return Err(ArmadaError {
+                        class: ErrClass::Environment,
+                        r#where: data.worktree.clone(),
+                        message: format!("`{}` has no worktree left to open", data.job),
+                        next_action: Some(format!(
+                            "`armada fleet kill {}` ends it and releases what it holds",
+                            data.job
+                        )),
+                    });
+                }
+                let argv = armada_core::fleet::bridge::cmux_open_argv(&cwd.to_string_lossy());
+                match run.call(&armada_core::ctx::RunRequest::new(argv, place.cwd.clone())) {
+                    Ok(output) if output.ok() => Ok(data.job.clone()),
+                    Ok(output) => Err(ArmadaError {
+                        class: ErrClass::ToolFailed,
+                        r#where: armada_core::fleet::bridge::CMUX.to_string(),
+                        message: format!(
+                            "`{}` exited {}",
+                            armada_core::fleet::bridge::CMUX,
+                            output.code.unwrap_or(-1)
+                        ),
+                        next_action: None,
+                    }),
+                    Err(error) => Err(ArmadaError {
+                        class: ErrClass::Environment,
+                        r#where: armada_core::fleet::bridge::CMUX.to_string(),
+                        message: error.message.clone(),
+                        next_action: None,
+                    }),
+                }
+            });
+            Done::said(match opened {
+                Ok(job) => format!("opened `{job}` in a cmux workspace"),
+                Err(error) => said(&error),
+            })
+        }
+
         Action::Chat => Done::said(match verbs::helm::entering_allowed(&place.armada_home) {
             true => "`armada helm` is on for this machine — run it yourself to enter".to_string(),
             false => format!(
@@ -1473,6 +1562,30 @@ fn no_boot_id() -> ArmadaError {
 /// stored string straight to `current_dir` made `enter` on the Bridge, and
 /// `armada fleet board --exec` from a prompt, fail on every Job on the machine
 /// with `No such file or directory` about a directory that was there all along.
+/// Where a Job can be opened on this machine (`docs/reserved/020` §9).
+///
+/// **A failure to probe is [`Workspace::None`] and never an error.** The Bridge
+/// runs whether or not a multiplexer is installed, so every way of not finding
+/// one — no such program, a non-zero `--help`, a help text that no longer offers
+/// the form Armada builds — lands on the fallback that has always been there:
+/// `↵` prints the worktree path and the resume command.
+fn workspace_of<R: armada_core::ctx::Run>(
+    run: &R,
+    place: &verbs::fleet::Where,
+) -> armada_core::fleet::bridge::Workspace {
+    use armada_core::ctx::RunRequest;
+    use armada_core::fleet::bridge::{self, Workspace};
+
+    let probe = run.call(
+        &RunRequest::new(bridge::cmux_probe_argv(), place.cwd.clone())
+            .timeout(std::time::Duration::from_secs(5)),
+    );
+    match probe {
+        Ok(output) if output.ok() && bridge::cmux_offers_open(&output.stdout) => Workspace::Cmux,
+        _ => Workspace::None,
+    }
+}
+
 fn board_exec(place: &verbs::fleet::Where, output: &Output) -> Result<(), ArmadaError> {
     use std::os::unix::process::CommandExt;
 

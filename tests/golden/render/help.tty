@@ -1,6 +1,7 @@
 [1m[38;2;255;169;64marmada — agents that work while you do not[0m
 
 [1m[38;2;255;169;64mUSAGE[0m
+  armada                          [38;2;156;163;175mthe front door — every module, and how it is[0m
   armada <module> <verb> [flags]  [38;2;156;163;175mthe verbs Armada owns[0m
   armada helm                     [38;2;156;163;175menter Helm, the agent you talk to[0m
 

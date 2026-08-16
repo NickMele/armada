@@ -12,16 +12,20 @@ raised: a design session after real use, 2026-08-15
 first time and found it wanting. Each is his answer to a question with the trade stated, and
 each section says whether it has been built.
 
-**Status: the functional half of §1, §2, §5, §6 and §7 is built.** What that means, section by
-section, is in the table below; everything not named there is still the brief for building it.
+**Status: eight of the nine are built.** §3 is the one that is not, and it is waiting on
+[`021`](021-the-work-hierarchy.md)'s rename rather than on anybody's time. What each of the rest
+means, section by section, is in the table below.
 
 | § | Built | What landed |
 |---|---|---|
 | 1 · the Stop hook ticks the Job | **yes** | every Drone carries `--settings` with a `Stop` hook that waits for its own process to go and then ticks |
 | 2 · the chain breaks silently | **yes** | the relay sweeps the **whole fleet**, and Helm's own `Stop` hook sweeps too — two mechanisms, [`PLAN.md`](../PLAN.md) §15.3's shape |
-| 5 · an action gets a state word | state machine only | `Acting` and `Job.doing`, written by `kill`, `reap` and `pause`; the rendering is not built |
+| 3 · one signals listing | **no** | needs [`021`](021-the-work-hierarchy.md)'s rename first |
+| 5 · an action gets a state word | **yes** | `Acting` and `Job.doing` were the state machine; the three surfaces that draw a Job now read them — `fleet ls`, the Bridge's table and its detail pane all say `ABORTING · docker 12s…` |
 | 6 · `SILENT` and `STALLED` | **yes** | both are real Job states, told apart by the tick watermark and by whether the Drone said anything |
 | 7 · `QUEUED`, not `WAITING` | **yes** | `Status::Queued`, in the enum and in [`glossary.md`](../glossary.md)'s status table |
+| 8 · the menu | **yes** | bare `armada` is the front door — five modules, a status word and a fact each, Helm first. [`PLAN.md`](../PLAN.md) §15.1's rationale is kept and marked superseded |
+| 9 · Helm opens beside you | **yes** | `↵` hands a Job's worktree to `cmux` and the Bridge keeps drawing; where cmux is absent it is the `board` handoff it always was |
 
 ## What §2 actually needed, and what it got
 
@@ -70,9 +74,8 @@ It supersedes nothing and completes two reservations:
 
 ## What is built
 
-**Six of the nine, plus five of the six notes under "Also decided".** What is left is the three
-that change a *surface* rather than a render, and each is its own piece of work — one of them
-changes what bare `armada` means.
+**Eight of the nine, and all six notes under "Also decided".** The one left is §3, and it is
+blocked on a rename rather than on effort.
 
 | Decision | State |
 |---|---|
@@ -80,16 +83,54 @@ changes what bare `armada` means.
 | §2 the detail pane's `SAID` row | **built** |
 | §3 one signals listing, origin a filter | open — needs [`021`](021-the-work-hierarchy.md)'s rename first |
 | §4 window usage first, dollars second | **built** |
-| §5 `ABORTING` / `REAPING` / `PAUSING` | **built** |
+| §5 `ABORTING` / `REAPING` / `PAUSING` | **built** — the word *and* the rendering |
 | §6 counts, never an aggregate word | **built** |
 | §7 `QUEUED`, not `WAITING` | **built** |
-| §8 the menu, and what bare `armada` becomes | open |
-| §9 Helm opens beside you, in cmux | open |
+| §8 the menu, and what bare `armada` becomes | **built** |
+| §9 Helm opens beside you, in cmux | **built** |
 | the wide layout · `NEEDS YOU` carries the question | **built** |
 | `SILENT` and `STALLED` as real states | **built** |
 | the id is shown | **built** |
 | a new Job is spawned detached | **built** |
 | the tagline | **built** |
+
+### What §5 needed beyond the state machine, and what it got
+
+The record already carried the transient — `Acting` and `Job.doing`, written by `kill`, `reap`
+and `pause` — and **nothing drew it**, which is the half a reader can see. Three surfaces draw a
+Job and all three now prefer the action to the state: `armada fleet ls`, the Bridge's table and
+the Bridge's detail pane. The word is composed once, on the payload, precisely because the
+failure this section is about is one surface remembering and another forgetting.
+
+**The slow part takes whichever column answers *what is it doing now*** — `DETAIL` in `ls`,
+`STEP` on the Bridge — because while somebody is aborting a Job, the abort *is* what it is doing.
+Both come back the moment the action settles.
+
+**The reader's clock does the subtraction.** `Doing` records the wall-clock millisecond a stage
+was entered, because that is the only honest thing the acting process can write down: it is
+blocked inside `manifest clean` and does not know when anybody will look. `JobRow.acting_for_s`
+is that subtraction, taken where somebody is looking — the same shape `step` and `on_step_s`
+already have.
+
+### What §8 and §9 each turned out to need
+
+**§8 is a verb, not a page.** Bare `armada` was the `--help` root page under the wordmark; it is
+now `armada_helm::verbs::menu`, which reads five modules and prints `STATUS · MODULE · DETAIL ·
+VERB`. `Topic::Bare` is gone rather than left unreachable — a second front door nothing draws is
+one the next reader finds and wires back up.
+
+**The `VERB` column varies with the row's state, and that is what makes the row usable.** A
+column that always said `armada helm` would, beside `DOWN`, advertise the one command that
+refuses; it says `armada helm enable` there. Same for `armada manifest init` over an unclaimed
+directory and `armada init` over an absent guild. The Bridge's `p` key already worked this way.
+
+**§9 needed one line of cmux's CLI, and it is measured rather than guessed.** `cmux <path>` —
+a bare path, no subcommand — opens a directory in a new workspace and launches cmux if needed.
+Every plausible guess (`cmux open`, `cmux new`, `cmux workspace`) is wrong, and a guessed
+subcommand would exit non-zero into a one-line notice: a key that appears bound, appears to run
+something, and never opens anything. [`traps.md`](../traps.md) records the measurement. Detection
+is `cmux --help`, checked for that literal form, so a cmux whose CLI moves on falls back rather
+than failing quietly.
 
 **One departure from what is written below, and the arithmetic forced it.** The wide layout
 sheds `WORKFLOW`, then `TURNS`, and then — where this page names only those two — **`TASK`**,
@@ -161,6 +202,25 @@ identical.
 beside it (`docker 12s…`). The status word carries it, so no spinner and no bar. `reap`, `tick`
 and `pause` all have the same shape.
 
+**Built, in two halves that landed apart.** The state machine came first — `Acting`, and
+`Job.doing` written to the record by `kill`, `reap` and `pause`. Nothing drew it, which meant the
+bug above was still on the screen: a working abort and a hung one looked identical because both
+rows kept saying `RUNNING`. The rendering is now on all three surfaces that draw a Job —
+[`fleet ls`](../commands/fleet/ls.md), the Bridge's table and its detail pane — and the word is
+composed **once**, on the payload, because the failure mode here is one surface remembering the
+precedence and another forgetting it.
+
+**`Job.doing` is on disk because the process doing it is not the process drawing it**, and that
+is not incidental — it is the mechanism. The terminal running the abort is blocked inside
+`armada manifest clean` and can draw nothing; the only thing that can report `docker 12s…` is
+another reader of the same record. The elapsed second is therefore subtracted against *the
+reader's* clock rather than written by the actor, which is the same shape `step` and `on_step_s`
+already have.
+
+**A Job being aborted is still `RUNNING` on disk**, which is why `Acting` is a fourth enum and
+not three more Job states: folding them together would leave a crash mid-abort with a Job
+claiming a state no verb ever reached.
+
 ## 6 · No aggregate status over several Jobs
 
 His objection: *"what's the point of an aggregate status when multiple jobs are running?"* — and
@@ -184,6 +244,28 @@ change is deliberate: entering Helm is off by default on a machine anyway (`helm
 front door that lists everything is the more honest default. **[`PLAN.md`](../PLAN.md) §15.1's rationale must be rewritten
 rather than deleted.**
 
+**Built.** The rows are `STATUS · MODULE · DETAIL · VERB`, drawn under the wordmark — bare
+`armada` is the moment of orientation, and the wordmark moved with it rather than staying on a
+help page nothing reaches. [`PLAN.md`](../PLAN.md) §15.1 keeps its argument and carries a note
+saying what superseded it, which is what *rewritten rather than deleted* meant.
+
+**Two things the section did not say, decided while building it.**
+
+- **The fact is a fact and the verb is the instruction.** *"no guild yet"* on the row, `armada
+  init` in the `VERB` column — not one sentence carrying both. Left together, the fact grows
+  until the flexible column truncates it, and a truncated command is not a shorter answer, it is
+  the wrong one ([`commands/fleet/board.md`](../commands/fleet/board.md) makes the same argument
+  about a resume line).
+- **The verb varies with the row's state.** A column that always said `armada helm` would, beside
+  `DOWN`, be advertising the one command that refuses; it says `armada helm enable` there. The
+  Bridge's `p` key — *pause* over a running Job, *resume* over a paused one — already worked this
+  way, and for the same reason.
+
+**No new status words.** Every row uses [`glossary.md`](../glossary.md)'s existing `Status`:
+`READY` / `DOWN` for the three that describe setup, and `WAITING` / `RUNNING` / `OK` for the two
+that move. `DOWN` is Manifest's own word for *not standing up*, which is what an off switch, an
+unclaimed directory and an absent guild each are.
+
 ## 9 · Helm opens beside you, not inside the TUI
 
 He asked for a full chat pane — *"a TUI in which I can do everything, including talking to the
@@ -201,6 +283,18 @@ rebuilding it to avoid a screen handoff — owning every rough edge to save one 
 **Not closed forever.** If the handoff still annoys him after living with the panes, the transport
 is already there.
 
+**Built, and one thing it needed that this page could not know.** `↵` on a Job hands its worktree
+to `cmux` and the Bridge keeps drawing; where cmux is absent, `↵` is the `armada fleet board`
+handoff it has always been, so a machine without a multiplexer loses nothing. The argv is `cmux
+<path>` — a bare path with no subcommand — and it is measured rather than guessed, in
+[`traps.md`](../traps.md): every plausible name for a subcommand here is wrong, and a wrong one
+would exit non-zero into a one-line notice, which is a key that appears bound and never opens
+anything.
+
+**The distinction that made this an `Action` rather than a `Departure`.** `board --exec`
+*replaces this process*, so there is nothing left to draw with; handing a path to a multiplexer
+starts something else and returns. That is the whole mechanism behind *"the panes stay up"*.
+
 ## What it costs
 
 | Piece | Size |
@@ -215,6 +309,23 @@ is already there.
 where they read *each other*. One screen touching everything is exactly how that boundary erodes,
 and nothing in a test will catch it — `cargo xtask boundaries` checks the crate graph, not a
 renderer's habits.
+
+### How the menu holds it, written down rather than intended
+
+`boundaries` cannot see this, so the discipline is three rules in
+`crates/helm/src/verbs/menu.rs`'s header, and two of them are asserted:
+
+1. **One function per row, each given only its own module's input.** `helm_row` takes a path,
+   `fleet_row` a Fleet `Where`, `guild_row` a `Guild`. None can read another module's data
+   because none is handed any — a property of the signatures rather than of anybody's care.
+2. **No row's outcome gates another's.** All five are computed unconditionally. The tempting
+   shortcut — *"there is no workspace here, so skip the fleet row"* — is Manifest deciding what
+   Fleet reports, and it is precisely the erosion above. Asserted against a machine with nothing
+   on it and a `Run` that fails every call: all five rows still appear, in order, with a word.
+3. **No aggregate.** There is no headline over the five, so there is no field anywhere that would
+   have to be computed from two modules at once. `020` refuses an aggregate over several Jobs
+   because a word derived from the worst row describes none of them; here that argument happens
+   to double as the structural guarantee.
 
 ## Also decided
 

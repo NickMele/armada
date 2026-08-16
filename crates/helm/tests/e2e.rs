@@ -1519,3 +1519,88 @@ fn boarding_a_job_execs_into_the_expanded_worktree() {
         "board did not exec inside the Job's worktree"
     );
 }
+
+/// **Bare `armada` is the front door, and it runs where nothing is set up**
+/// (`docs/reserved/020-the-tui-decided.md`'s menu decision).
+///
+/// **The directory here claims nothing** — no `armada.yml`, no guild, no Jobs —
+/// which is most directories a person opens a terminal in, and is exactly the
+/// moment they need to be told where they are. A front door that refused there
+/// would be the screen you cannot reach when you most need it.
+///
+/// **And it must not enter Helm.** PLAN.md §15.1 gave the bare word to the
+/// orchestrator and `020` took it back; the failure mode of taking it by accident
+/// is a Claude Code session nobody asked for, spending against a real account.
+/// This scratch machine has `helm.enter` off, so the row saying so is the
+/// assertion that nothing was entered.
+#[test]
+fn bare_armada_lists_every_module_where_nothing_is_set_up() {
+    let machine = Machine::new();
+    let loose = machine.outside();
+
+    let output = machine.run(&loose, &[]);
+    assert!(
+        output.status.success(),
+        "the front door refused in a directory that claims nothing: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+
+    // Helm first, then the rest, in order and each on its own row. The header
+    // row is skipped; every other table line opens with a status word.
+    let modules: Vec<String> = text
+        .lines()
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            let status = words.next()?;
+            let module = words.next()?;
+            match ["READY", "DOWN", "OK", "RUNNING", "WAITING"].contains(&status) {
+                true => Some(module.to_string()),
+                false => None,
+            }
+        })
+        .collect();
+    assert_eq!(
+        modules,
+        vec!["helm", "fleet", "inbox", "manifest", "guild"],
+        "the front door did not list the five modules, Helm first:\n{text}"
+    );
+
+    // Nothing is set up, so the three rows about setup say so — and each names
+    // what to type, which the row would be useless without.
+    assert!(text.contains("off on this machine"), "{text}");
+    assert!(text.contains("armada helm enable"), "{text}");
+    assert!(text.contains("no armada.yml here"), "{text}");
+    assert!(text.contains("no guild yet"), "{text}");
+
+    // **A pipe gets no wordmark and no escapes.** Six lines of block characters
+    // at the top of stdout is noise a parser has to learn to skip.
+    assert!(!text.contains('\x1b'), "a pipe got escapes:\n{text}");
+    assert!(!text.contains('█'), "a pipe got the wordmark:\n{text}");
+}
+
+/// The same front door, as a machine reads it.
+#[test]
+fn bare_armada_with_json_is_an_envelope_with_no_aggregate_word() {
+    let machine = Machine::new();
+    let output = machine.run(&machine.outside(), &["--json"]);
+    assert!(output.status.success());
+
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["verb"], "menu");
+    // **The command's status, not the machine's.** It is `OK` because the front
+    // door could look; the words describing the modules are on the rows, and
+    // there is deliberately no field summarising them — a headline is the one
+    // thing that would have to be computed from two modules at once
+    // (`ARCHITECTURE.md` §1.9).
+    assert_eq!(payload["status"], "OK");
+    let results = payload["data"]["results"].as_array().expect("results[]");
+    assert_eq!(results.len(), 5);
+    assert_eq!(results[0]["module"], "helm");
+    for row in results {
+        assert!(row["fact"].as_str().is_some_and(|fact| !fact.is_empty()));
+        assert!(row["verb"]
+            .as_str()
+            .is_some_and(|verb| verb.starts_with("armada ")));
+    }
+}

@@ -33,10 +33,10 @@ use armada_core::envelope::{
     ComponentsData, DispatchData, DoctorData, Envelope, Evidence, FailureData, FailuresData,
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxData, InboxRow,
-    InitData, InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem,
-    Projection, Released, ResolvedSkillView, ResultRow, RunView, ScanData, ServicesData,
-    SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem,
-    TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData, Window,
+    InitData, InitDryRun, JobRow, Locality, MachineInitData, MenuData, MenuRow, NoteRow,
+    PortReport, Problem, Projection, Released, ResolvedSkillView, ResultRow, RunView, ScanData,
+    ServicesData, SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData,
+    Sync, SyncItem, TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData, Window,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -1761,6 +1761,7 @@ fn fleet_ls_matches_its_fixture() {
             },
             needs_attention,
             acting: None,
+            acting_for_s: None,
         }
     }
 
@@ -2103,6 +2104,7 @@ fn bridge_matches_its_fixture() {
             },
             needs_attention,
             acting: None,
+            acting_for_s: None,
         }
     }
 
@@ -2216,6 +2218,7 @@ fn bridge_filtered_matches_its_fixture() {
             wall_clock_ms: 2_520_000,
         },
         acting: None,
+        acting_for_s: None,
         needs_attention: false,
     }];
 
@@ -2450,6 +2453,8 @@ fn show_data() -> ShowData {
         workflow: "feature".to_string(),
         state: JobState::Blocked,
         recorded_state: JobState::Running,
+        acting: None,
+        acting_for_s: None,
         drone_pgid: Some(48122),
         drone_alive: true,
         step: "implement".to_string(),
@@ -3281,8 +3286,8 @@ fn the_two_audiences_differ_only_in_styling() {
             plain_path.display()
         );
         assert_eq!(
-            fold(&strip_ansi(&tty)),
-            fold(&plain),
+            without_wordmark(&fold(&strip_ansi(&tty))),
+            without_wordmark(&fold(&plain)),
             "{} and its .plain twin are two different renders, not one render \
              twice. Same columns, same order, same words — styling is the only \
              thing that may differ (PLAN.md §3.1.1).",
@@ -3415,4 +3420,364 @@ fn fold(text: &str) -> String {
         .replace('›', ">")
         .replace('→', "->")
         .replace(" · ", ", ")
+}
+
+/// The wordmark removed, so the comparison above is about the report.
+///
+/// **The banner is styling, and it is the largest piece of styling Armada has.**
+/// `render/banner.rs` suppresses it on non-TTY stdout for the same reason
+/// [`Style::nothing`] folds an em dash to a hyphen: anything decorative is for
+/// the person and not for the parser. It carries no column, no word and no
+/// number — six lines of block characters spelling the tool's own name — so a
+/// `.tty` that opens with it and a `.plain` that does not are one render twice.
+///
+/// **Narrow on purpose: exactly the six known lines, matched literally.** It
+/// cannot hide a difference in the report, because no line of any report is one
+/// of these. The alternative considered and rejected was *"drop leading lines
+/// until the two align"*, which would silently absorb a real row.
+///
+/// [`Style::nothing`]: armada_helm::render::style::Style::nothing
+fn without_wordmark(text: &str) -> String {
+    const ARMADA: [&str; 6] = [
+        " █████╗ ██████╗ ███╗   ███╗ █████╗ ██████╗  █████╗",
+        "██╔══██╗██╔══██╗████╗ ████║██╔══██╗██╔══██╗██╔══██╗",
+        "███████║██████╔╝██╔████╔██║███████║██║  ██║███████║",
+        "██╔══██║██╔══██╗██║╚██╔╝██║██╔══██║██║  ██║██╔══██║",
+        "██║  ██║██║  ██║██║ ╚═╝ ██║██║  ██║██████╔╝██║  ██║",
+        "╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝",
+    ];
+    let mut lines: Vec<&str> = text.lines().collect();
+    if lines.iter().take(ARMADA.len()).eq(ARMADA.iter()) {
+        // The wordmark, and the blank line `banner` writes after it.
+        lines.drain(..ARMADA.len());
+        if lines.first() == Some(&"") {
+            lines.remove(0);
+        }
+    }
+    let mut out = lines.join("\n");
+    if text.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// the front door
+
+/// Bare `armada` — five modules, a word and a fact each
+/// (`docs/reserved/020-the-tui-decided.md`'s menu decision).
+///
+/// **Frozen because it is the first screen anybody sees.** Everything else in
+/// this file is a report somebody went looking for; this is the one a person
+/// meets before they know what Armada is, and its layout drifting is a
+/// first impression drifting.
+///
+/// **What the fixture is asserting, beyond the bytes**: Helm leads, every row
+/// opens with a status word from the fixed vocabulary, `DETAIL` carries counts
+/// rather than a second status word, and there is **no summary line** — the
+/// absence is the point. A headline over the five would be the one field
+/// computed from two modules at once, which is what `ARCHITECTURE.md` §1.9 is
+/// about on a screen that touches everything.
+#[test]
+fn menu_matches_its_fixture() {
+    let results = vec![
+        MenuRow {
+            module: "helm".to_string(),
+            status: Status::Ready,
+            fact: "resumes your conversation".to_string(),
+            verb: "armada helm".to_string(),
+        },
+        MenuRow {
+            module: "fleet".to_string(),
+            status: Status::Waiting,
+            // Counts, never an aggregate word — `020`'s sixth decision, on a
+            // second surface.
+            fact: "4 jobs · 2 need you · 1 stalled".to_string(),
+            verb: "armada fleet ls".to_string(),
+        },
+        MenuRow {
+            module: "inbox".to_string(),
+            status: Status::Waiting,
+            fact: "2 questions waiting on you".to_string(),
+            verb: "armada fleet inbox".to_string(),
+        },
+        MenuRow {
+            module: "manifest".to_string(),
+            status: Status::Ready,
+            fact: "armada.yml — this workspace".to_string(),
+            verb: "armada manifest status".to_string(),
+        },
+        MenuRow {
+            module: "guild".to_string(),
+            status: Status::Ready,
+            fact: "19 skills · 2 hooks · 4 workflows".to_string(),
+            verb: "armada guild ls".to_string(),
+        },
+    ];
+
+    let output = Output::Menu(Box::new(Envelope::ok(
+        "menu",
+        None,
+        Status::Ok,
+        MenuData { results },
+    )));
+    assert_render("menu", &output);
+}
+
+/// A machine with nothing on it still gets five rows, and each says what to
+/// type.
+///
+/// **The empty case is the one a new reader meets**, so it is frozen too. A
+/// front door that went blank on a fresh install would be the screen failing at
+/// exactly the moment it is most needed.
+#[test]
+fn menu_on_a_fresh_machine_matches_its_fixture() {
+    let results = vec![
+        MenuRow {
+            module: "helm".to_string(),
+            status: Status::Down,
+            fact: "off on this machine".to_string(),
+            // **The switch, not the verb it gates.** A row that said `armada
+            // helm` beside `DOWN` would advertise the command that refuses.
+            verb: "armada helm enable".to_string(),
+        },
+        MenuRow {
+            module: "fleet".to_string(),
+            status: Status::Ok,
+            fact: "no jobs".to_string(),
+            verb: "armada fleet ls".to_string(),
+        },
+        MenuRow {
+            module: "inbox".to_string(),
+            status: Status::Ok,
+            fact: "nothing open".to_string(),
+            verb: "armada fleet inbox".to_string(),
+        },
+        MenuRow {
+            module: "manifest".to_string(),
+            status: Status::Down,
+            fact: "no armada.yml here".to_string(),
+            verb: "armada manifest init".to_string(),
+        },
+        MenuRow {
+            module: "guild".to_string(),
+            status: Status::Down,
+            fact: "no guild yet".to_string(),
+            verb: "armada init".to_string(),
+        },
+    ];
+
+    let output = Output::Menu(Box::new(Envelope::ok(
+        "menu",
+        None,
+        Status::Ok,
+        MenuData { results },
+    )));
+    assert_render("menu-fresh", &output);
+}
+
+// ---------------------------------------------------------------------------
+// `020` §5 — an action with a duration gets a state word
+
+/// A Job being aborted says `ABORTING`, and names the slow part — on **both**
+/// listings (`docs/reserved/020-the-tui-decided.md` §5).
+///
+/// **This is the bug the whole of `020` was written around.** The owner aborted
+/// a Job, pressed `y`, and the screen said nothing for several seconds while
+/// `armada manifest clean` talked to docker. The abort was working. A working
+/// abort and a hung one were the same screen, because both rows said `RUNNING`.
+///
+/// **Both surfaces in one test, deliberately.** They are two renderers over one
+/// listing, and the failure `020` §5 names is one of them remembering to prefer
+/// the action while the other forgets — a test per surface would pass while they
+/// disagreed. This one cannot.
+///
+/// **No golden pair, and that is why it is a separate test.** A fixture freezes
+/// a layout; an action is a transient, and a frame caught mid-abort is not a
+/// layout anybody should have to regenerate by hand to change an unrelated
+/// column. What is asserted here is the substitution, which is the behaviour.
+#[test]
+fn a_job_being_acted_on_says_the_action_and_names_the_slow_part() {
+    let untouched = aborting_row();
+    let mut acting = untouched.clone();
+    acting.acting = Some(armada_core::fleet::job::Doing {
+        acting: armada_core::fleet::Acting::Aborting,
+        slow: Some("docker".to_string()),
+        since_ms: 1_000,
+    });
+    acting.acting_for_s = Some(12);
+
+    for (surface, before, after) in [
+        (
+            "fleet ls",
+            fleet_ls_text(&untouched),
+            fleet_ls_text(&acting),
+        ),
+        ("bridge", bridge_text(&untouched), bridge_text(&acting)),
+    ] {
+        // **The row, not the render.** The summary line under both tables
+        // carries the *envelope's* status, and a fleet with a Job in it is
+        // `RUNNING` whatever anybody is doing to one of its rows — that word
+        // describes the listing and this test is about the row.
+        let (before, after) = (job_line(surface, &before), job_line(surface, &after));
+        assert!(
+            before.contains("RUNNING") && !before.contains("ABORTING"),
+            "{surface} says the state while nobody is acting:\n{before}"
+        );
+        assert!(
+            after.contains("ABORTING"),
+            "{surface} drew the state over a running abort, which is 020 §5's silence:\n{after}"
+        );
+        assert!(
+            !after.contains("RUNNING"),
+            "{surface} drew both words for one row:\n{after}"
+        );
+        // **The stage and its clock, which is the half that makes the word
+        // useful.** `ABORTING` says an abort is happening; `docker 12s` says
+        // which part of it is the one taking the time.
+        assert!(
+            after.contains("docker 12s"),
+            "{surface} did not name the slow part:\n{after}"
+        );
+        // **No bar and no spinner** (PHASES.md §9.1 F2, `020` §5). The status
+        // word carries the fact that something is running, which is exactly why
+        // a bar computed from a turn count is refused: it would be a guess drawn
+        // as a measurement.
+        for banned in ['█', '▓', '▒', '░', '%'] {
+            assert!(
+                !after.contains(banned),
+                "{surface} drew a progress indicator `{banned}`:\n{after}"
+            );
+        }
+    }
+}
+
+/// The other two words reach both listings the same way, and none of the three
+/// is a Job state.
+#[test]
+fn reaping_and_pausing_reach_the_row_the_same_way() {
+    for acting in armada_core::fleet::Acting::ALL {
+        let mut row = aborting_row();
+        row.acting = Some(armada_core::fleet::job::Doing {
+            acting,
+            slow: Some("worktree".to_string()),
+            since_ms: 0,
+        });
+        row.acting_for_s = Some(3);
+        for (surface, text) in [
+            ("fleet ls", fleet_ls_text(&row)),
+            ("bridge", bridge_text(&row)),
+        ] {
+            assert!(
+                text.contains(acting.word()),
+                "{surface} lost `{}`:\n{text}",
+                acting.word()
+            );
+            assert!(
+                text.contains("worktree 3s"),
+                "{surface} lost the slow part under `{}`:\n{text}",
+                acting.word()
+            );
+        }
+    }
+}
+
+/// An action that has not reached anything slow gets the word and no stage.
+///
+/// **A stage that has not started is not a stage to name**, which is the refusal
+/// that already keeps `implement 0s` off the `STEP` column: a zero reads as a
+/// measurement, and nothing has been measured.
+#[test]
+fn an_action_with_nothing_slow_yet_names_no_stage() {
+    let mut row = aborting_row();
+    row.acting = Some(armada_core::fleet::job::Doing::started(
+        armada_core::fleet::Acting::Aborting,
+        0,
+    ));
+    row.acting_for_s = None;
+    for (surface, text) in [
+        ("fleet ls", fleet_ls_text(&row)),
+        ("bridge", bridge_text(&row)),
+    ] {
+        assert!(text.contains("ABORTING"), "{surface}:\n{text}");
+        assert!(
+            !text.contains("0s"),
+            "{surface} drew a clock nobody started:\n{text}"
+        );
+    }
+}
+
+/// The one table row about `rate-limit`, out of a whole render.
+///
+/// **Every assertion above is about a row**, and both listings print a summary
+/// line under the table carrying the envelope's own status word. Matching on the
+/// whole render would let that line answer for the row — which is how a test
+/// that reads `RUNNING` somewhere on the screen passes over a row that says
+/// `ABORTING`, and over one that does not.
+fn job_line<'a>(surface: &str, text: &'a str) -> &'a str {
+    text.lines()
+        .find(|line| line.contains("rate-limit"))
+        .unwrap_or_else(|| panic!("{surface} drew no row for `rate-limit`:\n{text}"))
+}
+
+/// One Job, `RUNNING` and untouched, as both listings receive it.
+fn aborting_row() -> JobRow {
+    JobRow {
+        uuid: "c19d0a34-3069-4115-ad92-e81f486ce8b9".to_string(),
+        name: "rate-limit".to_string(),
+        workflow: "feature".to_string(),
+        // **Still `RUNNING` on disk**, which is the whole reason the two words
+        // are laid over one another rather than folded into one enum: a crash
+        // mid-abort must not leave a Job claiming a state no verb reached.
+        state: JobState::Running,
+        detail: "implement".to_string(),
+        step: "implement".to_string(),
+        on_step_s: Some(840),
+        task: "hold the rate limit".to_string(),
+        runtime_s: 840,
+        cost_usd: 2.10,
+        tokens: 120_000,
+        turns: 4,
+        budget_remaining: Remaining {
+            iterations: 8,
+            tokens: 280_000,
+            wall_clock_ms: 1_860_000,
+        },
+        needs_attention: false,
+        acting: None,
+        acting_for_s: None,
+    }
+}
+
+fn fleet_ls_text(row: &JobRow) -> String {
+    let output = Output::FleetLs(Box::new(Envelope::ok(
+        "fleet ls",
+        None,
+        Status::Running,
+        FleetLsData {
+            results: vec![row.clone()],
+            needs_you: 0,
+            spent_usd: row.cost_usd,
+            window: None,
+        },
+    )));
+    render::human(&output, Style::plain(), Terminal::piped())
+}
+
+fn bridge_text(row: &JobRow) -> String {
+    let output = Output::Bridge(Box::new(Envelope::ok(
+        "bridge",
+        None,
+        Status::Running,
+        BridgeData {
+            needs_you: 0,
+            spent_usd: row.cost_usd,
+            running: 1,
+            filter: None,
+            hidden: 0,
+            window: None,
+            results: vec![row.clone()],
+        },
+    )));
+    render::human(&output, Style::plain(), Terminal::piped())
 }

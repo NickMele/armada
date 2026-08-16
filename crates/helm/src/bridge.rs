@@ -624,6 +624,7 @@ mod tests {
             },
             needs_attention: needs,
             acting: None,
+            acting_for_s: None,
         }
     }
 
@@ -1104,6 +1105,8 @@ mod tests {
             workflow: "feature".to_string(),
             state: JobState::Blocked,
             recorded_state: JobState::Running,
+            acting: None,
+            acting_for_s: None,
             drone_pgid: Some(48122),
             drone_alive: true,
             step: "implement".to_string(),

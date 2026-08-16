@@ -296,6 +296,29 @@ impl Role {
         }
     }
 
+    /// The colour an in-flight action is spoken in
+    /// (`docs/reserved/020-the-tui-decided.md` §5).
+    ///
+    /// **No new colour, and that is deliberate.** `Acting` is a fourth enum but
+    /// it is not a fourth kind of thing to a reader scanning a column: every one
+    /// of its three words is a Job on its way to a state the palette already
+    /// paints, so each borrows the colour of where it is going. A row that turns
+    /// pink when you press `x` and stays pink when the abort lands is one
+    /// colour changing once; minting a colour for the *-ING* form would make it
+    /// change twice for one event.
+    ///
+    /// **`REAPING` shares abort pink with `ABORTING`** for the reason `SILENT`
+    /// shares flare orange with `STALLED` above: both take a Job and what it
+    /// holds away, a reader wants the same thing from both rows, and the word is
+    /// what tells them apart.
+    pub const fn for_acting(acting: armada_core::fleet::Acting) -> Role {
+        use armada_core::fleet::Acting;
+        match acting {
+            Acting::Aborting | Acting::Reaping => Role::AbortPink,
+            Acting::Pausing => Role::StasisPurple,
+        }
+    }
+
     /// The colour a probed port state is spoken in.
     pub const fn for_port(state: PortState) -> Role {
         match state {

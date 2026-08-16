@@ -3726,9 +3726,22 @@ arguments enters it; `armada helm` is the explicit spelling.
 > a reader who had already flipped the switch was handed a command to paste — so `--exec` is now
 > an explicit synonym for the default, and `--print-command` is where the printed line went.
 >
-> **The bare word is superseded.** [`reserved/020-the-tui-decided.md`](reserved/020-the-tui-decided.md)
-> §8 gives `armada` alone a menu of the modules rather than Helm, and the rationale above is kept
-> rather than deleted because it is what the menu decision was weighed against.
+> **The bare word is superseded, and the menu is built.**
+> [`reserved/020-the-tui-decided.md`](reserved/020-the-tui-decided.md)'s menu decision gives
+> `armada` alone a front door listing the five modules — Helm, fleet, inbox, manifest, guild,
+> each with a status word and one line of fact — rather than entering Helm.
+>
+> **The rationale above is kept rather than deleted because it is what the menu decision was
+> weighed against**, and the argument that beat it is short enough to state here: entering Helm
+> is off by default on a machine (`helm.enter`), so a bare word that *usually refuses* is a worse
+> front door than one that lists what is there. The sentence *"typing `armada` with no arguments
+> enters it"* is therefore history rather than specification; `armada helm` is how you enter, and
+> it is the only way.
+>
+> **It runs before workspace resolution**, like Fleet and Helm and for the same reason: most
+> directories a person opens a terminal in are not workspaces, and the front door is what they
+> reach for when they do not know where they are. Manifest says so on its own row instead of the
+> screen refusing.
 
 Its toolbelt is `fleet.*` and `manifest.*` — spawn, status, probe, answer, kill, and the
 workspace verbs. Its job is **decompose, delegate, aggregate, report**. Classification is not
