@@ -162,15 +162,16 @@ pub const QUESTIONS: [Question; 7] = [
     // different product.
     Question {
         number: 4,
-        prompt: "How many iterations should one Job run before it stops and asks you?",
-        purpose: "A Job is one piece of work you asked for — it gets its own \
-                  branch and its own limits. One whole number here: at this \
-                  many turns it stops, keeps everything it has done, and waits \
-                  in your inbox for you to say whether to carry on.",
+        prompt: "How many times should one step be attempted before a Job stops and asks you?",
+        purpose: "A step advances when its gate passes. If the gate keeps \
+                  refusing, more tries will not help — so at this many attempts \
+                  the Job stops, keeps everything it has done, and waits in your \
+                  inbox. The count is per step and resets when one passes, so a \
+                  long Job that keeps moving is never near it.",
         // **The default is a value, not a description.** "the per-workflow
-        // ceilings" is a sentence you cannot type; `20` is the answer *and* the
+        // ceilings" is a sentence you cannot type; `3` is the answer *and* the
         // format, which is what a reader who has never set a ceiling needs.
-        keeps: "20",
+        keeps: "3",
         writes: "workflows/*.yml",
         shape: Shape::Line,
     },
@@ -225,7 +226,7 @@ pub const CEILING_QUESTIONS: [usize; 3] = [4, 5, 6];
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Ceilings {
     /// How many times the loop may go round.
-    pub iterations: u32,
+    pub attempts: u32,
     /// Cost in USD, to the nearest cent.
     pub cost_usd: f64,
     /// Wall clock, in minutes.
@@ -236,7 +237,7 @@ impl Ceilings {
     /// `design` and `plan`: they end at you regardless, so this is a runaway
     /// guard rather than a budget (`PLAN.md` §14.6).
     pub const ADVISORY: Ceilings = Ceilings {
-        iterations: 15,
+        attempts: 3,
         cost_usd: 5.00,
         wall_clock_minutes: 90,
     };
@@ -244,7 +245,7 @@ impl Ceilings {
     /// `feature` and `bug`: they can close autonomously, so this bounds real
     /// spend.
     pub const AUTONOMOUS: Ceilings = Ceilings {
-        iterations: 20,
+        attempts: 3,
         cost_usd: 10.00,
         wall_clock_minutes: 90,
     };
@@ -269,19 +270,19 @@ impl Ceilings {
     pub fn written(&self) -> String {
         format!(
             "{}, {:.2}, {}m",
-            self.iterations, self.cost_usd, self.wall_clock_minutes
+            self.attempts, self.cost_usd, self.wall_clock_minutes
         )
     }
 }
 
-/// Read question 4's answer — a count of iterations, as `20`.
+/// Read question 4's answer — a count of attempts at one step, as `3`.
 ///
 /// **Refuses rather than guesses.** A ceiling silently read as `0` is a fleet
-/// that stops after no iterations, and the caller can re-ask a question far
-/// more cheaply than a user can debug that.
-pub fn parse_iterations(answer: &str) -> Result<u32, String> {
-    let value = number(answer, "iterations", "20")?;
-    u32::try_from(value).map_err(|_| refusal(answer, "iterations", "20"))
+/// that stops before attempting anything, and the caller can re-ask a question
+/// far more cheaply than a user can debug that.
+pub fn parse_attempts(answer: &str) -> Result<u32, String> {
+    let value = number(answer, "attempts", "3")?;
+    u32::try_from(value).map_err(|_| refusal(answer, "attempts", "3"))
 }
 
 /// Read question 5's answer — a ceiling in dollars, as `10` or `$10.00`.
@@ -356,14 +357,14 @@ pub struct Answers {
     pub expectations: Option<String>,
     /// Question 3.
     pub how_i_work: Option<String>,
-    /// Question 4 — iterations, on its own.
+    /// Question 4 — attempts at one step, on its own.
     ///
     /// **The three ceilings are three fields rather than one `Ceilings`**, and
     /// that is the whole gain of splitting the question: each is independently
     /// answered or defaulted, so a person who cares only about cost keeps
     /// `design`'s 15 iterations and `bug`'s 20 rather than flattening both to
     /// whichever number he had to invent to get past the other two slots.
-    pub iterations: Option<u32>,
+    pub attempts: Option<u32>,
     /// Question 5 — cost in USD, on its own.
     pub cost_usd: Option<f64>,
     /// Question 6 — wall clock in minutes, on its own.
@@ -390,7 +391,7 @@ impl Answers {
             self.voice.is_some(),
             self.expectations.is_some(),
             self.how_i_work.is_some(),
-            self.iterations.is_some(),
+            self.attempts.is_some(),
             self.cost_usd.is_some(),
             self.wall_clock_minutes.is_some(),
             self.remote.is_some(),
@@ -435,7 +436,7 @@ impl Answers {
     pub fn ceilings_for(&self, workflow: &str) -> Ceilings {
         let per_workflow = Ceilings::for_workflow(workflow);
         Ceilings {
-            iterations: self.iterations.unwrap_or(per_workflow.iterations),
+            attempts: self.attempts.unwrap_or(per_workflow.attempts),
             cost_usd: self.cost_usd.unwrap_or(per_workflow.cost_usd),
             wall_clock_minutes: self
                 .wall_clock_minutes
@@ -492,7 +493,7 @@ mod tests {
     #[test]
     fn each_limit_question_takes_one_number_and_shows_it_as_its_default() {
         assert_eq!(CEILING_QUESTIONS, [4, 5, 6]);
-        assert_eq!(parse_iterations(QUESTIONS[3].keeps), Ok(20));
+        assert_eq!(parse_attempts(QUESTIONS[3].keeps), Ok(3));
         assert_eq!(parse_cost(QUESTIONS[4].keeps), Ok(10.00));
         assert_eq!(parse_minutes(QUESTIONS[5].keeps), Ok(90));
         for number in CEILING_QUESTIONS {
@@ -608,7 +609,7 @@ mod tests {
             voice: Some("Lead with the answer.".to_string()),
             expectations: Some("Tests pass.".to_string()),
             how_i_work: Some("Trunk based.".to_string()),
-            iterations: Some(20),
+            attempts: Some(3),
             cost_usd: Some(10.0),
             wall_clock_minutes: Some(90),
             remote: Some("git@example.com:me/guild.git".to_string()),
@@ -623,13 +624,13 @@ mod tests {
     #[test]
     fn an_answered_ceiling_replaces_the_per_workflow_default_everywhere() {
         let answers = Answers {
-            iterations: Some(8),
+            attempts: Some(8),
             cost_usd: Some(7.50),
             wall_clock_minutes: Some(30),
             ..Answers::default()
         };
         for workflow in ["design", "plan", "feature", "bug"] {
-            assert_eq!(answers.ceilings_for(workflow).iterations, 8, "{workflow}");
+            assert_eq!(answers.ceilings_for(workflow).attempts, 8, "{workflow}");
             assert_eq!(answers.ceilings_for(workflow).cost_usd, 7.50, "{workflow}");
         }
     }
@@ -649,8 +650,8 @@ mod tests {
             let ceilings = answers.ceilings_for(workflow);
             assert_eq!(ceilings.cost_usd, 7.50, "{workflow}");
             assert_eq!(
-                ceilings.iterations,
-                Ceilings::for_workflow(workflow).iterations,
+                ceilings.attempts,
+                Ceilings::for_workflow(workflow).attempts,
                 "{workflow} lost its own iteration ceiling"
             );
             assert_eq!(
@@ -668,7 +669,7 @@ mod tests {
         assert_eq!(
             Ceilings::for_workflow("design"),
             Ceilings {
-                iterations: 15,
+                attempts: 3,
                 cost_usd: 5.00,
                 wall_clock_minutes: 90
             }
@@ -676,7 +677,7 @@ mod tests {
         assert_eq!(
             Ceilings::for_workflow("feature"),
             Ceilings {
-                iterations: 20,
+                attempts: 3,
                 cost_usd: 10.00,
                 wall_clock_minutes: 90
             }
@@ -689,15 +690,15 @@ mod tests {
     /// to type.
     #[test]
     fn the_spelling_in_the_hint_round_trips() {
-        assert_eq!(Ceilings::AUTONOMOUS.written(), "20, 10.00, 90m");
-        assert_eq!(Ceilings::ADVISORY.written(), "15, 5.00, 90m");
+        assert_eq!(Ceilings::AUTONOMOUS.written(), "3, 10.00, 90m");
+        assert_eq!(Ceilings::ADVISORY.written(), "3, 5.00, 90m");
         let defaulted = Answers::all_defaulted();
-        assert_eq!(defaulted.ceilings_for("bug").written(), "20, 10.00, 90m");
+        assert_eq!(defaulted.ceilings_for("bug").written(), "3, 10.00, 90m");
         // Every hint is typeable into its own question, and reads back as the
         // number the defaulted interview would have used anyway.
         assert_eq!(
             Ceilings {
-                iterations: parse_iterations(QUESTIONS[3].keeps).unwrap(),
+                attempts: parse_attempts(QUESTIONS[3].keeps).unwrap(),
                 cost_usd: parse_cost(QUESTIONS[4].keeps).unwrap(),
                 wall_clock_minutes: parse_minutes(QUESTIONS[5].keeps).unwrap(),
             },
@@ -743,9 +744,9 @@ mod tests {
     /// typeable.
     #[test]
     fn an_unreadable_ceiling_is_refused_and_says_what_was_expected() {
-        for answer in ["", "lots", "0", "20, 600k, 90m", "-4"] {
-            let refusal = parse_iterations(answer).unwrap_err();
-            assert!(refusal.contains("20"), "`{answer}`: {refusal}");
+        for answer in ["", "lots", "0", "3, 10.00, 90m", "-4"] {
+            let refusal = parse_attempts(answer).unwrap_err();
+            assert!(refusal.contains('3'), "`{answer}`: {refusal}");
         }
         for answer in ["", "heaps", "600k, 90m"] {
             let refusal = parse_cost(answer).unwrap_err();
@@ -763,7 +764,7 @@ mod tests {
     /// ceiling he did not choose for the other two.
     #[test]
     fn the_old_triple_is_refused_rather_than_partly_understood() {
-        assert!(parse_iterations("20, 600k, 90m").is_err());
+        assert!(parse_attempts("20, 600k, 90m").is_err());
         assert!(parse_cost("20, 600k, 90m").is_err());
         assert!(parse_minutes("20, 600k, 90m").is_err());
     }

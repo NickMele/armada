@@ -1422,10 +1422,7 @@ fn a_budget_override_reaches_the_job_it_was_given_for() {
         },
     );
     assert_eq!(data.budget.cost_usd, 15.0);
-    assert_eq!(
-        data.budget.iterations, 20,
-        "the rest of `feature` is intact"
-    );
+    assert_eq!(data.budget.attempts, 3, "the rest of `feature` is intact");
 }
 
 // -------------------------------------------------------------------------- ls
@@ -1446,7 +1443,10 @@ fn listing_the_fleet_reads_what_the_drone_spent_from_its_transcript() {
             let row = &envelope.data.results[0];
             assert_eq!(row.turns, 2);
             assert_eq!(row.tokens, 4 + 85 + 14_815 + 44_357);
-            assert_eq!(row.budget_remaining.iterations, 18);
+            // **Three attempts at `plan`, none of them made yet.** This used
+            // to read 18 — twenty declared minus the two model turns the stub
+            // spends — which is the bug in one line: a turn is not an attempt.
+            assert_eq!(row.budget_remaining.attempts, 3);
             // **The Drone finished and exited, and nothing relayed** — this
             // scratch machine's `exe` is a path that does not exist, so the
             // hook's tick goes nowhere. `020` §6: that is `SILENT`, not the
@@ -2228,9 +2228,11 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
 
     match output {
         Output::Answer(envelope) => {
-            // Two turns of a twenty-iteration budget: the answer continued the
-            // run rather than starting a new one.
-            assert_eq!(envelope.data.budget_remaining.iterations, 18);
+            // **The attempt ceiling is untouched by an answer**, which is what
+            // "leaves the budget alone" means now that the ceiling counts
+            // attempts at a step rather than the model's turns: the Job is on
+            // its first attempt and has all three.
+            assert_eq!(envelope.data.budget_remaining.attempts, 3);
             assert_eq!(envelope.data.state, JobState::Running);
             assert!(envelope.data.pgid.is_some());
         }
@@ -2298,11 +2300,16 @@ fn answering_a_job_twice_adds_up_rather_than_starting_over() {
     }
 }
 
-/// **A Job past its ceiling is not resumed by answering it.** `on_exhausted:
-/// needs_human` means a person decides what happens next, and silently resuming
-/// is how a budget stops being one.
+/// **A Job past its ceiling is not resumed by prose.** `on_exhausted:
+/// needs_human` means a person decides what happens next, and *"carry on"* is
+/// not a decision about how much more rope it gets — silently resuming on it is
+/// how a budget stops being one.
+///
+/// **What the refusal says is the change**: not *board it or kill it*, which
+/// were two ways to abandon the work, but the grammar of a raise. The
+/// companion test below is the one that spends it.
 #[test]
-fn answering_a_job_that_has_run_out_of_rope_is_refused_and_raised() {
+fn answering_a_job_out_of_rope_with_prose_is_refused_and_told_the_grammar() {
     let scratch = Scratch::new();
     let run = scratch.harness();
     let data = spawn(
@@ -2336,23 +2343,110 @@ fn answering_a_job_that_has_run_out_of_rope_is_refused_and_raised() {
     )
     .unwrap_err();
     assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
-    // The ceiling this Job runs out of is now its cost one; what the test is
-    // about is that answering past *a* ceiling is refused, not which.
     assert!(error.message.contains("cost"), "{}", error.message);
+    assert!(
+        error
+            .next_action
+            .as_deref()
+            .is_some_and(|next| next.contains("max_cost")),
+        "the refusal does not say what would work: {:?}",
+        error.next_action
+    );
 
-    // Persisted and raised, so the ceiling is a durable fact rather than
-    // something one invocation noticed and forgot.
     let record = scratch.store().load(&data.uuid).unwrap();
     assert_eq!(record.state, JobState::Paused);
     assert_eq!(
         record.verdict,
         Some(armada_core::fleet::Verdict::NeedsHuman)
     );
-    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
-    assert!(
-        entries.iter().any(|entry| entry.body.contains("ceiling")),
-        "the ceiling was not raised: {entries:#?}"
+}
+
+/// **A ceiling is a checkpoint, not a death.**
+///
+/// This is the behaviour that did not exist: every Job that ran out of rope was
+/// refused with *board it, or kill it*, and its work was stranded on a branch
+/// nobody went back to. Two of the author's own Jobs sat that way for thirteen
+/// hours. The answer to *how much more does it get* is a `--budget` pair, in
+/// `--budget`'s own grammar, and the Job carries on from where it stopped.
+#[test]
+fn answering_a_job_out_of_rope_with_a_raise_gives_it_more_and_continues() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            budget: vec!["max_cost=0.01".to_string()],
+            ..task("add rate limiting")
+        },
     );
+    await_turn(&scratch, &data.uuid);
+
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "e1",
+        &data.uuid,
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "t",
+        1,
+        "well?",
+    )
+    .unwrap();
+
+    fleet::answer(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &data.name,
+        "max_cost=25.00",
+    )
+    .expect("a raise is an answer");
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.budget.cost_usd, 25.00, "the ceiling was not raised");
+    assert_eq!(
+        record.verdict, None,
+        "the verdict that stopped it survived the answer"
+    );
+    assert_ne!(
+        record.state,
+        JobState::Paused,
+        "the Job is still stopped after being given more rope"
+    );
+    // **Recorded as a ceiling a person set**, so a sub-Job spawned after this
+    // inherits the raise rather than its workflow's default ([`carved`]).
+    assert!(
+        record.budget_set.iter().any(|key| key == "max_cost"),
+        "the raise was not recorded as the caller's: {:?}",
+        record.budget_set
+    );
+
+    // **A raise that does not clear the ceiling is refused rather than closing
+    // the entry**, which would leave the Job stopped with nothing to answer.
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "e2",
+        &data.uuid,
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "t",
+        1,
+        "well?",
+    )
+    .unwrap();
+    let mut record = scratch.store().load(&data.uuid).unwrap();
+    record.budget.cost_usd = 0.01;
+    scratch.store().save(&record).unwrap();
+    let error = fleet::answer(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &data.name,
+        "max_cost=0.02",
+    )
+    .unwrap_err();
+    assert!(error.message.contains("still at"), "{}", error.message);
 }
 
 #[test]
@@ -2564,11 +2658,13 @@ fn show_reports_the_inbox_entry_that_raised_needs_you_in_full() {
     assert_eq!(shown.job, data.name);
     assert_eq!(shown.branch, data.branch);
     assert_eq!(shown.worktree, data.worktree);
-    assert!(shown.budget.iterations > 0, "no ceiling to spend against");
+    assert!(shown.budget.attempts > 0, "no ceiling to spend against");
+    // **Attempts at the step, not turns of the model.** These used to be added
+    // together, which only ever worked because the ceiling was counting turns —
+    // the bug that stopped every Job in its first exchange.
     assert_eq!(
-        shown.turns + shown.budget_remaining.iterations,
-        shown.budget.iterations,
-        "spent and left do not account for the ceiling"
+        shown.budget_remaining.attempts, shown.budget.attempts,
+        "a Job that has attempted nothing has every attempt left"
     );
 }
 
@@ -4050,7 +4146,7 @@ fn a_finished_job_holding_uncommitted_work_keeps_its_worktree() {
         &scratch,
         "bug",
         "name: bug\ndescription: land it\nends_at: branch\n\
-         budget:\n  iterations: 20\n  cost: 10.00\n  wall_clock: 90m\n  \
+         budget:\n  attempts: 3\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: land\n    skill: land-branch\n    verify: { must: branch_exists }\n",
     );
@@ -4127,7 +4223,7 @@ fn a_bug_workflow_reproduces_fixes_and_lands_with_no_human_turn_in_the_middle() 
         &scratch,
         "bug",
         "name: bug\ndescription: reproduce, fix, land\nends_at: branch\n\
-         budget:\n  iterations: 20\n  cost: 10.00\n  wall_clock: 90m\n  \
+         budget:\n  attempts: 3\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: reproduce\n    skill: reproduce-failure\n    \
          verify:\n      must: failing_test_exists\n      test: ${task.test}\n\
@@ -4317,7 +4413,7 @@ fn a_green_suite_is_not_a_reproduction_and_the_step_is_run_again() {
         &scratch,
         "bug",
         "name: bug\ndescription: reproduce only\nends_at: branch\n\
-         budget:\n  iterations: 20\n  cost: 10.00\n  wall_clock: 90m\n  \
+         budget:\n  attempts: 3\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: reproduce\n    skill: reproduce-failure\n    \
          verify:\n      must: failing_test_exists\n      test: regression_bad_parse\n",
@@ -4455,15 +4551,20 @@ fn the_loop_builds_the_check_argv_that_the_real_binary_accepts() {
 /// `on_exhausted: needs_human` is the only value the enum has, and it means the
 /// Job records where it reached and is raised to the inbox.
 ///
-/// **This is the ceiling PHASES.md §8.6 asks for, and it is the Job's.** The
-/// step is ungateable on purpose — an artifact nothing ever writes — so the loop
-/// would retry it for ever; `budget.iterations` against the turn ledger is what
-/// stops it. There is deliberately no second, per-step ceiling: see
-/// `fleet::advance::after`'s `DoesNotHold` arm for the two reasons the one that
-/// was there had to go.
+/// **This is the ceiling PHASES.md §8.6 asks for, and it is futility.** The step
+/// is ungateable on purpose — an artifact nothing ever writes — so the loop
+/// would retry it for ever; `budget.attempts`, counted at *this* step, is what
+/// stops it.
 ///
-/// The stub spends two turns an exchange, so `iterations: 4` buys exactly two
-/// exchanges: one attempt, one retry, then the ceiling.
+/// **The ceiling this replaced could not tell the two apart.** It compared the
+/// same declared number against `spend.turns` — the model's own turns inside an
+/// exchange — so it fired on a Job that was working hard as readily as on one
+/// that was stuck, and in practice it fired first: a working exchange is fifty
+/// to a hundred turns, so every Job halted in its first. This test passed
+/// throughout, because a Job that is stuck also burns turns. It proved the
+/// stopping and not the reason.
+///
+/// `attempts: 2` buys one attempt and one retry, then the ceiling.
 #[test]
 fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
     let scratch = Scratch::new();
@@ -4471,7 +4572,7 @@ fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
         &scratch,
         "bug",
         "name: bug\ndescription: one impossible step\nends_at: branch\n\
-         budget:\n  iterations: 4\n  cost: 10.00\n  wall_clock: 90m\n  \
+         budget:\n  attempts: 2\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: land\n    skill: land-branch\n    verify: { must: artifact_exists, artifact: never-written.md }\n",
     );
@@ -4489,7 +4590,15 @@ fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
 
     let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
     let words: Vec<&str> = rows.iter().map(|row| row.did.as_str()).collect();
-    assert_eq!(words, ["retried", "halted"], "{rows:#?}");
+    // **Two attempts and then the ceiling**, which is what `attempts: 2` buys.
+    //
+    // The second `retried` is a wart worth naming: a tick reports what it
+    // decided about the attempt that just failed, and the ceiling is read at the
+    // *start* of the next one — so the Job says it will retry and then halts
+    // instead. It never makes a third attempt, which is the property that
+    // matters; what it does is announce an intention one tick before finding out
+    // it has run out. Pre-existing, and not made worse here.
+    assert_eq!(words, ["retried", "retried", "halted"], "{rows:#?}");
 
     let record = scratch.store().load(&data.uuid).unwrap();
     assert_eq!(
@@ -4509,7 +4618,7 @@ fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
         inbox[0].body
     );
     assert!(
-        inbox[0].body.contains("iterations ceiling"),
+        inbox[0].body.contains("attempts ceiling"),
         "the entry does not say what stopped it: {}",
         inbox[0].body
     );
@@ -4866,7 +4975,7 @@ fn a_sub_job_step_runs_the_workflow_it_names_and_its_spend_lands_on_the_parent()
     // the tree cannot spend more than the parent was given.
     let parent = scratch.store().load(&data.uuid).unwrap();
     assert!(
-        child.budget.iterations <= parent.budget.iterations
+        child.budget.attempts <= parent.budget.attempts
             && child.budget.cost_usd <= parent.budget.cost_usd,
         "the child was given more rope than its parent has: {:?} against {:?}",
         child.budget,

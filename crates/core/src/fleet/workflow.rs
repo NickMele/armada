@@ -189,6 +189,17 @@ fn default_cost() -> f64 {
     10.00
 }
 
+/// What a Job minted before the attempt ceiling existed gets read as.
+///
+/// **Three, which is [`DEFAULT_BUDGET`]'s number and not a lenient one.** The
+/// field it replaces held turn counts — 40, 59, 150 — and carrying any of those
+/// forward would mean a hundred and fifty attempts at a single step. The units
+/// differ, so the only honest migration is the number a Job of its kind would be
+/// given today.
+fn default_attempts() -> u32 {
+    3
+}
+
 /// The ceilings, per workflow (PLAN.md §14.3).
 ///
 /// **Read off data Claude Code already emits** — `total_cost_usd`, `usage`,
@@ -196,16 +207,50 @@ fn default_cost() -> f64 {
 /// (PHASES.md §9.1 F2). Fleet builds no accounting layer and estimates nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Budget {
-    /// How many turns the **Job** may spend before the rope runs out.
+    /// How many times **one step** may be attempted before the Job stops and
+    /// asks you.
     ///
-    /// **The Job's, not a step's**, and the two are not interchangeable.
-    /// PLAN.md §14.3's interview asks *"how many iterations should one Job run
-    /// before it stops and asks you?"* and names [`super::job::exhausted`] as
-    /// what reads the answer — a comparison against `spend.turns`, summed off
-    /// each turn's `num_turns`. A per-step attempt ceiling on the same number
-    /// was built and removed: [`super::gate`]'s ceiling section has the two
-    /// reasons.
-    pub iterations: u32,
+    /// # What this replaced, and why it had to go
+    ///
+    /// This field was `iterations`, and [`super::job::exhausted`] compared it
+    /// against `spend.turns` — the sum of each exchange's `num_turns`. Those are
+    /// the model's own turns *inside* one `--print` exchange, so the number
+    /// measured how chatty a model happened to be on a task rather than any
+    /// resource a person budgets. A working exchange is fifty to a hundred
+    /// turns; a useless one is three.
+    ///
+    /// **So every Job died inside its first or second exchange, and always
+    /// had.** Measured 2026-08-16 across three Jobs: `iterations: 40` reached
+    /// after one exchange, `59` after two, `150` after two. The overnight run
+    /// that *"advanced through every gate but never finished"* was this. It read
+    /// as a budget being spent because the word *iterations* is what the
+    /// interview asks for — PLAN.md §14.3's *"how many iterations should one Job
+    /// run before it stops and asks you?"* — and a reader has no way to see that
+    /// the field answering that question counts something else.
+    ///
+    /// # Why a per-step attempt count is the right ceiling
+    ///
+    /// Three questions are worth asking a Job, and they need three different
+    /// measurements: *is this costing too much* (dollars), *is this hung*
+    /// (the wall clock), and *is this futile*. Only the third needed a new
+    /// number, and futility is not a whole-Job total — it is **a gate that keeps
+    /// refusing the same step**. A Job that clears four steps in twelve attempts
+    /// is working; a Job on its fourth attempt at `reproduce` is not going to
+    /// get there on its fifth.
+    ///
+    /// So the count is per step and it resets when a step passes, which is what
+    /// makes a small default safe. [`super::gate`]'s ceiling section records the
+    /// earlier attempt at this: a per-step ceiling *was* built and removed,
+    /// correctly noticing that one field was carrying two units and then keeping
+    /// the wrong one.
+    /// **No serde alias from the old name**, deliberately. An `iterations: 150`
+    /// carried forward as `attempts: 150` would be a hundred and fifty attempts
+    /// at one step — the units differ, so the numbers cannot be reused. Old Job
+    /// records take the default; old *workflow* documents are refused outright,
+    /// because [`BudgetDocument`] denies unknown fields and a guild that still
+    /// says `iterations:` should be told rather than quietly retuned.
+    #[serde(default = "default_attempts")]
+    pub attempts: u32,
     /// Maximum cost in USD, summed over the turn ledgers. **The ceiling that
     /// matters** (PLAN.md §14.3). Prior to this field, tokens were the ceiling,
     /// but most tokens counted are cache reads, not work — a ceiling computed
@@ -278,7 +323,7 @@ struct Document {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BudgetDocument {
-    iterations: u32,
+    attempts: u32,
     cost: f64,
     wall_clock: String,
     on_exhausted: OnExhausted,
@@ -290,7 +335,7 @@ struct BudgetDocument {
 /// regardless, so this is the floor under a workflow somebody wrote in a hurry
 /// rather than the number anybody tunes (PLAN.md §14.6).
 pub const DEFAULT_BUDGET: Budget = Budget {
-    iterations: 15,
+    attempts: 3,
     cost_usd: 5.0,
     wall_clock_ms: 90 * 60 * 1_000,
     on_exhausted: OnExhausted::NeedsHuman,
@@ -387,7 +432,7 @@ pub fn parse(text: &str, label: &str) -> Result<Workflow, ArmadaError> {
 
     let budget = match document.budget {
         Some(written) => Budget {
-            iterations: written.iterations,
+            attempts: written.attempts,
             cost_usd: written.cost,
             wall_clock_ms: duration_ms(&written.wall_clock, label)?,
             on_exhausted: written.on_exhausted,
@@ -443,17 +488,31 @@ pub fn override_budget(budget: Budget, pairs: &[String]) -> Result<Budget, Armad
             r#where: pair.clone(),
             message,
             next_action: Some(
-                "--budget max_iterations=12, max_cost=10.50 or max_wall_clock=45m".to_string(),
+                "--budget max_attempts=3, max_cost=10.50 or max_wall_clock=45m".to_string(),
             ),
         };
         let Some((key, value)) = pair.split_once('=') else {
             return Err(refuse(format!("`{pair}` is not a `key=value` pair")));
         };
         match key {
+            "max_attempts" => {
+                budget.attempts = value.parse().map_err(|_| {
+                    refuse(format!("`{value}` is not a number of attempts at a step"))
+                })?;
+            }
+            // **Named rather than swept into *not a ceiling*.** It was a real
+            // flag until 2026-08-16 and it is in shell history, in notes, and in
+            // the middle of half-written scripts. A caller who retypes it is
+            // asking for a ceiling that no longer exists in that unit, and the
+            // refusal that says so is worth more than a generic one — the number
+            // they would carry over is a turn count and cannot be reused.
             "max_iterations" => {
-                budget.iterations = value
-                    .parse()
-                    .map_err(|_| refuse(format!("`{value}` is not a number of iterations")))?;
+                return Err(refuse(
+                    "`max_iterations` counted the model's turns inside one exchange, \
+                     so it stopped every Job in its first; the ceiling now is \
+                     `max_attempts`, at one step"
+                        .to_string(),
+                ));
             }
             "max_cost" => {
                 budget.cost_usd = value
@@ -483,7 +542,11 @@ mod tests {
     fn a_budget_written_before_the_cost_ceiling_still_reads() {
         let old = r#"{"iterations":20,"tokens":2000000,"wall_clock_ms":7200000,"on_exhausted":"needs_human"}"#;
         let budget: Budget = serde_json::from_str(old).expect("an old record still deserialises");
-        assert_eq!(budget.iterations, 20);
+        assert_eq!(
+            budget.attempts, 3,
+            "an `iterations` of 20 counted model turns, so it cannot be carried \
+             over as 20 attempts at one step — the record takes today's default"
+        );
         assert_eq!(
             budget.cost_usd, 10.00,
             "a Job that predates the ceiling gets the one its kind would be given today"
@@ -498,7 +561,7 @@ description: Reproduce it with a failing test, fix it, have it reviewed, land it
 ends_at: branch
 
 budget:
-  iterations: 20
+  attempts: 3
   cost: 10.00
   wall_clock: 90m
   on_exhausted: needs_human
@@ -525,7 +588,7 @@ steps:
         let workflow = parse(BUG, "workflows/bug.yml").expect("the starter parses");
         assert_eq!(workflow.name, "bug");
         assert_eq!(workflow.ends_at, EndsAt::Branch);
-        assert_eq!(workflow.budget.iterations, 20);
+        assert_eq!(workflow.budget.attempts, 3);
         assert_eq!(workflow.budget.cost_usd, 10.0);
         assert_eq!(workflow.budget.wall_clock_ms, 90 * 60 * 1_000);
         assert_eq!(
@@ -695,7 +758,7 @@ steps:
         .unwrap();
         assert_eq!(budget.cost_usd, 15.50);
         assert_eq!(budget.wall_clock_ms, 45 * 60 * 1_000);
-        assert_eq!(budget.iterations, DEFAULT_BUDGET.iterations);
+        assert_eq!(budget.attempts, DEFAULT_BUDGET.attempts);
     }
 
     /// **A typo may not silently do nothing.** A caller who believes they raised

@@ -989,7 +989,7 @@ mod tests {
             tokens: 1_000,
             turns: 3,
             budget_remaining: Remaining {
-                iterations: 9,
+                attempts: 2,
                 cost_usd: 1.0,
                 wall_clock_ms: 1,
             },

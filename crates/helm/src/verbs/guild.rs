@@ -331,7 +331,7 @@ fn record(answers: &mut Answers, question: Question, given: &str) {
         // than looping** — a loop is one a piped stdin cannot escape. Each is
         // recorded on its own, so a refused cost answer no longer costs the
         // iteration and wall-clock answers that were typed correctly.
-        4 => answers.iterations = interview::parse_iterations(given).ok(),
+        4 => answers.attempts = interview::parse_attempts(given).ok(),
         5 => answers.cost_usd = interview::parse_cost(given).ok(),
         6 => answers.wall_clock_minutes = interview::parse_minutes(given).ok(),
         _ => answers.remote = Some(given.to_string()),
@@ -2478,7 +2478,7 @@ mod tests {
         assert_eq!(ask.asked[0].of, 7);
         assert_eq!(answers.voice.as_deref(), Some("brief"));
         assert_eq!(answers.expectations, None);
-        assert_eq!(answers.iterations, Some(8));
+        assert_eq!(answers.attempts, Some(8));
         assert_eq!(answers.cost_usd, Some(200.0));
         assert_eq!(answers.wall_clock_minutes, Some(30));
         assert_eq!(answers.kept(), 2);
@@ -2501,7 +2501,7 @@ mod tests {
         assert_eq!(
             shown,
             vec![
-                ("20".to_string(), Some("20".to_string())),
+                ("3".to_string(), Some("3".to_string())),
                 ("$10.00".to_string(), Some("$10.00".to_string())),
                 ("90m".to_string(), Some("90m".to_string())),
             ]
@@ -2526,7 +2526,7 @@ mod tests {
             ..crate::ask::Scripted::default()
         };
         let answers = interview(&mut ask, None);
-        assert_eq!(answers.iterations, None, "refused, so defaulted");
+        assert_eq!(answers.attempts, None, "refused, so defaulted");
         assert_eq!(
             answers.cost_usd,
             Some(200.0),

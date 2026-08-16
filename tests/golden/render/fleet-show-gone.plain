@@ -10,7 +10,7 @@
   GONE      drone     process group 48122 is not Armada's any more
   GATED     step      reproduce advances on failing_test_exists: reports::xlsx:…
   SPENT     budget    $1.25 of $10.00, 4 turns, 119k tokens
-  LEFT      budget    $8.75, 11 exchanges, 25m
+  LEFT      budget    $8.75, 2 attempts at this step, 25m
   SINCE     started   2026-08-09T14:02:11Z
   HELD      ports     5470-5479
   HELD      worktree  ~/.armada/workspaces/reports/xlsx-report

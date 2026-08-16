@@ -11,7 +11,7 @@ description: Explore a problem space and write down an approach, for you to judg
 ends_at: human
 
 budget:
-  iterations: 15
+  attempts: 3
   cost: 5.00
   wall_clock: 90m
   # Exhaustion is an outcome, never a silent stop (PLAN.md §14.3).

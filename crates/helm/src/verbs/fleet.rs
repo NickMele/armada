@@ -261,10 +261,21 @@ fn settle<C: Clock>(
                 now,
                 record,
                 inbox::Kind::NeedsHuman,
+                // **The entry says the keystroke that clears it**, which is
+                // `027`'s rule and the one this message used to break: *reached
+                // its iterations ceiling* was the sentence with no way out, and
+                // a reader who found it had to already know that `board` and
+                // `kill` were the only two moves. Now there is a third and it is
+                // the one they want, so the row carries it.
                 &format!(
-                    "reached its {} ceiling on the {} step",
+                    "reached its {} ceiling on the {} step — answer with `{}=…` to give it more",
                     ceiling.word(),
-                    record.step
+                    record.step,
+                    match ceiling {
+                        job::Ceiling::Attempts => "max_attempts",
+                        job::Ceiling::Cost => "max_cost",
+                        job::Ceiling::WallClock => "max_wall_clock",
+                    }
                 ),
             )?;
         }
@@ -1034,7 +1045,12 @@ pub fn ls<R: Run, C: Clock>(
             cost_usd: observed.spend.cost_usd,
             tokens: observed.spend.tokens,
             turns: observed.spend.turns,
-            budget_remaining: job::remaining(&record.budget, &observed.spend, run_time),
+            budget_remaining: job::remaining(
+                &record.budget,
+                &observed.spend,
+                run_time,
+                record.attempts_on_step(),
+            ),
             needs_attention: wants_you,
             // **Carried off the record, which is the only place it exists.**
             // `observe` cannot derive it: an action with a duration is a thing
@@ -1267,7 +1283,12 @@ pub fn show<R: Run, C: Clock>(
             tokens: observed.spend.tokens,
             turns: observed.spend.turns,
             budget: record.budget,
-            budget_remaining: job::remaining(&record.budget, &observed.spend, run_time),
+            budget_remaining: job::remaining(
+                &record.budget,
+                &observed.spend,
+                run_time,
+                record.attempts_on_step(),
+            ),
             repo: record.repo.clone(),
             branch: record.branch.clone(),
             worktree: record.worktree.clone(),
@@ -1915,6 +1936,7 @@ pub fn resume<R: Run, C: Clock>(
                 &record.budget,
                 &record.spend,
                 record.run_time_ms(now.wall_ms()),
+                record.attempts_on_step(),
             ),
             pgid: record.drone.as_ref().map(|drone| drone.pgid),
         },
@@ -2162,25 +2184,93 @@ pub fn answer<R: Run, C: Clock>(
         }
     };
 
-    // **Refused before the entry is closed.** A Job whose rope has run out is
-    // not continued by answering it: `on_exhausted: needs_human` means a person
-    // decides what happens next, and silently resuming past a ceiling is how a
-    // budget stops being one.
+    // # A ceiling is a checkpoint, not a death
+    //
+    // **The answer to a Job that ran out of rope is how much more it gets.**
+    // This used to refuse outright — *"board it to take it over, or kill it"* —
+    // on the argument that `on_exhausted: needs_human` means a person decides
+    // what happens next. That argument is right and the refusal did not follow
+    // from it: a person deciding *give it three more attempts* is the person
+    // deciding. What the old path actually offered was two ways to abandon the
+    // work, and it stranded every Job that reached a ceiling on a branch nobody
+    // went back to.
+    //
+    // **The answer is a `--budget` pair, in `--budget`'s own grammar**, so there
+    // is one spelling of a ceiling in Armada rather than two:
+    //
+    // ```text
+    // armada fleet answer 47fb4860 max_attempts=6
+    // armada fleet answer 47fb4860 max_cost=25.00
+    // ```
+    //
+    // [`workflow::override_budget`] already parses it, already refuses an
+    // unknown key, and already says what the three ceilings are — so an answer
+    // that is prose gets the grammar back rather than a second, differently
+    // worded complaint. And the raise is still a person's: nothing here raises
+    // a ceiling on its own, and a Job that is not answered stays stopped.
+    //
+    // **The key is recorded in `budget_set`** for [`carved`]'s reason — a
+    // ceiling a person typed is an instruction, and a sub-Job spawned after this
+    // must inherit the raise rather than its workflow's default.
     let (observed, _, _) = look(run, place, &record, now.wall_ms());
     if let Some(ceiling) = observed.ceiling {
-        // Persisted and raised on the way out, so the ceiling is a durable fact
-        // rather than something this invocation noticed and forgot.
-        settle(&mut record, &observed, place, now)?;
+        let raised = match workflow::override_budget(record.budget, &[said.to_string()]) {
+            Ok(raised) => raised,
+            Err(error) => {
+                // **Persisted and raised on the way out**, so the ceiling is a
+                // durable fact rather than something this invocation noticed and
+                // forgot. The answer was prose rather than a raise, so nothing
+                // about the Job has changed except that it is now written down
+                // as stopped.
+                settle(&mut record, &observed, place, now)?;
+                store.save(&record)?;
+                return Err(ArmadaError {
+                    message: format!(
+                        "`{}` reached its {} ceiling, and `{}` does not say how much more it gets: {}",
+                        record.name,
+                        ceiling.word(),
+                        said,
+                        error.message
+                    ),
+                    ..error
+                });
+            }
+        };
+        record.budget = raised;
+        if let Some((key, _)) = said.split_once('=') {
+            let key = key.trim().to_string();
+            if !record.budget_set.contains(&key) {
+                record.budget_set.push(key);
+            }
+        }
+
+        // **Re-observed against the new ceiling before anything is closed.** A
+        // raise that does not actually clear the ceiling it was given for — six
+        // attempts to a Job that has made six — would otherwise close the entry
+        // and leave the Job stopped with nothing open to answer, which is the
+        // silent-empty-answer shape this codebase has produced three times.
+        let (observed, _, _) = look(run, place, &record, now.wall_ms());
+        if let Some(still) = observed.ceiling {
+            return Err(ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: record.name.clone(),
+                message: format!(
+                    "`{}` is still at its {} ceiling after `{}`",
+                    record.name,
+                    still.word(),
+                    said
+                ),
+                next_action: Some(format!(
+                    "`armada fleet show {}` says what it has spent",
+                    record.name
+                )),
+            });
+        }
+        // **Cleared, so the verdict goes with it.** `NeedsHuman` is what stopped
+        // the Job; leaving it set would have `attention` decline to gate a Job
+        // whose question has just been answered.
+        record.verdict = None;
         store.save(&record)?;
-        return Err(ArmadaError {
-            class: ErrClass::BadInvocation,
-            r#where: record.name.clone(),
-            message: format!("`{}` reached its {} ceiling", record.name, ceiling.word()),
-            next_action: Some(format!(
-                "`armada fleet board {}` to take it over, or kill it",
-                record.name
-            )),
-        });
     }
 
     // **Whose question was this?** A gate's and a Drone's arrive in one inbox
@@ -2262,6 +2352,7 @@ pub fn answer<R: Run, C: Clock>(
                     &record.budget,
                     &record.spend,
                     record.run_time_ms(now.wall_ms()),
+                    record.attempts_on_step(),
                 ),
                 pgid: record.drone.as_ref().map(|drone| drone.pgid),
             },
@@ -2317,6 +2408,7 @@ pub fn answer<R: Run, C: Clock>(
                 &record.budget,
                 &record.spend,
                 record.run_time_ms(now.wall_ms()),
+                record.attempts_on_step(),
             ),
             pgid: record.drone.as_ref().map(|drone| drone.pgid),
         },
@@ -3972,37 +4064,48 @@ fn child_task(parent: &Job, kind: gate::SubJobKind) -> String {
 
 /// The ceilings a child runs under.
 ///
-/// **Iterations and tokens are the smaller of what the child's workflow asks
-/// for and what the parent has left; the wall clock is the child's own.** The
-/// first two measure work, and work a child does is work the tree did — 016 §2
-/// asks for the parent's ceilings to bound the child's, and a child that could
-/// spend a fresh 600k tokens is how a parent gets exhausted by something it
-/// never counted. The clock is different in kind: the parent's is **suspended**
-/// while the child runs ([`job::Kin::suspended_ms`]), so there is nothing of it
-/// to carve, and what bounds the elapsed time is the child's own declared
-/// ceiling.
+/// # Only cost is carved, because only cost is a tree-wide resource
 ///
-/// **A key the caller set is not a default, so it is not what the child is held
-/// to.** Measured 2026-08-16: a parent spawned with `--budget
-/// max_iterations=200` gave its planning sub-Job 15, because `plan.yml`
-/// declares 15 and `min` chose it. The raise never reached the work it was
-/// meant for. For a key in [`job::Job::budget_set`] the child gets the parent's
-/// **remaining** instead — still bounded by what the parent actually has, so
-/// the containment argument above is untouched; what changes is which number
-/// is the default and which is the instruction.
+/// **Cost is the smaller of what the child's workflow asks for and what the
+/// parent has left.** Money a child spends is money the tree spent — 016 §2 asks
+/// for the parent's ceilings to bound the child's, and a child that could spend
+/// a fresh $10 is how a parent gets exhausted by something it never counted.
+///
+/// **The other two are the child's own, for the same reason stated twice.**
+/// The parent's clock is *suspended* while the child runs
+/// ([`job::Kin::suspended_ms`]), so there is nothing of it to carve. And the
+/// attempt ceiling counts retries **at one step** — the child is running a
+/// different workflow with different steps, and its own first step has been
+/// attempted zero times no matter what the parent has been through. Carving it
+/// would hand a child two attempts because its parent had used one on an
+/// unrelated gate.
+///
+/// This used to carve `iterations` as well, when that field held a whole-Job
+/// turn count and so plausibly described a shared pool. It never really did:
+/// see [`workflow::Budget::attempts`] for what it was actually counting.
+///
+/// # A key the caller set is not a default, so it is not what the child is held to
+///
+/// Measured 2026-08-16: a parent spawned with `--budget max_cost=25.00` gave
+/// its planning sub-Job `plan.yml`'s $5.00, because `min` chose the smaller.
+/// The raise never reached the work it was meant for. For a key in
+/// [`job::Job::budget_set`] the child gets the parent's **remaining** instead —
+/// still bounded by what the parent actually has, so the containment argument
+/// above is untouched; what changes is which number is the default and which is
+/// the instruction.
 fn carved(
     declared: workflow::Budget,
     parent: &workflow::Budget,
     spent: &Spend,
     set: &[String],
 ) -> workflow::Budget {
-    let left = job::remaining(parent, spent, 0);
+    let left = job::remaining(parent, spent, 0, 0);
     let told = |key: &str| set.iter().any(|k| k == key);
     workflow::Budget {
-        iterations: match told("max_iterations") {
-            true => left.iterations,
-            false => declared.iterations.min(left.iterations),
-        },
+        // Per-step and per-workflow, so there is nothing of the parent's to
+        // carve — a raise the caller typed still reaches the child, because a
+        // child spawned with `--budget max_attempts` gets it on its own record.
+        attempts: declared.attempts,
         cost_usd: match told("max_cost") {
             true => left.cost_usd,
             false => declared.cost_usd.min(left.cost_usd),
@@ -4208,9 +4311,9 @@ mod tests {
     use super::*;
     use armada_core::fleet::workflow::{Budget, OnExhausted};
 
-    fn budget(iterations: u32, cost_usd: f64) -> Budget {
+    fn budget(attempts: u32, cost_usd: f64) -> Budget {
         Budget {
-            iterations,
+            attempts,
             cost_usd,
             wall_clock_ms: 90 * 60_000,
             on_exhausted: OnExhausted::NeedsHuman,
@@ -4219,27 +4322,41 @@ mod tests {
 
     /// **A ceiling the caller set reaches the whole tree.**
     ///
-    /// Measured 2026-08-16: `--budget max_iterations=200` on a parent gave its
-    /// planning sub-Job **15**, because `plan.yml` declares 15 and [`carved`]
-    /// took the smaller of the two. The child died on that 15 having spent
-    /// $2.42, and the raise the caller asked for never reached the work it was
-    /// asked for.
+    /// Measured 2026-08-16: `--budget max_cost=25.00` on a parent gave its
+    /// planning sub-Job **$5.00**, because `plan.yml` declares 5 and [`carved`]
+    /// took the smaller of the two. The child died on that $5 and the raise the
+    /// caller asked for never reached the work it was asked for.
     #[test]
     fn a_budget_the_caller_set_reaches_a_sub_job() {
-        let declared = budget(15, 5.00);
-        let parent = budget(200, 30.00);
+        let declared = budget(3, 5.00);
+        let parent = budget(3, 30.00);
         let spent = Spend::default();
 
         // Nobody said anything, so the child's own declaration holds. A
         // default must never be raised in silence.
-        assert_eq!(carved(declared, &parent, &spent, &[]).iterations, 15);
+        assert_eq!(carved(declared, &parent, &spent, &[]).cost_usd, 5.00);
 
-        let told = carved(declared, &parent, &spent, &["max_iterations".to_string()]);
-        assert_eq!(told.iterations, 200, "the raise did not reach the sub-Job");
-        assert_eq!(
-            told.cost_usd, 5.00,
-            "a key nobody named must keep the child's own declaration"
+        let told = carved(declared, &parent, &spent, &["max_cost".to_string()]);
+        assert_eq!(told.cost_usd, 30.00, "the raise did not reach the sub-Job");
+    }
+
+    /// **The attempt ceiling is not carved, because it is not a shared pool.**
+    ///
+    /// It counts retries at *one step*, and a child runs a different workflow
+    /// with different steps whose first attempt is its first. Carving it would
+    /// hand a child two attempts because its parent had spent one on an
+    /// unrelated gate — and a child that then failed twice would report having
+    /// run out of something it never had.
+    #[test]
+    fn a_child_gets_its_own_attempts_rather_than_what_the_parent_has_left() {
+        let spent = Spend::default();
+        let told = carved(
+            budget(3, 5.00),
+            &budget(3, 30.00),
+            &spent,
+            &["max_cost".to_string()],
         );
+        assert_eq!(told.attempts, 3, "the child's own step ceiling holds");
     }
 
     /// **A raise lifts the default; it does not mint budget.** The parent's
@@ -4249,19 +4366,19 @@ mod tests {
     #[test]
     fn a_raised_sub_job_is_still_bounded_by_what_the_parent_has_left() {
         let spent = Spend {
-            turns: 190,
+            cost_usd: 28.00,
             ..Default::default()
         };
         let told = carved(
-            budget(15, 5.00),
-            &budget(200, 30.00),
+            budget(3, 5.00),
+            &budget(3, 30.00),
             &spent,
-            &["max_iterations".to_string()],
+            &["max_cost".to_string()],
         );
         assert!(
-            told.iterations <= 10,
+            told.cost_usd <= 2.00,
             "a child was handed more than the parent had left: {}",
-            told.iterations
+            told.cost_usd
         );
     }
 }

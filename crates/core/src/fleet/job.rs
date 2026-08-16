@@ -750,6 +750,22 @@ impl Job {
                 .any(|t| t.step == self.step && t.event == StepEvent::Attempted)
             || self.progress.iter().any(|note| note.step == self.step)
     }
+
+    /// How many attempts at the step this Job is **currently on** have been
+    /// made.
+    ///
+    /// **Zero for a step never gated**, which is the ordinary reading for a Job
+    /// that has just been minted and for the first tick of every new step — and
+    /// it is why [`Ceiling::Attempts`] does not fire the instant a Job starts.
+    ///
+    /// **Per step, and that is what makes a small ceiling safe.** The count is
+    /// keyed by step name and a new step starts at zero, so a Job that clears
+    /// four steps in twelve attempts has never been within two of a ceiling of
+    /// three. A whole-Job total could not tell that Job apart from one stuck on
+    /// its first gate.
+    pub fn attempts_on_step(&self) -> u32 {
+        self.attempts.get(&self.step).copied().unwrap_or(0)
+    }
 }
 
 /// A Drone's process group, and the two stamps that make it provable.
@@ -832,8 +848,8 @@ impl Spend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Ceiling {
-    /// It retried a step more times than the workflow allows.
-    Iterations,
+    /// It attempted **one step** more times than the workflow allows.
+    Attempts,
     /// It spent more USD than the workflow allows.
     Cost,
     /// It ran longer than the workflow allows.
@@ -844,23 +860,51 @@ impl Ceiling {
     /// The word the render and the inbox entry both use.
     pub const fn word(self) -> &'static str {
         match self {
-            Ceiling::Iterations => "iterations",
+            Ceiling::Attempts => "attempts",
             Ceiling::Cost => "cost",
             Ceiling::WallClock => "wall clock",
         }
     }
 }
 
-/// The ceiling this spend has reached, or `None` while there is rope left.
+/// The ceiling this Job has reached, or `None` while there is rope left.
 ///
 /// **Exhaustion is a first-class outcome, not a crash** (PLAN.md §14.3): the
 /// Drone stops, the Job records what it spent and where it reached, and raises
-/// it to the inbox. The order below is the order a reader wants to be told
-/// about them — cost is the ceiling that matters, turns is what the caller can
-/// act on, and the clock is what merely elapsed.
-pub fn exhausted(budget: &Budget, spend: &Spend, run_time_ms: u64) -> Option<Ceiling> {
-    if spend.turns >= budget.iterations {
-        return Some(Ceiling::Iterations);
+/// it to the inbox — where an answer raises the ceiling and it carries on. A
+/// ceiling is a checkpoint, not a death.
+///
+/// # Three ceilings, three different questions
+///
+/// | Ceiling | Asks | Reached when |
+/// |---|---|---|
+/// | [`Ceiling::Cost`] | is this costing too much | the dollars are gone |
+/// | [`Ceiling::WallClock`] | is this hung | the clock ran out |
+/// | [`Ceiling::Attempts`] | is this futile | one gate keeps refusing one step |
+///
+/// The order below is the order a reader wants to be told about them: futility
+/// first because it is the one that will never resolve on its own, then cost,
+/// then the clock, which is what merely elapsed.
+///
+/// # `attempts_on_step` is the current step's count, not the Job's total
+///
+/// **That is the whole correction.** The ceiling this replaced compared a
+/// workflow's declared number against `spend.turns` — the model's own turns
+/// inside an exchange — so every Job halted in its first or second exchange
+/// while reporting that it had run out of *iterations*. See
+/// [`super::workflow::Budget::attempts`] for the measurement.
+///
+/// A per-step count resets when a step passes, which is what makes a default of
+/// three safe: a Job that clears four steps in twelve attempts has never been
+/// within two of this ceiling.
+pub fn exhausted(
+    budget: &Budget,
+    spend: &Spend,
+    run_time_ms: u64,
+    attempts_on_step: u32,
+) -> Option<Ceiling> {
+    if attempts_on_step >= budget.attempts {
+        return Some(Ceiling::Attempts);
     }
     if spend.cost_usd >= budget.cost_usd {
         return Some(Ceiling::Cost);
@@ -874,8 +918,8 @@ pub fn exhausted(budget: &Budget, spend: &Spend, run_time_ms: u64) -> Option<Cei
 /// What is left of each ceiling, for `ls --json`'s `budget_remaining`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct Remaining {
-    /// Iterations left.
-    pub iterations: u32,
+    /// Attempts left **at the step the Job is on**.
+    pub attempts: u32,
     /// USD left.
     pub cost_usd: f64,
     /// Milliseconds of wall clock left.
@@ -883,9 +927,14 @@ pub struct Remaining {
 }
 
 /// What is left of a Job's budget.
-pub fn remaining(budget: &Budget, spend: &Spend, run_time_ms: u64) -> Remaining {
+pub fn remaining(
+    budget: &Budget,
+    spend: &Spend,
+    run_time_ms: u64,
+    attempts_on_step: u32,
+) -> Remaining {
     Remaining {
-        iterations: budget.iterations.saturating_sub(spend.turns),
+        attempts: budget.attempts.saturating_sub(attempts_on_step),
         cost_usd: (budget.cost_usd - spend.cost_usd).max(0.0),
         wall_clock_ms: budget.wall_clock_ms.saturating_sub(run_time_ms),
     }
@@ -941,7 +990,12 @@ pub fn observe(
     // ([`Kin::spend`]).
     let mut spend = spend;
     spend.add(&record.kin.spend);
-    let ceiling = exhausted(&record.budget, &spend, run_time_ms);
+    let ceiling = exhausted(
+        &record.budget,
+        &spend,
+        run_time_ms,
+        record.attempts_on_step(),
+    );
     // **An errored turn is not due a gate.** The exchange ended badly rather
     // than ending; gating it would record a `FAILED` against work that was
     // never finished, which is the same refusal `attention` already makes for a
@@ -1150,7 +1204,7 @@ mod tests {
 
     fn budget() -> Budget {
         Budget {
-            iterations: 12,
+            attempts: 3,
             cost_usd: 10.0,
             wall_clock_ms: 45 * 60 * 1_000,
             on_exhausted: OnExhausted::NeedsHuman,
@@ -1246,7 +1300,7 @@ mod tests {
             turns: 4,
             api_ms: 9_000,
         };
-        assert_eq!(exhausted(&budget(), &spend, 14 * 60 * 1_000), None);
+        assert_eq!(exhausted(&budget(), &spend, 14 * 60 * 1_000, 2), None);
     }
 
     /// Each ceiling is reached on its own, and the one that is reported is the
@@ -1254,10 +1308,7 @@ mod tests {
     #[test]
     fn each_ceiling_is_reached_independently() {
         let base = Spend::default();
-        assert_eq!(
-            exhausted(&budget(), &Spend { turns: 12, ..base }, 0),
-            Some(Ceiling::Iterations)
-        );
+        assert_eq!(exhausted(&budget(), &base, 0, 3), Some(Ceiling::Attempts));
         assert_eq!(
             exhausted(
                 &budget(),
@@ -1265,29 +1316,32 @@ mod tests {
                     cost_usd: 10.0,
                     ..base
                 },
+                0,
                 0
             ),
             Some(Ceiling::Cost)
         );
         assert_eq!(
-            exhausted(&budget(), &base, 45 * 60 * 1_000),
+            exhausted(&budget(), &base, 45 * 60 * 1_000, 0),
             Some(Ceiling::WallClock)
+        );
+
+        // **A hundred model turns is not a ceiling any more**, which is the
+        // whole of the change: this exact spend used to report `Iterations` and
+        // stop a Job in its first exchange.
+        assert_eq!(
+            exhausted(&budget(), &Spend { turns: 98, ..base }, 0, 1),
+            None
         );
     }
 
-    /// The boundary is *at* the ceiling, not past it: a budget of twelve
-    /// iterations allows eleven and stops on the twelfth.
+    /// The boundary is *at* the ceiling, not past it: a budget of three
+    /// attempts allows two and stops on the third.
     #[test]
     fn a_ceiling_is_reached_at_its_value_rather_than_after_it() {
-        let spend = |turns| Spend {
-            turns,
-            ..Spend::default()
-        };
-        assert_eq!(exhausted(&budget(), &spend(11), 0), None);
-        assert_eq!(
-            exhausted(&budget(), &spend(12), 0),
-            Some(Ceiling::Iterations)
-        );
+        let base = Spend::default();
+        assert_eq!(exhausted(&budget(), &base, 0, 2), None);
+        assert_eq!(exhausted(&budget(), &base, 0, 3), Some(Ceiling::Attempts));
     }
 
     #[test]
@@ -1300,8 +1354,9 @@ mod tests {
                 ..Spend::default()
             },
             60 * 60 * 1_000,
+            9,
         );
-        assert_eq!(left.iterations, 0);
+        assert_eq!(left.attempts, 0);
         assert_eq!(left.cost_usd, 0.0);
         assert_eq!(left.wall_clock_ms, 0);
     }
@@ -1658,7 +1713,8 @@ mod tests {
             exhausted(
                 &record.budget,
                 &Spend::default(),
-                record.run_time_ms(3_600_000)
+                record.run_time_ms(3_600_000),
+                0
             ),
             None
         );
@@ -1677,7 +1733,8 @@ mod tests {
             exhausted(
                 &plain.budget,
                 &Spend::default(),
-                plain.run_time_ms(3_600_000)
+                plain.run_time_ms(3_600_000),
+                0
             ),
             Some(Ceiling::WallClock)
         );

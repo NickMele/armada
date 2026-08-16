@@ -114,7 +114,7 @@ fn the_review_step_names_no_runner_because_fleet_is_the_runner() {
 fn every_starter_carries_a_ceiling_that_ends_at_a_person() {
     for name in workflow::STARTERS {
         let budget = read(name).budget;
-        assert!(budget.iterations > 0, "{name} has no iteration ceiling");
+        assert!(budget.attempts > 0, "{name} has no attempt ceiling");
         assert!(budget.cost_usd > 0.0, "{name} has no cost ceiling");
         assert!(budget.wall_clock_ms > 0, "{name} has no wall clock");
         assert_eq!(
