@@ -5,6 +5,6 @@
   WRITTEN    voice         ~/.armada/helm/system-prompt.md
   UNCHANGED  conversation  ~/.armada/helm/session.json
 
-  enter with claude --agent helm --append-system-prompt "$(cat ~/.armada/helm/system-prompt.md)" --mcp-config ~/.armada/helm/mcp.json --plugin-dir ~/.armada/helm/plugin --settings ~/.armada/helm/settings.json --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0
+  enter with claude --agent helm --append-system-prompt "$(cat ~/.armada/helm/system-prompt.md)" --mcp-config ~/.armada/helm/mcp.json --plugin-dir ~/.armada/helm/plugin --settings ~/.armada/helm/settings.json --permission-mode auto --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0
 
-OK  helm, conversation new, nothing started; --exec is off on this machine
+OK  helm, conversation new, nothing started; entering is off on this machine — `armada helm enable`

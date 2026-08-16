@@ -1,52 +1,63 @@
-//! `armada helm` — **assemble the conversation; do not enter it**.
+//! `armada helm` — **assemble the conversation, and enter it if this machine
+//! allows it**.
 //!
 //! Every decision this file appears to make was made somewhere else: the argv,
 //! the documents and the record are `armada_core::helm`'s, and the guild
 //! that holds the persona is `armada_guild`'s. What lives here is the order the
-//! adapter calls go in, and the one refusal — no guild, no persona — that has to
-//! happen before any of them (`ARCHITECTURE.md` §1.3).
+//! adapter calls go in, and the two refusals — no guild or no persona, and a
+//! `helm.mode` Claude Code does not have — that both have to happen before any
+//! of them (`ARCHITECTURE.md` §1.3).
 //!
-//! # Entering is a separate act, gated by a switch you control
+//! # One lock, and the machine holds it
 //!
-//! `armada helm` writes the configuration, reports the command, and **starts
-//! nothing**. Entering the session is [`ENTER`], and the split is not caution
-//! for its own sake:
+//! Entering spends, and assembling does not:
 //!
 //! | | Costs |
 //! |---|---|
 //! | Assembling the command | nothing |
 //! | Entering the session | a real budget, against a real account, for as long as it is open |
 //!
-//! A verb that opened a Claude Code session as a side effect of being run can be
-//! reached by a script, by a shell alias, by a test harness and by a mistyped
-//! line — and each of those spends.
-//!
-//! **So [`ENTER`] is refused unless this machine has said otherwise.** Whether
-//! it may become a session lives in [`crate::machine`] — `helm.enter` in
-//! `~/.armada/machine.yml`, off on a fresh install, flipped by `armada helm
-//! enable` and put back by `armada helm disable`. Refused, it is refused by
-//! name and with a reason, via [`entering_is_off`], never as an unknown flag:
+//! So there is a lock: `helm.enter` in `~/.armada/machine.yml`, read through
+//! [`entering_allowed`], off on a fresh install, flipped by `armada helm enable`
+//! and put back by `armada helm disable`. Off, `armada helm` is refused by name
+//! and with a reason, via [`entering_is_off`], never as an unknown flag —
 //! "unknown flag" reads as a bug and invites somebody to go looking for the
 //! spelling that works.
 //!
-//! **This used to be an unconditional refusal, pending the Bridge.** The Bridge
-//! is now built, which is what made a real decision possible here instead of a
-//! blanket no. What replaced the blanket refusal is a switch rather than an
-//! unconditional yes, because assembling costs nothing and entering spends a
-//! real budget for as long as it is open — a decision that deserves an
-//! explicit yes on each machine, not a default that changed out from under
-//! whoever had not been reading release notes.
+//! **There used to be a second lock, and it was the defect.** Entering was also
+//! behind [`ENTER`], so a reader who had already set `helm.enter: true` typed
+//! `armada helm`, got a command printed for them to paste, and reported it:
+//! *"it didn't dump me into a Claude Code session. It asked me to run the
+//! command, which was weird."* They were right. Flipping the machine switch **is**
+//! the yes; asking for it twice does not make the second answer more
+//! considered, it makes the first one look ignored.
+//!
+//! | Invocation | What happens |
+//! |---|---|
+//! | `armada helm`, `helm.enter` on | enters the session |
+//! | `armada helm`, `helm.enter` off | [`entering_is_off`], and nothing is written |
+//! | `armada helm --print-command` ([`PRINT`]) | prints the pasteable line; never enters |
+//! | `armada helm --json` | the envelope, argv and all; never enters |
+//! | `armada helm --exec` ([`ENTER`]) | enters — the explicit spelling, kept for the scripts and the fingers that already have it |
+//!
+//! **The printed line is kept, and moved rather than deleted.** It is how a
+//! person reads the argv Armada built for them without spending anything to see
+//! it, and it is what a caller that wants to open the session *somewhere else* —
+//! the workspace hand-off of `docs/reserved/020` §9 — pastes. [`PRINT`] is where
+//! it lives now.
+//!
+//! **`--json` does not enter either, and that is the same rule.** A caller
+//! asking for the envelope is asking for output, and a process replaced by
+//! `claude` never prints one — so a script that read the argv yesterday reads it
+//! today rather than finding itself inside somebody's conversation.
 //!
 //! **The argv, the documents and the conversation's record are built and
-//! verified the same way whether the switch is on or off.** [`mark_started`] is
-//! the writer the exec path calls — first, because the process is replaced and
+//! verified the same way whichever of those it is.** [`mark_started`] is the
+//! writer the entering path calls — first, because the process is replaced and
 //! there is no after.
 //!
-//! **The same reasoning is why bare `armada` is not wired to it.** PLAN.md §15.1
-//! says typing `armada` with no arguments enters Helm; that is the intended end
-//! state and it is deliberately not this milestone's, because the bare word is
-//! the single most typeable thing on the machine and the failure mode of getting
-//! it wrong is a session nobody meant to open.
+//! **Bare `armada` is still not wired to this.** `docs/reserved/020` §8 gives
+//! the bare word a menu rather than Helm, and that is a different verb.
 //!
 //! # Machine-scoped, like Fleet
 //!
@@ -63,12 +74,27 @@ use std::path::{Path, PathBuf};
 
 use crate::verbs::Output;
 
-/// The flag that would turn the assembled command into a session.
+/// The explicit spelling of entering — **a synonym now, not a second lock**.
+///
+/// `armada helm` on a machine whose `helm.enter` is on does exactly what this
+/// does. It is kept because it is typed in scripts and in muscle memory, and
+/// because a flag that stops working is a worse answer than a flag that agrees
+/// with the default.
 ///
 /// Named here rather than typed in four files, because the parser, the help
 /// page, the render's summary line and the refusal all have to say the same
 /// word.
 pub const ENTER: &str = "--exec";
+
+/// The flag that asks for the line and nothing else.
+///
+/// **Where the old default went.** Printing the command used to be what bare
+/// `armada helm` did, which is how a machine that had already said yes ended up
+/// being asked to paste its own launch. The behaviour is worth keeping and the
+/// default is not: it is how a person reads the argv, and it costs nothing.
+///
+/// Named beside [`ENTER`] for the same reason [`ENTER`] is named at all.
+pub const PRINT: &str = "--print-command";
 
 /// Why entering is refused, in **the one place every surface reads it from**.
 ///
@@ -87,7 +113,8 @@ pub const ENABLE: &str = "armada helm enable";
 /// The verb that puts it back — the state a fresh install is already in.
 pub const DISABLE: &str = "armada helm disable";
 
-/// The refusal [`ENTER`] gets when [`entering_allowed`] says no.
+/// The refusal entering gets when [`entering_allowed`] says no — whether it was
+/// asked for by bare `armada helm` or by [`ENTER`].
 ///
 /// **`bad_invocation`, which is the class this CLI already uses for a flag it
 /// knows and has not built** — `armada doctor --fix` and `armada manifest check
@@ -97,20 +124,24 @@ pub const DISABLE: &str = "armada helm disable";
 /// **Refused by name, never as an unknown flag.** A caller told "unknown flag"
 /// concludes Armada is broken or that they typed it wrong, and goes looking for
 /// the spelling that works. Told that it is off and how to turn it on, they
-/// either run [`ENABLE`] or paste the printed command themselves — both of
-/// which `next_action` offers, because `armada helm` has already printed the
-/// command.
+/// either run [`ENABLE`] or ask for the line with [`PRINT`] and paste it
+/// themselves — both of which `next_action` offers.
+///
+/// **One refusal for both spellings, because they are one act.** `armada helm`
+/// and `armada helm --exec` enter the same session; two refusals worded
+/// differently would be the second lock growing back as prose.
 pub fn entering_is_off() -> ArmadaError {
     ArmadaError {
         class: ErrClass::BadInvocation,
-        r#where: format!("helm {ENTER}"),
+        r#where: "helm".to_string(),
         message: format!(
-            "`armada helm {ENTER}` is {ENTER_IS_OFF}: entering opens a Claude Code \
-             session, and this machine has not said yes to that yet"
+            "entering is {ENTER_IS_OFF}: `armada helm` — and `armada helm {ENTER}`, which \
+             is the same act spelled out — opens a Claude Code session, and this machine \
+             has not said yes to that yet"
         ),
         next_action: Some(format!(
-            "`{ENABLE}` turns it on here; `armada helm` alone still only assembles and \
-             prints the command"
+            "`{ENABLE}` turns it on here; `armada helm {PRINT}` prints the line to paste \
+             and enters nothing"
         )),
     }
 }
@@ -123,13 +154,36 @@ pub fn entering_allowed(armada_home: &Path) -> bool {
     crate::machine::read(armada_home).enter
 }
 
-/// `armada helm enable` — let [`ENTER`] become a session on this machine.
+/// The `--permission-mode` this machine's Helm enters under, checked before it
+/// can reach an argv.
+///
+/// **Read here and validated here, one layer above the argv.** `helm.mode` is
+/// free text in a file a person edits, and `--permission-mode` is checked by
+/// Claude Code at argument-parse time (`docs/traps.md`) — so an unrecognised
+/// value is a session that dies the instant it is entered, with Claude Code's
+/// usage error printed over whatever the reader was doing and no mention of the
+/// file that caused it. Held against `armada_core::helm::MODES`, which is the
+/// same list `crates/core/src/fleet/drone.rs` refuses a Drone's posture against,
+/// the failure is a named `bad_config` naming the file, the key and the six
+/// values.
+pub fn mode(armada_home: &Path) -> Result<String, ArmadaError> {
+    let mode = crate::machine::read(armada_home).mode;
+    match helm::MODES.contains(&mode.as_str()) {
+        true => Ok(mode),
+        false => Err(helm::bad_mode(&mode)),
+    }
+}
+
+/// `armada helm enable` — let `armada helm` become a session on this machine.
+///
+/// **This is the yes, and the only one.** Nothing downstream asks again: with
+/// it on, the bare verb enters.
 ///
 /// **Writes one boolean, and nothing else.** It does not touch the guild, the
 /// persona or any of the documents `armada helm` wires — whether a
 /// machine is *allowed* to open a session and whether it is currently *able*
 /// to (a guild, a persona, a projection) are different questions, answered by
-/// different commands. `armada helm --exec` still needs both.
+/// different commands. Entering still needs both.
 pub fn enable(armada_home: &Path) -> Result<Output, ArmadaError> {
     switch(armada_home, true, "helm enable")
 }
@@ -207,9 +261,10 @@ pub struct Options {
 
 /// Assemble the launch, wire the inbox, and report.
 ///
-/// **Nothing here starts a process.** The documents are written, the
-/// conversation's record is read or minted, and the argv is returned as a
-/// string for a person to read or a script to parse.
+/// **Nothing here starts a process**, on any path. The documents are written,
+/// the conversation's record is read or minted, and the argv is returned — as a
+/// vector for the caller to become, and as a string for a person to read. Which
+/// of those happens is the entrypoint's decision, not this function's.
 pub fn run<C: armada_core::ctx::Clock>(
     now: &C,
     place: &Where,
@@ -221,10 +276,12 @@ pub fn run<C: armada_core::ctx::Clock>(
         .unwrap_or_else(|| helm::AGENT.to_string());
     let guild = Guild::at(&place.armada_home);
 
-    // **The refusal comes first, before anything is written.** A `helm` that
+    // **Both refusals come first, before anything is written.** A `helm` that
     // laid down its configuration files and then admitted it has no persona to
-    // run would have changed the machine to report a failure.
+    // run — or a mode Claude Code would reject at argument-parse time — would
+    // have changed the machine in order to report a failure.
     persona(place, &guild, &agent)?;
+    let mode = mode(&place.armada_home)?;
 
     let (session, minted) = conversation(now, place, &agent, options.new)?;
     let voice = voice(&guild);
@@ -236,6 +293,7 @@ pub fn run<C: armada_core::ctx::Clock>(
         mcp_config: paths(place).mcp_config.display().to_string(),
         plugin_dir: paths(place).plugin_dir.display().to_string(),
         settings: paths(place).settings.display().to_string(),
+        mode,
         voice: voice.as_ref().map(|voice| voice.prompt.clone()),
     };
     let argv = helm::launch_argv(&launch);
@@ -461,13 +519,11 @@ fn record(session: &Session) -> Result<String, ArmadaError> {
 /// launch `--resume` a conversation nobody ever started, which fails with *no
 /// conversation found* and is indistinguishable from a lost transcript.
 ///
-/// **It has no caller while [`ENTER`] is refused, and is kept deliberately.**
-/// That gate is on entering and not on the work underneath it ([`ENTER_IS_OFF`]),
-/// so the writer the exec path needs stays here, stays tested, and turning
-/// entering back on is a deleted refusal and a call — rather than rediscovering
-/// which end of the exec this has to be written at. It is exercised directly by
-/// the suite for exactly that reason: a function kept for later that nothing
-/// runs is a function that has rotted by the time later arrives.
+/// **Its caller is the entering path, and no test may be that caller.** No test
+/// in this repository starts a session (`PHASES.md` §8.5), so the suite
+/// exercises this function directly instead — which is what closes the one link
+/// the rest of the suite cannot: the flag that makes the next launch say
+/// `--resume` is the flag this function writes.
 pub fn mark_started(place: &Where, session: &Session) -> Result<(), ArmadaError> {
     let started = Session {
         started: true,

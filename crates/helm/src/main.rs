@@ -899,10 +899,29 @@ fn dispatch(
     }
 }
 
-/// `armada helm` — assemble the launch, and enter it only if this machine has
-/// said yes.
+/// `armada helm` — enter the conversation, unless the caller asked for the
+/// line instead.
 ///
-/// **Whether `--exec` runs at all is decided before the verb runs, not
+/// **Entering is what this verb does, and `helm.enter` is the one thing that
+/// permits it.** It used to be gated twice — the machine switch *and*
+/// [`verbs::helm::ENTER`] — so a reader who had already set `helm.enter: true`
+/// typed `armada helm`, was handed a command to paste, and said so. Asking for
+/// permission a second time does not make the first answer more considered.
+///
+/// | Given | Enters |
+/// |---|---|
+/// | nothing | yes |
+/// | [`verbs::helm::ENTER`] | yes — the same act, spelled out |
+/// | [`verbs::helm::PRINT`] | no: the pasteable line |
+/// | `--json` | no: the envelope, argv and all |
+///
+/// **`--json` is on the *no* side because a replaced process prints no
+/// envelope.** A caller that asked for the data would otherwise find itself
+/// inside somebody's conversation with nothing on stdout — and every script
+/// that reads `data.argv` is such a caller. `--exec --json` is the way to say
+/// enter anyway, and it is what a person asking for both would mean.
+///
+/// **Whether entering happens at all is decided before the verb runs, not
 /// after.** A refusal that had already written the configuration files would
 /// have changed the machine in order to say no — the same rule `armada doctor
 /// --fix` follows, and the rule the no-guild refusal inside the verb follows
@@ -910,20 +929,21 @@ fn dispatch(
 /// [`verbs::helm::entering_is_off`] is returned before [`verbs::helm::run`]
 /// ever touches disk.
 ///
-/// **Off it stops there; on, it becomes [`helm_exec`].** The switch decides
-/// whether the process is ever replaced — it does not change what
-/// `armada helm` writes or reports either way, which is what keeps `--json`
-/// honest about a launch that was merely assembled.
+/// **What is written and reported does not depend on any of it.** The argv, the
+/// four documents and the conversation's record are the same on every row of
+/// that table, which is what keeps `--json` honest about a launch it did not
+/// enter.
 fn helm(
     place: &verbs::helm::Where,
     options: &args::Helm,
     wanted: &verbs::helm::Options,
 ) -> Result<Output, ArmadaError> {
-    if options.exec && !verbs::helm::entering_allowed(&place.armada_home) {
+    let entering = options.exec || !(options.print_command || options.json);
+    if entering && !verbs::helm::entering_allowed(&place.armada_home) {
         return Err(verbs::helm::entering_is_off());
     }
     let output = verbs::helm::run(&SystemClock, place, wanted)?;
-    if options.exec {
+    if entering {
         // **The process is replaced.** This returns only if the exec itself
         // failed — a successful one never comes back.
         helm_exec(place, &output)?;
@@ -1356,11 +1376,9 @@ fn on_screen(
         // `c` names the verb to run instead, and names it correctly whichever
         // way `armada helm enable`/`disable` last left it.
         Action::Chat => Done::said(match verbs::helm::entering_allowed(&place.armada_home) {
-            true => {
-                "`armada helm --exec` is on for this machine — run it yourself to enter".to_string()
-            }
+            true => "`armada helm` is on for this machine — run it yourself to enter".to_string(),
             false => format!(
-                "`armada helm --exec` is off — `{}` turns it on; enter boards the selected Job",
+                "`armada helm` is off — `{}` turns it on; enter boards the selected Job",
                 verbs::helm::ENABLE
             ),
         }),

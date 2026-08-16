@@ -590,20 +590,34 @@ impl Default for Bridge {
 
 /// `armada helm`, with the flags `commands/helm/helm.md` gives it.
 ///
-/// **`--exec` is a field rather than the default**, and that is the whole safety
-/// property of this verb. Assembling the launch costs nothing; entering the
-/// session spends a real budget against a real account for as long as it stays
-/// open — so the spend is behind a flag nothing but a person types.
+/// **Entering is the default, and the machine is what permits it.** Assembling
+/// the launch costs nothing; entering spends a real budget against a real
+/// account for as long as the session stays open — which is why there is a lock,
+/// and why it is `helm.enter` in `~/.armada/machine.yml` rather than a flag. A
+/// flag on top of that switch was a second lock, and the reader who had already
+/// opened the first one got a command printed at them for their trouble.
+///
+/// So neither of the two flags here is the permission: [`exec`](Self::exec)
+/// spells out what the bare verb already does, and
+/// [`print_command`](Self::print_command) asks for the line instead of the
+/// session.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Helm {
-    /// Emit the envelope.
+    /// Emit the envelope — **and, like `--print-command`, never enter.** A
+    /// caller asking for the envelope is asking for output, and a process
+    /// replaced by `claude` never prints one.
     pub json: bool,
     /// Start a fresh conversation instead of resuming yesterday's.
     pub new: bool,
     /// A persona other than `helm`, from `~/.armada/guild/subagents/`.
     pub agent: Option<String>,
-    /// **Become the session.** Off by default; see the struct's note.
+    /// **Become the session** — the explicit spelling of the default, kept for
+    /// the scripts and the fingers that already have it, and the one way to
+    /// enter while also passing `--json`.
     pub exec: bool,
+    /// **Print the pasteable line and enter nothing**, whatever the machine
+    /// says.
+    pub print_command: bool,
 }
 
 /// `armada init`, with the flags `docs/commands/init.md` gives it.
@@ -1669,13 +1683,15 @@ fn bridge(
 
 /// `armada helm` — the one agent you talk to.
 ///
-/// **A verb, and never the bare word.** PLAN.md §15.1 says typing `armada` with
-/// no arguments enters Helm, and that remains the intended end state; it is
-/// deliberately not wired here. The bare word is the most typeable thing on the
-/// machine, and the cost of getting it wrong is not a stray help page — it is a
-/// Claude Code session nobody meant to open, spending against a real account
-/// until somebody notices. Until entering is something a reader has asked for
-/// twice, `armada` alone stays the orientation page.
+/// **A verb, and never the bare word.** `docs/reserved/020` §8 decided that bare
+/// `armada` opens a menu of the modules rather than entering Helm — a different
+/// verb, and not this one's business. What `armada helm` does is settled by
+/// `helm.enter` on this machine: on, it enters; off, it is refused by name.
+///
+/// **`--print-command` and `--exec` are not a permission between them.** The
+/// first asks for the line instead of the session and the second spells out the
+/// default; the machine switch is what decides, once
+/// ([`crate::verbs::helm`]).
 ///
 /// **There is still no `helm` binary**, and there never will be. Kubernetes owns
 /// that name and Armada runs on machines that have it (PLAN.md §15.1).
@@ -1717,14 +1733,41 @@ fn helm(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocati
         json,
         color,
         "helm",
-        &["--new", "--exec"],
+        &[
+            "--new",
+            crate::verbs::helm::ENTER,
+            crate::verbs::helm::PRINT,
+        ],
         &["--agent"],
     )?;
+    // **Asking for both is refused rather than ranked.** `--print-command` says
+    // print instead of entering and `--exec` says enter; a precedence rule would
+    // silently do one of the two things the caller asked for, and the one it
+    // dropped is either a session they did not want or a session they did.
+    if parsed.on(crate::verbs::helm::ENTER) && parsed.on(crate::verbs::helm::PRINT) {
+        return Err(failure(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: "helm".to_string(),
+                message: format!(
+                    "`{}` and `{}` ask for opposite things",
+                    crate::verbs::helm::PRINT,
+                    crate::verbs::helm::ENTER
+                ),
+                next_action: Some(format!(
+                    "`{}` prints the line and enters nothing; `armada helm` alone enters",
+                    crate::verbs::helm::PRINT
+                )),
+            },
+            parsed.json,
+        ));
+    }
     Ok(Invocation::Helm(Box::new(Helm {
         json: parsed.json,
         new: parsed.on("--new"),
         agent: parsed.value("--agent"),
-        exec: parsed.on("--exec"),
+        exec: parsed.on(crate::verbs::helm::ENTER),
+        print_command: parsed.on(crate::verbs::helm::PRINT),
     })))
 }
 
@@ -3245,17 +3288,45 @@ mod tests {
         assert_eq!(helm.agent.as_deref(), Some("skeptic"));
     }
 
-    /// **`--exec` is off unless it is typed**, which is the whole safety
-    /// property of this verb: assembling the launch costs nothing and entering
-    /// the session costs a real budget.
+    /// **Neither flag is on unless it is typed**, and the parser does not
+    /// decide what a bare `armada helm` does with that.
+    ///
+    /// Whether it enters is `helm.enter`'s answer, read at the entrypoint —
+    /// which is the point of this test now: the grammar carries no second lock
+    /// of its own for the machine switch to be overruled by.
     #[test]
-    fn helm_does_not_enter_a_session_unless_it_was_asked_to() {
+    fn helm_carries_no_lock_of_its_own() {
         let Invocation::Helm(helm) = parse(&args(&["helm"])).unwrap().invocation else {
             panic!()
         };
-        assert!(!helm.exec, "`armada helm` alone would open a session");
+        assert!(!helm.exec);
+        assert!(!helm.print_command);
         assert!(!helm.new);
         assert_eq!(helm.agent, None);
+    }
+
+    /// **`--print-command` is the way to not enter**, and it parses on its own.
+    #[test]
+    fn helm_takes_the_flag_that_asks_for_the_line_instead_of_the_session() {
+        let Invocation::Helm(helm) = parse(&args(&["helm", "--print-command"]))
+            .unwrap()
+            .invocation
+        else {
+            panic!("`armada helm --print-command` did not parse as Helm")
+        };
+        assert!(helm.print_command);
+        assert!(!helm.exec);
+    }
+
+    /// Asking to print *and* to enter is refused rather than ranked — the two
+    /// ask for opposite things, and dropping one silently does the thing the
+    /// caller did not want either way.
+    #[test]
+    fn helm_refuses_the_two_flags_that_contradict_each_other() {
+        let failure = parse(&args(&["helm", "--print-command", "--exec"]))
+            .expect_err("both flags parsed as one coherent request");
+        assert_eq!(failure.error.class, ErrClass::BadInvocation);
+        assert!(failure.error.message.contains("opposite"));
     }
 
     /// `--agent` needs a name. A bare flag that silently ran the default persona

@@ -1,9 +1,10 @@
 //! `armada helm` end to end, against a scratch `$HOME`.
 //!
-//! **No test here starts a Claude Code session, and none can.** The verb under
-//! test assembles a launch and reports it; `--exec` is refused unless this
-//! machine has run `armada helm enable`, and a fresh scratch machine never
-//! has. That refusal is asserted rather than assumed — see
+//! **No test here starts a Claude Code session, and none can.** Entering is
+//! refused unless this machine has run `armada helm enable`, and a fresh scratch
+//! machine never has — so every test that wants an envelope asks for one with
+//! `--json` or `--print-command`, neither of which enters on any machine. That
+//! refusal is asserted rather than assumed — see
 //! [`entering_is_refused_by_name_and_says_why`], which is the deliverable of
 //! this file and not a detail of it. A gate with no test is a comment, and the
 //! first thing anybody would learn about it silently coming back on is a bill.
@@ -12,12 +13,14 @@
 //! [`enable_and_disable_flip_the_switch_machine_yml_records`] proves `armada
 //! helm enable` turns [`armada_helm::verbs::helm::entering_allowed`] on and
 //! `disable` turns it back, and that every surface that reports the state —
-//! `armada helm`'s own envelope, `armada doctor`'s row — agrees with it. What
-//! it does not do, on purpose, is run `armada helm --exec` once the switch is
-//! on: that would attempt a real `exec` into whatever `claude` resolves to on
-//! this machine's `PATH`, which on a developer's own box is the real thing.
-//! Proving the *decision* — off refuses, on does not refuse before the verb
-//! even runs — is the whole of what a test may safely check.
+//! `armada helm --json`'s envelope, `armada doctor`'s row — agrees with it.
+//!
+//! **One test does run the entering path**, and it is safe for one reason:
+//! [`support`]'s stub `claude` is first on this suite's `PATH`, so the `exec`
+//! lands on nine lines of `sh` that exit 0 and talk to nothing. See
+//! [`a_machine_that_has_said_yes_is_not_asked_a_second_time`], which exists
+//! because proving the decision alone was what let a second lock sit behind the
+//! first one unnoticed.
 //!
 //! [`entering_is_refused_by_name_and_says_why`]: entering_is_refused_by_name_and_says_why
 //! [`enable_and_disable_flip_the_switch_machine_yml_records`]: enable_and_disable_flip_the_switch_machine_yml_records
@@ -167,6 +170,11 @@ fn the_first_launch_is_assembled_and_nothing_is_started() {
             root.join("plugin").display().to_string(),
             "--settings".to_string(),
             root.join("settings.json").display().to_string(),
+            // **The mode the session enters under, which the launch used to
+            // pass not at all.** Without it Helm inherited Claude Code's own
+            // default and the reader approved every tool call by hand.
+            "--permission-mode".to_string(),
+            "auto".to_string(),
             "--session-id".to_string(),
             data["uuid"].as_str().unwrap().to_string(),
         ]
@@ -734,7 +742,10 @@ fn the_refusal_is_an_ordinary_error_with_a_class_and_a_next_action() {
     // ones still on it answer with. A class invented for the occasion would say
     // this refusal is a different kind of thing, and it is not.
     assert_eq!(error["class"], "bad_invocation");
-    assert_eq!(error["where"], "helm --exec");
+    // **`helm`, not `helm --exec`.** One refusal answers both spellings, because
+    // they are one act; a `where` naming the flag would say the flag was the
+    // thing refused, which is the second lock all over again.
+    assert_eq!(error["where"], "helm");
     assert!(error["next_action"].as_str().is_some_and(|n| !n.is_empty()));
 }
 
@@ -754,13 +765,18 @@ fn a_refused_entry_writes_nothing() {
     );
 }
 
-/// **The one constant, read by every surface.** The parser's flag, the help
-/// page's row, the render's summary line and the refusal all have to agree, and
-/// they agree because they read the same two strings rather than four copies of
-/// the same sentence.
+/// **The constants, read by every surface that has anything to say about
+/// them.** The parser's flags, the help page's rows, the render's summary line
+/// and the refusal all have to agree, and they agree because they read the same
+/// strings rather than four copies of the same sentence.
+///
+/// **The reason is what the surfaces share, not the flag.** `--exec` is now a
+/// synonym for the default rather than the lock, so the surface that used to
+/// have to name it — the report — names the *state* instead, and it reads that
+/// state from the same constant the refusal does.
 #[test]
 fn every_surface_reads_the_gate_from_the_same_place() {
-    use armada_helm::verbs::helm::{ENTER, ENTER_IS_OFF};
+    use armada_helm::verbs::helm::{ENABLE, ENTER, ENTER_IS_OFF, PRINT};
 
     let machine = Machine::new();
     a_machine_ready_for_helm(&machine);
@@ -772,22 +788,31 @@ fn every_surface_reads_the_gate_from_the_same_place() {
         String::from_utf8_lossy(&machine.run(machine.root.path(), &["helm", "--help"]).stdout)
             .to_string();
     let report =
-        String::from_utf8_lossy(&machine.run(machine.root.path(), &["helm"]).stdout).to_string();
+        String::from_utf8_lossy(&machine.run(machine.root.path(), &["helm", PRINT]).stdout)
+            .to_string();
 
-    for (surface, text) in [
-        ("refusal", &refusal),
-        ("help page", &page),
-        ("report", &report),
-    ] {
-        assert!(
-            text.contains(ENTER),
-            "the {surface} does not name `{ENTER}`"
-        );
+    // Both spellings of entering are on the page, and neither reads as the
+    // permission — the machine switch is that, and the page names it too.
+    for flag in [ENTER, PRINT] {
+        assert!(page.contains(flag), "the help page does not name `{flag}`");
     }
+    // The refusal names the flag it also answers for, so a caller who typed it
+    // is not told about a different command.
+    assert!(
+        refusal.contains(ENTER),
+        "the refusal does not name `{ENTER}`"
+    );
+
+    // The state, and the verb that changes it, in the two places a reader meets
+    // them — both read from the constants rather than retyped.
     for (surface, text) in [("refusal", &refusal), ("report", &report)] {
         assert!(
             text.contains(ENTER_IS_OFF),
             "the {surface} does not give the reason: {text}"
+        );
+        assert!(
+            text.contains(ENABLE),
+            "the {surface} does not name the verb that lifts it: {text}"
         );
     }
 }
@@ -831,42 +856,204 @@ fn the_writer_that_turns_a_launch_into_a_resume_still_works() {
     assert_eq!(&argv[argv.len() - 2..], ["--resume", uuid.as_str()]);
 }
 
-/// The default is free. `armada helm` with no flags starts nothing, and the
-/// human render says so in words rather than leaving a reader waiting for a
-/// prompt that is never coming.
+/// `--print-command` is free, and says out loud that it started nothing —
+/// rather than leaving a reader waiting for a prompt that is never coming.
+///
+/// **The line it prints is the point of the flag.** This is where the old
+/// default went when the bare verb started entering, and it is how a person
+/// reads the argv Armada built without spending anything to see it.
 #[test]
-fn the_default_says_out_loud_that_it_started_nothing() {
+fn print_command_says_out_loud_that_it_started_nothing() {
     let machine = Machine::new();
     a_machine_ready_for_helm(&machine);
 
-    let out = machine.run(machine.root.path(), &["helm"]);
-    assert!(out.status.success());
+    let out = machine.run(machine.root.path(), &["helm", "--print-command"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let said = String::from_utf8_lossy(&out.stdout);
     assert!(said.contains("nothing started"), "{said}");
-    assert!(said.contains("--exec"), "{said}");
+    assert!(said.contains("entering is off on this machine"), "{said}");
     assert!(said.contains("enter with claude --agent helm"), "{said}");
+    // The whole launch is on that line, mode and all.
+    assert!(said.contains("--permission-mode auto"), "{said}");
 }
 
-/// `armada helm --help` tells the truth about all three: the launch is
-/// assembled, entering is gated by a machine switch rather than always
-/// refused, and there is still no `helm` binary.
+/// **The defect this change exists for, as a test.**
+///
+/// `helm.enter` was already on and `armada helm` still printed a command to
+/// paste, because entering was gated a second time behind `--exec`. A machine
+/// that has said yes must not be asked again — and the only safe way to assert
+/// that here is on the *decision*, because entering for real would exec into
+/// whatever `claude` is on this developer's `PATH`.
+///
+/// So: with the switch off, the bare verb is refused and writes nothing. With
+/// it on, the same bare verb assembles the launch and then **becomes it** —
+/// which is safe here and nowhere else, because the `claude` on this suite's
+/// `PATH` is [`support`]'s stub: nine lines of `sh` that answer Armada's probes,
+/// exit 0, and talk to nothing. No turn, no token.
+///
+/// The three assertions are the three ways this could still be wrong: a refusal
+/// (the second lock still there), a printed command and an envelope (the old
+/// default still there), or no configuration at all (a launch that never ran).
 #[test]
-fn the_page_says_the_launch_is_built_and_entering_is_gated() {
+fn a_machine_that_has_said_yes_is_not_asked_a_second_time() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+
+    let refused = machine.run(machine.root.path(), &["helm"]);
+    assert_eq!(
+        refused.status.code(),
+        Some(2),
+        "a bare `armada helm` on a machine that has not said yes did not refuse"
+    );
+    assert!(
+        !helm_home(&machine).exists(),
+        "a refused launch wrote {:?}",
+        helm_home(&machine)
+    );
+
+    machine.run(machine.root.path(), &["helm", "enable"]);
+    let entered = machine.run(machine.root.path(), &["helm"]);
+    assert_eq!(
+        entered.status.code(),
+        Some(0),
+        "the machine said yes and `armada helm` did not enter: {}",
+        String::from_utf8_lossy(&entered.stderr)
+    );
+    let said = String::from_utf8_lossy(&entered.stdout);
+    // **The process was replaced, so there is no envelope and no line to
+    // paste.** This is the assertion the reader's complaint turns on: a machine
+    // that has said yes must not be handed its own launch command.
+    assert!(
+        !said.contains("enter with"),
+        "`armada helm` printed a command instead of entering: {said}"
+    );
+    assert!(
+        helm_home(&machine).join("mcp.json").is_file(),
+        "`armada helm` neither refused nor assembled a launch"
+    );
+    // And the record says the conversation exists, which is what `mark_started`
+    // writes *before* the exec — because there is no after.
+    let record = std::fs::read_to_string(helm_home(&machine).join("session.json")).unwrap();
+    assert!(record.contains("\"started\": true"), "{record}");
+}
+
+/// **`--print-command` and `--exec` are refused together**, rather than one
+/// silently winning. A precedence rule would do one of the two things the
+/// caller asked for and drop the other, and the one it dropped is either a
+/// session they did not want or a session they did.
+#[test]
+fn asking_to_print_and_to_enter_at_once_is_refused() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+    machine.run(machine.root.path(), &["helm", "enable"]);
+
+    let out = machine.run(
+        machine.root.path(),
+        &["helm", "--print-command", "--exec", "--json"],
+    );
+    assert_eq!(out.status.code(), Some(2));
+    let envelope: Value = serde_json::from_slice(&out.stdout).expect("an envelope");
+    assert_eq!(envelope["error"]["class"], "bad_invocation");
+    assert!(
+        envelope["error"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("opposite")),
+        "{envelope:#}"
+    );
+}
+
+/// **A `helm.mode` Claude Code has never heard of is refused before a launch is
+/// assembled**, by name, naming the file and the key.
+///
+/// `--permission-mode` is checked at argument-parse time, so an unrecognised
+/// value is a session that dies the instant it is entered, printing Claude
+/// Code's usage error over whatever the reader was doing. This is the check
+/// that costs nothing and names the file instead.
+#[test]
+fn a_mode_this_machine_invented_is_refused_and_nothing_is_written() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+    std::fs::write(
+        machine.home.path().join(".armada/machine.yml"),
+        "helm:\n  enter: true\n  mode: yolo\n",
+    )
+    .unwrap();
+
+    let out = machine.run(machine.root.path(), &["helm", "--json"]);
+    assert_eq!(out.status.code(), Some(3), "bad_config is exit 3");
+    let envelope: Value = serde_json::from_slice(&out.stdout).expect("an envelope");
+    let error = &envelope["error"];
+    assert_eq!(error["class"], "bad_config");
+    assert_eq!(error["where"], "machine.yml helm.mode");
+    assert!(
+        error["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("yolo")),
+        "{envelope:#}"
+    );
+    assert!(
+        error["next_action"]
+            .as_str()
+            .is_some_and(|n| n.contains("retry unchanged")),
+        "{envelope:#}"
+    );
+    assert!(
+        !helm_home(&machine).exists(),
+        "a refused mode wrote {:?}",
+        helm_home(&machine)
+    );
+}
+
+/// **The mode is the machine's, not a constant one layer down.** A reader who
+/// chose `acceptEdits` gets it in the argv.
+#[test]
+fn the_mode_this_machine_chose_reaches_the_launch() {
+    let machine = Machine::new();
+    a_machine_ready_for_helm(&machine);
+    std::fs::write(
+        machine.home.path().join(".armada/machine.yml"),
+        "helm:\n  mode: acceptEdits\n",
+    )
+    .unwrap();
+
+    let argv = argv_of(&helm_json(&machine, &[]));
+    let at = argv
+        .iter()
+        .position(|word| word == "--permission-mode")
+        .expect("no mode in the launch");
+    assert_eq!(argv[at + 1], "acceptEdits");
+}
+
+/// `armada helm --help` tells the truth about all four: entering is what the
+/// verb does, one machine switch is what permits it, `--print-command` is how
+/// to get the line instead, and there is still no `helm` binary.
+#[test]
+fn the_page_says_entering_is_the_default_and_names_its_one_switch() {
     let machine = Machine::new();
     let out = machine.run(machine.root.path(), &["helm", "--help"]);
     assert!(out.status.success());
     let page = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        page.contains("--exec"),
-        "the flag is not on its own page: {page}"
-    );
-    assert!(page.contains("assembled and verified"), "{page}");
+    for flag in ["--exec", "--print-command"] {
+        assert!(page.contains(flag), "{flag} is not on its own page: {page}");
+    }
+    // **One switch, named, and named as the only one.** The page a reader
+    // reaches for after `armada helm` refused them has to send them somewhere,
+    // and a page that implied a second gate is what this change removed.
+    assert!(page.contains("helm.enter"), "{page}");
+    assert!(page.contains("nothing else"), "{page}");
     assert!(page.contains("armada helm enable"), "{page}");
     assert!(page.contains("armada helm disable"), "{page}");
     assert!(
         page.contains("off on a fresh install"),
         "the page does not say what a caller who has never run enable gets: {page}"
     );
+    // The mode the session enters under is a machine setting too, and the page
+    // is where a reader learns the key exists.
+    assert!(page.contains("helm.mode"), "{page}");
     assert!(page.contains("There is no `helm` binary"), "{page}");
 }
 

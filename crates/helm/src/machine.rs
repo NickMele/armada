@@ -1,11 +1,12 @@
 //! Helm's section of `~/.armada/machine.yml` — **the file that never syncs**
 //! (`PLAN.md` §13.1, §4.3.1).
 //!
-//! One key lives here: whether `armada helm --exec` may become a session **on
-//! this machine**. Everything else about entering — the argv, the four
-//! documents, the conversation record — is built and verified regardless; this
-//! is the one bit that decides whether the last step, replacing this process
-//! with `claude`, is allowed to happen.
+//! Two keys live here, and both are answers about **this machine**: whether
+//! `armada helm` may become a session at all, and what that session does with a
+//! tool call its permissions do not settle. Everything else about entering — the
+//! argv, the four documents, the conversation record — is built and verified
+//! regardless; [`HelmSection::enter`] is the one bit that decides whether the
+//! last step, replacing this process with `claude`, is allowed to happen.
 //!
 //! # Why a machine fact and not a guild preference
 //!
@@ -43,17 +44,56 @@ use std::path::Path;
 const SECTION: &str = "helm";
 
 /// What Helm keeps in `machine.yml`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HelmSection {
-    /// Whether `armada helm --exec` may become a session on this machine.
+    /// Whether `armada helm` may become a session on this machine.
     ///
     /// **Off is the default**, which is also what a missing file, a missing
     /// section, and a section that fails to parse all mean — a fresh install
     /// must not be able to open a session until told to, on every one of those
     /// paths and not only the ordinary one.
+    ///
+    /// **On, it is the authorization, and there is not a second one.** This
+    /// switch used to gate `--exec` while a bare `armada helm` printed a command
+    /// to paste; a reader who had already flipped it passed one lock and hit
+    /// another, and reported the printed line as the bug it was. Whether a
+    /// session may open here is a question this file answers once.
     #[serde(default)]
     pub enter: bool,
+
+    /// What Claude Code does with a tool call the session's permissions do not
+    /// settle — `--permission-mode`, defaulting to
+    /// [`armada_core::helm::MODE`].
+    ///
+    /// **A machine fact for the same reason [`enter`](Self::enter) is one.** It
+    /// describes how much a session may do without stopping to ask *on this
+    /// box*, which a laptop somebody is sitting at answers differently from a
+    /// shared machine. It is validated against the list Claude Code itself
+    /// checks — `armada_core::helm::MODES` — before a launch is assembled, so a
+    /// typo here is a named `bad_config` rather than a session that dies at
+    /// argument-parse time with Claude Code's usage error on top of it.
+    #[serde(default = "default_mode")]
+    pub mode: String,
+}
+
+/// The mode a machine that has never said otherwise launches under.
+fn default_mode() -> String {
+    armada_core::helm::MODE.to_string()
+}
+
+/// **Written out rather than derived**, because a derived `Default` for a
+/// `String` is the empty string — and an empty `--permission-mode` is not a
+/// default, it is a launch Claude Code rejects. Every path that falls back to
+/// this one (no file, no section, a section that will not parse) has to land on
+/// a mode that actually works.
+impl Default for HelmSection {
+    fn default() -> HelmSection {
+        HelmSection {
+            enter: false,
+            mode: default_mode(),
+        }
+    }
 }
 
 /// Read Helm's section, or the default — `enter: false` — when the file, the
@@ -115,7 +155,13 @@ pub fn write(armada_home: &Path, section: &HelmSection) -> std::io::Result<()> {
 /// have done something twice.
 pub fn set_enter(armada_home: &Path, enter: bool) -> std::io::Result<HelmSection> {
     let before = read(armada_home);
-    let section = HelmSection { enter };
+    // **The mode is carried through, not defaulted back.** `enable` answers one
+    // question, and rewriting a `helm.mode:` the reader had chosen as the price
+    // of answering it would be this file's own version of the second lock.
+    let section = HelmSection {
+        enter,
+        mode: before.mode.clone(),
+    };
     if before.enter != enter {
         write(armada_home, &section)?;
     }
@@ -126,9 +172,14 @@ pub fn set_enter(armada_home: &Path, enter: bool) -> std::io::Result<HelmSection
 const HEADER: &str = "\
 # ~/.armada/machine.yml — this machine, and nothing about you.
 #
-# NEVER SYNCS (PLAN.md §13.1). helm.enter gates `armada helm --exec`: off by
-# default, so a fresh install cannot open a Claude Code session until you say
-# so with `armada helm enable`. `armada helm disable` puts it back.
+# NEVER SYNCS (PLAN.md §13.1). helm.enter is what lets `armada helm` become a
+# Claude Code session: off by default, so a fresh install cannot open one until
+# you say so with `armada helm enable`. `armada helm disable` puts it back, and
+# `armada helm --print-command` prints the line to paste without entering.
+#
+# helm.mode is that session's --permission-mode: auto by default, because you
+# are at the terminal and a prompt is a question you can answer. A Drone gets
+# dontAsk instead, for the opposite reason.
 ";
 
 fn document(armada_home: &Path) -> Option<serde_yaml_ng::Value> {
@@ -150,6 +201,67 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         assert_eq!(read(home.path()), HelmSection::default());
         assert!(!read(home.path()).enter);
+    }
+
+    /// **Every path that falls back lands on a mode Claude Code accepts.** The
+    /// derived `Default` for a `String` is the empty string, and an empty
+    /// `--permission-mode` is not a default — it is a launch that dies at
+    /// argument-parse time, on the machine that had never touched this file.
+    #[test]
+    fn a_machine_that_has_said_nothing_launches_under_the_default_mode() {
+        let home = tempfile::tempdir().unwrap();
+        assert_eq!(read(home.path()).mode, armada_core::helm::MODE);
+        assert_eq!(read(home.path()).mode, "auto");
+        // **The shape every machine that predates this key is in**: a `helm:`
+        // section that says `enter` and nothing else. A field default of
+        // `String::default()` would launch it with an empty `--permission-mode`
+        // and it is this line, not the ones below, that catches that.
+        std::fs::write(home.path().join("machine.yml"), "helm:\n  enter: true\n").unwrap();
+        assert!(read(home.path()).enter);
+        assert_eq!(read(home.path()).mode, "auto");
+        // The two paths that are not "no file at all", which land here too.
+        std::fs::write(home.path().join("machine.yml"), "helm: [\n").unwrap();
+        assert_eq!(read(home.path()).mode, "auto");
+        std::fs::write(
+            home.path().join("machine.yml"),
+            "manifest:\n  cpu_slots: 2\n",
+        )
+        .unwrap();
+        assert_eq!(read(home.path()).mode, "auto");
+    }
+
+    /// A mode the reader chose is read back as theirs — and is **not** validated
+    /// here. This reader never errors (see [`read`]); the launch refuses a mode
+    /// Claude Code does not have, by name, before it writes anything.
+    #[test]
+    fn a_mode_the_reader_wrote_is_read_back_including_a_wrong_one() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("machine.yml"),
+            "helm:\n  enter: true\n  mode: plan\n",
+        )
+        .unwrap();
+        assert!(read(home.path()).enter);
+        assert_eq!(read(home.path()).mode, "plan");
+
+        std::fs::write(home.path().join("machine.yml"), "helm:\n  mode: bogus\n").unwrap();
+        assert_eq!(read(home.path()).mode, "bogus");
+    }
+
+    /// **`enable` answers one question and rewrites nothing else.** A reader who
+    /// had chosen `acceptEdits` and then turned entering on must not find their
+    /// mode put back to the default as the price of it.
+    #[test]
+    fn flipping_the_switch_leaves_a_chosen_mode_alone() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("machine.yml"),
+            "helm:\n  enter: false\n  mode: acceptEdits\n",
+        )
+        .unwrap();
+        set_enter(home.path(), true).unwrap();
+        assert!(read(home.path()).enter);
+        assert_eq!(read(home.path()).mode, "acceptEdits");
     }
 
     #[test]
