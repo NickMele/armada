@@ -1509,3 +1509,38 @@ so each needed the call site changed — there is no one function all three alre
 **If you assume otherwise:** a harness that never answers the query (`script(1)`, or a fixed fake
 reply that does not track the real cursor) hides this entirely — the widget fails to open at all
 and falls back to the non-widget path, which looks clean for the wrong reason.
+
+---
+
+## `cmux` opens a directory with a bare path — there is no `open` subcommand
+
+Measured 2026-08-16 against **cmux 0.64.22 (102)**, darwin 27.0, installed as an app bundle
+(`/Applications/cmux.app/Contents/Resources/bin/cmux`) rather than by a package manager.
+
+<!-- doclint: skip — the output below is cmux's, quoted verbatim -->
+```
+$ cmux --help
+cmux - control cmux via Unix socket
+
+Usage:
+  cmux <path>                Open a directory in a new workspace (launches cmux if needed)
+  cmux [global-options] <command> [options]
+```
+
+The whole handoff [`020`](reserved/020-the-tui-decided.md)'s workspace decision needs is the
+first line: **a bare path, no verb.** cmux has a large subcommand surface — `settings`, `config`, `restore`,
+`tab-action` and a dozen more — and every plausible guess at a name for this one (`cmux open`,
+`cmux new`, `cmux workspace`) is not among them. `launches cmux if needed` is the other half:
+Armada does not have to check whether the app is already running.
+
+**Detection is `--help`, and it is free.** It prints the usage above and starts nothing, so
+probing costs no window and no socket connection — which is what makes it safe to run before the
+Bridge takes the alt screen. `armada_core::fleet::bridge::cmux_offers_open` looks for the literal
+`cmux <path>` in that output, so a cmux whose CLI moves on is detected as *absent* and `↵` falls
+back to printing the worktree path and the resume command.
+
+**If you assume otherwise:** a guessed subcommand exits non-zero with a usage message, which the
+Bridge would report as a one-line notice under the table — so the key would appear bound, appear
+to run something, and never open anything. That is the same class of silent failure
+[`020`](reserved/020-the-tui-decided.md)'s state-word decision is about, arriving through the key
+its workspace decision added.

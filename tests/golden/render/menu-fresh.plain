@@ -1,0 +1,8 @@
+  STATUS  MODULE    DETAIL               VERB
+  DOWN    helm      off on this machine  armada helm enable
+  OK      fleet     no jobs              armada fleet ls
+  OK      inbox     nothing open         armada fleet inbox
+  DOWN    manifest  no armada.yml here   armada manifest init
+  DOWN    guild     no guild yet         armada init
+
+  `armada --help` lists every verb · `armada <module>` opens one

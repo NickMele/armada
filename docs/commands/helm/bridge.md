@@ -94,7 +94,7 @@ the three.
 
 | Key | Does | Verb it calls |
 |---|---|---|
-| `↵` | Board the selected Job | [`../fleet/board.md`](../fleet/board.md) |
+| `↵` | Board the selected Job — **in a cmux workspace where there is one, and the screen stays up** | [`../fleet/board.md`](../fleet/board.md) |
 | `d` | **Why does it need me** — the selected Job in full, over the table | [`../fleet/show.md`](../fleet/show.md) |
 | `n` | New Job — **write the task here, then `ctrl-d`**; the screen comes back | [`../fleet/spawn.md`](../fleet/spawn.md) |
 | `p` | Pause a running Job, **resume a paused one** | [`../fleet/pause.md`](../fleet/pause.md) · [`../fleet/resume.md`](../fleet/resume.md) |
@@ -130,6 +130,34 @@ session's. `a` still needs words the screen does not have, so it gives the termi
 opens the same inline box the interview uses ([`../render.md`](../render.md)); an empty answer
 starts nothing. A `↵` that could not board is a notice like any other failure — only a
 successful board ends the frame.
+
+### `↵` opens the Job beside the screen where something can open it
+
+**One key, two destinations, decided by what the machine has** — the decision
+[`020`](../../reserved/020-the-tui-decided.md) records as *Helm opens beside you, not inside the
+TUI*. Where `cmux` is on `PATH`, `↵` hands it the Job's worktree and **the Bridge keeps
+drawing**: `cmux <path>` opens a directory in a new workspace, so something else takes the new
+window and this process still owns its own screen. Where nothing is found, `↵` is the
+`armada fleet board` handoff described above, unchanged.
+
+**Which it is, is measured once when the Bridge starts** and not per keypress. A multiplexer does
+not appear halfway through a session, and a probe behind `↵` would put a subprocess on the hot
+path. The probe is `cmux --help`, which starts nothing, and it checks that the bare-path form is
+still offered rather than only that the file exists — so a cmux whose CLI has moved on is treated
+as absent and the fallback takes over. [`../../traps.md`](../../traps.md) records the
+measurement.
+
+**The key line still says `board`, and the word is right either way.** *Step aboard this Job* is
+the same intent; only the thing carrying it out differs.
+
+**Why not a chat pane in the Bridge itself.** It was asked for — *"a TUI in which I can do
+everything, including talking to the Helm"* — and refused with the cost stated. The transport is
+not the problem: Armada already drives Claude Code as a two-way `stream-json` channel, because
+that is how every Drone runs. The problem is that rendering a live conversation *is* a terminal
+chat client — streaming text, tool calls, scrollback, resize, interrupt — and Claude Code is
+already an excellent one. Rebuilding it to avoid a screen handoff means owning every rough edge
+to save one keypress. Not closed forever: the transport is already there if the handoff still
+annoys after living with the panes.
 
 ### `n` — the new Job is written here, and the screen comes back
 

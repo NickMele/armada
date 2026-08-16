@@ -115,6 +115,7 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Failures(envelope) => failures(envelope, style, width),
         Output::Failure(envelope) => failure(envelope, style, width),
         Output::Untried(envelope) => untried(envelope, style, width),
+        Output::Menu(envelope) => menu(envelope, style, terminal, width),
         Output::Spawn(envelope) => spawn(envelope, style, width),
         Output::FleetLs(envelope) => fleet_ls(envelope, style, width),
         Output::Bridge(envelope) => bridge(envelope, style, width),
@@ -396,6 +397,86 @@ fn job_state(state: JobState) -> Cell {
     Cell::painted(state.word().to_string(), Role::for_job_state(state))
 }
 
+/// The `STATUS` cell of a Job row — **the action when there is one, the state
+/// otherwise** (`docs/reserved/020-the-tui-decided.md` §5).
+///
+/// **The one place every Job listing gets its word**, which is the point. The
+/// bug `020` §5 was written about is a screen that said nothing for several
+/// seconds during an abort that was working: a working abort and a hung one
+/// looked identical, because the row kept saying `RUNNING`. A second surface
+/// that reached for [`JobRow::state`] on its own would reintroduce exactly that,
+/// so the choice is made once — here for the row, and in
+/// [`armada_core::envelope::JobRow::status_word`] for the word itself.
+///
+/// **Nothing ticks by being drawn.** The action is a fact somebody else wrote to
+/// the record and this reads it; PLAN.md §15.1's *"the Bridge holds no state"*
+/// survives, because the process performing the abort is the one that wrote the
+/// word and this process only looks.
+fn job_status(row: &armada_core::envelope::JobRow) -> Cell {
+    // **The word comes from the payload and only the colour is chosen here.** A
+    // `match` in this file that picked the word as well would be a second copy
+    // of the precedence rule, and the copy that fell behind would be the one
+    // drawing `RUNNING` over an abort — which is the whole defect.
+    status_cell(row.status_word(), row.acting.as_ref(), row.state)
+}
+
+/// The `STATUS` cell shared by every surface that draws one Job — the listing,
+/// the Bridge's table and the Bridge's detail pane.
+///
+/// **Three surfaces, one cell, because `020` §5's failure is disagreement.** A
+/// person presses `x`, sees `ABORTING` on the row, presses `d` to find out why
+/// it has stopped moving, and a pane that answered `RUNNING` would restate the
+/// original silence on the screen they opened to escape it.
+fn status_cell(
+    word: &str,
+    acting: Option<&armada_core::fleet::job::Doing>,
+    state: JobState,
+) -> Cell {
+    Cell::painted(
+        word.to_string(),
+        match acting {
+            Some(doing) => Role::for_acting(doing.acting),
+            None => Role::for_job_state(state),
+        },
+    )
+}
+
+/// The slow part of an in-flight action, named, with how long it has been at it
+/// — `docker 12s…`.
+///
+/// **The trailing `…` is the same mark this corpus's tables already use for
+/// *there is more than this*** (`render/table.rs`'s truncation), and it means
+/// the same thing here: the number is a reading taken now, not a total. It is
+/// not folded to ASCII, because that marker is not folded either — a duration
+/// that is still climbing and a cell that was cut both leave the reader the same
+/// message.
+///
+/// **This is not a spinner.** Nothing animates and nothing is computed from a
+/// turn count; both halves are measured, which is the line PHASES.md §9.1 F2
+/// draws. The status word is what says the action is running, and the reason
+/// `020` §5 refuses a bar is that the word already carries it.
+///
+/// `None` when there is no action, or when it has not reached anything slow yet
+/// — naming a stage that has not started is the same untruth as a progress bar.
+fn acting_detail(row: &armada_core::envelope::JobRow) -> Option<String> {
+    acting_slow(row.acting_detail())
+}
+
+/// The stage and its clock, as a cell reads them.
+///
+/// **Takes the pair rather than a payload**, so the listing's row and the detail
+/// pane's header cannot come to spell one transient two ways.
+fn acting_slow(detail: Option<(&str, Option<u64>)>) -> Option<String> {
+    let (slow, for_s) = detail?;
+    Some(match for_s {
+        Some(seconds) => format!("{slow} {}…", format::elapsed(seconds * 1_000)),
+        // **The stage without a clock rather than a stage with a zero.** A
+        // `None` here means nothing measured it, and `docker 0s` reads as a
+        // measurement that was taken.
+        None => format!("{slow}…"),
+    })
+}
+
 /// The summary line for a verb that reports one Job.
 fn job_summary(style: Style, state: JobState, facts: &[String]) -> String {
     headlined(
@@ -602,7 +683,7 @@ fn fleet_ls(envelope: &Envelope<FleetLsData>, style: Style, width: usize) -> Str
 
     for row in &data.results {
         table = table.row(vec![
-            job_state(row.state),
+            job_status(row),
             // Naval blue is what the palette reserves for a Job identifier.
             Cell::painted(row.name.clone(), Role::NavalBlue),
             // **Muted, because it is the fallback and not the handle.** A name
@@ -610,7 +691,16 @@ fn fleet_ls(envelope: &Envelope<FleetLsData>, style: Style, width: usize) -> Str
             // type on the day two Jobs share one.
             Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
             Cell::muted(row.workflow.clone()),
-            detail_cell(style, Some(row.detail.as_str())),
+            // **The slow part takes `DETAIL` while an action is running**, and
+            // takes it rather than joining it. `DETAIL` answers *what is it
+            // doing now*, and while somebody is aborting a Job the answer is the
+            // abort — the step it was on is what it was doing before, and an
+            // open question it will never now be asked is moot. Both come back
+            // the moment the action settles, because `acting` is cleared then.
+            match acting_detail(row) {
+                Some(slow) => detail_cell(style, Some(slow.as_str())),
+                None => detail_cell(style, Some(row.detail.as_str())),
+            },
             // **Nothing spent is a dash, not `$0.00`.** A zero in this column
             // reads as a measurement; a Job that has not run yet has not been
             // measured.
@@ -917,7 +1007,7 @@ fn bridge_columns(
                 true => Cell::painted(style.caret(), Role::SignalAmber),
                 false => Cell::empty(),
             },
-            job_state(row.state),
+            job_status(row),
             Cell::painted(row.name.clone(), Role::NavalBlue),
             // **Muted, because it is the fallback and not the handle** — the
             // same words and the same colour `fleet ls` uses for it.
@@ -992,6 +1082,13 @@ fn needs_you_cell(row: &armada_core::envelope::JobRow) -> Cell {
 /// whose Drone never reported one has no boundary, and `implement 0s` would be a
 /// measurement nobody took.
 fn step_cell(row: &armada_core::envelope::JobRow) -> Cell {
+    // **An action in flight takes this column**, which is the Bridge's
+    // *what is it doing now* the way `DETAIL` is `fleet ls`'s. The step is what
+    // the Job was doing before somebody started aborting it, and a reader
+    // watching a screen that has stopped moving is asking about the abort.
+    if let Some(slow) = acting_detail(row) {
+        return Cell::muted(slow);
+    }
     match (row.step.as_str(), row.on_step_s) {
         ("", _) => Cell::empty(),
         (step, None) => Cell::muted(step.to_string()),
@@ -1346,10 +1443,18 @@ pub fn show_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>>
     ])
     .indent(2)
     .row(vec![
-        job_state(data.state),
+        status_cell(data.status_word(), data.acting.as_ref(), data.state),
         Cell::painted(data.job.clone(), Role::NavalBlue),
         Cell::muted(data.workflow.clone()),
-        detail_cell(style, Some(&step_and_attempt(data))),
+        // **The slow part takes `STEP` while an action is running**, the same
+        // substitution the two listings make in their own *what is it doing
+        // now* column. Everything the step said is still on this page — the
+        // gate, the attempt and the transitions are all below — so nothing is
+        // lost, and the one fact a reader opened this pane for is at the top.
+        match acting_slow(data.acting_detail()) {
+            Some(slow) => detail_cell(style, Some(slow.as_str())),
+            None => detail_cell(style, Some(&step_and_attempt(data))),
+        },
         Cell::muted(match data.cost_usd > 0.0 {
             true => format::money(data.cost_usd),
             false => style.nothing().to_string(),
@@ -4036,6 +4141,67 @@ fn headlined(style: Style, lead: &str, facts: &[String]) -> String {
 /// has no columns after it.
 fn verdict(status: Status) -> Cell {
     Cell::painted(status.to_string(), Role::for_status(status))
+}
+
+/// Bare `armada` — the front door
+/// (`docs/reserved/020-the-tui-decided.md`'s menu decision).
+///
+/// **`STATUS · NAME · DETAIL`, and a fourth column carrying the verb.** Every
+/// table Armada draws opens with a word (`commands/render.md`), and this one has
+/// nothing to put in `TIME` — so the column is not there rather than filled with
+/// a dash per row. What replaces it is what each row *runs*, because a front door
+/// whose rows you cannot act on is a status report wearing a menu's name.
+///
+/// **The wordmark belongs here.** Bare `armada` is the moment of orientation,
+/// which is the distinction `commands/render.md` draws between this and
+/// `--help`: a banner above a page you reached for in a hurry is a banner in the
+/// way, and a banner above the screen you opened to find out where you are is
+/// the screen introducing itself. [`banner::banner`]
+/// decides for itself whether the reader is a person.
+///
+/// **No summary line, and its absence is load-bearing.** There is no word over
+/// the five rows, for the reason `020` gives for refusing an aggregate over
+/// several Jobs — *"a word derived from the worst row describes no Job in
+/// particular"* — and because a headline is the one thing on this screen that
+/// would have to be computed from two modules at once
+/// ([`crate::verbs::menu`] holds `ARCHITECTURE.md` §1.9 by not having one).
+fn menu(
+    envelope: &Envelope<armada_core::envelope::MenuData>,
+    style: Style,
+    terminal: Terminal,
+    width: usize,
+) -> String {
+    let mut table = Table::new(vec![
+        Column::fixed("status"),
+        Column::fixed("module"),
+        Column::flexible("detail"),
+        Column::fixed("verb"),
+    ])
+    .indent(2);
+    for row in &envelope.data.results {
+        table = table.row(vec![
+            verdict(row.status),
+            // Naval blue is what the palette reserves for a name you type.
+            Cell::painted(row.module.clone(), Role::NavalBlue),
+            detail_cell(style, Some(row.fact.as_str())),
+            Cell::muted(row.verb.clone()),
+        ]);
+    }
+
+    let mut out = banner::banner(style, terminal);
+    out.push_str(&table.render(style, width));
+    out.push('\n');
+    out.push_str(&format!(
+        "  {}\n",
+        style.paint(
+            Role::SteelGrey,
+            "`armada --help` lists every verb · `armada <module>` opens one"
+        )
+    ));
+    if let Some(error) = &envelope.error {
+        out.push_str(&error_lines(error, style));
+    }
+    out
 }
 
 fn verdict_strong(style: Style, status: Status) -> String {

@@ -1,6 +1,7 @@
 armada — agents that work while you do not
 
 USAGE
+  armada                          the front door — every module, and how it is
   armada <module> <verb> [flags]  the verbs Armada owns
   armada helm                     enter Helm, the agent you talk to
 

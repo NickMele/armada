@@ -1035,6 +1035,23 @@ pub fn ls<R: Run, C: Clock>(
             // somebody is doing, not a thing the transcript or the process
             // table can be asked about.
             acting: record.doing.clone(),
+            // **Measured here, against this reader's clock**, for the reason
+            // `on_step_s` two fields up is: the process performing the action is
+            // blocked inside it and cannot know when anybody will look, so it
+            // writes down when the stage began and the process *looking* does
+            // the subtraction. That is the whole of `020` §5's mechanism — the
+            // terminal running the abort is stuck in `manifest clean`, so the
+            // only thing that can report `docker 12s` is another reader of the
+            // same record.
+            acting_for_s: record
+                .doing
+                .as_ref()
+                // **Only once a stage has been named.** A `Doing` with no
+                // `slow` has a `since_ms` that dates the action rather than a
+                // stage, and ageing an unnamed thing is a number with nothing
+                // to attach it to.
+                .filter(|doing| doing.slow.is_some())
+                .map(|doing| doing.elapsed_ms(wall) / 1_000),
         });
     }
 
@@ -1181,6 +1198,16 @@ pub fn show<R: Run, C: Clock>(
             workflow: record.workflow.clone(),
             state: observed.state,
             recorded_state: record.state,
+            // **Off the record and aged against this reader's clock**, exactly
+            // as `ls` does it two hundred lines up — the pane is what opens on
+            // `d` over a row that has just started saying `ABORTING`, and it
+            // reads the same field for the same reason.
+            acting: record.doing.clone(),
+            acting_for_s: record
+                .doing
+                .as_ref()
+                .filter(|doing| doing.slow.is_some())
+                .map(|doing| doing.elapsed_ms(wall) / 1_000),
             drone_pgid: record.drone.as_ref().map(|handle| handle.pgid),
             drone_alive: drone::alive(
                 run,

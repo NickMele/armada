@@ -41,11 +41,15 @@ use super::term::Terminal;
 /// Which page to draw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Topic {
-    /// `armada`, with no arguments at all. The same page as [`Topic::Root`],
-    /// under the wordmark — this is the one moment of orientation
-    /// (`docs/commands/render.md`).
-    Bare,
     /// `armada --help`.
+    ///
+    /// **Bare `armada` is no longer one of these**, and the variant that was
+    /// here is gone rather than kept unreachable. It drew this same page under
+    /// the wordmark, because bare `armada` was the one moment of orientation;
+    /// `docs/reserved/020`'s menu decision gave that moment to a live listing of
+    /// the five modules ([`crate::verbs::menu`]) and the wordmark went with it.
+    /// A `Bare` nothing could reach would be a second front door, drawn by
+    /// nobody, that the next reader would find and wire back up.
     Root,
     /// `armada manifest`, or `armada manifest --help`.
     Manifest,
@@ -1189,15 +1193,10 @@ pub fn page_for(path: &str) -> Option<&'static str> {
 /// Draw a page.
 pub fn render(topic: Topic, style: Style, terminal: Terminal) -> String {
     match topic {
-        // **The wordmark's one place on this page, and only on this topic.**
-        // Bare `armada` is the moment of orientation; `--help` is the page you
-        // reached for in a hurry (`docs/commands/render.md`). `banner` decides
-        // for itself whether the reader is a person.
-        Topic::Bare => format!(
-            "{}{}",
-            super::banner::banner(style, terminal),
-            root(style, terminal)
-        ),
+        // **No wordmark on any page here, and that is the whole rule.** A banner
+        // above the page you reached for in a hurry is a banner in the way
+        // (`docs/commands/render.md`). The one moment of orientation is bare
+        // `armada`, and that is now the front door rather than this page.
         Topic::Root => root(style, terminal),
         Topic::Manifest => manifest(style, terminal),
         Topic::Guild => guild(style, terminal),
@@ -1276,11 +1275,15 @@ fn root(style: Style, terminal: Terminal) -> String {
 
     out.push_str(&heading(style, "USAGE"));
     out.push_str(
-        // **`armada helm`, spelled out.** PLAN.md §15.1 gives the bare word to
-        // Helm eventually; until it does, a USAGE line promising that `armada`
-        // alone enters the orchestrator would be this page describing a build
-        // that does not exist — which is the one thing a help page may never do.
+        // **The bare word is on this list now, and it is not Helm.** PLAN.md
+        // §15.1 once gave it to the orchestrator; `docs/reserved/020`'s menu
+        // decision gave it to the front door instead, and a USAGE line
+        // promising that `armada` alone enters a session would be this page
+        // describing a build that does not exist — the one thing a help page
+        // may never do. `armada helm` stays spelled out, because entering is
+        // still a thing you ask for by name.
         &two_column(&[
+            ("armada", "the front door — every module, and how it is"),
             ("armada <module> <verb> [flags]", "the verbs Armada owns"),
             ("armada helm", "enter Helm, the agent you talk to"),
         ])
@@ -1933,17 +1936,11 @@ mod tests {
 
     /// Every page the renderer can draw, at a width nothing truncates.
     fn every_page() -> Vec<(Topic, String)> {
-        [
-            Topic::Bare,
-            Topic::Root,
-            Topic::Manifest,
-            Topic::Guild,
-            Topic::Fleet,
-        ]
-        .into_iter()
-        .chain(PAGES.iter().map(|page| Topic::Verb(page.path)))
-        .map(|topic| (topic, render(topic, Style::plain(), Terminal::at(100))))
-        .collect()
+        [Topic::Root, Topic::Manifest, Topic::Guild, Topic::Fleet]
+            .into_iter()
+            .chain(PAGES.iter().map(|page| Topic::Verb(page.path)))
+            .map(|topic| (topic, render(topic, Style::plain(), Terminal::at(100))))
+            .collect()
     }
 
     /// **No spec citation reaches a reader.**
@@ -2014,13 +2011,14 @@ mod tests {
         .contains('\x1b'));
     }
 
-    /// **The wordmark is on bare `armada` and on nothing else here.** A banner
-    /// above `--help` is a banner in the way of the one page someone reaches for
-    /// when they are in a hurry (`docs/commands/render.md`).
+    /// **No page here carries the wordmark.** A banner above `--help` is a
+    /// banner in the way of the one page someone reaches for when they are in a
+    /// hurry (`docs/commands/render.md`), and the one moment of orientation it
+    /// used to sit on — bare `armada` — is the front door now
+    /// (`docs/reserved/020`'s menu decision), which draws it there instead.
     #[test]
-    fn the_wordmark_is_on_bare_armada_and_on_no_other_page() {
+    fn no_help_page_carries_the_wordmark() {
         let wide = Terminal::at(120);
-        assert!(render(Topic::Bare, Style::painted(), wide).contains("█████╗"));
         for topic in [
             Topic::Root,
             Topic::Manifest,

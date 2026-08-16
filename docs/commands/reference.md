@@ -18,7 +18,8 @@ and the three status enums. These pages use them without re-explaining them.
 | [`doctor.md`](doctor.md) | `armada doctor` — what this machine is missing | M2 |
 | [`settings.md`](settings.md) | `armada settings` — every setting, its value, where it lives, whether it syncs | shipped, read-only |
 | [`render.md`](render.md) | Output, colour and the palette — how every verb renders | M1.5 |
-| [`helm/helm.md`](helm/helm.md) | `armada` — enter Helm | M3 |
+| [`menu.md`](menu.md) | `armada` — the front door: every module, and how it is | shipped |
+| [`helm/helm.md`](helm/helm.md) | `armada helm` — enter Helm | M3 |
 | [`helm/bridge.md`](helm/bridge.md) | `armada bridge` — the live screen | M3 |
 
 ## Manifest — what a workspace is and how to operate it

@@ -82,8 +82,40 @@ and the renderer follows it.
 **A Job that has not run yet gets a placeholder in both number columns**, not `$0.00` and
 `0s`: a zero reads as a measurement, and nothing has been measured.
 
+### An action with a duration takes the status column while it runs
+
+```
+  STATUS    JOB         ID        WORKFLOW  DETAIL       SPENT  TIME
+  ABORTING  rate-limit  c19d0a34  feature   docker 12s…  $2.10   14m
+```
+
+**A working abort and a hung one used to be the same screen.** Aborting a Job talks to docker,
+and for the several seconds that took, the row said `RUNNING` and nothing else moved. That is
+the bug [`020`](../../reserved/020-the-tui-decided.md) was written around, and the answer is a
+word: `ABORTING`, `REAPING` or `PAUSING` in the status column, with the slow part named in
+`DETAIL`.
+
+**The Job is still `RUNNING` on disk, and that is deliberate.** `Acting` is a fourth enum rather
+than three more Job states ([`../../glossary.md`](../../glossary.md)) — folding them together
+would leave a crash mid-abort with a Job claiming a state no verb ever reached. The row lays one
+over the other; the record keeps them apart.
+
+**The one that reports it is never the one doing it.** The terminal running the abort is blocked
+inside `armada manifest clean`, so it cannot draw anything — which is why the transient is
+written to the Job record, and why a *second* reader of that record is what makes
+`ABORTING · docker 12s…` appear at all. Run this in another window during an abort and that is
+what you see.
+
+**No spinner and no bar.** Both halves here are measurements — a stage name somebody wrote down
+and a subtraction against your clock — and a fraction of an abort would be a guess drawn as a
+measurement ([`../../PHASES.md`](../../PHASES.md) §9.1). The status word is what says something
+is running; that is the whole reason a bar is refused. An action that has not reached anything
+slow yet gets the word and no stage, for the same reason a Job with no measured boundary gets no
+`0s`.
+
 `--json` returns one result per Job with `uuid`, `name`, `workflow`, `state`, `detail`, `task`,
-`runtime_s`, `cost_usd`, `tokens`, `turns`, `budget_remaining` and `needs_attention`.
+`runtime_s`, `cost_usd`, `tokens`, `turns`, `budget_remaining` and `needs_attention` — plus
+`acting` and `acting_for_s` while somebody is acting on it, and neither field when nobody is.
 
 Beside `results` it carries `needs_you`, `spent_usd` and — when one of the Jobs has seen it and
 it has not reset yet — `window`, holding `used_percent` and `resets_in_s`.

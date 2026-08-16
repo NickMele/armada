@@ -233,6 +233,23 @@ pub enum Invocation {
         /// Every verb, not only the ones never run.
         all: bool,
     },
+    /// **Bare `armada`** — the front door: every module, with a status word and
+    /// one line of fact (`docs/reserved/020`'s menu decision).
+    ///
+    /// **This is what the bare word became, and it replaces two things.** It
+    /// replaces the `--help` root page that stood here, and it supersedes
+    /// PLAN.md §15.1's *"typing `armada` with no arguments enters it"* — Helm
+    /// was never wired to the bare word, and `020` decided it should not be:
+    /// entering is off by default on a machine, so a front door that usually
+    /// refuses is worse than one that lists what is there.
+    ///
+    /// **No sub-verbs and one flag.** It reads five things and prints them;
+    /// `armada --help` is still the list of every verb, one keystroke away, and
+    /// the menu's own last line says so.
+    Menu {
+        /// Emit the envelope.
+        json: bool,
+    },
     /// `armada mcp serve` — the toolbelt, over stdio.
     ///
     /// **No fields but `--json`.** `--stdio` is the only transport and the
@@ -1128,12 +1145,14 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         }
     }
 
-    // **Bare `armada` is its own page**, not `--help`. Both list the same
-    // things, but only one of them is the moment of orientation the wordmark
-    // belongs to (`docs/commands/render.md`) — a banner above the page you
-    // reached for because you are in a hurry is a banner in the way.
+    // **Bare `armada` is the front door**, not `--help` and not Helm
+    // (`docs/reserved/020`'s menu decision). It is the moment of orientation the
+    // wordmark belongs to (`docs/commands/render.md`) — a banner above the page
+    // you reached for because you are in a hurry is a banner in the way — and
+    // what it orients you with is now five live rows rather than a list of verb
+    // names, which `armada --help` still is.
     let Some(module) = args.get(index) else {
-        return Ok(Invocation::Help(Topic::Bare));
+        return Ok(Invocation::Menu { json });
     };
 
     if module != "manifest" {
@@ -3252,19 +3271,44 @@ mod tests {
         words.iter().map(|s| s.to_string()).collect()
     }
 
+    /// **Bare `armada` is the front door**, not an error and no longer the
+    /// `--help` root page (`docs/reserved/020`'s menu decision).
+    ///
+    /// The page it replaced listed verb *names*; this lists five modules with a
+    /// word and a fact each, which is what a person opening a terminal in an
+    /// unfamiliar directory actually wants. `armada --help` is still the list of
+    /// every verb and is unchanged.
     #[test]
-    fn bare_armada_is_help_rather_than_an_error() {
+    fn bare_armada_is_the_menu_rather_than_an_error() {
         assert_eq!(
             parse(&[]).unwrap().invocation,
-            Invocation::Help(Topic::Bare)
+            Invocation::Menu { json: false }
+        );
+        assert_eq!(
+            parse(&args(&["--json"])).unwrap().invocation,
+            Invocation::Menu { json: true },
+            "a machine caller at the front door gets an envelope"
+        );
+    }
+
+    /// **`--help` still reaches the root page**, which is the half of the
+    /// change that is easy to lose. The menu replaces the *bare word*, not the
+    /// page — a reader who types `armada --help` is asking for the verb list and
+    /// must not be handed five status rows instead.
+    #[test]
+    fn help_still_reaches_the_root_page_the_menu_took_the_bare_word_from() {
+        assert_eq!(
+            parse(&args(&["--help"])).unwrap().invocation,
+            Invocation::Help(Topic::Root)
         );
     }
 
     /// **And it is not Helm**, which is a stronger claim than the one above and
     /// is the reason this second assertion exists rather than being folded into
-    /// it. PLAN.md §15.1 gives the bare word to Helm eventually; wiring it there
-    /// is a decision, and the failure mode of taking it by accident is a Claude
-    /// Code session nobody asked for, spending against a real account.
+    /// it. PLAN.md §15.1 gave the bare word to Helm; `docs/reserved/020` took it
+    /// back and gave it the menu. Wiring it to the orchestrator is a decision,
+    /// and the failure mode of taking it by accident is a Claude Code session
+    /// nobody asked for, spending against a real account.
     #[test]
     fn the_bare_word_is_not_wired_to_the_orchestrator() {
         assert!(

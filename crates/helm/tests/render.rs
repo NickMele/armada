@@ -81,7 +81,15 @@ fn the_wordmark_is_absent_from_a_captured_stdout() {
             "`armada {}` drew the wordmark into a pipe: {text}",
             args.join(" ")
         );
-        assert!(text.contains("USAGE"), "the page itself is still there");
+        // **The screen itself is still there**, which is the half that stops
+        // this passing by drawing nothing at all. What bare `armada` draws is
+        // the front door now rather than the `--help` root page
+        // (`docs/reserved/020`'s menu decision), so the marker is a module row
+        // and no longer a `USAGE` heading.
+        assert!(
+            text.contains("STATUS") && text.contains("helm"),
+            "the front door itself is still there: {text}"
+        );
     }
 }
 

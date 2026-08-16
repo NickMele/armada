@@ -516,6 +516,17 @@ pub enum Action {
     /// `c` — `armada helm`, which is not built and says so here rather than by
     /// ending the screen to report it.
     Chat,
+    /// `↵` on a machine with a [`Workspace`] — open the Job's worktree beside
+    /// the screen, and **keep drawing** (`020` §9).
+    ///
+    /// **An [`Action`] and not a [`Departure`], which is the whole decision.**
+    /// [`Departure::Board`] exists because `--exec` *replaces this process*: from
+    /// the `exec` on, the tty and the exit code belong to `claude`, so there is
+    /// nothing left to draw with. Handing a path to a multiplexer starts
+    /// something else and returns, so the fleet never leaves the screen — which
+    /// is what `020` §9 asked for in the words *"the menu and the panes stay
+    /// up"*.
+    Open(Target),
 }
 
 /// What carrying out an [`Action`] produced.
@@ -567,6 +578,79 @@ pub struct Screen {
     /// it.** A `p` that did nothing at all is indistinguishable from a dead
     /// keyboard.
     pub notice: Option<String>,
+    /// Where a Job can be opened on this machine
+    /// (`docs/reserved/020-the-tui-decided.md` §9).
+    ///
+    /// **A fact the shell measures once and hands in**, because the core owns no
+    /// `PATH`. It is set when the Bridge starts and not re-probed per keypress:
+    /// a multiplexer does not appear halfway through a session, and a probe on
+    /// the hot path would put a subprocess behind `↵`.
+    pub workspace: Workspace,
+}
+
+/// What can open a Job's worktree beside the screen
+/// (`docs/reserved/020-the-tui-decided.md` §9).
+///
+/// **Armada does not own a terminal, and this does not change that**
+/// (PHASES.md §9.1 F1). `↵` used to end the Bridge and hand back a path and a
+/// resume command to paste; where something on this machine can open a
+/// directory, the same keypress asks *it* to, and the fleet stays on the screen.
+/// Nothing is attached to and no pty is taken.
+///
+/// **Why not a chat pane instead.** `020` §9 weighed one and refused it: the
+/// transport is not the problem — Armada already drives Claude Code as a two-way
+/// `stream-json` channel, because that is how every Drone runs — but rendering a
+/// live conversation is a terminal chat client, with streaming, tool calls,
+/// scrollback, resize and interrupt. Claude Code is already an excellent one,
+/// and rebuilding it to avoid one screen handoff is owning every rough edge to
+/// save a keypress.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Workspace {
+    /// Nothing found. `↵` prints the path and the resume command, which is what
+    /// `armada fleet board` has always done — **the fallback is the old
+    /// behaviour exactly**, so a machine without a multiplexer loses nothing.
+    #[default]
+    None,
+    /// `cmux` is on `PATH`. `cmux <path>` opens a directory in a new workspace,
+    /// which is the whole of the handoff.
+    Cmux,
+}
+
+/// The program `020` §9 hands a Job to.
+pub const CMUX: &str = "cmux";
+
+/// What is run to find out whether [`Workspace::Cmux`] is available.
+///
+/// **`--help`, because it is free and it proves the thing that matters.** A bare
+/// `which` proves a file exists; this proves the *form Armada is about to use*
+/// is one the program offers — the rule `armada doctor` already follows for the
+/// Drone, held against `claude --help` on every run. `cmux --help` starts
+/// nothing, so probing is not a side effect.
+pub fn cmux_probe_argv() -> Vec<String> {
+    vec![CMUX.to_string(), "--help".to_string()]
+}
+
+/// The argv that opens a worktree beside the screen.
+///
+/// **A path and nothing else**, which is the whole of the handoff: `cmux <path>`
+/// opens a directory in a new workspace and launches cmux if it is not already
+/// up. Armada does not attach, does not take a pty, and does not tell the
+/// workspace what to run — a Job's conversation is an ordinary resumable Claude
+/// Code session in a git worktree, and opening the worktree is the whole of what
+/// Armada knows that cmux does not (`commands/fleet/board.md`).
+pub fn cmux_open_argv(worktree: &str) -> Vec<String> {
+    vec![CMUX.to_string(), worktree.to_string()]
+}
+
+/// Whether that help text offers the form [`cmux_open_argv`] builds.
+///
+/// **It fails closed, and that is the point of checking rather than assuming.**
+/// A `cmux` whose CLI has moved on answers `false`, `↵` goes back to printing
+/// the path and the resume command, and the reader loses a convenience rather
+/// than pressing a key that silently does nothing — which is the failure
+/// `Workspace::None` is the honest name for.
+pub fn cmux_offers_open(help: &str) -> bool {
+    help.contains("cmux <path>")
 }
 
 /// Apply one keypress. **The whole of the Bridge's key handling, and it touches
@@ -616,9 +700,16 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
             screen.mode = Mode::Filtering(existing);
         }
 
-        Key::Enter => match selected {
-            Some(target) => return Pressed::Leave(Departure::Board(target)),
-            None => screen.notice = Some(nothing_selected("board")),
+        // **One key, two destinations, decided by what the machine has**
+        // (`020` §9). Where something can open a directory the Job is opened
+        // beside the screen and the fleet stays up; where nothing can, this is
+        // the `armada fleet board` handoff it has always been. The key is the
+        // same either way, because *step aboard this Job* is the same intent —
+        // only the thing that carries it out differs.
+        Key::Enter => match (selected, screen.workspace) {
+            (Some(target), Workspace::Cmux) => return Pressed::Act(Action::Open(target)),
+            (Some(target), Workspace::None) => return Pressed::Leave(Departure::Board(target)),
+            (None, _) => screen.notice = Some(nothing_selected("board")),
         },
         // **`n` opens the box here rather than ending the screen.** The task is
         // the one thing the frame cannot know, and asking for it used to cost
@@ -903,6 +994,7 @@ mod tests {
             },
             needs_attention: needs,
             acting: None,
+            acting_for_s: None,
         }
     }
 
@@ -1107,6 +1199,87 @@ mod tests {
                 "{key:?}"
             );
         }
+    }
+
+    /// `↵` opens the Job **beside** the screen where something can open it, and
+    /// hands the screen back where nothing can
+    /// (`docs/reserved/020-the-tui-decided.md` §9).
+    ///
+    /// **Both halves, because the fallback is the feature.** The point of
+    /// detecting a workspace is that a machine without one loses nothing: `↵` is
+    /// the `armada fleet board` handoff it has always been. A test that only
+    /// asserted the cmux side would pass over a build where the fallback had
+    /// become a keypress that did nothing.
+    #[test]
+    fn enter_opens_a_workspace_where_there_is_one_and_boards_where_there_is_not() {
+        let (_, rows) = watching_at(3);
+
+        let mut with = Screen {
+            workspace: Workspace::Cmux,
+            ..Screen::default()
+        };
+        assert_eq!(
+            press(&mut with, &rows, Key::Enter),
+            Pressed::Act(Action::Open(target("rate-limit"))),
+            "an action, not a departure — `020` §9 keeps the panes up"
+        );
+
+        let mut without = Screen::default();
+        assert_eq!(
+            without.workspace,
+            Workspace::None,
+            "nothing found is the default, so a fresh Screen keeps the old behaviour"
+        );
+        assert_eq!(
+            press(&mut without, &rows, Key::Enter),
+            Pressed::Leave(Departure::Board(target("rate-limit"))),
+            "the fallback stopped being `armada fleet board`"
+        );
+    }
+
+    /// An empty fleet answers `↵` the same way whichever workspace is there:
+    /// there is no row to open.
+    #[test]
+    fn enter_over_nothing_says_so_rather_than_opening_a_workspace() {
+        for workspace in [Workspace::None, Workspace::Cmux] {
+            let mut screen = Screen {
+                workspace,
+                ..Screen::default()
+            };
+            assert_eq!(press(&mut screen, &[], Key::Enter), Pressed::Stay);
+            assert!(screen.notice.is_some(), "{workspace:?} swallowed the key");
+        }
+    }
+
+    /// The argv Armada hands cmux, and the help text that proves the form is
+    /// offered.
+    ///
+    /// **The help text below is a measurement, not a guess** — it is what
+    /// `cmux --help` printed, and `docs/traps.md` records where it came from.
+    /// Holding the argv against the program's own help is the rule `armada
+    /// doctor` follows for the Drone; the difference here is that no test may
+    /// require cmux to be installed, so the measurement is carried rather than
+    /// re-taken.
+    #[test]
+    fn the_cmux_argv_is_a_bare_path_and_the_probe_asks_its_help() {
+        assert_eq!(cmux_probe_argv(), vec!["cmux", "--help"]);
+        assert_eq!(
+            cmux_open_argv("~/.armada/workspaces/api/rate-limit"),
+            vec!["cmux", "~/.armada/workspaces/api/rate-limit"],
+            "a path and nothing else — Armada does not tell the workspace what to run"
+        );
+
+        let measured = "\
+Usage:
+  cmux <path>                Open a directory in a new workspace (launches cmux if needed)
+  cmux [global-options] <command> [options]
+";
+        assert!(cmux_offers_open(measured));
+        // **Fails closed.** A cmux whose CLI has moved on sends `↵` back to
+        // printing the path, which is a lost convenience rather than a key that
+        // silently does nothing.
+        assert!(!cmux_offers_open("Usage:\n  cmux open <path>\n"));
+        assert!(!cmux_offers_open(""));
     }
 
     /// **`n` opens the box instead of ending the screen**, which is the second

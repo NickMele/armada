@@ -19,6 +19,7 @@ pub mod guild;
 pub mod helm;
 pub mod init;
 pub mod machine;
+pub mod menu;
 pub mod offer;
 pub mod preflight;
 pub mod prune;
@@ -37,9 +38,10 @@ use armada_core::envelope::{
     CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
     FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
     GuildSyncData, GuildUpgradeData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun,
-    KillData, MachineInitData, McpData, PauseData, ProbeData, Projection, ProposeData, PruneData,
-    ReapPlanData, ReportData, ResumeData, ScanData, ServicesData, SettingsData, ShowData,
-    SkillsData, SpawnData, StatusData, TickData, UntriedData, UpDryRun, VerdictData, VerifyData,
+    KillData, MachineInitData, McpData, MenuData, PauseData, ProbeData, Projection, ProposeData,
+    PruneData, ReapPlanData, ReportData, ResumeData, ScanData, ServicesData, SettingsData,
+    ShowData, SkillsData, SpawnData, StatusData, TickData, UntriedData, UpDryRun, VerdictData,
+    VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -114,6 +116,8 @@ pub enum Output {
     /// `armada untried` — every verb Armada owns, and what this machine has
     /// done with each.
     Untried(Box<Envelope<UntriedData>>),
+    /// Bare `armada` — the front door, one row per module.
+    Menu(Box<Envelope<MenuData>>),
     /// `armada fleet spawn`.
     Spawn(Box<Envelope<SpawnData>>),
     /// `armada fleet ls`.
@@ -197,6 +201,7 @@ impl Output {
             Output::Failures(e) => e.to_json(),
             Output::Failure(e) => e.to_json(),
             Output::Untried(e) => e.to_json(),
+            Output::Menu(e) => e.to_json(),
             Output::Spawn(e) => e.to_json(),
             Output::FleetLs(e) => e.to_json(),
             Output::Bridge(e) => e.to_json(),
@@ -271,6 +276,7 @@ impl Output {
             Output::Failures(e) => e.exit_code(),
             Output::Failure(e) => e.exit_code(),
             Output::Untried(e) => e.exit_code(),
+            Output::Menu(e) => e.exit_code(),
             Output::Spawn(e) => e.exit_code(),
             Output::FleetLs(e) => e.exit_code(),
             Output::Bridge(e) => e.exit_code(),
