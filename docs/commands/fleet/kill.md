@@ -15,7 +15,7 @@ armada fleet kill --all-finished [--json]
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `<job>` | Job name | — | Which Job. Required unless `--all-finished`. |
+| `<job>` | Job name | — | Which Job, **and every sub-Job it started**. Required unless `--all-finished`. |
 | `--keep-branch` | flag | off | Do not delete the branch. Use when the work is worth keeping. |
 | `--keep-worktree` | flag | off | Release resources but leave the directory. Implies `--keep-branch`. |
 | `--all-finished` | flag | off | Kill every Job whose workflow has terminated, instead of one. |
@@ -45,6 +45,18 @@ reason Manifest sits underneath Fleet.
 
 The transcript is **not** deleted. It lives under `~/.claude/projects/` and is the record of
 what happened.
+
+### A Job's sub-Jobs go with it, and they go first
+
+A step gated on `review_clean` or `subjob_passed` is satisfied by a **child Job**
+([`tick.md`](tick.md)), and killing the parent kills every one of them first, deepest first.
+Left behind, a child keeps a Drone, a worktree and a port block, and spends a budget producing a
+verdict for a record that says `ABORTED`.
+
+**Killing a child on its own is allowed and means something different.** The parent's gate reads
+it as a Job ended before it reached a verdict, stops **once** and asks you — rather than starting
+a second child over the same work, which would be spending again on a decision you have already
+made by hand.
 
 ### The Job is marked ended whatever happened above
 

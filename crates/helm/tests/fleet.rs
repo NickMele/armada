@@ -421,7 +421,15 @@ impl Run for Harness {
             // which is what lets a Drone's process group be recorded against
             // it. A fake that made an empty directory would quietly turn that
             // recording into a no-op.
-            ["git", "worktree", "add", "-b", _, path] => {
+            // **Two forms, because a sub-Job's worktree names a start point.**
+            // A reviewer branched from the repository's `HEAD` would be reading
+            // the code as it was before the work it was started to review, so
+            // `armada fleet tick` passes the parent's branch — and a harness
+            // that only knew the four-word form would answer the seven-word one
+            // with the catch-all `["git", ..]` arm, which makes no directory at
+            // all and turns the whole spawn into an `ENOENT` two calls later.
+            ["git", "worktree", "add", "-b", _, path]
+            | ["git", "worktree", "add", "-b", _, path, _] => {
                 std::fs::create_dir_all(path).unwrap();
                 std::fs::write(
                     Path::new(path).join("armada.yml"),
@@ -467,7 +475,11 @@ impl Scratch {
         let repo = tempfile::tempdir().unwrap();
         let workflows = home.path().join(".armada/guild/workflows");
         std::fs::create_dir_all(&workflows).unwrap();
-        for name in ["feature", "bug", "plan", "design"] {
+        // `review` among them, because it is what a `review_clean` gate spawns
+        // a Job to run — a guild without it is one where `bug` and `feature`
+        // both stop at their review step, which is the state this milestone
+        // ended.
+        for name in ["feature", "bug", "plan", "design", "review"] {
             let from = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../templates/guild/workflows")
                 .join(format!("{name}.yml"));
@@ -4269,64 +4281,482 @@ fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
     );
 }
 
-/// **The two predicates nothing can decide stop and say so.**
+// ------------------------------------------------- the two that need a sub-Job
+//
+// `review_clean` and `subjob_passed` are settled by another Job's verdict, and
+// for the whole of M4 Fleet started none — so both stopped and asked, and the
+// two shipped workflows that end on a branch could not reach one. These drive
+// the real verb: a child record on disk, a parent that waits for it, and the
+// evidence naming it.
+
+/// Every Job in the index that this one started.
+fn children_of(scratch: &Scratch, parent: &str) -> Vec<armada_core::fleet::job::Job> {
+    scratch
+        .store()
+        .all()
+        .unwrap()
+        .into_iter()
+        .filter(|job| job.kin.parent.as_ref().is_some_and(|up| up.uuid == parent))
+        .collect()
+}
+
+/// Drive the loop over a Job **and everything it started**, doing the one thing
+/// a stub Drone cannot: leaving behind the artifact a real reviewer would write.
 ///
-/// `review_clean` needs a reviewer Job and `subjob_passed` needs a sub-Job;
-/// Fleet starts neither. Answering *yes* to either would be the false pass the
-/// predicate exists to prevent, and answering *no* would retry until the budget
-/// was gone and then blame a ceiling — sending the reader to hunt a failing test
-/// instead of telling them what is actually missing.
-#[test]
-fn a_gate_that_needs_another_job_halts_once_and_names_what_is_missing() {
-    for (predicate, wanted) in [
-        ("review_clean", "reviewer Job"),
-        ("subjob_passed", "sub-Job"),
-    ] {
-        let scratch = Scratch::new();
-        workflow(
-            &scratch,
-            "bug",
-            &format!(
-                "name: bug\ndescription: one ungateable step\nends_at: branch\nsteps:\n\
-                 \x20 - id: review\n    verify: {{ must: {predicate} }}\n"
-            ),
-        );
-        let run = scratch.harness();
-        let data = spawn(
-            &scratch,
-            &run,
-            &Spawn {
-                workflow: Some("bug".to_string()),
-                ..task("look at it")
-            },
-        );
-        await_turn(&scratch, &data.uuid);
-        await_exit(&scratch, &data.uuid);
+/// **`until_settled` cannot be reused, and the difference is the subject.** It
+/// waits for *one* Job's Drone and reads *one* row; a parent waiting on a
+/// sub-Job has two of each, and the pass that moves the parent is the one after
+/// the pass that moved the child.
+fn settle_family(
+    scratch: &Scratch,
+    run: &Harness,
+    job: &str,
+    uuid: &str,
+) -> Vec<armada_core::envelope::TickRow> {
+    let mut seen = Vec::new();
+    for _ in 0..120 {
+        // A child's stub Drone writes its turn and then exits, and the loop
+        // rightly leaves a live Drone alone — so every Drone in the family is
+        // given the chance to finish before the pass that judges it.
+        for record in scratch.store().all().unwrap() {
+            if record.kin.parent.is_some() || record.uuid == uuid {
+                scratch.watch(&record.uuid);
+                await_exit(scratch, &record.uuid);
+            }
+        }
+        // What a reviewer produces. The stub `claude` writes a transcript and
+        // nothing else, and `review.yml` gates on the findings being on disk —
+        // which is the point of that predicate, so the test supplies the file
+        // rather than the workflow being weakened to not want one.
+        for child in scratch.store().all().unwrap() {
+            if child.workflow == "review" && !child.state.is_over() {
+                let at = scratch.place().expand(&child.worktree).join("REVIEW.md");
+                if at.parent().is_some_and(Path::is_dir) && !at.exists() {
+                    std::fs::write(&at, "# Review\n\n**Nothing blocks landing this.**\n").unwrap();
+                }
+            }
+        }
 
-        let pass = tick(&scratch, &run, &data.name);
-        assert_eq!(pass.results[0].did, "halted", "{predicate}: {pass:#?}");
-        assert!(
-            pass.results[0].why.contains(wanted),
-            "{predicate} did not say what is missing: {}",
-            pass.results[0].why
-        );
-
-        let record = scratch.store().load(&data.uuid).unwrap();
-        assert_eq!(record.state, JobState::Paused, "{predicate}");
-        // **It stopped once.** Retrying an undecidable gate would spend the
-        // whole budget and then report the wrong reason.
-        assert_eq!(
-            record
-                .transitions
-                .iter()
-                .filter(|entry| entry.event == armada_core::fleet::job::StepEvent::Failed)
-                .count(),
-            0,
-            "{predicate} was recorded as a failure rather than as undecidable"
-        );
-        let inbox = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
-        assert_eq!(inbox.len(), 1, "{predicate}: {inbox:#?}");
+        let row = tick(scratch, run, job).results.remove(0);
+        let done = matches!(row.did.as_str(), "finished" | "halted" | "asked");
+        if row.did == "advanced" || row.did == "retried" {
+            forget_argv(uuid);
+            scratch.watch(uuid);
+            await_turn(scratch, uuid);
+        }
+        seen.push(row);
+        if done {
+            return seen;
+        }
+        std::thread::sleep(Duration::from_millis(10));
     }
+    panic!("the loop never settled: {seen:#?}");
+}
+
+/// **`review_clean` starts a reviewer Job and advances on its verdict.**
+///
+/// The claim in three parts, and each of them is a thing that used to be a
+/// sentence in `docs/reserved/016` rather than a fact: a child Job exists and
+/// says whose it is; its worktree starts at the **parent's branch**, so what it
+/// reads is the work rather than the repository as it was before; and the
+/// parent's step passes carrying that Job's uuid as its evidence.
+#[test]
+fn a_review_step_spawns_a_reviewer_over_the_parents_branch_and_gates_on_its_verdict() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: review, then land\nends_at: branch\nsteps:\n\
+         \x20 - id: fix\n    skill: implement-change\n    verify: { must: always }\n\
+         \x20 - id: review\n    verify: { must: review_clean }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("the parser drops the last field")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let rows = settle_family(&scratch, &run, &data.name, &data.uuid);
+    assert_eq!(rows.last().unwrap().did, "finished", "{rows:#?}");
+
+    // **A Job of its own, and it says whose.**
+    let children = children_of(&scratch, &data.uuid);
+    assert_eq!(children.len(), 1, "{children:#?}");
+    let reviewer = &children[0];
+    assert_eq!(reviewer.workflow, "review");
+    assert_eq!(reviewer.state, JobState::Done);
+    assert_eq!(
+        reviewer.verdict,
+        Some(armada_core::fleet::Verdict::Pass),
+        "the reviewer did not reach a verdict"
+    );
+    let up = reviewer
+        .kin
+        .parent
+        .as_ref()
+        .expect("a reviewer has a parent");
+    assert_eq!(up.step, "review");
+    assert_eq!(up.attempt, 1);
+
+    // **Its worktree starts at the branch under review.** Without the start
+    // point it would be branched from the repository's own `HEAD`, and a
+    // reviewer reading an empty diff comes back clean having seen nothing.
+    let parent = scratch.store().load(&data.uuid).unwrap();
+    let argv = run.argv_containing(&["worktree", "add", &reviewer.branch]);
+    assert_eq!(
+        argv.last().map(String::as_str),
+        Some(parent.branch.as_str()),
+        "the reviewer was not branched from the work: {argv:?}"
+    );
+
+    // **The task it was given is the branch and the claim, not the parent's
+    // reasoning.** A reviewer that shared the implementer's context would share
+    // its blind spots.
+    assert!(
+        reviewer.task.contains(&parent.branch) && reviewer.task.contains("drops the last field"),
+        "the reviewer was not told what it is reviewing: {}",
+        reviewer.task
+    );
+
+    // **And the step passed on that Job's uuid.** A `PASS` carries evidence an
+    // external command produced, and a child Job's verdict is what §14.6 names
+    // for this predicate.
+    let completed = parent
+        .transitions
+        .iter()
+        .find(|entry| {
+            entry.step == "review" && entry.event == armada_core::fleet::job::StepEvent::Completed
+        })
+        .expect("the review step completed");
+    let evidence = &completed.gate.as_ref().unwrap().evidence;
+    assert!(
+        evidence
+            .iter()
+            .any(|item| item.kind == "job" && item.scope == reviewer.uuid && item.exit == 0),
+        "the review passed on something other than the reviewer: {evidence:?}"
+    );
+}
+
+/// **A step Fleet satisfies starts no Drone to do nothing.**
+///
+/// `review` names neither `skill:` nor `workflow:` because Fleet is its runner
+/// (`workflow.schema.json`), and starting the Job's own Drone on it would ask
+/// the work under review to review itself — at the cost of a turn against the
+/// ceiling, for an answer that is not evidence in any case.
+///
+/// **Asserted on the process group rather than on a missing file**, because an
+/// absence is a race and a pgid is a fact: [`start_step`] records a new handle
+/// every time it starts one, so an unchanged handle is proof that nothing was
+/// started.
+#[test]
+fn fleet_does_not_start_a_drone_for_a_step_it_satisfies_itself() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: fix, then review\nends_at: branch\nsteps:\n\
+         \x20 - id: fix\n    skill: implement-change\n    verify: { must: always }\n\
+         \x20 - id: review\n    verify: { must: review_clean }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("the parser drops the last field")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+    let before = scratch.store().load(&data.uuid).unwrap().drone;
+
+    let pass = tick(&scratch, &run, &data.name);
+    assert_eq!(pass.results[0].did, "advanced", "{pass:#?}");
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.step, "review");
+    assert_eq!(
+        record.drone.as_ref().map(|handle| handle.pgid),
+        before.as_ref().map(|handle| handle.pgid),
+        "a Drone was started for a step Fleet satisfies"
+    );
+    // **And it is not stuck.** The Job rests `RUNNING` with no Drone — the
+    // ordinary state between turns — and the next pass is what starts the
+    // reviewer.
+    assert_eq!(record.state, JobState::Running);
+    assert_eq!(tick(&scratch, &run, &data.name).results[0].did, "waiting");
+    assert_eq!(children_of(&scratch, &data.uuid).len(), 1);
+
+    // **And its wall clock stops while it waits** (PLAN.md §14.6). A `plan`
+    // sub-Job ends at your approval and approval takes hours; a parent whose
+    // clock kept running would be killed because you went to lunch. The window
+    // opens here and `job::Kin::suspended_by` is what spends it.
+    let waiting = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(
+        waiting.kin.suspended_from_ms,
+        Some(FrozenClock::new().wall_ms()),
+        "the parent went on spending its wall clock while a sub-Job ran"
+    );
+}
+
+/// **A reviewer is not sent to read an empty diff.**
+///
+/// Every Job gets a worktree of its own, so what a reviewer can see is what is
+/// committed on the branch — and until something commits, the work is sitting in
+/// the parent's worktree where no other Job can reach it. A reviewer started
+/// then would come back clean having read nothing, which is the false pass the
+/// predicate exists to refuse. So the gate does not hold, no Job is spawned, and
+/// the words go to the one session that can fix it: the parent's own Drone.
+#[test]
+fn a_review_gate_will_not_start_a_reviewer_over_work_that_is_not_committed() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: one review step\nends_at: branch\nsteps:\n\
+         \x20 - id: review\n    verify: { must: review_clean }\n",
+    );
+    // `git status --porcelain` with something in it: the Drone's work, still
+    // uncommitted.
+    let run = scratch
+        .harness()
+        .answering("git status --porcelain", 0, " M src/parse.rs\n");
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("the parser drops the last field")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let pass = tick(&scratch, &run, &data.name);
+    assert_eq!(pass.results[0].did, "retried", "{pass:#?}");
+    assert!(
+        pass.results[0].why.contains("nothing committed"),
+        "the row does not say what is wrong: {}",
+        pass.results[0].why
+    );
+    assert!(
+        children_of(&scratch, &data.uuid).is_empty(),
+        "a reviewer was spawned over an empty diff"
+    );
+
+    // **The remedy went to the Drone.** A retry of a step Fleet satisfies is
+    // the one case that restarts the parent's own session, because committing
+    // is the only thing that can move this gate.
+    let argv = recorded_argv(&data.uuid);
+    assert!(
+        argv.iter().any(|word| word.contains("nothing committed")),
+        "the Drone was restarted without being told what failed: {argv:?}"
+    );
+}
+
+/// **A `workflow:` step runs that workflow as its own Job, and what the child
+/// spends the parent has spent.**
+///
+/// The roll-up is the answer to `docs/reserved/016` §2's *"the parent's ceilings
+/// bounding the child's"*: a parent waiting on a sub-Job runs no turns of its
+/// own, so a ledger read off its transcript alone would sit still however many
+/// children it started — and a child able to exhaust its parent in silence is
+/// the failure that design exists to avoid.
+#[test]
+fn a_sub_job_step_runs_the_workflow_it_names_and_its_spend_lands_on_the_parent() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "feature",
+        "name: feature\ndescription: plan as a sub-Job, then land\nends_at: branch\nsteps:\n\
+         \x20 - id: plan\n    workflow: plan\n    verify: { must: subjob_passed }\n",
+    );
+    workflow(
+        &scratch,
+        "plan",
+        "name: plan\ndescription: one step\nends_at: human\nsteps:\n\
+         \x20 - id: research\n    skill: explore-codebase\n    verify: { must: always }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("feature".to_string()),
+            ..task("add rate limiting")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let rows = settle_family(&scratch, &run, &data.name, &data.uuid);
+    assert_eq!(rows.last().unwrap().did, "finished", "{rows:#?}");
+
+    let children = children_of(&scratch, &data.uuid);
+    assert_eq!(children.len(), 1, "{children:#?}");
+    let child = &children[0];
+    assert_eq!(child.workflow, "plan");
+    // **A sub-Job hands over to its parent, not to you.** `plan` is
+    // `ends_at: human` and run on its own it stops; PLAN.md §14.6 says
+    // `feature`'s plan step continues past that, and this is where.
+    assert_eq!(child.state, JobState::Done, "the sub-Job stopped and asked");
+    assert!(
+        armada_fleet::inbox::read(&scratch.inbox())
+            .unwrap()
+            .is_empty(),
+        "a sub-Job that hands over to its parent asked a person instead"
+    );
+
+    // **The child's ceilings are carved out of what the parent had left**, so
+    // the tree cannot spend more than the parent was given.
+    let parent = scratch.store().load(&data.uuid).unwrap();
+    assert!(
+        child.budget.iterations <= parent.budget.iterations
+            && child.budget.tokens <= parent.budget.tokens,
+        "the child was given more rope than its parent has: {:?} against {:?}",
+        child.budget,
+        parent.budget
+    );
+
+    // **And what it spent is on the parent's ledger.**
+    assert!(
+        parent.kin.spend.tokens > 0 && parent.kin.spend.turns > 0,
+        "the sub-Job's spend went uncounted: {:?}",
+        parent.kin.spend
+    );
+    // **And the clock is running again.** The suspension is opened when the
+    // child starts and closed when it is over; one left open would be a Job
+    // that never reached its wall clock at all.
+    assert_eq!(
+        parent.kin.suspended_from_ms, None,
+        "the parent's wall clock is still suspended after its sub-Job ended"
+    );
+
+    // **Strictly greater**, because the parent ran a turn of its own as well:
+    // an equal figure would be the child's spend standing in for the total,
+    // which is what a ledger that never added them up looks like.
+    assert!(
+        parent.spend.tokens > parent.kin.spend.tokens,
+        "the parent's own ledger does not add its children to its transcript: \
+         {:?} against {:?}",
+        parent.spend,
+        parent.kin.spend
+    );
+}
+
+/// **A killed parent takes its sub-Job with it.**
+///
+/// `docs/reserved/016` §2 named this as the unanswered question. Left behind,
+/// the child keeps a Drone, a worktree and a port block, and spends a budget
+/// producing a verdict for a record that says `ABORTED`.
+#[test]
+fn killing_a_parent_ends_the_sub_job_it_was_waiting_on() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: one review step\nends_at: branch\nsteps:\n\
+         \x20 - id: review\n    verify: { must: review_clean }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            // **Not `STAY-ALIVE`.** The reviewer's task is built from this one,
+            // so a parent whose stub sleeps would give the reviewer a stub that
+            // sleeps too — and the parent's own turn has to *end* before its
+            // gate ever runs and spawns the reviewer at all.
+            ..task("look at it")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+
+    // One pass is enough to start the reviewer.
+    assert_eq!(tick(&scratch, &run, &data.name).results[0].did, "waiting");
+    let children = children_of(&scratch, &data.uuid);
+    assert_eq!(children.len(), 1, "{children:#?}");
+    scratch.watch(&children[0].uuid);
+
+    fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&data.name),
+        false,
+        false,
+    )
+    .expect("the kill answers");
+
+    assert_eq!(
+        scratch.store().load(&children[0].uuid).unwrap().state,
+        JobState::Aborted,
+        "the reviewer outlived the Job that was waiting on it"
+    );
+    assert_eq!(
+        scratch.store().load(&data.uuid).unwrap().state,
+        JobState::Aborted
+    );
+}
+
+/// **A workflow whose sub-Job would run a workflow already above it is refused
+/// rather than spawned.**
+///
+/// `workflow.schema.json` says the graph *"must be acyclic; `armada guild
+/// verify` rejects a cycle"* — and `guild verify` is not built, so without this
+/// `feature → plan → feature` is a fleet that grows until every ceiling in it is
+/// reached. Refused where the edge is taken, and the chain is in the words.
+#[test]
+fn a_sub_job_that_would_run_a_workflow_already_above_it_is_refused() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: a workflow that runs itself\nends_at: branch\nsteps:\n\
+         \x20 - id: again\n    workflow: bug\n    verify: { must: subjob_passed }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("go round for ever")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+
+    let pass = tick(&scratch, &run, &data.name);
+    assert_eq!(pass.results[0].did, "halted", "{pass:#?}");
+    assert!(
+        pass.results[0].why.contains("would run inside itself"),
+        "the stop does not say what is wrong: {}",
+        pass.results[0].why
+    );
+    assert!(
+        children_of(&scratch, &data.uuid).is_empty(),
+        "a cycle was spawned anyway"
+    );
+    // Stopped, raised, and stopped **once**: the whole fleet still moves.
+    assert_eq!(
+        scratch.store().load(&data.uuid).unwrap().state,
+        JobState::Paused
+    );
+    assert_eq!(
+        armada_fleet::inbox::read(&scratch.inbox()).unwrap().len(),
+        1
+    );
 }
 
 /// **`human_approves` asks, and the answer decides.** It is the one predicate
@@ -4571,15 +5001,16 @@ fn watch_drives_a_job_to_its_end_in_one_invocation() {
     );
 }
 
-/// **The shipped `bug` workflow stops at `review`, and says why.**
+/// **The shipped `bug` workflow runs all four steps to `DONE`.**
 ///
-/// This is the honest edge of M4: `review_clean` needs a reviewer Job that Fleet
-/// does not spawn, so the shipped four-step `bug` reproduces, fixes, and then
-/// asks. `docs/reserved/016` is where that is recorded and what it would take to
-/// close it. The test exists so the boundary is a fact in the suite rather than
-/// a sentence in a document.
+/// It used to stop at `review` and say why, and that stop was the honest edge of
+/// M4: `review_clean` was settled by a reviewer Job and Fleet spawned none.
+/// This is the same four steps with the fourth one reachable — reproduce, fix,
+/// **review**, land, on evidence throughout and with nobody asked anything. The
+/// only thing the test supplies is the reviewer's findings file, because the
+/// stub `claude` writes a transcript and not a document.
 #[test]
-fn the_shipped_bug_workflow_runs_to_its_review_step_and_stops_there() {
+fn the_shipped_bug_workflow_runs_through_its_review_step_to_done() {
     let scratch = Scratch::new();
     let run = scratch
         .harness()
@@ -4613,19 +5044,17 @@ fn the_shipped_bug_workflow_runs_to_its_review_step_and_stops_there() {
     await_turn(&scratch, &data.uuid);
     forget_argv(&data.uuid);
 
-    let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
+    let rows = settle_family(&scratch, &run, &data.name, &data.uuid);
     let last = rows.last().unwrap();
-    assert_eq!(last.did, "halted", "{rows:#?}");
-    assert!(
-        last.why.contains("reviewer Job"),
-        "the stop does not name what is missing: {}",
-        last.why
-    );
+    assert_eq!(last.did, "finished", "{rows:#?}");
 
     let record = scratch.store().load(&data.uuid).unwrap();
-    assert_eq!(record.step, "review");
-    // The two steps before it were decided on evidence, with nobody asked.
-    for step in ["reproduce", "fix"] {
+    assert_eq!(record.step, "land");
+    assert_eq!(record.state, JobState::Done);
+    // **Every one of the four passed on evidence, and nobody was asked.** The
+    // `review` row is the one that is new, and its evidence is a Job rather
+    // than a run id — which is the whole of this change.
+    for step in ["reproduce", "fix", "review", "land"] {
         assert!(
             record.transitions.iter().any(|entry| {
                 entry.step == step
@@ -4639,4 +5068,10 @@ fn the_shipped_bug_workflow_runs_to_its_review_step_and_stops_there() {
             record.transitions
         );
     }
+    assert!(
+        armada_fleet::inbox::read(&scratch.inbox())
+            .unwrap()
+            .is_empty(),
+        "a workflow that promises no human turn in the middle asked one"
+    );
 }

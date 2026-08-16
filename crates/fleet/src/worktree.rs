@@ -28,7 +28,20 @@ pub fn branch_for(name: &str) -> String {
 /// **`-b` is not optional.** Without it `git worktree add` checks out an
 /// existing branch when the name happens to match, which puts two Jobs on one
 /// branch — and the first symptom is a merge nobody made.
-pub fn add(run: &impl Run, repo_root: &Path, path: &Path, branch: &str) -> Result<(), ArmadaError> {
+///
+/// **`from` is the commit-ish the branch starts at**, and `None` means the
+/// repository's own `HEAD` — which is right for a Job a person asked for and
+/// wrong for a sub-Job. A reviewer branched from `HEAD` would be looking at the
+/// repository as it was before the work it was started to review, and would
+/// report an empty diff as nothing to say. `armada fleet tick` passes the
+/// parent's branch.
+pub fn add(
+    run: &impl Run,
+    repo_root: &Path,
+    path: &Path,
+    branch: &str,
+    from: Option<&str>,
+) -> Result<(), ArmadaError> {
     // The parent directory is Fleet's policy rather than git's: `git worktree
     // add` creates the leaf and not `~/.armada/workspaces/<repo>/`.
     if let Some(parent) = path.parent() {
@@ -40,7 +53,7 @@ pub fn add(run: &impl Run, repo_root: &Path, path: &Path, branch: &str) -> Resul
         })?;
     }
 
-    let argv = vec![
+    let mut argv = vec![
         "git".to_string(),
         "worktree".to_string(),
         "add".to_string(),
@@ -48,6 +61,8 @@ pub fn add(run: &impl Run, repo_root: &Path, path: &Path, branch: &str) -> Resul
         branch.to_string(),
         path.display().to_string(),
     ];
+    // Last, because `git worktree add` takes the start point after the path.
+    argv.extend(from.map(str::to_string));
     call(run, repo_root, argv, "could not create the worktree")
 }
 
@@ -206,7 +221,14 @@ mod tests {
         let run = FakeRun::ok();
         let home = tempfile::tempdir().unwrap();
         let path = home.path().join("workspaces/api/rate-limit");
-        add(&run, Path::new("/code/api"), &path, "armada/rate-limit").unwrap();
+        add(
+            &run,
+            Path::new("/code/api"),
+            &path,
+            "armada/rate-limit",
+            None,
+        )
+        .unwrap();
         assert_eq!(
             run.argv(),
             [
@@ -216,6 +238,36 @@ mod tests {
                 "-b",
                 "armada/rate-limit",
                 &path.display().to_string(),
+            ]
+        );
+    }
+
+    /// **A sub-Job's worktree starts at the branch it is about.** A reviewer
+    /// branched from the repository's `HEAD` would be reading the code as it
+    /// was before the work, and would report an empty diff as nothing to say.
+    #[test]
+    fn a_worktree_can_start_at_a_named_commit_ish() {
+        let run = FakeRun::ok();
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("workspaces/api/rate-limit-review");
+        add(
+            &run,
+            Path::new("/code/api"),
+            &path,
+            "armada/rate-limit-review",
+            Some("armada/rate-limit"),
+        )
+        .unwrap();
+        assert_eq!(
+            run.argv(),
+            [
+                "git",
+                "worktree",
+                "add",
+                "-b",
+                "armada/rate-limit-review",
+                &path.display().to_string(),
+                "armada/rate-limit",
             ]
         );
     }
@@ -239,7 +291,14 @@ mod tests {
         }
         let run = Cwd(RefCell::new(None));
         let home = tempfile::tempdir().unwrap();
-        add(&run, Path::new("/code/api"), &home.path().join("w"), "b").unwrap();
+        add(
+            &run,
+            Path::new("/code/api"),
+            &home.path().join("w"),
+            "b",
+            None,
+        )
+        .unwrap();
         assert_eq!(run.0.borrow().clone().unwrap(), PathBuf::from("/code/api"));
     }
 

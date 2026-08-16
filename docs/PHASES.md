@@ -434,7 +434,7 @@ idempotent, and `--watch` is one driver of it rather than the only one.
 |---|---|
 | **A gate's evidence is what the shell looked at, and the decision is pure.** `gate::needs` says which fact a predicate wants; the shell starts a check, searches the tree or stats a path; `gate::decide` weighs what came back. That split is what let the evaluator be tested against a fake and then proved end to end against a real `armada` and a stub `claude` — the lesson of the two bugs that shipped behind green reducer tests. |
 | **One ceiling, read in the unit it was declared in.** A per-step attempt ceiling was built beside the Job's and removed. `budget.iterations` is the **Job's** turn ledger (§14.3 of [`PLAN.md`](PLAN.md)), comparing the same number against attempts at one step is a second unit on one field, and it could never fire anyway: an attempt costs at least one turn, so the Job-wide ceiling always reaches the number first. |
-| **Two predicates are refused rather than decided.** `review_clean` and `subjob_passed` both need another Job's verdict and Fleet spawns none from inside a gate. The loop stops once and names what is missing: *yes* would be the false pass the predicate exists to prevent, and *no* would spend the budget and then blame a ceiling. [`reserved/016`](reserved/016-what-the-gate-cannot-prove.md) has the whole of the evaluator's coverage. |
+| **Two predicates are settled by another Job, and were refused until Fleet could spawn one.** `review_clean` and `subjob_passed` both need a child Job's verdict. For the length of M4 the loop stopped once and named what was missing — *yes* would have been the false pass the predicate exists to prevent, and *no* would have spent the budget and then blamed a ceiling. A gate now starts that Job: its own worktree at the parent's branch, ceilings carved out of the parent's, and the parent's wall clock suspended while it runs. [`reserved/016`](reserved/016-what-the-gate-cannot-prove.md) records what it decides and what it still cannot prove. |
 
 **Done when:** a bug workflow reproduces a failure, writes a test that fails first, fixes it,
 gets `check` green, and lands on a local branch, with no human turn in the middle and a hard
@@ -442,9 +442,10 @@ ceiling that stops it if it cannot.
 
 **Met**, by `a_bug_workflow_reproduces_fixes_and_lands_with_no_human_turn_in_the_middle` in
 `crates/helm/tests/fleet.rs` — three steps, every one settled by an external command, an empty
-inbox at the end. **The shipped four-step `bug` workflow has a `review` step this cannot reach**,
-and `the_shipped_bug_workflow_runs_to_its_review_step_and_stops_there` holds that boundary as a
-fact in the suite rather than a sentence here.
+inbox at the end. **And met by the shipped four-step workflow since the gate learned to spawn a
+Job**: `the_shipped_bug_workflow_runs_through_its_review_step_to_done` drives reproduce, fix,
+review and land, with the `review` step passing on a reviewer Job's verdict and the inbox still
+empty at the end.
 
 ---
 

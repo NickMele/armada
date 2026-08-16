@@ -21,7 +21,7 @@ armada fleet tick [<job>] [--watch] [--json]
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `<job>` | Job name | every Job | Which Job to look at. Absent means the whole fleet, in name order. |
+| `<job>` | Job name | every Job | Which Job to look at, **and everything it started** — a parent waiting on a sub-Job moves only when the child does. Absent means the whole fleet, in name order. |
 | `--watch` | flag | off | Keep going, every two seconds, until nothing in scope could move again. |
 
 ## How it works
@@ -64,16 +64,34 @@ drivers — `--watch` is one of them rather than the only one. A daemon would ne
 its own crash recovery and its own answer to *"what happened while it was down"*, all to replace
 a command you can simply run again.
 
-### What it cannot decide
+### The two steps a pass may spawn a Job for
 
-Five of the eight predicates are decided from the machine, one is asked of you, and **two are
-refused**: `review_clean` and `subjob_passed` both need another Job's verdict, and Fleet spawns no
-Job from inside a running Job's gate. The loop stops once and names what is missing rather than
-guessing — answering *yes* would be the false pass the predicate exists to prevent, and answering
-*no* would spend the budget and then blame a ceiling. The whole of the coverage, and what would
-close each gap, is [`../../reserved/016-what-the-gate-cannot-prove.md`](../../reserved/016-what-the-gate-cannot-prove.md).
+Seven of the eight predicates are decided from the machine or asked of you. `review_clean` and
+`subjob_passed` are settled by **another Job's verdict**, and a pass starts that Job: its own
+uuid, worktree, branch, budget and record, in a session that never saw the parent's reasoning.
+The parent's row reads `waiting` until the child reaches a verdict, and the step then passes
+carrying the child's uuid as its evidence.
 
-**So the shipped four-step `bug` workflow reproduces, fixes, lands and then stops at `review`.**
+| | `review_clean` | `subjob_passed` |
+|---|---|---|
+| which workflow | the step's `workflow:`, or `review` | the step's `workflow:`, required |
+| worktree | a new one **at the parent's branch** | a new one at the parent's branch |
+| first, every time | the parent's work must be **committed** — a reviewer cannot read an empty diff | — |
+| holds when | the reviewer Job reached `DONE` with `PASS` | the sub-Job reached `DONE` with `PASS` |
+
+**One child per attempt.** A reviewer started for attempt one read the diff before the fix, so
+its verdict never settles attempt two — the same rule a detached check run travels under.
+
+**The parent's ceilings bound the child's.** Its `iterations` and `tokens` are the smaller of
+what its own workflow asks for and what the parent has left, and what it spends is added to the
+parent's ledger when it settles. Its **wall clock** is its own: the parent's is suspended while
+a child runs, because a `plan` sub-Job ends at your approval and a clock that kept ticking would
+kill a Job because you went to lunch.
+
+**A cycle is refused where the edge is taken.** A sub-Job that would run a workflow already
+above it — `feature → plan → feature` — stops the Job and names the chain, and so does a fourth
+generation. What the loop still cannot prove about a review is
+[`../../reserved/016-what-the-gate-cannot-prove.md`](../../reserved/016-what-the-gate-cannot-prove.md) §2.
 
 ### Ceilings
 
@@ -89,7 +107,7 @@ raised to the inbox. Nothing is discarded and nothing is rolled back.
   JOB          STEP       DID       WHY
   rate-limit   fix        advanced  `fix` passed; it is on `land`
   bad-parse    reproduce  waiting   check run 01JQR… is still RUNNING
-  flaky-suite  review     halted    `review` cannot be gated: `review_clean` is settled by a reviewer Job
+  flaky-suite  review     waiting   the `review` sub-Job `flaky-suite-review` is RUNNING
 
 OK  3 Jobs, 2 moved
 ```
@@ -97,6 +115,10 @@ OK  3 Jobs, 2 moved
 One row per Job. `did` is one of `idle`, `working`, `waiting`, `advanced`, `retried`,
 `finished`, `asked` or `halted`; the first three are the ones where the loop did nothing, and
 `--watch` goes round again while any row could still move on its own.
+
+**A parent whose sub-Job is waiting on *you* reads `asked`, not `waiting`.** The difference is
+whether `--watch` ever returns: a detached check finishes on its own and an unanswered question
+does not. Nothing new is raised for it — the child already put the question in your inbox.
 
 `--json` returns `data.results[]` with `job`, `step`, `did`, `state`, `verdict`, `predicate`,
 `evidence[]` and `why`, plus `data.moved`.

@@ -202,16 +202,36 @@ impl Next {
 /// comment gives: a ceiling counted from what a Drone reported is a ceiling a
 /// silent Drone never reaches and a chatty one reaches twice as fast.
 ///
+/// `under_a_parent` is whether this Job is somebody's sub-Job — see the
+/// [`EndsAt::Human`] arm, which is the only thing that reads it.
+///
 /// **Exhaustive over [`Outcome`], with no `_ =>` arm.**
-pub fn after(outcome: &Outcome, workflow: &Workflow, step: &str, attempts: u32) -> Next {
+pub fn after(
+    outcome: &Outcome,
+    workflow: &Workflow,
+    step: &str,
+    attempts: u32,
+    under_a_parent: bool,
+) -> Next {
     match outcome {
         Outcome::Holds { .. } => match workflow.step_after(step) {
             Some(next) => Next::Advance {
                 to: next.id.clone(),
             },
-            None => match workflow.ends_at {
-                EndsAt::Branch => Next::Finish,
-                EndsAt::Human => Next::Hand {
+            None => match (workflow.ends_at, under_a_parent) {
+                (EndsAt::Branch, _) => Next::Finish,
+                // **A sub-Job hands over to its parent, not to you**, and that
+                // is PLAN.md §14.6's *"`plan.yml` run on its own terminates at
+                // approval; `feature`'s plan step continues past it"* made
+                // real. `plan` is `ends_at: human` and `feature`'s first step
+                // runs it as a sub-Job, so a child that stopped here would sit
+                // `PAUSED` for ever with nothing to answer — its own
+                // `human_approves` step has already been answered by then, and
+                // the parent is what comes next. Composition is not textual
+                // inclusion: the child's steps still run under the child's
+                // ceilings, and only where it *ends* changes.
+                (EndsAt::Human, true) => Next::Finish,
+                (EndsAt::Human, false) => Next::Hand {
                     why: format!(
                         "`{}` finished its last step and the `{}` workflow ends with you",
                         step, workflow.name
@@ -319,6 +339,7 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            kin: Default::default(),
         }
     }
 
@@ -393,12 +414,12 @@ mod tests {
             evidence: Vec::new(),
         };
         assert_eq!(
-            after(&held, &flow, "one", 1),
+            after(&held, &flow, "one", 1, false),
             Next::Advance {
                 to: "two".to_string()
             }
         );
-        assert_eq!(after(&held, &flow, "two", 1), Next::Finish);
+        assert_eq!(after(&held, &flow, "two", 1, false), Next::Finish);
     }
 
     /// **A workflow that ends at a person does not close itself.** `design`
@@ -410,12 +431,42 @@ mod tests {
         let held = Outcome::Holds {
             evidence: Vec::new(),
         };
-        match after(&held, &flow, "one", 1) {
+        match after(&held, &flow, "one", 1, false) {
             Next::Hand { why } => assert!(why.contains("ends with you")),
             other => panic!("a human-ended workflow closed itself: {other:?}"),
         }
         // It still passed the step: the pause is the Job's, not the step's.
-        assert_eq!(after(&held, &flow, "one", 1).verdict(), Some(Verdict::Pass));
+        assert_eq!(
+            after(&held, &flow, "one", 1, false).verdict(),
+            Some(Verdict::Pass)
+        );
+    }
+
+    /// **A sub-Job hands over to its parent, not to you.** PLAN.md §14.6:
+    /// *"`plan.yml` run on its own terminates at approval; `feature`'s plan step
+    /// continues past it."* A child that stopped at the same place would sit
+    /// `PAUSED` with nothing left to answer, and the parent waiting on it would
+    /// wait for ever.
+    #[test]
+    fn a_sub_job_whose_workflow_ends_at_a_person_finishes_for_its_parent() {
+        let flow = workflow(EndsAt::Human, &["one"]);
+        let held = Outcome::Holds {
+            evidence: Vec::new(),
+        };
+        assert_eq!(after(&held, &flow, "one", 1, true), Next::Finish);
+        // Run on its own it still stops, which is the whole of `plan`.
+        assert!(matches!(
+            after(&held, &flow, "one", 1, false),
+            Next::Hand { .. }
+        ));
+        // And a workflow that ends on a branch is unaffected either way.
+        let closes = workflow(EndsAt::Branch, &["one"]);
+        for under_a_parent in [true, false] {
+            assert_eq!(
+                after(&held, &closes, "one", 1, under_a_parent),
+                Next::Finish
+            );
+        }
     }
 
     /// **A failing step is always retried, however many times it has failed** —
@@ -431,7 +482,7 @@ mod tests {
             why: "the suite is red".to_string(),
         };
         assert_eq!(
-            after(&missed, &flow, "one", 1),
+            after(&missed, &flow, "one", 1, false),
             Next::Retry {
                 attempt: 2,
                 why: "the suite is red".to_string()
@@ -440,14 +491,14 @@ mod tests {
         // Well past `budget.iterations` — still a retry, because the ceiling is
         // `attention`'s and it never gets this far.
         assert_eq!(
-            after(&missed, &flow, "one", 99),
+            after(&missed, &flow, "one", 99, false),
             Next::Retry {
                 attempt: 100,
                 why: "the suite is red".to_string()
             }
         );
         assert_eq!(
-            after(&missed, &flow, "one", 99).verdict(),
+            after(&missed, &flow, "one", 99, false).verdict(),
             Some(Verdict::Failed)
         );
     }
@@ -460,7 +511,7 @@ mod tests {
         let waiting = Outcome::NotYet {
             why: "check run 01J is still RUNNING".to_string(),
         };
-        let next = after(&waiting, &flow, "one", 1);
+        let next = after(&waiting, &flow, "one", 1, false);
         assert!(matches!(next, Next::Again { .. }));
         assert_eq!(next.verdict(), None);
     }
@@ -473,7 +524,7 @@ mod tests {
         let cannot = Outcome::CannotDecide {
             why: "`review_clean` is settled by a reviewer Job".to_string(),
         };
-        match after(&cannot, &flow, "review", 1) {
+        match after(&cannot, &flow, "review", 1, false) {
             Next::Halt { why } => {
                 assert!(why.contains("reviewer Job"), "{why}");
                 assert!(why.contains("cannot be gated"), "{why}");
@@ -481,7 +532,7 @@ mod tests {
             other => panic!("an undecidable gate did something: {other:?}"),
         }
         assert_eq!(
-            after(&cannot, &flow, "review", 1).verdict(),
+            after(&cannot, &flow, "review", 1, false).verdict(),
             Some(Verdict::NeedsHuman)
         );
     }
@@ -525,7 +576,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                after(&outcome, &flow, "one", 1).verdict(),
+                after(&outcome, &flow, "one", 1, false).verdict(),
                 want,
                 "{outcome:?}"
             );

@@ -28,23 +28,22 @@
 //! of the mapping, which is what stops the gatherer and the decider drifting
 //! apart over which predicate wanted what.
 //!
-//! # What this evaluator will not decide, and says so
+//! # The two predicates that are settled by another Job
 //!
-//! Two predicates are honestly out of reach today and answer
-//! [`Outcome::CannotDecide`] rather than guessing:
+//! `review_clean` and `subjob_passed` are decided by a **child Job's** verdict
+//! rather than by a command this process runs, and for a year they answered
+//! [`Outcome::CannotDecide`] because Fleet started no such Job. It starts one
+//! now ([`Needs::SubJob`]), and the rule the evaluator lives under is intact:
+//! the parent Drone's opinion of the child is still not evidence, and what the
+//! gate reads is the child's own record — a state and a verdict Armada wrote
+//! about work it watched, exactly as it reads a check run's.
 //!
-//! - **`review_clean`** needs a reviewer Job, and Fleet spawns none. A step
-//!   gated on it stops and asks.
-//! - **`subjob_passed`** needs a sub-Job running another workflow, which is the
-//!   `workflow:` runner [`super::workflow::Runner::SubJob`] names and nothing
-//!   starts.
-//!
-//! **Guessing either would be the exact failure the predicates exist to
-//! prevent.** A `review_clean` that answered *yes* because nothing reviewed
-//! anything is worse than a step that stops, because the stop is visible and the
-//! false pass is not.
+//! **What `review_clean` proves is narrower than its name**, in the same way
+//! `failing_test_exists` is, and `docs/reserved/016` §2 records both the
+//! narrowing and what would close it.
 
 use super::workflow::{Predicate, Step};
+use super::{JobState, Verdict};
 use crate::envelope::Evidence;
 use crate::error::Status;
 
@@ -111,11 +110,28 @@ pub enum Needs {
     Branch,
     /// A person's answer.
     Person,
-    /// Another Job, which Fleet does not start. **Not decidable here**, and the
-    /// text says which Job and why.
-    AnotherJob {
-        /// What is missing, in words a reader can act on.
-        why: &'static str,
+    /// **Another Job's verdict**, for the two predicates nothing this process
+    /// runs can settle.
+    ///
+    /// # Why a child Job is evidence when the parent's Drone is not
+    ///
+    /// [`super::workflow::Verify`]'s rule is that a step advances on *"evidence
+    /// an external command produced"*. A sub-Job is not a command, and the
+    /// distinction that matters is not the process boundary — it is **who
+    /// decided**. The parent's Drone asserting *"I reviewed it and it is
+    /// fine"* is the worker grading its own work. A child Job's verdict is
+    /// Armada's own gate, run against its own predicates, in a session that
+    /// never saw the parent's reasoning: PLAN.md §14.6 puts it as *"a reviewer
+    /// that shares the implementer's context shares its blind spots"*, and the
+    /// verdict envelope is what §14.6's table names as the evidence.
+    SubJob {
+        /// The workflow the child runs — the step's `workflow:`, or
+        /// [`super::workflow::REVIEWER`] for a `review_clean` step that names
+        /// none.
+        workflow: String,
+        /// Which of the two predicates asked, because they want different
+        /// things looked at first.
+        kind: SubJobKind,
     },
     /// The workflow did not say enough to look anything up.
     ///
@@ -130,6 +146,52 @@ pub enum Needs {
         /// Which key, and how to give it a value.
         why: String,
     },
+}
+
+/// Which predicate asked for a sub-Job.
+///
+/// **Two kinds rather than one, because a reviewer needs one more fact than a
+/// sub-Job does.** A `workflow:` step's child works from the parent's task; a
+/// reviewer works from the parent's **branch**, and a branch with the work
+/// still sitting uncommitted in the parent's worktree would hand the reviewer
+/// an empty diff and get back a clean bill of health for nothing. So `Review`
+/// gates on the commit first — see [`decide`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubJobKind {
+    /// `review_clean`: a reviewer over the parent's committed branch.
+    Review,
+    /// `subjob_passed`: the workflow the step names, run as its own Job.
+    Workflow,
+}
+
+impl SubJobKind {
+    /// The predicate this kind belongs to, for a sentence a reader can grep the
+    /// workflow file with.
+    pub const fn word(self) -> &'static str {
+        match self {
+            SubJobKind::Review => Predicate::ReviewClean.word(),
+            SubJobKind::Workflow => Predicate::SubjobPassed.word(),
+        }
+    }
+}
+
+/// What a child Job has reached, read off its own record.
+///
+/// **Read, never re-derived.** The child's state is
+/// [`super::job::observe`]'s answer about the child — the same reconciliation
+/// of transcript and process table every other verb uses — and its verdict is
+/// what `fleet.verdict` wrote. A parent that formed its own opinion of a child
+/// would be the second implementation of a decision that already has one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubjobFact {
+    /// The child's uuid — what the evidence names, because a name is a label.
+    pub uuid: String,
+    /// The child's name, for the sentence a person reads.
+    pub name: String,
+    /// What the child is doing, observed.
+    pub state: JobState,
+    /// The verdict it reached, if it has reached one.
+    pub verdict: Option<Verdict>,
 }
 
 /// Whether a placeholder is still a placeholder.
@@ -221,13 +283,31 @@ pub fn needs(step: &Step) -> Needs {
         },
         Predicate::BranchExists => Needs::Branch,
         Predicate::HumanApproves => Needs::Person,
-        Predicate::ReviewClean => Needs::AnotherJob {
-            why: "`review_clean` is settled by a reviewer Job, and Fleet does not spawn one yet",
+        // **`workflow:` chooses the reviewer, and its absence is not an
+        // error.** A `review` step names no runner precisely because Fleet is
+        // the runner (`workflow.schema.json`), so the common case has nothing
+        // to read and the constant is the answer.
+        Predicate::ReviewClean => Needs::SubJob {
+            workflow: step
+                .workflow
+                .clone()
+                .unwrap_or_else(|| super::workflow::REVIEWER.to_string()),
+            kind: SubJobKind::Review,
         },
-        Predicate::SubjobPassed => Needs::AnotherJob {
-            why:
-                "`subjob_passed` is settled by a sub-Job running another workflow, and Fleet does \
-                  not start one yet",
+        // A `subjob_passed` step with no `workflow:` does not parse, so the
+        // fallback here is unreachable through the guild — it exists so that a
+        // `Step` built by hand in a test cannot make this function panic.
+        Predicate::SubjobPassed => match &step.workflow {
+            Some(workflow) => Needs::SubJob {
+                workflow: workflow.clone(),
+                kind: SubJobKind::Workflow,
+            },
+            None => Needs::Unstated {
+                why: format!(
+                    "the `{}` step gates on `subjob_passed` and names no workflow",
+                    step.id
+                ),
+            },
         },
     }
 }
@@ -288,6 +368,8 @@ pub struct Facts {
     pub branch: Option<Probed>,
     /// What a person answered, when they have.
     pub answer: Option<String>,
+    /// What the child Job this attempt started has reached.
+    pub subjob: Option<SubjobFact>,
 }
 
 /// How a step's gate came out.
@@ -485,9 +567,82 @@ pub fn decide(needs: &Needs, facts: &Facts) -> Outcome {
             },
         },
 
-        Needs::AnotherJob { why } => Outcome::CannotDecide {
-            why: (*why).to_string(),
-        },
+        Needs::SubJob { workflow, kind } => {
+            // **The commit comes first for a reviewer, and its absence is
+            // decisive on its own.** `armada fleet spawn` gives every Job a
+            // worktree of its own from a named start point, so what a reviewer
+            // can see is exactly what is on the branch — and the work sits
+            // uncommitted in the parent's worktree until something commits it.
+            // A reviewer started over an empty diff would come back clean
+            // having read nothing, which is the false pass this predicate
+            // exists to refuse. The retry that follows is what fixes it: the
+            // parent's own Drone is handed these words and commits.
+            if *kind == SubJobKind::Review {
+                match &facts.branch {
+                    None => {
+                        return Outcome::NotYet {
+                            why: "nothing has looked for the branch yet".to_string(),
+                        }
+                    }
+                    Some(probe) if !probe.found() => {
+                        return Outcome::DoesNotHold {
+                            evidence: vec![probe_evidence("branch", probe)],
+                            why: format!(
+                                "there is nothing committed on `{}` for a reviewer to read",
+                                probe.scope
+                            ),
+                        }
+                    }
+                    Some(_) => {}
+                }
+            }
+
+            let Some(child) = &facts.subjob else {
+                return Outcome::NotYet {
+                    why: format!("no `{workflow}` sub-Job has been started yet"),
+                };
+            };
+            let evidence = vec![subjob_evidence(child)];
+            match (child.state, child.verdict) {
+                // **A Job somebody killed is not a verdict about the work.**
+                // Retrying would start another child over the same diff, which
+                // is spending again on a decision a person has already made by
+                // hand; `CannotDecide` stops once and names the Job, which is
+                // what they can act on.
+                (JobState::Aborted, _) => Outcome::CannotDecide {
+                    why: format!(
+                        "the `{workflow}` sub-Job `{}` was ended before it reached a verdict",
+                        child.name
+                    ),
+                },
+                (JobState::Done, Some(Verdict::Pass)) => Outcome::Holds { evidence },
+                (JobState::Done, reached) => Outcome::DoesNotHold {
+                    evidence,
+                    why: format!(
+                        "the `{workflow}` sub-Job `{}` finished {}",
+                        child.name,
+                        match reached {
+                            Some(verdict) => verdict.word(),
+                            None => "without a verdict",
+                        }
+                    ),
+                },
+                // **Waiting on a person is still waiting.** The child raised
+                // its own inbox entry, so the question is already in front of
+                // somebody; a parent that halted here would be `PAUSED`, and a
+                // `PAUSED` Job is never gated again — so answering the child
+                // would leave the parent stopped for ever.
+                (state, _) if state.needs_a_person() => Outcome::NotYet {
+                    why: format!(
+                        "the `{workflow}` sub-Job `{}` is waiting on you",
+                        child.name
+                    ),
+                },
+                (state, _) => Outcome::NotYet {
+                    why: format!("the `{workflow}` sub-Job `{}` is {state}", child.name),
+                },
+            }
+        }
         Needs::Unstated { why } => Outcome::CannotDecide { why: why.clone() },
     }
 }
@@ -505,6 +660,21 @@ fn check_evidence(check: &CheckFact) -> Evidence {
         kind: "check".to_string(),
         scope: check.run.clone(),
         exit: check.exit,
+    }
+}
+
+/// What a child Job's verdict looks like as evidence.
+///
+/// **The uuid, because that is the identity**, and it is what
+/// `armada fleet show <uuid>` opens — the transcript, the transitions and the
+/// findings the reviewer wrote are all one command away from the row that
+/// gated on them. The exit code is the shape every other piece of evidence has:
+/// zero for the verdict that advances a step.
+fn subjob_evidence(child: &SubjobFact) -> Evidence {
+    Evidence {
+        kind: "job".to_string(),
+        scope: child.uuid.clone(),
+        exit: i32::from(child.verdict != Some(Verdict::Pass)),
     }
 }
 
@@ -662,6 +832,25 @@ mod tests {
                     ..Facts::default()
                 },
             ),
+            (
+                Needs::SubJob {
+                    workflow: "review".to_string(),
+                    kind: SubJobKind::Review,
+                },
+                Facts {
+                    branch: Some(Probed {
+                        scope: "armada/x".to_string(),
+                        exit: 0,
+                    }),
+                    subjob: Some(SubjobFact {
+                        uuid: "8f2a".to_string(),
+                        name: "x-review".to_string(),
+                        state: JobState::Done,
+                        verdict: Some(Verdict::Pass),
+                    }),
+                    ..Facts::default()
+                },
+            ),
         ];
         for (want, facts) in cases {
             match decide(&want, &facts) {
@@ -762,19 +951,188 @@ mod tests {
         assert!(matches!(decide(&want, &facts), Outcome::NotYet { .. }));
     }
 
-    /// **Undecidable is said, not guessed.** A `review_clean` that answered yes
-    /// because nothing reviewed anything is the false pass the predicate exists
-    /// to prevent.
+    /// **Neither predicate guesses, and neither refuses any more.** Both wait
+    /// for a child Job, and until one has been started there is nothing to
+    /// weigh — which is [`Outcome::NotYet`], the same answer a check that has
+    /// not been started yet gets, and not a failure.
     #[test]
-    fn the_two_predicates_that_need_another_job_refuse_to_answer() {
-        for must in [Predicate::ReviewClean, Predicate::SubjobPassed] {
-            let want = needs(&step(must));
-            assert!(matches!(want, Needs::AnotherJob { .. }), "{must:?}");
-            match decide(&want, &Facts::default()) {
-                Outcome::CannotDecide { why } => {
-                    assert!(why.contains(must.word()), "{why} does not name {must:?}");
+    fn both_sub_job_predicates_wait_for_a_child_rather_than_deciding_without_one() {
+        let review = needs(&step(Predicate::ReviewClean));
+        assert_eq!(
+            review,
+            Needs::SubJob {
+                // Fleet's choice, because the step names no runner at all.
+                workflow: super::super::workflow::REVIEWER.to_string(),
+                kind: SubJobKind::Review,
+            }
+        );
+
+        let mut named = step(Predicate::SubjobPassed);
+        named.workflow = Some("plan".to_string());
+        assert_eq!(
+            needs(&named),
+            Needs::SubJob {
+                workflow: "plan".to_string(),
+                kind: SubJobKind::Workflow,
+            }
+        );
+
+        // A `subjob_passed` step with nothing committed to review still asks
+        // for its child; only `review_clean` gates on the branch first.
+        match decide(&needs(&named), &Facts::default()) {
+            Outcome::NotYet { why } => assert!(why.contains("plan"), "{why}"),
+            other => panic!("a sub-Job nobody started decided something: {other:?}"),
+        }
+    }
+
+    /// **A `workflow:` on a `review` step chooses the reviewer**, which is a
+    /// person editing their own guild — never the Job under review choosing its
+    /// own examiner, because a `review_clean` step names no runner and so the
+    /// Drone has no say in it.
+    #[test]
+    fn a_review_step_may_name_the_workflow_its_reviewer_runs() {
+        let mut swapped = step(Predicate::ReviewClean);
+        swapped.workflow = Some("careful-review".to_string());
+        assert_eq!(
+            needs(&swapped),
+            Needs::SubJob {
+                workflow: "careful-review".to_string(),
+                kind: SubJobKind::Review,
+            }
+        );
+    }
+
+    /// **A child's verdict is what settles it, and only `PASS` holds.** The
+    /// evidence names the child by uuid, so the row that gated on it is one
+    /// `armada fleet show` away from the transcript that produced it.
+    #[test]
+    fn a_sub_job_holds_the_step_only_when_it_finished_with_a_pass() {
+        let want = Needs::SubJob {
+            workflow: "review".to_string(),
+            kind: SubJobKind::Workflow,
+        };
+        let child = |state, verdict| Facts {
+            subjob: Some(SubjobFact {
+                uuid: "8f2a1c40".to_string(),
+                name: "rate-limit-review".to_string(),
+                state,
+                verdict,
+            }),
+            ..Facts::default()
+        };
+
+        match decide(&want, &child(JobState::Done, Some(Verdict::Pass))) {
+            Outcome::Holds { evidence } => {
+                assert_eq!(evidence[0].kind, "job");
+                assert_eq!(evidence[0].scope, "8f2a1c40", "the uuid is the identity");
+                assert_eq!(evidence[0].exit, 0);
+            }
+            other => panic!("a passing sub-Job did not hold: {other:?}"),
+        }
+
+        for reached in [Some(Verdict::Failed), Some(Verdict::Blocked), None] {
+            match decide(&want, &child(JobState::Done, reached)) {
+                Outcome::DoesNotHold { evidence, why } => {
+                    assert_eq!(evidence[0].exit, 1, "{reached:?}");
+                    assert!(why.contains("rate-limit-review"), "{why}");
                 }
-                other => panic!("{must:?} answered {other:?}"),
+                other => panic!("a sub-Job that did not pass passed: {other:?}"),
+            }
+        }
+    }
+
+    /// **A reviewer cannot review what is not committed.** Every Job gets a
+    /// worktree of its own, so a reviewer branched from a branch with nothing
+    /// on it reads an empty diff and comes back clean having seen nothing —
+    /// which is the false pass `review_clean` exists to refuse. It is a
+    /// `DoesNotHold` rather than a stop, because the retry hands those words to
+    /// the parent's own Drone, which is the thing that can commit.
+    #[test]
+    fn a_review_gate_wants_the_work_committed_before_it_starts_a_reviewer() {
+        let want = Needs::SubJob {
+            workflow: "review".to_string(),
+            kind: SubJobKind::Review,
+        };
+        let dirty = Facts {
+            branch: Some(Probed {
+                scope: "armada/rate-limit, with changes still uncommitted".to_string(),
+                exit: 1,
+            }),
+            ..Facts::default()
+        };
+        match decide(&want, &dirty) {
+            Outcome::DoesNotHold { why, evidence } => {
+                assert!(why.contains("nothing committed"), "{why}");
+                assert_eq!(evidence[0].kind, "branch");
+            }
+            other => panic!("a reviewer was sent to read an empty diff: {other:?}"),
+        }
+        // Committed, and now it is the reviewer that is missing.
+        let clean = Facts {
+            branch: Some(Probed {
+                scope: "armada/rate-limit".to_string(),
+                exit: 0,
+            }),
+            ..Facts::default()
+        };
+        assert!(matches!(decide(&want, &clean), Outcome::NotYet { .. }));
+    }
+
+    /// **A sub-Job somebody killed stops the parent rather than starting
+    /// another.** A retry would spawn a second child over the same work, which
+    /// is spending again on a decision a person already made by hand.
+    #[test]
+    fn a_sub_job_that_was_killed_stops_the_parent_and_names_it() {
+        let want = Needs::SubJob {
+            workflow: "review".to_string(),
+            kind: SubJobKind::Workflow,
+        };
+        let killed = Facts {
+            subjob: Some(SubjobFact {
+                uuid: "8f2a".to_string(),
+                name: "rate-limit-review".to_string(),
+                state: JobState::Aborted,
+                verdict: None,
+            }),
+            ..Facts::default()
+        };
+        match decide(&want, &killed) {
+            Outcome::CannotDecide { why } => {
+                assert!(why.contains("rate-limit-review"), "{why}");
+            }
+            other => panic!("a killed sub-Job was retried: {other:?}"),
+        }
+    }
+
+    /// **A child waiting on a person leaves the parent waiting, not stopped.**
+    /// A parent that halted would be `PAUSED`, and a `PAUSED` Job is never
+    /// gated again — so answering the child would leave the parent stopped for
+    /// ever, which is the one outcome worse than waiting.
+    #[test]
+    fn a_child_that_is_waiting_on_a_person_leaves_the_parent_waiting() {
+        let want = Needs::SubJob {
+            workflow: "plan".to_string(),
+            kind: SubJobKind::Workflow,
+        };
+        for state in [
+            JobState::Paused,
+            JobState::Blocked,
+            JobState::Running,
+            JobState::Stalled,
+            JobState::Queued,
+        ] {
+            let facts = Facts {
+                subjob: Some(SubjobFact {
+                    uuid: "8f2a".to_string(),
+                    name: "rate-limit-plan".to_string(),
+                    state,
+                    verdict: None,
+                }),
+                ..Facts::default()
+            };
+            match decide(&want, &facts) {
+                Outcome::NotYet { why } => assert!(why.contains("rate-limit-plan"), "{why}"),
+                other => panic!("a live sub-Job settled the step: {other:?}"),
             }
         }
     }
@@ -875,6 +1233,14 @@ mod tests {
             },
             Needs::Branch,
             Needs::Nothing,
+            Needs::SubJob {
+                workflow: "review".to_string(),
+                kind: SubJobKind::Review,
+            },
+            Needs::SubJob {
+                workflow: "plan".to_string(),
+                kind: SubJobKind::Workflow,
+            },
         ] {
             assert!(
                 matches!(decide(&want, &Facts::default()), Outcome::NotYet { .. }),
