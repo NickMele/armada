@@ -409,6 +409,13 @@ pub fn spawn<R: Run, C: Clock>(
         Some(&classified),
     );
     let workflow = read_workflow(place, &classification.workflow)?;
+    // **Every workflow it will reach has to exist before anything is spawned.**
+    // A `review` or a sub-Job step resolves its workflow at the moment its gate
+    // is reached, which is several paid exchanges in: a `bug` Job finds out its
+    // guild has no `review` only after `reproduce` and `fix` have run, and the
+    // money is spent whatever the reader does next. The check costs a directory
+    // read; the alternative costs a Job.
+    reachable_workflows_exist(place, &workflow)?;
     let budget = workflow::override_budget(workflow.budget, &options.budget)?;
 
     let store = place.store();
@@ -760,6 +767,39 @@ fn gate_of(place: &Where, workflow: &str, step: &str) -> Option<workflow::Verify
         .iter()
         .find(|candidate| candidate.id == step)
         .map(|candidate| candidate.verify.clone())
+}
+
+/// Refuse before spawning if any workflow this one can reach is missing.
+///
+/// **Transitive, because a referenced workflow may reference another.** The
+/// depth bound is the same one the gate enforces at run time; a guild whose
+/// workflows form a cycle is refused there and this walk simply stops rather
+/// than duplicating that argument in a second place.
+///
+/// The error is [`read_workflow`]'s own, unchanged — it already names
+/// `armada guild upgrade`, and a second wording for one condition is the drift
+/// `docs/glossary.md` exists to prevent.
+fn reachable_workflows_exist(place: &Where, from: &Workflow) -> Result<(), ArmadaError> {
+    let mut seen: Vec<String> = vec![from.name.clone()];
+    let mut queue: Vec<Workflow> = vec![from.clone()];
+    while let Some(flow) = queue.pop() {
+        for step in &flow.steps {
+            // A step names its sub-Job's workflow outright; `review_clean`
+            // names none and means the reviewer, which is a constant so that a
+            // Job under review cannot choose its own examiner.
+            let named = step.workflow.clone().or_else(|| {
+                (step.verify.must == workflow::Predicate::ReviewClean)
+                    .then(|| workflow::REVIEWER.to_string())
+            });
+            let Some(name) = named else { continue };
+            if seen.contains(&name) {
+                continue;
+            }
+            seen.push(name.clone());
+            queue.push(read_workflow(place, &name)?);
+        }
+    }
+    Ok(())
 }
 
 /// Read one workflow out of the guild.

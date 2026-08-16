@@ -610,6 +610,19 @@ fn spawn(scratch: &Scratch, run: &Harness, options: &Spawn) -> armada_core::enve
     data
 }
 
+/// The refusal a spawn that cannot succeed produces.
+fn spawn_err(scratch: &Scratch, run: &Harness, options: &Spawn) -> armada_core::error::ArmadaError {
+    fleet::spawn(
+        run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        options,
+        None,
+        &mut armada_helm::render::progress::Silent,
+    )
+    .expect_err("the spawn is refused")
+}
+
 /// Wait until a Job's transcript holds a finished turn.
 fn await_turn(scratch: &Scratch, uuid: &str) {
     let stream = armada_fleet::home::stream(&scratch.home.path().join(".armada"), uuid);
@@ -5230,6 +5243,54 @@ fn watch_drives_a_job_to_its_end_in_one_invocation() {
     assert_eq!(
         scratch.store().load(&data.uuid).unwrap().state,
         JobState::Done
+    );
+}
+
+/// **A guild missing a workflow the chosen one reaches is refused at `spawn`.**
+///
+/// The `bug` workflow's `review` step resolves the reviewer only when its gate
+/// is reached, which is two paid exchanges in — so a guild made before the
+/// reviewer shipped bought `reproduce` and `fix` before finding out. The check
+/// costs a directory read and the alternative costs a Job, and the money is
+/// gone whatever the reader does next.
+#[test]
+fn spawning_is_refused_when_a_workflow_the_bug_flow_reaches_is_missing() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    // The guild of somebody who ran `guild init` before the reviewer existed.
+    std::fs::remove_file(
+        scratch
+            .home
+            .path()
+            .join(".armada/guild/workflows/review.yml"),
+    )
+    .expect("the starter reviewer is there to remove");
+
+    let error = spawn_err(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..Default::default()
+        },
+    );
+
+    assert_eq!(error.r#where, armada_core::fleet::workflow::REVIEWER);
+    assert!(
+        error.message.contains("no workflow called `review`"),
+        "{error:?}"
+    );
+    assert!(
+        error
+            .next_action
+            .as_deref()
+            .unwrap_or_default()
+            .contains("armada guild upgrade"),
+        "the reader is not told what fixes it: {error:?}"
+    );
+    assert!(
+        scratch.started.borrow().is_empty(),
+        "a Drone was started for a Job that cannot finish"
     );
 }
 
