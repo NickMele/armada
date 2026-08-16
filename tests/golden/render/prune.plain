@@ -1,0 +1,8 @@
+armada
+
+  STATUS   VOLUME                  DETAIL
+  CLEAN    armada-a3f91c02_pgdata  79.0 MB
+  SKIPPED  armada-b7c14e90_pgdata  48.2 MB — armada's, in use
+  SKIPPED  someone-elses_pgdata    12.0 GB — not armada's
+
+PARTIAL  79.0 MB freed, 2 of 3 armada's

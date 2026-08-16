@@ -902,6 +902,7 @@ mod tests {
                 wall_clock_ms: 1,
             },
             needs_attention: needs,
+            acting: None,
         }
     }
 

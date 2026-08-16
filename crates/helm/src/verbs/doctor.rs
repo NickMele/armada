@@ -30,10 +30,12 @@
 //! nobody runs on a train, which is where you most want it.
 
 use armada_core::ctx::{Run, RunRequest};
+use armada_core::disk;
 use armada_core::envelope::{DoctorData, Envelope, Finding, Problem, Settled};
 use armada_core::error::ArmadaError;
 use armada_guild::layout::{self, Guild, DIRECTORIES};
 use armada_guild::{machine, memory, projector, repo};
+use armada_manifest::docker;
 use std::path::Path;
 
 use crate::verbs::guild::Where;
@@ -52,13 +54,18 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     // every fragment still as imported, and interleaving those with `manifest.db`
     // is what made a real reader ask which rows belonged together.
     let mut results = preflight::run(runner, &place.cwd, true).results;
-    results.push(drone_argv(runner, &place.cwd));
+    results.push(drone_argv(runner, &place.cwd, &place.armada_home));
     results.push(helm_argv(runner, &place.cwd, &place.armada_home));
     results.push(directories(&place.armada_home));
     results.extend(drift(runner, &guild));
     results.extend(fragments(&guild));
     results.extend(projection(place, &guild));
     results.push(store(&place.armada_home));
+    // **Last, and beside the store, because they answer the same question.**
+    // `manifest.db`'s reclaimable rows and Docker's reclaimable bytes are both
+    // "what has quietly accumulated", and a reader who has just been told about
+    // one is already asking about the other.
+    results.extend(docker_disk(runner, &place.cwd));
 
     let status = DoctorData::verdict(&results);
     Ok(Output::Doctor(Box::new(Envelope::ok(
@@ -112,8 +119,31 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
 /// and `stream-json`"* is one only the real validator can answer, and it answers
 /// it here for free. Probe 0 below is the one thing that must be settled before
 /// the binary is asked anything at all.
-fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
+fn drone_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
     use armada_core::fleet::drone as argv;
+
+    // **Probe 3: the relay's flag, on a document that registers no hook**
+    // (`020` §1). `--settings` is what carries a Drone's `Stop` hook, and its
+    // disappearance is the quietest failure of the lot: every Job still spawns,
+    // and none of them ever advances a step again. The document registers
+    // nothing, because a probe that fired a relay would tick the fleet about an
+    // exchange that never happened — and it is written under `~/.armada/`
+    // rather than beside the caller, since `doctor` runs in somebody's
+    // repository and must not leave a file in it.
+    //
+    // **Into a `~/.armada/` that already exists, and never creating one.**
+    // `doctor` is a read verb, and a machine with no `~/.armada/` is a finding
+    // three rows down — a probe that created the directory would answer the
+    // question `directories` is asking, and `armada init`'s whole first-run
+    // contract is that the directory is not there yet.
+    //
+    // **A path that will not take the file is not a finding either.** Failing
+    // `doctor` over a scratch write would report a machine as broken for a
+    // reason that has nothing to do with Claude Code; the probe simply runs
+    // without the flag, and every other check stands.
+    let no_hooks = armada_home.join(format!("probe-{}.json", argv::PROBE_SESSION));
+    let registered = (armada_home.is_dir() && std::fs::write(&no_hooks, argv::NO_HOOKS).is_ok())
+        .then(|| no_hooks.display().to_string());
 
     // **Probe 0: the brief cannot eat the flag behind it.** `--append-system-prompt`
     // takes a value, so a brief that were empty or flag-shaped would consume
@@ -123,7 +153,18 @@ fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
     // than only in a unit test because this is the vector this machine would
     // run, and because a probe whose flags had silently shifted by one would
     // then be validating a combination Armada does not use.
-    let probe = argv::probe_argv();
+    // **The probe carries the MCP flags too, for the reason above**: a machine
+    // that accepts `--mcp-config` is what makes a Drone able to report at all,
+    // and a probe missing the flag would validate a combination Armada does not
+    // run. Written beside the hooks document and on the same terms — into an
+    // existing `~/.armada/` only, and a path that will not take the file simply
+    // runs without it.
+    let probe_mcp = armada_home.join(format!("probe-{}.mcp.json", argv::PROBE_SESSION));
+    let attached = (armada_home.is_dir()
+        && std::fs::write(&probe_mcp, armada_core::helm::mcp_json("armada")).is_ok())
+    .then(|| probe_mcp.display().to_string());
+
+    let probe = argv::probe_argv(registered.as_deref(), attached.as_deref());
     if let Some(at) = probe.iter().position(|word| word == argv::APPEND) {
         let carried = probe.get(at + 1).map(String::as_str).unwrap_or("");
         if carried.trim().is_empty() || carried.starts_with('-') {
@@ -215,6 +256,11 @@ fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
             "report this to Armada: the doctor probe needs narrowing",
         );
     }
+
+    // The probe's scratch document goes with it: it is a fixed name beside the
+    // caller's directory, and leaving one behind on every `doctor` run would be
+    // litter in somebody's repository.
+    let _ = std::fs::remove_file(&no_hooks);
 
     Finding::settled(
         "drone argv",
@@ -724,6 +770,227 @@ fn store(armada_home: &Path) -> Finding {
     Finding::settled("manifest.db", Settled::Ok, detail)
 }
 
+/// The name both disk rows carry, so the render draws them as one check.
+const DOCKER_DISK: &str = "docker disk";
+
+/// The deadline on every docker call this check makes.
+///
+/// **The docker CLI has no client-side timeout** (`docs/traps.md`), and a
+/// `doctor` that hung against a wedged daemon would be a `doctor` nobody runs —
+/// which is worse than one that reports nothing about disk. Ten seconds is
+/// generous against the 0.34s these took with 171 volumes on the machine this
+/// was measured on.
+const DISK_PROBE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How much disk Docker is holding, **and how much of it is Armada's**.
+///
+/// This check exists because of a specific event: a macOS storage warning, on a
+/// machine holding 171 local volumes and 12.0 GB, 100% reclaimable. `doctor`
+/// already reports `manifest.db`'s row counts and the guild's drift, and this is
+/// the same shape of fact — something accumulating quietly that nothing else on
+/// the machine would ever mention.
+///
+/// # Two rows, because there are two remedies
+///
+/// | Row | Whose | What to run |
+/// |---|---|---|
+/// | the machine's | everything Docker holds | `docker volume prune`, which is **the reader's to run** |
+/// | Armada's | what carries an Armada owner label | `armada manifest clean --all` |
+///
+/// **They are never summed.** On the measured machine every one of those 171
+/// volumes was somebody else's compose work and **none carried an Armada
+/// label**, so a single "reclaimable" figure would have pointed the reader at
+/// Armada's verb for a problem Armada did not cause — or, reversed, at
+/// `docker volume prune` for containers a live workspace is still using.
+///
+/// # Neither row is ever a warning
+///
+/// **Docker being absent or not running is normal, not a fault.** Most machines
+/// running `armada doctor` are not running Docker at that moment, and a check
+/// that warned every time would make the command unsafe in a shell prompt — the
+/// property the module header says `doctor` exists to keep.
+///
+/// **Reclaimable disk is not a warning either**, which is the less obvious half.
+/// It is a fact about the machine rather than drift Armada can fix: `clean`
+/// removes a workspace's resources when that workspace is *dead*, so a live
+/// worktree's 2 GB is legitimately held and a row calling it a problem would be
+/// wrong every day the reader is working. The precedent is [`store`] directly
+/// above, which reports `manifest.db`'s reclaimable row count as `ok` and puts
+/// the command in the detail — a settled row may not carry a `remedy`, and the
+/// number is on screen either way, which is the whole of what was asked for.
+///
+/// # Ownership is read from the daemon, never from `df -v`'s label string
+///
+/// `docker system df -v` carries a `Labels` field, and reading ownership out of
+/// it would save a call. It is a **comma-joined string** (`docs/traps.md`), and
+/// this file's neighbouring rule is that a delimiter a value can contain is one
+/// that eventually attributes a resource to the wrong owner. So ownership comes
+/// from `docker volume ls --filter label=…`, which the daemon answers, and
+/// `df -v` contributes only the size, matched by name.
+fn docker_disk(runner: &impl Run, cwd: &Path) -> Vec<Finding> {
+    let ask = |argv: Vec<String>| -> Option<String> {
+        runner
+            .call(&RunRequest::new(argv, cwd.to_path_buf()).timeout(DISK_PROBE))
+            .ok()
+            .filter(|output| output.ok() && !output.timed_out)
+            .map(|output| output.stdout)
+    };
+
+    // **One JSON object per line, and the template rather than the columns.** A
+    // renamed field makes this exit non-zero; a renamed column would shift a
+    // whitespace split by one and report a count as a size.
+    let Some(stdout) = ask(argv(&["docker", "system", "df", "--format", "{{json .}}"])) else {
+        // Absent, not running, or wedged — all three are ordinary, and none of
+        // them is this machine's problem to fix right now.
+        return vec![Finding::settled(
+            DOCKER_DISK,
+            Settled::Ok,
+            "docker did not answer, so there is nothing to report",
+        )];
+    };
+
+    let usage = disk::parse_summary(&stdout);
+    if usage.rows.is_empty() && usage.unrecognised.is_empty() {
+        // It answered and said nothing Armada could read. **Reported as read
+        // rather than as empty**, because "no disk in use" and "the output
+        // changed shape" are different facts and only one of them is good news.
+        return vec![Finding::settled(
+            DOCKER_DISK,
+            Settled::Ok,
+            "docker answered in a shape armada could not read",
+        )];
+    }
+
+    let mut rows = vec![Finding::settled(
+        DOCKER_DISK,
+        Settled::Ok,
+        machine_detail(&usage),
+    )];
+
+    // Nothing on the machine means nothing to attribute, and two more docker
+    // calls to prove it.
+    let volumes = usage
+        .row(disk::DiskKind::Volumes)
+        .map_or(0, |row| row.total);
+    if volumes == 0 {
+        rows.push(Finding::settled(
+            DOCKER_DISK,
+            Settled::Ok,
+            "armada holds no volumes",
+        ));
+        return rows;
+    }
+
+    // **Both label namespaces, one call each.** Repeating `--filter label=…`
+    // ands the conditions, so asking for both in one call matches nothing —
+    // the same measured rule `docker::list_labelled` is built on, and the
+    // reason a pre-M1 volume stays attributable for one release.
+    let mut ours: Vec<String> = Vec::new();
+    let mut asked = false;
+    for label in [docker::LABEL_WORKSPACE, docker::LEGACY_LABEL_WORKSPACE] {
+        let listed = ask(argv(&[
+            "docker",
+            "volume",
+            "ls",
+            "-q",
+            "--filter",
+            &format!("label={label}"),
+        ]));
+        if let Some(listed) = listed {
+            asked = true;
+            for name in listed.lines().map(str::trim).filter(|l| !l.is_empty()) {
+                if !ours.iter().any(|seen| seen == name) {
+                    ours.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    let sizes = ask(argv(&[
+        "docker",
+        "system",
+        "df",
+        "-v",
+        "--format",
+        "{{json .}}",
+    ]))
+    .map(|stdout| disk::parse_verbose_volumes(&stdout));
+
+    rows.push(match (asked, sizes) {
+        (true, Some(sizes)) => {
+            let share = disk::split(&sizes, &ours);
+            Finding::settled(DOCKER_DISK, Settled::Ok, armada_detail(&share))
+        }
+        // The enumeration is the half that decides whose a volume is, so
+        // without it Armada says it does not know rather than guessing zero —
+        // "armada holds none of it" is exactly the reassuring sentence that
+        // must never be printed on a failed lookup.
+        _ => Finding::settled(
+            DOCKER_DISK,
+            Settled::Ok,
+            "armada's own share could not be read",
+        ),
+    });
+    rows
+}
+
+/// `docker`'s argv, as owned strings.
+fn argv(words: &[&str]) -> Vec<String> {
+    words.iter().map(|word| word.to_string()).collect()
+}
+
+/// The machine's row: **the number, and nothing else**.
+///
+/// **The remedy is deliberately not on this row.** At the 80 columns the render
+/// is frozen at, a detail carrying both the figures and a command truncates
+/// mid-word — and the half that gets cut is the command, which is the half that
+/// is worth reading. So this row is the fact and [`armada_detail`] below is the
+/// attribution plus the verb, which is also the order the reader asks in: how
+/// much, then whose, then what to run.
+fn machine_detail(usage: &disk::DiskUsage) -> String {
+    let held: Vec<String> = usage
+        .rows
+        .iter()
+        .filter(|row| row.total > 0)
+        .map(|row| crate::render::format::count(row.total as usize, row.kind.word()))
+        .collect();
+    let held = match held.is_empty() {
+        true => "nothing".to_string(),
+        false => held.join(", "),
+    };
+    let mut detail = format!(
+        "{} reclaimable in {held}",
+        disk::format_maybe(usage.reclaimable())
+    );
+    // **A type this version has no case for is disk being under-reported**, and
+    // the reader is the only one who can judge whether it matters. It goes last
+    // because it is the part that may safely be truncated: it names a thing to
+    // go and look at rather than a thing to do.
+    if !usage.unrecognised.is_empty() {
+        detail.push_str(&format!(
+            "; docker also reported {}, which armada does not know",
+            usage.unrecognised.join(", ")
+        ));
+    }
+    detail
+}
+
+/// Armada's row: **whose it is, and therefore which verb**.
+fn armada_detail(share: &disk::Share) -> String {
+    if share.armada_count == 0 {
+        // **The measured case, and the one worth spelling out.** A machine full
+        // of volumes none of which are Armada's should say so plainly and hand
+        // the reader the verb that will actually help — which is not one of
+        // Armada's.
+        return "none of it is armada's; `docker volume prune` is yours".to_string();
+    }
+    format!(
+        "armada holds {}, {}; `armada manifest clean --all`",
+        crate::render::format::count(share.armada_count, "volume"),
+        disk::format_maybe(share.armada_bytes)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1048,13 +1315,35 @@ mod tests {
     #[test]
     fn the_probe_runs_the_drones_own_argv_and_not_an_approximation() {
         let run = Watching(std::cell::RefCell::new(Vec::new()));
-        drone_argv(&run, Path::new("/tmp"));
+        drone_argv(&run, Path::new("/tmp"), Path::new("/tmp"));
 
         let probe = run.0.borrow().last().cloned().expect("a probe ran");
+        // **The relay's own settings, on the real path this check writes**
+        // (`020` §1). Passing `None` here would have let `--settings` vanish
+        // from the probe while `doctor` went on reporting the argv checked.
+        let registered = Path::new("/tmp").join(format!(
+            "probe-{}.json",
+            armada_core::fleet::drone::PROBE_SESSION
+        ));
+        // **And the MCP config, on the real path this check writes**, for the
+        // same reason: a probe that lost `--mcp-config` would still be reported
+        // as the argv checked, while the flag that decides whether a Drone can
+        // report at all went unexercised.
+        let attached = Path::new("/tmp").join(format!(
+            "probe-{}.mcp.json",
+            armada_core::fleet::drone::PROBE_SESSION
+        ));
         assert_eq!(
             probe,
-            armada_core::fleet::drone::probe_argv(),
+            armada_core::fleet::drone::probe_argv(
+                Some(&registered.display().to_string()),
+                Some(&attached.display().to_string()),
+            ),
             "the probe drifted from the Drone's own argv"
+        );
+        assert!(
+            std::fs::read_to_string(&registered).is_err(),
+            "the probe left its scratch document behind"
         );
     }
 
@@ -1073,14 +1362,23 @@ mod tests {
         use armada_core::fleet::drone;
 
         let run = Watching(std::cell::RefCell::new(Vec::new()));
-        drone_argv(&run, Path::new("/tmp"));
+        drone_argv(&run, Path::new("/tmp"), Path::new("/tmp"));
         let probe = run.0.borrow().last().cloned().expect("a probe ran");
 
         let at = probe
             .iter()
             .position(|word| word == drone::APPEND)
             .expect("the validator never saw the brief");
-        assert_eq!(probe[at + 1], drone::BRIEF, "{probe:?}");
+        // **Both halves of the one appended prompt reach the validator**: the
+        // reporting contract (`docs/reserved/019`) and Armada's own skill
+        // (`docs/reserved/008`), in that order. Asserted as a prefix and a
+        // suffix rather than an equality, because the flag is singular and the
+        // two are joined into one value.
+        assert!(probe[at + 1].starts_with(drone::BRIEF), "{probe:?}");
+        assert!(
+            probe[at + 1].ends_with(armada_core::skill::BODY),
+            "the validator never saw Armada's own skill"
+        );
         // The flag behind it survived, which is the collision this probe is
         // extended to cover: a swallowed `--permission-mode` is a Drone with no
         // posture, and `docs/reserved/011` is what that costs.
@@ -1104,7 +1402,7 @@ mod tests {
         // And the guard is wired: a healthy `claude` with a real brief is Ok,
         // which is the only branch that reaches the flag check below it.
         assert_eq!(
-            drone_argv(&Claude::healthy(), Path::new("/tmp")).status,
+            drone_argv(&Claude::healthy(), Path::new("/tmp"), Path::new("/tmp")).status,
             Health::Ok
         );
     }
@@ -1115,7 +1413,7 @@ mod tests {
     #[test]
     fn the_argv_probe_has_nothing_to_say_and_so_cannot_spend_a_token() {
         let run = Watching(std::cell::RefCell::new(Vec::new()));
-        drone_argv(&run, Path::new("/tmp"));
+        drone_argv(&run, Path::new("/tmp"), Path::new("/tmp"));
         let probe = run.0.borrow().last().cloned().unwrap();
 
         assert_eq!(
@@ -1127,6 +1425,8 @@ mod tests {
             armada_core::fleet::drone::PROBE_SESSION,
             "a prompt",
             &armada_core::fleet::drone::Posture::default(),
+            Some("/s.json"),
+            Some("/m.json"),
         );
         assert!(
             !probe.iter().any(|word| word == "a prompt"),
@@ -1141,7 +1441,7 @@ mod tests {
 
     #[test]
     fn a_claude_that_offers_every_flag_and_refuses_nothing_is_ok() {
-        let finding = drone_argv(&Claude::healthy(), Path::new("/tmp"));
+        let finding = drone_argv(&Claude::healthy(), Path::new("/tmp"), Path::new("/tmp"));
         assert_eq!(finding.status, Health::Ok);
         assert!(finding.remedy.is_none());
     }
@@ -1156,10 +1456,54 @@ mod tests {
                 ..Claude::healthy()
             },
             Path::new("/tmp"),
+            Path::new("/tmp"),
         );
         assert_eq!(finding.status, Health::Missing);
         assert!(finding.detail.contains("--verbose"), "{}", finding.detail);
         assert!(finding.remedy.is_some(), "a finding without a remedy");
+    }
+
+    /// **The Drone's own `--append-system-prompt`, and this is the whole of the
+    /// preflight for it** (`docs/reserved/008`).
+    ///
+    /// It carries Armada's own skill into every headless turn — *do not edit
+    /// `armada.yml`, propose it* — and a `claude` that dropped the flag would
+    /// take every Job with it, because the flag is in the argv unconditionally.
+    /// Asserting the argv proves Armada built the string it meant to; this is
+    /// the half that proves the binary still accepts it, which is the rule the
+    /// `--verbose` trap wrote.
+    #[test]
+    fn a_claude_that_no_longer_appends_a_system_prompt_takes_every_drone_with_it() {
+        assert!(
+            armada_core::fleet::drone::FLAGS.contains(&armada_core::fleet::drone::APPEND),
+            "the flag that carries Armada's own skill is not checked at all"
+        );
+        let finding = drone_argv(
+            &Claude {
+                flags: armada_core::fleet::drone::FLAGS
+                    .iter()
+                    .filter(|flag| **flag != armada_core::fleet::drone::APPEND)
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                ..Claude::healthy()
+            },
+            Path::new("/tmp"),
+            Path::new("/tmp"),
+        );
+        assert_eq!(finding.status, Health::Missing);
+        assert!(
+            finding.detail.contains(armada_core::fleet::drone::APPEND),
+            "{}",
+            finding.detail
+        );
+        // Inverted once: the same probe against a `claude` that still offers it
+        // is `Ok`, so the finding is about the missing flag rather than about
+        // the fixture.
+        assert_eq!(
+            drone_argv(&Claude::healthy(), Path::new("/tmp"), Path::new("/tmp")).status,
+            Health::Ok
+        );
     }
 
     /// **The specific failure this check was added after.** The flags all exist
@@ -1172,6 +1516,7 @@ mod tests {
                     "Error: When using --print, --output-format=stream-json requires --verbose",
                 ..Claude::healthy()
             },
+            Path::new("/tmp"),
             Path::new("/tmp"),
         );
         assert_eq!(finding.status, Health::Missing);
@@ -1201,7 +1546,7 @@ mod tests {
                 })
             }
         }
-        let finding = drone_argv(&Spending, Path::new("/tmp"));
+        let finding = drone_argv(&Spending, Path::new("/tmp"), Path::new("/tmp"));
         assert_eq!(finding.status, Health::Partial, "a spend was reported ok");
         assert!(
             finding.detail.contains("cost nothing"),
@@ -1227,7 +1572,7 @@ mod tests {
                 })
             }
         }
-        let finding = drone_argv(&Absent, Path::new("/tmp"));
+        let finding = drone_argv(&Absent, Path::new("/tmp"), Path::new("/tmp"));
         assert_eq!(finding.status, Health::Offline);
         assert!(
             !finding.status.is_failure(),
@@ -1625,5 +1970,281 @@ mod tests {
         assert_eq!(written(&["a", "b", "c"]), "a, b and c");
         let none: [&str; 0] = [];
         assert_eq!(written(&none), "");
+    }
+
+    // ------------------------------------------------------------ docker disk
+
+    /// A docker daemon that answers whatever the test wants it to, and records
+    /// what it was asked.
+    ///
+    /// **Every reply here is real output** measured on darwin against Docker
+    /// 29.6.2 — the 171 volumes and 12.01GB are the machine this check was
+    /// written for. A fake carrying invented output would prove only that the
+    /// parser reads the fake.
+    struct Daemon {
+        summary: Option<&'static str>,
+        owned: Option<&'static str>,
+        verbose: Option<&'static str>,
+        seen: std::cell::RefCell<Vec<Vec<String>>>,
+    }
+
+    impl Daemon {
+        fn measured() -> Daemon {
+            Daemon {
+                summary: Some(MEASURED_SUMMARY),
+                // The measured machine: every one of the 171 was somebody
+                // else's compose work, and none carried an Armada label.
+                owned: Some(""),
+                verbose: Some(MEASURED_VERBOSE),
+                seen: std::cell::RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl Run for Daemon {
+        fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+            self.seen.borrow_mut().push(request.argv.clone());
+            let argv: Vec<&str> = request.argv.iter().map(String::as_str).collect();
+            let reply = match argv.as_slice() {
+                ["docker", "system", "df", "-v", ..] => self.verbose,
+                ["docker", "system", "df", ..] => self.summary,
+                ["docker", "volume", "ls", ..] => self.owned,
+                _ => Some(""),
+            };
+            Ok(RunOutput {
+                code: Some(if reply.is_some() { 0 } else { 1 }),
+                signal: None,
+                stdout: reply.unwrap_or_default().to_string(),
+                stderr: String::new(),
+                timed_out: false,
+            })
+        }
+    }
+
+    const MEASURED_SUMMARY: &str = concat!(
+        r#"{"Active":"0","Reclaimable":"4.171MB (100%)","Size":"4.171MB","TotalCount":"1","Type":"Images"}"#,
+        "\n",
+        r#"{"Active":"0","Reclaimable":"0B","Size":"0B","TotalCount":"0","Type":"Containers"}"#,
+        "\n",
+        r#"{"Active":"0","Reclaimable":"12.01GB (100%)","Size":"12.01GB","TotalCount":"171","Type":"Local Volumes"}"#,
+        "\n",
+        r#"{"Active":"0","Reclaimable":"0B","Size":"0B","TotalCount":"0","Type":"Build Cache"}"#,
+    );
+
+    const MEASURED_VERBOSE: &str = concat!(
+        r#"{"Images":[],"Containers":[],"BuildCache":[],"Volumes":["#,
+        r#"{"Name":"someone-elses_pgdata","Size":"12.01GB"},"#,
+        r#"{"Name":"armada-a3f91c02_pgdata","Size":"79.02MB"}]}"#,
+    );
+
+    fn details(runner: &impl Run) -> Vec<String> {
+        docker_disk(runner, Path::new("/srv/repo"))
+            .into_iter()
+            .map(|finding| finding.detail)
+            .collect()
+    }
+
+    /// **The measured machine, and the row he would have seen.** 171 volumes,
+    /// 12.0 GB reclaimable — and the second row saying none of it is Armada's,
+    /// which is what sends him to the right verb.
+    #[test]
+    fn the_measured_machine_reports_its_numbers_and_says_none_of_it_is_armadas() {
+        let rows = details(&Daemon::measured());
+        assert_eq!(rows.len(), 2, "{rows:#?}");
+        assert!(rows[0].contains("171 volumes"), "{}", rows[0]);
+        assert!(rows[0].contains("12.0 GB reclaimable"), "{}", rows[0]);
+        assert!(rows[1].contains("none of it is armada's"), "{}", rows[1]);
+        assert!(rows[1].contains("docker volume prune"), "{}", rows[1]);
+    }
+
+    /// **The two remedies never appear on one row**, because acting on the wrong
+    /// one either deletes somebody's database or leaves the disk full.
+    #[test]
+    fn the_two_remedies_never_appear_on_one_row() {
+        let rows = details(&Daemon::measured());
+        assert!(!rows[0].contains("armada manifest clean"), "{}", rows[0]);
+        assert!(!rows[0].contains("docker volume prune"), "{}", rows[0]);
+        assert!(!rows[1].contains("armada manifest clean"), "{}", rows[1]);
+    }
+
+    /// Armada holding something says so, with the verb that releases what is
+    /// dead — the inverse of the measured case above.
+    #[test]
+    fn a_volume_armada_owns_is_attributed_to_armada_with_its_own_remedy() {
+        let daemon = Daemon {
+            owned: Some("armada-a3f91c02_pgdata\n"),
+            ..Daemon::measured()
+        };
+        let rows = details(&daemon);
+        assert!(rows[1].contains("1 volume"), "{}", rows[1]);
+        assert!(rows[1].contains("79.0 MB"), "{}", rows[1]);
+        assert!(
+            rows[1].contains("armada manifest clean --all"),
+            "{}",
+            rows[1]
+        );
+    }
+
+    /// **Docker being absent or not running is normal, not a fault.** One row,
+    /// `ok`, and `doctor` still passes — a check that warned every run on a
+    /// machine not running Docker would make the command unusable in a prompt.
+    #[test]
+    fn a_docker_that_does_not_answer_is_one_ok_row_and_never_a_warning() {
+        let daemon = Daemon {
+            summary: None,
+            ..Daemon::measured()
+        };
+        let rows = docker_disk(&daemon, Path::new("/srv/repo"));
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, Health::Ok);
+        assert!(rows[0].detail.contains("did not answer"), "{rows:#?}");
+        assert_eq!(DoctorData::verdict(&rows), armada_core::error::Status::Ok);
+    }
+
+    /// The whole check is read-only. **Inverted once**: if any argv here ever
+    /// mutates, this is the test that says so.
+    #[test]
+    fn nothing_this_check_runs_can_remove_anything() {
+        let daemon = Daemon::measured();
+        docker_disk(&daemon, Path::new("/srv/repo"));
+        for argv in daemon.seen.borrow().iter() {
+            assert!(
+                !argv.iter().any(|word| matches!(
+                    word.as_str(),
+                    "rm" | "prune" | "remove" | "-f" | "--force" | "down"
+                )),
+                "doctor must never mutate: {argv:?}"
+            );
+        }
+    }
+
+    /// **Both namespaces, one call each.** Repeating `--filter label=…` ands the
+    /// conditions, so a single call asking for both matches nothing — and a
+    /// pre-M1 volume would be silently attributed to nobody.
+    #[test]
+    fn ownership_is_asked_in_both_label_namespaces() {
+        let daemon = Daemon::measured();
+        docker_disk(&daemon, Path::new("/srv/repo"));
+        let filters: Vec<String> = daemon
+            .seen
+            .borrow()
+            .iter()
+            .filter(|argv| argv.get(1).map(String::as_str) == Some("volume"))
+            .filter_map(|argv| argv.last().cloned())
+            .collect();
+        assert_eq!(
+            filters,
+            vec![
+                "label=armada.workspace".to_string(),
+                "label=char.workspace".to_string()
+            ]
+        );
+    }
+
+    /// **Ownership is never read out of `df -v`'s label string.** It is
+    /// comma-joined, and a delimiter a value can contain eventually attributes a
+    /// volume to the wrong owner — so the daemon is asked instead.
+    #[test]
+    fn ownership_comes_from_the_daemon_and_not_from_the_verbose_label_field() {
+        // `df -v` claims the volume is Armada's; the daemon says it is not.
+        let daemon = Daemon {
+            verbose: Some(concat!(
+                r#"{"Volumes":[{"Name":"someone-elses_pgdata","Size":"12.01GB","#,
+                r#""Labels":"armada.workspace=a3f91c02"}]}"#,
+            )),
+            owned: Some(""),
+            ..Daemon::measured()
+        };
+        assert!(details(&daemon)[1].contains("none of it is armada's"));
+    }
+
+    /// **The reassuring sentence must never be printed on a failed lookup.** A
+    /// lookup that did not happen is *unknown*, and reporting it as "none of it
+    /// is armada's" would be a claim nothing checked.
+    #[test]
+    fn an_ownership_lookup_that_failed_says_so_rather_than_claiming_none() {
+        let daemon = Daemon {
+            owned: None,
+            ..Daemon::measured()
+        };
+        let rows = details(&daemon);
+        assert_eq!(rows[1], "armada's own share could not be read");
+        assert!(!rows[1].contains("none of it is armada's"));
+    }
+
+    /// A machine with no volumes at all does not spend two more docker calls
+    /// proving Armada owns none of them.
+    #[test]
+    fn a_machine_with_no_volumes_asks_nothing_further() {
+        let daemon = Daemon {
+            summary: Some(
+                r#"{"Active":"0","Reclaimable":"0B","Size":"0B","TotalCount":"0","Type":"Local Volumes"}"#,
+            ),
+            ..Daemon::measured()
+        };
+        let rows = details(&daemon);
+        assert_eq!(rows[1], "armada holds no volumes");
+        assert!(!daemon
+            .seen
+            .borrow()
+            .iter()
+            .any(|argv| argv.get(1).map(String::as_str) == Some("volume")));
+    }
+
+    /// **A type this version has no case for is disk being under-reported.**
+    /// Naming it is the only way the reader can judge whether it matters.
+    #[test]
+    fn a_type_docker_grew_since_this_shipped_is_named_on_the_row() {
+        let daemon = Daemon {
+            summary: Some(concat!(
+                r#"{"Active":"0","Reclaimable":"0B","Size":"0B","TotalCount":"0","Type":"Local Volumes"}"#,
+                "\n",
+                r#"{"Active":"0","Reclaimable":"1GB","Size":"1GB","TotalCount":"3","Type":"Snapshots"}"#,
+            )),
+            ..Daemon::measured()
+        };
+        assert!(
+            details(&daemon)[0].contains("Snapshots"),
+            "{:#?}",
+            details(&daemon)
+        );
+    }
+
+    /// Output that changed shape entirely reads as *could not be read*, never as
+    /// an empty machine — one of those is good news and the other is not.
+    #[test]
+    fn output_in_a_shape_armada_cannot_read_is_not_reported_as_an_empty_machine() {
+        let daemon = Daemon {
+            summary: Some("TYPE  TOTAL  ACTIVE  SIZE  RECLAIMABLE\n"),
+            ..Daemon::measured()
+        };
+        let rows = details(&daemon);
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].contains("could not read"), "{}", rows[0]);
+    }
+
+    /// Every docker call this check makes carries Armada's own deadline. The
+    /// docker CLI has none of its own, and a `doctor` that hangs is one nobody
+    /// runs.
+    #[test]
+    fn every_docker_call_this_check_makes_has_a_deadline() {
+        struct Deadlines(std::cell::RefCell<Vec<Option<std::time::Duration>>>);
+        impl Run for Deadlines {
+            fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+                self.0.borrow_mut().push(request.timeout);
+                Ok(RunOutput {
+                    code: Some(0),
+                    signal: None,
+                    stdout: MEASURED_SUMMARY.to_string(),
+                    stderr: String::new(),
+                    timed_out: false,
+                })
+            }
+        }
+        let runner = Deadlines(std::cell::RefCell::new(Vec::new()));
+        docker_disk(&runner, Path::new("/srv/repo"));
+        let seen = runner.0.borrow();
+        assert!(!seen.is_empty());
+        assert!(seen.iter().all(|t| *t == Some(DISK_PROBE)), "{seen:?}");
     }
 }

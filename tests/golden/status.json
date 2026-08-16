@@ -24,7 +24,11 @@
         },
         "owns": [
           "container:armada-<workspace>-api",
+          "pgid:<pgid>",
           "volume:pgdata"
+        ],
+        "stale": [
+          "pgid:<pgid>"
         ]
       }
     ],

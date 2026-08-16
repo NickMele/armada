@@ -25,10 +25,23 @@ running.
 
 **What it reports is an observation, not the record.** A Drone runs detached and updates nothing
 when its turn ends, so the state on disk is what a verb last wrote — and this is the verb that
-looks at the two things that can be looked at and says what is actually true. `STALLED` is the
-one that could only ever come from here: a Job is stalled when its Drone produced no transcript
-activity, which is the one condition a busy Drone cannot report about itself
-([`../../PLAN.md`](../../PLAN.md) §14.3).
+looks at the two things that can be looked at and says what is actually true. `STALLED` and
+`SILENT` are the two that could only ever come from here — both are conditions a busy Drone
+cannot report about itself ([`../../PLAN.md`](../../PLAN.md) §14.3):
+
+| Word | Means |
+|---|---|
+| `STALLED` | its Drone is gone and nothing has ticked the Job |
+| `SILENT` | its Drone ended an exchange with neither a verdict nor a question, so what it decided is only in a transcript nothing reads |
+
+**Both were drawn as `RUNNING` until [`020`](../../reserved/020-the-tui-decided.md) §6**, which
+is how a dead Job read as alive for eight hours: a Drone that had exited got the same word as a
+Drone that was working. What tells them apart from rest is the tick watermark on the record —
+whether anything has gated the exchange that just ended.
+
+**A Job resting between exchanges is `RUNNING` for as long as the relay takes**, which is a
+second or so ([`tick.md`](tick.md)). If it is longer than that, the relay was lost, and the row
+now says so.
 
 **It writes none of it back.** A read verb that persisted would make `armada fleet ls | head` a
 change to the fleet; [`kill.md`](kill.md) and [`answer.md`](answer.md) are the verbs that
@@ -45,7 +58,7 @@ Read-only. Never resumes or interrupts a Job.
 ```
   STATUS   JOB            ID        WORKFLOW  DETAIL                 SPENT  TIME
   RUNNING  rate-limit     c19d0a34  feature   implement, check gre…  $2.10   14m
-  STALLED  xlsx-report    3d9cc7ba  bug       no output for 6m       $4.60   22m
+  STALLED  xlsx-report    3d9cc7ba  bug       Drone gone, not ticked $4.60   22m
   BLOCKED  release-merge  7f2ab618  feature   wants CI timeout rai…  $1.25    1h
   QUEUED   nightly-flake  e52eaad5  bug       -                          -     -
 

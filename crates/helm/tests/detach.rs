@@ -56,6 +56,29 @@ manifest:
         slow: { cmd: \"sleep 3\", scope: component }
 ";
 
+/// Two checks: one held open until the test lets it go, one the interloper
+/// selects.
+///
+/// **The gate file rather than another `sleep`**, because what is asserted is
+/// what the record says *while the run is still deciding*, and a fixture that
+/// depends on a sleep outlasting three subprocess spawns is a fixture that
+/// reports a slow machine as a defect. The loop exits the moment the file
+/// appears, so nothing here outlives the test either — which is the rule this
+/// suite's module doc states and has already been burned by twice.
+const HELD_OPEN: &str = "\
+manifest:
+  version: 1
+  components:
+    app:
+      root: src
+      checks:
+        held:
+          cmd: \"until [ -f gate ]; do sleep 0.05; done\"
+          shell: true
+          scope: component
+        quick: { cmd: \"./exiter.sh 0\", scope: component }
+";
+
 fn envelope(output: &std::process::Output) -> serde_json::Value {
     serde_json::from_slice(&output.stdout).unwrap_or_else(|e| {
         panic!(
@@ -259,6 +282,55 @@ fn detach_returns_while_the_run_is_still_going_and_status_says_so() {
     );
 }
 
+/// **A running check's clock moves between two polls of the same run.**
+///
+/// It did not. `State::now_mono` is the last reading the *shell* reported, and
+/// a detached shell writes its journal at step boundaries — so `--status` read
+/// a check's start time, subtracted it from a `now` frozen at that same moment,
+/// and reported the same `duration_ms` for as long as the check ran. Measured:
+/// a check thirteen minutes into a `cargo test` reported `duration_ms: 786`,
+/// and repeated it on every poll.
+///
+/// That is worse than reporting nothing. A duration that does not move while
+/// the thing it measures does is read as evidence the run is wedged — which is
+/// exactly the conclusion it produced.
+///
+/// The sleep here is the point of the test and cannot be tuned out: what is
+/// being asserted is that wall-clock passing between two reads of one unchanged
+/// record changes the answer.
+#[test]
+fn a_running_checks_duration_advances_between_two_polls() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", SLOW);
+    machine.run(&repo, &["manifest", "init"]);
+
+    let started = envelope(&machine.run(&repo, &["manifest", "check", "--detach", "--json"]));
+    let pgid = pgid_of(&started);
+    let run = started["data"]["run_id"]
+        .as_str()
+        .expect("a run id")
+        .to_string();
+
+    let first = poll_until_running(&machine, &repo, &run);
+    std::thread::sleep(Duration::from_millis(600));
+    let second = envelope(&machine.run(&repo, &["manifest", "check", "--status", &run, "--json"]));
+    stop(pgid);
+
+    let duration = |e: &serde_json::Value| -> u64 {
+        e["data"]["results"][0]["duration_ms"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("a running check reports how long it has been running: {e}"))
+    };
+
+    assert_eq!(second["data"]["results"][0]["status"], "RUNNING");
+    let (before, after) = (duration(&first), duration(&second));
+    assert!(
+        after >= before + 400,
+        "600ms passed between two polls of one running check, but its duration went \
+         {before}ms -> {after}ms — the reader is subtracting from the writer's frozen clock"
+    );
+}
+
 /// **The group is recorded as owned**, which is what makes a detached run
 /// reclaimable by the same pass that reclaims an orphaned service or Drone.
 /// Without the row, an `armada` that died mid-run would leave a process nothing
@@ -373,6 +445,82 @@ fn a_killed_run_is_reported_dead_rather_than_still_running() {
             .contains("detach.log"),
         "nothing points at the detached run's own output: {after}"
     );
+}
+
+// ------------------------------------------------ the run belongs to one process
+
+/// **A process that only *inherited* `ARMADA_DETACH_RUN` is not the run.**
+///
+/// Measured, on run `01M048KKTG19V63A` of this repository: `armada:test` runs
+/// `cargo test --workspace`, `crates/helm/tests/dogfood.rs` runs `armada
+/// manifest check armada:fmt` in the repository root with a scratch `$HOME`,
+/// and PLAN.md §4.5 had handed that invocation the outer run's variable through
+/// two layers of children. It adopted the run id and rewrote `state.json` with
+/// a record of its own — one check, `PASS`, `finished` — over a plan of five
+/// checks that were still running. Both records parsed; nothing was torn. A
+/// `--status` landing in the window reported `PASS · 1 passed, 0 failed`, which
+/// is the one wrong answer a merge gate acts on.
+///
+/// The three assertions are the three halves of that failure: the nested
+/// invocation runs as itself, the outer record still describes the run that
+/// wrote it, and `--status` still reports a run in flight as in flight.
+#[test]
+fn an_invocation_that_only_inherited_the_detach_variable_starts_its_own_run() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", HELD_OPEN);
+    machine.run(&repo, &["manifest", "init"]);
+
+    let started = envelope(&machine.run(&repo, &["manifest", "check", "--detach", "--json"]));
+    let pgid = pgid_of(&started);
+    let run = started["data"]["run_id"]
+        .as_str()
+        .expect("a run id")
+        .to_string();
+    poll_until_running(&machine, &repo, &run);
+
+    // **The interloper, reproduced rather than imagined.** The same repository,
+    // the variable inherited from the run above it, and a scratch `$HOME` —
+    // which is what the dogfood suite gives the `armada` it runs, and the
+    // reason no run lease contended: the outer run's lease is in a
+    // `manifest.db` this invocation cannot see.
+    let elsewhere = tempfile::tempdir().expect("a second scratch home");
+    let nested = envelope(&machine.run_with_env(
+        &repo,
+        &["manifest", "check", "app:quick", "--json"],
+        &[
+            ("HOME", elsewhere.path().to_str().expect("a UTF-8 path")),
+            (armada_helm::verbs::check::DETACH_RUN_VAR, &run),
+        ],
+    ));
+
+    let outer = envelope(&machine.run(&repo, &["manifest", "check", "--status", &run, "--json"]));
+    std::fs::write(repo.join("gate"), b"").expect("the held check is let go");
+    let done = poll_until_done(&machine, &repo, &run);
+    stop(pgid);
+
+    let ids: Vec<&str> = outer["data"]["results"]
+        .as_array()
+        .expect("results[]")
+        .iter()
+        .filter_map(|row| row["id"].as_str())
+        .collect();
+    assert_eq!(
+        ids,
+        ["app:held", "app:quick"],
+        "the outer run's plan was replaced by a nested invocation's: {outer}"
+    );
+    assert_eq!(
+        outer["status"], "RUNNING",
+        "a run still holding a check open reported a verdict: {outer}"
+    );
+    assert_ne!(
+        nested["data"]["run_id"], run,
+        "the nested invocation wrote into the run above it: {nested}"
+    );
+    // And the run it interrupted still finishes, with the verdict it was always
+    // going to reach — a guard that stopped the clobber by stopping the run
+    // would pass every assertion above.
+    assert_eq!(done["status"], "PASS", "{done}");
 }
 
 // -------------------------------------------------------------- the refusals

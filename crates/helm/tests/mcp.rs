@@ -20,7 +20,7 @@ use armada_core::ctx::{Clock, Run, RunOutput, RunRequest, SpawnError};
 use armada_core::envelope::Evidence;
 use armada_core::fleet::job::{self as job, Handle, Job, Spend, StepEvent};
 use armada_core::fleet::workflow::{Budget, OnExhausted};
-use armada_core::fleet::{JobState, Verdict};
+use armada_core::fleet::{JobState, Subject, Verdict};
 use armada_fleet::inbox;
 use armada_fleet::jobs::Store;
 use armada_helm::mcp::{tool_names, Belt};
@@ -145,6 +145,8 @@ impl Machine {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            ticked_turns: 0,
+            doing: None,
         };
         Store::at(&place.armada_home).save(&record).expect("saved");
         if !transcript.is_empty() {
@@ -627,6 +629,124 @@ fn an_entry_answered_before_the_wait_comes_back_answered() {
     assert_eq!(entries[0].answered.as_deref(), Some("yes, behind a flag"));
 }
 
+// ----------------------------------------------------------------- proposing
+
+/// **`docs/reserved/008`'s evidence, end to end.** A Drone that learned
+/// something the manifest does not say raises it, and what arrives is a row in
+/// the inbox with an id — `Origin::Raised`, the id space `001` settled, and no
+/// fifth store.
+#[test]
+fn a_proposal_arrives_as_a_raised_item_with_an_id() {
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+    let run = Recorder::new("unused");
+
+    let output = fleet::propose(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        Subject::Manifest,
+        "checks.lint runs `cargo clippy` but the repo's own script also passes --deny warnings",
+    )
+    .expect("raised");
+
+    let entries = machine.inbox();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].job, "tidy-otter");
+    assert!(entries[0].is_open(), "a proposal is a row still yours");
+    // **The subject is in the body**, because an inbox entry is read out of
+    // context and a bare sentence about a check leaves a reader guessing which
+    // file it is about.
+    assert!(
+        entries[0]
+            .body
+            .starts_with("proposes a change to the manifest:"),
+        "{}",
+        entries[0].body
+    );
+
+    let payload = json(&output);
+    // The id comes back, which is what makes the row nameable one at a time.
+    assert!(payload.contains(&entries[0].uuid), "{payload}");
+    assert!(payload.contains("\"subject\": \"manifest\""), "{payload}");
+
+    // **Nothing was started and nothing was written but the entry.** A proposal
+    // is not a change: Armada does not run an editor, a check, or a model to
+    // decide whether the Drone is right.
+    assert!(
+        run.seen.borrow().is_empty(),
+        "proposing reached for a process: {:?}",
+        run.seen.borrow()
+    );
+}
+
+/// **It does not wait, and that is the whole difference from `fleet.ask_human`.**
+///
+/// `ask_human` polls the inbox until an answer or a deadline; a Drone that had
+/// to do that to say *this check name looks stale* would spend its own wall
+/// clock ceiling telling somebody something they can read tomorrow.
+///
+/// Asserted through the clock rather than through elapsed time, because the
+/// suite has no real one: `FrozenClock` records nothing slept.
+#[test]
+fn a_proposal_returns_without_waiting_for_anybody() {
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    fleet::propose(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        Subject::Guild,
+        "the bug workflow's review step is always skipped for this person",
+    )
+    .expect("raised");
+
+    let entries = machine.inbox();
+    assert_eq!(entries.len(), 1);
+    assert!(
+        entries[0].answered.is_none(),
+        "it came back with an answer nobody gave"
+    );
+    assert!(
+        entries[0].body.contains("to the guild:"),
+        "{}",
+        entries[0].body
+    );
+}
+
+/// **An empty proposal is refused rather than filed.** The inbox is append-only,
+/// so a row whose body says nothing is there for good and cannot be closed with
+/// any confidence.
+#[test]
+fn a_proposal_with_nothing_in_it_is_refused_and_writes_no_row() {
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    let error = fleet::propose(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        Subject::Manifest,
+        "   \n  ",
+    )
+    .expect_err("an empty proposal is not a proposal");
+
+    assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
+    assert!(machine.inbox().is_empty(), "a blank row was filed anyway");
+    // Inverted once: the same call with a body succeeds, so the refusal is
+    // about the body and not about the fixture.
+    fleet::propose(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        Subject::Manifest,
+        "the `test` check no longer exists",
+    )
+    .expect("raised");
+    assert_eq!(machine.inbox().len(), 1);
+}
+
 // ------------------------------------------------------------------ verdicts
 
 /// **The rule that keeps the loop honest** (PLAN.md §14.3). An agent asserting
@@ -767,7 +887,7 @@ fn a_drone_is_offered_nothing_that_spawns_and_the_belts_are_disjoint() {
     let drone = tool_names(Belt::Drone);
     let helm = tool_names(Belt::Helm);
 
-    assert_eq!(drone.len(), 3, "{drone:?}");
+    assert_eq!(drone.len(), 4, "{drone:?}");
     for tool in &drone {
         assert!(!tool.contains("spawn"), "a Drone was offered `{tool}`");
         assert!(!helm.contains(tool), "`{tool}` is on both belts");

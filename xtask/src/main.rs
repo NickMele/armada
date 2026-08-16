@@ -11,6 +11,7 @@ mod boundaries;
 mod docs;
 mod keys;
 mod privacy;
+mod reserved;
 mod xref;
 
 use std::path::{Path, PathBuf};
@@ -23,6 +24,9 @@ cargo xtask <command>
   xref            resolve every §N.N against the heading index
   blocks          parse every fenced yaml / json / sh block
   keys            config keys in examples vs prose (-v lists one-sided keys)
+  reserved        docs/reserved's numbering: the filename and the frontmatter
+                  agree, no two designs claim one id, each has an index row,
+                  and every citation of one resolves
   privacy         the ARCHITECTURE.md §2.4 leak rules, over every tracked file
   history         the same rules over every ref and commit — a report, not a gate
   boundaries      the ARCHITECTURE.md §1.5 and §1.9 layers contract, over the
@@ -71,6 +75,16 @@ fn main() -> ExitCode {
             findings.extend(keys::check(&corpus, verbose));
             ran.push("keys");
         }
+        Some("reserved") => match reserved::check(&corpus, &root) {
+            Ok(f) => {
+                findings.extend(f);
+                ran.push("reserved");
+            }
+            Err(e) => {
+                eprintln!("xtask: reserved: {e}");
+                return ExitCode::from(2);
+            }
+        },
         Some("boundaries") => match boundaries::check(&root) {
             Ok(f) => {
                 findings.extend(f);
@@ -106,6 +120,16 @@ fn main() -> ExitCode {
             findings.extend(blocks::check(&corpus));
             findings.extend(keys::check(&corpus, verbose));
             ran.extend(["xref", "blocks", "keys"]);
+            match reserved::check(&corpus, &root) {
+                Ok(f) => {
+                    findings.extend(f);
+                    ran.push("reserved");
+                }
+                Err(e) => {
+                    eprintln!("xtask: reserved: {e}");
+                    return ExitCode::from(2);
+                }
+            }
             match privacy::check(&root) {
                 Ok(f) => {
                     findings.extend(f);

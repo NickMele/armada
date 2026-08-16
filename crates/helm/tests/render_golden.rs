@@ -34,9 +34,9 @@ use armada_core::envelope::{
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxData, InboxRow,
     InitData, InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem,
-    Projection, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, SettingRow,
-    SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, TickData,
-    TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData, Window,
+    Projection, Released, ResolvedSkillView, ResultRow, RunView, ScanData, ServicesData,
+    SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem,
+    TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData, Window,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -429,6 +429,30 @@ fn status_matches_its_fixture() {
         "network:armada-3d9cc7ba".to_string(),
         "pgid:4212".to_string(),
         "volume:pgdata".to_string(),
+    ];
+    // **The one stale row is fourth in `owns`, so the fixture pins the reorder
+    // and not merely the word.** The human render names three and counts the
+    // rest; left in sorted order the leaked group would fall into the `+2` and a
+    // reader would never see the only row they can act on.
+    row.stale = vec!["pgid:4212".to_string()];
+    // A run in flight and one that stopped without deciding, because those are
+    // the only two words this table ever prints and a fixture with one of them
+    // pins half a rule.
+    row.runs = vec![
+        RunView {
+            run_id: "01M048YQMSD6YP48".to_string(),
+            status: Status::Running,
+            pgid: 4212,
+            log: ".armada/run/01M048YQMSD6YP48/detach.log".to_string(),
+            started_at: "2026-08-09T14:02:11Z".to_string(),
+        },
+        RunView {
+            run_id: "01M048KKTG19V63A".to_string(),
+            status: Status::Dead,
+            pgid: 4098,
+            log: ".armada/run/01M048KKTG19V63A/detach.log".to_string(),
+            started_at: "2026-08-09T13:40:02Z".to_string(),
+        },
     ];
     let output = Output::Status(Box::new(Envelope::ok(
         "status",
@@ -1041,6 +1065,95 @@ fn armada_init_matches_its_fixture() {
     assert_render("init-machine", &output);
 }
 
+/// The rows a prune draws, and **the fact the whole table exists to carry**:
+/// whose each volume is.
+///
+/// **Built by hand rather than by running the verb**, for the reason the suite's
+/// own rule gives — no test may remove a real docker resource on this machine.
+/// The numbers are the measured ones: a machine holding 171 volumes and 12.0 GB
+/// of which almost none is Armada's. Three rows stand for the three outcomes,
+/// because a fixture with only the easy one freezes a layout nobody will see.
+fn prune_row(
+    status: Status,
+    reference: &str,
+    owner: armada_core::disk::Ownership,
+    bytes: Option<u64>,
+    detail: Option<&str>,
+) -> armada_core::envelope::PruneRow {
+    armada_core::envelope::PruneRow {
+        status,
+        reference: reference.to_string(),
+        kind: armada_core::disk::DiskKind::Volumes,
+        owner,
+        bytes,
+        detail: detail.map(str::to_string),
+    }
+}
+
+fn prune_fixture() -> armada_core::envelope::PruneData {
+    use armada_core::disk::Ownership;
+    armada_core::envelope::PruneData {
+        results: vec![
+            // Armada's, idle, and taken — the only kind that opens ticked.
+            prune_row(
+                Status::Clean,
+                "armada-a3f91c02_pgdata",
+                Ownership::Armada,
+                Some(79_020_000),
+                None,
+            ),
+            // Armada's, and somebody is working in that worktree right now.
+            prune_row(
+                Status::Skipped,
+                "armada-b7c14e90_pgdata",
+                Ownership::Armada,
+                Some(48_210_000),
+                Some("armada's, in use"),
+            ),
+            // **The row the verb exists to get right.** Twelve gigabytes that
+            // Armada did not create and cannot identify.
+            prune_row(
+                Status::Skipped,
+                "someone-elses_pgdata",
+                Ownership::Unlabelled,
+                Some(12_010_000_000),
+                Some("not armada's"),
+            ),
+        ],
+        freed: Some(79_020_000),
+        withheld: Vec::new(),
+        skipped: Vec::new(),
+    }
+}
+
+#[test]
+fn prune_matches_its_fixture() {
+    let output = Output::Prune(Box::new(Envelope::ok(
+        "prune",
+        None,
+        Status::Partial,
+        prune_fixture(),
+    )));
+    assert_render("prune", &output);
+}
+
+/// **A run with nobody to ask removes nothing, and says which rule stopped it.**
+/// This is the shape an agent gets, and the fixture exists so that the sentence
+/// naming the flag cannot quietly go missing.
+#[test]
+fn prune_with_nobody_to_ask_matches_its_fixture() {
+    let mut data = prune_fixture();
+    data.freed = Some(0);
+    data.results[0].status = Status::Skipped;
+    data.results[0].detail = Some("would go".to_string());
+    data.withheld = vec![
+        "no terminal to ask at; `--yes` removes armada's own".to_string(),
+        "1 of these is not armada's; only a person can remove it".to_string(),
+    ];
+    let output = Output::Prune(Box::new(Envelope::ok("prune", None, Status::Skipped, data)));
+    assert_render("prune-preview", &output);
+}
+
 /// **`armada doctor`, and the `→` lines that are the point of it.**
 ///
 /// Two corrections to the transcribed fixture, both made by hand and recorded
@@ -1110,6 +1223,23 @@ fn doctor_matches_its_fixture() {
             "armada guild project",
         ),
         settled("manifest.db", Settled::Ok, "2 workspaces, 0 orphans"),
+        // **The two disk rows, and the reason there are two of them.** They sit
+        // beside `manifest.db` because they answer its question — what has
+        // quietly accumulated — and they are separate rows because the remedies
+        // differ: the machine's is the reader's own `docker volume prune`, and
+        // Armada's is `armada manifest clean --all`. The numbers here are the
+        // measured ones from the machine the check was written for, where every
+        // one of the 171 volumes was somebody else's compose work.
+        settled(
+            "docker disk",
+            Settled::Ok,
+            "12.0 GB reclaimable in 1 image, 171 volumes",
+        ),
+        settled(
+            "docker disk",
+            Settled::Ok,
+            "none of it is armada's; `docker volume prune` is yours",
+        ),
     ];
     let output = Output::Doctor(Box::new(Envelope::ok(
         "doctor",
@@ -1622,6 +1752,7 @@ fn fleet_ls_matches_its_fixture() {
                 wall_clock_ms: 1_860_000,
             },
             needs_attention,
+            acting: None,
         }
     }
 
@@ -1812,6 +1943,9 @@ fn fleet_tick_matches_its_fixture() {
             predicate: predicate.map(str::to_string),
             evidence: Vec::new(),
             why: why.to_string(),
+            // Absent on every pass but the one that ends a Job, so absent here:
+            // this fixture freezes the ordinary rows.
+            released: None,
         }
     }
 
@@ -1960,6 +2094,7 @@ fn bridge_matches_its_fixture() {
                 wall_clock_ms: 1_860_000,
             },
             needs_attention,
+            acting: None,
         }
     }
 
@@ -2072,6 +2207,7 @@ fn bridge_filtered_matches_its_fixture() {
             tokens: 388_000,
             wall_clock_ms: 2_520_000,
         },
+        acting: None,
         needs_attention: false,
     }];
 
@@ -2158,7 +2294,7 @@ fn helm_matches_its_fixture() {
             // here as `"$(cat …)"` and the fixture freezes that it never
             // appears any other way.
             command: "claude --agent helm --append-system-prompt \
-                      \"$(cat ~/.armada/helm/guild-voice.md)\" \
+                      \"$(cat ~/.armada/helm/system-prompt.md)\" \
                       --mcp-config ~/.armada/helm/mcp.json \
                       --plugin-dir ~/.armada/helm/plugin \
                       --settings ~/.armada/helm/settings.json \
@@ -2182,7 +2318,7 @@ fn helm_matches_its_fixture() {
                 ),
                 wired(
                     "voice",
-                    "~/.armada/helm/guild-voice.md",
+                    "~/.armada/helm/system-prompt.md",
                     "voice.md, how-i-work.md: your words, and they outrank the persona",
                 ),
                 Wired {

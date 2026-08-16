@@ -189,14 +189,32 @@ fn shipped_posture() -> Vec<String> {
     armada_core::fleet::drone::Posture::default().argv()
 }
 
-/// The two words that carry a Drone what it owes, read off the constants for the
-/// same reason [`shipped_posture`] is: the prose belongs to `armada_core`'s own
-/// tests, and what these assertions are about is the pair reaching `execve`
-/// whole and in the right place.
+/// The relay pair a Drone's argv carries (`020` §1), read off the record's
+/// uuid so the assertion is about the flag reaching `execve` rather than about
+/// where the file happens to go.
+fn shipped_relay(scratch: &Scratch, uuid: &str) -> Vec<String> {
+    vec![
+        armada_core::fleet::drone::SETTINGS.to_string(),
+        armada_fleet::home::drone_settings(&scratch.home.path().join(".armada"), uuid)
+            .display()
+            .to_string(),
+    ]
+}
+
+/// The two words that carry a Drone what it owes, read off the shipped assembler
+/// for the same reason [`shipped_posture`] is: the prose belongs to
+/// `armada_core`'s own tests, and what these assertions are about is the pair
+/// reaching `execve` whole and in the right place.
+///
+/// **`brief()` rather than `BRIEF`, since `docs/reserved/008`.** One
+/// `--append-system-prompt` carries the reporting contract and then Armada's own
+/// skill, because the flag is singular and a second occurrence would keep only
+/// the last. A fixture naming one constant would go green against an `execve`
+/// that lost the other.
 fn shipped_brief() -> Vec<String> {
     vec![
         armada_core::fleet::drone::APPEND.to_string(),
-        armada_core::fleet::drone::BRIEF.to_string(),
+        armada_core::fleet::drone::brief(),
     ]
 }
 
@@ -438,8 +456,13 @@ impl Run for Harness {
             [_, "manifest", "init", "--json"] => ok(
                 r#"{"schema_version":2,"verb":"init","workspace":"3d9cc7ba","status":"READY","error":null,"data":{"port_block":{"from":5470,"to":5479},"claimed_at":"t","reaped":{},"results":[]}}"#,
             ),
+            // **A volume in the reply, deliberately.** A named volume outlives
+            // `down` and outlives its container, so it is the resource a
+            // teardown most easily leaves behind — and a fixture releasing
+            // zero of them could never tell a `clean` that reclaims volumes
+            // from one that quietly does not.
             [_, "manifest", "clean", "--json"] => ok(
-                r#"{"schema_version":2,"verb":"clean","status":"CLEAN","error":null,"data":{"reaped":{},"results":[{"id":"a","status":"CLEAN","released":{"processes":0,"containers":3,"networks":0,"volumes":0,"images":0,"port_block":true,"files":0}}]}}"#,
+                r#"{"schema_version":2,"verb":"clean","status":"CLEAN","error":null,"data":{"reaped":{},"results":[{"id":"a","status":"CLEAN","released":{"processes":0,"containers":3,"networks":1,"volumes":2,"images":0,"port_block":true,"files":0}}]}}"#,
             ),
             ["git", ..] => ok(""),
             other => Err(SpawnError {
@@ -680,6 +703,7 @@ fn the_drone_is_executed_with_the_session_id_the_job_was_minted_with() {
     let mut expected = vec!["--session-id".to_string(), data.uuid.clone()];
     expected.extend(shipped_brief());
     expected.extend(shipped_posture());
+    expected.extend(shipped_relay(&scratch, &data.uuid));
     expected.extend(
         ["--print", "--output-format", "stream-json", "--verbose"]
             .iter()
@@ -720,9 +744,19 @@ fn the_drone_execve_receives_both_its_brief_and_its_task() {
     // The prose itself, not a path to it and not an instruction to go and read
     // one — the repair `armada_guild::layout::skill_argv` made one file over.
     let brief = &argv[at + 1];
-    assert_eq!(brief, armada_core::fleet::drone::BRIEF, "{argv:?}");
+    assert_eq!(brief, &armada_core::fleet::drone::brief(), "{argv:?}");
     assert!(brief.contains("mcp__armada__fleet_verdict"), "{brief}");
     assert!(brief.contains("not evidence"), "{brief}");
+    // **Both halves reached `execve`.** The reporting contract
+    // (`docs/reserved/019`) and Armada's own skill (`docs/reserved/008`) share
+    // one flag; a Drone given only the first would edit `armada.yml` rather
+    // than proposing, and nothing on the vector would say so.
+    assert!(brief.contains("mcp__armada__fleet_propose"), "{brief}");
+    assert!(
+        brief.find("mcp__armada__fleet_verdict") < brief.find("mcp__armada__fleet_propose"),
+        "the skill overtook the brief, so the session is told what it may do \
+         before it is told who it is"
+    );
 
     // The flag behind the brief survived it, so the Drone still has a posture.
     assert_eq!(argv[at + 2], "--permission-mode", "{argv:?}");
@@ -1369,9 +1403,11 @@ fn listing_the_fleet_reads_what_the_drone_spent_from_its_transcript() {
             assert_eq!(row.turns, 2);
             assert_eq!(row.tokens, 4 + 85 + 14_815 + 44_357);
             assert_eq!(row.budget_remaining.iterations, 18);
-            // The Drone finished and exited: the Job is at rest, which is the
-            // ordinary state rather than an error.
-            assert_eq!(row.state, JobState::Running);
+            // **The Drone finished and exited, and nothing relayed** — this
+            // scratch machine's `exe` is a path that does not exist, so the
+            // hook's tick goes nowhere. `020` §6: that is `SILENT`, not the
+            // `RUNNING` this line used to assert.
+            assert_eq!(row.state, JobState::Silent);
         }
         other => panic!("not a listing: {other:?}"),
     }
@@ -2133,6 +2169,7 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
     let mut expected = vec!["--resume".to_string(), data.uuid.clone()];
     expected.extend(shipped_brief());
     expected.extend(shipped_posture());
+    expected.extend(shipped_relay(&scratch, &data.uuid));
     expected.extend(
         ["--print", "--output-format", "stream-json", "--verbose"]
             .iter()
@@ -2777,8 +2814,16 @@ fn a_filtered_frame_counts_what_it_shows_and_reports_what_it_hid() {
 fn once_answers_with_the_frame_it_read() {
     let scratch = Scratch::new();
     let run = scratch.harness();
-    let data = spawn(&scratch, &run, &task("add rate limiting"));
-    await_turn(&scratch, &data.uuid);
+    // **A Job whose Drone is still working**, so the frame has a `RUNNING` row
+    // to count. Since `020` §6 a Job whose exchange ended with nothing relaying
+    // is `SILENT` rather than `RUNNING`, and this test's subject is the frame
+    // agreeing with the listing — not which of the two words applies.
+    let data = spawn(
+        &scratch,
+        &run,
+        &task(&format!("add rate limiting {STAY_ALIVE}")),
+    );
+    scratch.watch(&data.uuid);
 
     let output =
         armada_helm::verbs::bridge::once(&run, &FrozenClock::new(), &scratch.place(), None)
@@ -3941,6 +3986,85 @@ fn a_finished_exchange_advances_the_step_instead_of_leaving_the_job_running_for_
 
 /// **The done-when, less its `review` step** (PHASES.md §8.6).
 ///
+/// **A finished Job whose tree is dirty keeps its worktree, and says so.**
+///
+/// The other half of the guard, and the half that matters most. `worktree::remove`
+/// forces — right when a person asked for it by name, wrong when a background
+/// pass decided — so an automatic removal asks git first and stands down when
+/// the answer is that there is work in there.
+///
+/// **This is the failure the guard was written against**: a full disk fixed at
+/// the cost of somebody's uncommitted work. A loop nobody was watching must not
+/// be able to do that.
+#[test]
+fn a_finished_job_holding_uncommitted_work_keeps_its_worktree() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: land it\nends_at: branch\n\
+         budget:\n  iterations: 20\n  tokens: 600000\n  wall_clock: 90m\n  \
+         on_exhausted: needs_human\nsteps:\n\
+         \x20 - id: land\n    skill: land-branch\n    verify: { must: branch_exists }\n",
+    );
+
+    let run = scratch
+        .harness()
+        // The Drone left something uncommitted behind, which is ordinary.
+        .answering("status --porcelain --untracked-files", 0, " M src/lib.rs\n");
+
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("land the change")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
+    let last = rows.last().unwrap();
+    assert_eq!(last.did, "finished", "{rows:#?}");
+
+    // **The machine resources still go.** Keeping the directory is not a reason
+    // to keep the containers, the networks or the named volumes — those are not
+    // work anybody can lose.
+    let released = last.released.as_ref().expect("it released its resources");
+    assert_eq!(released.volumes, 2, "a dirty tree kept the volumes too");
+    assert!(released.port_block);
+
+    // **And the worktree stays.**
+    assert!(
+        run.at_index(&["worktree", "remove"]).is_none(),
+        "uncommitted work was destroyed by a pass nobody was watching: {:#?}",
+        run.calls()
+    );
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert!(
+        !record.worktree.is_empty(),
+        "the record forgot a worktree that is still there"
+    );
+    assert!(
+        scratch.place().expand(&record.worktree).is_dir(),
+        "the directory is gone despite the guard"
+    );
+
+    // **Said out loud.** A directory that survives with nothing explaining it
+    // reads as a broken removal; a reader told why goes and looks at it.
+    assert!(
+        last.why.contains("uncommitted work"),
+        "the row does not say why the worktree is still there: {}",
+        last.why
+    );
+    assert!(
+        last.why.contains("reap"),
+        "the row does not say where removing it is a deliberate act: {}",
+        last.why
+    );
+}
+
 /// A bug workflow reproduces a failure, writes a test that fails first, fixes
 /// it, gets `check` green and lands on a local branch — with **no human turn in
 /// the middle**. Every gate is decided by an external command: a search of the
@@ -4013,6 +4137,81 @@ fn a_bug_workflow_reproduces_fixes_and_lands_with_no_human_turn_in_the_middle() 
     assert_eq!(record.state, JobState::Done);
     assert_eq!(record.step, "land");
     assert_eq!(record.verdict, Some(armada_core::fleet::Verdict::Pass));
+
+    // **A Job releases what it holds when it ends**, rather than waiting for
+    // somebody to run `clean`. Nobody runs it, which is how a machine comes to
+    // hold 171 named volumes and 12.0 GB — a volume outlives `down` and
+    // outlives its container by design, so nothing else would ever have
+    // reclaimed these.
+    let released = last
+        .released
+        .as_ref()
+        .unwrap_or_else(|| panic!("the finishing pass released nothing: {rows:#?}"));
+    assert_eq!(released.volumes, 2, "the named volumes were left behind");
+    assert_eq!(released.containers, 3);
+    assert_eq!(released.networks, 1);
+    assert!(released.port_block, "the block was not handed back");
+
+    // **And it is on the row a person reads**, not only in the payload: a
+    // reclaim that is not reported is one nobody can audit (`reap.rs`).
+    assert!(
+        last.why.contains("2 volumes"),
+        "the row does not say what went: {}",
+        last.why
+    );
+
+    // The block is gone from the record too, so the next `spawn` does not
+    // believe it is still taken.
+    assert_eq!(record.port_block, None);
+
+    // **The worktree goes, because there was nothing in it to lose.** The happy
+    // path was the leak: every other way a Job ended reclaimed its worktree and
+    // the one path a Job takes when it *succeeds* did not, so a Job that worked
+    // left its directory behind for ever.
+    assert!(
+        run.at_index(&["worktree", "remove"]).is_some(),
+        "finishing left the worktree behind: {:#?}",
+        run.calls()
+    );
+    assert!(
+        !scratch.place().expand(&data.uuid).is_dir()
+            || !scratch.place().expand(&record.worktree).is_dir(),
+        "the worktree is still on disk"
+    );
+
+    // **git was asked first, and that is the guard.** `worktree::remove` forces,
+    // which is right when a person asked by name and wrong when a background
+    // pass decided — so an automatic removal asks whether there is uncommitted
+    // work before it destroys any.
+    assert!(
+        run.at_index(&["status", "--porcelain"]).is_some(),
+        "the worktree was removed without asking whether it held work: {:#?}",
+        run.calls()
+    );
+    assert!(
+        run.at_index(&["status", "--porcelain"]).unwrap()
+            < run.at_index(&["worktree", "remove"]).unwrap(),
+        "the tree was removed before anything asked what was in it"
+    );
+
+    // **The branch survives, and that is the difference from `kill`.** A Job
+    // that finished produced commits, and those commits are the deliverable —
+    // deleting the branch would make success indistinguishable from failure.
+    assert!(
+        run.at_index(&["branch", "-D"]).is_none(),
+        "finishing deleted the branch: {:#?}",
+        run.calls()
+    );
+
+    // **And the record does not go on claiming a directory that is gone.** A
+    // Job reading as holding a worktree nothing can open is the same shape of
+    // lie as a `RUNNING` Job with a dead Drone, which this fleet has already
+    // shown a reader once.
+    assert!(
+        record.worktree.is_empty(),
+        "the record still claims a worktree that was removed: {:?}",
+        record.worktree
+    );
 
     // **Nothing asked a person anything.** That is the clause the milestone
     // turns on, and an inbox entry is the only way it could have.
@@ -4639,4 +4838,258 @@ fn the_shipped_bug_workflow_runs_to_its_review_step_and_stops_there() {
             record.transitions
         );
     }
+}
+
+// ------------------------------------------------ the relay, and its backstop
+
+/// **The relay is registered on the Drone, or nothing observes it ending**
+/// (`020` §1).
+///
+/// This is the assertion the whole milestone rests on, and it is made against
+/// what `execve` received rather than against what Armada meant to pass — the
+/// distinction `docs/traps.md` records after a Drone shipped without
+/// `--verbose` and every argv assertion passed.
+#[test]
+fn a_spawned_drone_carries_a_stop_hook_that_is_written_and_executable() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task(&format!("something {STAY_ALIVE}")));
+
+    let argv = recorded_argv(&data.uuid);
+    let at = argv
+        .iter()
+        .position(|word| word == armada_core::fleet::drone::SETTINGS)
+        .unwrap_or_else(|| panic!("no --settings reached execve: {argv:?}"));
+    let settings = PathBuf::from(&argv[at + 1]);
+    assert!(
+        settings.is_file(),
+        "the Drone was pointed at settings nobody wrote: {}",
+        settings.display()
+    );
+
+    // The document names the hook, and the hook is a file Claude Code could
+    // actually run — a `Stop` hook without the executable bit is a relay that
+    // silently is not one.
+    let registered: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+    let hook = PathBuf::from(
+        registered["hooks"]["Stop"][0]["hooks"][0]["command"]
+            .as_str()
+            .expect("a Stop command"),
+    );
+    assert!(hook.is_file(), "the hook was registered and not written");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&hook).unwrap().permissions().mode();
+        assert!(mode & 0o111 != 0, "the hook is not executable: {mode:o}");
+    }
+    // And it relays by ticking the whole fleet, which is what makes one Job's
+    // hook the backstop for every other (`020` §2).
+    let body = std::fs::read_to_string(&hook).unwrap();
+    assert!(body.contains("fleet tick\n"), "{body}");
+}
+
+/// **The relay actually fires, and it fires after its Drone has gone.**
+///
+/// A green test on the hook's *text* proves nothing about whether the mechanism
+/// runs — the lesson `AGENTS.md` records from two scheduler bugs that shipped
+/// behind passing reducer tests. So this runs the generated script for real, as
+/// a child of a real process group that then exits, and watches for the `armada
+/// fleet tick` that comes out the other side.
+///
+/// **Nothing here starts a session or spends a token**: the `armada` the hook
+/// invokes is a two-line recorder, and the Drone is `sh` exiting.
+#[test]
+fn the_relay_ticks_the_fleet_once_its_drone_has_actually_exited() {
+    let dir = tempfile::tempdir().unwrap();
+    let recorder = dir.path().join("armada");
+    let ticks = dir.path().join("ticks");
+    std::fs::write(
+        &recorder,
+        format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n", ticks.display()),
+    )
+    .unwrap();
+    let hook = dir.path().join("stop.sh");
+    std::fs::write(
+        &hook,
+        armada_core::fleet::drone::stop_hook(&recorder.display().to_string()),
+    )
+    .unwrap();
+    // The Drone: it runs its `Stop` hook and exits, which is a Claude Code
+    // exchange ending, in two words of shell.
+    let drone = dir.path().join("drone.sh");
+    std::fs::write(&drone, format!("#!/bin/sh\n{}\n", hook.display())).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&recorder, &hook, &drone] {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    // **Its own process group, exactly as a real Drone gets one.** The hook
+    // reads the group's leader out of `ps` to know what to wait for, so a child
+    // sharing the test binary's group would wait for the test binary.
+    let group = armada_manifest::process::ProcessGroup::spawn(&RunRequest::new(
+        vec![drone.display().to_string()],
+        dir.path().to_path_buf(),
+    ))
+    .expect("the stand-in Drone starts");
+    drop(group);
+
+    for _ in 0..600 {
+        if let Ok(seen) = std::fs::read_to_string(&ticks) {
+            assert_eq!(
+                seen.trim(),
+                "fleet tick",
+                "the relay ran something other than a sweep"
+            );
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    panic!("the Drone exited and nothing ticked — the relay is not wired");
+}
+
+/// **A Job whose relay was lost reads as a failure, never as `RUNNING`**
+/// (`020` §6) — and the sweep is what rescues it (`020` §2).
+///
+/// This is the eight hours, reproduced and then closed. The Drone finishes its
+/// exchange and goes; nothing relays — which is what a SIGKILL, a hook that
+/// could not run and a crash in between all look like from here. Before this
+/// milestone the Job read `RUNNING` for ever.
+#[test]
+fn a_job_whose_relay_was_lost_stalls_visibly_and_is_rescued_by_the_next_sweep() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: two steps\nends_at: branch\nsteps:\n\
+         \x20 - id: one\n    skill: reproduce-failure\n    verify: { must: always }\n\
+         \x20 - id: two\n    skill: land-branch\n    verify: { must: always }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("something is broken")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    await_exit(&scratch, &data.uuid);
+
+    // **Nothing relayed.** The record still says `RUNNING`, because that is what
+    // `spawn` wrote and no verb has looked since.
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.state, JobState::Running);
+
+    // What an observer sees is not `RUNNING`, and that is the repair. The Drone
+    // said nothing through its tools, so the honest word is `SILENT`.
+    let observed = armada_core::fleet::job::observe(
+        &record,
+        armada_core::fleet::job::Spend::default(),
+        1,
+        false,
+        false,
+        record.run_time_ms(1),
+    );
+    assert_ne!(
+        observed.state,
+        JobState::Running,
+        "a Job with a dead Drone still reads as alive"
+    );
+    assert_eq!(observed.state, JobState::Silent);
+    assert!(observed.due, "the ended exchange is not due a gate");
+
+    // **The sweep — no handle, every Job — picks it up.** This is `020` §2's
+    // backstop: nothing about this Job's own relay had to work.
+    let swept = ticked(
+        &fleet::tick(&run, &FrozenClock::new(), &scratch.place(), None, false)
+            .expect("the sweep answers"),
+    );
+    assert_eq!(swept.moved, 1, "the sweep rescued nothing: {swept:#?}");
+    assert_eq!(swept.results[0].did, "advanced");
+
+    let after = scratch.store().load(&data.uuid).unwrap();
+    scratch.watch(&data.uuid);
+    assert_eq!(after.step, "two", "the sweep did not move the Job on");
+    assert_eq!(
+        after.ticked_turns, 1,
+        "the exchange was gated and not watermarked, so it would be gated again"
+    );
+}
+
+/// **One pass at a time, machine-wide.** Every Drone's hook sweeps the whole
+/// fleet, so five exchanges ending together start five passes — and two passes
+/// gating one step would both `claude --resume` one session.
+#[test]
+fn a_second_pass_declines_while_the_first_holds_the_machine() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task(&format!("something {STAY_ALIVE}")));
+    scratch.watch(&data.uuid);
+
+    let place = scratch.place();
+    // The harness's clock, so the lock is not older than `STALE_MS` the
+    // instant it is written — which would be a lock nothing ever holds.
+    let held = armada_fleet::pass::take(
+        &place.armada_home,
+        &place.boot_id,
+        FrozenClock::new().wall_ms(),
+    )
+    .unwrap()
+    .expect("the first pass takes the lock");
+
+    // A second pass answers successfully and does nothing, rather than racing.
+    let second = ticked(
+        &fleet::tick(&run, &FrozenClock::new(), &place, None, false).expect("the pass answers"),
+    );
+    assert_eq!(second.moved, 0);
+    assert!(second.results.is_empty(), "{second:#?}");
+
+    drop(held);
+    // With the lock free, the same call walks the fleet again.
+    let third = ticked(
+        &fleet::tick(&run, &FrozenClock::new(), &place, None, false).expect("the pass answers"),
+    );
+    assert_eq!(third.results.len(), 1, "{third:#?}");
+}
+
+/// **An action with a duration says so in the record, while it runs**
+/// (`020` §5).
+///
+/// The bug was an abort that took several seconds inside docker and said
+/// nothing — a working abort and a hung one looked identical. The transient is
+/// written where a second reader can see it, and cleared by the write that
+/// settles the Job.
+#[test]
+fn an_abort_names_what_it_is_doing_and_clears_it_when_it_settles() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task(&format!("something {STAY_ALIVE}")));
+    scratch.watch(&data.uuid);
+
+    fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&data.name),
+        false,
+        false,
+    )
+    .expect("the Job is killed");
+
+    let after = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(after.state, JobState::Aborted);
+    assert!(
+        after.doing.is_none(),
+        "the Job still claims to be being aborted: {:?}",
+        after.doing
+    );
+    // The word a row shows falls back to the state once the action is over,
+    // which is what makes the transient safe to write at all.
+    assert_eq!(after.status_word(), "ABORTED");
 }

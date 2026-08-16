@@ -481,6 +481,18 @@ impl<R: Run, C: Clock, F: Fetch> App<R, C, F> {
         })
     }
 
+    /// What the daemon is holding, in total.
+    pub fn docker_disk_usage(&mut self) -> Result<armada_core::disk::DiskUsage, ArmadaError> {
+        self.docker_call(|run, cwd, timeout, tick| docker::disk_usage(run, cwd, timeout, tick))
+    }
+
+    /// Every volume on the daemon, with the size docker attributes to it.
+    pub fn docker_volume_sizes(
+        &mut self,
+    ) -> Result<Vec<armada_core::disk::VolumeEntry>, ArmadaError> {
+        self.docker_call(|run, cwd, timeout, tick| docker::volume_sizes(run, cwd, timeout, tick))
+    }
+
     /// Every handle matching a declared `owns:` selector.
     pub fn docker_list_by_selector(
         &mut self,
