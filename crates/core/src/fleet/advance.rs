@@ -305,7 +305,7 @@ mod tests {
             ends_at,
             budget: Budget {
                 iterations: 3,
-                tokens: 1_000,
+                cost_usd: 10.0,
                 wall_clock_ms: 1_000,
                 on_exhausted: OnExhausted::NeedsHuman,
             },
@@ -416,10 +416,10 @@ mod tests {
         assert_eq!(
             attention(
                 &record,
-                &observed(JobState::Running, Some(Ceiling::Tokens)),
+                &observed(JobState::Running, Some(Ceiling::Cost)),
                 true
             ),
-            Attention::Ceiling(Ceiling::Tokens)
+            Attention::Ceiling(Ceiling::Cost)
         );
     }
 

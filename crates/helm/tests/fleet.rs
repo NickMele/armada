@@ -1417,11 +1417,11 @@ fn a_budget_override_reaches_the_job_it_was_given_for() {
         &scratch,
         &run,
         &Spawn {
-            budget: vec!["max_tokens=200000".to_string()],
+            budget: vec!["max_cost=15.00".to_string()],
             ..task("add rate limiting")
         },
     );
-    assert_eq!(data.budget.tokens, 200_000);
+    assert_eq!(data.budget.cost_usd, 15.0);
     assert_eq!(
         data.budget.iterations, 20,
         "the rest of `feature` is intact"
@@ -2309,7 +2309,7 @@ fn answering_a_job_that_has_run_out_of_rope_is_refused_and_raised() {
         &scratch,
         &run,
         &Spawn {
-            budget: vec!["max_tokens=1".to_string()],
+            budget: vec!["max_cost=0.01".to_string()],
             ..task("add rate limiting")
         },
     );
@@ -3222,7 +3222,7 @@ fn ceilinged(
             &scratch.place(),
             &Spawn {
                 name: Some(name.to_string()),
-                budget: vec!["max_tokens=1".to_string()],
+                budget: vec!["max_cost=0.01".to_string()],
                 ..task("add rate limiting")
             },
             None,
@@ -4048,7 +4048,7 @@ fn a_finished_job_holding_uncommitted_work_keeps_its_worktree() {
         &scratch,
         "bug",
         "name: bug\ndescription: land it\nends_at: branch\n\
-         budget:\n  iterations: 20\n  tokens: 600000\n  wall_clock: 90m\n  \
+         budget:\n  iterations: 20\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: land\n    skill: land-branch\n    verify: { must: branch_exists }\n",
     );
@@ -4125,7 +4125,7 @@ fn a_bug_workflow_reproduces_fixes_and_lands_with_no_human_turn_in_the_middle() 
         &scratch,
         "bug",
         "name: bug\ndescription: reproduce, fix, land\nends_at: branch\n\
-         budget:\n  iterations: 20\n  tokens: 600000\n  wall_clock: 90m\n  \
+         budget:\n  iterations: 20\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: reproduce\n    skill: reproduce-failure\n    \
          verify:\n      must: failing_test_exists\n      test: ${task.test}\n\
@@ -4315,7 +4315,7 @@ fn a_green_suite_is_not_a_reproduction_and_the_step_is_run_again() {
         &scratch,
         "bug",
         "name: bug\ndescription: reproduce only\nends_at: branch\n\
-         budget:\n  iterations: 20\n  tokens: 600000\n  wall_clock: 90m\n  \
+         budget:\n  iterations: 20\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: reproduce\n    skill: reproduce-failure\n    \
          verify:\n      must: failing_test_exists\n      test: regression_bad_parse\n",
@@ -4865,7 +4865,7 @@ fn a_sub_job_step_runs_the_workflow_it_names_and_its_spend_lands_on_the_parent()
     let parent = scratch.store().load(&data.uuid).unwrap();
     assert!(
         child.budget.iterations <= parent.budget.iterations
-            && child.budget.tokens <= parent.budget.tokens,
+            && child.budget.cost_usd <= parent.budget.cost_usd,
         "the child was given more rope than its parent has: {:?} against {:?}",
         child.budget,
         parent.budget

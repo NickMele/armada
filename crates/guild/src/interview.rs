@@ -220,12 +220,12 @@ pub const COUNT: usize = QUESTIONS.len();
 pub const CEILING_QUESTIONS: [usize; 3] = [4, 5, 6];
 
 /// A budget ceiling triple (`PLAN.md` §14.3, §14.6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Ceilings {
     /// How many times the loop may go round.
     pub iterations: u32,
-    /// Tokens, whole.
-    pub tokens: u64,
+    /// Cost in USD, to the nearest cent.
+    pub cost_usd: f64,
     /// Wall clock, in minutes.
     pub wall_clock_minutes: u32,
 }
@@ -235,7 +235,7 @@ impl Ceilings {
     /// guard rather than a budget (`PLAN.md` §14.6).
     pub const ADVISORY: Ceilings = Ceilings {
         iterations: 15,
-        tokens: 500_000,
+        cost_usd: 5.00,
         wall_clock_minutes: 90,
     };
 
@@ -243,7 +243,7 @@ impl Ceilings {
     /// spend.
     pub const AUTONOMOUS: Ceilings = Ceilings {
         iterations: 20,
-        tokens: 600_000,
+        cost_usd: 10.00,
         wall_clock_minutes: 90,
     };
 
@@ -262,13 +262,13 @@ impl Ceilings {
         }
     }
 
-    /// `20, 600k, 90m` — the spelling the hint offers and the one the answer is
+    /// `20, 10.00, 90m` — the spelling the hint offers and the one the answer is
     /// read back in.
     pub fn written(&self) -> String {
         format!(
-            "{}, {}, {}m",
+            "{}, {:.2}, {}m",
             self.iterations,
-            thousands(self.tokens),
+            self.cost_usd,
             self.wall_clock_minutes
         )
     }
@@ -299,21 +299,17 @@ pub fn parse_iterations(answer: &str) -> Result<u32, String> {
 /// **`k` is thousands and it is the only suffix**, because there is exactly one
 /// unit here. The old triple read `m` as *minutes* in one slot and as nothing in
 /// another, which is precisely the ambiguity the split removes.
-pub fn parse_tokens(answer: &str) -> Result<u64, String> {
+pub fn parse_cost(answer: &str) -> Result<f64, String> {
     let text = answer.trim();
-    let value = match text.strip_suffix(['k', 'K']) {
-        Some(head) => number(head, "tokens", "600k")?
-            .checked_mul(1_000)
-            .ok_or_else(|| refusal(answer, "tokens", "600k"))?,
-        None => number(text, "tokens", "600k")?,
-    };
-    // **A ceiling under a thousand tokens is refused rather than obeyed.** It is
-    // less than a single turn, so it would exhaust every Job on its first one —
-    // and the likeliest way to type it is meaning `600k` and writing `600`.
-    if value < 1_000 {
+    let trimmed = text.strip_prefix('$').unwrap_or(text);
+    let value = trimmed.parse::<f64>()
+        .map_err(|_| refusal(answer, "dollars", "10.00"))?;
+    // **A ceiling under $0.01 is refused rather than obeyed.** It is less than
+    // a single turn would typically cost, so it would exhaust every Job on its
+    // first one.
+    if value < 0.01 {
         return Err(format!(
-            "`{}` is fewer tokens than one turn spends — did you mean `{}k`?",
-            answer.trim(),
+            "`{}` is less than $0.01 — did you mean a larger amount?",
             answer.trim()
         ));
     }
@@ -359,7 +355,7 @@ fn refusal(text: &str, unit: &str, example: &str) -> String {
 
 /// What the interview came back with. `None` on a field means the default was
 /// taken, which is what `armada doctor` reports as still-as-imported.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Answers {
     /// Question 1.
     pub voice: Option<String>,
@@ -371,12 +367,12 @@ pub struct Answers {
     ///
     /// **The three ceilings are three fields rather than one `Ceilings`**, and
     /// that is the whole gain of splitting the question: each is independently
-    /// answered or defaulted, so a person who cares only about tokens keeps
+    /// answered or defaulted, so a person who cares only about cost keeps
     /// `design`'s 15 iterations and `bug`'s 20 rather than flattening both to
     /// whichever number he had to invent to get past the other two slots.
     pub iterations: Option<u32>,
-    /// Question 5 — tokens, on its own.
-    pub tokens: Option<u64>,
+    /// Question 5 — cost in USD, on its own.
+    pub cost_usd: Option<f64>,
     /// Question 6 — wall clock in minutes, on its own.
     pub wall_clock_minutes: Option<u32>,
     /// Question 7.
@@ -402,7 +398,7 @@ impl Answers {
             self.expectations.is_some(),
             self.how_i_work.is_some(),
             self.iterations.is_some(),
-            self.tokens.is_some(),
+            self.cost_usd.is_some(),
             self.wall_clock_minutes.is_some(),
             self.remote.is_some(),
         ]
@@ -447,7 +443,7 @@ impl Answers {
         let per_workflow = Ceilings::for_workflow(workflow);
         Ceilings {
             iterations: self.iterations.unwrap_or(per_workflow.iterations),
-            tokens: self.tokens.unwrap_or(per_workflow.tokens),
+            cost_usd: self.cost_usd.unwrap_or(per_workflow.cost_usd),
             wall_clock_minutes: self
                 .wall_clock_minutes
                 .unwrap_or(per_workflow.wall_clock_minutes),
@@ -504,7 +500,7 @@ mod tests {
     fn each_limit_question_takes_one_number_and_shows_it_as_its_default() {
         assert_eq!(CEILING_QUESTIONS, [4, 5, 6]);
         assert_eq!(parse_iterations(QUESTIONS[3].keeps), Ok(20));
-        assert_eq!(parse_tokens(QUESTIONS[4].keeps), Ok(600_000));
+        assert_eq!(parse_cost(QUESTIONS[4].keeps), Ok(600_000));
         assert_eq!(parse_minutes(QUESTIONS[5].keeps), Ok(90));
         for number in CEILING_QUESTIONS {
             let question = QUESTIONS[number - 1];
@@ -602,7 +598,7 @@ mod tests {
             expectations: Some("Tests pass.".to_string()),
             how_i_work: Some("Trunk based.".to_string()),
             iterations: Some(20),
-            tokens: Some(600_000),
+            cost_usd: Some(10.0),
             wall_clock_minutes: Some(90),
             remote: Some("git@example.com:me/guild.git".to_string()),
         };
@@ -617,13 +613,13 @@ mod tests {
     fn an_answered_ceiling_replaces_the_per_workflow_default_everywhere() {
         let answers = Answers {
             iterations: Some(8),
-            tokens: Some(200_000),
+            cost_usd: Some(7.50),
             wall_clock_minutes: Some(30),
             ..Answers::default()
         };
         for workflow in ["design", "plan", "feature", "bug"] {
             assert_eq!(answers.ceilings_for(workflow).iterations, 8, "{workflow}");
-            assert_eq!(answers.ceilings_for(workflow).tokens, 200_000, "{workflow}");
+            assert_eq!(answers.ceilings_for(workflow).cost_usd, 7.50, "{workflow}");
         }
     }
 
@@ -634,13 +630,13 @@ mod tests {
     #[test]
     fn answering_one_limit_leaves_the_other_two_per_workflow() {
         let answers = Answers {
-            tokens: Some(200_000),
+            cost_usd: Some(7.50),
             ..Answers::default()
         };
         assert_eq!(answers.answered(), 1);
         for workflow in ["design", "plan", "feature", "bug"] {
             let ceilings = answers.ceilings_for(workflow);
-            assert_eq!(ceilings.tokens, 200_000, "{workflow}");
+            assert_eq!(ceilings.cost_usd, 7.50, "{workflow}");
             assert_eq!(
                 ceilings.iterations,
                 Ceilings::for_workflow(workflow).iterations,
@@ -691,7 +687,7 @@ mod tests {
         assert_eq!(
             Ceilings {
                 iterations: parse_iterations(QUESTIONS[3].keeps).unwrap(),
-                tokens: parse_tokens(QUESTIONS[4].keeps).unwrap(),
+                tokens: parse_cost(QUESTIONS[4].keeps).unwrap(),
                 wall_clock_minutes: parse_minutes(QUESTIONS[5].keeps).unwrap(),
             },
             Ceilings::AUTONOMOUS
@@ -702,9 +698,9 @@ mod tests {
     /// and the purpose says `600000` and a reader may type back either.
     #[test]
     fn a_token_ceiling_reads_the_same_in_both_spellings() {
-        assert_eq!(parse_tokens("600k"), parse_tokens("600000"));
-        assert_eq!(parse_tokens("600K"), Ok(600_000));
-        assert_eq!(parse_tokens(" 200k "), Ok(200_000));
+        assert_eq!(parse_cost("600k"), parse_cost("600000"));
+        assert_eq!(parse_cost("600K"), Ok(600_000));
+        assert_eq!(parse_cost(" 200k "), Ok(200_000));
     }
 
     /// The minutes question shows `90m` and must accept it back, as well as the
@@ -727,7 +723,7 @@ mod tests {
             assert!(refusal.contains("20"), "`{answer}`: {refusal}");
         }
         for answer in ["", "heaps", "0", "600k, 90m"] {
-            let refusal = parse_tokens(answer).unwrap_err();
+            let refusal = parse_cost(answer).unwrap_err();
             assert!(refusal.contains("600k"), "`{answer}`: {refusal}");
         }
         for answer in ["", "ages", "0m", "90m, 20"] {
@@ -743,7 +739,7 @@ mod tests {
     #[test]
     fn the_old_triple_is_refused_rather_than_partly_understood() {
         assert!(parse_iterations("20, 600k, 90m").is_err());
-        assert!(parse_tokens("20, 600k, 90m").is_err());
+        assert!(parse_cost("20, 600k, 90m").is_err());
         assert!(parse_minutes("20, 600k, 90m").is_err());
     }
 
@@ -752,8 +748,8 @@ mod tests {
     /// every Job on its first turn.
     #[test]
     fn a_token_ceiling_smaller_than_a_turn_is_refused_with_the_likely_fix() {
-        let refusal = parse_tokens("600").unwrap_err();
+        let refusal = parse_cost("600").unwrap_err();
         assert!(refusal.contains("600k"), "{refusal}");
-        assert_eq!(parse_tokens("1000"), Ok(1_000), "a thousand is allowed");
+        assert_eq!(parse_cost("1000"), Ok(1_000), "a thousand is allowed");
     }
 }

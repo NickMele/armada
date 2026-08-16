@@ -1670,12 +1670,12 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
             detail_cell(
                 style,
                 Some(&format!(
-                    "{} of {} turns, {} of {} tokens, {}",
+                    "{} of {} turns, {} of ${:.2}, {} tokens",
                     data.turns,
                     data.budget.iterations,
-                    token_count(data.tokens),
-                    token_count(data.budget.tokens),
                     format::money(data.cost_usd),
+                    data.budget.cost_usd,
+                    token_count(data.tokens),
                 )),
             ),
         ])
@@ -1685,9 +1685,10 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
             detail_cell(
                 style,
                 Some(&format!(
-                    "{} turns, {} tokens, {}",
+                    "{} turns, ${:.2}, {} tokens, {}",
                     data.budget_remaining.iterations,
-                    token_count(data.budget_remaining.tokens),
+                    data.budget_remaining.cost_usd,
+                    token_count(data.tokens),
                     // **[`format::elapsed`], the same spelling the `TIME` column
                     // uses.** `25m` beside a run time of `1h` compares; `25m 00s`
                     // beside it is the same fact in a second notation.
