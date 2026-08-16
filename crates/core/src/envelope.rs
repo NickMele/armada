@@ -400,6 +400,46 @@ pub struct Released {
     pub files: usize,
 }
 
+impl Released {
+    /// What went, as a clause for a sentence — or [`None`] when nothing did.
+    ///
+    /// **Reclaiming is reported, never silent** (`reap.rs`), and a Job that
+    /// finishes now reclaims — so the pass that ended it has to say what it
+    /// took. [`None`] rather than `"nothing"` so the caller can leave the clause
+    /// off entirely: *"`review` was its last step; released nothing"* is noise
+    /// on the ordinary Job that held no services at all.
+    ///
+    /// **Volumes are named even though they are the least familiar of these**,
+    /// because they are the one that leaks: a named volume outlives `down` and
+    /// outlives its container by design, so it is the count a reader most needs
+    /// to see go down.
+    pub fn summary(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        for (count, singular) in [
+            (self.processes, "process group"),
+            (self.containers, "container"),
+            (self.networks, "network"),
+            (self.volumes, "volume"),
+            (self.images, "image"),
+            (self.files, "file"),
+        ] {
+            if count > 0 {
+                parts.push(match count {
+                    1 => format!("1 {singular}"),
+                    n => format!("{n} {singular}s"),
+                });
+            }
+        }
+        if self.port_block {
+            parts.push("its port block".to_string());
+        }
+        match parts.is_empty() {
+            true => None,
+            false => Some(parts.join(", ")),
+        }
+    }
+}
+
 /// `armada manifest init`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct InitData {
@@ -619,6 +659,77 @@ pub struct CleanDryRun {
     /// something one path emits, so they are reported here and named as such
     /// rather than dropped.
     pub would_report: Vec<String>,
+}
+
+/// `armada manifest prune` — what could go, what did, and what was never
+/// offered.
+///
+/// # The preview is the verb
+///
+/// Every other reclaiming verb in Armada acts on resources Armada created and
+/// can prove it owns. This one can reach further, and that is the whole reason
+/// it is a separate verb rather than a flag: **an unlabelled volume was not made
+/// by Armada, and one of them may be a database somebody cares about.** Deleting
+/// it is unrecoverable and nothing here can tell which it was.
+///
+/// So the shape is `armada fleet reap`'s — rows toggle, enter confirms, esc
+/// touches nothing — and the defaults carry the safety rule:
+/// `armada_core::disk::default_ticks` ticks Armada's own and nothing else.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct PruneData {
+    /// Every candidate, whether or not this run acted on it.
+    ///
+    /// **The unlabelled ones are listed even when they can never be removed on
+    /// this run** — under `--json`, in a pipe, in a script. That is the point of
+    /// listing them: the reader asked what is using the disk, and the answer is
+    /// mostly resources that are not Armada's. Refusing to *say so* because
+    /// Armada may not *delete* them would answer a question nobody asked.
+    pub results: Vec<PruneRow>,
+    /// Bytes this run actually freed, when every removed resource had a readable
+    /// size.
+    ///
+    /// [`None`] rather than a partial sum, for the reason
+    /// `armada_core::disk` gives throughout: a total quietly missing a
+    /// contributor reads as a complete answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freed: Option<u64>,
+    /// What this run was **not** allowed to touch, and why — so a caller that
+    /// expected a prune and got a preview is told which rule stopped it rather
+    /// than being left to infer it from an empty list.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub withheld: Vec<String>,
+    /// Enumerations that could not be performed, in the same channel and for the
+    /// same reason [`ReapPlan::skipped`] keeps one: a list that is empty because
+    /// nothing could be listed is indistinguishable from a tidy machine.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<String>,
+}
+
+/// One thing `prune` found.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PruneRow {
+    /// **`CLEAN` when it is gone, `SKIPPED` when it is still there.**
+    ///
+    /// Two words, both already in the vocabulary, and no third one for "would
+    /// have gone": a preview is simply a run in which every row is `SKIPPED`,
+    /// and [`PruneRow::detail`] says whether it was ticked. Inventing an
+    /// `OFFERED` status would put a word in the terminal-state enum that maps to
+    /// no exit code and describes no outcome.
+    pub status: Status,
+    /// What docker knows it by.
+    pub reference: String,
+    /// What kind of thing.
+    pub kind: crate::disk::DiskKind,
+    /// Whose it is — **the field the whole verb turns on**.
+    pub owner: crate::disk::Ownership,
+    /// What removing it would free, when docker reported a size Armada could
+    /// read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
+    /// Why this row ended the way it did, when that is not obvious from the
+    /// status alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// `--dry-run` on `init`.
@@ -2542,6 +2653,19 @@ pub struct TickRow {
     pub evidence: Vec<Evidence>,
     /// Why, in words, for the screen and the inbox.
     pub why: String,
+    /// What the Job released **because it ended**, on the pass that ended it.
+    ///
+    /// **A Job that finishes releases what it holds, rather than waiting for
+    /// somebody to run `clean`.** `armada fleet kill` already reports this as
+    /// [`Killed::released`], and the two paths reach the same state — the
+    /// difference was only that one of them was reported and the other left a
+    /// named volume alive with nothing on screen to say so. A named volume
+    /// outlives `down`, outlives its container, and is what 171 of came to
+    /// 12.0 GB on the machine this was written for.
+    ///
+    /// Absent on every other pass, because nothing was released on one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub released: Option<Released>,
 }
 
 /// `fleet.verdict` — how a step ended (PLAN.md §14.3).

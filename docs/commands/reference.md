@@ -28,6 +28,7 @@ and the three status enums. These pages use them without re-explaining them.
 | [`manifest/init.md`](manifest/init.md) | `armada manifest init` | shipped |
 | [`manifest/status.md`](manifest/status.md) | `armada manifest status` | shipped |
 | [`manifest/clean.md`](manifest/clean.md) | `armada manifest clean` | shipped |
+| [`manifest/prune.md`](manifest/prune.md) | `armada manifest prune` — reclaim docker disk, including disk that is not Armada's | shipped |
 | [`manifest/commands.md`](manifest/commands.md) | `armada manifest commands` · `armada manifest <repo-command>` | shipped |
 | [`manifest/skills.md`](manifest/skills.md) | `armada manifest skills` · `render` | `skills` shipped · `render` not built |
 | [`manifest/components.md`](manifest/components.md) | `armada manifest components` | shipped |

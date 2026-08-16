@@ -479,3 +479,88 @@ manifest:
         cmd: ./serve
         ports: { web: 3000 }
 ";
+
+/// **A live workspace's own named volume is released by `armada manifest
+/// clean`** — which is the exact call a Job makes when it finishes.
+///
+/// # Why this is not covered by the orphan test above
+///
+/// That test proves the *reap* pass: a workspace whose directory is gone, found
+/// by label and removed on `ENOENT`. This proves the other half, and it is the
+/// half that leaks. A workspace that is alive and well, whose Job has just
+/// reached its last step, is `PathStat::Present` — so the reaper correctly
+/// leaves its resources alone, and the only thing that removes them is
+/// `clean_one`'s per-workspace pass. Nothing exercised that pass against a real
+/// volume, so nothing would have noticed if it had only ever removed containers.
+///
+/// **A named volume is the resource this is written for.** `down` stops the
+/// containers and the networks and leaves the volume standing, by design — that
+/// is what docker volumes are for. So it outlives the Job unless something goes
+/// and gets it, and nothing did: the machine this was written after held 171 of
+/// them and 12.0 GB.
+///
+/// The fixture is created by this test, carries this process's id in its name,
+/// and is removed on the way out whatever happens. **Nothing here can touch a
+/// volume the machine's owner created** — it is addressed by a name this test
+/// minted, never by a prune, never by a filter that could match anything else.
+#[test]
+fn a_live_workspaces_own_volume_is_released_when_it_cleans() {
+    if !daemon_is_up() {
+        eprintln!("skipping: no Docker daemon reachable");
+        return;
+    }
+
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    let payload: Value =
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "init", "--json"]).stdout)
+            .unwrap();
+    let id = payload["workspace"].as_str().unwrap().to_string();
+    let namespace = namespace_of(&machine);
+
+    // Stamped exactly as the compose transform stamps a top-level `volumes:`
+    // entry — which is a separate stamp from the services', because measured,
+    // a service's labels do not reach the volume.
+    let volume = format!("armada-test-livevol-{}", std::process::id());
+    docker(&[
+        "volume",
+        "create",
+        "--label",
+        &format!("armada.workspace={id}"),
+        "--label",
+        &format!("armada.workspace_path={}", repo.display()),
+        "--label",
+        &format!("armada.namespace={namespace}"),
+        &volume,
+    ]);
+    assert!(exists("volume", &volume), "the fixture was not created");
+
+    let cleaned = machine.run(&repo, &["manifest", "clean", "--json"]);
+    assert!(
+        cleaned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&cleaned.stderr)
+    );
+
+    // **Reported, never silent.** A reclaim nobody can audit is one nobody
+    // trusts, and the count is what `armada fleet tick` puts on the row when a
+    // Job finishes.
+    let payload: Value = serde_json::from_slice(&cleaned.stdout).unwrap();
+    let released = &payload["data"]["results"][0]["released"];
+    assert_eq!(
+        released["volumes"], 1,
+        "the volume was not counted as released: {payload}"
+    );
+
+    let survived = exists("volume", &volume);
+    // Removed before the assertion, so a failure leaves nothing behind either:
+    // stray `armada-test-*` resources from an earlier run have twice been
+    // misdiagnosed as flakiness.
+    let _ = Command::new("docker")
+        .args(["volume", "rm", "-f", &volume])
+        .output();
+    assert!(
+        !survived,
+        "the workspace's own named volume survived its own `clean` — this is the leak"
+    );
+}

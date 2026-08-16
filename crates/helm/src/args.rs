@@ -85,6 +85,18 @@ pub enum Invocation {
         /// Rebuild an unreadable `manifest.db` from labels alone.
         force_rebuild: bool,
     },
+    /// `armada manifest prune` — reclaim disk, **including disk that is not
+    /// Armada's**, which is why it is its own verb and not a flag on `clean`.
+    Prune {
+        /// The shared flags.
+        common: Common,
+        /// Skip the tick list.
+        ///
+        /// **Consent for Armada's own and for nothing else.** A flag survives in
+        /// a script; consent to delete something unrecoverable has to be given
+        /// on the run that does it.
+        yes: bool,
+    },
     /// `armada manifest status`.
     Status(Common),
     /// `armada manifest check`.
@@ -855,12 +867,17 @@ pub struct Common {
 /// The verbs Manifest owns. A `commands:` entry may not shadow one — the schema
 /// rejects that, because without the rule a repo can silently break the one
 /// guarantee the project exists to provide.
-pub const BUILTIN_VERBS: [&str; 13] = [
+pub const BUILTIN_VERBS: [&str; 14] = [
     "init",
     "up",
     "down",
     "check",
     "clean",
+    // **Claimed for the same reason as every other name here, and with a
+    // sharper edge than most.** A repo whose `commands:` declared a `prune`
+    // could otherwise have `armada manifest prune` mean something local — and
+    // this is the one verb that can remove a resource Armada did not create.
+    "prune",
     "status",
     "config",
     "skills",
@@ -984,13 +1001,14 @@ pub const RESERVED_GUILD_VERBS: [(&str, &str); 1] =
 /// A separate list from [`BUILTIN_VERBS`], because that one claims names,
 /// several of which answer "not built yet": giving `armada manifest render
 /// --help` a page would promise a verb that does not exist.
-pub const MANIFEST_BUILT: [&str; 10] = [
+pub const MANIFEST_BUILT: [&str; 11] = [
     "init",
     "up",
     "down",
     "status",
     "check",
     "clean",
+    "prune",
     "config",
     "skills",
     "components",
@@ -1201,6 +1219,13 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
         "skills" => skills(rest, json, color),
         "components" => components(rest, json, color),
         "commands" => commands(rest, json, color),
+        "prune" => {
+            let common = common(rest, json, color, &["--dry-run", "--yes"])?;
+            Ok(Invocation::Prune {
+                common,
+                yes: rest.iter().any(|a| a == "--yes"),
+            })
+        }
         "clean" => {
             let common = common(
                 rest,

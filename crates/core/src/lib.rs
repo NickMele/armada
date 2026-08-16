@@ -18,6 +18,7 @@
 pub mod compose;
 pub mod config;
 pub mod ctx;
+pub mod disk;
 pub mod dispatch;
 pub mod envelope;
 pub mod error;

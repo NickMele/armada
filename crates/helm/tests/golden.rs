@@ -294,7 +294,21 @@ fn run_verb(
     scenario: &Scenario,
     verb: impl FnOnce(&mut app::App<NoDocker, FrozenClock, RealFetch>) -> Result<Output, ArmadaError>,
 ) -> String {
-    let run = NoDocker;
+    run_verb_with(scenario, NoDocker, verb)
+}
+
+/// The same, with a runner the test chooses.
+///
+/// **Split out so a verb that reads the daemon can be snapshotted without one.**
+/// `prune` is the only verb whose whole payload comes from `docker system df`,
+/// and the suite's standing rule is that no test may remove a real docker
+/// resource on this machine — so the daemon is a fake that answers with measured
+/// output and records what it was asked to remove.
+fn run_verb_with<R: Run>(
+    scenario: &Scenario,
+    run: R,
+    verb: impl FnOnce(&mut app::App<R, FrozenClock, RealFetch>) -> Result<Output, ArmadaError>,
+) -> String {
     let workspace = discovery::resolve(&run, &scenario.repo).unwrap();
     let ctx = Ctx {
         workspace: Some(workspace),
@@ -663,3 +677,209 @@ manifest:
       cmd: echo
       help: Echo whatever it is given
 ";
+
+/// `armada manifest prune`, against a daemon holding what his machine held.
+///
+/// **No real docker resource is touched.** [`PrunableDocker`] answers the two
+/// `docker system df` forms with output measured on darwin against Docker
+/// 29.6.2, and answers `docker volume rm` by recording it — so the snapshot is
+/// the real verb's payload and the suite still cannot delete anything.
+///
+/// The scenario is the one that made the verb necessary: a machine whose volumes
+/// are mostly **not Armada's**. Nothing is confirmed, so nothing is removed, and
+/// the payload's job is to say what could be and whose it is.
+#[test]
+fn prune_matches_its_snapshot() {
+    let scenario = scenario(CONFIG);
+    run_verb(&scenario, |app| verbs::init::run(app, false));
+    let json = run_verb_with(&scenario, PrunableDocker, |app| {
+        verbs::prune::run(
+            app,
+            armada_helm::args::Common {
+                json: true,
+                dry_run: false,
+                lens: Lens::Workspace,
+            },
+            verbs::prune::Filters { yes: false },
+            &mut armada_helm::ask::Defaults,
+            // No terminal, which is what an agent gets — and what makes this
+            // the invocation that must never remove anything unlabelled.
+            false,
+        )
+    });
+    assert_golden("prune", &json);
+}
+
+/// A daemon that answers, and **cannot remove anything**.
+///
+/// The `df` payloads are verbatim measurements. `volume rm` answers success
+/// without touching docker, which is what lets the snapshot cover the removing
+/// path too if one is ever added — and what keeps the suite unable to destroy a
+/// volume the machine's owner created.
+struct PrunableDocker;
+
+impl PrunableDocker {
+    const SUMMARY: &'static str = concat!(
+        r#"{"Active":"0","Reclaimable":"0B","Size":"0B","TotalCount":"0","Type":"Images"}"#,
+        "\n",
+        r#"{"Active":"0","Reclaimable":"12.01GB (100%)","Size":"12.01GB","TotalCount":"2","Type":"Local Volumes"}"#,
+    );
+
+    const VERBOSE: &'static str = concat!(
+        r#"{"Images":[],"Containers":[],"BuildCache":[],"Volumes":["#,
+        r#"{"Name":"someone-elses_pgdata","Size":"12.01GB"},"#,
+        r#"{"Name":"armada-orphan_pgdata","Size":"79.02MB"}]}"#,
+    );
+}
+
+impl Run for PrunableDocker {
+    fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+        let argv: Vec<&str> = request.argv.iter().map(String::as_str).collect();
+        let stdout = match argv.as_slice() {
+            ["docker", "system", "df", "-v", ..] => Self::VERBOSE.to_string(),
+            ["docker", "system", "df", ..] => Self::SUMMARY.to_string(),
+            ["docker", "version", ..] => "29.6.2".to_string(),
+            // The owner lookup, in the current namespace only — the legacy one
+            // answers empty, as it does on a machine with nothing pre-M1 left.
+            ["docker", "volume", "ls", .., filter] if filter.contains("armada.workspace") => {
+                "armada-orphan_pgdata\n".to_string()
+            }
+            // **Labels read through `inspect`, never off `df -v`'s comma-joined
+            // string.** The workspace path here does not exist, so the volume is
+            // Armada's and idle.
+            ["docker", "inspect", ..] => concat!(
+                "armada-orphan_pgdata\t{\"armada.workspace\":\"deadbeef\",",
+                "\"armada.workspace_path\":\"/nonexistent/gone\",",
+                "\"armada.namespace\":\"ns-1\"}\n"
+            )
+            .to_string(),
+            ["docker", ..] => String::new(),
+            _ => return RealRun.call(request),
+        };
+        Ok(RunOutput {
+            code: Some(0),
+            signal: None,
+            stdout,
+            stderr: String::new(),
+            timed_out: false,
+        })
+    }
+
+    fn call_with_tick(
+        &self,
+        request: &RunRequest,
+        _tick: &mut dyn FnMut(),
+    ) -> Result<RunOutput, SpawnError> {
+        self.call(request)
+    }
+}
+
+/// **An agent must not be able to prune the user's data**, asserted on the argv.
+///
+/// The snapshot above shows the *payload* leaving the unlabelled volume alone.
+/// This shows that no `docker volume rm` was ever built for it — which is the
+/// claim that matters, because a payload is a description and an argv is the
+/// thing that happens. The suite's own rule is that asserting on a payload
+/// proves you described what you meant, not that you did it.
+///
+/// # What inverting it showed, recorded because it is not what was expected
+///
+/// **Neither guard alone makes this test fail, and that is the finding.** There
+/// are two of them and they are independent:
+///
+/// | Guard | What it stops |
+/// |---|---|
+/// | [`disk::default_ticks`] | an unlabelled volume is never *ticked*, so `--yes` never proposes one |
+/// | [`disk::permitted`] | an unlabelled volume is never *removed* on a flag, however it came to be ticked |
+///
+/// Inverting either one on its own left this green; inverting **both** together
+/// made it fail with a real `docker volume rm` for a volume Armada did not
+/// create. So this test proves the pair, not either half — the halves are proved
+/// individually by `disk.rs`'s own unit tests, and that split is deliberate
+/// rather than an accident of coverage. Defence in depth is the intent: the
+/// second guard exists precisely so that a future edit to the first cannot
+/// quietly make an agent able to delete somebody's database.
+///
+/// The `--yes` branch below is what stops the whole thing being vacuous: it
+/// asserts that Armada's *own* volume **was** queued, so "nothing was removed at
+/// all" cannot pass this.
+#[test]
+fn a_run_with_nobody_to_ask_never_builds_a_removal_for_an_unlabelled_volume() {
+    for yes in [false, true] {
+        let scenario = scenario(CONFIG);
+        run_verb(&scenario, |app| verbs::init::run(app, false));
+        let daemon = RecordingDocker::default();
+        let seen = daemon.seen.clone();
+        run_verb_with(&scenario, daemon, |app| {
+            verbs::prune::run(
+                app,
+                armada_helm::args::Common {
+                    json: true,
+                    dry_run: false,
+                    lens: Lens::Workspace,
+                },
+                verbs::prune::Filters { yes },
+                &mut armada_helm::ask::Defaults,
+                false,
+            )
+        });
+
+        let removals: Vec<Vec<String>> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|argv| argv.iter().any(|word| word == "rm"))
+            .cloned()
+            .collect();
+        assert!(
+            !removals
+                .iter()
+                .any(|argv| argv.iter().any(|word| word == "someone-elses_pgdata")),
+            "a volume armada did not create was queued for removal with nobody to ask \
+             (--yes={yes}): {removals:#?}"
+        );
+        // The other half: `--yes` is consent for Armada's own, so something did
+        // happen and the assertion above is not vacuous.
+        if yes {
+            assert!(
+                removals
+                    .iter()
+                    .any(|argv| argv.iter().any(|word| word == "armada-orphan_pgdata")),
+                "--yes removed nothing at all, so the assertion above proves nothing: \
+                 {removals:#?}"
+            );
+        }
+    }
+}
+
+/// [`PrunableDocker`], recording every argv it was given.
+#[derive(Default)]
+struct RecordingDocker {
+    seen: std::sync::Arc<std::sync::Mutex<Vec<Vec<String>>>>,
+}
+
+impl Run for RecordingDocker {
+    fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+        self.seen.lock().unwrap().push(request.argv.clone());
+        // `volume rm` is answered, never performed: no test may remove a real
+        // docker resource on this machine.
+        if request.argv.iter().any(|word| word == "rm") {
+            return Ok(RunOutput {
+                code: Some(0),
+                signal: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                timed_out: false,
+            });
+        }
+        PrunableDocker.call(request)
+    }
+
+    fn call_with_tick(
+        &self,
+        request: &RunRequest,
+        _tick: &mut dyn FnMut(),
+    ) -> Result<RunOutput, SpawnError> {
+        self.call(request)
+    }
+}
