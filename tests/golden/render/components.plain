@@ -1,9 +1,9 @@
 armada  3d9cc7ba
 
-  STATUS    COMPONENT  CHECKS
-  RUNS      api        lint, test
-  DECLARED  docs       -
-  DECLARED  web        e2e, lint, types
+  COMPONENT  STATUS    CHECKS
+  api        RUNS      lint, test
+  docs       DECLARED  -
+  web        DECLARED  e2e, lint, types
 
 OK  3 components, 5 checks
 

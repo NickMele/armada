@@ -1,5 +1,5 @@
-  STATUS      ITEM                  DETAIL
-  DELETED     skills/add-migration  Write a migration and its rollback.
-  REFERENCED  1 file                workflows/feature.yml
+  ITEM                  STATUS   DETAIL
+  skills/add-migration  DELETED  Write a migration and its rollback.
+  REFERENCED            1 file   workflows/feature.yml
 
 READY  ~/.armada/guild, committed, armada guild push sends it

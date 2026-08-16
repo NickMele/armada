@@ -1,8 +1,8 @@
-  [1m[38;2;156;163;175mSTATUS[0m   [1m[38;2;156;163;175mCHECK[0m      [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;61;220;132mFOUND[0m    git        [38;2;156;163;175m2.51.0[0m
-  [38;2;61;220;132mFOUND[0m    claude     [38;2;156;163;175m2.0.14[0m
-  [38;2;255;92;92mMISSING[0m  docker     [38;2;156;163;175mnot required by every repo[0m
-  [38;2;61;220;132mCREATED[0m  ~/.armada  [38;2;156;163;175mguild/, jobs/, workspaces/[0m
+  [1m[38;2;156;163;175mCHECK[0m      [1m[38;2;156;163;175mSTATUS[0m   [1m[38;2;156;163;175mDETAIL[0m
+  git        [38;2;61;220;132mFOUND[0m    [38;2;156;163;175m2.51.0[0m
+  claude     [38;2;61;220;132mFOUND[0m    [38;2;156;163;175m2.0.14[0m
+  docker     [38;2;255;92;92mMISSING[0m  [38;2;156;163;175mnot required by every repo[0m
+  ~/.armada  [38;2;61;220;132mCREATED[0m  [38;2;156;163;175mguild/, jobs/, workspaces/[0m
 
 [38;2;255;169;64mDo you already have a guild?[0m  [38;2;156;163;175m›[0m [38;2;92;225;230m3 build one now[0m
 

@@ -1,6 +1,6 @@
 pass 1, static, nothing is executed
 
-  STATUS     CHECK          DETAIL                           TIME
+  CHECK      STATUS         DETAIL                           TIME
   PASS       schema         -                                0.1s
   PASS       references     needs:, match:, ports fit block  0.1s
   FAILED     argv[0]        `vitest` not on PATH or in root  0.2s

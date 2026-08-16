@@ -1,8 +1,8 @@
-  STATUS   CHECK      DETAIL
-  FOUND    git        2.51.0
-  FOUND    claude     2.0.14
-  MISSING  docker     not required by every repo
-  CREATED  ~/.armada  guild/, jobs/, workspaces/
+  CHECK      STATUS   DETAIL
+  git        FOUND    2.51.0
+  claude     FOUND    2.0.14
+  docker     MISSING  not required by every repo
+  ~/.armada  CREATED  guild/, jobs/, workspaces/
 
 Do you already have a guild?  > 3 build one now
 

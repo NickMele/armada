@@ -1,4 +1,4 @@
-  STATUS      STEP      DETAIL                           TIME
+  STEP        STATUS    DETAIL                           TIME
   CLASSIFIED  workflow  feature, confidence 0.91         0.8s
   CREATED     worktree  ~/.armada/workspaces/rate-limit  0.3s
   CLAIMED     ports     5470-5479                           -

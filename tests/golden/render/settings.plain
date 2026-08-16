@@ -1,8 +1,8 @@
-  STATUS   NAME                      DETAIL
-  MACHINE  manifest.cpu_slots        6 — ~/.armada/machine.yml
-  MACHINE  manifest.port_block_size  10 — ~/.armada/machine.yml
-  MACHINE  helm.enter                on — ~/.armada/machine.yml
-  MACHINE  helm.mode                 auto — ~/.armada/machine.yml
-  SYNCED   guild.settings.json       3 settings — ~/.armada/guild/settings.json
+  NAME                      STATUS   DETAIL
+  manifest.cpu_slots        MACHINE  6 — ~/.armada/machine.yml
+  manifest.port_block_size  MACHINE  10 — ~/.armada/machine.yml
+  helm.enter                MACHINE  on — ~/.armada/machine.yml
+  helm.mode                 MACHINE  auto — ~/.armada/machine.yml
+  guild.settings.json       SYNCED   3 settings — ~/.armada/guild/settings.json
 
 OK  5 settings

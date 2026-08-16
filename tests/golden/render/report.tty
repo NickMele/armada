@@ -1,24 +1,24 @@
-  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mID[0m        [1m[38;2;156;163;175mDETAIL[0m                                                  [1m[38;2;156;163;175mTIME[0m
-  [38;2;255;180;84mOPEN[0m    [38;2;76;159;232m6d40b1e9[0m  [38;2;156;163;175mreported, the dry-run said CREATED worktree and made …[0m    [38;2;156;163;175m0s[0m
+  [1m[38;2;156;163;175mID[0m        [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mDETAIL[0m                                                  [1m[38;2;156;163;175mTIME[0m
+  [38;2;76;159;232m6d40b1e9[0m  [38;2;255;180;84mOPEN[0m    [38;2;156;163;175mreported, the dry-run said CREATED worktree and made …[0m    [38;2;156;163;175m0s[0m
 
 [38;2;156;163;175m  what was reported:[0m
     the dry-run said CREATED worktree and made nothing
 
-  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mFACT[0m       [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;156;163;175mSEEN[0m    [38;2;156;163;175mcount[0m      [38;2;156;163;175monce, at 2026-08-09T14:58:11Z[0m
-  [38;2;156;163;175mIN[0m      [38;2;156;163;175mdirectory[0m  [38;2;156;163;175m~/code/orders[0m
-  [38;2;156;163;175mRAN[0m     [38;2;156;163;175marmada[0m     [38;2;156;163;175m0.1.0[0m
-  [38;2;156;163;175mRAN[0m     [38;2;156;163;175mclaude[0m     [38;2;156;163;175m2.0.14[0m
-  [38;2;156;163;175mON[0m      [38;2;156;163;175msystem[0m     [38;2;156;163;175mlinux x86_64[0m
-  [38;2;156;163;175mIN[0m      [38;2;156;163;175mworkspace[0m  [38;2;156;163;175m~/code/orders, with an armada.yml[0m
-  [38;2;255;180;84mSAID[0m    [38;2;156;163;175mdoctor[0m     [38;2;156;163;175mSTALE guild: 3 commits behind origin[0m
-  [38;2;255;180;84mOPEN[0m    [38;2;156;163;175mfailures[0m   [38;2;156;163;175ma1b2c3d4 could not be found to run[0m
-  [38;2;76;159;232mIN[0m      [38;2;156;163;175mflight[0m     [38;2;156;163;175morders-fix-a1b2 RUNNING bug[0m
+  [1m[38;2;156;163;175mFACT[0m   [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;156;163;175mcount[0m  [38;2;156;163;175mSEEN[0m       [38;2;156;163;175monce, at 2026-08-09T14:58:11Z[0m
+  [38;2;156;163;175mIN[0m     [38;2;156;163;175mdirectory[0m  [38;2;156;163;175m~/code/orders[0m
+  [38;2;156;163;175mRAN[0m    [38;2;156;163;175marmada[0m     [38;2;156;163;175m0.1.0[0m
+  [38;2;156;163;175mRAN[0m    [38;2;156;163;175mclaude[0m     [38;2;156;163;175m2.0.14[0m
+  [38;2;156;163;175mON[0m     [38;2;156;163;175msystem[0m     [38;2;156;163;175mlinux x86_64[0m
+  [38;2;156;163;175mIN[0m     [38;2;156;163;175mworkspace[0m  [38;2;156;163;175m~/code/orders, with an armada.yml[0m
+  [38;2;255;180;84mSAID[0m   [38;2;156;163;175mdoctor[0m     [38;2;156;163;175mSTALE guild: 3 commits behind origin[0m
+  [38;2;255;180;84mOPEN[0m   [38;2;156;163;175mfailures[0m   [38;2;156;163;175ma1b2c3d4 could not be found to run[0m
+  [38;2;76;159;232mIN[0m     [38;2;156;163;175mflight[0m     [38;2;156;163;175morders-fix-a1b2 RUNNING bug[0m
 
 [38;2;156;163;175m  what was run before it:[0m
-  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mRUN[0m          [1m[38;2;156;163;175mDETAIL[0m                                              [1m[38;2;156;163;175mTIME[0m
-  [38;2;156;163;175mOK[0m      [38;2;76;159;232mfleet spawn[0m  [38;2;156;163;175marmada fleet spawn 'add the report verb' --dry-run[0m    [38;2;156;163;175m0s[0m
-  [38;2;156;163;175mOK[0m      [38;2;76;159;232mfleet ls[0m     [38;2;156;163;175marmada fleet ls[0m                                       [38;2;156;163;175m1m[0m
+  [1m[38;2;156;163;175mRUN[0m          [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mDETAIL[0m                                              [1m[38;2;156;163;175mTIME[0m
+  [38;2;76;159;232mfleet spawn[0m  [38;2;156;163;175mOK[0m      [38;2;156;163;175marmada fleet spawn 'add the report verb' --dry-run[0m    [38;2;156;163;175m0s[0m
+  [38;2;76;159;232mfleet ls[0m     [38;2;156;163;175mOK[0m      [38;2;156;163;175marmada fleet ls[0m                                       [38;2;156;163;175m1m[0m
 
 [38;2;156;163;175m  the task a Job would be given:[0m
     This was reported by hand rather than caught by Armada, and was recorded as

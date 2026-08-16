@@ -707,11 +707,10 @@ mod tests {
         assert!(header.contains("STATUS"), "{header}");
         assert!(header.contains("STEP"), "{header}");
         assert!(!header.contains("CHECK"), "{header}");
-        // STATUS is the first column here as it is everywhere: the universal
-        // rule won over `STEP` first (`commands/render.md`).
+        // NAME is the first column now per the universal rule (NAME → STATUS → DETAIL).
         assert!(
-            header.trim_start().starts_with("STATUS"),
-            "STATUS is not first: {header}"
+            header.trim_start().starts_with("STEP"),
+            "STEP (name) is not first: {header}"
         );
         for step in super::super::progress::SpawnStep::ALL {
             assert!(

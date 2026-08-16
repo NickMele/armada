@@ -1,15 +1,15 @@
 armada  3d9cc7ba  /scratch/repo                                  ports 5460-5469
 
-  STATUS    PORT      DETAIL
-  UP        api       5460
-  CONFLICT  postgres  5462
-  DOWN      web       5461
+  PORT      STATUS    DETAIL
+  api       UP        5460
+  postgres  CONFLICT  5462
+  web       DOWN      5461
 
-  STATUS   RUN               DETAIL
-  RUNNING  01M048YQMSD6YP48  pgid 4212 · .armada/run/01M048YQMSD6YP48/detach.log
-  DEAD     01M048KKTG19V63A  pgid 4098 · .armada/run/01M048KKTG19V63A/detach.log
+  RUN               STATUS   DETAIL
+  01M048YQMSD6YP48  RUNNING  pgid 4212 · .armada/run/01M048YQMSD6YP48/detach.log
+  01M048KKTG19V63A  DEAD     pgid 4098 · .armada/run/01M048KKTG19V63A/detach.log
 
-  STATUS    RESOURCE   DETAIL
+  RESOURCE  STATUS     DETAIL
   STALE     pgid       4212
   OWNS      container  armada-3d9cc7ba-api
   OWNS      container  armada-3d9cc7ba-db

@@ -1,7 +1,7 @@
 [1m[38;2;255;169;64marmada[0m  [38;2;156;163;175m3d9cc7ba[0m
 
-  [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mSKILL[0m         [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;61;220;132mDECLARED[0m  add-endpoint  [38;2;156;163;175mAdd an API endpoint, OpenAPI first, then the generate…[0m
-  [38;2;61;220;132mDECLARED[0m  triage-flake  [38;2;156;163;175mWork out whether a failing test is flaky or genuinely…[0m
+  [1m[38;2;156;163;175mSKILL[0m         [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mDETAIL[0m
+  add-endpoint  [38;2;61;220;132mDECLARED[0m  [38;2;156;163;175mAdd an API endpoint, OpenAPI first, then the generate…[0m
+  triage-flake  [38;2;61;220;132mDECLARED[0m  [38;2;156;163;175mWork out whether a failing test is flaky or genuinely…[0m
 
 [1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m2 skills · 0 unresolved references[0m

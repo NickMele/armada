@@ -1,7 +1,7 @@
-  [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mITEM[0m    [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;61;220;132mADDED[0m      skills  [38;2;156;163;175madd-migration, onboard-repo[0m
-  [38;2;255;180;84mCHANGED[0m    agents  [38;2;156;163;175mhelm.md[0m
-  [38;2;255;92;92mCONFLICT[0m   hooks   [38;2;156;163;175medited here; delete it to take the guild's[0m
-  [38;2;156;163;175mUNCHANGED[0m  skills  [38;2;156;163;175mtriage-flake[0m
+  [1m[38;2;156;163;175mITEM[0m    [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mDETAIL[0m
+  skills  [38;2;61;220;132mADDED[0m      [38;2;156;163;175madd-migration, onboard-repo[0m
+  agents  [38;2;255;180;84mCHANGED[0m    [38;2;156;163;175mhelm.md[0m
+  hooks   [38;2;255;92;92mCONFLICT[0m   [38;2;156;163;175medited here; delete it to take the guild's[0m
+  skills  [38;2;156;163;175mUNCHANGED[0m  [38;2;156;163;175mtriage-flake[0m
 
 [1m[38;2;255;180;84mNEEDS ATTENTION[0m  [38;2;156;163;175m~/.claude/ · 2 placed · 1 updated · 1 left as yours[0m

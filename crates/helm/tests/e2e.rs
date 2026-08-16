@@ -1339,9 +1339,9 @@ fn a_skill_can_be_listed_and_resolved_and_never_run() {
         text.lines()
             .any(|line| line.split_whitespace().collect::<Vec<_>>() == words)
     };
-    assert!(row(&["GRANTS", "tickets", "./exiter.sh", "0"]), "{text}");
+    assert!(row(&["tickets", "GRANTS", "./exiter.sh", "0"]), "{text}");
     assert!(
-        row(&["READS", "doc", "docs/skills/add-endpoint.md"]),
+        row(&["doc", "READS", "docs/skills/add-endpoint.md"]),
         "{text}"
     );
 

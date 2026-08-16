@@ -1,9 +1,9 @@
 armada
 
-  STATUS   VOLUME                  DETAIL
-  SKIPPED  armada-a3f91c02_pgdata  79.0 MB — would go
-  SKIPPED  armada-b7c14e90_pgdata  48.2 MB — armada's, in use
-  SKIPPED  someone-elses_pgdata    12.0 GB — not armada's
+  VOLUME                  STATUS   DETAIL
+  armada-a3f91c02_pgdata  SKIPPED  79.0 MB — would go
+  armada-b7c14e90_pgdata  SKIPPED  48.2 MB — armada's, in use
+  someone-elses_pgdata    SKIPPED  12.0 GB — not armada's
 
   NOTE  no terminal to ask at; `--yes` removes armada's own
   NOTE  1 of these is not armada's; only a person can remove it

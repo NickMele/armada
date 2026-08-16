@@ -1,7 +1,7 @@
-  STATUS     ITEM    DETAIL
-  ADDED      skills  add-migration, onboard-repo
-  CHANGED    agents  helm.md
-  CONFLICT   hooks   edited here; delete it to take the guild's
-  UNCHANGED  skills  triage-flake
+  ITEM    STATUS     DETAIL
+  skills  ADDED      add-migration, onboard-repo
+  agents  CHANGED    helm.md
+  hooks   CONFLICT   edited here; delete it to take the guild's
+  skills  UNCHANGED  triage-flake
 
 NEEDS ATTENTION  ~/.claude/, 2 placed, 1 updated, 1 left as yours

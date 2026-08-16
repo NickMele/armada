@@ -1,9 +1,9 @@
 armada  3d9cc7ba
 
-  STATUS    COMMAND    DETAIL
-  DECLARED  deploy     Deploy this branch to staging
-  DECLARED  seed-db    pnpm prisma db seed
-  DECLARED  worktrees  Create and tear down git worktrees
+  COMMAND    STATUS    DETAIL
+  deploy     DECLARED  Deploy this branch to staging
+  seed-db    DECLARED  pnpm prisma db seed
+  worktrees  DECLARED  Create and tear down git worktrees
 
 OK  3 commands, 1 with a secrets grant
 

@@ -1,14 +1,14 @@
 [1m[38;2;255;169;64marmada[0m  [38;2;156;163;175m3d9cc7ba[0m
 
-  [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mSKILL[0m         [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;61;220;132mDECLARED[0m  add-endpoint  [38;2;156;163;175mAdd an API endpoint, OpenAPI first, then the generate…[0m
+  [1m[38;2;156;163;175mSKILL[0m         [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mDETAIL[0m
+  add-endpoint  [38;2;61;220;132mDECLARED[0m  [38;2;156;163;175mAdd an API endpoint, OpenAPI first, then the generate…[0m
 
-  [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mNAME[0m     [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;92;225;230mGRANTS[0m    tickets  [38;2;156;163;175muv run scripts/tickets.py[0m
-  [38;2;61;220;132mVERIFIES[0m  check    [38;2;156;163;175mapi:types[0m
-  [38;2;61;220;132mVERIFIES[0m  check    [38;2;156;163;175mweb:lint[0m
-  [38;2;156;163;175mREADS[0m     doc      [38;2;156;163;175mdocs/skills/add-endpoint.md[0m
-  [38;2;255;180;84mTOUCHES[0m   glob     [38;2;156;163;175mbackend/openapi.yaml[0m
-  [38;2;255;180;84mTOUCHES[0m   glob     [38;2;156;163;175mfrontend/src/generated/**[0m
+  [1m[38;2;156;163;175mNAME[0m     [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mDETAIL[0m
+  tickets  [38;2;92;225;230mGRANTS[0m    [38;2;156;163;175muv run scripts/tickets.py[0m
+  check    [38;2;61;220;132mVERIFIES[0m  [38;2;156;163;175mapi:types[0m
+  check    [38;2;61;220;132mVERIFIES[0m  [38;2;156;163;175mweb:lint[0m
+  doc      [38;2;156;163;175mREADS[0m     [38;2;156;163;175mdocs/skills/add-endpoint.md[0m
+  glob     [38;2;255;180;84mTOUCHES[0m   [38;2;156;163;175mbackend/openapi.yaml[0m
+  glob     [38;2;255;180;84mTOUCHES[0m   [38;2;156;163;175mfrontend/src/generated/**[0m
 
 [1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m1 skill · 0 unresolved references[0m

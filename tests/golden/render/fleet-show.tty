@@ -14,17 +14,17 @@
   [38;2;230;232;235mmerge the release branch and cut 4.2, resolving the migration conflict in[0m
   [38;2;230;232;235morders before the tag goes out[0m
 
-  [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mFACT[0m      [1m[38;2;156;163;175mDETAIL[0m
-  [38;2;156;163;175mRECORDED[0m  [38;2;156;163;175mstate[0m     [38;2;156;163;175mRUNNING, as a verb last wrote it[0m
-  [38;2;61;220;132mALIVE[0m     [38;2;156;163;175mdrone[0m     [38;2;156;163;175mprocess group 48122[0m
-  [38;2;156;163;175mGATED[0m     [38;2;156;163;175mstep[0m      [38;2;156;163;175mimplement advances on check_passes[0m
-  [38;2;156;163;175mSPENT[0m     [38;2;156;163;175mbudget[0m    [38;2;156;163;175m$1.25 of $10.00, 4 turns, 119k tokens[0m
-  [38;2;156;163;175mLEFT[0m      [38;2;156;163;175mbudget[0m    [38;2;156;163;175m$8.75, 2 attempts at this step, 25m[0m
-  [38;2;156;163;175mSINCE[0m     [38;2;156;163;175mstarted[0m   [38;2;156;163;175m2026-08-09T14:02:11Z[0m
-  [38;2;92;225;230mHELD[0m      [38;2;156;163;175mports[0m     [38;2;156;163;175m5470–5479[0m
-  [38;2;92;225;230mHELD[0m      [38;2;156;163;175mworktree[0m  [38;2;156;163;175m~/.armada/workspaces/orders/release-merge[0m
-  [38;2;92;225;230mHELD[0m      [38;2;156;163;175mbranch[0m    [38;2;156;163;175marmada/release-merge[0m
-  [38;2;156;163;175mFROM[0m      [38;2;156;163;175mrepo[0m      [38;2;156;163;175morders[0m
+  [1m[38;2;156;163;175mFACT[0m      [1m[38;2;156;163;175mSTATUS[0m    [1m[38;2;156;163;175mDETAIL[0m
+  [38;2;156;163;175mstate[0m     [38;2;156;163;175mRECORDED[0m  [38;2;156;163;175mRUNNING, as a verb last wrote it[0m
+  [38;2;156;163;175mdrone[0m     [38;2;61;220;132mALIVE[0m     [38;2;156;163;175mprocess group 48122[0m
+  [38;2;156;163;175mstep[0m      [38;2;156;163;175mGATED[0m     [38;2;156;163;175mimplement advances on check_passes[0m
+  [38;2;156;163;175mbudget[0m    [38;2;156;163;175mSPENT[0m     [38;2;156;163;175m$1.25 of $10.00, 4 turns, 119k tokens[0m
+  [38;2;156;163;175mbudget[0m    [38;2;156;163;175mLEFT[0m      [38;2;156;163;175m$8.75, 2 attempts at this step, 25m[0m
+  [38;2;156;163;175mstarted[0m   [38;2;156;163;175mSINCE[0m     [38;2;156;163;175m2026-08-09T14:02:11Z[0m
+  [38;2;156;163;175mports[0m     [38;2;92;225;230mHELD[0m      [38;2;156;163;175m5470–5479[0m
+  [38;2;156;163;175mworktree[0m  [38;2;92;225;230mHELD[0m      [38;2;156;163;175m~/.armada/workspaces/orders/release-merge[0m
+  [38;2;156;163;175mbranch[0m    [38;2;92;225;230mHELD[0m      [38;2;156;163;175marmada/release-merge[0m
+  [38;2;156;163;175mrepo[0m      [38;2;156;163;175mFROM[0m      [38;2;156;163;175morders[0m
 
   [1m[38;2;156;163;175mSTATUS[0m     [1m[38;2;156;163;175mSTEP[0m       [1m[38;2;156;163;175mDETAIL[0m                                           [1m[38;2;156;163;175mTIME[0m
   [38;2;156;163;175mRESTARTED[0m  [38;2;156;163;175mimplement[0m  [38;2;156;163;175mattempt 2[0m                                         [38;2;156;163;175m18m[0m
