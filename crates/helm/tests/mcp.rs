@@ -143,6 +143,8 @@ impl Machine {
             task: "make the flaky test stop being flaky".to_string(),
             progress: Vec::new(),
             attempts: BTreeMap::new(),
+            waited_ms: 0,
+            waiting_from_ms: None,
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),

@@ -251,6 +251,16 @@ fn settle<C: Clock>(
     record.spend = observed.spend;
     record.state = observed.state;
 
+    // **The wall clock stops while the Job is stopped in front of you.** Every
+    // verb that persists an observation runs this, so the stamp is set by
+    // whichever one first sees the Job waiting and banked by whichever first
+    // sees it moving again — which is what makes the credit survive a Job
+    // nobody looks at for an hour ([`job::Job::waited_ms`]).
+    match record.waiting_on_a_person() {
+        true => record.began_waiting(now.wall_ms()),
+        false => record.stopped_waiting(now.wall_ms()),
+    }
+
     if let Some(ceiling) = observed.ceiling {
         // **Exhaustion is an outcome, never a silent stop** (PLAN.md §14.3):
         // the Job records what it spent and where it reached, and is raised.
@@ -487,6 +497,8 @@ pub fn spawn<R: Run, C: Clock>(
         task: options.task.clone(),
         progress: Vec::new(),
         attempts: std::collections::BTreeMap::new(),
+        waited_ms: 0,
+        waiting_from_ms: None,
         transitions: Vec::new(),
         pending: None,
         facts: options.set.clone(),
@@ -2271,6 +2283,45 @@ pub fn answer<R: Run, C: Clock>(
         // whose question has just been answered.
         record.verdict = None;
         store.save(&record)?;
+
+        // # A raise is not an answer to whatever else the Job was asking
+        //
+        // **Measured within the hour this branch was written, on the author's
+        // own fleet.** A planning Job sat on `human_approves` asking *"does this
+        // look right to you?"*, and while it waited its wall clock ran out. The
+        // raise that gave it more time fell through to `inbox::answer` below and
+        // closed that question with the string `max_wall_clock=6h` — which the
+        // gate then read as the reviewer's verdict, decided it was not an
+        // approval, and recorded a failed attempt. Three of those and the Job was
+        // out of attempts as well.
+        //
+        // So a raise settles the ceiling and nothing else. The gate's question
+        // stays open and is answered on its own terms, by a second call that
+        // carries the actual decision.
+        if let Some(pending) = &record.pending {
+            if matches!(&pending.on, job::Waiting::Answer(waiting_on) if waiting_on == &entry.uuid)
+            {
+                return Ok(Output::Answer(Box::new(Envelope::ok(
+                    "fleet answer",
+                    None,
+                    Status::Ok,
+                    AnswerData {
+                        job: record.name.clone(),
+                        uuid: record.uuid.clone(),
+                        entry: entry.uuid.clone(),
+                        answer: said.to_string(),
+                        state: record.state,
+                        budget_remaining: job::remaining(
+                            &record.budget,
+                            &record.spend,
+                            record.run_time_ms(now.wall_ms()),
+                            record.attempts_on_step(),
+                        ),
+                        pgid: record.drone.as_ref().map(|drone| drone.pgid),
+                    },
+                ))));
+            }
+        }
     }
 
     // **Whose question was this?** A gate's and a Drone's arrive in one inbox
@@ -3980,6 +4031,8 @@ fn spawn_child<R: Run, C: Clock>(
         task: task.clone(),
         progress: Vec::new(),
         attempts: std::collections::BTreeMap::new(),
+        waited_ms: 0,
+        waiting_from_ms: None,
         transitions: Vec::new(),
         pending: None,
         // **The parent's `--set` facts, inherited.** A `${task.test}` the

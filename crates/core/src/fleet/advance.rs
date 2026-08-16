@@ -349,6 +349,8 @@ mod tests {
             task: "t".to_string(),
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
+            waited_ms: 0,
+            waiting_from_ms: None,
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
