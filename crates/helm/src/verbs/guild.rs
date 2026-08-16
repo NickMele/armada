@@ -2466,7 +2466,7 @@ mod tests {
                 None,
                 None,
                 Some("8".to_string()),
-                Some("200k".to_string()),
+                Some("200".to_string()),
                 Some("30m".to_string()),
                 Some("git@example.com:me/guild.git".to_string()),
             ],
@@ -2479,7 +2479,7 @@ mod tests {
         assert_eq!(answers.voice.as_deref(), Some("brief"));
         assert_eq!(answers.expectations, None);
         assert_eq!(answers.iterations, Some(8));
-        assert_eq!(answers.tokens, Some(200_000));
+        assert_eq!(answers.cost_usd, Some(200.0));
         assert_eq!(answers.wall_clock_minutes, Some(30));
         assert_eq!(answers.kept(), 2);
     }
@@ -2502,7 +2502,7 @@ mod tests {
             shown,
             vec![
                 ("20".to_string(), Some("20".to_string())),
-                ("600k".to_string(), Some("600k".to_string())),
+                ("$10.00".to_string(), Some("$10.00".to_string())),
                 ("90m".to_string(), Some("90m".to_string())),
             ]
         );
@@ -2519,7 +2519,7 @@ mod tests {
                 None,
                 None,
                 Some("lots".to_string()),
-                Some("200k".to_string()),
+                Some("200".to_string()),
                 None,
                 None,
             ],
@@ -2528,8 +2528,8 @@ mod tests {
         let answers = interview(&mut ask, None);
         assert_eq!(answers.iterations, None, "refused, so defaulted");
         assert_eq!(
-            answers.tokens,
-            Some(200_000),
+            answers.cost_usd,
+            Some(200.0),
             "the readable answer survives"
         );
         assert_eq!(answers.wall_clock_minutes, None);

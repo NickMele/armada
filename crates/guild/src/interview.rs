@@ -8,7 +8,7 @@
 //! | 2 | What does "done" mean? | `expectations.md` | what import wrote |
 //! | 3 | How do you work? | `how-i-work.md` | what import wrote |
 //! | 4 | Iterations before a Job stops | `workflows/*.yml` | `20` |
-//! | 5 | Tokens before a Job stops | `workflows/*.yml` | `600k` |
+//! | 5 | Dollars before a Job stops | `workflows/*.yml` | `$10.00` |
 //! | 6 | Minutes before a Job stops | `workflows/*.yml` | `90m` |
 //! | 7 | A private git remote to sync to | `machine.yml` | none — sync off, `export` still works |
 //!
@@ -176,12 +176,14 @@ pub const QUESTIONS: [Question; 7] = [
     },
     Question {
         number: 5,
-        prompt: "How many tokens should one Job spend before it stops and asks you?",
-        purpose: "One number — write it as 600k or as 600000, both read the \
-                  same. It counts every token that Job spends, and at this many \
-                  it stops and waits for you exactly as the iteration limit \
-                  does. This is the limit that bounds what a Job costs.",
-        keeps: "600k",
+        prompt: "How much should one Job spend before it stops and asks you?",
+        purpose: "One number, in dollars — 10 or 10.00, both read the same. It \
+                  is what the Job has actually cost, summed from every turn, \
+                  and at this much it stops and waits for you exactly as the \
+                  iteration limit does. It used to be a token count, and a \
+                  token count turned out to measure how much conversation was \
+                  re-read rather than how much was spent.",
+        keeps: "$10.00",
         writes: "workflows/*.yml",
         shape: Shape::Line,
     },

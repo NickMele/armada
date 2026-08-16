@@ -59,6 +59,26 @@ pub struct Job {
     pub port_block: Option<PortBlock>,
     /// The ceilings this Job runs under.
     pub budget: Budget,
+    /// Which budget keys the **caller** set, rather than the workflow.
+    ///
+    /// **A workflow's declared budget is a default; `--budget` is an
+    /// instruction about this tree.** `carved` bounds a sub-Job by the smaller
+    /// of its own workflow's declaration and what the parent has left — which
+    /// is right when nobody said otherwise, and wrong the moment somebody did:
+    /// measured 2026-08-16, a parent spawned with `--budget max_iterations=200`
+    /// gave its planning sub-Job **15**, because `plan.yml` declares 15 and the
+    /// child was capped by its own default. The raise could not reach the work,
+    /// and `--budget` was a promise the tree did not keep.
+    ///
+    /// So the keys travel with the Job and down to its children: a key named
+    /// here means *use the parent's remaining for this one*, still bounded by
+    /// what the parent actually has. A key absent means the child's own
+    /// declaration stands, which is the containment `016` §2 asked for.
+    ///
+    /// Additive and defaulted, so `schema_version` stays 1 and a record written
+    /// before this field existed reads as *nothing was overridden*.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub budget_set: Vec<String>,
     /// What the Job is doing right now.
     pub state: JobState,
     /// The step it is on.
