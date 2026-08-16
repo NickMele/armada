@@ -138,6 +138,28 @@ impl Where {
         Some(settings.display().to_string())
     }
 
+    /// The `--mcp-config` document that attaches Armada's own server, written
+    /// beside the relay and for the same reason.
+    ///
+    /// **Without it a Drone cannot report at all.** Measured 2026-08-16: a
+    /// Drone's session advertised 103 tools and none of them Armada's, so the
+    /// four `mcp__armada__fleet_*` tools its brief names — and that
+    /// `drone::ALLOW` grants — did not exist to be called. The Job did its
+    /// work, said so in prose, and stopped `SILENT`.
+    ///
+    /// The document is `helm::mcp_json`'s, unchanged: one server, one command,
+    /// and `ARMADA_JOB` in the environment is what makes `armada mcp serve`
+    /// answer with the Drone's belt rather than Helm's. A second document
+    /// spelling the same server differently is the drift `glossary.md` exists
+    /// to prevent.
+    fn drone_mcp(&self, uuid: &str) -> Option<String> {
+        let path = home::drone_mcp(&self.armada_home, uuid);
+        std::fs::create_dir_all(path.parent()?).ok()?;
+        let exe = self.exe.display().to_string();
+        std::fs::write(&path, armada_core::helm::mcp_json(&exe)).ok()?;
+        Some(path.display().to_string())
+    }
+
     /// Turn a `~/…` back into a real path.
     ///
     /// **Tilde-form is the stored form, and this is the only reader.** A Job
@@ -527,6 +549,7 @@ pub fn spawn<R: Run, C: Clock>(
             // **The relay, written before the first Drone starts** (`020` §1).
             // Nothing observed an exchange ending until this line existed.
             place.relay(&uuid).as_deref(),
+            place.drone_mcp(&uuid).as_deref(),
         ),
     )?);
     store.save(&record)?;
@@ -1742,6 +1765,7 @@ pub fn resume<R: Run, C: Clock>(
             &record.uuid,
             &place.posture()?,
             place.relay(&record.uuid).as_deref(),
+            place.drone_mcp(&record.uuid).as_deref(),
         ),
     )?);
     store.save(&record)?;
@@ -2058,6 +2082,7 @@ pub fn answer<R: Run, C: Clock>(
             said,
             &place.posture()?,
             place.relay(&record.uuid).as_deref(),
+            place.drone_mcp(&record.uuid).as_deref(),
         ),
     )?);
     store.save(&record)?;
@@ -3161,6 +3186,7 @@ fn start_step<R: Run>(
             &ask,
             &place.posture()?,
             place.relay(&record.uuid).as_deref(),
+            place.drone_mcp(&record.uuid).as_deref(),
         ),
     )?);
     Ok(())

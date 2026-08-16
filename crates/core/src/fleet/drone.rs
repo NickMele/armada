@@ -66,13 +66,14 @@ pub fn spawn_argv(
     prompt: &str,
     posture: &Posture,
     settings: Option<&str>,
+    mcp: Option<&str>,
 ) -> Vec<String> {
     let mut argv = vec![
         CLAUDE.to_string(),
         "--session-id".to_string(),
         uuid.to_string(),
     ];
-    argv.extend(headless(posture, settings));
+    argv.extend(headless(posture, settings, mcp));
     argv.push(prompt.to_string());
     argv
 }
@@ -87,9 +88,10 @@ pub fn resume_argv(
     prompt: &str,
     posture: &Posture,
     settings: Option<&str>,
+    mcp: Option<&str>,
 ) -> Vec<String> {
     let mut argv = vec![CLAUDE.to_string(), "--resume".to_string(), uuid.to_string()];
-    argv.extend(headless(posture, settings));
+    argv.extend(headless(posture, settings, mcp));
     argv.push(prompt.to_string());
     argv
 }
@@ -110,8 +112,13 @@ pub const CONTINUE: &str = "Continue from where you left off.";
 
 /// The argv for **resuming** a Job nobody said anything to —
 /// `armada fleet resume`.
-pub fn continue_argv(uuid: &str, posture: &Posture, settings: Option<&str>) -> Vec<String> {
-    resume_argv(uuid, CONTINUE, posture, settings)
+pub fn continue_argv(
+    uuid: &str,
+    posture: &Posture,
+    settings: Option<&str>,
+    mcp: Option<&str>,
+) -> Vec<String> {
+    resume_argv(uuid, CONTINUE, posture, settings, mcp)
 }
 
 /// The argv `armada fleet board` prints, and execs under `--exec`.
@@ -164,13 +171,38 @@ pub fn board_argv(uuid: &str) -> Vec<String> {
 /// **`--settings` carries the `Stop` hook, and it comes before `--print`** for
 /// the same reason the posture does: everything variadic has to be behind a
 /// flag that ends it, and the prompt is last.
-fn headless(posture: &Posture, settings: Option<&str>) -> Vec<String> {
+fn headless(posture: &Posture, settings: Option<&str>, mcp: Option<&str>) -> Vec<String> {
     let mut argv = vec![APPEND.to_string(), brief()];
     argv.extend(posture.argv());
     if let Some(path) = settings {
         argv.push(SETTINGS.to_string());
         argv.push(path.to_string());
     }
+    // **Armada's own server, and nobody else's.** Measured 2026-08-16: a Drone
+    // spawned without these two reported a toolbelt of **103 tools, none of
+    // them Armada's**, and the servers it did carry were the operator's own —
+    // Gmail, Drive, Notion, Todoist. Two failures from one omission.
+    //
+    // The first is why no Job ever finished. [`BRIEF`] instructs a Drone to
+    // report through `mcp__armada__fleet_*`, and [`ALLOW`] grants exactly those
+    // four — but a grant is not a connection, and a tool absent from the
+    // session cannot be called however broadly it is permitted. Every Job ran
+    // its work, answered in prose, and stopped `SILENT` with no verdict to
+    // advance on.
+    //
+    // The second is the one [`FLAGS`] already warned about beside
+    // `--strict-mcp-config`: without it, an unattended model inherits the
+    // caller's whole toolbelt. A Drone with the operator's mail is a Drone that
+    // can do something no worktree contains.
+    //
+    // **`--strict-mcp-config` is passed whether or not a config is**, because
+    // its job is subtraction. A Drone with no server of its own still must not
+    // be handed somebody else's.
+    if let Some(path) = mcp {
+        argv.push(MCP_CONFIG.to_string());
+        argv.push(path.to_string());
+    }
+    argv.push(STRICT_MCP.to_string());
     argv.push("--print".to_string());
     argv.push("--output-format".to_string());
     argv.push(STREAM_JSON.to_string());
@@ -609,6 +641,22 @@ pub const DISALLOWED: &str = "--disallowedTools";
 /// every session on the machine, including the reader's own and Helm's.
 pub const SETTINGS: &str = "--settings";
 
+/// The flag that attaches Armada's own MCP server to a Drone.
+///
+/// The same document Helm uses (`armada_core::helm::mcp_json`) and the same
+/// server behind it: `armada mcp serve --stdio`. **Which toolbelt it presents
+/// is decided at runtime, not here** — `ARMADA_JOB` in the Drone's environment
+/// makes `armada mcp serve` answer with the Drone belt, so one config file is
+/// correct for both callers and there is no second document to keep in step.
+pub const MCP_CONFIG: &str = "--mcp-config";
+
+/// The flag that stops a Drone inheriting the operator's own MCP servers.
+///
+/// **Subtraction, not configuration**, which is why it is passed unconditionally
+/// and why its absence was invisible: nothing fails, the Drone simply arrives
+/// holding tools nobody granted it.
+pub const STRICT_MCP: &str = "--strict-mcp-config";
+
 /// How long the relay waits for its Drone to actually exit, in seconds.
 ///
 /// **A cap rather than a deadline.** The hook cannot tick while the Drone it is
@@ -777,8 +825,8 @@ pub const STREAM_JSON_NEEDS: [&str; 1] = ["--verbose"];
 /// carries the flag, and `armada doctor` hands it [`NO_HOOKS`] rather than a
 /// real hook: a probe that relayed would tick a fleet on behalf of an exchange
 /// that never happened.
-pub fn probe_argv(settings: Option<&str>) -> Vec<String> {
-    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default(), settings);
+pub fn probe_argv(settings: Option<&str>, mcp: Option<&str>) -> Vec<String> {
+    let mut argv = spawn_argv(PROBE_SESSION, "", &Posture::default(), settings, mcp);
     argv.pop();
     argv.push("--input-format".to_string());
     argv.push(STREAM_JSON.to_string());
@@ -807,7 +855,7 @@ pub const PROBE_SESSION: &str = "00000000-0000-4000-8000-0000000a2ada";
 /// added after: a Job that spawns, records a worktree and a port block, and
 /// whose Drone dies on a usage error nobody sees until `fleet ls` says
 /// `STALLED`.
-pub const FLAGS: [&str; 14] = [
+pub const FLAGS: [&str; 15] = [
     // The relay's, which carries the `Stop` hook that ticks the Job (`020`
     // §1). Its disappearance is the quietest failure of all — every Job still
     // spawns, and none of them ever advances a step again.
@@ -824,6 +872,9 @@ pub const FLAGS: [&str; 14] = [
     // unattended model the caller's whole toolbelt.
     "--strict-mcp-config",
     "--disable-slash-commands",
+    // The server a Drone reports through. `--strict-mcp-config` above already
+    // covers the subtraction half; this is the half that grants.
+    MCP_CONFIG,
     // [`Posture`]'s three, which are the only ones that *grant* anything. Their
     // disappearance is the opposite failure and the more visible one: a Drone
     // back to asking a terminal that is not there, which is `STALLED`.
@@ -1034,7 +1085,7 @@ mod tests {
     #[test]
     fn a_first_turn_assigns_the_session_id_before_anything_starts() {
         assert_eq!(
-            spawn_argv(UUID, "reproduce the flake", &narrow(), None),
+            spawn_argv(UUID, "reproduce the flake", &narrow(), None, None),
             [
                 "claude",
                 "--session-id",
@@ -1052,6 +1103,7 @@ mod tests {
                 "Bash",
                 "--disallowedTools",
                 "Bash(git push:*)",
+                "--strict-mcp-config",
                 "--print",
                 "--output-format",
                 "stream-json",
@@ -1067,7 +1119,7 @@ mod tests {
     /// on the first `git commit` it reached.
     #[test]
     fn a_drone_is_granted_permission_to_do_the_work_it_was_given() {
-        let argv = spawn_argv(UUID, "fix the flake", &Posture::default(), None);
+        let argv = spawn_argv(UUID, "fix the flake", &Posture::default(), None, None);
         assert!(
             argv.iter().any(|word| word == "--permission-mode"),
             "{argv:?} grants nothing, so the first state-mutating call stalls"
@@ -1109,10 +1161,10 @@ mod tests {
     fn nothing_a_drone_runs_bypasses_permissions_altogether() {
         let posture = Posture::default();
         let argvs = [
-            spawn_argv(UUID, "go", &posture, None),
-            resume_argv(UUID, "go", &posture, None),
-            continue_argv(UUID, &posture, None),
-            probe_argv(None),
+            spawn_argv(UUID, "go", &posture, None, None),
+            resume_argv(UUID, "go", &posture, None, None),
+            continue_argv(UUID, &posture, None, None),
+            probe_argv(None, None),
             board_argv(UUID),
         ];
         for argv in argvs {
@@ -1157,8 +1209,8 @@ mod tests {
         ];
         for posture in postures {
             for argv in [
-                spawn_argv(UUID, "a prompt", &posture, None),
-                resume_argv(UUID, "a prompt", &posture, None),
+                spawn_argv(UUID, "a prompt", &posture, None, None),
+                resume_argv(UUID, "a prompt", &posture, None, None),
             ] {
                 let variadic = argv
                     .iter()
@@ -1194,11 +1246,14 @@ mod tests {
     fn the_brief_and_the_task_both_reach_the_argv() {
         for (argv, turn) in [
             (
-                spawn_argv(UUID, "fix the flake", &narrow(), None),
+                spawn_argv(UUID, "fix the flake", &narrow(), None, None),
                 "fix the flake",
             ),
-            (resume_argv(UUID, "yes, 90s", &narrow(), None), "yes, 90s"),
-            (continue_argv(UUID, &narrow(), None), CONTINUE),
+            (
+                resume_argv(UUID, "yes, 90s", &narrow(), None, None),
+                "yes, 90s",
+            ),
+            (continue_argv(UUID, &narrow(), None, None), CONTINUE),
         ] {
             let at = argv
                 .iter()
@@ -1434,8 +1489,8 @@ mod tests {
     #[test]
     fn every_stream_json_argv_carries_what_the_cli_requires_with_it() {
         for argv in [
-            spawn_argv(UUID, "go", &Posture::default(), None),
-            resume_argv(UUID, "carry on", &Posture::default(), None),
+            spawn_argv(UUID, "go", &Posture::default(), None, None),
+            resume_argv(UUID, "carry on", &Posture::default(), None, None),
         ] {
             assert!(
                 argv.iter().any(|word| word == STREAM_JSON),
@@ -1481,8 +1536,8 @@ mod tests {
     /// which is how a check ends up green on a Drone that cannot start.
     #[test]
     fn the_doctor_probe_is_the_spawn_argv_with_nothing_to_say() {
-        let probe = probe_argv(None);
-        let real = spawn_argv(PROBE_SESSION, "go", &Posture::default(), None);
+        let probe = probe_argv(None, None);
+        let real = spawn_argv(PROBE_SESSION, "go", &Posture::default(), None, None);
 
         // Every flag of the real argv, in the same order.
         let flags = |argv: &[String]| -> Vec<String> {
@@ -1523,16 +1578,17 @@ mod tests {
         // **The relay-carrying form, because that is the one a Job runs**
         // (`020` §1). A `--settings` absent from every argv the test looked at
         // is a flag `doctor` would go on validating while nothing used it.
-        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default(), Some("/s.json"))
+        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default(), Some("/s.json"), None)
             .into_iter()
             .chain(resume_argv(
                 UUID,
                 "go",
                 &Posture::default(),
                 Some("/s.json"),
+                Some("/mcp.json"),
             ))
             .chain(super::super::classify::argv("go"))
-            .chain(probe_argv(None))
+            .chain(probe_argv(None, None))
             .filter(|word| word.starts_with("--"))
             .collect();
         for flag in &used {
@@ -1555,7 +1611,7 @@ mod tests {
     /// neither can be swallowed by a variadic list.
     #[test]
     fn a_drone_carries_the_settings_that_register_its_stop_hook() {
-        let argv = spawn_argv(UUID, "go", &Posture::default(), Some("/j/s.json"));
+        let argv = spawn_argv(UUID, "go", &Posture::default(), Some("/j/s.json"), None);
         let at = argv
             .iter()
             .position(|word| word == SETTINGS)
@@ -1567,7 +1623,7 @@ mod tests {
 
         // **Inverted**: no path, no flag — an empty `--settings` would consume
         // whatever came next, which is `--print`.
-        assert!(!spawn_argv(UUID, "go", &Posture::default(), None)
+        assert!(!spawn_argv(UUID, "go", &Posture::default(), None, None)
             .iter()
             .any(|word| word == SETTINGS));
     }
@@ -1658,7 +1714,7 @@ mod tests {
     /// the answer was an answer to.
     #[test]
     fn continuing_a_job_resumes_the_session_rather_than_minting_one() {
-        let argv = resume_argv(UUID, "yes, raise it to 90s", &narrow(), None);
+        let argv = resume_argv(UUID, "yes, raise it to 90s", &narrow(), None, None);
         assert_eq!(
             argv,
             [
@@ -1678,6 +1734,7 @@ mod tests {
                 "Bash",
                 "--disallowedTools",
                 "Bash(git push:*)",
+                "--strict-mcp-config",
                 "--print",
                 "--output-format",
                 "stream-json",
@@ -1715,9 +1772,9 @@ mod tests {
     #[test]
     fn every_headless_turn_carries_armadas_own_skill() {
         for argv in [
-            spawn_argv(UUID, "fix the flake", &Posture::default(), None),
-            resume_argv(UUID, "yes", &Posture::default(), None),
-            continue_argv(UUID, &Posture::default(), None),
+            spawn_argv(UUID, "fix the flake", &Posture::default(), None, None),
+            resume_argv(UUID, "yes", &Posture::default(), None, None),
+            continue_argv(UUID, &Posture::default(), None, None),
         ] {
             let at = argv
                 .iter()
@@ -1753,13 +1810,58 @@ mod tests {
         assert!(!board_argv(UUID).iter().any(|word| word == APPEND));
     }
 
+    /// **A Drone is handed Armada's own server and denied everyone else's.**
+    ///
+    /// Measured 2026-08-16, before this was passed: a real Drone's session
+    /// advertised **103 tools, none of them Armada's**, and the servers it did
+    /// carry were the operator's own — Gmail, Drive, Notion, Todoist. Two
+    /// failures from one omission, and both silent.
+    ///
+    /// The Job could not report: [`BRIEF`] names four `mcp__armada__fleet_*`
+    /// tools and [`ALLOW`] grants exactly those four, but a grant is not a
+    /// connection and a tool absent from the session cannot be called. Every
+    /// Job did its work, answered in prose, and stopped `SILENT`.
+    #[test]
+    fn a_drone_is_given_armadas_server_and_denied_the_operators() {
+        let argv = spawn_argv(UUID, "go", &narrow(), None, Some("/j.mcp.json"));
+        let at = argv
+            .iter()
+            .position(|w| w == MCP_CONFIG)
+            .expect("a Drone with no server cannot report, and reporting is how a Job advances");
+        assert_eq!(argv[at + 1], "/j.mcp.json");
+        assert!(
+            argv.iter().any(|w| w == STRICT_MCP),
+            "without it the Drone inherits the operator's own MCP servers"
+        );
+    }
+
+    /// **The subtraction is unconditional; the grant is not.**
+    ///
+    /// A Drone that has no server of its own must still not be handed somebody
+    /// else's — so `--strict-mcp-config` does not travel with `--mcp-config`.
+    #[test]
+    fn a_drone_without_a_server_is_still_denied_the_operators() {
+        let argv = spawn_argv(UUID, "go", &narrow(), None, None);
+        assert!(
+            argv.iter().any(|w| w == STRICT_MCP),
+            "the flag whose whole job is subtraction went missing when there was nothing to add"
+        );
+        assert!(!argv.iter().any(|w| w == MCP_CONFIG));
+    }
+
     /// The prompt is the last element and is never split. A task arrives as free
     /// text and a shell has already had its turn with it.
     #[test]
     fn the_prompt_is_one_argument_however_many_words_it_has() {
-        let argv = spawn_argv(UUID, "add rate limiting to the API --json", &narrow(), None);
+        let argv = spawn_argv(
+            UUID,
+            "add rate limiting to the API --json",
+            &narrow(),
+            None,
+            None,
+        );
         assert_eq!(argv.last().unwrap(), "add rate limiting to the API --json");
-        assert_eq!(argv.len(), 17);
+        assert_eq!(argv.len(), 18);
         // And a prompt that *looks* like a flag is still the prompt, because a
         // flag closes the tool list before it and nothing reopens one.
         assert_eq!(argv[argv.len() - 2], "--verbose");
