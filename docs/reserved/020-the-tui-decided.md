@@ -40,6 +40,24 @@ a Job behind the reader's back breaks [`PLAN.md`](../PLAN.md) §15.1 — §1 bel
 name. Reporting a Job as `STALLED` is honest; doing the work unasked is not. The repair for the
 symptom is that `STALLED` is now a word you can *see*, which it was not before.
 
+## The residual, stated rather than hidden
+
+**One link in the relay is not provable by any test in this repository**, and it is worth
+naming: that Claude Code runs a `Stop` hook registered through `--settings`. Proving it needs a
+real session, and no test here may start one ([`PHASES.md`](../PHASES.md) §8.5). Everything
+either side of it is proved:
+
+| Link | How |
+|---|---|
+| the spawned Drone's argv carries `--settings <path>` | asserted on what `execve` received, not on what Armada built |
+| that path holds a document registering an executable hook | the file is read back and parsed |
+| that hook, run for real, ticks the fleet once its Drone has gone | the generated script is executed as a child of a real process group that then exits |
+| a tick rescues a Job whose relay was lost | a Drone finishes an exchange, nothing relays, and the sweep advances the step |
+
+The unproved link is the same mechanism `armada helm` has used since M0 — [`PHASES.md`](../PHASES.md) §9.1 F3
+measured it — and `armada doctor` holds `--settings` against `claude --help` on every run, which
+is what catches it disappearing.
+
 **The sweep costs one thing, and it is paid for**: five exchanges ending in the same second start
 five passes over the same records, and two passes gating one step would both `claude --resume`
 one session. `~/.armada/tick.lock` serialises them, and a second pass declines rather than
