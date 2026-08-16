@@ -259,6 +259,55 @@ fn detach_returns_while_the_run_is_still_going_and_status_says_so() {
     );
 }
 
+/// **A running check's clock moves between two polls of the same run.**
+///
+/// It did not. `State::now_mono` is the last reading the *shell* reported, and
+/// a detached shell writes its journal at step boundaries — so `--status` read
+/// a check's start time, subtracted it from a `now` frozen at that same moment,
+/// and reported the same `duration_ms` for as long as the check ran. Measured:
+/// a check thirteen minutes into a `cargo test` reported `duration_ms: 786`,
+/// and repeated it on every poll.
+///
+/// That is worse than reporting nothing. A duration that does not move while
+/// the thing it measures does is read as evidence the run is wedged — which is
+/// exactly the conclusion it produced.
+///
+/// The sleep here is the point of the test and cannot be tuned out: what is
+/// being asserted is that wall-clock passing between two reads of one unchanged
+/// record changes the answer.
+#[test]
+fn a_running_checks_duration_advances_between_two_polls() {
+    let machine = Machine::new();
+    let repo = machine.repo("main", SLOW);
+    machine.run(&repo, &["manifest", "init"]);
+
+    let started = envelope(&machine.run(&repo, &["manifest", "check", "--detach", "--json"]));
+    let pgid = pgid_of(&started);
+    let run = started["data"]["run_id"]
+        .as_str()
+        .expect("a run id")
+        .to_string();
+
+    let first = poll_until_running(&machine, &repo, &run);
+    std::thread::sleep(Duration::from_millis(600));
+    let second = envelope(&machine.run(&repo, &["manifest", "check", "--status", &run, "--json"]));
+    stop(pgid);
+
+    let duration = |e: &serde_json::Value| -> u64 {
+        e["data"]["results"][0]["duration_ms"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("a running check reports how long it has been running: {e}"))
+    };
+
+    assert_eq!(second["data"]["results"][0]["status"], "RUNNING");
+    let (before, after) = (duration(&first), duration(&second));
+    assert!(
+        after >= before + 400,
+        "600ms passed between two polls of one running check, but its duration went \
+         {before}ms -> {after}ms — the reader is subtracting from the writer's frozen clock"
+    );
+}
+
 /// **The group is recorded as owned**, which is what makes a detached run
 /// reclaimable by the same pass that reclaims an orphaned service or Drone.
 /// Without the row, an `armada` that died mid-run would leave a process nothing

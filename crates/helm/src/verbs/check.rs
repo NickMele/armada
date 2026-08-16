@@ -739,7 +739,7 @@ fn status<R: Run, C: Clock, F: Fetch>(
             .pop()
             .ok_or_else(|| no_runs(&workspace.id))?,
     };
-    let record = runs::read_record(&workspace.root, &run_id)?
+    let mut record = runs::read_record(&workspace.root, &run_id)?
         .ok_or_else(|| unknown_run(&run_id, &workspace.id))?;
     let detached = runs::read_detached(&workspace.root, &run_id)?;
 
@@ -751,6 +751,26 @@ fn status<R: Run, C: Clock, F: Fetch>(
         );
         detached.is_ours(&app.boot_id, observed.as_deref())
     });
+
+    // **A running check's elapsed time is measured against the reader's clock,
+    // not the writer's.** `State::now_mono` is the last reading the *shell*
+    // reported, and a detached shell writes its journal at step boundaries — so
+    // a check that has been running for thirteen minutes without finishing
+    // reported `duration_ms: 786`, frozen at the moment it started, and every
+    // subsequent `--status` repeated that number. A duration that does not move
+    // while the thing it measures does is worse than no duration: it reads as
+    // evidence the run is wedged.
+    //
+    // **Only while it is alive**, and the guard is not incidental. `alive` is
+    // already `is_ours(boot_id, …)`, so it is exactly the condition under which
+    // the two processes' readings are comparable: `mono()` is `clock_gettime`
+    // on `CLOCK_UPTIME_RAW`/`CLOCK_MONOTONIC`, which is machine-wide since boot
+    // rather than process-relative, and meaningless across a reboot. A finished
+    // or dead run keeps what its record says, which is the honest final figure
+    // and the one the foreground run printed.
+    if alive {
+        record.state.now_mono = record.state.now_mono.max(app.ctx.now.mono());
+    }
 
     let (status, error) = match record.state.verdict() {
         // **The record wins over the probe, and the order matters.** A run that
