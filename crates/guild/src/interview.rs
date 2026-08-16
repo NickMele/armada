@@ -501,7 +501,7 @@ mod tests {
     fn each_limit_question_takes_one_number_and_shows_it_as_its_default() {
         assert_eq!(CEILING_QUESTIONS, [4, 5, 6]);
         assert_eq!(parse_iterations(QUESTIONS[3].keeps), Ok(20));
-        assert_eq!(parse_cost(QUESTIONS[4].keeps), Ok(600_000));
+        assert_eq!(parse_cost(QUESTIONS[4].keeps), Ok(10.00));
         assert_eq!(parse_minutes(QUESTIONS[5].keeps), Ok(90));
         for number in CEILING_QUESTIONS {
             let question = QUESTIONS[number - 1];
@@ -545,17 +545,31 @@ mod tests {
     }
 
     /// **No question asks for money.** `Budget` has no dollar field and
-    /// `exhausted` never looks at `cost_usd`, so a money ceiling asked here
-    /// would be a number nothing reads — it would look like a spending cap and
-    /// stop nothing.
+    /// **The money question exists because money is now the ceiling.**
+    ///
+    /// This test used to assert the opposite — that no question mentioned
+    /// dollars, because `exhausted` looked only at iterations, tokens and the
+    /// clock, so a money ceiling would have been a number nothing read. The
+    /// token ceiling was replaced by a cost one on 2026-08-16, after a Job
+    /// counted 16.3M tokens against a 500k limit for $2.42 of spend, and the
+    /// inverted assertion is kept rather than deleted so nobody restores it.
     #[test]
-    fn nothing_asks_for_a_dollar_ceiling_because_none_is_enforced() {
+    fn the_ceiling_question_asks_about_money_because_money_is_what_stops_a_job() {
+        let asked = format!("{} {}", QUESTIONS[4].prompt, QUESTIONS[4].purpose).to_lowercase();
+        assert!(
+            asked.contains("dollar"),
+            "the cost question does not say dollars: {asked}"
+        );
+        assert!(
+            !asked.contains("token ceiling"),
+            "the cost question still describes a token ceiling: {asked}"
+        );
         for question in QUESTIONS {
             let says = format!("{} {}", question.prompt, question.purpose).to_lowercase();
-            for money in ["dollar", "usd", "$", " spend per", "per month"] {
+            for stale in ["how many tokens"] {
                 assert!(
-                    !says.contains(money),
-                    "question {} asks about money: {money}",
+                    !says.contains(stale),
+                    "question {} still asks for tokens: {stale}",
                     question.number
                 );
             }
@@ -659,7 +673,7 @@ mod tests {
             Ceilings::for_workflow("design"),
             Ceilings {
                 iterations: 15,
-                tokens: 500_000,
+                cost_usd: 5.00,
                 wall_clock_minutes: 90
             }
         );
@@ -667,7 +681,7 @@ mod tests {
             Ceilings::for_workflow("feature"),
             Ceilings {
                 iterations: 20,
-                tokens: 600_000,
+                cost_usd: 10.00,
                 wall_clock_minutes: 90
             }
         );
@@ -679,16 +693,16 @@ mod tests {
     /// to type.
     #[test]
     fn the_spelling_in_the_hint_round_trips() {
-        assert_eq!(Ceilings::AUTONOMOUS.written(), "20, 600k, 90m");
-        assert_eq!(Ceilings::ADVISORY.written(), "15, 500k, 90m");
+        assert_eq!(Ceilings::AUTONOMOUS.written(), "20, 10.00, 90m");
+        assert_eq!(Ceilings::ADVISORY.written(), "15, 5.00, 90m");
         let defaulted = Answers::all_defaulted();
-        assert_eq!(defaulted.ceilings_for("bug").written(), "20, 600k, 90m");
+        assert_eq!(defaulted.ceilings_for("bug").written(), "20, 10.00, 90m");
         // Every hint is typeable into its own question, and reads back as the
         // number the defaulted interview would have used anyway.
         assert_eq!(
             Ceilings {
                 iterations: parse_iterations(QUESTIONS[3].keeps).unwrap(),
-                tokens: parse_cost(QUESTIONS[4].keeps).unwrap(),
+                cost_usd: parse_cost(QUESTIONS[4].keeps).unwrap(),
                 wall_clock_minutes: parse_minutes(QUESTIONS[5].keeps).unwrap(),
             },
             Ceilings::AUTONOMOUS
@@ -697,11 +711,25 @@ mod tests {
 
     /// **Tokens read the same written either way**, because the hint says `600k`
     /// and the purpose says `600000` and a reader may type back either.
+    /// **A cost ceiling reads as dollars, with or without the sign.**
+    ///
+    /// It replaced a token ceiling that accepted `600k`, and that shorthand is
+    /// gone on purpose: `600k` as an amount of money is a number nobody means,
+    /// and silently reading it as $600,000 would be the worst possible way to
+    /// be wrong about a budget.
     #[test]
-    fn a_token_ceiling_reads_the_same_in_both_spellings() {
-        assert_eq!(parse_cost("600k"), parse_cost("600000"));
-        assert_eq!(parse_cost("600K"), Ok(600_000));
-        assert_eq!(parse_cost(" 200k "), Ok(200_000));
+    fn a_cost_ceiling_reads_as_dollars() {
+        assert_eq!(parse_cost("10"), Ok(10.00));
+        assert_eq!(parse_cost("$10.00"), Ok(10.00));
+        assert_eq!(parse_cost(" 2.50 "), Ok(2.50));
+        assert!(
+            parse_cost("600k").is_err(),
+            "a token shorthand is not an amount"
+        );
+        assert!(
+            parse_cost("0.001").is_err(),
+            "under a cent exhausts on the first turn"
+        );
     }
 
     /// The minutes question shows `90m` and must accept it back, as well as the
@@ -723,9 +751,9 @@ mod tests {
             let refusal = parse_iterations(answer).unwrap_err();
             assert!(refusal.contains("20"), "`{answer}`: {refusal}");
         }
-        for answer in ["", "heaps", "0", "600k, 90m"] {
+        for answer in ["", "heaps", "600k, 90m"] {
             let refusal = parse_cost(answer).unwrap_err();
-            assert!(refusal.contains("600k"), "`{answer}`: {refusal}");
+            assert!(refusal.contains("10.00"), "`{answer}`: {refusal}");
         }
         for answer in ["", "ages", "0m", "90m, 20"] {
             let refusal = parse_minutes(answer).unwrap_err();
@@ -744,13 +772,12 @@ mod tests {
         assert!(parse_minutes("20, 600k, 90m").is_err());
     }
 
-    /// **A token ceiling under one turn is refused**, because the way it gets
-    /// typed is meaning `600k` and writing `600`, and obeying it would exhaust
-    /// every Job on its first turn.
+    /// **A ceiling under a cent is refused**, because it is less than a single
+    /// turn costs and would exhaust every Job on its first one.
     #[test]
-    fn a_token_ceiling_smaller_than_a_turn_is_refused_with_the_likely_fix() {
-        let refusal = parse_cost("600").unwrap_err();
-        assert!(refusal.contains("600k"), "{refusal}");
-        assert_eq!(parse_cost("1000"), Ok(1_000), "a thousand is allowed");
+    fn a_cost_ceiling_smaller_than_a_turn_is_refused_with_the_likely_fix() {
+        let refusal = parse_cost("0.001").unwrap_err();
+        assert!(refusal.contains("$0.01"), "{refusal}");
+        assert_eq!(parse_cost("1000"), Ok(1_000.0), "a thousand is allowed");
     }
 }

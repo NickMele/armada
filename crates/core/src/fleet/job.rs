@@ -1310,6 +1310,7 @@ mod tests {
 
     fn watching(state: JobState) -> Job {
         Job {
+            budget_set: Vec::new(),
             uuid: mint_uuid("seed"),
             name: "rate-limit".to_string(),
             workflow: "feature".to_string(),
@@ -1687,6 +1688,7 @@ mod tests {
     #[test]
     fn run_time_is_measured_from_when_the_job_was_minted() {
         let job = Job {
+            budget_set: Vec::new(),
             uuid: mint_uuid("seed"),
             name: "rate-limit".to_string(),
             workflow: "feature".to_string(),
@@ -1932,6 +1934,7 @@ mod tests {
     #[test]
     fn a_job_round_trips_through_its_record_on_disk() {
         let job = Job {
+            budget_set: Vec::new(),
             uuid: mint_uuid("seed"),
             name: "nightly-flake".to_string(),
             workflow: "bug".to_string(),

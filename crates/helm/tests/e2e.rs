@@ -1472,7 +1472,7 @@ fn boarding_a_job_execs_into_the_expanded_worktree() {
               "repo_root": "~/code/api",
               "worktree": "~/.armada/workspaces/api/rate-limit",
               "branch": "armada/rate-limit",
-              "budget": {{"iterations": 20, "tokens": 2000000, "wall_clock_ms": 7200000, "on_exhausted": "needs_human"}},
+              "budget": {{"iterations": 20, "cost_usd": 10.00, "wall_clock_ms": 7200000, "on_exhausted": "needs_human"}},
               "state": "RUNNING",
               "step": "implement",
               "created_at": "2026-08-09T14:02:11Z",

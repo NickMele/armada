@@ -117,6 +117,7 @@ impl Machine {
     fn job(&self, name: &str, state: JobState, transcript: &str) -> Job {
         let place = self.place();
         let record = Job {
+            budget_set: Vec::new(),
             uuid: format!("uuid-of-{name}"),
             name: name.to_string(),
             workflow: "feature".to_string(),
@@ -128,7 +129,7 @@ impl Machine {
             port_block: None,
             budget: Budget {
                 iterations: 12,
-                cost: 10.00_000,
+                cost_usd: 10.00,
                 wall_clock_ms: 2_700_000,
                 on_exhausted: OnExhausted::NeedsHuman,
             },
