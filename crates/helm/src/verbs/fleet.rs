@@ -417,6 +417,13 @@ pub fn spawn<R: Run, C: Clock>(
     // read; the alternative costs a Job.
     reachable_workflows_exist(place, &workflow)?;
     let budget = workflow::override_budget(workflow.budget, &options.budget)?;
+    // The keys, not the values: a value is this Job's ceiling and a key is the
+    // caller saying *this tree, not the default*.
+    let budget_set: Vec<String> = options
+        .budget
+        .iter()
+        .filter_map(|pair| pair.split_once('=').map(|(key, _)| key.to_string()))
+        .collect();
 
     let store = place.store();
     let wanted = options
@@ -450,6 +457,7 @@ pub fn spawn<R: Run, C: Clock>(
     let mut record = Job {
         uuid: uuid.clone(),
         name: name.clone(),
+        budget_set,
         workflow: workflow.name.clone(),
         confidence: classification.confidence,
         repo: repo.clone(),
@@ -3851,6 +3859,9 @@ fn spawn_child<R: Run, C: Clock>(
     let mut record = Job {
         uuid: uuid.clone(),
         name: name.clone(),
+        // A sub-Job inherits what the caller said about the tree, so a raise
+        // reaches every generation rather than only the first.
+        budget_set: parent.budget_set.clone(),
         workflow: flow.name.clone(),
         // **Not a guess and not a person's answer either.** A confidence here
         // would be a number nobody measured; the workflow was named by the
@@ -3861,7 +3872,12 @@ fn spawn_child<R: Run, C: Clock>(
         worktree: place.shown(&path),
         branch: branch.clone(),
         port_block: None,
-        budget: carved(flow.budget, &parent.budget, &parent.spend),
+        budget: carved(
+            flow.budget,
+            &parent.budget,
+            &parent.spend,
+            &parent.budget_set,
+        ),
         state: JobState::Queued,
         step: first.clone(),
         verdict: None,
@@ -3965,15 +3981,34 @@ fn child_task(parent: &Job, kind: gate::SubJobKind) -> String {
 /// while the child runs ([`job::Kin::suspended_ms`]), so there is nothing of it
 /// to carve, and what bounds the elapsed time is the child's own declared
 /// ceiling.
+///
+/// **A key the caller set is not a default, so it is not what the child is held
+/// to.** Measured 2026-08-16: a parent spawned with `--budget
+/// max_iterations=200` gave its planning sub-Job 15, because `plan.yml`
+/// declares 15 and `min` chose it. The raise never reached the work it was
+/// meant for. For a key in [`job::Job::budget_set`] the child gets the parent's
+/// **remaining** instead — still bounded by what the parent actually has, so
+/// the containment argument above is untouched; what changes is which number
+/// is the default and which is the instruction.
 fn carved(
     declared: workflow::Budget,
     parent: &workflow::Budget,
     spent: &Spend,
+    set: &[String],
 ) -> workflow::Budget {
     let left = job::remaining(parent, spent, 0);
+    let told = |key: &str| set.iter().any(|k| k == key);
     workflow::Budget {
-        iterations: declared.iterations.min(left.iterations),
-        cost_usd: declared.cost_usd.min(left.cost_usd),
+        iterations: match told("max_iterations") {
+            true => left.iterations,
+            false => declared.iterations.min(left.iterations),
+        },
+        cost_usd: match told("max_cost") {
+            true => left.cost_usd,
+            false => declared.cost_usd.min(left.cost_usd),
+        },
+        // The clock stays the child's own either way: the parent's is suspended
+        // while the child runs, so there is nothing of it to carve or to raise.
         wall_clock_ms: declared.wall_clock_ms,
         on_exhausted: declared.on_exhausted,
     }
@@ -4165,5 +4200,68 @@ fn committed<R: Run>(run: &R, worktree: &Path, branch: &str) -> gate::Probed {
             scope: branch.to_string(),
             exit: 0,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use armada_core::fleet::workflow::{Budget, OnExhausted};
+
+    fn budget(iterations: u32, cost_usd: f64) -> Budget {
+        Budget {
+            iterations,
+            cost_usd,
+            wall_clock_ms: 90 * 60_000,
+            on_exhausted: OnExhausted::NeedsHuman,
+        }
+    }
+
+    /// **A ceiling the caller set reaches the whole tree.**
+    ///
+    /// Measured 2026-08-16: `--budget max_iterations=200` on a parent gave its
+    /// planning sub-Job **15**, because `plan.yml` declares 15 and [`carved`]
+    /// took the smaller of the two. The child died on that 15 having spent
+    /// $2.42, and the raise the caller asked for never reached the work it was
+    /// asked for.
+    #[test]
+    fn a_budget_the_caller_set_reaches_a_sub_job() {
+        let declared = budget(15, 5.00);
+        let parent = budget(200, 30.00);
+        let spent = Spend::default();
+
+        // Nobody said anything, so the child's own declaration holds. A
+        // default must never be raised in silence.
+        assert_eq!(carved(declared, &parent, &spent, &[]).iterations, 15);
+
+        let told = carved(declared, &parent, &spent, &["max_iterations".to_string()]);
+        assert_eq!(told.iterations, 200, "the raise did not reach the sub-Job");
+        assert_eq!(
+            told.cost_usd, 5.00,
+            "a key nobody named must keep the child's own declaration"
+        );
+    }
+
+    /// **A raise lifts the default; it does not mint budget.** The parent's
+    /// remaining still bounds the child, so `016` §2's containment argument —
+    /// *a child that could spend a fresh budget is how a parent gets exhausted
+    /// by something it never counted* — is untouched.
+    #[test]
+    fn a_raised_sub_job_is_still_bounded_by_what_the_parent_has_left() {
+        let spent = Spend {
+            turns: 190,
+            ..Default::default()
+        };
+        let told = carved(
+            budget(15, 5.00),
+            &budget(200, 30.00),
+            &spent,
+            &["max_iterations".to_string()],
+        );
+        assert!(
+            told.iterations <= 10,
+            "a child was handed more than the parent had left: {}",
+            told.iterations
+        );
     }
 }
