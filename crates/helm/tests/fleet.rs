@@ -189,6 +189,17 @@ fn shipped_posture() -> Vec<String> {
     armada_core::fleet::drone::Posture::default().argv()
 }
 
+/// The two words that carry a Drone what it owes, read off the constants for the
+/// same reason [`shipped_posture`] is: the prose belongs to `armada_core`'s own
+/// tests, and what these assertions are about is the pair reaching `execve`
+/// whole and in the right place.
+fn shipped_brief() -> Vec<String> {
+    vec![
+        armada_core::fleet::drone::APPEND.to_string(),
+        armada_core::fleet::drone::BRIEF.to_string(),
+    ]
+}
+
 /// A harness that answers by argv, and remembers every vector it was handed.
 struct Harness {
     seen: RefCell<Vec<Vec<String>>>,
@@ -667,6 +678,7 @@ fn the_drone_is_executed_with_the_session_id_the_job_was_minted_with() {
     // separately — so it comes off before the vector is compared.
     let prompt = argv.pop().expect("a prompt");
     let mut expected = vec!["--session-id".to_string(), data.uuid.clone()];
+    expected.extend(shipped_brief());
     expected.extend(shipped_posture());
     expected.extend(
         ["--print", "--output-format", "stream-json", "--verbose"]
@@ -679,6 +691,49 @@ fn the_drone_is_executed_with_the_session_id_the_job_was_minted_with() {
     );
     assert!(prompt.contains("add rate limiting to the API"), "{prompt}");
     assert!(prompt.contains("feature"), "{prompt}");
+}
+
+/// **The brief and the task both reach `execve`, and neither displaced the
+/// other.**
+///
+/// This is the assertion the whole change turns on, and it is written against a
+/// failure this repository has already shipped: the `config scan` hand-over
+/// asserted its `--append-system-prompt`, asserted the prose, then asserted the
+/// length — and went green against a session that opened with instructions and
+/// nothing to act on. A Drone can fail the mirror image, because
+/// `--append-system-prompt` takes a value: a brief that went empty would consume
+/// `--permission-mode`, and the Job's task would follow a posture that no longer
+/// exists. Both halves are checked here, on the vector the operating system was
+/// handed rather than on one built for a fake.
+#[test]
+fn the_drone_execve_receives_both_its_brief_and_its_task() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting to the API"));
+    let argv = recorded_argv(&data.uuid);
+
+    let at = argv
+        .iter()
+        .position(|word| word == armada_core::fleet::drone::APPEND)
+        .unwrap_or_else(|| panic!("the Drone was started with no brief: {argv:?}"));
+
+    // The prose itself, not a path to it and not an instruction to go and read
+    // one — the repair `armada_guild::layout::skill_argv` made one file over.
+    let brief = &argv[at + 1];
+    assert_eq!(brief, armada_core::fleet::drone::BRIEF, "{argv:?}");
+    assert!(brief.contains("mcp__armada__fleet_verdict"), "{brief}");
+    assert!(brief.contains("not evidence"), "{brief}");
+
+    // The flag behind the brief survived it, so the Drone still has a posture.
+    assert_eq!(argv[at + 2], "--permission-mode", "{argv:?}");
+    assert!(argv.iter().any(|word| word == "dontAsk"), "{argv:?}");
+
+    // And it was given something to do: the task is the last word, unflagged,
+    // and it is one argument however many lines the brief above it has.
+    let turn = argv.last().expect("a turn");
+    assert!(turn.contains("add rate limiting to the API"), "{turn}");
+    assert_ne!(turn, brief, "the brief was handed over as the turn");
+    assert!(!turn.starts_with('-'), "the turn reads as a flag: {turn}");
 }
 
 /// **A Drone is granted permission, and this is where that is proved.**
@@ -2076,6 +2131,7 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
     let mut argv = recorded_argv(&data.uuid);
     let prompt = argv.pop().unwrap();
     let mut expected = vec!["--resume".to_string(), data.uuid.clone()];
+    expected.extend(shipped_brief());
     expected.extend(shipped_posture());
     expected.extend(
         ["--print", "--output-format", "stream-json", "--verbose"]
