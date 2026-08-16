@@ -35,12 +35,20 @@ fn capture(machine: &Machine, at: &std::path::Path, what: &str) -> String {
 fn seed_bug_workflow(machine: &Machine) {
     let workflows = machine.home.path().join(".armada/guild/workflows");
     std::fs::create_dir_all(&workflows).unwrap();
-    std::fs::copy(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../templates/guild/workflows/bug.yml"),
-        workflows.join("bug.yml"),
-    )
-    .unwrap();
+    // **The reviewer too, because `bug` reaches it.** `fleet spawn` walks every
+    // workflow the chosen one can reach and refuses before spending if one is
+    // missing — a `bug` Job whose guild has no `review` would otherwise buy
+    // `reproduce` and `fix` before finding out. A fixture carrying only `bug`
+    // is a guild that cannot run `bug`.
+    for name in ["bug.yml", "review.yml"] {
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../templates/guild/workflows")
+                .join(name),
+            workflows.join(name),
+        )
+        .unwrap();
+    }
 }
 
 /// **The whole feature in one test.** A sentence goes in, an id comes back, and
