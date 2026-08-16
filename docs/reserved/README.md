@@ -40,7 +40,7 @@ usually asking which one applies.
 | [023](023-status-shows-what-is-running.md) | Status shows what is running | FIXED | manifest | `status` enumerated the port registry, so six leaked process groups against a workspace that never claimed a block were invisible; it now enumerates the union, names what is provably gone, and reports undecided detached runs |
 | [024](024-the-relay-does-not-fire.md) | The relay does not fire under `--print` | BUG | fleet | [020](020-the-tui-decided.md)'s first decision was that the Drone's `Stop` hook ticks the Job; measured, it never runs — `SessionStart` fires and `Stop` never appears, so every Job sits `SILENT` until somebody types `fleet tick` |
 | [025](025-a-drone-reached-outside-its-worktree.md) | A Drone reached outside its worktree | BUG | fleet | An unattended Drone ran `npx skills add -g` and installed third-party software on the operator's machine — [011](011-what-a-drone-may-do-unattended.md)'s deny list has no rule for package installers |
-| [026](026-a-job-never-reaches-done.md) | A Job never reaches `DONE` | BUG | fleet | `DONE` is legal, rendered and matched on in five places, and no Job has been in it — the terminal `human_approves` step asks again on every tick until a budget ceiling |
+| [026](026-a-job-never-reaches-done.md) | A Job never reaches `DONE` | BUG | fleet | `DONE` is legal, rendered and matched on in five places, and no Job has been in it — `fleet answer` resumes the Drone instead of settling the gate, so a fresh question always overtakes the approval |
 
 **Armada's task system exists** ([002](002-tasks.md)), so these can become its first rows — one
 file per row is what makes that a script rather than a rewrite. It is not run automatically:

@@ -39,14 +39,36 @@ number carried in `job::Pending`. That rule is right, and [`gate.rs`](../../crat
 argues it well: *"yes, ship it" about the second thing you were asked is not approval of the
 third.*
 
-The suspicion — **not proved, and it should be proved before it is fixed** — is that answering
-the entry lets the step run again, the re-run raises a new question under a new attempt number,
-and the gate then waits on the newer id. The approval is always one attempt behind the question.
-If that is right, the terminal step can never settle, because settling requires an approval that
-arrives without the step running again first.
+**The cause, traced in code rather than guessed.** `armada fleet answer`
+(`crates/helm/src/verbs/fleet.rs`) does two things: it records the answer with `inbox::answer`,
+and then it **immediately resumes the Drone** — `start_drone` with `resume_argv`, and
+`record.state = JobState::Running`. That is right for the question it was built for, where a Drone
+is stuck and needs input to carry on. It is wrong for a gate.
 
-**A cheap experiment settles it**: answer the pending entry, then tick *without* letting a Drone
-exchange run in between, and see whether the gate reaches `Finish`.
+`human_approves` is not a Drone's question. It is the *workflow* asking whether the step is
+accepted, and the answer belongs to the gate. What happens instead:
+
+1. The gate halts and asks. `pending` remembers that entry's id for this attempt.
+2. `fleet answer` records the answer — **and starts a Drone exchange**.
+3. That Drone does more work and, per [`BRIEF`], asks its own question. A **new** entry is raised
+   and `pending` now names it.
+4. The next `tick` reads `pending`, finds the new entry unanswered, and halts to ask again.
+
+The approval is recorded every time and read never, because a fresh question always overtakes it.
+The Job cannot settle its last step, so `Next::Finish` is unreachable and `release_on_finish`
+never runs.
+
+**The earlier suspicion recorded here was wrong**, and is kept because a rejected diagnosis with
+its reason attached does not get proposed again: it guessed the attempt counter had advanced past
+the pending entry. It has not. `job::step_failures` counts only `StepEvent::Failed`, and the only
+writer of that is `Verdict::Failed` — asking a person is not a failure and never moves the
+attempt.
+
+**What has to be decided, and it is not a one-line fix.** Answering a gate and answering a Drone
+are two different acts that share one verb. Either `fleet answer` learns the difference — settle
+the gate and tick, rather than resume — or `human_approves` stops routing through the inbox that
+Drones also write to. The first is smaller; the second is the one that stops the two kinds of
+question sharing a queue at all.
 
 ## Why this was invisible
 
