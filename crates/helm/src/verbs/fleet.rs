@@ -2070,7 +2070,84 @@ pub fn answer<R: Run, C: Clock>(
         });
     }
 
+    // **Whose question was this?** A gate's and a Drone's arrive in one inbox
+    // and are answered by one verb, and they want opposite things done next.
+    //
+    // A Drone that asked is stuck and needs the answer to carry on, so the
+    // answer is a continuation — resume the session, below.
+    //
+    // A gate that asked is the *workflow* asking whether the step is accepted.
+    // The answer belongs to the gate, and resuming a Drone here is what made
+    // `human_approves` unsettleable: the resumed Drone did more work, asked its
+    // own question, and a new entry replaced the pending one, so the next tick
+    // halted on that instead. The approval was recorded every time and read
+    // never, `Next::Finish` was unreachable, and no Job has ever been `DONE`
+    // (`docs/reserved/026`).
+    let settles_a_gate = record
+        .pending
+        .as_ref()
+        .is_some_and(|pending| match &pending.on {
+            job::Waiting::Answer(waiting_on) => waiting_on == &entry.uuid,
+            job::Waiting::Check(_) => false,
+        });
+
     inbox::answer(&place.inbox(), &entry.uuid, said)?;
+
+    if settles_a_gate {
+        // **Ticked rather than resumed**, and ticked here rather than left for
+        // the relay: no Drone is going to run, so no `Stop` hook is going to
+        // fire, and a gate that is settled but never gated is a Job that stops
+        // exactly as dead as before.
+        //
+        // `tick` takes the pass lock itself and this function holds none, so
+        // the call nests nothing. Its own output is discarded: the reader ran
+        // `fleet answer` and the envelope they get back says so.
+        // **Out of `PAUSED` before the tick, and `RUNNING` is the right word
+        // for it.** `advance::attention` reads `PAUSED` as *"it is waiting on
+        // you"* and declines to gate — correctly, because a paused Job has an
+        // open question. Answering closed that question, so the Job is back in
+        // what `JobState::Running` actually names here: *the ordinary resting
+        // state between turns, a turn finished cleanly and no Drone is
+        // running*. Nothing is started; the word is about the Job, not a
+        // process, and `alive` is observed separately.
+        //
+        // The old path reached the same state by resuming a Drone, which is why
+        // this was never missing before — and resuming is the thing that made
+        // the gate unsettleable.
+        record.state = JobState::Running;
+        store.save(&record)?;
+        // **The Job's own name, never the caller's `handle`.** `handle` is
+        // whatever was typed, and this verb deliberately accepts an *entry* id
+        // as well as a Job's — so passing it on gave `tick` an inbox id and the
+        // refusal `no Job called a058890c`, raised *after* the answer had
+        // already been written. The answer landed, the gate was never told, and
+        // the error named the wrong noun.
+        let name = record.name.clone();
+        tick(run, now, place, Some(&name), false)?;
+        // Re-read, because the tick has just rewritten the record it acted on.
+        // **By uuid, which is what the store is keyed by** — `handle` is what
+        // the caller typed and may be a name or an entry id, and `load` builds
+        // a path out of what it is given.
+        let record = store.load(&record.uuid)?;
+        return Ok(Output::Answer(Box::new(Envelope::ok(
+            "fleet answer",
+            None,
+            Status::Ok,
+            AnswerData {
+                job: record.name.clone(),
+                uuid: record.uuid.clone(),
+                entry: entry.uuid.clone(),
+                answer: said.to_string(),
+                state: record.state,
+                budget_remaining: job::remaining(
+                    &record.budget,
+                    &record.spend,
+                    record.run_time_ms(now.wall_ms()),
+                ),
+                pgid: record.drone.as_ref().map(|drone| drone.pgid),
+            },
+        ))));
+    }
 
     // A Drone left over from the previous turn is stopped first: two Drones on
     // one session is two writers on one transcript.
