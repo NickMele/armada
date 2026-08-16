@@ -54,6 +54,17 @@ pub fn drone_settings(armada_home: &Path, uuid: &str) -> PathBuf {
     jobs(armada_home).join(format!("{uuid}.settings.json"))
 }
 
+/// The `--mcp-config` document that attaches Armada's own server:
+/// `~/.armada/jobs/<uuid>.mcp.json`.
+///
+/// **Per Job rather than one shared file**, for the same reason the settings
+/// document is: the two are written together at spawn, live and die with the
+/// Job, and are reclaimed by the same pass. A shared file would be a thing
+/// every Job depends on and no Job owns.
+pub fn drone_mcp(armada_home: &Path, uuid: &str) -> PathBuf {
+    jobs(armada_home).join(format!("{uuid}.mcp.json"))
+}
+
 /// The lock one `armada fleet tick` pass holds: `~/.armada/tick.lock`.
 ///
 /// **One pass at a time, machine-wide.** Every Drone's `Stop` hook sweeps the

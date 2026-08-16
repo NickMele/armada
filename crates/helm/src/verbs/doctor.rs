@@ -153,7 +153,18 @@ fn drone_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
     // than only in a unit test because this is the vector this machine would
     // run, and because a probe whose flags had silently shifted by one would
     // then be validating a combination Armada does not use.
-    let probe = argv::probe_argv(registered.as_deref());
+    // **The probe carries the MCP flags too, for the reason above**: a machine
+    // that accepts `--mcp-config` is what makes a Drone able to report at all,
+    // and a probe missing the flag would validate a combination Armada does not
+    // run. Written beside the hooks document and on the same terms — into an
+    // existing `~/.armada/` only, and a path that will not take the file simply
+    // runs without it.
+    let probe_mcp = armada_home.join(format!("probe-{}.mcp.json", argv::PROBE_SESSION));
+    let attached = (armada_home.is_dir()
+        && std::fs::write(&probe_mcp, armada_core::helm::mcp_json("armada")).is_ok())
+    .then(|| probe_mcp.display().to_string());
+
+    let probe = argv::probe_argv(registered.as_deref(), attached.as_deref());
     if let Some(at) = probe.iter().position(|word| word == argv::APPEND) {
         let carried = probe.get(at + 1).map(String::as_str).unwrap_or("");
         if carried.trim().is_empty() || carried.starts_with('-') {
