@@ -43,6 +43,8 @@ usually asking which one applies.
 | [026](026-a-job-never-reaches-done.md) | What it takes for a Job to reach `DONE` | FIXED | fleet | `fleet answer` resumed the Drone instead of settling the gate, so an approval was read never — **fixed**. The headline claim was wrong: `design` and `plan` end at a human by design, and only [016](016-what-the-gate-cannot-prove.md) stands between a branch-ending workflow and `DONE` |
 | [027](027-the-cli-under-a-users-hands.md) | The CLI under a user's hands | RESERVED | cross-cutting | A review of the whole CLI, driven rather than read — six things that stop somebody, led by a tick list whose printed instruction is false at a terminal |
 | [028](028-specialised-drones.md) | Specialised Drones, and subagents a repository declares | RESERVED | cross-cutting | A repo declares its own subagents the way it declares skills, and Armada ships a fleet of specialised ones — a reviewer that cannot `Edit` is a mechanism where *"you are reviewing"* is only guidance |
+| [029](029-a-job-of-its-own-done.md) | A Job says what done means | RESERVED | fleet | Done is the workflow's, so two Jobs on one workflow finish the same way however different the tasks were — and a prose goal self-assessed by a Drone is the false pass [PLAN.md](../PLAN.md) §14.3 exists to refuse |
+| [030](030-armada-helps-write-the-prompt.md) | Armada helps write the prompt, and you approve it | RESERVED | cross-cutting | Classification already pays for a turn; a bad task is the most expensive failure Armada has. Approve, edit or skip — and no terminal means no rewrite |
 
 **Armada's task system exists** ([002](002-tasks.md)), so these can become its first rows — one
 file per row is what makes that a script rather than a rewrite. It is not run automatically:
