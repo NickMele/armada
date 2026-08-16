@@ -2449,6 +2449,78 @@ fn answering_a_job_out_of_rope_with_a_raise_gives_it_more_and_continues() {
     assert!(error.message.contains("still at"), "{}", error.message);
 }
 
+/// **A raise settles the ceiling and nothing else.**
+///
+/// Measured within the hour the raise was built, on the author's own fleet. A
+/// planning Job sat on `human_approves` asking *"does this look right to
+/// you?"*, and while it waited its wall clock ran out. The raise that gave it
+/// more time fell through and closed that question with the string
+/// `max_wall_clock=6h` — which the gate read as the reviewer's verdict, decided
+/// was not an approval, and recorded as a failed attempt. Three of those and
+/// the Job was out of attempts as well, having never been reviewed.
+///
+/// A ceiling and a gate are two different questions and one answer may not
+/// settle both.
+#[test]
+fn a_raise_does_not_answer_the_question_the_job_was_asking() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            budget: vec!["max_cost=0.01".to_string()],
+            ..task("add rate limiting")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "gate-question",
+        &data.uuid,
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "t",
+        1,
+        "does this look right to you?",
+    )
+    .unwrap();
+
+    // The Job's gate is waiting on that entry, which is what makes it the
+    // workflow's question rather than a bare notification.
+    let mut record = scratch.store().load(&data.uuid).unwrap();
+    record.pending = Some(armada_core::fleet::job::Pending {
+        step: record.step.clone(),
+        attempt: 1,
+        on: armada_core::fleet::job::Waiting::Answer("gate-question".to_string()),
+    });
+    scratch.store().save(&record).unwrap();
+
+    fleet::answer(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        &data.name,
+        "max_cost=25.00",
+    )
+    .expect("a raise is an answer to the ceiling");
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.budget.cost_usd, 25.00, "the ceiling was not raised");
+
+    let entries = armada_fleet::inbox::read(&scratch.inbox()).unwrap();
+    let question = entries
+        .iter()
+        .find(|entry| entry.uuid == "gate-question")
+        .expect("the gate's question is still on file");
+    assert!(
+        question.answered.is_none(),
+        "a budget raise was recorded as the reviewer's verdict: {:?}",
+        question.answered
+    );
+}
+
 #[test]
 fn answering_a_job_with_nothing_open_is_refused_before_any_session_is_touched() {
     let scratch = Scratch::new();

@@ -125,6 +125,27 @@ pub struct Job {
     /// that `fleet.kill` may have truncated is a ceiling that quietly resets.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub attempts: std::collections::BTreeMap<String, u32>,
+    /// How long this Job has spent stopped in front of a question, in
+    /// milliseconds. Subtracted from [`Job::run_time_ms`].
+    ///
+    /// **Waiting is not working, and the wall clock ceiling asks about work.**
+    /// [`Kin::suspended_ms`] already makes this argument for a parent whose
+    /// child is waiting on a person; this is the same credit for the Job that is
+    /// itself stopped in front of the question. Without it, the answer to *"how
+    /// long has this Job been running"* is really *"how long has its reviewer
+    /// been at lunch"*.
+    ///
+    /// **Only the clock is credited.** Cost and attempts are untouched: those
+    /// measure work, and the work was really done.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub waited_ms: u64,
+    /// When the wait now running began, in wall clock milliseconds.
+    ///
+    /// Separate from [`Job::waited_ms`] for [`Kin::suspended_from_ms`]'s reason:
+    /// a wait has to be measured while it happens, or a Job trips its ceiling
+    /// partway through one and is stopped before the credit is written down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting_from_ms: Option<u64>,
     /// Every step boundary this Job has crossed, oldest first.
     ///
     /// **Append-only, and on disk for the reason the inbox is**: it has to
@@ -706,10 +727,76 @@ impl Job {
     /// went to lunch. It is therefore **not** how long the Job has existed —
     /// that is `now_ms - created_ms`, and no surface that means *"started at"*
     /// should call this.
+    ///
+    /// **And less whatever it spent waiting on you** ([`Job::waited_ms`]), which
+    /// is the same argument arriving one level down and taking a year to be
+    /// noticed. The paragraph above was written about a *parent* whose child was
+    /// waiting for a person — but the Job actually stopped in front of the
+    /// question is waiting for exactly as long, and nothing credited it.
+    ///
+    /// Measured 2026-08-16: a planning Job asked *"does this look right to
+    /// you?"*, its reviewer took ninety minutes, and it tripped a ninety-minute
+    /// ceiling having done no work at all in the interval. The clock that killed
+    /// it was measuring the reviewer.
     pub fn run_time_ms(&self, now_ms: u64) -> u64 {
         now_ms
             .saturating_sub(self.created_ms)
             .saturating_sub(self.kin.suspended_by(now_ms))
+            .saturating_sub(self.waited_by(now_ms))
+    }
+
+    /// How much of this Job's life has been spent waiting on a person, by
+    /// `now_ms`.
+    ///
+    /// **Measured while it happens rather than folded on settle**, which is
+    /// [`Kin::suspended_from_ms`]'s reason repeated: crediting only on the
+    /// answer would let a Job trip its ceiling at minute ninety of a two-hour
+    /// wait and be stopped before the credit it was owed was ever written down.
+    /// That is not a hypothetical — it is what happened.
+    pub fn waited_by(&self, now_ms: u64) -> u64 {
+        self.waited_ms.saturating_add(
+            self.waiting_from_ms
+                .map_or(0, |from| now_ms.saturating_sub(from)),
+        )
+    }
+
+    /// Whether this Job is stopped in front of a person rather than working.
+    ///
+    /// **Two shapes, and both are the Job's own record.** A gate waiting on an
+    /// answer is [`Waiting::Answer`]; a Job halted at a ceiling or by a Drone
+    /// that gave up is [`Verdict::NeedsHuman`]. Nothing here reads the inbox,
+    /// so the answer does not depend on a second file being consistent with
+    /// this one.
+    ///
+    /// **A gate waiting on a *check* or a *sub-Job* is not this.** Those are
+    /// waits on a machine, and a machine is not at lunch — the sub-Job case is
+    /// already credited from the other side by [`Kin::suspended_ms`], and
+    /// crediting it here as well would pay a parent twice.
+    pub fn waiting_on_a_person(&self) -> bool {
+        self.verdict == Some(super::Verdict::NeedsHuman)
+            || self
+                .pending
+                .as_ref()
+                .is_some_and(|pending| matches!(pending.on, Waiting::Answer(_)))
+    }
+
+    /// Start the clock on a wait for a person, if one is not already running.
+    ///
+    /// **Idempotent, because a question can be re-raised.** A Job that asks,
+    /// goes unanswered, and has its entry re-raised by a later tick is in one
+    /// wait, not two, and restarting the stamp would silently discard the credit
+    /// already earned.
+    pub fn began_waiting(&mut self, now_ms: u64) {
+        if self.waiting_from_ms.is_none() {
+            self.waiting_from_ms = Some(now_ms);
+        }
+    }
+
+    /// Stop the clock on a wait for a person and bank what it cost.
+    pub fn stopped_waiting(&mut self, now_ms: u64) {
+        if let Some(from) = self.waiting_from_ms.take() {
+            self.waited_ms = self.waited_ms.saturating_add(now_ms.saturating_sub(from));
+        }
     }
 
     /// The word a row's status column shows — **the action, when there is one**
@@ -1386,6 +1473,8 @@ mod tests {
             task: "add rate limiting".to_string(),
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
+            waited_ms: 0,
+            waiting_from_ms: None,
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
@@ -1740,6 +1829,87 @@ mod tests {
         );
     }
 
+    /// **A Job does not spend its wall clock waiting for you either.**
+    ///
+    /// The same argument as the test above, one level down, and it took a real
+    /// loss to notice. A planning Job asked *"does this look right to you?"*,
+    /// its reviewer took ninety minutes, and it tripped a ninety-minute ceiling
+    /// having done no work at all in the interval — the clock that killed it was
+    /// measuring the reviewer. The credit above was written for a *parent* whose
+    /// child was waiting on a person, and the Job actually stopped in front of
+    /// the question got nothing.
+    #[test]
+    fn a_job_does_not_spend_its_wall_clock_waiting_for_a_person() {
+        let mut record = watching(JobState::Paused);
+        record.created_ms = 0;
+        record.verdict = Some(super::super::Verdict::NeedsHuman);
+        assert!(record.waiting_on_a_person());
+
+        // Ninety minutes in, all of it waiting on a review.
+        record.began_waiting(60_000);
+        assert_eq!(
+            record.run_time_ms(5_460_000),
+            60_000,
+            "the wait was charged to the Job"
+        );
+        assert_eq!(
+            exhausted(
+                &record.budget,
+                &Spend::default(),
+                record.run_time_ms(5_460_000),
+                0
+            ),
+            None,
+            "a Job was killed by a ceiling it reached while its reviewer was at lunch"
+        );
+
+        // The answer lands: the wait is banked and the clock runs again.
+        record.stopped_waiting(5_460_000);
+        assert_eq!(record.waited_ms, 5_400_000);
+        assert_eq!(record.run_time_ms(5_460_000), 60_000);
+        assert_eq!(record.run_time_ms(5_520_000), 120_000);
+
+        // **Idempotent**, because a question that goes unanswered is re-raised
+        // by every tick and a restarted stamp would discard the credit earned.
+        record.began_waiting(6_000_000);
+        record.began_waiting(6_600_000);
+        assert_eq!(record.waiting_from_ms, Some(6_000_000));
+    }
+
+    /// **A wait on a machine is not a wait on a person.** A gate waiting for a
+    /// check to exit is waiting on something that is not at lunch, and a gate
+    /// waiting on a sub-Job is already credited from the other side by
+    /// `Kin::suspended_ms` — crediting it here as well would pay a parent twice.
+    #[test]
+    fn only_a_wait_on_a_person_stops_the_clock() {
+        let mut record = watching(JobState::Running);
+        assert!(
+            !record.waiting_on_a_person(),
+            "a working Job waits on nobody"
+        );
+
+        record.pending = Some(Pending {
+            step: "implement".to_string(),
+            attempt: 1,
+            on: Waiting::Check("01M0".to_string()),
+        });
+        assert!(!record.waiting_on_a_person(), "a check is not a person");
+
+        record.pending = Some(Pending {
+            step: "review".to_string(),
+            attempt: 1,
+            on: Waiting::SubJob("uuid".to_string()),
+        });
+        assert!(!record.waiting_on_a_person(), "a sub-Job is not a person");
+
+        record.pending = Some(Pending {
+            step: "approve".to_string(),
+            attempt: 1,
+            on: Waiting::Answer("entry".to_string()),
+        });
+        assert!(record.waiting_on_a_person());
+    }
+
     /// Run time is wall clock, because a Job outlives a boot and a monotonic
     /// reading does not.
     #[test]
@@ -1766,6 +1936,8 @@ mod tests {
             task: "add rate limiting to the API".to_string(),
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
+            waited_ms: 0,
+            waiting_from_ms: None,
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
@@ -2020,6 +2192,8 @@ mod tests {
             task: "the nightly job is flaky".to_string(),
             progress: Vec::new(),
             attempts: std::collections::BTreeMap::new(),
+            waited_ms: 0,
+            waiting_from_ms: None,
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
