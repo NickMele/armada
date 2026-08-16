@@ -36,7 +36,7 @@ use armada_core::envelope::{
     InitData, InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem,
     Projection, Released, ResolvedSkillView, ResultRow, RunView, ScanData, ServicesData,
     SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem,
-    TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
+    TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData, Window,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -1826,6 +1826,11 @@ fn fleet_ls_matches_its_fixture() {
             needs_you: results.iter().filter(|row| row.needs_attention).count(),
             spent_usd: results.iter().map(|row| row.cost_usd).sum(),
             results,
+            // **Carried and not drawn here.** `ls` is a listing of Jobs and the
+            // window is a fact about the account; the surface that leads with it
+            // is the Bridge (`020` §4), which reads this listing rather than a
+            // second source. A `--json` consumer gets it either way.
+            window: None,
         },
     )));
     assert_render("fleet-ls", &output);
@@ -2050,8 +2055,13 @@ fn fleet_tick_matches_its_fixture() {
 fn bridge_matches_its_fixture() {
     /// `on_step` is the step and how long it has been on it, together, because
     /// the second means nothing without the first.
+    // Eight fields of a nine-field row, written out rather than bundled: a
+    // struct literal here would be the `JobRow` this already builds, and a
+    // builder would be a second description of one fixture.
+    #[allow(clippy::too_many_arguments)]
     fn row(
         name: &str,
+        uuid: &str,
         state: JobState,
         on_step: (&str, Option<u64>),
         task: &str,
@@ -2061,7 +2071,12 @@ fn bridge_matches_its_fixture() {
     ) -> JobRow {
         let (step, on_step_s) = on_step;
         JobRow {
-            uuid: format!("{name}-uuid"),
+            // **The same five uuids `fleet-ls` uses**, because it is the same
+            // fleet drawn by a second surface — and because the point of the
+            // `ID` column is that the id is opaque where the handle is not, so a
+            // fixture whose ids were built out of the handles would prove
+            // nothing.
+            uuid: uuid.to_string(),
             name: name.to_string(),
             workflow: "feature".to_string(),
             state,
@@ -2083,9 +2098,10 @@ fn bridge_matches_its_fixture() {
         }
     }
 
-    let results = vec![
+    let mut results = vec![
         row(
             "rate-limit",
+            "c19d0a34-3069-4115-ad92-e81f486ce8b9",
             JobState::Running,
             ("implement", Some(12 * 60)),
             "add gateway limiter",
@@ -2095,6 +2111,7 @@ fn bridge_matches_its_fixture() {
         ),
         row(
             "carina-schema",
+            "94b1fd2e-6288-46f8-83f0-0d7d857e64cd",
             JobState::Running,
             ("plan", Some(3 * 60)),
             "migrate schema",
@@ -2108,6 +2125,7 @@ fn bridge_matches_its_fixture() {
         // nothing is drawn rather than a `0s` that reads as a measurement.
         row(
             "xlsx-report",
+            "3d9cc7ba-1f40-4a6e-9c21-5b8e0d2a7f13",
             JobState::Stalled,
             ("reproduce", None),
             "generate report",
@@ -2117,6 +2135,7 @@ fn bridge_matches_its_fixture() {
         ),
         row(
             "release-merge",
+            "7f2ab618-58d3-4c07-b9e4-1a6c39fd80ae",
             JobState::Blocked,
             ("implement", Some(18 * 60)),
             "merge release",
@@ -2125,6 +2144,12 @@ fn bridge_matches_its_fixture() {
             true,
         ),
     ];
+    // **`NEEDS YOU` carries the question, not `YES`** (`020` §"Also decided"),
+    // so most answers need no second screen. `armada fleet ls` folds an open
+    // inbox entry's body into `detail`, and this is the one row that has one —
+    // which is also why the other three keep `detail == step` and draw nothing
+    // in that column at all.
+    results[3].detail = "the CI timeout is 30s and the flake needs 90s. Raise it?".to_string();
 
     let output = Output::Bridge(Box::new(Envelope::ok(
         "bridge",
@@ -2139,6 +2164,14 @@ fn bridge_matches_its_fixture() {
                 .count(),
             filter: None,
             hidden: 0,
+            // **The window leads the summary line and spend follows it**
+            // (`020` §4). Both halves are here because both were measured: the
+            // percentage is Claude Code's `utilization` floored, and the reset
+            // is its `resetsAt` turned into a countdown.
+            window: Some(Window {
+                used_percent: Some(71),
+                resets_in_s: Some(2 * 3_600 + 14 * 60),
+            }),
             results,
         },
     )));
@@ -2157,7 +2190,7 @@ fn bridge_matches_its_fixture() {
 #[test]
 fn bridge_filtered_matches_its_fixture() {
     let results = vec![JobRow {
-        uuid: "carina-schema-uuid".to_string(),
+        uuid: "94b1fd2e-6288-46f8-83f0-0d7d857e64cd".to_string(),
         name: "carina-schema".to_string(),
         workflow: "feature".to_string(),
         state: JobState::Running,
@@ -2188,6 +2221,19 @@ fn bridge_filtered_matches_its_fixture() {
             running: 1,
             filter: Some("state=RUNNING".to_string()),
             hidden: 3,
+            // **A window with no percentage, which is the ordinary case.** The
+            // `utilization` field only rides along once the service has crossed
+            // a threshold, so most frames know when the window resets and not
+            // how much of it is gone — and the line says what it has rather than
+            // computing the rest.
+            //
+            // **It survives the filter**, unlike every other number here: the
+            // rows are what `state=RUNNING` selected, and the window is the
+            // account's.
+            window: Some(Window {
+                used_percent: None,
+                resets_in_s: Some(43 * 60),
+            }),
             results,
         },
     )));

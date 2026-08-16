@@ -85,10 +85,15 @@ and the renderer follows it.
 `--json` returns one result per Job with `uuid`, `name`, `workflow`, `state`, `detail`, `task`,
 `runtime_s`, `cost_usd`, `tokens`, `turns`, `budget_remaining` and `needs_attention`.
 
-**`task` is carried and not drawn here.** The table's `DETAIL` answers *what is it doing now*;
-`task` is the words the Job was given, which [`../helm/bridge.md`](../helm/bridge.md) draws as
-its own column. The Bridge is a renderer over this listing, so the field travels with the
-listing rather than sending the Bridge back to `~/.armada/jobs/` for a second read.
+Beside `results` it carries `needs_you`, `spent_usd` and — when one of the Jobs has seen it and
+it has not reset yet — `window`, holding `used_percent` and `resets_in_s`.
+
+**`task` and `window` are carried and not drawn here.** The table's `DETAIL` answers *what is it
+doing now*; `task` is the words the Job was given, and `window` is the rate-limit window the
+account is inside rather than a fact about any row. [`../helm/bridge.md`](../helm/bridge.md)
+draws both. The Bridge is a renderer over this listing, so those fields travel with the listing
+rather than sending the Bridge back to `~/.armada/jobs/` for a second read — which is also what
+keeps the Bridge out of a Drone's transcript ([`ARCHITECTURE.md`](../../ARCHITECTURE.md) §1.9).
 
 ## Dependencies
 

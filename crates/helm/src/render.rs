@@ -760,7 +760,7 @@ fn bridge(envelope: &Envelope<BridgeData>, style: Style, width: usize) -> String
     // table describes both surfaces and the renderer decides which columns
     // earned their width (`docs/commands/render.md`), which is what stops the
     // screen and `--once` from becoming two layouts.
-    let table = bridge_table(data, style, None);
+    let table = bridge_table(data, style, None, width);
     out.push_str(&table.render(style, width));
     if table.is_empty() {
         // **An empty fleet says so.** A screen that drew nothing would be
@@ -796,66 +796,189 @@ fn bridge(envelope: &Envelope<BridgeData>, style: Style, width: usize) -> String
 /// `cursor` is the row under the caret, or `None` when nobody is watching — and
 /// a cursor column no row filled is dropped, header and all, which is why
 /// `--once` shows no empty gutter.
-pub fn bridge_table(data: &BridgeData, style: Style, cursor: Option<usize>) -> Table {
-    let mut table = Table::new(vec![
+///
+/// **The table grows into a wide terminal** (`020` §"Also decided"). Three
+/// columns are optional and are shed in [`SHED`]'s order as the width runs out,
+/// so a 200-column screen carries the workflow and the turn count and an
+/// 80-column one does not — one layout that fits both, rather than a layout
+/// designed for the narrowest terminal anybody might have.
+pub fn bridge_table(data: &BridgeData, style: Style, cursor: Option<usize>, width: usize) -> Table {
+    // Shed the lowest-priority optional column, re-measure, repeat. The width a
+    // table needs depends on its rows, so this cannot be a set of thresholds
+    // written down here — `x jobs at 92 columns` is a different answer from
+    // `x jobs whose names are all short at 92 columns`.
+    let mut shown: Vec<Optional> = SHED.to_vec();
+    loop {
+        let table = bridge_columns(data, style, cursor, &shown);
+        if shown.is_empty() || table.minimum_width() <= width {
+            return table;
+        }
+        shown.remove(0);
+    }
+}
+
+/// A column the Bridge's table carries only when there is room for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Optional {
+    /// Which workflow the Job is running.
+    Workflow,
+    /// How many turns it has taken.
+    Turns,
+    /// What it was asked to do.
+    Task,
+}
+
+/// The optional columns, **lowest priority first** — which is the order they are
+/// shed in as the terminal narrows.
+///
+/// **`WORKFLOW` goes first** because it is the one column a reader can predict:
+/// a fleet is usually running one or two workflows and the row's step already
+/// implies which. **`TURNS` second**, because it is a measurement worth having
+/// and worth nothing urgently — a Job approaching its ceiling shows up as a
+/// state word long before a person notices a number climbing.
+///
+/// **`TASK` last, and it is the departure from the note in `020`**, which lists
+/// only the first two before saying `NEEDS YOU` truncates. The arithmetic does
+/// not allow it: measured against the Bridge's own fixture at eighty columns, a
+/// table carrying both flexible columns needs eighty-one, so it would overhang
+/// the screen rather than truncate inside it and one of the two has to go.
+///
+/// **It is `TASK`, and the handle is why.** A Job's name is derived from its
+/// task — two significant words of it
+/// ([`armada_core::fleet::job::derive_name`]) — so
+/// `TASK` is the one column on the row that largely repeats another, and what it
+/// adds beyond the name is a truncation of a sentence the detail pane carries
+/// whole. `NEEDS YOU` is the only column that is ever a call to action, and it
+/// now carries the question rather than `YES`.
+///
+/// **The trade this leaves, stated:** an eighty-column Bridge with something
+/// waiting on you shows the question and not the task. A wide one shows both,
+/// which is the whole reason the layout grows.
+const SHED: [Optional; 3] = [Optional::Workflow, Optional::Turns, Optional::Task];
+
+fn bridge_columns(
+    data: &BridgeData,
+    style: Style,
+    cursor: Option<usize>,
+    shown: &[Optional],
+) -> Table {
+    let has = |which: Optional| shown.contains(&which);
+    let mut columns = vec![
         // The caret, for the surface that has one. **A character rather than a
         // colour**, for the reason `ask/select.rs` gives: a row told apart only
         // by being amber is a row a monochrome terminal cannot tell apart.
         Column::fixed(""),
         Column::fixed("status"),
         Column::fixed("job"),
-        // **The step, and how long it has been on it.** One column rather than
-        // two, and the width for it comes out of `TASK` — which is the trade,
-        // stated: the task is already a truncation of a sentence the detail pane
-        // carries whole, and the step is the fact no other column can be read
-        // for. `DETAIL` in `fleet ls` folds the step together with an open
-        // inbox body, so it is not a substitute.
-        //
-        // **A step and an elapsed time, and never a fraction.** *"On `implement`
-        // for 12m"* is measured; *"three of five steps"* would be the progress
-        // bar PHASES.md §9.1 F2 bans, drawn in words.
-        Column::fixed("step"),
-        Column::flexible("task"),
-        Column::fixed("run").right(),
-        Column::fixed("spent").right(),
-        // **The only column that is ever a call to action**, and the only one
-        // besides the caret that disappears when nothing fills it: a `NEEDS YOU`
-        // header over a column of placeholders claims somebody is waiting.
-        Column::fixed("needs you"),
-    ])
-    .indent(2);
+        // **The id, because a generated handle is not readable.** `now-that` is
+        // what naming two significant words out of a sentence produces, and it
+        // is the id a person checks a row against — the same eight characters
+        // `armada fleet ls` shows, so the two listings match by eye.
+        Column::fixed("id"),
+    ];
+    if has(Optional::Workflow) {
+        columns.push(Column::fixed("workflow"));
+    }
+    // **The step, and how long it has been on it.** One column rather than
+    // two, and the width for it comes out of `TASK` — which is the trade,
+    // stated: the task is already a truncation of a sentence the detail pane
+    // carries whole, and the step is the fact no other column can be read
+    // for. `DETAIL` in `fleet ls` folds the step together with an open
+    // inbox body, so it is not a substitute.
+    //
+    // **A step and an elapsed time, and never a fraction.** *"On `implement`
+    // for 12m"* is measured; *"three of five steps"* would be the progress
+    // bar PHASES.md §9.1 F2 bans, drawn in words.
+    columns.push(Column::fixed("step"));
+    if has(Optional::Task) {
+        columns.push(Column::flexible("task"));
+    }
+    columns.push(Column::fixed("run").right());
+    if has(Optional::Turns) {
+        columns.push(Column::fixed("turns").right());
+    }
+    columns.push(Column::fixed("spent").right());
+    // **The only column that is ever a call to action**, and the only one
+    // besides the caret that disappears when nothing fills it: a `NEEDS YOU`
+    // header over a column of placeholders claims somebody is waiting.
+    //
+    // **Flexible, because it now holds a sentence.** It carried `YES`, which
+    // told a reader that a Job wanted them and made them open a second screen to
+    // find out what for; it carries the question now, so most answers need no
+    // second screen — and it is the last column to be squeezed because every
+    // flexible column ahead of it has already been shed.
+    columns.push(Column::flexible("needs you"));
+
+    let mut table = Table::new(columns).indent(2);
 
     for (index, row) in data.results.iter().enumerate() {
-        table = table.row(vec![
+        let mut cells = vec![
             match cursor == Some(index) {
                 true => Cell::painted(style.caret(), Role::SignalAmber),
                 false => Cell::empty(),
             },
             job_state(row.state),
             Cell::painted(row.name.clone(), Role::NavalBlue),
-            step_cell(row),
-            detail_cell(style, Some(row.task.as_str())),
-            // A Job that has not run yet is a dash in both number columns, for
-            // the reason `fleet ls` gives: a zero reads as a measurement, and
-            // nothing has been measured.
-            Cell::muted(if row.state == JobState::Queued {
-                style.nothing().to_string()
-            } else {
-                format::elapsed(row.runtime_s * 1_000)
-            }),
-            Cell::muted(if row.cost_usd > 0.0 {
-                format::money(row.cost_usd)
-            } else {
-                style.nothing().to_string()
-            }),
-            if row.needs_attention {
-                Cell::painted("YES", Role::DistressRed)
-            } else {
-                Cell::nothing()
-            },
-        ]);
+            // **Muted, because it is the fallback and not the handle** — the
+            // same words and the same colour `fleet ls` uses for it.
+            Cell::muted(armada_fleet::jobs::short(&row.uuid).to_string()),
+        ];
+        if has(Optional::Workflow) {
+            cells.push(Cell::muted(row.workflow.clone()));
+        }
+        cells.push(step_cell(row));
+        if has(Optional::Task) {
+            cells.push(detail_cell(style, Some(row.task.as_str())));
+        }
+        // A Job that has not run yet is a dash in both number columns, for
+        // the reason `fleet ls` gives: a zero reads as a measurement, and
+        // nothing has been measured.
+        cells.push(Cell::muted(if row.state == JobState::Queued {
+            style.nothing().to_string()
+        } else {
+            format::elapsed(row.runtime_s * 1_000)
+        }));
+        if has(Optional::Turns) {
+            // **A count, never a fraction of a budget.** `4` is what the
+            // transcript reported; `4 of 12` would be a progress bar with the
+            // bar left off (PHASES.md §9.1 F2), and the ceiling is in the detail
+            // pane where the other three ceilings are.
+            cells.push(Cell::muted(match row.turns {
+                0 => style.nothing().to_string(),
+                turns => turns.to_string(),
+            }));
+        }
+        cells.push(Cell::muted(if row.cost_usd > 0.0 {
+            format::money(row.cost_usd)
+        } else {
+            style.nothing().to_string()
+        }));
+        cells.push(needs_you_cell(row));
+        table = table.row(cells);
     }
     table
+}
+
+/// What the `NEEDS YOU` column says, which is the question when there is one.
+///
+/// **The complaint this closes is a `YES` with no way to find out why.** The
+/// row's `detail` is `fleet ls`'s fold: an open inbox entry's body when one is
+/// open, and the step name when none is. Only the first is a question, and the
+/// second is already in `STEP` — so a cell that printed `detail` blindly would
+/// put the step in this column twice on exactly the rows a person is looking at.
+///
+/// **`YES` survives as the fallback rather than as the default.** A Job whose
+/// state needs a person without an entry to point at — `BLOCKED` with nothing
+/// raised — still needs them, and the word is [`JobState::needs_a_person`]'s
+/// answer said out loud rather than a new status word.
+fn needs_you_cell(row: &armada_core::envelope::JobRow) -> Cell {
+    if !row.needs_attention {
+        return Cell::nothing();
+    }
+    match row.detail.is_empty() || row.detail == row.step {
+        true => Cell::painted("YES", Role::DistressRed),
+        false => Cell::painted(row.detail.clone(), Role::DistressRed),
+    }
 }
 
 /// The step a Job is on, and how long it has been on it.
@@ -880,7 +1003,25 @@ fn step_cell(row: &armada_core::envelope::JobRow) -> Cell {
 
 /// The Bridge's summary line, painted, for `--once`.
 pub fn bridge_summary(data: &BridgeData, status: Status, style: Style) -> String {
-    summary(style, status, &frame_facts(data))
+    match aggregates(data) {
+        false => summary(style, status, &frame_facts(data)),
+        true => headlined_facts(style, &frame_facts(data)),
+    }
+}
+
+/// Whether this frame's leading word would be an aggregate over several Jobs.
+///
+/// **The objection, in his words: *"what's the point of an aggregate status when
+/// multiple jobs are running?"*** (`020` §6). A word derived from the worst row
+/// describes no Job in particular — `RUNNING` over four rows of which one is
+/// stalled and one wants an answer is true of one row and misleading about
+/// three. Counts cannot be wrong, so the counts stand alone.
+///
+/// **A single Job keeps its word, because there it means something**: it is that
+/// Job's state, not a summary of anything, and dropping it would take a fact off
+/// the line to satisfy a rule about a case this is not.
+fn aggregates(data: &BridgeData) -> bool {
+    data.results.len() > 1
 }
 
 /// The same line as **coloured pieces**, for the screen.
@@ -892,6 +1033,14 @@ pub fn bridge_summary(data: &BridgeData, status: Status, style: Style) -> String
 /// screen cannot take escape sequences, because `ratatui` prints an SGR string
 /// it finds in a value literally.
 pub fn bridge_summary_pieces(data: &BridgeData, status: Status, style: Style) -> Vec<Span> {
+    let facts = Span {
+        text: frame_facts(data).join(style.between()),
+        role: Some(Role::SteelGrey),
+        bold: false,
+    };
+    if aggregates(data) {
+        return vec![facts];
+    }
     vec![
         Span {
             text: status.to_string(),
@@ -903,11 +1052,7 @@ pub fn bridge_summary_pieces(data: &BridgeData, status: Status, style: Style) ->
             role: None,
             bold: false,
         },
-        Span {
-            text: frame_facts(data).join(style.between()),
-            role: Some(Role::SteelGrey),
-            bold: false,
-        },
+        facts,
     ]
 }
 
@@ -999,6 +1144,32 @@ fn frame_facts(data: &BridgeData) -> Vec<String> {
     let mut facts = vec![format::count(data.results.len(), "job")];
     if data.needs_you > 0 {
         facts.push(format!("{} need you", data.needs_you));
+    }
+    // **The count `020` §6 names, and the reason the aggregate word could go.**
+    // A stalled Job is the failure that cost him eight hours: it drew as
+    // `RUNNING` until `SILENT`/`STALLED` became real states, and a leading word
+    // taken off the worst row would hide it again the moment a second Job was
+    // running. Omitted at zero, like `need you`, so that seeing it means
+    // something.
+    let stalled = data
+        .results
+        .iter()
+        .filter(|row| row.state == JobState::Stalled)
+        .count();
+    if stalled > 0 {
+        facts.push(format!("{stalled} stalled"));
+    }
+    // **What stops you working, ahead of what it cost** (`020` §4). The window
+    // is the account's rather than the frame's, so it survives a filter — and
+    // both halves are omitted when the service did not send them, because a
+    // percentage nobody measured is the one thing this line may not carry.
+    if let Some(window) = data.window {
+        if let Some(used) = window.used_percent {
+            facts.push(format!("window {used}%"));
+        }
+        if let Some(resets_in_s) = window.resets_in_s {
+            facts.push(format!("resets {}", format::countdown(resets_in_s * 1_000)));
+        }
     }
     facts.push(format!("{} today", format::money(data.spent_usd)));
     if let Some(filter) = &data.filter {
@@ -3826,6 +3997,18 @@ fn headline(style: Style, headline: Headline, facts: &[String]) -> String {
         style,
         &style.strong(Role::FlareOrange, &headline.to_string()),
         facts,
+    )
+}
+
+/// The same line with **no leading word at all** — counts, and nothing derived.
+///
+/// **One caller, and it is `020` §6.** Every other summary in this corpus leads
+/// with a verdict about one thing; the Bridge over several Jobs has no one thing
+/// to be a verdict about, and the honest line is the facts on their own.
+fn headlined_facts(style: Style, facts: &[String]) -> String {
+    format!(
+        "{}\n",
+        style.paint(Role::SteelGrey, &facts.join(style.between()))
     )
 }
 
