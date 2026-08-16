@@ -128,7 +128,7 @@ impl Machine {
             port_block: None,
             budget: Budget {
                 iterations: 12,
-                tokens: 400_000,
+                cost: 10.00_000,
                 wall_clock_ms: 2_700_000,
                 on_exhausted: OnExhausted::NeedsHuman,
             },

@@ -1669,13 +1669,17 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
             Cell::muted("budget"),
             detail_cell(
                 style,
+                // **Turns and exchanges are different units and are no longer
+                // compared.** `51 of 20 turns` read as a ceiling overshot by
+                // 2.5x; it was a Drone's internal turns held against a ceiling
+                // counted in exchanges. The cost is the ceiling that bites, so
+                // it is the only `x of y` here.
                 Some(&format!(
-                    "{} of {} turns, {} of {} tokens, {}",
-                    data.turns,
-                    data.budget.iterations,
-                    token_count(data.tokens),
-                    token_count(data.budget.tokens),
+                    "{} of ${:.2}, {} turns, {} tokens",
                     format::money(data.cost_usd),
+                    data.budget.cost_usd,
+                    data.turns,
+                    token_count(data.tokens),
                 )),
             ),
         ])
@@ -1684,10 +1688,14 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
             Cell::muted("budget"),
             detail_cell(
                 style,
+                // **No token figure, because there is no token ceiling.** This
+                // row printed `data.tokens` — the tokens *spent* — in a row
+                // headed `LEFT`, so a reader was told a remainder that was
+                // actually a total. `Remaining` no longer carries one to print.
                 Some(&format!(
-                    "{} turns, {} tokens, {}",
+                    "${:.2}, {} exchanges, {}",
+                    data.budget_remaining.cost_usd,
                     data.budget_remaining.iterations,
-                    token_count(data.budget_remaining.tokens),
                     // **[`format::elapsed`], the same spelling the `TIME` column
                     // uses.** `25m` beside a run time of `1h` compares; `25m 00s`
                     // beside it is the same fact in a second notation.

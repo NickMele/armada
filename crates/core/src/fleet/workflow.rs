@@ -179,7 +179,7 @@ pub enum Runner {
 /// **Read off data Claude Code already emits** — `total_cost_usd`, `usage`,
 /// `num_turns` and `duration_api_ms` from the turn's `result` event
 /// (PHASES.md §9.1 F2). Fleet builds no accounting layer and estimates nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Budget {
     /// How many turns the **Job** may spend before the rope runs out.
     ///
@@ -191,8 +191,12 @@ pub struct Budget {
     /// was built and removed: [`super::gate`]'s ceiling section has the two
     /// reasons.
     pub iterations: u32,
-    /// Total tokens, summed over the turn ledgers.
-    pub tokens: u64,
+    /// Maximum cost in USD, summed over the turn ledgers. **The ceiling that
+    /// matters** (PLAN.md §14.3). Prior to this field, tokens were the ceiling,
+    /// but most tokens counted are cache reads, not work — a ceiling computed
+    /// from tokens was a ceiling on context size rather than spend, and real
+    /// Jobs halted at 1/240th of their allowed spend.
+    pub cost_usd: f64,
     /// Wall clock, in milliseconds.
     pub wall_clock_ms: u64,
     /// What happens at a ceiling. **Exhaustion is an outcome, never a silent
@@ -211,7 +215,7 @@ pub enum OnExhausted {
 }
 
 /// A whole workflow.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Workflow {
     /// How it is named on the command line and in a `workflow:` step.
     pub name: String,
@@ -259,7 +263,7 @@ struct Document {
 #[serde(deny_unknown_fields)]
 struct BudgetDocument {
     iterations: u32,
-    tokens: u64,
+    cost: f64,
     wall_clock: String,
     on_exhausted: OnExhausted,
 }
@@ -271,7 +275,7 @@ struct BudgetDocument {
 /// rather than the number anybody tunes (PLAN.md §14.6).
 pub const DEFAULT_BUDGET: Budget = Budget {
     iterations: 15,
-    tokens: 500_000,
+    cost_usd: 5.0,
     wall_clock_ms: 90 * 60 * 1_000,
     on_exhausted: OnExhausted::NeedsHuman,
 };
@@ -368,7 +372,7 @@ pub fn parse(text: &str, label: &str) -> Result<Workflow, ArmadaError> {
     let budget = match document.budget {
         Some(written) => Budget {
             iterations: written.iterations,
-            tokens: written.tokens,
+            cost_usd: written.cost,
             wall_clock_ms: duration_ms(&written.wall_clock, label)?,
             on_exhausted: written.on_exhausted,
         },
@@ -423,7 +427,7 @@ pub fn override_budget(budget: Budget, pairs: &[String]) -> Result<Budget, Armad
             r#where: pair.clone(),
             message,
             next_action: Some(
-                "--budget max_iterations=12, max_tokens=400000 or max_wall_clock=45m".to_string(),
+                "--budget max_iterations=12, max_cost=10.50 or max_wall_clock=45m".to_string(),
             ),
         };
         let Some((key, value)) = pair.split_once('=') else {
@@ -435,10 +439,10 @@ pub fn override_budget(budget: Budget, pairs: &[String]) -> Result<Budget, Armad
                     .parse()
                     .map_err(|_| refuse(format!("`{value}` is not a number of iterations")))?;
             }
-            "max_tokens" => {
-                budget.tokens = value
+            "max_cost" => {
+                budget.cost_usd = value
                     .parse()
-                    .map_err(|_| refuse(format!("`{value}` is not a number of tokens")))?;
+                    .map_err(|_| refuse(format!("`{value}` is not a cost in USD")))?;
             }
             "max_wall_clock" => {
                 budget.wall_clock_ms = duration_ms(value, "--budget")
@@ -461,7 +465,7 @@ ends_at: branch
 
 budget:
   iterations: 20
-  tokens: 600000
+  cost: 10.00
   wall_clock: 90m
   on_exhausted: needs_human
 
@@ -488,7 +492,7 @@ steps:
         assert_eq!(workflow.name, "bug");
         assert_eq!(workflow.ends_at, EndsAt::Branch);
         assert_eq!(workflow.budget.iterations, 20);
-        assert_eq!(workflow.budget.tokens, 600_000);
+        assert_eq!(workflow.budget.cost_usd, 10.0);
         assert_eq!(workflow.budget.wall_clock_ms, 90 * 60 * 1_000);
         assert_eq!(
             workflow
@@ -650,12 +654,12 @@ steps:
         let budget = override_budget(
             DEFAULT_BUDGET,
             &[
-                "max_tokens=200000".to_string(),
+                "max_cost=15.50".to_string(),
                 "max_wall_clock=45m".to_string(),
             ],
         )
         .unwrap();
-        assert_eq!(budget.tokens, 200_000);
+        assert_eq!(budget.cost_usd, 15.50);
         assert_eq!(budget.wall_clock_ms, 45 * 60 * 1_000);
         assert_eq!(budget.iterations, DEFAULT_BUDGET.iterations);
     }

@@ -3637,8 +3637,8 @@ mod tests {
             tokens: 120_000,
             turns: 4,
             budget_remaining: crate::fleet::job::Remaining {
+                cost_usd: 3.75,
                 iterations: 8,
-                tokens: 280_000,
                 wall_clock_ms: 1_860_000,
             },
             needs_attention: false,

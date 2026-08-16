@@ -171,7 +171,7 @@ fn with_ceilings(body: &str, ceilings: Ceilings) -> String {
             l if l.starts_with("iterations:") => {
                 Some(format!("  iterations: {}", ceilings.iterations))
             }
-            l if l.starts_with("tokens:") => Some(format!("  tokens: {}", ceilings.tokens)),
+            l if l.starts_with("cost:") => Some(format!("  cost: {:.2}", ceilings.cost_usd)),
             l if l.starts_with("wall_clock:") => {
                 Some(format!("  wall_clock: {}m", ceilings.wall_clock_minutes))
             }
@@ -238,7 +238,7 @@ mod tests {
                 );
             }
             let budget = parsed.get("budget").unwrap();
-            for key in ["iterations", "tokens", "wall_clock", "on_exhausted"] {
+            for key in ["iterations", "cost", "wall_clock", "on_exhausted"] {
                 assert!(
                     budget.get(key).is_some(),
                     "{} has no `budget.{key}:`",
@@ -320,11 +320,11 @@ mod tests {
 
         let plan = std::fs::read_to_string(guild.path().join("workflows/plan.yml")).unwrap();
         assert!(plan.contains("iterations: 15"), "{plan}");
-        assert!(plan.contains("tokens: 500000"), "{plan}");
+        assert!(plan.contains("cost: 5.00"), "{plan}");
 
         let bug = std::fs::read_to_string(guild.path().join("workflows/bug.yml")).unwrap();
         assert!(bug.contains("iterations: 20"), "{bug}");
-        assert!(bug.contains("tokens: 600000"), "{bug}");
+        assert!(bug.contains("cost: 10.00"), "{bug}");
         assert!(bug.contains("wall_clock: 90m"), "{bug}");
     }
 
@@ -335,7 +335,7 @@ mod tests {
         let guild = tempfile::tempdir().unwrap();
         let answers = Answers {
             iterations: Some(8),
-            tokens: Some(200_000),
+            cost_usd: Some(7.50),
             wall_clock_minutes: Some(30),
             ..Answers::default()
         };
@@ -345,7 +345,7 @@ mod tests {
             let body = std::fs::read_to_string(guild.path().join(format!("workflows/{name}.yml")))
                 .unwrap();
             assert!(body.contains("iterations: 8"), "{name}: {body}");
-            assert!(body.contains("tokens: 200000"), "{name}: {body}");
+            assert!(body.contains("cost: 7.50"), "{name}: {body}");
             assert!(body.contains("wall_clock: 30m"), "{name}: {body}");
             assert!(
                 body.contains("on_exhausted: needs_human"),

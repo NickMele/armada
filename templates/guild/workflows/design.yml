@@ -12,7 +12,7 @@ ends_at: human
 
 budget:
   iterations: 15
-  tokens: 500000
+  cost: 5.00
   wall_clock: 90m
   # Exhaustion is an outcome, never a silent stop (PLAN.md §14.3).
   on_exhausted: needs_human

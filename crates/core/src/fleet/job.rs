@@ -814,8 +814,8 @@ impl Spend {
 pub enum Ceiling {
     /// It retried a step more times than the workflow allows.
     Iterations,
-    /// It spent more tokens than the workflow allows.
-    Tokens,
+    /// It spent more USD than the workflow allows.
+    Cost,
     /// It ran longer than the workflow allows.
     WallClock,
 }
@@ -825,7 +825,7 @@ impl Ceiling {
     pub const fn word(self) -> &'static str {
         match self {
             Ceiling::Iterations => "iterations",
-            Ceiling::Tokens => "tokens",
+            Ceiling::Cost => "cost",
             Ceiling::WallClock => "wall clock",
         }
     }
@@ -836,14 +836,14 @@ impl Ceiling {
 /// **Exhaustion is a first-class outcome, not a crash** (PLAN.md §14.3): the
 /// Drone stops, the Job records what it spent and where it reached, and raises
 /// it to the inbox. The order below is the order a reader wants to be told
-/// about them — turns and tokens are what the caller can act on, and the clock
-/// is what merely elapsed.
+/// about them — cost is the ceiling that matters, turns is what the caller can
+/// act on, and the clock is what merely elapsed.
 pub fn exhausted(budget: &Budget, spend: &Spend, run_time_ms: u64) -> Option<Ceiling> {
     if spend.turns >= budget.iterations {
         return Some(Ceiling::Iterations);
     }
-    if spend.tokens >= budget.tokens {
-        return Some(Ceiling::Tokens);
+    if spend.cost_usd >= budget.cost_usd {
+        return Some(Ceiling::Cost);
     }
     if run_time_ms >= budget.wall_clock_ms {
         return Some(Ceiling::WallClock);
@@ -856,8 +856,8 @@ pub fn exhausted(budget: &Budget, spend: &Spend, run_time_ms: u64) -> Option<Cei
 pub struct Remaining {
     /// Iterations left.
     pub iterations: u32,
-    /// Tokens left.
-    pub tokens: u64,
+    /// USD left.
+    pub cost_usd: f64,
     /// Milliseconds of wall clock left.
     pub wall_clock_ms: u64,
 }
@@ -866,7 +866,7 @@ pub struct Remaining {
 pub fn remaining(budget: &Budget, spend: &Spend, run_time_ms: u64) -> Remaining {
     Remaining {
         iterations: budget.iterations.saturating_sub(spend.turns),
-        tokens: budget.tokens.saturating_sub(spend.tokens),
+        cost_usd: (budget.cost_usd - spend.cost_usd).max(0.0),
         wall_clock_ms: budget.wall_clock_ms.saturating_sub(run_time_ms),
     }
 }
@@ -1131,7 +1131,7 @@ mod tests {
     fn budget() -> Budget {
         Budget {
             iterations: 12,
-            tokens: 400_000,
+            cost_usd: 10.0,
             wall_clock_ms: 45 * 60 * 1_000,
             on_exhausted: OnExhausted::NeedsHuman,
         }
@@ -1242,12 +1242,12 @@ mod tests {
             exhausted(
                 &budget(),
                 &Spend {
-                    tokens: 400_000,
+                    cost_usd: 10.0,
                     ..base
                 },
                 0
             ),
-            Some(Ceiling::Tokens)
+            Some(Ceiling::Cost)
         );
         assert_eq!(
             exhausted(&budget(), &base, 45 * 60 * 1_000),
@@ -1276,13 +1276,13 @@ mod tests {
             &budget(),
             &Spend {
                 turns: 20,
-                tokens: 500_000,
+                cost_usd: 10.0,
                 ..Spend::default()
             },
             60 * 60 * 1_000,
         );
         assert_eq!(left.iterations, 0);
-        assert_eq!(left.tokens, 0);
+        assert_eq!(left.cost_usd, 0.0);
         assert_eq!(left.wall_clock_ms, 0);
     }
 
@@ -1515,7 +1515,7 @@ mod tests {
         let observed = observe(
             &watching(JobState::Running),
             Spend {
-                tokens: 400_000,
+                cost_usd: 10.0,
                 ..Spend::default()
             },
             1,
@@ -1524,7 +1524,7 @@ mod tests {
             60_000,
         );
         assert_eq!(observed.state, JobState::Paused);
-        assert_eq!(observed.ceiling, Some(Ceiling::Tokens));
+        assert_eq!(observed.ceiling, Some(Ceiling::Cost));
     }
 
     /// **The spend is the transcript's, not the record's.** Nothing adds it up
@@ -1603,13 +1603,13 @@ mod tests {
     fn what_a_sub_job_spent_counts_against_the_parents_ceilings() {
         let mut record = watching(JobState::Running);
         record.kin.spend = Spend {
-            cost_usd: 1.0,
+            cost_usd: 6.0,
             tokens: 399_000,
             turns: 8,
             api_ms: 900,
         };
         let transcript = Spend {
-            cost_usd: 0.1,
+            cost_usd: 4.5,
             tokens: 1_000,
             turns: 2,
             api_ms: 30,
@@ -1617,8 +1617,8 @@ mod tests {
         let observed = observe(&record, transcript, 1, false, false, 1_000);
         assert_eq!(observed.spend.tokens, 400_000);
         assert_eq!(observed.spend.turns, 10);
-        // The Job's own budget is 400k tokens, and the child is what reached it.
-        assert_eq!(observed.ceiling, Some(Ceiling::Tokens));
+        // The parent's budget is $10, and the child is what exceeded it.
+        assert_eq!(observed.ceiling, Some(Ceiling::Cost));
         assert_eq!(observed.state, JobState::Paused);
     }
 

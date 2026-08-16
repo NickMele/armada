@@ -115,7 +115,7 @@ fn every_starter_carries_a_ceiling_that_ends_at_a_person() {
     for name in workflow::STARTERS {
         let budget = read(name).budget;
         assert!(budget.iterations > 0, "{name} has no iteration ceiling");
-        assert!(budget.tokens > 0, "{name} has no token ceiling");
+        assert!(budget.cost_usd > 0.0, "{name} has no cost ceiling");
         assert!(budget.wall_clock_ms > 0, "{name} has no wall clock");
         assert_eq!(
             budget.on_exhausted,
