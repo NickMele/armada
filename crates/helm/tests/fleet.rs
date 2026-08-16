@@ -201,6 +201,24 @@ fn shipped_relay(scratch: &Scratch, uuid: &str) -> Vec<String> {
     ]
 }
 
+/// The two words that attach Armada's own server, and the one that keeps the
+/// operator's out.
+///
+/// **Read off the shipped path helper for the same reason [`shipped_relay`] is**
+/// — what these assertions are about is the flags reaching `execve` in the right
+/// place, not where a test thinks the file lives. Measured 2026-08-16: without
+/// them a Drone's session carried 103 tools, none of them Armada's, so its brief
+/// named four tools it had no way to call.
+fn shipped_mcp(scratch: &Scratch, uuid: &str) -> Vec<String> {
+    vec![
+        armada_core::fleet::drone::MCP_CONFIG.to_string(),
+        armada_fleet::home::drone_mcp(&scratch.home.path().join(".armada"), uuid)
+            .display()
+            .to_string(),
+        armada_core::fleet::drone::STRICT_MCP.to_string(),
+    ]
+}
+
 /// The two words that carry a Drone what it owes, read off the shipped assembler
 /// for the same reason [`shipped_posture`] is: the prose belongs to
 /// `armada_core`'s own tests, and what these assertions are about is the pair
@@ -704,6 +722,7 @@ fn the_drone_is_executed_with_the_session_id_the_job_was_minted_with() {
     expected.extend(shipped_brief());
     expected.extend(shipped_posture());
     expected.extend(shipped_relay(&scratch, &data.uuid));
+    expected.extend(shipped_mcp(&scratch, &data.uuid));
     expected.extend(
         ["--print", "--output-format", "stream-json", "--verbose"]
             .iter()
@@ -2170,6 +2189,7 @@ fn answering_a_job_resumes_its_session_detached_and_leaves_the_budget_alone() {
     expected.extend(shipped_brief());
     expected.extend(shipped_posture());
     expected.extend(shipped_relay(&scratch, &data.uuid));
+    expected.extend(shipped_mcp(&scratch, &data.uuid));
     expected.extend(
         ["--print", "--output-format", "stream-json", "--verbose"]
             .iter()
