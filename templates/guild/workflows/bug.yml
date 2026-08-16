@@ -11,7 +11,7 @@ description: Reproduce it with a failing test, fix it, have it reviewed, land it
 ends_at: branch
 
 budget:
-  iterations: 20
+  attempts: 3
   cost: 10.00
   wall_clock: 90m
   on_exhausted: needs_human

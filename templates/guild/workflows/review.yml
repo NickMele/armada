@@ -20,7 +20,7 @@ description: Read a branch against the task it claims to do, and write down what
 ends_at: branch
 
 budget:
-  iterations: 15
+  attempts: 3
   cost: 5.00
   wall_clock: 90m
   on_exhausted: needs_human

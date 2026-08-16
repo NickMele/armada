@@ -618,7 +618,7 @@ mod tests {
             tokens: 1_000,
             turns: 3,
             budget_remaining: Remaining {
-                iterations: 9,
+                attempts: 2,
                 cost_usd: 1.0,
                 wall_clock_ms: 1,
             },
@@ -1122,13 +1122,13 @@ mod tests {
             tokens: 1_000,
             turns: 3,
             budget: armada_core::fleet::workflow::Budget {
-                iterations: 12,
+                attempts: 3,
                 cost_usd: 10.0,
                 wall_clock_ms: 90 * 60 * 1_000,
                 on_exhausted: armada_core::fleet::workflow::OnExhausted::NeedsHuman,
             },
             budget_remaining: Remaining {
-                iterations: 9,
+                attempts: 2,
                 cost_usd: 7.90,
                 wall_clock_ms: 60 * 60 * 1_000,
             },

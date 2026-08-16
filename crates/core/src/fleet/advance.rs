@@ -304,7 +304,7 @@ mod tests {
             description: String::new(),
             ends_at,
             budget: Budget {
-                iterations: 3,
+                attempts: 3,
                 cost_usd: 10.0,
                 wall_clock_ms: 1_000,
                 on_exhausted: OnExhausted::NeedsHuman,

@@ -31,10 +31,10 @@
     "budget": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["iterations", "cost", "wall_clock", "on_exhausted"],
+      "required": ["attempts", "cost", "wall_clock", "on_exhausted"],
       "description": "Ceilings are per workflow, because a step that ends at a human can take hours and one that closes autonomously bounds real spend (PLAN.md §14.6). Cost in USD is the ceiling that matters; token counts are tracked for transparency but are mostly cache reads and dominated by context size rather than work done.",
       "properties": {
-        "iterations": { "type": "integer", "minimum": 1 },
+        "attempts": { "type": "integer", "minimum": 1 },
         "cost": { "type": "number", "minimum": 0.01, "description": "Maximum cost in USD that this workflow may spend before the Drone stops and raises it to the inbox." },
         "wall_clock": {
           "type": "string",

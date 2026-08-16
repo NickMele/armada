@@ -163,14 +163,12 @@ pub fn write(guild_root: &Path, answers: &Answers) -> std::io::Result<Vec<String
 ///
 /// Line-oriented and keyed on the exact indented spelling the starters use, so
 /// a workflow the user has since restructured is not silently rewritten in some
-/// other place that happens to say `iterations:`.
+/// other place that happens to say `attempts:`.
 fn with_ceilings(body: &str, ceilings: Ceilings) -> String {
     let mut out = String::with_capacity(body.len());
     for line in body.lines() {
         let replaced = match line.trim_start() {
-            l if l.starts_with("iterations:") => {
-                Some(format!("  iterations: {}", ceilings.iterations))
-            }
+            l if l.starts_with("attempts:") => Some(format!("  attempts: {}", ceilings.attempts)),
             l if l.starts_with("cost:") => Some(format!("  cost: {:.2}", ceilings.cost_usd)),
             l if l.starts_with("wall_clock:") => {
                 Some(format!("  wall_clock: {}m", ceilings.wall_clock_minutes))
@@ -238,7 +236,7 @@ mod tests {
                 );
             }
             let budget = parsed.get("budget").unwrap();
-            for key in ["iterations", "cost", "wall_clock", "on_exhausted"] {
+            for key in ["attempts", "cost", "wall_clock", "on_exhausted"] {
                 assert!(
                     budget.get(key).is_some(),
                     "{} has no `budget.{key}:`",
@@ -319,11 +317,11 @@ mod tests {
         write(guild.path(), &Answers::all_defaulted()).unwrap();
 
         let plan = std::fs::read_to_string(guild.path().join("workflows/plan.yml")).unwrap();
-        assert!(plan.contains("iterations: 15"), "{plan}");
+        assert!(plan.contains("attempts: 3"), "{plan}");
         assert!(plan.contains("cost: 5.00"), "{plan}");
 
         let bug = std::fs::read_to_string(guild.path().join("workflows/bug.yml")).unwrap();
-        assert!(bug.contains("iterations: 20"), "{bug}");
+        assert!(bug.contains("attempts: 3"), "{bug}");
         assert!(bug.contains("cost: 10.00"), "{bug}");
         assert!(bug.contains("wall_clock: 90m"), "{bug}");
     }
@@ -334,7 +332,7 @@ mod tests {
     fn an_answered_ceiling_rewrites_the_numbers_and_leaves_the_document_alone() {
         let guild = tempfile::tempdir().unwrap();
         let answers = Answers {
-            iterations: Some(8),
+            attempts: Some(8),
             cost_usd: Some(7.50),
             wall_clock_minutes: Some(30),
             ..Answers::default()
@@ -344,7 +342,7 @@ mod tests {
         for name in ["design", "plan", "feature", "bug"] {
             let body = std::fs::read_to_string(guild.path().join(format!("workflows/{name}.yml")))
                 .unwrap();
-            assert!(body.contains("iterations: 8"), "{name}: {body}");
+            assert!(body.contains("attempts: 8"), "{name}: {body}");
             assert!(body.contains("cost: 7.50"), "{name}: {body}");
             assert!(body.contains("wall_clock: 30m"), "{name}: {body}");
             assert!(
@@ -356,7 +354,7 @@ mod tests {
                 "{name} lost the comment that says it is yours now"
             );
             let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(&body).unwrap();
-            assert_eq!(parsed["budget"]["iterations"], 8);
+            assert_eq!(parsed["budget"]["attempts"], 8);
         }
     }
 

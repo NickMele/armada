@@ -128,7 +128,7 @@ impl Machine {
             branch: format!("armada/{name}"),
             port_block: None,
             budget: Budget {
-                iterations: 12,
+                attempts: 3,
                 cost_usd: 10.00,
                 wall_clock_ms: 2_700_000,
                 on_exhausted: OnExhausted::NeedsHuman,

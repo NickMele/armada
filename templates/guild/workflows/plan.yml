@@ -13,7 +13,7 @@ description: Research a task and write a plan, for you to approve before anythin
 ends_at: human
 
 budget:
-  iterations: 15
+  attempts: 3
   cost: 5.00
   wall_clock: 90m
   on_exhausted: needs_human

@@ -1728,9 +1728,9 @@ fn facts_table(data: &ShowData, style: Style) -> Table {
                 // headed `LEFT`, so a reader was told a remainder that was
                 // actually a total. `Remaining` no longer carries one to print.
                 Some(&format!(
-                    "${:.2}, {} exchanges, {}",
+                    "${:.2}, {} at this step, {}",
                     data.budget_remaining.cost_usd,
-                    data.budget_remaining.iterations,
+                    format::count(data.budget_remaining.attempts as usize, "attempt"),
                     // **[`format::elapsed`], the same spelling the `TIME` column
                     // uses.** `25m` beside a run time of `1h` compares; `25m 00s`
                     // beside it is the same fact in a second notation.
@@ -2206,7 +2206,7 @@ fn answer(envelope: &Envelope<AnswerData>, style: Style, width: usize) -> String
             // that: an answer is a continuation rather than a new run.
             format!(
                 "{} remaining",
-                format::count(data.budget_remaining.iterations as usize, "iteration")
+                format::count(data.budget_remaining.attempts as usize, "attempt")
             ),
         ],
     ));
@@ -2285,7 +2285,7 @@ fn resume(envelope: &Envelope<ResumeData>, style: Style, width: usize) -> String
             // a resume continues the same session.
             format!(
                 "{} remaining",
-                format::count(data.budget_remaining.iterations as usize, "iteration")
+                format::count(data.budget_remaining.attempts as usize, "attempt")
             ),
         ],
     ));

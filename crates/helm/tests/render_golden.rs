@@ -1755,7 +1755,7 @@ fn fleet_ls_matches_its_fixture() {
             tokens: 120_000,
             turns: 4,
             budget_remaining: Remaining {
-                iterations: 8,
+                attempts: 2,
                 cost_usd: 8.75,
                 wall_clock_ms: 1_860_000,
             },
@@ -2098,7 +2098,7 @@ fn bridge_matches_its_fixture() {
             tokens: 120_000,
             turns: 4,
             budget_remaining: Remaining {
-                iterations: 8,
+                attempts: 2,
                 cost_usd: 8.75,
                 wall_clock_ms: 1_860_000,
             },
@@ -2226,7 +2226,7 @@ fn bridge_filtered_matches_its_fixture() {
         tokens: 12_000,
         turns: 1,
         budget_remaining: Remaining {
-            iterations: 11,
+            attempts: 2,
             cost_usd: 8.75,
             wall_clock_ms: 2_520_000,
         },
@@ -2562,13 +2562,13 @@ fn show_data() -> ShowData {
         tokens: 119_900,
         turns: 4,
         budget: Budget {
-            iterations: 15,
+            attempts: 2,
             cost_usd: 10.00,
             wall_clock_ms: 90 * 60 * 1_000,
             on_exhausted: OnExhausted::NeedsHuman,
         },
         budget_remaining: Remaining {
-            iterations: 11,
+            attempts: 2,
             cost_usd: 8.75,
             wall_clock_ms: 25 * 60 * 1_000,
         },
@@ -3025,7 +3025,7 @@ fn fleet_spawn_matches_its_fixture() {
                 to: 5479,
             }),
             budget: Budget {
-                iterations: 20,
+                attempts: 2,
                 cost_usd: 10.00,
                 wall_clock_ms: 90 * 60 * 1_000,
                 on_exhausted: OnExhausted::NeedsHuman,
@@ -3079,7 +3079,7 @@ fn fleet_spawn_dry_run_matches_its_fixture() {
             // get — and inventing one would be the same defect in a new column.
             port_block: None,
             budget: Budget {
-                iterations: 20,
+                attempts: 2,
                 cost_usd: 10.00,
                 wall_clock_ms: 90 * 60 * 1_000,
                 on_exhausted: OnExhausted::NeedsHuman,
@@ -3127,7 +3127,7 @@ fn a_preview_and_a_spawn_are_told_apart_by_status() {
                     branch: "armada/rate-limit".to_string(),
                     port_block: block,
                     budget: Budget {
-                        iterations: 20,
+                        attempts: 2,
                         cost_usd: 10.00,
                         wall_clock_ms: 90 * 60 * 1_000,
                         on_exhausted: OnExhausted::NeedsHuman,
@@ -3223,7 +3223,7 @@ fn a_low_confidence_spawn_says_so_in_words_and_names_the_override() {
                 branch: "armada/this-test".to_string(),
                 port_block: None,
                 budget: Budget {
-                    iterations: 15,
+                    attempts: 2,
                     cost_usd: 10.00,
                     wall_clock_ms: 90 * 60 * 1_000,
                     on_exhausted: OnExhausted::NeedsHuman,
@@ -3753,7 +3753,7 @@ fn aborting_row() -> JobRow {
         tokens: 120_000,
         turns: 4,
         budget_remaining: Remaining {
-            iterations: 8,
+            attempts: 2,
             cost_usd: 8.75,
             wall_clock_ms: 1_860_000,
         },
