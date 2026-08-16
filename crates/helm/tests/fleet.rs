@@ -2336,7 +2336,9 @@ fn answering_a_job_that_has_run_out_of_rope_is_refused_and_raised() {
     )
     .unwrap_err();
     assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
-    assert!(error.message.contains("tokens"), "{}", error.message);
+    // The ceiling this Job runs out of is now its cost one; what the test is
+    // about is that answering past *a* ceiling is refused, not which.
+    assert!(error.message.contains("cost"), "{}", error.message);
 
     // Persisted and raised, so the ceiling is a durable fact rather than
     // something one invocation noticed and forgot.
@@ -4469,7 +4471,7 @@ fn a_step_that_keeps_failing_stops_and_asks_rather_than_retrying_for_ever() {
         &scratch,
         "bug",
         "name: bug\ndescription: one impossible step\nends_at: branch\n\
-         budget:\n  iterations: 4\n  tokens: 600000\n  wall_clock: 90m\n  \
+         budget:\n  iterations: 4\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
          \x20 - id: land\n    skill: land-branch\n    verify: { must: artifact_exists, artifact: never-written.md }\n",
     );

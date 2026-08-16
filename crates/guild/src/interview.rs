@@ -267,9 +267,7 @@ impl Ceilings {
     pub fn written(&self) -> String {
         format!(
             "{}, {:.2}, {}m",
-            self.iterations,
-            self.cost_usd,
-            self.wall_clock_minutes
+            self.iterations, self.cost_usd, self.wall_clock_minutes
         )
     }
 }
@@ -302,7 +300,8 @@ pub fn parse_iterations(answer: &str) -> Result<u32, String> {
 pub fn parse_cost(answer: &str) -> Result<f64, String> {
     let text = answer.trim();
     let trimmed = text.strip_prefix('$').unwrap_or(text);
-    let value = trimmed.parse::<f64>()
+    let value = trimmed
+        .parse::<f64>()
         .map_err(|_| refusal(answer, "dollars", "10.00"))?;
     // **A ceiling under $0.01 is refused rather than obeyed.** It is less than
     // a single turn would typically cost, so it would exhaust every Job on its

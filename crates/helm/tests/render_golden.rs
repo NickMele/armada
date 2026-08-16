@@ -1756,7 +1756,7 @@ fn fleet_ls_matches_its_fixture() {
             turns: 4,
             budget_remaining: Remaining {
                 iterations: 8,
-                tokens: 280_000,
+                cost_usd: 8.75,
                 wall_clock_ms: 1_860_000,
             },
             needs_attention,
@@ -2099,7 +2099,7 @@ fn bridge_matches_its_fixture() {
             turns: 4,
             budget_remaining: Remaining {
                 iterations: 8,
-                tokens: 280_000,
+                cost_usd: 8.75,
                 wall_clock_ms: 1_860_000,
             },
             needs_attention,
@@ -2214,7 +2214,7 @@ fn bridge_filtered_matches_its_fixture() {
         turns: 1,
         budget_remaining: Remaining {
             iterations: 11,
-            tokens: 388_000,
+            cost_usd: 8.75,
             wall_clock_ms: 2_520_000,
         },
         acting: None,
@@ -2549,13 +2549,13 @@ fn show_data() -> ShowData {
         turns: 4,
         budget: Budget {
             iterations: 15,
-            tokens: 400_000,
+            cost_usd: 10.00,
             wall_clock_ms: 90 * 60 * 1_000,
             on_exhausted: OnExhausted::NeedsHuman,
         },
         budget_remaining: Remaining {
             iterations: 11,
-            tokens: 280_100,
+            cost_usd: 8.75,
             wall_clock_ms: 25 * 60 * 1_000,
         },
         repo: "orders".to_string(),
@@ -3012,7 +3012,7 @@ fn fleet_spawn_matches_its_fixture() {
             }),
             budget: Budget {
                 iterations: 20,
-                tokens: 600_000,
+                cost_usd: 10.00,
                 wall_clock_ms: 90 * 60 * 1_000,
                 on_exhausted: OnExhausted::NeedsHuman,
             },
@@ -3066,7 +3066,7 @@ fn fleet_spawn_dry_run_matches_its_fixture() {
             port_block: None,
             budget: Budget {
                 iterations: 20,
-                tokens: 600_000,
+                cost_usd: 10.00,
                 wall_clock_ms: 90 * 60 * 1_000,
                 on_exhausted: OnExhausted::NeedsHuman,
             },
@@ -3114,7 +3114,7 @@ fn a_preview_and_a_spawn_are_told_apart_by_status() {
                     port_block: block,
                     budget: Budget {
                         iterations: 20,
-                        tokens: 600_000,
+                        cost_usd: 10.00,
                         wall_clock_ms: 90 * 60 * 1_000,
                         on_exhausted: OnExhausted::NeedsHuman,
                     },
@@ -3210,7 +3210,7 @@ fn a_low_confidence_spawn_says_so_in_words_and_names_the_override() {
                 port_block: None,
                 budget: Budget {
                     iterations: 15,
-                    tokens: 500_000,
+                    cost_usd: 10.00,
                     wall_clock_ms: 90 * 60 * 1_000,
                     on_exhausted: OnExhausted::NeedsHuman,
                 },
@@ -3740,7 +3740,7 @@ fn aborting_row() -> JobRow {
         turns: 4,
         budget_remaining: Remaining {
             iterations: 8,
-            tokens: 280_000,
+            cost_usd: 8.75,
             wall_clock_ms: 1_860_000,
         },
         needs_attention: false,
