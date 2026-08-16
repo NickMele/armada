@@ -377,6 +377,20 @@ fn status_matches_its_snapshot() {
                 component: None,
             })?;
         }
+        // **A third row, so `stale[]` is in the snapshot rather than merely in
+        // the struct.** A field that is omitted when empty is a field a key
+        // rename cannot break here, and this suite exists to catch key renames.
+        // A `pgid` stamped with a boot that has ended is the one shape whose
+        // staleness is decidable without probing anything — the same shape
+        // measured on this project's own checkout, four times over.
+        app.db.record_owned(&OwnedRow {
+            workspace: id.clone(),
+            kind: OwnedKind::Pgid,
+            reference: "61477".to_string(),
+            boot_id: Some("a-boot-that-has-ended".to_string()),
+            pid_started_at: Some("whenever".to_string()),
+            component: None,
+        })?;
         verbs::status::run(
             app,
             armada_helm::args::Common {
