@@ -1104,7 +1104,7 @@ mod tests {
     /// succeeds, and changes nothing.
     #[test]
     fn the_backstop_blocks_the_turn_rather_than_merely_reporting() {
-        let script = stop_hook("/scratch/.armada/inbox.jsonl");
+        let script = stop_hook("/scratch/.armada/inbox.jsonl", "/scratch/bin/armada");
         assert!(script.starts_with("#!/bin/sh\n"));
         assert!(script.contains(r#"{"decision":"block""#), "{script}");
         assert!(script.contains(r#""answered":false"#), "{script}");
@@ -1117,7 +1117,7 @@ mod tests {
     /// installed, and says nothing about it.
     #[test]
     fn the_backstop_needs_nothing_but_a_posix_shell() {
-        let script = stop_hook("/scratch/.armada/inbox.jsonl");
+        let script = stop_hook("/scratch/.armada/inbox.jsonl", "/scratch/bin/armada");
         for tool in ["jq", "python", "node", "awk", "perl"] {
             assert!(
                 !script.contains(tool),
@@ -1130,7 +1130,7 @@ mod tests {
     /// split the hook's assignment into two words.
     #[test]
     fn a_path_with_a_space_survives_the_shell() {
-        let script = stop_hook("/Users/a b/.armada/inbox.jsonl");
+        let script = stop_hook("/Users/a b/.armada/inbox.jsonl", "/Users/a b/bin/armada");
         assert!(
             script.contains("inbox='/Users/a b/.armada/inbox.jsonl'"),
             "{script}"

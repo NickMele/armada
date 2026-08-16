@@ -1146,6 +1146,8 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            ticked_turns: 0,
+            doing: None,
         }
     }
 
@@ -1201,14 +1203,120 @@ mod tests {
         assert_eq!(seen(JobState::Running, 1, true, false), JobState::Stalled);
     }
 
-    /// **A Job with no live Drone is the ordinary resting state, not an error**
-    /// (PLAN.md §14.1). It is what you have after a turn ends, after a crash and
-    /// after a reboot, and reporting it as a failure would make the common case
-    /// look broken.
+    /// **The eight hours, as a test** (`020` §1 and §6).
+    ///
+    /// This assertion used to read `JobState::Running`, and the sentence above
+    /// it called that *"the ordinary resting state, not an error"*. That was
+    /// the bug: a Drone which finished its exchange and exited drew the same
+    /// word as a Drone that was working, so a dead Job read as alive.
+    ///
+    /// **The resting state is real and much shorter than it looked.** A Job
+    /// rests between turns for as long as it takes the `Stop` hook to relay —
+    /// and if nothing relays, that is not rest, it is what `STALLED` now names.
     #[test]
-    fn a_finished_turn_with_no_live_drone_is_the_ordinary_resting_state() {
-        assert_eq!(seen(JobState::Running, 1, false, false), JobState::Running);
-        assert_eq!(seen(JobState::Queued, 2, false, false), JobState::Running);
+    /// The fixture's Drone reported nothing, so the word is `SILENT`; which of
+    /// the two it is, is the next test's subject. What matters here is that
+    /// neither of them is `RUNNING` any more.
+    #[test]
+    fn an_exchange_nothing_gated_is_a_stall_rather_than_the_resting_state() {
+        for (state, finished) in [(JobState::Running, 1), (JobState::Queued, 2)] {
+            let got = seen(state, finished, false, false);
+            assert_ne!(
+                got,
+                JobState::Running,
+                "{state} with an ungated exchange still reads as alive"
+            );
+            assert_eq!(got, JobState::Silent);
+        }
+    }
+
+    /// **`RUNNING` with no live Drone means one thing now**: a tick has this
+    /// exchange and started a gate on it. The `pending` record is the evidence,
+    /// and without it the same shape is a stall.
+    #[test]
+    fn a_job_resting_on_a_gate_a_tick_started_is_still_running() {
+        let mut record = watching(JobState::Running);
+        record.ticked_turns = 1;
+        record.pending = Some(Pending {
+            step: record.step.clone(),
+            on: Waiting::Check("01J".to_string()),
+            attempt: 1,
+        });
+        assert_eq!(
+            observe(&record, Spend::default(), 1, false, false, 60_000).state,
+            JobState::Running
+        );
+        // Inverted: the same Job with nothing pending is a Drone that went away
+        // between exchanges — a SIGKILL is exactly this shape.
+        record.pending = None;
+        assert_eq!(
+            observe(&record, Spend::default(), 1, false, false, 60_000).state,
+            JobState::Stalled
+        );
+    }
+
+    /// **`SILENT` is the worse of the two failures** (`020` §6): the exchange
+    /// ended, nothing gated it, *and* the Drone never reported through a tool —
+    /// so what it decided exists only in a transcript nothing may read.
+    #[test]
+    fn a_drone_that_ended_an_exchange_saying_nothing_is_silent_rather_than_stalled() {
+        let quiet = watching(JobState::Running);
+        assert!(!quiet.said_something());
+        assert_eq!(
+            observe(&quiet, Spend::default(), 1, false, false, 60_000).state,
+            JobState::Silent
+        );
+
+        // The same ungated exchange, from a Drone that did report: `STALLED`,
+        // because there is a signal — it is the relay that was lost, not the
+        // Drone's voice.
+        let mut spoke = quiet.clone();
+        spoke.progress.push(Note {
+            at: "t".to_string(),
+            at_ms: 1,
+            step: spoke.step.clone(),
+            body: "reproduced it".to_string(),
+        });
+        assert!(spoke.said_something());
+        assert_eq!(
+            observe(&spoke, Spend::default(), 1, false, false, 60_000).state,
+            JobState::Stalled
+        );
+    }
+
+    /// **The watermark is what tells the two apart, and nothing else is.** One
+    /// tick over the same transcript moves a Job out of `due`, which is the
+    /// whole mechanism `020` §1 adds.
+    #[test]
+    fn gating_an_exchange_is_what_stops_it_being_due() {
+        let mut record = watching(JobState::Running);
+        assert!(observe(&record, Spend::default(), 2, false, false, 60_000).due);
+        record.ticked_turns = 2;
+        assert!(!observe(&record, Spend::default(), 2, false, false, 60_000).due);
+        // A third exchange lands, and it is due again.
+        assert!(observe(&record, Spend::default(), 3, false, false, 60_000).due);
+    }
+
+    /// An errored turn is never due a gate: gating it would record a `FAILED`
+    /// against work that was never finished.
+    #[test]
+    fn a_turn_that_ended_badly_is_not_due_a_gate() {
+        let record = watching(JobState::Running);
+        assert!(!observe(&record, Spend::default(), 1, true, false, 60_000).due);
+    }
+
+    /// **The action word wins the status column while an action is running**
+    /// (`020` §5), and the Job state is what is drawn the rest of the time.
+    #[test]
+    fn a_job_being_aborted_says_so_rather_than_saying_running() {
+        let mut record = watching(JobState::Running);
+        assert_eq!(record.status_word(), "RUNNING");
+        let doing = Doing::started(crate::fleet::Acting::Aborting, 1_000);
+        record.doing = Some(doing.at("docker", 5_000));
+        assert_eq!(record.status_word(), "ABORTING");
+        let held = record.doing.as_ref().unwrap();
+        assert_eq!(held.slow.as_deref(), Some("docker"));
+        assert_eq!(held.elapsed_ms(17_000), 12_000);
     }
 
     /// A person is waiting on the other end of a `PAUSED` or `BLOCKED` Job, and
@@ -1346,6 +1454,8 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            ticked_turns: 0,
+            doing: None,
         };
         assert_eq!(job.run_time_ms(1_840_000), 840_000);
         // A clock that stepped backwards costs a display value, never a panic.
@@ -1555,6 +1665,8 @@ mod tests {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            ticked_turns: 0,
+            doing: None,
         };
         let json = serde_json::to_string(&job).unwrap();
         assert!(!json.contains("confidence"), "an absent field is absent");

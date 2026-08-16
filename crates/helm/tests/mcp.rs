@@ -145,6 +145,8 @@ impl Machine {
             transitions: Vec::new(),
             pending: None,
             facts: std::collections::BTreeMap::new(),
+            ticked_turns: 0,
+            doing: None,
         };
         Store::at(&place.armada_home).save(&record).expect("saved");
         if !transcript.is_empty() {

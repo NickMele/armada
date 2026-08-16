@@ -1364,6 +1364,7 @@ mod tests {
             armada_core::fleet::drone::PROBE_SESSION,
             "a prompt",
             &armada_core::fleet::drone::Posture::default(),
+            None,
         );
         assert!(
             !probe.iter().any(|word| word == "a prompt"),

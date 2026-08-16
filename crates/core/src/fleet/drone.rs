@@ -672,6 +672,19 @@ pub const RELAY_CAP_S: u32 = 3_600;
 /// A hook that resolved `armada` against the Drone's `PATH` is precisely `020`
 /// §2's second failure mode, and it is the only one of the three that is fixed
 /// rather than backstopped.
+/// # `ps`, not `kill -0`, and that is the trap this file already records
+///
+/// **A Drone that has exited is its parent's zombie until the parent goes**
+/// (`docs/traps.md`; `armada_fleet::drone::start` says the same thing from the
+/// other side — *"`setsid` does not reparent it, and assuming it did is what
+/// broke `stop`"*). `kill -0` on a zombie **succeeds**, because the pid is
+/// still a process-table entry, so a relay that waited on `kill -0` would wait
+/// out its whole cap on every single exchange and never tick once.
+///
+/// So the wait asks `ps` for the process *state* and treats `Z` — and an empty
+/// answer, which is a process that has been reaped — as gone. A zombie has
+/// exited: its files are flushed and its session is closed, which is everything
+/// the next `claude --resume` needs.
 pub fn stop_hook(exe: &str) -> String {
     format!(
         "#!/bin/sh\n\
@@ -682,11 +695,13 @@ pub fn stop_hook(exe: &str) -> String {
          [ -n \"$leader\" ] || exit 0\n\
          {{\n\
          \x20 waited=0\n\
-         \x20 while [ \"$waited\" -lt {cap} ] && kill -0 \"$leader\" 2>/dev/null; do\n\
+         \x20 while [ \"$waited\" -lt {cap} ]; do\n\
+         \x20   state=$(ps -o state= -p \"$leader\" 2>/dev/null | tr -d ' ')\n\
+         \x20   case \"$state\" in '' | Z*) break ;; esac\n\
          \x20   waited=$((waited + 1))\n\
          \x20   sleep 1\n\
          \x20 done\n\
-         \x20 kill -0 \"$leader\" 2>/dev/null || \"$armada\" fleet tick\n\
+         \x20 [ \"$waited\" -lt {cap} ] && \"$armada\" fleet tick\n\
          }} >/dev/null 2>&1 &\n\
          exit 0\n",
         exe = shell_quote(exe),
@@ -1165,7 +1180,7 @@ mod tests {
                 spawn_argv(UUID, "fix the flake", &narrow(), None),
                 "fix the flake",
             ),
-            (resume_argv(UUID, "yes, 90s", &narrow()), "yes, 90s"),
+            (resume_argv(UUID, "yes, 90s", &narrow(), None), "yes, 90s"),
             (continue_argv(UUID, &narrow(), None), CONTINUE),
         ] {
             let at = argv
@@ -1488,9 +1503,12 @@ mod tests {
     /// disappearing.
     #[test]
     fn every_flag_the_drone_uses_is_one_doctor_checks_for() {
-        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default(), None)
+        // **The relay-carrying form, because that is the one a Job runs**
+        // (`020` §1). A `--settings` absent from every argv the test looked at
+        // is a flag `doctor` would go on validating while nothing used it.
+        let used: Vec<String> = spawn_argv(UUID, "go", &Posture::default(), Some("/s.json"))
             .into_iter()
-            .chain(resume_argv(UUID, "go", &Posture::default(), None))
+            .chain(resume_argv(UUID, "go", &Posture::default(), Some("/s.json")))
             .chain(super::super::classify::argv("go"))
             .chain(probe_argv())
             .filter(|word| word.starts_with("--"))
@@ -1510,12 +1528,115 @@ mod tests {
         }
     }
 
+    /// **The relay is registered or the Job never advances** (`020` §1). The
+    /// flag and its path travel together and both come before `--print`, so
+    /// neither can be swallowed by a variadic list.
+    #[test]
+    fn a_drone_carries_the_settings_that_register_its_stop_hook() {
+        let argv = spawn_argv(UUID, "go", &Posture::default(), Some("/j/s.json"));
+        let at = argv
+            .iter()
+            .position(|word| word == SETTINGS)
+            .expect("no --settings, so nothing observes this exchange ending");
+        assert_eq!(argv[at + 1], "/j/s.json");
+        let print = argv.iter().position(|w| w == "--print").expect("--print");
+        assert!(at < print, "the relay is behind a variadic list: {argv:?}");
+        assert_eq!(argv.last().unwrap(), "go", "the prompt is still last");
+
+        // **Inverted**: no path, no flag — an empty `--settings` would consume
+        // whatever came next, which is `--print`.
+        assert!(!spawn_argv(UUID, "go", &Posture::default(), None)
+            .iter()
+            .any(|word| word == SETTINGS));
+    }
+
+    /// **The relay ticks the whole fleet, not one Job** — which is what makes
+    /// it `020` §2's backstop as well as §1's relay. A Job whose own hook was
+    /// lost is picked up by the next Drone anywhere on the machine to finish.
+    #[test]
+    fn the_relay_sweeps_the_fleet_rather_than_its_own_job() {
+        let hook = stop_hook("/opt/armada/bin/armada");
+        assert!(
+            hook.contains("fleet tick\n"),
+            "the relay does not tick:\n{hook}"
+        );
+        assert!(
+            !hook.contains("fleet tick '") && !hook.contains("fleet tick \""),
+            "the relay ticks one Job, so nothing rescues the rest:\n{hook}"
+        );
+    }
+
+    /// **The absolute binary, never the bare word.** `020` §2's second failure
+    /// mode is a hook with no `armada` on its `PATH`, and it is the only one of
+    /// the three that is fixed rather than backstopped.
+    #[test]
+    fn the_relay_names_the_binary_it_was_written_by() {
+        let hook = stop_hook("/opt/armada/bin/armada");
+        assert!(hook.contains("armada='/opt/armada/bin/armada'"), "{hook}");
+        // A `$HOME` with a space in it is ordinary on macOS and must stay one
+        // shell word.
+        assert!(stop_hook("/Users/a b/bin/armada").contains("'/Users/a b/bin/armada'"));
+    }
+
+    /// **It waits for its own Drone before ticking, and this is not optional.**
+    /// A `Stop` hook runs while its session is alive; a tick from inside it
+    /// would find a live process group, decline to gate — correctly — and the
+    /// whole relay would be a no-op that looked wired.
+    #[test]
+    fn the_relay_waits_for_its_drone_to_go_before_it_ticks() {
+        let hook = stop_hook("/bin/armada");
+        assert!(hook.contains("ps -o pgid= -p $$"), "{hook}");
+        // **`ps -o state=`, never `kill -0`.** A Drone that exited is a zombie
+        // until its parent goes, and `kill -0` says a zombie is alive — a relay
+        // written that way waits out its cap on every exchange and never ticks.
+        assert!(hook.contains("ps -o state= -p \"$leader\""), "{hook}");
+        assert!(
+            !hook.contains("kill -0"),
+            "the relay cannot tell a zombie from a live Drone:\n{hook}"
+        );
+        assert!(
+            hook.contains(&RELAY_CAP_S.to_string()),
+            "the wait is unbounded, so a hung Drone leaks a shell forever:\n{hook}"
+        );
+        // Backgrounded and detached from the hook's own streams: a hook that
+        // held stdout open holds the turn open.
+        assert!(hook.contains(">/dev/null 2>&1 &"), "{hook}");
+    }
+
+    /// **No `jq` and no `python`**, for Helm's hook's reason: a backstop that
+    /// depends on a tool the machine may not have is one that silently stops
+    /// backing anything up.
+    #[test]
+    fn the_relay_depends_on_nothing_a_machine_might_not_have() {
+        let hook = stop_hook("/bin/armada");
+        assert!(hook.starts_with("#!/bin/sh\n"));
+        for absent in ["jq", "python", "setsid", "pgrep", "flock"] {
+            assert!(
+                !hook.contains(absent),
+                "the relay depends on `{absent}`:\n{hook}"
+            );
+        }
+    }
+
+    /// The settings document registers the hook as a `Stop` command, and it is
+    /// the document Helm re-exports rather than a second shape.
+    #[test]
+    fn the_settings_document_registers_the_hook_as_a_stop_command() {
+        let json = settings_json("/j/stop.sh");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(
+            parsed["hooks"]["Stop"][0]["hooks"][0]["command"],
+            serde_json::json!("/j/stop.sh")
+        );
+        assert_eq!(json, crate::helm::settings_json("/j/stop.sh"));
+    }
+
     /// **`--resume`, never a second `--session-id`.** Minting where continuing
     /// was meant starts a Job's next turn as its first, with none of the context
     /// the answer was an answer to.
     #[test]
     fn continuing_a_job_resumes_the_session_rather_than_minting_one() {
-        let argv = resume_argv(UUID, "yes, raise it to 90s", &narrow());
+        let argv = resume_argv(UUID, "yes, raise it to 90s", &narrow(), None);
         assert_eq!(
             argv,
             [
