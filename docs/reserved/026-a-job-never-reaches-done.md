@@ -82,3 +82,36 @@ match its own pattern. A terminal-state bug needs a Job at the terminal state.
 `armada fleet answer` refuses an 8-character id prefix with *"give more of the id"* while
 `fleet inbox` prints exactly 8 characters in its `ID` column. The verb refuses what the listing
 shows. Small, and it cost two cycles of the loop above.
+
+## Established 2026-08-16, by driving a Job rather than reading
+
+**The `fleet answer` half is fixed and merged.** Answering a gate now settles it
+rather than resuming the Drone, and a real Job proved it: its transitions record
+`explore`, `articulate` and `hand-over` all `completed`, where before every
+answer produced a fresh question and the approval was never read.
+
+Three things had to change together, and only the first was the one predicted
+above — the other two were found by running it:
+
+| Change | Why it was needed |
+|---|---|
+| Settle the gate rather than resume the Drone | the diagnosis above |
+| Leave `PAUSED` before ticking | `advance::attention` reads `PAUSED` as *"it is waiting on you"* and declines to gate. The old path reached `RUNNING` only as a side effect of resuming — so removing the resume removed the thing that made the tick work |
+| Pass the Job's name to `tick`, not the caller's handle | this verb accepts an entry id too, so `tick` was handed an inbox id and refused with `no Job called a058890c` — **after** the answer had been written, naming the wrong noun |
+
+**What still stops a Job finishing, and it is now narrow.** After the final step
+records `completed`, the Job rests `PAUSED` and `tick` will not gate a `PAUSED`
+Job. `Next::Finish` is unreachable, so `release_on_finish` — which writes
+`DONE`, keeps the branch and removes a clean worktree — still never runs.
+
+The remaining question is what should move a Job out of `PAUSED` when its last
+step has completed and nothing is open. Answering is no longer it: the entry is
+closed and there is nothing left to answer. **Either the pass that completes a
+final step must go on to `Finish` in the same tick, or `PAUSED` with no open
+entry must not read as "waiting on you".** The second is the more general
+statement and probably the right one — `PAUSED` currently means two things, and
+only one of them wants a person.
+
+**Do not fix this by making `tick` gate every `PAUSED` Job.** That would gate
+Jobs genuinely waiting on a person, which is the case the state exists for and
+the reason the rule reads the way it does.
