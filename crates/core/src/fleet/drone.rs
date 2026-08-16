@@ -974,22 +974,53 @@ impl RateLimit {
     }
 }
 
-/// The window a fleet is working inside, out of everything its Jobs have seen.
+/// Every window a fleet is working inside, out of everything its Jobs have seen
+/// — **one per kind, soonest reset first.**
 ///
-/// **The furthest reset wins, and an expired one is dropped.** Every Job's
-/// transcript carries the window *that Job's* last turn passed through, and a
-/// Job that finished four hours ago is holding a window that has since rolled
-/// over. Within one window the reset is a constant, so the greatest `resets_at`
-/// is the most recently observed window — and one that has already reset
-/// describes nothing a reader can act on, which is the whole reason §4 puts this
-/// ahead of spend.
+/// # Why this is a list and used to be a single window
+///
+/// The account has more than one limit at a time. Today's transcripts carry
+/// `five_hour` on forty turns and `seven_day` on six, each with its own
+/// `utilization` and `resetsAt`, and the two answer different questions: the
+/// five-hour window is what stops you this afternoon, and the seven-day one is
+/// what stops you on Thursday having felt fine all week.
+///
+/// **Picking one by furthest reset silently picked the wrong one every time.**
+/// A seven-day reset is always further away than a five-hour reset, so the
+/// moment a weekly event arrived it won the comparison permanently — and the
+/// screen reported `24% resets 4d` while the window actually about to stop the
+/// fleet sat at 71% with two hours left. A Job died at 03:55 with `status:
+/// "rejected"` and cost a whole overnight run; the number that would have
+/// predicted it had been observed, compared, and discarded.
+///
+/// So the ordering is by *nearness* rather than distance: the window that runs
+/// out first leads, because that is the one a reader has to plan around.
+///
+/// # What still holds from the single-window rule
+///
+/// **The freshest observation of each kind wins, and an expired one is
+/// dropped.** Every Job's transcript carries the window *that Job's* last turn
+/// passed through, and a Job that finished four hours ago is holding a
+/// `five_hour` window that has since rolled over. Within one window the reset is
+/// a constant, so the greatest `resets_at` **of that kind** is the most recently
+/// observed one.
 ///
 /// **A window with no reset at all is not a window.** It cannot be aged out, so
 /// it would sit on the screen forever after the account's limits moved on.
-pub fn window(seen: &[RateLimit], now_s: u64) -> Option<&RateLimit> {
-    seen.iter()
+pub fn windows(seen: &[RateLimit], now_s: u64) -> Vec<&RateLimit> {
+    let mut live: Vec<&RateLimit> = Vec::new();
+    for limit in seen
+        .iter()
         .filter(|limit| limit.resets_at.is_some_and(|at| at > now_s))
-        .max_by_key(|limit| limit.resets_at)
+    {
+        match live.iter_mut().find(|held| held.kind == limit.kind) {
+            Some(held) if held.resets_at >= limit.resets_at => {}
+            Some(held) => *held = limit,
+            None => live.push(limit),
+        }
+    }
+    live.sort_by_key(|limit| limit.resets_at);
+    live
 }
 
 /// Everything a Job's transcript says about what it has spent and how far it
@@ -1000,12 +1031,19 @@ pub struct Reading {
     pub turns: Vec<Turn>,
     /// Their sum, which **is** the Job's spend. Nothing else adds it up.
     pub spend: Spend,
-    /// The last rate-limit window seen.
+    /// The last rate-limit window seen **of each kind**.
     ///
     /// **Strictly better than a fixed concurrency cap**, which was only ever a
     /// proxy for the same thing: the orchestrator can decline to spawn when a
     /// window reset is close (PHASES.md §9.1 F2).
-    pub rate_limit: Option<RateLimit>,
+    ///
+    /// **A list because the account has more than one limit at a time.** This
+    /// was one slot, and every `rate_limit_event` overwrote it — so a transcript
+    /// carrying both a `five_hour` and a `seven_day` event kept whichever
+    /// happened to arrive last, and which one that was is a property of the
+    /// service's headers rather than of anything a reader cares about. See
+    /// [`windows`].
+    pub rate_limits: Vec<RateLimit>,
 }
 
 impl Reading {
@@ -1056,7 +1094,22 @@ pub fn read(stream: &str) -> Reading {
                 reading.spend.add(&turn.spend);
                 reading.turns.push(turn);
             }
-            Some("rate_limit_event") => reading.rate_limit = read_rate_limit(&event),
+            // **The latest of each kind, rather than the latest of all.** A
+            // transcript reports `five_hour` on most turns and `seven_day` on a
+            // few, interleaved; assigning into one slot kept whichever the
+            // service happened to send last and threw the other away.
+            Some("rate_limit_event") => {
+                if let Some(limit) = read_rate_limit(&event) {
+                    match reading
+                        .rate_limits
+                        .iter_mut()
+                        .find(|held| held.kind == limit.kind)
+                    {
+                        Some(held) => *held = limit,
+                        None => reading.rate_limits.push(limit),
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -2013,7 +2066,8 @@ mod tests {
     /// one question rather than two.
     #[test]
     fn the_rate_limit_window_is_reported_alongside_the_turn() {
-        let limit = read(RECORDED).rate_limit.expect("a window");
+        let reading = read(RECORDED);
+        let limit = reading.rate_limits.first().expect("a window");
         assert_eq!(limit.status, "allowed");
         assert_eq!(limit.kind, "five_hour");
         assert_eq!(limit.resets_at, Some(1_754_748_131));
@@ -2034,41 +2088,98 @@ mod tests {
         const WARNED: &str = r#"
 {"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"five_hour","resetsAt":1754748131,"utilization":0.7194}}
 "#;
-        let limit = read(WARNED).rate_limit.expect("a window");
+        let reading = read(WARNED);
+        let limit = reading.rate_limits.first().expect("a window");
         assert_eq!(limit.status, "allowed_warning");
         assert_eq!(limit.utilization, Some(0.7194));
         // Floored, exactly as Claude Code floors it: 71%, never 72%.
         assert_eq!(limit.percent(), Some(71));
     }
 
-    /// **The furthest reset wins and an expired one is dropped.** Each Job's
-    /// transcript holds the window *that Job's* last turn passed through, so a
-    /// fleet is holding several observations of one account — and a Job that
-    /// finished four hours ago is holding a window that has since rolled over.
-    #[test]
-    fn the_fleets_window_is_the_freshest_one_that_has_not_reset_yet() {
-        let seen = |kind: &str, at: Option<u64>| RateLimit {
+    fn seen(kind: &str, at: Option<u64>) -> RateLimit {
+        RateLimit {
             status: "allowed".to_string(),
             kind: kind.to_string(),
             resets_at: at,
             utilization: None,
-        };
+        }
+    }
+
+    /// **The freshest of each kind wins and an expired one is dropped.** Each
+    /// Job's transcript holds the windows *that Job's* last turns passed
+    /// through, so a fleet is holding several observations of one account — and
+    /// a Job that finished four hours ago is holding a five-hour window that has
+    /// since rolled over.
+    #[test]
+    fn the_fleets_window_is_the_freshest_one_that_has_not_reset_yet() {
         let now = 1_754_740_000;
         let stale = seen("five_hour", Some(now - 3_600));
         let fresh = seen("five_hour", Some(now + 7_200));
         let fresher = seen("five_hour", Some(now + 9_000));
 
         assert_eq!(
-            window(&[stale.clone(), fresher.clone(), fresh.clone()], now),
-            Some(&fresher)
+            windows(&[stale.clone(), fresher.clone(), fresh.clone()], now),
+            vec![&fresher]
         );
         // Every window has already reset: there is nothing to say, and saying
         // the stale one would put a number on the screen that stopped being
         // true hours ago.
-        assert_eq!(window(std::slice::from_ref(&stale), now), None);
+        assert!(windows(std::slice::from_ref(&stale), now).is_empty());
         // A window with no reset cannot be aged out, so it never qualifies.
-        assert_eq!(window(&[seen("five_hour", None)], now), None);
-        assert_eq!(window(&[], now), None);
+        assert!(windows(&[seen("five_hour", None)], now).is_empty());
+        assert!(windows(&[], now).is_empty());
+    }
+
+    /// **Both windows survive, and the one that runs out first leads.**
+    ///
+    /// The bug this pins: the fleet reported one window, chosen by furthest
+    /// reset. A seven-day reset is always further away than a five-hour one, so
+    /// the weekly window won that comparison every time it existed — and the
+    /// screen showed `24%, resets 4d` while the window actually about to stop
+    /// the fleet sat at 71% with two hours left. A Job died at 03:55 with
+    /// `status: "rejected"` and cost an overnight run; the number that would
+    /// have predicted it had been observed, compared, and thrown away.
+    #[test]
+    fn the_weekly_window_no_longer_hides_the_five_hour_one() {
+        let now = 1_754_740_000;
+        let five = seen("five_hour", Some(now + 8_000));
+        let week = seen("seven_day", Some(now + 350_000));
+
+        let both = [week.clone(), five.clone()];
+        assert_eq!(
+            windows(&both, now),
+            vec![&five, &week],
+            "both windows are reported, soonest reset first"
+        );
+    }
+
+    /// A transcript reporting both kinds keeps both, rather than keeping
+    /// whichever the service happened to send last.
+    #[test]
+    fn a_transcript_carrying_two_kinds_of_window_keeps_both_of_them() {
+        const BOTH: &str = r#"
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour","resetsAt":1754748131,"utilization":0.71}}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"seven_day","resetsAt":1755100000,"utilization":0.24}}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour","resetsAt":1754748131,"utilization":0.73}}
+"#;
+        let reading = read(BOTH);
+        assert_eq!(reading.rate_limits.len(), 2, "one window kept per kind");
+
+        let five = reading
+            .rate_limits
+            .iter()
+            .find(|limit| limit.kind == "five_hour")
+            .expect("the five-hour window");
+        // **The later of the two five-hour events**, not the first: within one
+        // kind the freshest observation is the one that is true now.
+        assert_eq!(five.percent(), Some(73));
+
+        let week = reading
+            .rate_limits
+            .iter()
+            .find(|limit| limit.kind == "seven_day")
+            .expect("the seven-day window was not overwritten by the five-hour event after it");
+        assert_eq!(week.percent(), Some(24));
     }
 
     /// **A Drone that has not finished a turn yet reads as empty, not as

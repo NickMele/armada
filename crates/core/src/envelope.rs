@@ -1893,15 +1893,15 @@ pub struct FleetLsData {
     pub needs_you: usize,
     /// What the listed Jobs have cost between them.
     pub spent_usd: f64,
-    /// The rate-limit window the fleet is working inside, when one of the Jobs
-    /// has seen it and it has not reset yet.
+    /// Every rate-limit window the fleet is working inside, soonest reset
+    /// first — the ones some Job has seen and that have not reset yet.
     ///
     /// **A fact about the account rather than about any row**, which is why it
     /// sits beside `results` and not in one. Every Job's transcript carries the
-    /// window its own last turn passed through;
-    /// [`crate::fleet::drone::window`] picks the one still in force.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub window: Option<Window>,
+    /// windows its own last turns passed through;
+    /// [`crate::fleet::drone::windows`] picks the live one of each kind.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub windows: Vec<Window>,
 }
 
 /// The rate-limit window a fleet is working inside.
@@ -1915,8 +1915,17 @@ pub struct FleetLsData {
 /// the service sends what it has. A percentage arrives once the window crosses a
 /// threshold, a reset arrives whenever the headers carry one, and a renderer
 /// draws the ones that are there rather than filling in the rest.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Window {
+    /// Which window this is, as the service spells it: `five_hour`,
+    /// `seven_day`, and whatever else arrives.
+    ///
+    /// **Carried rather than inferred from position.** Two windows are now
+    /// reported at once and they are not interchangeable — one says what stops
+    /// you this afternoon and the other what stops you on Thursday — so a
+    /// consumer that had to tell them apart by their reset distance would be
+    /// re-deriving a fact the payload was handed.
+    pub kind: String,
     /// How much of the window is used, as whole percent, floored.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub used_percent: Option<u8>,
@@ -2121,8 +2130,8 @@ pub struct BridgeData {
     /// **Unfiltered, deliberately.** Every other number here is over the rows on
     /// the screen; this one is a fact about the account, and `state=RUNNING`
     /// does not change how much of a five-hour window is gone.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub window: Option<Window>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub windows: Vec<Window>,
 }
 
 /// `armada fleet show` — **one Job, and why it wants you.**

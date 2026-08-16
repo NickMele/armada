@@ -6,6 +6,6 @@
   STALLED  xlsx-report    3d9cc7ba  reproduce      22m  $4.60  -
   BLOCKED  release-merge  7f2ab618  implement 18m   1h  $1.25  the CI timeout i…
 
-4 jobs, 1 need you, 1 stalled, window 71%, resets 2h14m, $8.40 today
+4 jobs, 1 need you, 1 stalled, 5h 71% resets 2h14m, 7d 24% resets 4d, $8.40 today
 
   enter board  d detail  n new  p pause  x abort  a answer  ? keys  q quit

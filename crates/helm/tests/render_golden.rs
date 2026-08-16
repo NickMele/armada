@@ -1839,7 +1839,7 @@ fn fleet_ls_matches_its_fixture() {
             // window is a fact about the account; the surface that leads with it
             // is the Bridge (`020` §4), which reads this listing rather than a
             // second source. A `--json` consumer gets it either way.
-            window: None,
+            windows: Vec::new(),
         },
     )));
     assert_render("fleet-ls", &output);
@@ -2174,14 +2174,27 @@ fn bridge_matches_its_fixture() {
                 .count(),
             filter: None,
             hidden: 0,
-            // **The window leads the summary line and spend follows it**
-            // (`020` §4). Both halves are here because both were measured: the
-            // percentage is Claude Code's `utilization` floored, and the reset
-            // is its `resetsAt` turned into a countdown.
-            window: Some(Window {
-                used_percent: Some(71),
-                resets_in_s: Some(2 * 3_600 + 14 * 60),
-            }),
+            // **The windows lead the summary line and spend follows them**
+            // (`020` §4). Both halves of each are here because both were
+            // measured: the percentage is Claude Code's `utilization` floored,
+            // and the reset is its `resetsAt` turned into a countdown.
+            //
+            // **Two of them, soonest reset first**, which is the order they
+            // matter in. The line used to carry one, chosen by furthest reset —
+            // an arithmetic the weekly window won every time it existed, hiding
+            // the five-hour one that is about to stop the fleet.
+            windows: vec![
+                Window {
+                    kind: "five_hour".to_string(),
+                    used_percent: Some(71),
+                    resets_in_s: Some(2 * 3_600 + 14 * 60),
+                },
+                Window {
+                    kind: "seven_day".to_string(),
+                    used_percent: Some(24),
+                    resets_in_s: Some(4 * 86_400),
+                },
+            ],
             results,
         },
     )));
@@ -2241,10 +2254,11 @@ fn bridge_filtered_matches_its_fixture() {
             // **It survives the filter**, unlike every other number here: the
             // rows are what `state=RUNNING` selected, and the window is the
             // account's.
-            window: Some(Window {
+            windows: vec![Window {
+                kind: "five_hour".to_string(),
                 used_percent: None,
                 resets_in_s: Some(43 * 60),
-            }),
+            }],
             results,
         },
     )));
@@ -3758,7 +3772,7 @@ fn fleet_ls_text(row: &JobRow) -> String {
             results: vec![row.clone()],
             needs_you: 0,
             spent_usd: row.cost_usd,
-            window: None,
+            windows: Vec::new(),
         },
     )));
     render::human(&output, Style::plain(), Terminal::piped())
@@ -3775,7 +3789,7 @@ fn bridge_text(row: &JobRow) -> String {
             running: 1,
             filter: None,
             hidden: 0,
-            window: None,
+            windows: Vec::new(),
             results: vec![row.clone()],
         },
     )));

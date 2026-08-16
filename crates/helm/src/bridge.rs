@@ -639,7 +639,7 @@ mod tests {
             spent_usd: 4.20,
             hidden: 0,
             filter: None,
-            window: None,
+            windows: Vec::new(),
         }
     }
 
@@ -892,33 +892,34 @@ mod tests {
     #[test]
     fn the_window_is_drawn_ahead_of_the_spend_and_omits_what_was_not_measured() {
         let mut frame = frame();
-        frame.window = Some(armada_core::envelope::Window {
+        frame.windows = vec![armada_core::envelope::Window {
+            kind: "five_hour".to_string(),
             used_percent: Some(71),
             resets_in_s: Some(2 * 3_600 + 14 * 60),
-        });
+        }];
         let all = drawn_at(&frame, &Screen::default(), 200).join("\n");
         let line = all
             .lines()
-            .find(|line| line.contains("window"))
+            .find(|line| line.contains("5h"))
             .expect("a summary line");
-        assert!(line.contains("window 71%"), "{line}");
-        assert!(line.contains("resets 2h14m"), "{line}");
+        assert!(line.contains("5h 71% resets 2h14m"), "{line}");
         assert!(
-            line.find("window").unwrap() < line.find("$4.20").unwrap(),
+            line.find("5h").unwrap() < line.find("$4.20").unwrap(),
             "spend is drawn ahead of the window: {line}"
         );
 
         // A window the service reported without a percentage says what it has.
-        frame.window = Some(armada_core::envelope::Window {
+        frame.windows = vec![armada_core::envelope::Window {
+            kind: "five_hour".to_string(),
             used_percent: None,
             resets_in_s: Some(43 * 60),
-        });
+        }];
         let all = drawn_at(&frame, &Screen::default(), 200).join("\n");
         let line = all
             .lines()
             .find(|line| line.contains("resets"))
             .expect("a summary line");
-        assert!(line.contains("resets 43m"), "{line}");
+        assert!(line.contains("5h resets 43m"), "{line}");
         assert!(
             !line.contains('%'),
             "a percentage nobody measured was drawn: {line}"
@@ -1380,7 +1381,7 @@ mod tests {
                 spent_usd: 0.0,
                 hidden: 0,
                 filter,
-                window: None,
+                windows: Vec::new(),
             };
             let drawn = text(&paint(
                 &empty,

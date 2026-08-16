@@ -1237,6 +1237,26 @@ fn spelled(pairs: &[(&str, &str)]) -> String {
 /// reporting the fleet's totals would be answering a question nobody asked; the
 /// filter and what it removed are said instead, so the smaller numbers are
 /// accounted for rather than mysterious.
+/// A rate-limit window's name, in the units a reader already thinks in.
+///
+/// **`5h` and `7d` rather than `five_hour` and `seven_day`**, because the two
+/// now appear side by side and the whole point of showing both is that a glance
+/// tells them apart. The service's own spelling is kept in the envelope for a
+/// consumer that wants it; a screen with room for four characters spends them on
+/// the duration.
+///
+/// **An unrecognised kind is printed as the service spelled it**, underscores
+/// and all. A window Armada has never seen is exactly the one worth showing
+/// verbatim: renaming it to something friendlier would mean inventing a name for
+/// a limit nobody here understands yet.
+fn window_name(kind: &str) -> String {
+    match kind {
+        "five_hour" => "5h".to_string(),
+        "seven_day" => "7d".to_string(),
+        other => other.to_string(),
+    }
+}
+
 fn frame_facts(data: &BridgeData) -> Vec<String> {
     let mut facts = vec![format::count(data.results.len(), "job")];
     if data.needs_you > 0 {
@@ -1260,13 +1280,28 @@ fn frame_facts(data: &BridgeData) -> Vec<String> {
     // is the account's rather than the frame's, so it survives a filter — and
     // both halves are omitted when the service did not send them, because a
     // percentage nobody measured is the one thing this line may not carry.
-    if let Some(window) = data.window {
+    // **Both windows, soonest first**, which is the order they matter in: the
+    // five-hour window is what stops you this afternoon and the seven-day one is
+    // what stops you on Thursday having felt fine all week. The line used to
+    // carry one, chosen by furthest reset — an arithmetic that picked the weekly
+    // window every time it existed and hid the one about to run out.
+    //
+    // **One fact per window, not one per measurement.** `5h 71% resets 2h14m` is
+    // a single thing a reader takes in at a glance; splitting it into `5h 71%`
+    // and `5h resets 2h14m` puts the window's name on the line twice and makes
+    // two windows read as four unrelated numbers.
+    for window in &data.windows {
+        let mut said = window_name(&window.kind);
         if let Some(used) = window.used_percent {
-            facts.push(format!("window {used}%"));
+            said.push_str(&format!(" {used}%"));
         }
         if let Some(resets_in_s) = window.resets_in_s {
-            facts.push(format!("resets {}", format::countdown(resets_in_s * 1_000)));
+            said.push_str(&format!(
+                " resets {}",
+                format::countdown(resets_in_s * 1_000)
+            ));
         }
+        facts.push(said);
     }
     facts.push(format!("{} today", format::money(data.spent_usd)));
     if let Some(filter) = &data.filter {
