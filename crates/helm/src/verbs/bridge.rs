@@ -70,7 +70,7 @@ pub fn data(frame: Frame) -> BridgeData {
         running: frame.running,
         filter: frame.filter,
         hidden: frame.hidden,
-        window: frame.window,
+        windows: frame.windows,
         results: frame.rows,
     }
 }

@@ -76,10 +76,19 @@ pub fn elapsed(ms: u64) -> String {
 /// **No space, unlike [`duration`]**, because this appears inside a summary line
 /// whose separator is a space-padded middle dot: `resets 2h 14m` would read as
 /// two facts.
+///
+/// **Above a day it coarsens back to whole days**, which looks like a
+/// contradiction of the paragraph above and is the same argument applied twice.
+/// The precision a countdown needs is the precision the *decision* needs, and
+/// the decision changes with the scale: at two hours it is *do I wait*, and
+/// minutes settle it; at four days it is *do I plan around this*, and
+/// `96h00m` answers that in a unit nobody thinks in. The seven-day rate-limit
+/// window is what made this reachable — no Job runs long enough to need it.
 pub fn countdown(ms: u64) -> String {
     const SECOND: u64 = 1_000;
     const MINUTE: u64 = 60 * SECOND;
     const HOUR: u64 = 60 * MINUTE;
+    const DAY: u64 = 24 * HOUR;
 
     if ms < MINUTE {
         return format!("{}s", ms / SECOND);
@@ -87,7 +96,10 @@ pub fn countdown(ms: u64) -> String {
     if ms < HOUR {
         return format!("{}m", ms / MINUTE);
     }
-    format!("{}h{:02}m", ms / HOUR, (ms % HOUR) / MINUTE)
+    if ms < DAY {
+        return format!("{}h{:02}m", ms / HOUR, (ms % HOUR) / MINUTE);
+    }
+    format!("{}d", ms / DAY)
 }
 
 /// Dollars, as the agreed layout writes them: `$2.10`.

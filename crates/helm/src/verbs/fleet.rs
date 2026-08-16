@@ -994,9 +994,7 @@ pub fn ls<R: Run, C: Clock>(
             continue;
         }
         let (observed, reading, _) = look(run, place, &record, wall);
-        if let Some(limit) = reading.rate_limit {
-            windows.push(limit);
-        }
+        windows.extend(reading.rate_limits);
         // **By uuid, and never for a Job that is over.** The first is the
         // defect `005` records; the second is its first consequence, and it is
         // asserted here as well as written at the close because `--all` draws
@@ -1083,12 +1081,14 @@ pub fn ls<R: Run, C: Clock>(
             // the payload carries `resets_in_s`, so neither the renderer nor a
             // `--json` consumer has to know what epoch second it is to read the
             // one number that says when you can work again.
-            window: armada_core::fleet::drone::window(&windows, wall / 1_000).map(|limit| {
-                armada_core::envelope::Window {
+            windows: armada_core::fleet::drone::windows(&windows, wall / 1_000)
+                .into_iter()
+                .map(|limit| armada_core::envelope::Window {
+                    kind: limit.kind.clone(),
                     used_percent: limit.percent(),
                     resets_in_s: limit.resets_at.map(|at| at.saturating_sub(wall / 1_000)),
-                }
-            }),
+                })
+                .collect(),
         },
     ))))
 }
