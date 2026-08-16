@@ -481,24 +481,41 @@ pub const MODES: [&str; 6] = [
 /// | `Edit`, `Write`, `NotebookEdit` | the change itself, and Claude Code confines these to the session's directory — which is the worktree |
 /// | `TodoWrite` | the Drone's own scratchpad; it touches nothing outside the session |
 /// | `Bash` | **the tool whole**, because the repository's checks are spelled in a language Armada does not know |
+/// | `Skill` | a workflow step names the skill that runs it, so a Drone that cannot invoke one cannot perform its step |
+/// | `mcp__armada__fleet_*` | the four tools [`BRIEF`] instructs the Drone to report through |
 ///
 /// **`Bash` whole is the deliberate one.** An allowlist of commands would be an
 /// enumeration of every build system there is, and each one missing is a Job
 /// that edits code it cannot test. [`DENY`] is what makes that affordable: the
 /// escapes are a finite list and the checks are not.
 ///
-/// **No rule here names `mcp__armada__*`, and [`BRIEF`] tells a Drone to report
-/// through three tools spelled exactly that way.** Under [`MODE`]'s `dontAsk` an
-/// uncovered tool is denied rather than asked about, so a Drone could be refused
-/// the very tools its brief instructs it to use — and refused silently, which is
-/// 011's original bug one layer up. It is **not proved**: whether an MCP tool
-/// absent from [`ALLOWED`] is denied or merely not pre-approved is Claude Code's
-/// behaviour, and the only honest test spawns a real Drone and spends a token,
-/// which PHASES.md §8.5 forbids. This list is the reader's decision
-/// (`docs/reserved/011`), so the risk is recorded in
-/// `docs/reserved/019-the-brief-a-drone-reports-through.md` rather than fixed in
-/// passing here.
-pub const ALLOW: [&str; 8] = [
+/// **The last five entries are a fix, and this is the evidence for it.** They
+/// were absent, and the open question recorded here was whether an uncovered
+/// tool is *denied* under [`MODE`]'s `dontAsk` or merely not pre-approved — not
+/// provable in a test, because the only honest one spawns a real Drone and
+/// spends a token (`PHASES.md` §8.5).
+///
+/// **Real use answered it.** A Drone was handed a brief naming the
+/// `reproduce-failure` skill and reported that it could not access the skill it
+/// had been told it had — with `Skill` absent from this list. An allowlist that
+/// omits a tool denies it. The same mechanism governs the MCP tools, which is
+/// why a Drone had already been observed answering its operator in *prose*
+/// rather than calling `fleet_ask_human` (`docs/reserved/020` §2): it was not
+/// ignoring the brief, it was refused the tools the brief names, silently. That
+/// is 011's original bug one layer up, which
+/// `docs/reserved/019-the-brief-a-drone-reports-through.md` recorded as a risk
+/// and which is now closed.
+///
+/// **The four MCP tools are named individually rather than by a
+/// `mcp__armada` wildcard.** `crates/helm/src/mcp/drone.rs` serves exactly these
+/// four, so the enumeration is complete today — and it stays correct if that
+/// router ever gains a fifth, because [`BRIEF`] promises *"you cannot spawn
+/// Jobs"* and a wildcard would quietly grant whatever is added next.
+///
+/// The **client's** spelling, not the server's: Claude Code exposes
+/// `fleet.report` as `mcp__armada__fleet_report`, and the dotted name matches
+/// nothing the model can call (`docs/traps.md`).
+pub const ALLOW: [&str; 13] = [
     "Read",
     "Glob",
     "Grep",
@@ -507,6 +524,11 @@ pub const ALLOW: [&str; 8] = [
     "NotebookEdit",
     "TodoWrite",
     "Bash",
+    "Skill",
+    "mcp__armada__fleet_report",
+    "mcp__armada__fleet_verdict",
+    "mcp__armada__fleet_ask_human",
+    "mcp__armada__fleet_propose",
 ];
 
 /// What a Drone may not do however broadly [`ALLOW`] grants — **the things
@@ -1050,6 +1072,65 @@ mod tests {
     /// (`docs/traps.md`), and a prompt written with the documented name matches
     /// nothing at all. `crates/helm/src/mcp/drone.rs` holds these names against
     /// the router that actually serves them.
+    /// **Every tool the brief instructs a Drone to use must be granted.**
+    ///
+    /// This is the assertion that would have caught the bug: `BRIEF` named three
+    /// `mcp__armada__*` tools that [`ALLOW`] did not grant, so a Drone was
+    /// refused — silently, under `dontAsk` — the only means it had of reporting
+    /// anything. Observed in real use as a Drone answering its operator in prose
+    /// and as a Job that never advanced.
+    ///
+    /// Derived from `BRIEF` rather than restated, so a tool added to the brief
+    /// with no matching grant fails here rather than in a Job hours later.
+    #[test]
+    fn every_tool_the_brief_names_is_one_the_drone_is_granted() {
+        let named: Vec<&str> = BRIEF
+            .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .filter(|w| w.starts_with("mcp__"))
+            .collect();
+        assert!(
+            !named.is_empty(),
+            "the brief names no tools — this test would pass vacuously"
+        );
+        for tool in named {
+            assert!(
+                ALLOW.contains(&tool),
+                "the brief tells a Drone to use `{tool}`, which ALLOW does not grant — \
+                 under MODE `{MODE}` an uncovered tool is denied, and silently"
+            );
+        }
+    }
+
+    /// The skill tool, kept separate because nothing in `BRIEF` names it: a
+    /// workflow step names its skill, and the brief is workflow-agnostic.
+    ///
+    /// A Drone was handed *"use the `reproduce-failure` skill"* and reported it
+    /// could not access the skill it had been told it had. That is the
+    /// measurement this list was missing.
+    #[test]
+    fn a_drone_may_invoke_a_skill_its_step_names() {
+        assert!(
+            ALLOW.contains(&"Skill"),
+            "a workflow step names the skill that runs it; without this the step cannot run"
+        );
+    }
+
+    /// A wildcard would grant whatever the router gains next, and `BRIEF`
+    /// promises a Drone cannot spawn Jobs.
+    #[test]
+    fn the_mcp_grants_are_named_individually_rather_than_by_wildcard() {
+        for tool in ALLOW.iter().filter(|t| t.starts_with("mcp__")) {
+            assert!(
+                !tool.ends_with('*') && tool.matches("__").count() == 2,
+                "`{tool}` is not one fully-qualified tool name"
+            );
+        }
+        assert!(
+            !ALLOW.contains(&"mcp__armada__fleet_spawn"),
+            "the brief promises a Drone cannot spawn Jobs"
+        );
+    }
+
     #[test]
     fn the_brief_states_the_contract_rather_than_asking_for_brevity() {
         for tool in [
