@@ -1,12 +1,12 @@
 ---
 id: 024
-title: The relay does not fire under `--print`
+title: The relay's watcher never ticks
 status: BUG
 module: fleet
 raised: a Job driven end to end, 2026-08-16
 ---
 
-# 024 — The relay does not fire under `--print`
+# 024 — The relay's watcher never ticks
 
 **The claim [`020`](020-the-tui-decided.md)'s first decision rests on is false for a Drone.** That section
 decided the Drone's `Stop` hook ticks the Job, and argued it from
@@ -47,16 +47,37 @@ Two things follow, and the second is the sharper one:
   until a person runs `armada fleet tick`. The backstop sweep exists and is correct, and nothing
   calls it either.
 
-## What is not yet known
+## What the hook does and does not explain — corrected 2026-08-16
 
-**Which of two causes this is has not been established, and the fix differs.** Either
-`--settings` hooks are not applied to a `--print` session at all, or `Stop` is not an event a
-`--print` session emits — it ends rather than stopping. The first is a wiring bug; the second
-means the whole mechanism needs a different event, and that decision's *"the exchange ending **is**
-the event"* is the sentence that would be wrong.
+**A `Stop` hook does fire under `--print`.** Measured directly, with a minimal probe rather than
+by inference:
 
-Answering it costs one probe session and no guesswork: register a `Stop` hook that touches a
-file, run `claude --print` with it, and look for the file.
+```sh
+claude --settings ./settings.json --permission-mode dontAsk \
+       --allowedTools Read --print "say banana"
+# -> STOP HOOK FIRED 06:41:52
+```
+
+**So the conclusion first recorded here was wrong, and the reasoning is worth keeping because it
+is a trap.** It rested on the Drone's transcript showing `SessionStart` and no `Stop` event — but
+the transcript is closed before a `Stop` hook runs, so a `Stop` event can never appear in it.
+Absence there is not evidence of anything.
+
+What still stands is the `recent.jsonl` evidence: across a whole run the only `armada fleet tick`
+is the one typed by hand. The hook fires and the tick does not happen, so **the fault is inside
+`stop.sh`**, between the two.
+
+The script forks a watcher that reads its own process group, polls until the group leader is gone,
+and only then ticks. The likeliest failure is that the watcher is inside the Drone's own process
+group and is killed with it — `drone::stop` signals the group, and a watcher waiting for that
+group's death is a watcher the death takes with it. **Not yet proved**, and it is provable without
+spending a token: fork the same watcher under a process group, kill the group, and see whether the
+tick lands.
+
+**A second reading of the probe above is worth noting.** The first attempt failed with *"Input
+must be provided either through stdin or as a prompt argument"* because `--allowedTools Read "say
+banana"` let the variadic flag eat the prompt — the exact trap `drone.rs` documents and guards
+with an invariant test. The guard works; a hand-written probe has no such guard.
 
 ## Why it was invisible until now
 
