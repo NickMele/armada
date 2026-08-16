@@ -773,3 +773,113 @@ impl Run for PrunableDocker {
         self.call(request)
     }
 }
+
+/// **An agent must not be able to prune the user's data**, asserted on the argv.
+///
+/// The snapshot above shows the *payload* leaving the unlabelled volume alone.
+/// This shows that no `docker volume rm` was ever built for it — which is the
+/// claim that matters, because a payload is a description and an argv is the
+/// thing that happens. The suite's own rule is that asserting on a payload
+/// proves you described what you meant, not that you did it.
+///
+/// # What inverting it showed, recorded because it is not what was expected
+///
+/// **Neither guard alone makes this test fail, and that is the finding.** There
+/// are two of them and they are independent:
+///
+/// | Guard | What it stops |
+/// |---|---|
+/// | [`disk::default_ticks`] | an unlabelled volume is never *ticked*, so `--yes` never proposes one |
+/// | [`disk::permitted`] | an unlabelled volume is never *removed* on a flag, however it came to be ticked |
+///
+/// Inverting either one on its own left this green; inverting **both** together
+/// made it fail with a real `docker volume rm` for a volume Armada did not
+/// create. So this test proves the pair, not either half — the halves are proved
+/// individually by `disk.rs`'s own unit tests, and that split is deliberate
+/// rather than an accident of coverage. Defence in depth is the intent: the
+/// second guard exists precisely so that a future edit to the first cannot
+/// quietly make an agent able to delete somebody's database.
+///
+/// The `--yes` branch below is what stops the whole thing being vacuous: it
+/// asserts that Armada's *own* volume **was** queued, so "nothing was removed at
+/// all" cannot pass this.
+#[test]
+fn a_run_with_nobody_to_ask_never_builds_a_removal_for_an_unlabelled_volume() {
+    for yes in [false, true] {
+        let scenario = scenario(CONFIG);
+        run_verb(&scenario, |app| verbs::init::run(app, false));
+        let daemon = RecordingDocker::default();
+        let seen = daemon.seen.clone();
+        run_verb_with(&scenario, daemon, |app| {
+            verbs::prune::run(
+                app,
+                armada_helm::args::Common {
+                    json: true,
+                    dry_run: false,
+                    lens: Lens::Workspace,
+                },
+                verbs::prune::Filters { yes },
+                &mut armada_helm::ask::Defaults,
+                false,
+            )
+        });
+
+        let removals: Vec<Vec<String>> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|argv| argv.iter().any(|word| word == "rm"))
+            .cloned()
+            .collect();
+        assert!(
+            !removals
+                .iter()
+                .any(|argv| argv.iter().any(|word| word == "someone-elses_pgdata")),
+            "a volume armada did not create was queued for removal with nobody to ask \
+             (--yes={yes}): {removals:#?}"
+        );
+        // The other half: `--yes` is consent for Armada's own, so something did
+        // happen and the assertion above is not vacuous.
+        if yes {
+            assert!(
+                removals
+                    .iter()
+                    .any(|argv| argv.iter().any(|word| word == "armada-orphan_pgdata")),
+                "--yes removed nothing at all, so the assertion above proves nothing: \
+                 {removals:#?}"
+            );
+        }
+    }
+}
+
+/// [`PrunableDocker`], recording every argv it was given.
+#[derive(Default)]
+struct RecordingDocker {
+    seen: std::sync::Arc<std::sync::Mutex<Vec<Vec<String>>>>,
+}
+
+impl Run for RecordingDocker {
+    fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+        self.seen.lock().unwrap().push(request.argv.clone());
+        // `volume rm` is answered, never performed: no test may remove a real
+        // docker resource on this machine.
+        if request.argv.iter().any(|word| word == "rm") {
+            return Ok(RunOutput {
+                code: Some(0),
+                signal: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                timed_out: false,
+            });
+        }
+        PrunableDocker.call(request)
+    }
+
+    fn call_with_tick(
+        &self,
+        request: &RunRequest,
+        _tick: &mut dyn FnMut(),
+    ) -> Result<RunOutput, SpawnError> {
+        self.call(request)
+    }
+}

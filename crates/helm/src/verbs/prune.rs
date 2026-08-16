@@ -43,7 +43,7 @@
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::disk::{self, Confirmed, Ownership, PruneCandidate};
 use armada_core::envelope::{Envelope, PruneData, PruneRow};
-use armada_core::error::{ArmadaError, Status};
+use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::reap::PathStat;
 use armada_manifest::{docker, fs};
 
@@ -350,9 +350,42 @@ fn remove<R: Run, C: Clock, F: Fetch>(
         });
     }
 
-    let failed = results.iter().any(|row| row.status == Status::Failed);
+    // **A volume that would not go is a leak Armada is about to stop looking
+    // at, so it fails the run.** `clean` keeps exactly this distinction: an
+    // *enumeration* Armada could not perform is `skipped` and proves nothing,
+    // while a *removal* Armada attempted and could not complete is real and has
+    // to reach the exit code. Building the envelope `ok` regardless would have
+    // had a run that failed to free anything exit `0`, which is the shape of
+    // silence a caller cannot gate on.
+    let refused: Vec<&PruneRow> = results
+        .iter()
+        .filter(|row| row.status == Status::Failed)
+        .collect();
+    let error = refused.first().map(|_| ArmadaError {
+        class: ErrClass::ToolFailed,
+        r#where: "docker".to_string(),
+        message: refused
+            .iter()
+            .map(|row| {
+                format!(
+                    "{}: {}",
+                    row.reference,
+                    row.detail.as_deref().unwrap_or("would not go")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; "),
+        next_action: Some(
+            "remove what is named above by hand, then re-run `armada manifest prune`".to_string(),
+        ),
+    });
+
     let removed = results.iter().any(|row| row.status == Status::Clean);
-    let status = match (failed, removed) {
+    // **`PARTIAL` earns its place**, for the reason `clean` gives: "three of
+    // five went" and "none went" demand different actions and would otherwise
+    // both read `FAILED`. The state describes what happened; the class says why,
+    // and the exit code follows the class and never the state.
+    let status = match (error.is_some(), removed) {
         (true, true) => Status::Partial,
         (true, false) => Status::Failed,
         (false, _) => Status::Clean,
@@ -363,5 +396,12 @@ fn remove<R: Run, C: Clock, F: Fetch>(
         withheld,
         skipped,
     };
-    Output::Prune(Box::new(Envelope::ok("prune", None, status, data)))
+    Output::Prune(Box::new(match error {
+        None => Envelope::ok("prune", None, status, data),
+        Some(error) => {
+            let mut envelope = Envelope::failed("prune", None, error, data);
+            envelope.status = status;
+            envelope
+        }
+    }))
 }
