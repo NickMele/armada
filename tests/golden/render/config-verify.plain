@@ -1,10 +1,10 @@
 pass 1, static, nothing is executed
 
-  CHECK      STATUS         DETAIL                           TIME
-  PASS       schema         -                                0.1s
-  PASS       references     needs:, match:, ports fit block  0.1s
-  FAILED     argv[0]        `vitest` not on PATH or in root  0.2s
-  UNCHECKED  shell entries  3, no argv[0] to resolve            -
+  CHECK          STATUS     DETAIL                           TIME
+  schema         PASS       -                                0.1s
+  references     PASS       needs:, match:, ports fit block  0.1s
+  argv[0]        FAILED     `vitest` not on PATH or in root  0.2s
+  shell entries  UNCHECKED  3, no argv[0] to resolve            -
 
 FAILED  pass 2 not attempted, fix pass 1 first
   -> web:test declares `vitest run`; did you mean `pnpm exec vitest run`?

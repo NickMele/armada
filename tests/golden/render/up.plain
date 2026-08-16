@@ -1,9 +1,9 @@
 armada  3d9cc7ba                                                 ports 5460-5469
 
-  SERVICE  STATUS    DETAIL                                     TIME
-  UP       postgres  tcp pg (5460)                              1.9s
-  TIMEOUT  web       the ready-check did not pass within 60s  1m 00s
-           .armada/logs/web.log
+  SERVICE   STATUS   DETAIL                                     TIME
+  postgres  UP       tcp pg (5460)                              1.9s
+  web       TIMEOUT  the ready-check did not pass within 60s  1m 00s
+            .armada/logs/web.log
 
   PORT  STATUS  DETAIL
   pg    UP      5460

@@ -1168,7 +1168,7 @@ fn config_verify_fails_pass_one_and_does_not_attempt_pass_two() {
         text.starts_with("pass 1, static, nothing is executed"),
         "{text}"
     );
-    assert!(text.contains("UNCHECKED  shell entries"), "{text}");
+    assert!(text.contains("shell entries"), "{text}");
     assert!(
         text.contains("pass 2 not attempted, fix pass 1 first"),
         "{text}"

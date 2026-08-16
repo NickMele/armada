@@ -551,14 +551,14 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
     // Past tense even under `--dry-run`: the workflow really is settled, either
     // by a call that really was made or by the `--workflow` you passed.
     table = table.row(vec![
-        token(progress::SpawnStep::Classify.done(), role),
         Cell::plain(progress::SpawnStep::Classify.id()),
+        token(progress::SpawnStep::Classify.done(), role),
         detail_cell(style, Some(&classified)),
         time_cell(data.classify_ms),
     ]);
     table = table.row(vec![
-        done_or_would(dry, progress::SpawnStep::Worktree.done(), Role::BeaconGreen),
         Cell::plain(progress::SpawnStep::Worktree.id()),
+        done_or_would(dry, progress::SpawnStep::Worktree.done(), Role::BeaconGreen),
         detail_cell(style, Some(&data.worktree)),
         // Nothing was prepared, so no interval is reported. `0.0s` next to
         // `WOULD` is a measurement of work that did not happen.
@@ -568,6 +568,7 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         }),
     ]);
     table = table.row(vec![
+        Cell::plain(progress::SpawnStep::Ports.id()),
         done_or_would(
             dry,
             progress::SpawnStep::Ports.done(),
@@ -576,7 +577,6 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
                 None => Role::SteelGrey,
             },
         ),
-        Cell::plain(progress::SpawnStep::Ports.id()),
         detail_cell(
             style,
             data.port_block
@@ -586,8 +586,8 @@ fn spawn(envelope: &Envelope<SpawnData>, style: Style, width: usize) -> String {
         time_cell(None),
     ]);
     table = table.row(vec![
-        done_or_would(dry, progress::SpawnStep::Drone.done(), Role::BeaconGreen),
         Cell::plain(progress::SpawnStep::Drone.id()),
+        done_or_would(dry, progress::SpawnStep::Drone.done(), Role::BeaconGreen),
         detail_cell(
             style,
             Some(&match dry {
@@ -4593,8 +4593,8 @@ fn services(envelope: &Envelope<ServicesData>, style: Style, width: usize, noun:
             .filter(|_| !matches!(row.status, Status::Up | Status::Down));
         table = table.row_with_note(
             vec![
-                verdict(row.status),
                 Cell::plain(row.id.clone()),
+                verdict(row.status),
                 detail_cell(style, detail.as_deref()),
                 time_cell(row.duration_ms),
             ],
@@ -4953,8 +4953,8 @@ fn check(envelope: &Envelope<CheckData>, style: Style, width: usize) -> String {
             .filter(|_| !matches!(row.status, Status::Pass | Status::Skipped));
         table = table.row_with_note(
             vec![
-                verdict(row.status),
                 Cell::plain(row.id.clone()),
+                verdict(row.status),
                 detail_cell(style, detail.as_deref()),
                 time_cell(row.duration_ms),
             ],
@@ -5737,8 +5737,8 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
             .map(|e| e.message.clone())
             .or_else(|| row.reason.clone());
         table = table.row(vec![
-            verdict(row.status),
             Cell::plain(row.id.clone()),
+            verdict(row.status),
             detail_cell(style, detail.as_deref()),
             time_cell(row.duration_ms),
         ]);
@@ -5748,8 +5748,8 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
     // established either way — so it is derived from `data.unchecked` and
     // spelled lowercase, exactly as `claimed` and `owns` are.
     table = table.row(vec![
-        token("unchecked", Role::FlareOrange),
         Cell::plain("shell entries"),
+        token("unchecked", Role::FlareOrange),
         Cell::muted(format!("{}, no argv[0] to resolve", data.unchecked)),
         time_cell(None),
     ]);
@@ -5771,8 +5771,8 @@ fn verify(envelope: &Envelope<VerifyData>, style: Style, width: usize) -> String
                 .map(|e| e.message.clone())
                 .or_else(|| row.reason.clone());
             suite = suite.row(vec![
-                verdict(row.status),
                 Cell::plain(row.id.clone()),
+                verdict(row.status),
                 detail_cell(style, detail.as_deref()),
                 time_cell(row.duration_ms),
             ]);
