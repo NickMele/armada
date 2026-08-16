@@ -6,7 +6,6 @@
 
   STATUS  FACT       DETAIL
   SEEN    count      once, at 2026-08-09T14:02:11Z
-  TYPED   command    -
   IN      directory  -
   JOB     raised by  nightly-flake
 

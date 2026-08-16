@@ -2689,11 +2689,20 @@ fn failure(envelope: &Envelope<FailureData>, style: Style, width: usize) -> Stri
             }),
         ),
     ]);
-    facts = facts.row(vec![
-        token("typed", Role::SteelGrey),
-        Cell::muted("command"),
-        detail_cell(style, Some(&entry.argv)),
-    ]);
+    // **The command is shown when it is the thing that went wrong.** A failure's
+    // `argv` is the reproduction — retype it and you are back where the record
+    // was written. A report's is `armada report`, which reproduces the filing
+    // rather than the bug, and a task's is `armada task`; both are already named
+    // by the origin the reader arrived through. `class` is the discriminator
+    // because it is the one the branch above already turns on: Armada authored
+    // an envelope, or a person wrote a sentence.
+    if entry.class.is_some() {
+        facts = facts.row(vec![
+            token("typed", Role::SteelGrey),
+            Cell::muted("command"),
+            detail_cell(style, Some(&entry.argv)),
+        ]);
+    }
     facts = facts.row(vec![
         token("in", Role::SteelGrey),
         Cell::muted("directory"),

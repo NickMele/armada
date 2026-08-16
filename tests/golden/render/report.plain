@@ -6,7 +6,6 @@
 
   STATUS  FACT       DETAIL
   SEEN    count      once, at 2026-08-09T14:58:11Z
-  TYPED   command    armada report 'the dry-run said CREATED worktree and made …
   IN      directory  ~/code/orders
   RAN     armada     0.1.0
   RAN     claude     2.0.14
@@ -30,8 +29,7 @@
 
         the dry-run said CREATED worktree and made nothing
 
-    Filed by `armada report 'the dry-run said CREATED worktree and made
-    nothing'`, in ~/code/orders.
+    Filed on 2026-08-09T14:58:11Z, in ~/code/orders.
 
     Armada 0.1.0 on linux x86_64, with claude 2.0.14.
 

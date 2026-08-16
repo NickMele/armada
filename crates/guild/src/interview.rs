@@ -274,16 +274,6 @@ impl Ceilings {
     }
 }
 
-/// `600000` as `600k`, and `1500000` as `1500k`. Whole thousands only, because
-/// a ceiling is a round number and `600.5k` reads as a measurement.
-fn thousands(tokens: u64) -> String {
-    if tokens.is_multiple_of(1_000) && tokens >= 1_000 {
-        format!("{}k", tokens / 1_000)
-    } else {
-        tokens.to_string()
-    }
-}
-
 /// Read question 4's answer — a count of iterations, as `20`.
 ///
 /// **Refuses rather than guesses.** A ceiling silently read as `0` is a fleet
@@ -294,11 +284,13 @@ pub fn parse_iterations(answer: &str) -> Result<u32, String> {
     u32::try_from(value).map_err(|_| refusal(answer, "iterations", "20"))
 }
 
-/// Read question 5's answer — a token count, as `600k` or `600000`.
+/// Read question 5's answer — a ceiling in dollars, as `10` or `$10.00`.
 ///
-/// **`k` is thousands and it is the only suffix**, because there is exactly one
-/// unit here. The old triple read `m` as *minutes* in one slot and as nothing in
-/// another, which is precisely the ambiguity the split removes.
+/// **`$` is optional and it is the only decoration accepted**, because there is
+/// exactly one unit here. The question used to ask for tokens, and a token
+/// ceiling was the wrong ceiling: cache reads counted at parity with everything
+/// else, so a Job showed four million tokens against sixty-four cents of real
+/// spend and the number people budget in was the one Armada was not counting.
 pub fn parse_cost(answer: &str) -> Result<f64, String> {
     let text = answer.trim();
     let trimmed = text.strip_prefix('$').unwrap_or(text);
@@ -566,7 +558,11 @@ mod tests {
         );
         for question in QUESTIONS {
             let says = format!("{} {}", question.prompt, question.purpose).to_lowercase();
-            for stale in ["how many tokens"] {
+            // **Every phrasing the old question could come back in**, not just
+            // the one it happened to use. A single-phrase check passes the
+            // moment somebody rewords the restoration, which is the way a
+            // guard against a specific sentence stops guarding the decision.
+            for stale in ["how many tokens", "token ceiling", "token budget", "600k"] {
                 assert!(
                     !says.contains(stale),
                     "question {} still asks for tokens: {stale}",
