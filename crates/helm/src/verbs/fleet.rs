@@ -1385,7 +1385,9 @@ fn tear_down<R: Run, C: Clock>(
             (_, false) => Disposition::Gone,
             (true, true) => Disposition::Kept,
             (false, true) => {
-                doing = stage(&store, record, doing.as_ref(), "worktree", now.wall_ms());
+                // The last stage, so its answer is not carried on — the write
+                // that settles the Job clears the transient a few lines below.
+                stage(&store, record, doing.as_ref(), "worktree", now.wall_ms());
                 match worktree::remove(run, &repo_root, &path) {
                     Ok(()) => Disposition::Removed,
                     Err(error) => {

@@ -1466,6 +1466,7 @@ mod tests {
                 ..Claude::healthy()
             },
             Path::new("/tmp"),
+            Path::new("/tmp"),
         );
         assert_eq!(finding.status, Health::Missing);
         assert!(
@@ -1477,7 +1478,7 @@ mod tests {
         // is `Ok`, so the finding is about the missing flag rather than about
         // the fixture.
         assert_eq!(
-            drone_argv(&Claude::healthy(), Path::new("/tmp")).status,
+            drone_argv(&Claude::healthy(), Path::new("/tmp"), Path::new("/tmp")).status,
             Health::Ok
         );
     }
