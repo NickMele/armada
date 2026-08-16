@@ -1,7 +1,7 @@
 ---
 id: 024
 title: The relay's watcher never ticks
-status: BUG
+status: FIXED
 module: fleet
 raised: a Job driven end to end, 2026-08-16
 ---
@@ -92,3 +92,17 @@ enough to *finish an exchange cleanly* before the missing tick was the thing you
 `uuid` while the human table's column header is `ID`. A caller reading the JSON for an `id` finds
 nothing. Small, and it cost a wrong answer to a stale entry while driving the Job above — which
 then let the gate ask again and burned two more exchanges.
+
+## Fixed 2026-08-16
+
+`leader=$PPID`. Claude Code runs a hook in its own process group, so `$$`'s group named the hook
+and the watcher waited for itself — it broke at `waited=0` and ticked while the Drone was still
+running, and `tick` correctly reported `WORKING` and moved nothing. `$PPID` is the Drone.
+
+**The test that was supposed to catch this asserted `ps -o pgid= -p $$`**, so it pinned the bug in
+place while reading as proof of the opposite. It is `AGENTS.md`'s own rule arriving as a defect:
+asserting on a string proves you built the string you meant, not that it works. The assertion now
+requires `$PPID` and forbids the process-group form.
+
+Verified on a real Job: spawned at `explore`, it advanced to `articulate` with no manual tick, and
+`recent.jsonl` recorded six hook-driven ticks over the run.
