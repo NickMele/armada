@@ -1,7 +1,7 @@
 ---
 id: 025
 title: A Drone reached outside its worktree
-status: BUG
+status: RESERVED
 module: fleet
 raised: watching a real Job's transcript, 2026-08-16
 ---
@@ -65,3 +65,29 @@ a Drone the guild's skills is `docs/reserved/008`'s territory and is partly buil
 built is what a Drone should do when a named skill is missing.** Right now it improvises, and
 improvising is how it ended up on the internet. Refusing the step with a `BLOCKED` verdict naming
 the skill would have been the correct outcome and would have cost nothing.
+
+## Decided 2026-08-16: left open, deliberately
+
+**Nothing is being built for this yet.** The owner's call, in his words: *"until agents really
+start misbehaving I don't think armada needs to be this strict."* One Drone fetched one skill
+because the one its workflow named was missing — that is a nuisance, not a pattern, and a posture
+tightened against a single incident is a posture nobody can loosen later without an argument.
+
+**The containment option above was withdrawn before it was rejected, and for a better reason than
+proportionality.** Giving a Job its own `HOME` would move `~/.claude` — and a Drone *is* a
+`claude` process. It would lose its own credentials and settings and come up unauthenticated, lose
+`~/.gitconfig` so its commits carry the wrong identity or none, lose `~/.ssh`, and redownload a
+toolchain per Job because `~/.cargo` moved with it. **The thing being contained is the same
+program whose configuration lives in the directory being moved.** Anybody reaching for this again
+should reach for the narrow form instead: `npm_config_prefix`, `PNPM_HOME`, `CARGO_INSTALL_ROOT`
+(*not* `CARGO_HOME`, which holds the registry cache and credentials), `PIPX_HOME`, `GOBIN` — which
+move where a global install *lands* and leave identity, credentials and caches alone.
+
+**What would change the decision:** a second incident, or any install that reaches something
+shared and durable rather than a skills directory. The narrow form above is the thing to build
+then, and it is small.
+
+**The narrower half is still worth doing on its own merits** and is not blocked by this: a Drone
+that cannot resolve a skill its workflow names should emit a `BLOCKED` verdict naming it, rather
+than improvising. That is what sent this one to the internet, and refusing would have cost
+nothing.
