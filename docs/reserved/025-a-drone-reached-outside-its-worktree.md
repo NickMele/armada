@@ -54,7 +54,8 @@ Three candidates, none costless:
 | Contain instead of deny — a per-Job `HOME`, `npm_config_prefix`, `CARGO_HOME` | The honest fix, and the largest: it makes *"outside the worktree"* a property of the environment rather than a list of forbidden words |
 
 **The third is the one that matches how the rest of Armada works** — the worktree is containment
-rather than a rule, and `020` §1's whole argument is that mechanisms beat instructions. It is
+rather than a rule, and [`020`](020-the-tui-decided.md)'s first decision argues throughout that
+mechanisms beat instructions. It is
 also the only one that does not need updating when somebody invents another package manager.
 
 ## The narrower thing this also revealed
