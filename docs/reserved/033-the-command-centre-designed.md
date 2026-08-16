@@ -51,7 +51,7 @@ the five-hour window and the weekly one, each with a percentage and a time to re
 │                                                        │ │ remote       in step           │ │ disk         176 GB free                 │
 │ WORKSPACE          STATUS   PORTS                      │ │                                │ │ stale pgid   18 · reap                   │
 │ armada             LEASED   none declared              │ │  u upgrade  s sync  g ls       │ │                                          │
-│ private            LEASED   5460–5469                  │ └────────────────────────────────┘ └──────────────────────────────────────────┘
+│ orders             LEASED   5460–5469                  │ └────────────────────────────────┘ └──────────────────────────────────────────┘
 └────────────────────────────────────────────────────────┘                                                                                
 
 ┌─ KEYS ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐

@@ -6,7 +6,6 @@
 
   [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mFACT[0m       [1m[38;2;156;163;175mDETAIL[0m
   [38;2;156;163;175mSEEN[0m    [38;2;156;163;175mcount[0m      [38;2;156;163;175monce, at 2026-08-09T14:58:11Z[0m
-  [38;2;156;163;175mTYPED[0m   [38;2;156;163;175mcommand[0m    [38;2;156;163;175marmada report 'the dry-run said CREATED worktree and made …[0m
   [38;2;156;163;175mIN[0m      [38;2;156;163;175mdirectory[0m  [38;2;156;163;175m~/code/orders[0m
   [38;2;156;163;175mRAN[0m     [38;2;156;163;175marmada[0m     [38;2;156;163;175m0.1.0[0m
   [38;2;156;163;175mRAN[0m     [38;2;156;163;175mclaude[0m     [38;2;156;163;175m2.0.14[0m
@@ -30,8 +29,7 @@
 
         the dry-run said CREATED worktree and made nothing
 
-    Filed by `armada report 'the dry-run said CREATED worktree and made
-    nothing'`, in ~/code/orders.
+    Filed on 2026-08-09T14:58:11Z, in ~/code/orders.
 
     Armada 0.1.0 on linux x86_64, with claude 2.0.14.
 

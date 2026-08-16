@@ -740,6 +740,11 @@ pub fn reported(
 ) -> (String, Line) {
     let clean = |text: &str| tilde(&redact(text), home);
     let list = |items: &[String]| items.iter().map(|item| clean(item)).collect();
+    // **Taken before the description is cleaned**, because it is matched against
+    // `argv`'s own words and those have not been cleaned either — comparing a
+    // redacted sentence to an unredacted argument would never match, and the
+    // duplication would come back for exactly the reports carrying a secret.
+    let typed = argv_without(argv, what);
     let what = clean(what);
     let mut hex = blake3::hash(format!("report|{at_ms}|{what}").as_bytes())
         .to_hex()
@@ -789,7 +794,7 @@ pub fn reported(
             at: at.to_string(),
             at_ms,
             what,
-            argv: clean(&argv_line(argv)),
+            argv: clean(&argv_line(&typed)),
             cwd: clean(&cwd.display().to_string()),
             diagnostics: Box::new(diagnostics),
         },
@@ -836,6 +841,7 @@ pub fn written(
     redact: &dyn Fn(&str) -> String,
 ) -> (String, Line) {
     let clean = |text: &str| tilde(&redact(text), home);
+    let typed = argv_without(argv, what);
     let what = clean(what);
     let mut hex = blake3::hash(format!("task|{at_ms}|{what}").as_bytes())
         .to_hex()
@@ -848,7 +854,7 @@ pub fn written(
             at: at.to_string(),
             at_ms,
             what,
-            argv: clean(&argv_line(argv)),
+            argv: clean(&argv_line(&typed)),
             cwd: clean(&cwd.display().to_string()),
             workspace: workspace.map(|dir| clean(&dir.display().to_string())),
         },
@@ -907,6 +913,32 @@ pub fn argv_line(argv: &[String]) -> String {
         }
     }
     out
+}
+
+/// The command line **without the sentence it carried**.
+///
+/// `armada report "<what happened>"` and `armada task "<what to do>"` both put
+/// the whole description in `argv`, so a record that keeps both keeps the
+/// person's words twice — and every screen over that record then prints them
+/// twice more. A report filed with a paragraph pasted into it printed that
+/// paragraph four times on one screen: once as the row, once under *what was
+/// reported*, once as `typed command`, and once inside the hand-over block's
+/// *filed by*.
+///
+/// **The description is [`Line::Reported::what`]; what `argv` adds is the verb
+/// and any flags.** So that is what `argv` keeps, and the duplication is
+/// removed where it is created rather than suppressed at each of the four
+/// places it surfaces.
+///
+/// **Trimmed on both sides of the comparison** because the verb trims the
+/// description before storing it, so a sentence typed with a trailing newline
+/// is not the same string by the time it gets here.
+fn argv_without(argv: &[String], what: &str) -> Vec<String> {
+    let what = what.trim();
+    argv.iter()
+        .filter(|word| word.trim() != what)
+        .cloned()
+        .collect()
 }
 
 /// A path as a person writes it, wherever it appears in a string.
@@ -1185,6 +1217,37 @@ fn written_task(entry: &Entry) -> String {
     )
 }
 
+/// A recorded command line as **one line, recognisable**, for the runs list a
+/// hand-over block carries.
+///
+/// **Filed against a real report.** The list is meant to read as *what was
+/// happening just before* — a dozen verbs a person can scan. But one of those
+/// verbs is `armada fleet spawn "<task>"`, and a task is paragraphs: a report
+/// filed a minute after a spawn had that Job's entire brief, newlines and all,
+/// pasted into the middle of an unrelated bug. Sixty lines of somebody else's
+/// instructions, in a block whose whole job is to say *here is what happened*.
+///
+/// **Truncated, and the record is not.** [`Entry::diagnostics`] still holds
+/// every argv whole, and `armada failures show` prints the table over them; this
+/// is the prose copy that goes to a Drone, where a run nobody can recognise
+/// costs nothing and a run quoted in full costs its context.
+///
+/// The limit is generous enough that no ordinary verb is touched — `armada fleet
+/// kill check-in-the-loop-plan --keep-branch` is 48 characters — and newlines
+/// collapse first, because a single embedded newline breaks the list's shape
+/// however short the line is.
+fn one_line(argv: &str) -> String {
+    const ROOM: usize = 96;
+    let flat = argv.split_whitespace().collect::<Vec<_>>().join(" ");
+    match flat.chars().count() > ROOM {
+        false => flat,
+        true => format!(
+            "{}…",
+            flat.chars().take(ROOM).collect::<String>().trim_end()
+        ),
+    }
+}
+
 fn report_task(entry: &Entry) -> String {
     let mut out = format!(
         "This was reported by hand rather than caught by Armada, and was recorded \
@@ -1192,8 +1255,8 @@ fn report_task(entry: &Entry) -> String {
          notice, so there may be no error to look for.\n\n\
          What happened, in the words it was reported in:\n\n\
          \x20   {}\n\n\
-         Filed by `{}`, in {}.\n",
-        entry.id, entry.message, entry.argv, entry.cwd
+         Filed on {}, in {}.\n",
+        entry.id, entry.message, entry.first_at, entry.cwd
     );
 
     if let Some(diagnostics) = &entry.diagnostics {
@@ -1209,7 +1272,7 @@ fn report_task(entry: &Entry) -> String {
         if !diagnostics.recent.is_empty() {
             out.push_str("\nThe runs leading up to it, most recent first:\n\n");
             for run in &diagnostics.recent {
-                out.push_str(&format!("    {} {}\n", run.word(), run.argv));
+                out.push_str(&format!("    {} {}\n", run.word(), one_line(&run.argv)));
             }
         }
         if !diagnostics.doctor.is_empty() {
@@ -1281,6 +1344,112 @@ mod tests {
         assert_eq!(folded[0].class, Some(ErrClass::Environment));
         assert_eq!(folded[0].r#where, "~/.cargo/bin/armada");
         assert_eq!(folded[0].cwd, "~/code/api");
+    }
+
+    /// **A report keeps the person's words once.**
+    ///
+    /// Filed against a real one: a paragraph pasted into `armada report` came
+    /// back on one screen four times — the row, *what was reported*, `typed
+    /// command`, and the hand-over block's *filed by* — because `argv` held a
+    /// second copy of the description. The sentence is [`Line::Reported::what`];
+    /// `argv` keeps the verb and the flags, and nothing that is already `what`.
+    #[test]
+    fn a_report_does_not_keep_a_second_copy_of_the_sentence_in_its_argv() {
+        let what = "the menu prints a summary but never drops me into a TUI";
+        let (_, line) = reported(
+            what,
+            Path::new("/scratch/home"),
+            Path::new("/scratch/home/code/api"),
+            &["report".to_string(), what.to_string()],
+            &Diagnostics::default(),
+            "2026-08-16T20:37:27Z",
+            1_000,
+            &|text| text.to_string(),
+        );
+        let Line::Reported {
+            what: kept, argv, ..
+        } = &line
+        else {
+            panic!("a report is a Reported line");
+        };
+        assert_eq!(kept, what, "the description is kept, whole and unaltered");
+        assert_eq!(
+            argv, "armada report",
+            "argv keeps the verb, not the sentence the verb carried"
+        );
+    }
+
+    /// The same for `armada task`, which has the same shape and the same trap.
+    #[test]
+    fn a_written_task_does_not_keep_a_second_copy_of_the_sentence_either() {
+        let what = "make guild upgrade deliver files the guild has never seen";
+        let (_, line) = written(
+            what,
+            Path::new("/scratch/home"),
+            Path::new("/scratch/home/code/api"),
+            None,
+            &["task".to_string(), what.to_string()],
+            "2026-08-16T20:37:27Z",
+            1_000,
+            &|text| text.to_string(),
+        );
+        let Line::Written { argv, .. } = &line else {
+            panic!("a written task is a Written line");
+        };
+        assert_eq!(argv, "armada task");
+    }
+
+    /// **A flag survives; only the description is dropped.** The filter matches
+    /// the sentence rather than "the last argument", so a report filed with
+    /// `--json` still records that it was.
+    #[test]
+    fn a_flag_alongside_the_sentence_is_kept() {
+        let what = "the dry-run said CREATED and made nothing";
+        let (_, line) = reported(
+            what,
+            Path::new("/scratch/home"),
+            Path::new("/scratch/home/code/api"),
+            &["report".to_string(), what.to_string(), "--json".to_string()],
+            &Diagnostics::default(),
+            "2026-08-16T20:37:27Z",
+            1_000,
+            &|text| text.to_string(),
+        );
+        let Line::Reported { argv, .. } = &line else {
+            panic!("a report is a Reported line");
+        };
+        assert_eq!(argv, "armada report --json");
+    }
+
+    /// **A spawn's brief does not get pasted into somebody else's report.**
+    ///
+    /// Measured on report `2a6ad78f`: filed a minute after `armada fleet spawn`,
+    /// its hand-over block carried that Job's whole multi-paragraph task — sixty
+    /// lines of unrelated instructions inside a bug report about the menu.
+    #[test]
+    fn a_spawns_whole_brief_does_not_reach_a_reports_hand_over_block() {
+        let brief = "Make the Job drive the workflow and the Drone only report, \
+                     per docs/reserved/032.\n\nEvery new test must be shown to \
+                     fail without the change. Verify with armada manifest check.";
+        let line = one_line(&format!("armada fleet spawn '{brief}' --workflow feature"));
+        assert!(!line.contains('\n'), "a run is one line: {line}");
+        assert!(
+            line.chars().count() <= 97,
+            "a run stays scannable, and this one is {} characters",
+            line.chars().count()
+        );
+        assert!(
+            line.starts_with("armada fleet spawn"),
+            "the verb survives, so the run is still recognisable: {line}"
+        );
+    }
+
+    /// **An ordinary verb is untouched**, which is what makes the truncation
+    /// safe: it fires on the pathological case and nothing else.
+    #[test]
+    fn an_ordinary_command_line_is_recorded_whole() {
+        let typed = "armada fleet kill check-in-the-loop-plan --keep-branch";
+        assert_eq!(one_line(typed), typed);
     }
 
     /// **The same failure eight times is one row.** A list that does not
