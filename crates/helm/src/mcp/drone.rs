@@ -289,6 +289,49 @@ mod tests {
         assert!(word_to_verdict("ok").is_err());
     }
 
+    /// **The Drone's brief names this belt and no other.**
+    ///
+    /// [`armada_core::fleet::drone::BRIEF`] is prose telling a Drone which tools
+    /// its account of the work is read through. Two ways that prose goes wrong
+    /// silently, and this is where both are caught, because this is the only
+    /// place the router and the words are visible at once.
+    ///
+    /// **The spelling.** The server advertises `fleet.report`; Claude Code
+    /// exposes it to the model as `mcp__armada__fleet_report` (`docs/traps.md`,
+    /// *Claude Code renames a dotted tool*). A brief written with the documented
+    /// name matches nothing and the model answers that it has no such tool — the
+    /// same class of inert instruction that made Helm's persona ask for files it
+    /// had no `Read` to open.
+    ///
+    /// **The absence.** `fleet.spawn` is not on this belt and there is no path
+    /// from here to it; a brief that mentioned it would be inviting a Drone to
+    /// call a tool that does not exist, which costs a turn and teaches it
+    /// nothing.
+    #[test]
+    fn the_brief_names_every_tool_on_this_belt_as_the_model_sees_it() {
+        let brief = armada_core::fleet::drone::BRIEF;
+        for tool in TOOLS {
+            let seen = format!(
+                "mcp__{}__{}",
+                armada_core::helm::SERVER,
+                tool.replace('.', "_")
+            );
+            assert!(brief.contains(&seen), "the brief never names `{seen}`");
+            assert!(
+                !brief.contains(tool),
+                "the brief spells `{tool}` the way the wire does, which matches \
+                 nothing the model can call"
+            );
+        }
+        // It says a Drone cannot spawn, and it names no tool for doing so —
+        // those are different claims and only the second is a bug.
+        assert!(brief.contains("cannot spawn"), "{brief}");
+        assert!(
+            !brief.contains(&format!("mcp__{}__fleet_spawn", armada_core::helm::SERVER)),
+            "the brief offers a Drone a tool this belt does not serve"
+        );
+    }
+
     #[test]
     fn a_refused_verdict_says_which_four_words_are_legal() {
         let error = word_to_verdict("done").unwrap_err();

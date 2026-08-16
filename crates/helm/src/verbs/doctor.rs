@@ -103,8 +103,39 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
 /// validation — so nothing can enumerate combination rules in advance. Probe 2
 /// covers the combination Armada actually uses, which is the one that matters,
 /// and it would have caught the failure this check was written after.
+///
+/// **The brief is inside probe 2 rather than beside it**, and that is the point
+/// of building the probe out of the real [`armada_core::fleet::drone::spawn_argv`]
+/// rather than out of an approximation. A Drone's argv now carries a
+/// multi-kilobyte `--append-system-prompt` value; the question *"does this
+/// machine's `claude` accept that alongside `dontAsk`, two variadic tool lists
+/// and `stream-json`"* is one only the real validator can answer, and it answers
+/// it here for free. Probe 0 below is the one thing that must be settled before
+/// the binary is asked anything at all.
 fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
     use armada_core::fleet::drone as argv;
+
+    // **Probe 0: the brief cannot eat the flag behind it.** `--append-system-prompt`
+    // takes a value, so a brief that were empty or flag-shaped would consume
+    // `--permission-mode` — and the argv that results is still *accepted*. The
+    // failure is a Drone with no posture, which is `docs/reserved/011`'s stall
+    // arriving by a new route and reporting nothing. It is checked here rather
+    // than only in a unit test because this is the vector this machine would
+    // run, and because a probe whose flags had silently shifted by one would
+    // then be validating a combination Armada does not use.
+    let probe = argv::probe_argv();
+    if let Some(at) = probe.iter().position(|word| word == argv::APPEND) {
+        let carried = probe.get(at + 1).map(String::as_str).unwrap_or("");
+        if carried.trim().is_empty() || carried.starts_with('-') {
+            return Finding::needs(
+                "drone argv",
+                Problem::Missing,
+                "the Drone's brief is empty, so `--append-system-prompt` would swallow \
+                 the flag after it",
+                "report this to Armada: a Drone would run with no posture",
+            );
+        }
+    }
 
     let help = runner.call(
         &RunRequest::new(
@@ -148,10 +179,8 @@ fn drone_argv(runner: &impl Run, cwd: &Path) -> Finding {
         );
     }
 
-    // The real validator, on the real combination.
-    let Ok(output) =
-        runner.call(&RunRequest::new(argv::probe_argv(), cwd.to_path_buf()).timeout(PROBE))
-    else {
+    // The real validator, on the real combination — brief included.
+    let Ok(output) = runner.call(&RunRequest::new(probe, cwd.to_path_buf()).timeout(PROBE)) else {
         return Finding::needs(
             "drone argv",
             Problem::Offline,
@@ -1026,6 +1055,57 @@ mod tests {
             probe,
             armada_core::fleet::drone::probe_argv(),
             "the probe drifted from the Drone's own argv"
+        );
+    }
+
+    /// **The brief goes through the real validator, and the posture survives
+    /// it.**
+    ///
+    /// AGENTS.md: *"asserting on argv proves you built the string you meant, not
+    /// that it works"*, and this is the half that is not an argv assertion — the
+    /// vector this machine's `claude` is actually handed carries the
+    /// multi-kilobyte system prompt, so the answer covers the combination and
+    /// not just the flag. `armada_core` already pins the flag and the bytes; the
+    /// thing that could only fail *here* is `claude` refusing that value beside
+    /// two variadic tool lists.
+    #[test]
+    fn the_probe_the_validator_receives_carries_the_brief_and_still_has_a_posture() {
+        use armada_core::fleet::drone;
+
+        let run = Watching(std::cell::RefCell::new(Vec::new()));
+        drone_argv(&run, Path::new("/tmp"));
+        let probe = run.0.borrow().last().cloned().expect("a probe ran");
+
+        let at = probe
+            .iter()
+            .position(|word| word == drone::APPEND)
+            .expect("the validator never saw the brief");
+        assert_eq!(probe[at + 1], drone::BRIEF, "{probe:?}");
+        // The flag behind it survived, which is the collision this probe is
+        // extended to cover: a swallowed `--permission-mode` is a Drone with no
+        // posture, and `docs/reserved/011` is what that costs.
+        assert_eq!(probe[at + 2], "--permission-mode", "{probe:?}");
+        assert!(probe.iter().any(|word| word == "dontAsk"), "{probe:?}");
+    }
+
+    /// **A brief that went empty is caught before the binary is asked
+    /// anything.** The argv would still be accepted — `--append-system-prompt`
+    /// would take `--permission-mode` as its value and Claude Code would not
+    /// complain — so no probe against the real validator can find this one.
+    #[test]
+    fn a_brief_that_would_swallow_the_posture_is_a_finding() {
+        // The shape, asserted against the real constant: if this ever became
+        // empty, the guard above would fire and the row would stop being green.
+        assert!(
+            !armada_core::fleet::drone::BRIEF.trim().is_empty(),
+            "an empty brief would make every Drone posture-less"
+        );
+        assert!(!armada_core::fleet::drone::BRIEF.starts_with('-'));
+        // And the guard is wired: a healthy `claude` with a real brief is Ok,
+        // which is the only branch that reaches the flag check below it.
+        assert_eq!(
+            drone_argv(&Claude::healthy(), Path::new("/tmp")).status,
+            Health::Ok
         );
     }
 

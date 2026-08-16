@@ -84,7 +84,15 @@ pub use crate::fleet::drone::CLAUDE;
 /// standing instructions, rather than being reduced to them. It is in [`FLAGS`],
 /// so `armada doctor` holds it against `claude --help` like every other flag the
 /// launch uses.
-pub const APPEND: &str = "--append-system-prompt";
+///
+/// **Defined one module over and re-exported**, exactly as [`CLAUDE`] is: a
+/// Drone's launch appends [`crate::fleet::drone::BRIEF`] with the same flag, and
+/// two spellings of one flag are two things `doctor` would have to be told about
+/// separately. What the two launches *append* could hardly be more different —
+/// the reader's own standing instructions on one side, the contract a worker
+/// owes an orchestrator on the other — and that difference is argued where each
+/// prompt is assembled, not here.
+pub use crate::fleet::drone::APPEND;
 
 /// The document [`voice`] assembles, written under `~/.armada/helm/`.
 ///

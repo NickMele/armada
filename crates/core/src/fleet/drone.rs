@@ -5,10 +5,14 @@
 //! anything starts, and a subprocess.
 //!
 //! ```text
-//! claude --session-id <uuid> <posture> --print --output-format stream-json --verbose <prompt>
-//! claude --resume     <uuid> <posture> --print --output-format stream-json --verbose <answer>
-//! claude --resume     <uuid>                                                          # boarding
+//! claude --session-id <uuid> <brief> <posture> --print --output-format stream-json --verbose <prompt>
+//! claude --resume     <uuid> <brief> <posture> --print --output-format stream-json --verbose <answer>
+//! claude --resume     <uuid>                                                                  # boarding
 //! ```
+//!
+//! **`<brief>` is [`BRIEF`], and until it existed a Drone reported at whatever
+//! length it liked.** Read [`BRIEF`] for whose voice a Drone speaks in, what it
+//! owes, and why the answer is not the one Helm got.
 //!
 //! **`<posture>` is [`Posture`], and until it existed no Job could finish.** A
 //! headless Drone that reaches a state-mutating tool call with no permission
@@ -129,14 +133,129 @@ pub fn board_argv(uuid: &str) -> Vec<String> {
 /// immediately behind a variadic list, and the Job's task would be read as one
 /// more tool name. Emitting it before `--print` puts a flag behind every list
 /// there is. [`the_prompt_never_follows_a_variadic_list`] holds it there.
+///
+/// **[`BRIEF`] comes before the posture**, for the reason Helm's own launch puts
+/// the reader's words immediately after `--agent`: it says who this session is,
+/// and everything after it is wiring. It is also the one position where it
+/// cannot be mistaken for a value of anything variadic.
+///
+/// **The brief travels on a resumed turn too.** A Job's obligations do not lapse
+/// halfway through it, and the turn a Drone is most likely to end without a
+/// verdict is the one it was answered into. `--append-system-prompt` appends to
+/// the session the flag is passed to, so a resumed turn that carries it is a
+/// turn that still knows the contract; one that did not would be a Drone whose
+/// instructions expired at its first question.
 fn headless(posture: &Posture) -> Vec<String> {
-    let mut argv = posture.argv();
+    let mut argv = vec![APPEND.to_string(), BRIEF.to_string()];
+    argv.extend(posture.argv());
     argv.push("--print".to_string());
     argv.push("--output-format".to_string());
     argv.push(STREAM_JSON.to_string());
     argv.extend(STREAM_JSON_NEEDS.iter().map(|flag| (*flag).to_string()));
     argv
 }
+
+/// The flag that carries an appended system prompt into a session.
+///
+/// **`--append-system-prompt` rather than `--system-prompt`**: the session keeps
+/// the persona, the repository's own `CLAUDE.md` and everything Claude Code
+/// normally is, and *gains* what it owes Armada — rather than being reduced to
+/// it. `armada_core::helm::APPEND` is a re-export of this, because one spelling
+/// of a flag is what `armada doctor` can hold against `claude --help` once.
+pub const APPEND: &str = "--append-system-prompt";
+
+/// **What a Drone owes, in the words the session is handed** (PLAN.md §15.2).
+///
+/// # Whose voice a Drone speaks in — and it is not the reader's
+///
+/// `armada helm` assembles the reader's `voice.md`, `expectations.md` and
+/// `how-i-work.md` into an appended system prompt, because **Helm talks to
+/// them**: its whole product is a sentence a person reads, so how that sentence
+/// is written is theirs to decide.
+///
+/// **A Drone talks to Helm**, and its output has three destinations of which a
+/// person is none:
+///
+/// | What a Drone writes | Who reads it |
+/// |---|---|
+/// | `fleet.report` bodies | the Job record — `fleet ls`, `fleet show`, and Helm aggregating many Jobs |
+/// | `fleet.verdict` | the gate, which reads an enum and an exit code and never the prose |
+/// | the transcript's last `result` | the cheap model that summarises it ([`super::probe`]), before Helm sees a word |
+///
+/// So the reader's 150-word rule is the wrong instrument twice over. It is
+/// **too weak** where it would matter — a report is one or two sentences, not
+/// a hundred and fifty words — and it is **wrong** in the one channel that does
+/// reach a person: `fleet.ask_human` is read out of context and possibly hours
+/// later, so it needs *more* context, not less. And a fleet of Drones each
+/// imitating the reader's register would hand Helm a chorus of impersonations to
+/// aggregate, when what Helm needs is the same shape from every Job.
+///
+/// **What a Drone owes is a contract, not a register.** That is what this says.
+///
+/// # Why it restates the tools rather than asking for brevity
+///
+/// Asking an agent to be terse in the abstract produces prose that is shorter
+/// and no more useful. The three tools already have a contract — a step boundary
+/// vocabulary, four verdict words, and evidence an external command produced —
+/// and every part of it is a thing a Drone gets wrong silently: a step left
+/// without a verdict cannot be advanced, a `PASS` without evidence is refused
+/// after the work is done, and a Job that never reports `entered` is one whose
+/// step nobody can see. Restating that contract is worth more than any
+/// instruction about length, and it is the half of PLAN.md §15.2 that a Drone
+/// can act on.
+///
+/// # Why it is a constant here and not a file in the guild
+///
+/// Every word of this describes the contract of Armada's **own** MCP tools. A
+/// guild copy would be a description of a contract the guild does not own, and
+/// `docs/reserved/006` is the reason that matters: a guild receives a template
+/// change only through `armada guild upgrade`, which is a `git merge` somebody
+/// has to run. A guild that never runs it would keep a stale description of
+/// `fleet.verdict` — and a *wrong* description is worse than none, because a
+/// Drone that believes it may report a step `completed` will try, be refused,
+/// and spend a turn finding out.
+///
+/// **What is genuinely the reader's already reaches a Drone**, by paths that
+/// needed no new mechanism: the worktree's own `CLAUDE.md` and `AGENTS.md`,
+/// which a Drone reads because it is an ordinary Claude Code session in that
+/// repository, and `~/.armada/guild/permissions.yml`, which says what it may do
+/// ([`Posture`]). Adding a guild override later costs one `Option<&str>` at this
+/// call site; adding one now would be a mechanism with no reader.
+///
+/// # The tools are named as the model sees them
+///
+/// The server advertises `fleet.report`; Claude Code exposes it to the model as
+/// `mcp__armada__fleet_report` (`docs/traps.md`, *Claude Code renames a dotted
+/// tool*). A prompt written with the documented name matches nothing and the
+/// model reports it has no such tool — so this uses the client's spelling, and
+/// `crates/helm/src/mcp/drone.rs` holds it against the router that serves them.
+pub const BRIEF: &str = "\
+# How a Drone reports
+
+You are an Armada Drone: one Job, one git worktree, one branch, and nobody watching. Your \
+account of the work is read by an orchestrator following a whole fleet, not by a person reading \
+your transcript. Three tools are how you are read. Nothing else you write is.
+
+- `mcp__armada__fleet_report` — one or two sentences, at a step boundary. Pass \
+`event: \"entered\"` when you begin a step and `event: \"attempted\"` when you stop working on \
+one. That is the only thing that makes which step you are on, and how long you have been on it, \
+visible to anybody. It is not narration: a note per thought puts your transcript into the \
+orchestrator's window, which is the one place it must never be. You cannot report a step \
+`completed`.
+- `mcp__armada__fleet_verdict` — how a step ended: `PASS`, `FAILED`, `BLOCKED` or \
+`NEEDS_HUMAN`. Emit one for every step you entered, including the ones that went wrong; a step \
+you leave silently is a Job nobody can advance. A `PASS` carries evidence an external command \
+produced — a check id and its exit code — and is refused without it. Your own assertion that \
+the tests pass is not evidence.
+- `mcp__armada__fleet_ask_human` — only for a judgement that is genuinely the person's. Write \
+the question in full: it is read out of context, possibly hours later, by somebody who has not \
+seen your work. Brevity is the wrong instinct here and nowhere else.
+
+You cannot spawn Jobs. If the task needs decomposing, say so with `mcp__armada__fleet_ask_human`.
+
+Your closing message is read beside a dozen others. A few lines: what you did, what you proved \
+it with, and what is left. Not a transcript — the record is already in your reports and your \
+verdicts.";
 
 /// **What a Drone may do unattended.**
 ///
@@ -328,6 +447,18 @@ pub const MODES: [&str; 6] = [
 /// enumeration of every build system there is, and each one missing is a Job
 /// that edits code it cannot test. [`DENY`] is what makes that affordable: the
 /// escapes are a finite list and the checks are not.
+///
+/// **No rule here names `mcp__armada__*`, and [`BRIEF`] tells a Drone to report
+/// through three tools spelled exactly that way.** Under [`MODE`]'s `dontAsk` an
+/// uncovered tool is denied rather than asked about, so a Drone could be refused
+/// the very tools its brief instructs it to use — and refused silently, which is
+/// 011's original bug one layer up. It is **not proved**: whether an MCP tool
+/// absent from [`ALLOWED`] is denied or merely not pre-approved is Claude Code's
+/// behaviour, and the only honest test spawns a real Drone and spends a token,
+/// which PHASES.md §8.5 forbids. This list is the reader's decision
+/// (`docs/reserved/011`), so the risk is recorded in
+/// `docs/reserved/019-the-brief-a-drone-reports-through.md` rather than fixed in
+/// passing here.
 pub const ALLOW: [&str; 8] = [
     "Read",
     "Glob",
@@ -442,7 +573,7 @@ pub const PROBE_SESSION: &str = "00000000-0000-4000-8000-0000000a2ada";
 /// added after: a Job that spawns, records a worktree and a port block, and
 /// whose Drone dies on a usage error nobody sees until `fleet ls` says
 /// `STALLED`.
-pub const FLAGS: [&str; 12] = [
+pub const FLAGS: [&str; 13] = [
     "--session-id",
     "--resume",
     "--print",
@@ -461,6 +592,11 @@ pub const FLAGS: [&str; 12] = [
     "--permission-mode",
     ALLOWED,
     DISALLOWED,
+    // [`BRIEF`]'s, which grants nothing and withholds nothing — it says what the
+    // Drone owes. Its disappearance is the quietest failure of the three
+    // classes: every Job still runs, and every one of them reports at whatever
+    // length it likes into an orchestrator's window.
+    APPEND,
 ];
 
 /// What one turn reported.
@@ -664,6 +800,8 @@ mod tests {
                 "claude",
                 "--session-id",
                 UUID,
+                APPEND,
+                BRIEF,
                 "--permission-mode",
                 "dontAsk",
                 "--allowedTools",
@@ -797,6 +935,111 @@ mod tests {
         }
     }
 
+    /// **The brief reaches the session as bytes, and the task still reaches it
+    /// as the turn.** This is the assertion the whole change exists for, and it
+    /// is written against the failure that has already shipped twice.
+    ///
+    /// The `config scan` hand-over asserted its flag, asserted its prose, and
+    /// then asserted `argv.len() == 3` — so it went green against a session that
+    /// opened with instructions and nothing to act on
+    /// (`armada_guild::layout::skill_argv`). A Drone has the mirror-image
+    /// hazard: `--append-system-prompt` takes a value, so a brief that were
+    /// empty would consume `--permission-mode` and the Job's task would follow a
+    /// posture that no longer exists. Both halves are asserted here, for every
+    /// argv that carries a brief.
+    #[test]
+    fn the_brief_and_the_task_both_reach_the_argv() {
+        for (argv, turn) in [
+            (
+                spawn_argv(UUID, "fix the flake", &narrow()),
+                "fix the flake",
+            ),
+            (resume_argv(UUID, "yes, 90s", &narrow()), "yes, 90s"),
+            (continue_argv(UUID, &narrow()), CONTINUE),
+        ] {
+            let at = argv
+                .iter()
+                .position(|word| word == APPEND)
+                .unwrap_or_else(|| panic!("{argv:?} carries no brief"));
+            // The value, and it is the brief itself rather than a path to it or
+            // an instruction to go and read one.
+            let brief = &argv[at + 1];
+            assert_eq!(brief, BRIEF, "{argv:?} appends something else");
+            assert!(
+                !brief.trim().is_empty() && !brief.starts_with('-'),
+                "an empty or flag-shaped brief eats the flag after it: {argv:?}"
+            );
+            // And the flag after it survived, which is the collision.
+            assert_eq!(argv[at + 2], "--permission-mode", "{argv:?}");
+            // The turn is still the last word, unflagged, and is not the brief.
+            assert_eq!(argv.last().unwrap(), turn, "{argv:?} lost its turn");
+            assert_ne!(argv.last().unwrap(), BRIEF);
+            assert!(!turn.starts_with('-'), "the turn reads as a flag");
+        }
+    }
+
+    /// **The brief restates the tools' contract, which is what a Drone gets
+    /// wrong.** A prompt asking for brevity in the abstract would pass a laxer
+    /// test than this one and would leave every one of these silent: a step with
+    /// no verdict cannot be advanced, and a `PASS` with no evidence is refused
+    /// after the work is already done.
+    ///
+    /// The **client's** spelling of each tool, not the server's: Claude Code
+    /// exposes `fleet.report` to the model as `mcp__armada__fleet_report`
+    /// (`docs/traps.md`), and a prompt written with the documented name matches
+    /// nothing at all. `crates/helm/src/mcp/drone.rs` holds these names against
+    /// the router that actually serves them.
+    #[test]
+    fn the_brief_states_the_contract_rather_than_asking_for_brevity() {
+        for tool in [
+            "mcp__armada__fleet_report",
+            "mcp__armada__fleet_verdict",
+            "mcp__armada__fleet_ask_human",
+        ] {
+            assert!(BRIEF.contains(tool), "the brief never names {tool}");
+        }
+        assert!(
+            !BRIEF.contains("fleet.report"),
+            "the dotted name matches nothing the model can call"
+        );
+        // The step-boundary vocabulary, and the two words that are not verdicts.
+        for word in ["entered", "attempted"] {
+            assert!(BRIEF.contains(word), "the brief omits `{word}`");
+        }
+        assert!(
+            BRIEF.contains("completed"),
+            "the brief does not say which boundary word is refused"
+        );
+        // Every verdict, so a Drone with a blocked step has a word for it.
+        for verdict in ["PASS", "FAILED", "BLOCKED", "NEEDS_HUMAN"] {
+            assert!(BRIEF.contains(verdict), "the brief omits {verdict}");
+        }
+        // And the rule the gate actually enforces (PLAN.md §14.3).
+        assert!(BRIEF.contains("evidence"), "{BRIEF}");
+        assert!(BRIEF.contains("not evidence"), "{BRIEF}");
+        // It is not the reader's voice, and must never quietly become it: a
+        // Drone that trimmed a question to a word count would be obeying the
+        // one rule that is wrong in the one channel that reaches a person.
+        assert!(
+            !BRIEF.contains("150"),
+            "the reader's rule for prose they read has reached a Drone: {BRIEF}"
+        );
+    }
+
+    /// **A brief costs bytes on every turn of every Job**, so it is bounded here
+    /// rather than discovered at `exec`. Helm's [`crate::helm::VOICE_BUDGET`]
+    /// is 24 KiB because it carries prose somebody else wrote; this is Armada's
+    /// own and there is no reason for it to be long.
+    #[test]
+    fn the_brief_is_small_enough_to_send_on_every_turn() {
+        assert!(
+            BRIEF.len() < 4096,
+            "the brief is {} bytes, sent on every turn of every Job",
+            BRIEF.len()
+        );
+        assert!(!BRIEF.ends_with('\n'), "a trailing newline is not content");
+    }
+
     /// An empty list emits no flag, because `--allowedTools` with nothing after
     /// it consumes whatever came next — and what comes next is `--print`.
     #[test]
@@ -898,6 +1141,10 @@ mod tests {
             "--print",
             "--output-format",
             "--verbose",
+            // **And no brief.** [`BRIEF`] tells a session it is being read by an
+            // orchestrator rather than by a person; boarding is a person, at a
+            // terminal, reading it themselves.
+            APPEND,
             // **And no posture either.** Boarding hands the conversation to a
             // person at a terminal, and a terminal is exactly the thing that
             // can answer a permission prompt. Granting there would take the
@@ -988,6 +1235,8 @@ mod tests {
                 "claude",
                 "--resume",
                 UUID,
+                APPEND,
+                BRIEF,
                 "--permission-mode",
                 "dontAsk",
                 "--allowedTools",
@@ -1018,7 +1267,7 @@ mod tests {
     fn the_prompt_is_one_argument_however_many_words_it_has() {
         let argv = spawn_argv(UUID, "add rate limiting to the API --json", &narrow());
         assert_eq!(argv.last().unwrap(), "add rate limiting to the API --json");
-        assert_eq!(argv.len(), 15);
+        assert_eq!(argv.len(), 17);
         // And a prompt that *looks* like a flag is still the prompt, because a
         // flag closes the tool list before it and nothing reopens one.
         assert_eq!(argv[argv.len() - 2], "--verbose");
