@@ -750,13 +750,37 @@ pub const RELAY_CAP_S: u32 = 3_600;
 /// answer, which is a process that has been reaped — as gone. A zombie has
 /// exited: its files are flushed and its session is closed, which is everything
 /// the next `claude --resume` needs.
+///
+/// # It waits on `$PPID`, and the first version waited on itself
+///
+/// **Claude Code runs a hook in its own process group.** Measured 2026-08-16
+/// from inside a real `--print` session: `pid=35802 ppid=35532 pgid=35802`, and
+/// the parent's argv is `claude --session-id <uuid> …`. So `$$`'s process group
+/// is the *hook's*, not the Drone's — and the first version of this script read
+/// exactly that, then waited for it to disappear.
+///
+/// It always had. The hook exits the instant it forks the watcher, so the
+/// watcher's first poll found its own leader already gone, broke at `waited=0`,
+/// and ticked **while the Drone was still running**. `tick` then did the honest
+/// thing and reported `WORKING · its Drone is still working`, moving nothing.
+/// Every Job in a night's testing sat `SILENT` because of it.
+///
+/// `$PPID` is the Drone itself, so it is what the wait asks about. It is
+/// captured before the fork rather than read inside it, because `$PPID` in a
+/// subshell is not guaranteed to name the same process.
+///
+/// **The three wrong diagnoses this bug survived are worth naming**, because
+/// each was reached by inference and refuted by measurement: that a `Stop` hook
+/// does not fire under `--print` (it does); that the relay's document was never
+/// registered (it was); and that the watcher was killed with the process group
+/// it watched (it survives, and outlives the Drone reparented to `init`).
 pub fn stop_hook(exe: &str) -> String {
     format!(
         "#!/bin/sh\n\
          # Written by Armada for one Job's Drone. Regenerated on every exchange;\n\
          # edit the verb, not this. See `020` §1: the exchange ending is the event.\n\
          armada={exe}\n\
-         leader=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')\n\
+         leader=$PPID\n\
          [ -n \"$leader\" ] || exit 0\n\
          {{\n\
          \x20 waited=0\n\
@@ -1125,6 +1149,26 @@ pub fn not_on_path() -> ArmadaError {
 
 #[cfg(test)]
 mod tests {
+    /// **The relay waits on the Drone, not on itself.**
+    ///
+    /// Claude Code runs a hook in its own process group, so `$$`'s pgid names
+    /// the hook. The first version read that and waited for it — and the hook
+    /// exits the instant it forks the watcher, so the watcher ticked at once,
+    /// while the Drone was still running, and `tick` moved nothing. Measured
+    /// 2026-08-16: `WATCHER TICKED after 0s`.
+    #[test]
+    fn the_relay_waits_on_the_drone_rather_than_on_the_hook() {
+        let hook = stop_hook("/usr/local/bin/armada");
+        assert!(
+            hook.contains("leader=$PPID"),
+            "the hook must wait on its parent, which is the Drone: {hook}"
+        );
+        assert!(
+            !hook.contains("pgid= -p $$"),
+            "reading its own process group is the bug: the hook is its own group leader"
+        );
+    }
+
     use super::*;
 
     const UUID: &str = "15bfa340-33b1-4f81-bd7f-688f0f01dbb0";
@@ -1720,10 +1764,17 @@ mod tests {
     /// A `Stop` hook runs while its session is alive; a tick from inside it
     /// would find a live process group, decline to gate — correctly — and the
     /// whole relay would be a no-op that looked wired.
+    ///
+    /// **This assertion used to require `ps -o pgid= -p $$`, and that is the
+    /// bug it was pinning in place.** The hook is its own process group leader,
+    /// so that expression names the hook and not the Drone; the relay ticked
+    /// immediately and moved nothing, and this test passed the whole time. It
+    /// is `AGENTS.md`'s own rule arriving as a defect — *asserting on a string
+    /// proves you built the string you meant, not that it works.*
     #[test]
     fn the_relay_waits_for_its_drone_to_go_before_it_ticks() {
         let hook = stop_hook("/bin/armada");
-        assert!(hook.contains("ps -o pgid= -p $$"), "{hook}");
+        assert!(hook.contains("leader=$PPID"), "{hook}");
         // **`ps -o state=`, never `kill -0`.** A Drone that exited is a zombie
         // until its parent goes, and `kill -0` says a zombie is alive — a relay
         // written that way waits out its cap on every exchange and never ticks.
