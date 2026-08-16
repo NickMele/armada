@@ -35,10 +35,17 @@ Normally registered rather than run by hand — the orchestrator launches it, an
 | `manifest.up` / `.down` / `.status` / `.clean` | corresponding pages | Workspace operations. |
 | `manifest.explain` | [`../manifest/explain.md`](../manifest/explain.md) | Evidence a stack trace does not carry. **Not served**: the verb it would wrap is not built, and a tool that reimplemented one would be the thing §1.3 exists to stop. It lands with the verb. |
 | `manifest.skills` | [`../manifest/skills.md`](../manifest/skills.md) | What this repo knows about itself. Summaries only — Helm holds a routing table, not prose. |
-| `manifest.skill` | [`../manifest/skills.md`](../manifest/skills.md) | One skill resolved, **including the doc body**. A Drone calls this; Helm does not. |
+| `manifest.skill` | [`../manifest/skills.md`](../manifest/skills.md) | One skill resolved, **including the doc body**. |
 
-**Drones get a smaller toolbelt** — they may report, ask, propose and settle a step, not spawn. A Drone able to spawn
-Drones is a fork bomb with a budget.
+> **`manifest.skill` is on this belt and not on the Drone's**, and that sentence used to read *a
+> Drone calls this; Helm does not*, which the shipped belts have never done. The two routers are
+> two types (below) and the Drone's has only `fleet.*` — so a Drone cannot read this repository's
+> skills, cannot read its manifest, and learns what it learns from the commands it runs. That is
+> the half [`../../reserved/008-armada-injects-its-own-skills.md`](../../reserved/008-armada-injects-its-own-skills.md)
+> records as left open; widening the belt is a separate decision with a separate blast radius.
+
+**Drones get a smaller toolbelt** — they may report, ask, propose and settle a step, not spawn. A
+Drone able to spawn Drones is a fork bomb with a budget.
 
 | Drone tool | Effect |
 |---|---|

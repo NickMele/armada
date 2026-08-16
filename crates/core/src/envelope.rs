@@ -2025,11 +2025,11 @@ pub struct HelmData {
     ///
     /// **Not a second source of truth — derived from [`Self::argv`]** by
     /// `armada_core::helm::launch_line`, which replaces the appended system
-    /// prompt with `"$(cat ~/.armada/helm/guild-voice.md)"` and leaves every
-    /// other word alone. The reader's own `voice.md`, `expectations.md` and
-    /// `how-i-work.md` are inlined into the argv as bytes, which is what makes
-    /// them binding; joining that vector for the screen would print several
-    /// kilobytes of their own prose where the one pasteable line goes.
+    /// prompt with `"$(cat ~/.armada/helm/system-prompt.md)"` and leaves every
+    /// other word alone. Armada's own skill and the reader's `voice.md`,
+    /// `expectations.md` and `how-i-work.md` are inlined into the argv as bytes,
+    /// which is what makes them binding; joining that vector for the screen
+    /// would print several kilobytes of prose where the one pasteable line goes.
     pub command: String,
     /// What was wired, one row each.
     pub results: Vec<Wired>,
