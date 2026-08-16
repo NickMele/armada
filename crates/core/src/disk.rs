@@ -219,7 +219,10 @@ pub fn parse_verbose_volumes(stdout: &str) -> Vec<VolumeEntry> {
         .filter_map(|entry| {
             Some(VolumeEntry {
                 name: entry.get("Name")?.as_str()?.to_string(),
-                size: entry.get("Size").and_then(|v| v.as_str()).and_then(parse_size),
+                size: entry
+                    .get("Size")
+                    .and_then(|v| v.as_str())
+                    .and_then(parse_size),
             })
         })
         .collect()

@@ -1110,6 +1110,23 @@ fn doctor_matches_its_fixture() {
             "armada guild project",
         ),
         settled("manifest.db", Settled::Ok, "2 workspaces, 0 orphans"),
+        // **The two disk rows, and the reason there are two of them.** They sit
+        // beside `manifest.db` because they answer its question — what has
+        // quietly accumulated — and they are separate rows because the remedies
+        // differ: the machine's is the reader's own `docker volume prune`, and
+        // Armada's is `armada manifest clean --all`. The numbers here are the
+        // measured ones from the machine the check was written for, where every
+        // one of the 171 volumes was somebody else's compose work.
+        settled(
+            "docker disk",
+            Settled::Ok,
+            "12.0 GB reclaimable in 1 image, 171 volumes",
+        ),
+        settled(
+            "docker disk",
+            Settled::Ok,
+            "none of it is armada's; `docker volume prune` is yours",
+        ),
     ];
     let output = Output::Doctor(Box::new(Envelope::ok(
         "doctor",
