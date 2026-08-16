@@ -1,12 +1,12 @@
 ---
 id: 026
-title: A Job never reaches `DONE`
-status: BUG
+title: What it takes for a Job to reach `DONE`
+status: FIXED
 module: fleet
 raised: driving a `design` Job to its last step, 2026-08-16
 ---
 
-# 026 — A Job never reaches `DONE`
+# 026 — What it takes for a Job to reach `DONE`
 
 **`DONE` is a legal Job state, is rendered, is matched on in five places — and no Job has ever
 been in it.** The same shape as [`022`](022-docker-hygiene.md)'s finding about the `owned` table's
@@ -115,3 +115,29 @@ only one of them wants a person.
 **Do not fix this by making `tick` gate every `PAUSED` Job.** That would gate
 Jobs genuinely waiting on a person, which is the case the state exists for and
 the reason the rule reads the way it does.
+
+## Corrected 2026-08-16: the headline claim was wrong
+
+**A `design` Job resting `PAUSED` after its last step is correct, and is its terminal state.**
+`advance::Next` says so in its own words: `Next::Hand` is *"the step passed and it was the last
+one, but the workflow `EndsAt::Human` — `design` and `plan` both do, because no command can tell
+you an approach is right. It stops and asks."*
+
+| Workflow | `ends_at` | Terminal |
+|---|---|---|
+| `design`, `plan` | `human` | `PAUSED`, asking — **the end** |
+| `feature`, `bug` | `branch` | `Next::Finish` → `release_on_finish` → `DONE` |
+
+Every Job driven while writing this was a `design` Job, so every one of them reached the end of
+its workflow and was read as stuck. **The transition to `DONE` was never missing**; nothing had
+run a workflow that could reach it.
+
+**What is missing is [`016`](016-what-the-gate-cannot-prove.md), and only that.** Both workflows
+that end at a branch are gated on predicates Fleet cannot settle — `feature` on `subjob_passed`
+*and* `review_clean`, `bug` on `review_clean` — so no shipped workflow can currently reach `DONE`.
+That is a missing gate evaluator, not a missing state transition.
+
+**The work this file did record stands**, and it was real: `fleet answer` resumed the Drone
+instead of settling the gate, so an approval was recorded every time and read never, and the
+final step could not complete at all. That is fixed and merged. It simply was not what stopped a
+Job being `DONE`.
