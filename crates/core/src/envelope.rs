@@ -1882,6 +1882,22 @@ pub struct JobRow {
     pub budget_remaining: crate::fleet::job::Remaining,
     /// Whether it is waiting on you.
     pub needs_attention: bool,
+    /// What somebody is doing **to** this Job right now, if anything
+    /// (`reserved/020` §5).
+    ///
+    /// **The status column's word when it is `Some`**, and
+    /// [`crate::fleet::job::Job::status_word`] is where the two are composed —
+    /// a renderer that preferred [`Self::state`] would draw `RUNNING` over a
+    /// running abort, which is the silence `020` §5 is about.
+    ///
+    /// **On the row rather than only on the record**, because the process
+    /// drawing the row is not the process performing the action: the abort that
+    /// prompted this was blocked inside `armada manifest clean`, so the only
+    /// thing that could have reported it is another reader of the same listing.
+    ///
+    /// Additive, so `schema_version` stays 1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acting: Option<crate::fleet::job::Doing>,
 }
 
 /// `armada bridge` — one frame of the live screen.

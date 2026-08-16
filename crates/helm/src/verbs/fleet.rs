@@ -944,6 +944,11 @@ pub fn ls<R: Run, C: Clock>(
             turns: observed.spend.turns,
             budget_remaining: job::remaining(&record.budget, &observed.spend, run_time),
             needs_attention: wants_you,
+            // **Carried off the record, which is the only place it exists.**
+            // `observe` cannot derive it: an action with a duration is a thing
+            // somebody is doing, not a thing the transcript or the process
+            // table can be asked about.
+            acting: record.doing.clone(),
         });
     }
 
