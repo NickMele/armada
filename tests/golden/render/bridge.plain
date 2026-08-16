@@ -1,11 +1,11 @@
   ARMADA BRIDGE
 
-  STATUS   JOB            STEP           TASK              RUN  SPENT  NEEDS YOU
-  RUNNING  rate-limit     implement 12m  add gateway lim…  14m  $2.10  -
-  RUNNING  carina-schema  plan 3m        migrate schema     3m  $0.45  -
-  STALLED  xlsx-report    reproduce      generate report   22m  $4.60  -
-  BLOCKED  release-merge  implement 18m  merge release      1h  $1.25  YES
+  STATUS   JOB            ID        STEP           RUN  SPENT  NEEDS YOU
+  RUNNING  rate-limit     c19d0a34  implement 12m  14m  $2.10  -
+  RUNNING  carina-schema  94b1fd2e  plan 3m         3m  $0.45  -
+  STALLED  xlsx-report    3d9cc7ba  reproduce      22m  $4.60  -
+  BLOCKED  release-merge  7f2ab618  implement 18m   1h  $1.25  the CI timeout i…
 
-RUNNING  4 jobs, 1 need you, $8.40 today
+4 jobs, 1 need you, 1 stalled, window 71%, resets 2h14m, $8.40 today
 
   enter board  d detail  n new  p pause  x abort  a answer  ? keys  q quit

@@ -495,10 +495,34 @@ pub const DETACH_RUN_VAR: &str = "ARMADA_DETACH_RUN";
 /// rewrote it — and a value of `../../etc` reaching `.armada/run/<id>/` is a
 /// directory traversal. A malformed one starts an ordinary run of its own,
 /// which is the same forgiving answer `nesting` gives.
-fn adopted_run<R: Run, C: Clock, F: Fetch>(app: &App<R, C, F>) -> Option<RunId> {
-    app.inherited
+///
+/// **And validated is still not enough, because the variable is inherited.**
+/// PLAN.md §4.5 hands Armada's environment to every child wholesale, so this
+/// variable reaches the run's own checks and everything they spawn — it names
+/// a *real* run of *this* workspace at any depth below the detached child.
+/// Measured on run `01M048KKTG19V63A`: `armada:test` runs `cargo test
+/// --workspace`, `crates/helm/tests/dogfood.rs` runs `armada manifest check
+/// armada:fmt` in the repository root with a scratch `$HOME` — so no lease
+/// contended — and that invocation adopted the outer run and overwrote its
+/// `state.json` with a one-check record. A `--status` landing in the window
+/// read a complete, parseable record saying `PASS · 1 passed, 0 failed` about
+/// a run of five checks that was still going.
+///
+/// So adoption takes the offer the detaching parent left in the run directory
+/// ([`runs::claim_adoption`]), and takes it exactly once. The variable says
+/// which run; the offer says whether this process is the one it was handed to.
+/// A child that finds no offer is not refused — it starts a run of its own,
+/// which is what a nested `armada manifest check` is entitled to do (PLAN.md
+/// §2.4) and what it would have done had the variable never reached it.
+fn adopted_run<R: Run, C: Clock, F: Fetch>(
+    app: &App<R, C, F>,
+    workspace: &Workspace,
+) -> Option<RunId> {
+    let run = app
+        .inherited
         .get(DETACH_RUN_VAR)
-        .and_then(|value| RunId::parse(value).ok())
+        .and_then(|value| RunId::parse(value).ok())?;
+    runs::claim_adoption(&workspace.root, &run).then_some(run)
 }
 
 /// The command line the detached child is given.
@@ -601,6 +625,12 @@ fn detach<R: Run, C: Clock, F: Fetch>(
             state,
         ),
     )?;
+    // **Left before the child is spawned, because the child takes it at the
+    // top of its run.** This is what makes `ARMADA_DETACH_RUN` mean "you are
+    // the process this run was handed to" rather than merely "a run is in
+    // flight somewhere above you" — see [`adopted_run`] for the run whose
+    // record was overwritten by a grandchild that had only the variable.
+    runs::offer_adoption(&workspace.root, &run_id)?;
 
     // **This invocation's own binary, resolved rather than assumed.** A child
     // spawned as `armada` would be whichever `armada` is on the child's `PATH`,
@@ -739,7 +769,7 @@ fn status<R: Run, C: Clock, F: Fetch>(
             .pop()
             .ok_or_else(|| no_runs(&workspace.id))?,
     };
-    let record = runs::read_record(&workspace.root, &run_id)?
+    let mut record = runs::read_record(&workspace.root, &run_id)?
         .ok_or_else(|| unknown_run(&run_id, &workspace.id))?;
     let detached = runs::read_detached(&workspace.root, &run_id)?;
 
@@ -751,6 +781,26 @@ fn status<R: Run, C: Clock, F: Fetch>(
         );
         detached.is_ours(&app.boot_id, observed.as_deref())
     });
+
+    // **A running check's elapsed time is measured against the reader's clock,
+    // not the writer's.** `State::now_mono` is the last reading the *shell*
+    // reported, and a detached shell writes its journal at step boundaries — so
+    // a check that has been running for thirteen minutes without finishing
+    // reported `duration_ms: 786`, frozen at the moment it started, and every
+    // subsequent `--status` repeated that number. A duration that does not move
+    // while the thing it measures does is worse than no duration: it reads as
+    // evidence the run is wedged.
+    //
+    // **Only while it is alive**, and the guard is not incidental. `alive` is
+    // already `is_ours(boot_id, …)`, so it is exactly the condition under which
+    // the two processes' readings are comparable: `mono()` is `clock_gettime`
+    // on `CLOCK_UPTIME_RAW`/`CLOCK_MONOTONIC`, which is machine-wide since boot
+    // rather than process-relative, and meaningless across a reboot. A finished
+    // or dead run keeps what its record says, which is the honest final figure
+    // and the one the foreground run printed.
+    if alive {
+        record.state.now_mono = record.state.now_mono.max(app.ctx.now.mono());
+    }
 
     let (status, error) = match record.state.verdict() {
         // **The record wins over the probe, and the order matters.** A run that
@@ -919,7 +969,7 @@ fn execute<R: Run, C: Clock, F: Fetch>(
     // than minting one of its own, because the parent has already told the
     // caller which run this is. A second id here would leave `--detach`
     // printing one directory and `--status` reading another.
-    let adopted = adopted_run(app);
+    let adopted = adopted_run(app, workspace);
     let run_id = adopted
         .clone()
         .unwrap_or_else(|| RunId::mint(app.ctx.now.wall_ms(), entropy(app)));

@@ -54,6 +54,7 @@ is also the part that is already built.
 | [`down`](docs/commands/manifest/down.md) | Services stopped. Port block kept. |
 | [`check`](docs/commands/manifest/check.md) | Lint, format, test. Scoped, scheduled, locked. |
 | [`clean`](docs/commands/manifest/clean.md) | Releases everything this workspace owns. |
+| [`prune`](docs/commands/manifest/prune.md) | Reclaims docker volumes, including ones Armada did not create. Asks first, always. |
 | [`status`](docs/commands/manifest/status.md) | What's running, what's mine, what's stale. |
 
 Every verb takes `--json`.

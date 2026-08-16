@@ -9,11 +9,13 @@
 //!
 //! ```text
 //! claude --agent helm
-//!        --mcp-config  ~/.armada/helm/mcp.json
-//!        --plugin-dir  ~/.armada/helm/plugin
-//!        --settings    ~/.armada/helm/settings.json
-//!        --session-id  <uuid>      # the first launch, which mints it
-//!        --resume      <uuid>      # every launch after that
+//!        --append-system-prompt <armada's skill, then the reader's own words>
+//!        --mcp-config      ~/.armada/helm/mcp.json
+//!        --plugin-dir      ~/.armada/helm/plugin
+//!        --settings        ~/.armada/helm/settings.json
+//!        --permission-mode auto     # `helm.mode` in machine.yml
+//!        --session-id      <uuid>   # the first launch, which mints it
+//!        --resume          <uuid>   # every launch after that
 //! ```
 //!
 //! **This module is where the bugs are, which is why it is pure.** A `--resume`
@@ -77,7 +79,8 @@ pub const SERVER: &str = "armada";
 /// The program Helm is. The same binary a Drone is, because Helm is a session.
 pub use crate::fleet::drone::CLAUDE;
 
-/// The flag that carries the reader's own words into the session.
+/// The flag that carries prose — Armada's own and the reader's — into the
+/// session.
 ///
 /// **`--append-system-prompt` rather than `--system-prompt`**: the session keeps
 /// the persona and everything Claude Code normally is, and *gains* the reader's
@@ -88,20 +91,88 @@ pub use crate::fleet::drone::CLAUDE;
 /// **Defined one module over and re-exported**, exactly as [`CLAUDE`] is: a
 /// Drone's launch appends [`crate::fleet::drone::BRIEF`] with the same flag, and
 /// two spellings of one flag are two things `doctor` would have to be told about
-/// separately. What the two launches *append* could hardly be more different —
-/// the reader's own standing instructions on one side, the contract a worker
-/// owes an orchestrator on the other — and that difference is argued where each
-/// prompt is assembled, not here.
+/// separately. What the two launches *append* is not the same — the reader's own
+/// standing instructions on one side, the contract a worker owes an orchestrator
+/// on the other — and that difference is argued where each prompt is assembled,
+/// not here.
+///
+/// **What both launches append is [`crate::skill::BODY`]**, which is the one
+/// thing they do share: `docs/reserved/008`'s skill goes to every agent Armada
+/// runs, because *raise it rather than fixing it silently* is as true of the
+/// orchestrator as of the worker.
 pub use crate::fleet::drone::APPEND;
 
-/// The document [`voice`] assembles, written under `~/.armada/helm/`.
+/// The flag [`MODE`] is passed as, and [`MODES`] is checked against — both
+/// defined one module over and re-exported, exactly as [`CLAUDE`] and [`APPEND`]
+/// are.
+///
+/// **One spelling and one list, because there is one flag.** A second copy of
+/// the six modes here would be a second thing to update when Claude Code adds a
+/// seventh, and the copy that was not updated is the one that refuses a mode the
+/// binary accepts — the defect `docs/glossary.md` exists to prevent, arriving as
+/// code.
+pub use crate::fleet::drone::{MODES, PERMISSION_MODE};
+
+/// What Helm does with a tool call the session's permissions do not settle.
+///
+/// **`auto`, and the contrast with a Drone's [`crate::fleet::drone::MODE`] is
+/// the argument.** A Drone runs `dontAsk` because there is nobody at the
+/// terminal: every mode that still prompts turns an uncovered tool call into a
+/// stall, and a Drone that stalls is `STALLED` with a bill and no work. Helm is
+/// the session a person is *sitting in front of*, so a prompt is a question that
+/// gets answered rather than a process that hangs — and the failure worth
+/// avoiding here is the opposite one. Launching with no mode at all left Helm on
+/// Claude Code's own default, which asked the reader to approve every tool call
+/// by hand; `auto` is the mode that grants the ordinary ones and still puts the
+/// unusual ones to the person who is right there.
+///
+/// **Not `bypassPermissions`, and not the Drone's `dontAsk`.** Both would spend
+/// the reader's presence rather than use it: the whole reason a terminal is
+/// worth more than an allowlist is that it can be asked.
+pub const MODE: &str = "auto";
+
+/// The refusal a `helm.mode` Claude Code has never heard of gets.
+///
+/// **`bad_config`, because it is a value in `~/.armada/machine.yml`** and the
+/// file is what has to change — which is also why `next_action` is required for
+/// this class and names the file, the key and the six values by name rather than
+/// saying *check your config*.
+///
+/// **Refused here rather than at `exec`.** `--permission-mode` is validated at
+/// argument-parse time (`docs/traps.md`), so a mode Claude Code does not have is
+/// a session that dies the instant it is entered, printing Claude Code's usage
+/// error over whatever the reader was doing. Checking a six-element list first
+/// costs nothing and names the file that is wrong.
+pub fn bad_mode(mode: &str) -> ArmadaError {
+    ArmadaError {
+        class: ErrClass::BadConfig,
+        r#where: "machine.yml helm.mode".to_string(),
+        message: format!(
+            "`{mode}` is not a permission mode — Claude Code offers {}",
+            MODES.join(", ")
+        ),
+        next_action: Some(format!(
+            "set `helm.mode:` in ~/.armada/machine.yml to one of them (`{MODE}` is the \
+             default), then retry unchanged"
+        )),
+    }
+}
+
+/// The appended system prompt [`appended`] assembles, written under
+/// `~/.armada/helm/`.
 ///
 /// **Named so it cannot be mistaken for its sources.** `~/.armada/guild/voice.md`
 /// is the reader's, hand-edited and synced; this is a generated file rewritten on
 /// every launch, exactly like `mcp.json` beside it. A generated file called
 /// `voice.md` would be edited by somebody once and silently regenerated the next
 /// time.
-pub const VOICE: &str = "guild-voice.md";
+///
+/// **It was `guild-voice.md` until it stopped being only the guild's.** Since
+/// `docs/reserved/008` the same document also carries Armada's own skill
+/// ([`crate::skill::BODY`]), because one `--append-system-prompt` may be passed
+/// once — so a name saying *guild* would now be wrong about most of the bytes in
+/// it, in the one file a reader opens to find out what their session was told.
+pub const VOICE: &str = "system-prompt.md";
 
 /// How many bytes of the reader's prose reach one launch.
 ///
@@ -217,6 +288,36 @@ pub fn voice(fragments: &[(&str, &str)]) -> Option<Voice> {
 /// Room held back for a truncation note, so that saying the prose was cut is
 /// not itself what overruns [`VOICE_BUDGET`].
 const NOTE: usize = 256;
+
+/// **The one appended system prompt a launch carries**: Armada's own skill, and
+/// the reader's words after it when they have written any.
+///
+/// # Why one string and not two flags
+///
+/// `claude --help` spells it `--append-system-prompt <prompt>` — singular. A
+/// second occurrence is a Commander option with no collector, so the **last one
+/// wins and the first is dropped silently**. Emitting the flag twice would
+/// therefore hand Helm the reader's voice and none of Armada's instructions, or
+/// the reverse, with nothing on screen saying which — the exact shape of failure
+/// `docs/traps.md` records for `--verbose`.
+///
+/// # Armada first, the reader second, and order is still not precedence
+///
+/// [`VOICE_HEADER`] settles precedence in words, above all three fragments: what
+/// the reader wrote wins. Armada's skill goes first only because it is the
+/// smaller, fixed half — a prefix that is byte-identical on every launch is the
+/// half a prompt cache can keep, and the reader's prose is what varies.
+///
+/// **A guild nobody has written yields no [`Voice`] and this still returns the
+/// skill.** That is the change `008` makes to the old shape, where an unwritten
+/// guild meant no flag at all: Armada's instructions to the agents it runs do
+/// not depend on whether the user has got round to describing themselves.
+pub fn appended(voice: Option<&str>) -> String {
+    match voice {
+        Some(voice) => format!("{}\n\n{voice}", crate::skill::BODY),
+        None => crate::skill::BODY.to_string(),
+    }
+}
 
 /// The reader's words, and what had to be done to fit them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -346,12 +447,25 @@ pub struct Launch {
     pub plugin_dir: String,
     /// `~/.armada/helm/settings.json`.
     pub settings: String,
+    /// What happens to a tool call the session's permissions do not settle —
+    /// `helm.mode` in `~/.armada/machine.yml`, [`MODE`] by default.
+    ///
+    /// **A value, not a default read here.** The machine file is the caller's to
+    /// read (`ARCHITECTURE.md` §1.4), and the caller is also where a mode this
+    /// module cannot vouch for is refused, by [`bad_mode`], before a single
+    /// document is written.
+    pub mode: String,
     /// The reader's own standing instructions, assembled by [`voice`].
     ///
     /// **[`None`] is a guild nobody has written yet**, not an error and not a
     /// degraded launch: the persona's own defaults already produce a terse Helm,
     /// and injecting the example text would make Armada's boilerplate binding in
     /// the reader's name.
+    ///
+    /// **It is no longer what decides whether the flag is emitted.** Since
+    /// `docs/reserved/008` the launch always carries an appended prompt, because
+    /// Armada's own skill is in it; this field decides only whether the reader's
+    /// half is there too. See [`appended`].
     pub voice: Option<String>,
 }
 
@@ -378,10 +492,13 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
     // precedence: what outranks what is settled in the prose ([`voice`]), and
     // has to be, because a flag's place in an argv is not something a model
     // reads.
-    if let Some(voice) = &launch.voice {
-        argv.push(APPEND.to_string());
-        argv.push(voice.clone());
-    }
+    //
+    // **Unconditional since `docs/reserved/008`**, and one flag rather than two:
+    // [`appended`] carries Armada's own skill whether or not the reader has
+    // written a word, and `--append-system-prompt` passed twice keeps only the
+    // last.
+    argv.push(APPEND.to_string());
+    argv.push(appended(launch.voice.as_deref()));
     argv.extend([
         "--mcp-config".to_string(),
         launch.mcp_config.clone(),
@@ -398,6 +515,16 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
         // never stops.
         "--settings".to_string(),
         launch.settings.clone(),
+        // **Passed explicitly, because the alternative was the bug.** Without
+        // this flag the session runs on whatever Claude Code's own default is,
+        // and the reader who first entered Helm had to approve every tool call
+        // by hand — a Helm that cannot call its own toolbelt without being
+        // asked twelve times is not an orchestrator. The value is the machine's
+        // ([`MODE`] by default) and the contrast with a Drone's `dontAsk` is
+        // argued there: a Drone has nobody to ask, and Helm has somebody
+        // sitting in front of it.
+        PERMISSION_MODE.to_string(),
+        launch.mode.clone(),
     ]);
     argv.push(
         match launch.session.resumable_as(&launch.agent) {
@@ -419,12 +546,17 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
 /// (`docs/traps.md`). A flag renamed or removed under Armada would otherwise
 /// surface as a Helm that will not start, in the one session the reader cannot
 /// ask Armada about — because Helm is how they ask.
-pub const FLAGS: [&str; 7] = [
+pub const FLAGS: [&str; 8] = [
     "--agent",
     APPEND,
     "--mcp-config",
     "--plugin-dir",
     "--settings",
+    // **The one flag here whose *value* is also checked**, and by the same list
+    // Claude Code checks it against ([`MODES`]). A rename of the flag is this
+    // array's business; a value the binary does not accept is [`bad_mode`]'s,
+    // one launch earlier.
+    PERMISSION_MODE,
     "--session-id",
     "--resume",
 ];
@@ -522,13 +654,13 @@ pub fn monitors_json(inbox: &str) -> String {
 /// would fire it in every session on the machine — including a Drone's, and a
 /// Drone held open until the inbox is read is a Drone that cannot finish the
 /// work the inbox is about.
+/// **The document is Fleet's now, and this is a re-export.** A Drone registers
+/// a `Stop` hook of its own (`020` §1), and two hand-written copies of the same
+/// JSON would be two shapes by the third edit. `ARCHITECTURE.md` §1.9 decides
+/// which way the call goes: Helm may reference Fleet, Fleet may not reference
+/// Helm, so the shared document lives in the lower module.
 pub fn settings_json(hook: &str) -> String {
-    format!(
-        "{{\n  \"hooks\": {{\n    \"Stop\": [\n      {{\n        \"hooks\": [\n          \
-         {{\n            \"type\": \"command\",\n            \"command\": {}\n          }}\n        \
-         ]\n      }}\n    ]\n  }}\n}}\n",
-        quote(hook)
-    )
+    crate::fleet::drone::settings_json(hook)
 }
 
 /// What the `Stop` hook runs: **nine lines of shell, and no daemon**.
@@ -548,19 +680,39 @@ pub fn settings_json(hook: &str) -> String {
 /// **No `jq` and no `python`.** A hook that depends on a tool the machine may
 /// not have is a backstop that silently stops backing anything up, so this is
 /// `grep -c` and `printf` against a file of one JSON document per line.
-pub fn stop_hook(inbox: &str) -> String {
+/// **It also sweeps the fleet, which is `020` §2's backstop.**
+///
+/// Every Drone's own `Stop` hook ticks the fleet when its exchange ends
+/// (`crate::fleet::drone::stop_hook`), and that relay has three ways to be
+/// lost: a SIGKILL, a hook that could not run, a crash in between. Helm's turn
+/// ending is the second event that is guaranteed to happen — you cannot talk to
+/// the orchestrator without one — so the moment you ask Helm anything at all,
+/// every Job the relay dropped is caught up. That is the same two-mechanism
+/// shape §15.3 already uses here: the monitor pushes, the hook backstops.
+///
+/// **Backgrounded, and it must be.** A hook's answer holds the turn open; a
+/// fleet-wide tick reads transcripts, runs a `ps` and may start a check, and
+/// Helm's reply is not waiting on any of that. The sweep is fire-and-forget and
+/// its result arrives the ordinary way — in the inbox, on the next screen.
+///
+/// `exe` is the absolute path of the running `armada`, never the bare word, for
+/// `crate::fleet::drone::stop_hook`'s reason.
+pub fn stop_hook(inbox: &str, exe: &str) -> String {
     format!(
         "#!/bin/sh\n\
          # Written by `armada helm`. Regenerated on every launch; edit the verb, not this.\n\
          # The backstop of PLAN.md §15.3: a turn does not end while the inbox is unread.\n\
+         # And of `020` §2: a turn of Helm's catches up every Job the relay dropped.\n\
          inbox={inbox}\n\
+         {armada} fleet tick >/dev/null 2>&1 &\n\
          [ -f \"$inbox\" ] || exit 0\n\
          unread=$(grep -c '\"answered\":false' \"$inbox\" 2>/dev/null || echo 0)\n\
          [ \"$unread\" -gt 0 ] || exit 0\n\
          printf '{{\"decision\":\"block\",\"reason\":\"%s unread inbox %s. \
          Call fleet.inbox, then report what needs the user.\"}}\\n' \\\n\
          \"$unread\" \"$([ \"$unread\" -eq 1 ] && echo entry || echo entries)\"\n",
-        inbox = shell_quote(inbox)
+        inbox = shell_quote(inbox),
+        armada = shell_quote(exe),
     )
 }
 
@@ -640,6 +792,7 @@ mod tests {
             mcp_config: "/scratch/.armada/helm/mcp.json".to_string(),
             plugin_dir: "/scratch/.armada/helm/plugin".to_string(),
             settings: "/scratch/.armada/helm/settings.json".to_string(),
+            mode: MODE.to_string(),
             voice: None,
         }
     }
@@ -677,16 +830,78 @@ mod tests {
                 "claude",
                 "--agent",
                 "helm",
+                // **Armada's own skill, on every launch** (`docs/reserved/008`),
+                // and one flag rather than two — `--append-system-prompt` passed
+                // twice keeps only the last.
+                APPEND,
+                &appended(None),
                 "--mcp-config",
                 "/scratch/.armada/helm/mcp.json",
                 "--plugin-dir",
                 "/scratch/.armada/helm/plugin",
                 "--settings",
                 "/scratch/.armada/helm/settings.json",
+                "--permission-mode",
+                "auto",
                 "--session-id",
                 UUID,
             ]
         );
+    }
+
+    /// **Helm launches under a mode, and it is not the Drone's.**
+    ///
+    /// The launch used to pass no `--permission-mode` at all, which left the
+    /// session on Claude Code's own default and made the reader approve every
+    /// tool call by hand on the first real Helm session. The contrast is the
+    /// decision: `dontAsk` for a Drone because there is nobody to ask, `auto`
+    /// here because there is somebody sitting in front of it.
+    #[test]
+    fn the_session_enters_under_a_mode_and_it_is_not_a_drones() {
+        let argv = launch_argv(&a_launch(false));
+        let at = argv
+            .iter()
+            .position(|word| word == PERMISSION_MODE)
+            .expect("the launch passes no permission mode at all");
+        assert_eq!(argv[at + 1], MODE);
+        assert_eq!(MODE, "auto");
+        assert_ne!(
+            MODE,
+            crate::fleet::drone::MODE,
+            "Helm entered under the mode written for a session nobody is watching"
+        );
+        assert!(MODES.contains(&MODE), "{MODE} is not a mode the CLI offers");
+    }
+
+    /// **The machine's mode reaches the argv**, rather than the default being
+    /// baked in one layer down where `helm.mode` could never change it.
+    #[test]
+    fn a_machine_that_chose_another_mode_gets_the_one_it_chose() {
+        let launch = Launch {
+            mode: "plan".to_string(),
+            ..a_launch(true)
+        };
+        let argv = launch_argv(&launch);
+        let at = argv.iter().position(|w| w == PERMISSION_MODE).unwrap();
+        assert_eq!(argv[at + 1], "plan");
+    }
+
+    /// A mode Claude Code has never heard of is refused **against the same list
+    /// the Drone's posture is refused against**, with the file and the key
+    /// named. Two lists of one thing is the defect this reuse prevents.
+    #[test]
+    fn a_mode_claude_code_does_not_have_is_refused_before_anything_is_written() {
+        let error = bad_mode("bogus");
+        assert_eq!(error.class, ErrClass::BadConfig);
+        assert_eq!(error.class.exit_code(), 3);
+        assert!(error.message.contains("bogus"), "{}", error.message);
+        for mode in MODES {
+            assert!(error.message.contains(mode), "{}", error.message);
+        }
+        let next = error.next_action.expect("bad_config requires one");
+        assert!(next.contains("machine.yml"), "{next}");
+        assert!(next.contains("helm.mode"), "{next}");
+        assert!(next.contains("retry unchanged"), "{next}");
     }
 
     /// **The second launch resumes, and this is the assertion the whole feature
@@ -788,15 +1003,63 @@ mod tests {
     /// made binding in the reader's name is worse than the persona's own
     /// defaults, which already produce a terse Helm.
     #[test]
-    fn an_unwritten_guild_adds_no_flag_and_no_empty_prompt() {
+    fn an_unwritten_guild_adds_no_words_of_the_readers_and_no_empty_prompt() {
         assert_eq!(voice(&[]), None);
         assert_eq!(
             voice(&[("voice.md", "   \n\n")]),
             None,
             "whitespace is not a voice"
         );
+        // **The flag is still there, and this is what `docs/reserved/008`
+        // changed.** It used to be absent, because the reader's words were the
+        // only thing it carried; Armada's instructions to the agents it runs do
+        // not depend on whether the user has got round to describing themselves.
         let argv = launch_argv(&a_launch(false));
-        assert!(!argv.iter().any(|word| word == APPEND), "{argv:?}");
+        let at = argv
+            .iter()
+            .position(|word| word == APPEND)
+            .unwrap_or_else(|| panic!("{argv:?}"));
+        assert_eq!(argv[at + 1], crate::skill::BODY);
+        // And none of the header that introduces the reader's own fragments,
+        // which would be Armada announcing words nobody wrote.
+        assert!(!argv[at + 1].contains(VOICE_HEADER), "{:?}", argv[at + 1]);
+    }
+
+    /// **One appended prompt carrying both halves, in that order.**
+    ///
+    /// `claude --help` spells the flag `--append-system-prompt <prompt>` —
+    /// singular — so a second occurrence keeps only the last and drops the first
+    /// without a word. That would hand Helm the reader's voice and none of
+    /// Armada's instructions, or the reverse, with nothing on screen saying
+    /// which.
+    #[test]
+    fn the_skill_and_the_readers_words_share_one_appended_prompt() {
+        let mut launch = a_launch(false);
+        let voice = voice(&[("voice.md", "Answer in under 150 words.")]).expect("written");
+        launch.voice = Some(voice.prompt.clone());
+
+        let argv = launch_argv(&launch);
+        assert_eq!(
+            argv.iter().filter(|word| *word == APPEND).count(),
+            1,
+            "a second occurrence silently drops the first: {argv:?}"
+        );
+        let at = argv.iter().position(|word| word == APPEND).unwrap();
+        let prompt = &argv[at + 1];
+        assert!(
+            prompt.contains("mcp__armada__fleet_propose"),
+            "Armada's half is missing"
+        );
+        assert!(
+            prompt.contains("under 150 words"),
+            "the reader's half is missing"
+        );
+        // Armada first: a byte-identical prefix on every launch is the half a
+        // prompt cache can keep. Precedence is settled in the prose, not here.
+        assert!(
+            prompt.find("mcp__armada__fleet_propose") < prompt.find("under 150 words"),
+            "{prompt}"
+        );
     }
 
     /// **Prose with no length bound meets a launch with one.** A single argv
@@ -842,10 +1105,10 @@ mod tests {
     fn the_printed_line_reproduces_the_argv_it_stands_for() {
         let voice = a_voice();
         let argv = launch_argv(&a_spoken_launch());
-        let line = launch_line(&argv, "~/.armada/helm/guild-voice.md");
+        let line = launch_line(&argv, "~/.armada/helm/system-prompt.md");
 
         assert!(
-            line.contains("--append-system-prompt \"$(cat ~/.armada/helm/guild-voice.md)\""),
+            line.contains("--append-system-prompt \"$(cat ~/.armada/helm/system-prompt.md)\""),
             "{line}"
         );
         assert!(
@@ -869,12 +1132,30 @@ mod tests {
     /// A launch with nothing to append prints exactly what it did before, so
     /// the substitution cannot appear on a machine that has no voice file.
     #[test]
-    fn a_silent_launch_prints_the_plain_argv() {
+    fn a_launch_prints_the_appended_prompt_as_a_file_and_never_inline() {
         let argv = launch_argv(&a_launch(false));
-        assert_eq!(
-            launch_line(&argv, "~/.armada/helm/guild-voice.md"),
-            argv.join(" ")
+        let line = launch_line(&argv, "~/.armada/helm/system-prompt.md");
+        // **Nothing of the prose is in the printed line.** It was the whole argv
+        // verbatim while an unwritten guild meant no flag at all; since
+        // `docs/reserved/008` there is always a prompt to substitute, and
+        // inlining two kilobytes would replace the one line this verb exists to
+        // produce with a screenful.
+        assert!(
+            line.contains("--append-system-prompt \"$(cat ~/.armada/helm/system-prompt.md)\""),
+            "{line}"
         );
+        assert!(
+            !line.contains("mcp__armada__fleet_propose"),
+            "the prose was inlined: {line}"
+        );
+        // Every other word of the argv survives verbatim, so the printed line is
+        // the launch with one substitution rather than a second, looser command.
+        for word in argv.iter().filter(|word| !word.contains('\n')) {
+            assert!(
+                line.contains(word.as_str()),
+                "{word} is missing from {line}"
+            );
+        }
     }
 
     /// **Helm is interactive, so it carries none of the headless flags.**
@@ -961,7 +1242,7 @@ mod tests {
     /// succeeds, and changes nothing.
     #[test]
     fn the_backstop_blocks_the_turn_rather_than_merely_reporting() {
-        let script = stop_hook("/scratch/.armada/inbox.jsonl");
+        let script = stop_hook("/scratch/.armada/inbox.jsonl", "/scratch/bin/armada");
         assert!(script.starts_with("#!/bin/sh\n"));
         assert!(script.contains(r#"{"decision":"block""#), "{script}");
         assert!(script.contains(r#""answered":false"#), "{script}");
@@ -974,7 +1255,7 @@ mod tests {
     /// installed, and says nothing about it.
     #[test]
     fn the_backstop_needs_nothing_but_a_posix_shell() {
-        let script = stop_hook("/scratch/.armada/inbox.jsonl");
+        let script = stop_hook("/scratch/.armada/inbox.jsonl", "/scratch/bin/armada");
         for tool in ["jq", "python", "node", "awk", "perl"] {
             assert!(
                 !script.contains(tool),
@@ -987,7 +1268,7 @@ mod tests {
     /// split the hook's assignment into two words.
     #[test]
     fn a_path_with_a_space_survives_the_shell() {
-        let script = stop_hook("/Users/a b/.armada/inbox.jsonl");
+        let script = stop_hook("/Users/a b/.armada/inbox.jsonl", "/Users/a b/bin/armada");
         assert!(
             script.contains("inbox='/Users/a b/.armada/inbox.jsonl'"),
             "{script}"

@@ -697,10 +697,28 @@ fn clean_artifacts_deletes_the_declared_files_and_reports_the_external_command()
 
     assert!(!repo.join("node_modules").exists(), "the artifact went");
     assert!(!repo.join(".armada").exists(), ".armada/ went with it");
+    // **The released workspace still gets a row, and the row is what proves the
+    // release.** This used to assert `results[]` was empty, which said "the
+    // registry row went" only by accident: `status` enumerated the registry, so
+    // an absent row and a workspace that never existed were the same answer. It
+    // now always answers about the directory you are standing in
+    // (`docs/reserved/023-status-shows-what-is-running.md`), so the claim is
+    // made directly — nothing owned, and no port block held.
     let status: Value =
         serde_json::from_slice(&machine.run(&repo, &["manifest", "status", "--json"]).stdout)
             .unwrap();
-    assert_eq!(status["data"]["results"].as_array().unwrap().len(), 0);
+    let rows = status["data"]["results"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{status}");
+    assert_eq!(
+        rows[0]["port_block"],
+        Value::Null,
+        "the block went: {status}"
+    );
+    assert_eq!(
+        rows[0]["owns"],
+        Value::Null,
+        "and so did every row: {status}"
+    );
 }
 
 /// The human renderer on the ordinary success path: `status` prints its scope,

@@ -93,9 +93,15 @@ which is what the worktree already does, and it would cost a Drone the ability t
 a bad attempt.
 
 **`Bash(armada:*)` is the one worth reading twice.** [008](008-armada-injects-its-own-skills.md)
-reserves giving Drones Armada's own tools deliberately, and it arrives as MCP rather than as a
-shell command. Denying the CLI here is what keeps that decision open instead of making it by
-accident, badly, through a shell.
+reserved giving Drones Armada's own tools deliberately, and said it should arrive as MCP rather
+than as a shell command. Denying the CLI here is what kept that decision open instead of making
+it by accident, badly, through a shell.
+
+> **`008` is now built and the decision went the way this rule held it open for.** A Drone's
+> Armada is `fleet.*` on its MCP belt, and the fourth tool — `fleet.propose` — is how it raises a
+> change to `armada.yml` rather than making one. **This deny rule does not move**: the skill
+> Armada injects tells an agent that a tool it has not been given is a tool it was not meant to
+> use, which is a sentence that only means anything while the shell stays shut.
 
 ## The residual, stated rather than papered over
 

@@ -1,4 +1,4 @@
-[1m[38;2;255;169;64marmada — one vocabulary for a repo's stack, and the agents working in it[0m
+[1m[38;2;255;169;64marmada — agents that work while you do not[0m
 
 [1m[38;2;255;169;64mUSAGE[0m
   armada <module> <verb> [flags]  [38;2;156;163;175mthe verbs Armada owns[0m
@@ -15,6 +15,7 @@
   components            [38;2;156;163;175mwhat this repository can be filtered by[0m
   commands              [38;2;156;163;175mthe verbs this repository declares[0m
   clean                 [38;2;156;163;175mrelease what this workspace owns[0m
+  prune                 [38;2;156;163;175mreclaim docker disk, including disk that is not armada's[0m
   <name>                [38;2;156;163;175ma verb this repo declares; manifest commands lists them[0m
 
 [1m[38;2;255;169;64mGUILD — you, portable: voice, skills, hooks, workflows[0m
@@ -44,8 +45,8 @@
   kill [<job>]          [38;2;156;163;175mend a Job and release everything it owns[0m
 
 [1m[38;2;255;169;64mHELM AND THE BRIDGE — where you talk, and what you watch[0m
-  helm          [38;2;156;163;175mthe one agent you talk to: wire the toolbelt, report the launch[0m
-  helm enable   [38;2;156;163;175mlet --exec become a session, on this machine[0m
+  helm          [38;2;156;163;175mthe one agent you talk to: wire the toolbelt, enter the session[0m
+  helm enable   [38;2;156;163;175mlet armada helm become a session, on this machine[0m
   helm disable  [38;2;156;163;175mthe opposite of enable — the default on a fresh install[0m
   bridge        [38;2;156;163;175mthe live screen: every Job, its state, its spend, who needs you[0m
 

@@ -267,6 +267,14 @@ every `§` cross-reference, parses every fenced block with a real parser, and ru
 contamination grep from its single source. If a block is deliberately unparseable, mark it
 `<!-- doclint: skip — reason -->` rather than leaving a finding for everyone to scroll past.
 
+**Adding a reserved design: take the next free number and state it in four places.** The
+filename, the frontmatter's `id:`, the H1 if you number it, and a row in
+`docs/reserved/README.md`. `cargo xtask reserved` — inside `doclint` — checks they agree, that
+no two designs claim one number, and that every link citing a design resolves. **It exists
+because the same collision landed three times**: two branches written the same afternoon both
+reach for the next number, and git sees two differently-named files rather than a conflict. If
+you have to renumber, the gate tells you which of the records you missed.
+
 **Never commit to `main`.** Work on a feature branch, always.
 
 <!-- doclint: skip — <placeholders>, not runnable shell -->

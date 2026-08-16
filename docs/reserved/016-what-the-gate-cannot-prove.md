@@ -87,6 +87,35 @@ spots"*, and names the verdict envelope as the evidence.
 | **The wall clock is the child's own, and the parent's is suspended while it runs** (`Kin::suspended_ms`). | Two fields on the record and a `run_time_ms` that is no longer *how long the Job has existed*. It has to be this way: [`PLAN.md`](../PLAN.md) §14.6 is explicit that `feature` waits on a `plan` sub-Job that ends at your approval, and a clock that kept ticking would kill a Job because you went to lunch. |
 | **One child per attempt**, keyed exactly as a detached check run is. | A failed review starts a second reviewer rather than re-reading the first one's verdict. That is the point: the first read the diff *before* the fix. |
 | **A step Fleet satisfies starts no Drone** — except on a retry, when the gate's words are handed to the parent's own session, which is the only thing that can act on them. | The first step of a workflow is still always a Drone's, because `--resume` needs a session that exists. |
+| **And it is gated in the pass that enters it**, rather than on the next one. | One more gate per pass that advances into such a step. It is not an optimisation — see below. |
+
+### The step that is never *due* a tick
+
+[`020`](020-the-tui-decided.md)'s *"the Stop hook drives tick"* decision gave the
+loop a watermark: a Job is due a gate when its transcript
+holds more finished turns than the last tick gated (`finished > ticked_turns`),
+and a Job with no live Drone, nothing pending and nothing due is `STALLED`. That
+is what makes a dead Job provable, and it is right.
+
+**A step no Drone runs produces no exchange, so it can never satisfy it.** A
+parent that advanced into `review` and stopped there was measured as
+`state=Stalled due=false -> Idle { "its Drone stopped without finishing a turn" }`
+— a Job nothing would ever look at again, including the sweep whose whole
+purpose is to rescue the ones nothing looked at. The two features are each
+correct and the gap is exactly between them.
+
+The fix is to close the window rather than to add a second watermark: there is
+genuinely nothing to wait for, and the pass that advances into the step already
+holds everything the gate needs. It terminates because `step_after` only moves
+forward.
+
+**The same seam cost the ledger, in the other direction.** `tear_down` settles a
+finishing Job's spend from its transcript, *"because the transcript is about to
+be the only thing left that knows"* — true before a Job could have children, and
+false after: a child runs in a session of its own. A `feature` Job that finished
+with a `plan` sub-Job had that sub-Job's entire spend subtracted at the last
+moment, and the figure written there is the one `armada fleet ls --all` shows
+for ever.
 
 ### What `armada fleet kill` on a parent does to a live child
 

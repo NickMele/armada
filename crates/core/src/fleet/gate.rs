@@ -199,6 +199,65 @@ pub struct SubjobFact {
 /// **`${` and nothing more clever.** [`crate::template`] owns substitution and
 /// this owns noticing that it did not happen; a second parser here would be a
 /// second grammar to keep in step with the first.
+/// Whether an artifact pattern is a glob rather than a literal path.
+///
+/// The two the shipped workflows use are `docs/design/*.md` and `PLAN.md`, and
+/// the probe has to answer both.
+pub fn is_glob(pattern: &str) -> bool {
+    pattern.contains('*') || pattern.contains('?')
+}
+
+/// Split a pattern into the directory to read and the name pattern to match.
+///
+/// **Only the final segment may glob**, and that is a stated limit rather than
+/// an oversight: `docs/*/design/*.md` would need a directory walk, and a walk
+/// rooted in a workflow's own string is how a gate comes to read a tree nobody
+/// scoped. The shipped patterns need one segment; when one needs two, the
+/// argument for walking can be had then.
+pub fn glob_parts(pattern: &str) -> (&str, &str) {
+    match pattern.rfind('/') {
+        Some(at) => (&pattern[..at], &pattern[at + 1..]),
+        None => ("", pattern),
+    }
+}
+
+/// Match one file name against a pattern of `*` and `?`.
+///
+/// **Written here rather than taken as a dependency.** `README.md` claims *"no
+/// interpreter, no toolchain, nothing to provision"*, and a glob crate is a
+/// dependency earning its place by fifteen lines. `*` spans any run of
+/// characters including none, `?` exactly one, and neither crosses a `/`
+/// because [`glob_parts`] has already removed every `/` from what arrives here.
+///
+/// Iterative with backtracking rather than recursive: the patterns are short,
+/// but a pattern is a workflow's string and a workflow is data somebody edits
+/// at one in the morning — so it must not be able to exhaust the stack.
+pub fn glob_matches(name: &str, pattern: &str) -> bool {
+    let (n, p): (Vec<char>, Vec<char>) = (name.chars().collect(), pattern.chars().collect());
+    let (mut ni, mut pi) = (0usize, 0usize);
+    // Where to resume if the current `*` turns out to have eaten too little.
+    let (mut star, mut mark) = (None, 0usize);
+    while ni < n.len() {
+        if pi < p.len() && (p[pi] == '?' || p[pi] == n[ni]) {
+            ni += 1;
+            pi += 1;
+        } else if pi < p.len() && p[pi] == '*' {
+            star = Some(pi);
+            mark = ni;
+            pi += 1;
+        } else if let Some(at) = star {
+            // The `*` takes one more character and the pattern re-runs from it.
+            pi = at + 1;
+            mark += 1;
+            ni = mark;
+        } else {
+            return false;
+        }
+    }
+    // Trailing `*`s match the empty rest; anything else left over does not.
+    p[pi..].iter().all(|c| *c == '*')
+}
+
 fn unsubstituted(text: &str) -> bool {
     text.contains("${")
 }
@@ -709,6 +768,46 @@ fn probe_evidence(kind: &str, probe: &Probed) -> Evidence {
 
 #[cfg(test)]
 mod tests {
+    /// **`docs/design/*.md` is the shipped `design` workflow's own artifact**,
+    /// and the literal-path probe could never match it. A Job wrote and
+    /// committed `docs/design/hello-format.md`; the gate reported the artifact
+    /// absent and the Job retried to its token ceiling.
+    #[test]
+    fn a_glob_matches_the_file_a_design_job_actually_writes() {
+        let (dir, name) = glob_parts("docs/design/*.md");
+        assert_eq!(dir, "docs/design");
+        assert_eq!(name, "*.md");
+        assert!(glob_matches("hello-format.md", name));
+        assert!(glob_matches("decision.md", name));
+        assert!(!glob_matches("notes.txt", name));
+    }
+
+    /// A pattern with no wildcard is a path and keeps the cheap route.
+    #[test]
+    fn a_literal_artifact_is_not_a_glob() {
+        assert!(!is_glob("PLAN.md"));
+        assert!(is_glob("docs/design/*.md"));
+        assert!(is_glob("report-?.md"));
+        let (dir, name) = glob_parts("PLAN.md");
+        assert_eq!((dir, name), ("", "PLAN.md"));
+    }
+
+    /// The cases a hand-written matcher gets wrong: a `*` that must give back
+    /// what it first took, and a trailing `*` matching nothing at all.
+    #[test]
+    fn the_matcher_backtracks_and_terminates() {
+        assert!(glob_matches("a.md", "*.md"));
+        assert!(glob_matches(".md", "*.md"));
+        assert!(glob_matches("aaa.md.md", "*.md"));
+        assert!(!glob_matches("a.mdx", "*.md"));
+        assert!(glob_matches("design", "design*"));
+        assert!(glob_matches("anything", "*"));
+        assert!(!glob_matches("", "?"));
+        assert!(glob_matches("ab", "?b"));
+        // Pathological, and it must return rather than hang or recurse away.
+        assert!(!glob_matches(&"a".repeat(64), "*a*a*a*a*b"));
+    }
+
     use super::*;
     use crate::fleet::workflow::{Predicate, Verify};
 

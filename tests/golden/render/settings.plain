@@ -2,6 +2,7 @@
   MACHINE  manifest.cpu_slots        6 — ~/.armada/machine.yml
   MACHINE  manifest.port_block_size  10 — ~/.armada/machine.yml
   MACHINE  helm.enter                on — ~/.armada/machine.yml
+  MACHINE  helm.mode                 auto — ~/.armada/machine.yml
   SYNCED   guild.settings.json       3 settings — ~/.armada/guild/settings.json
 
-OK  4 settings
+OK  5 settings

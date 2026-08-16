@@ -1950,6 +1950,9 @@ manifest:                 # Manifest's section; every other module gets its own
   up_timeout: 600         # …except the ones that do work rather than ask (§6)
 guild:                    # §13.1: the remote, and what the importer withheld
   withheld: []
+helm:                     # §15.1: whether a session may open here, and how it behaves
+  enter: false            # off on a fresh install; `armada helm enable` flips it
+  mode: auto              # --permission-mode; a Drone gets dontAsk, for the opposite reason
 ```
 
 **`port_base` is the eighth key, and it is the pair of one that was already here.**
@@ -3711,22 +3714,21 @@ The reasoning, since this one has a real cost either way:
 MCP server as its toolbelt, resuming the same conversation each day. Typing `armada` with no
 arguments enters it; `armada helm` is the explicit spelling.
 
-> **What M3 built, and the one line of this it did not.** `armada helm` assembles the launch,
-> wires the inbox and remembers the conversation. **Entering is switched off until the Bridge is
-> fixed**: `--exec` is refused by name, the bare word is not wired to it, and no path in the
-> shipped binary opens a session ([`commands/helm/helm.md`](commands/helm/helm.md)).
+> **What shipped, and the two lines of this it changed.** `armada helm` assembles the launch,
+> wires the inbox, remembers the conversation — and **enters it**
+> ([`commands/helm/helm.md`](commands/helm/helm.md)).
 >
-> The reasoning is the one this section already applies to naming. `armada` is the most typeable
-> thing on the machine, and the cost of a mistake there is not a stray page but a Claude Code
-> session nobody meant to open, spending against a real account until somebody notices. The same
-> argument covers `--exec` while the thing you would watch the fleet *with* is broken: a
-> conversation you can start and cannot observe is the failure this whole design exists to
-> prevent.
+> **Entering is gated once, by the machine.** `helm.enter` in `~/.armada/machine.yml` is off on a
+> fresh install, and off it refuses by name. The reasoning is the one this section already applies
+> to naming: the cost of a mistake here is not a stray page but a Claude Code session nobody meant
+> to open, spending against a real account until somebody notices. What that argument does *not*
+> license is asking twice. An earlier build gated entering behind the switch **and** `--exec`, and
+> a reader who had already flipped the switch was handed a command to paste — so `--exec` is now
+> an explicit synonym for the default, and `--print-command` is where the printed line went.
 >
-> **A gate on entering, not a rollback.** The argv, the toolbelt registration, the inbox wiring
-> and the resumption record are built and verified; turning entering on is deleting a refusal.
-> Giving the bare word to Helm remains the intended end state, and wants a deliberate decision
-> rather than arriving as a side effect of building the verb.
+> **The bare word is superseded.** [`reserved/020-the-tui-decided.md`](reserved/020-the-tui-decided.md)
+> §8 gives `armada` alone a menu of the modules rather than Helm, and the rationale above is kept
+> rather than deleted because it is what the menu decision was weighed against.
 
 Its toolbelt is `fleet.*` and `manifest.*` — spawn, status, probe, answer, kill, and the
 workspace verbs. Its job is **decompose, delegate, aggregate, report**. Classification is not

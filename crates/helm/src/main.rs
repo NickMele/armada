@@ -213,7 +213,7 @@ fn json_wanted(invocation: &Invocation) -> bool {
     match invocation {
         Invocation::Init(common) | Invocation::Status(common) => common.json,
         Invocation::Services { json, .. } => *json,
-        Invocation::Clean { common, .. } => common.json,
+        Invocation::Clean { common, .. } | Invocation::Prune { common, .. } => common.json,
         Invocation::Check(check) => check.json,
         Invocation::Dispatch { json, .. } => *json,
         Invocation::Config { json, .. }
@@ -825,7 +825,7 @@ fn dispatch(
         fetch: RealFetch,
     };
     let mut app = app::build(ctx, home, inherited)?;
-    app.handoff = detach_handoff(&app.inherited);
+    app.handoff = detach_handoff(&app.inherited, app.ctx.workspace.as_ref());
 
     match invocation {
         Invocation::Init(common) => verbs::init::run(&mut app, common.dry_run),
@@ -852,6 +852,21 @@ fn dispatch(
                 force_rebuild,
             },
         ),
+        Invocation::Prune { common, yes } => {
+            // **The terminal is read here and nowhere below.** `prune` turns on
+            // whether a person can be asked *on this run*, and that is a fact
+            // about the entrypoint's streams — a verb that sniffed them itself
+            // would be reading ambient state, and would also be untestable.
+            let interactive = terminal.can_ask() && !common.json;
+            let mut asking = at_the_terminal(style, terminal);
+            verbs::prune::run(
+                &mut app,
+                common,
+                verbs::prune::Filters { yes },
+                &mut asking,
+                interactive,
+            )
+        }
         Invocation::Check(check) => verbs::check::run(&mut app, &check, progress),
         Invocation::Dispatch { name, argv, json } => {
             verbs::dispatch::run(&mut app, &name, &argv, json)
@@ -884,10 +899,29 @@ fn dispatch(
     }
 }
 
-/// `armada helm` — assemble the launch, and enter it only if this machine has
-/// said yes.
+/// `armada helm` — enter the conversation, unless the caller asked for the
+/// line instead.
 ///
-/// **Whether `--exec` runs at all is decided before the verb runs, not
+/// **Entering is what this verb does, and `helm.enter` is the one thing that
+/// permits it.** It used to be gated twice — the machine switch *and*
+/// [`verbs::helm::ENTER`] — so a reader who had already set `helm.enter: true`
+/// typed `armada helm`, was handed a command to paste, and said so. Asking for
+/// permission a second time does not make the first answer more considered.
+///
+/// | Given | Enters |
+/// |---|---|
+/// | nothing | yes |
+/// | [`verbs::helm::ENTER`] | yes — the same act, spelled out |
+/// | [`verbs::helm::PRINT`] | no: the pasteable line |
+/// | `--json` | no: the envelope, argv and all |
+///
+/// **`--json` is on the *no* side because a replaced process prints no
+/// envelope.** A caller that asked for the data would otherwise find itself
+/// inside somebody's conversation with nothing on stdout — and every script
+/// that reads `data.argv` is such a caller. `--exec --json` is the way to say
+/// enter anyway, and it is what a person asking for both would mean.
+///
+/// **Whether entering happens at all is decided before the verb runs, not
 /// after.** A refusal that had already written the configuration files would
 /// have changed the machine in order to say no — the same rule `armada doctor
 /// --fix` follows, and the rule the no-guild refusal inside the verb follows
@@ -895,20 +929,21 @@ fn dispatch(
 /// [`verbs::helm::entering_is_off`] is returned before [`verbs::helm::run`]
 /// ever touches disk.
 ///
-/// **Off it stops there; on, it becomes [`helm_exec`].** The switch decides
-/// whether the process is ever replaced — it does not change what
-/// `armada helm` writes or reports either way, which is what keeps `--json`
-/// honest about a launch that was merely assembled.
+/// **What is written and reported does not depend on any of it.** The argv, the
+/// four documents and the conversation's record are the same on every row of
+/// that table, which is what keeps `--json` honest about a launch it did not
+/// enter.
 fn helm(
     place: &verbs::helm::Where,
     options: &args::Helm,
     wanted: &verbs::helm::Options,
 ) -> Result<Output, ArmadaError> {
-    if options.exec && !verbs::helm::entering_allowed(&place.armada_home) {
+    let entering = options.exec || !(options.print_command || options.json);
+    if entering && !verbs::helm::entering_allowed(&place.armada_home) {
         return Err(verbs::helm::entering_is_off());
     }
     let output = verbs::helm::run(&SystemClock, place, wanted)?;
-    if options.exec {
+    if entering {
         // **The process is replaced.** This returns only if the exec itself
         // failed — a successful one never comes back.
         helm_exec(place, &output)?;
@@ -1341,11 +1376,9 @@ fn on_screen(
         // `c` names the verb to run instead, and names it correctly whichever
         // way `armada helm enable`/`disable` last left it.
         Action::Chat => Done::said(match verbs::helm::entering_allowed(&place.armada_home) {
-            true => {
-                "`armada helm --exec` is on for this machine — run it yourself to enter".to_string()
-            }
+            true => "`armada helm` is on for this machine — run it yourself to enter".to_string(),
             false => format!(
-                "`armada helm --exec` is off — `{}` turns it on; enter boards the selected Job",
+                "`armada helm` is off — `{}` turns it on; enter boards the selected Job",
                 verbs::helm::ENABLE
             ),
         }),
@@ -1546,7 +1579,7 @@ fn look(style: Style, terminal: render::term::Terminal) -> verbs::guild::Look {
 /// ambient (`ARCHITECTURE.md` §1.4). The verb underneath gets a `String` on
 /// [`app::App::handoff`] exactly as it gets the environment on `inherited`.
 ///
-/// Two guards, and both are about never blocking:
+/// Three guards, and all of them are about never blocking:
 ///
 /// - **`ARMADA_DETACH_RUN` must hold a real run id.** Nothing else in Armada
 ///   reads stdin at startup, and an unconditional read would hang every ordinary
@@ -1555,6 +1588,16 @@ fn look(style: Style, terminal: render::term::Terminal) -> verbs::guild::Look {
 ///   `verbs::check::adopted_run` — which validates for its own reason, the id
 ///   becoming a path — and a malformed value takes the ordinary resolving path
 ///   in both places instead of one each.
+/// - **The run must still be offering itself.** The variable is inherited
+///   wholesale by everything the run spawns (PLAN.md §4.5), so a real id at any
+///   depth below the detached child is the ordinary case rather than a strange
+///   one — measured, an `armada manifest check` run from inside `cargo test`
+///   had it. Such a process is not the child the parent wrote a payload for,
+///   and reading stdin on its behalf means either swallowing input meant for
+///   something else or blocking on a pipe with a writer that is not going to
+///   close it. `runs::adoption_offered` is a read and never takes the offer:
+///   the taking belongs to the run that carries it out, and `--status` must
+///   not write.
 /// - **stdin must not be a terminal.** Armada sets that variable and Armada
 ///   reads it back, so a person who exported it by hand is not a detached child
 ///   — and the honest answer for them is an ordinary run, not a wait on input
@@ -1564,11 +1607,17 @@ fn look(style: Style, terminal: render::term::Terminal) -> verbs::guild::Look {
 /// Why the payload travels this way at all — rather than in a file, in Armada's
 /// own environment, or in argv — is [`armada_helm::secrets`], which is also the
 /// only thing that can read it back.
-fn detach_handoff(inherited: &BTreeMap<String, String>) -> Option<String> {
+fn detach_handoff(
+    inherited: &BTreeMap<String, String>,
+    workspace: Option<&armada_core::workspace::Workspace>,
+) -> Option<String> {
     use std::io::{IsTerminal, Read};
-    inherited
+    let run = inherited
         .get(armada_helm::verbs::check::DETACH_RUN_VAR)
         .and_then(|value| armada_core::run::RunId::parse(value).ok())?;
+    if !armada_manifest::runs::adoption_offered(&workspace?.root, &run) {
+        return None;
+    }
     let mut stdin = std::io::stdin();
     if stdin.is_terminal() {
         return None;

@@ -1,8 +1,8 @@
   ARMADA BRIDGE
 
-  STATUS   JOB            STEP          TASK            RUN  SPENT
-  RUNNING  carina-schema  implement 3m  migrate schema   3m  $0.45
+  STATUS   JOB            ID        STEP          TASK         RUN  TURNS  SPENT
+  RUNNING  carina-schema  94b1fd2e  implement 3m  migrate sc…   3m      1  $0.45
 
-RUNNING  1 job, $0.45 today, filter state=RUNNING, 3 hidden
+RUNNING  1 job, resets 43m, $0.45 today, filter state=RUNNING, 3 hidden
 
   enter board  d detail  n new  p pause  x abort  a answer  ? keys  q quit

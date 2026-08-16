@@ -19,7 +19,9 @@ Three readers, reused rather than retyped:
    `MachineConfig::read`, the same reader every Manifest verb uses. Eight keys, each destructured
    by name, so a ninth key added to that struct and not added here fails to compile.
 2. **Helm's section of the same file** — `crates/helm/src/machine.rs`'s `read`, the reader
-   `armada helm enable`/`disable` already write through. One key: `enter`.
+   `armada helm enable`/`disable` already write through. Two keys: `enter`, and `mode` — the
+   `--permission-mode` the session enters under. **No verb writes `mode`**, which is exactly why
+   it is listed: this is the only place a reader finds out the key exists and what it is set to.
 3. **The guild's config-shaped items** — `armada_guild::inventory::Inventory::items`, the same
    call `armada guild ls` makes. `settings.json`, `plugins.yml`, `mcp.yml` and `permissions.yml`
    are listed; a skill, a hook, a workflow or a memory fragment is content rather than a setting
@@ -42,14 +44,17 @@ and the one most easily got wrong:
   MACHINE  manifest.cpu_slots        6 — ~/.armada/machine.yml
   MACHINE  manifest.port_block_size  10 — ~/.armada/machine.yml
   MACHINE  helm.enter                on — ~/.armada/machine.yml
+  MACHINE  helm.mode                 auto — ~/.armada/machine.yml
   SYNCED   guild.settings.json       3 settings — ~/.armada/guild/settings.json
 
-OK  4 settings
+OK  5 settings
 ```
 
 `MACHINE` describes this machine and its running processes and never syncs — `machine.yml`.
 `SYNCED` describes you and travels with the guild between every machine you use. `helm.enter` is
-`MACHINE` on purpose: pulling a guild onto a new laptop must not silently enable Helm there.
+`MACHINE` on purpose: pulling a guild onto a new laptop must not silently enable Helm there, and
+`helm.mode` is `MACHINE` for the same reason — how much a session may do without stopping to ask
+is a fact about the box you are sitting at.
 
 `--json` carries `data.settings[]`, each row with `locality` (`"machine"` or `"synced"`), `name`,
 `value` and `at` — the same four facts, unjoined.

@@ -192,6 +192,13 @@ pub struct Frame {
     pub hidden: usize,
     /// The filter this frame was built under, as it was typed.
     pub filter: Option<String>,
+    /// The rate-limit window the fleet is working inside.
+    ///
+    /// **Not filtered with the rows.** Every other number on this struct counts
+    /// what is on the screen; this one is a fact about the account, and a filter
+    /// is a question about which Jobs to look at rather than about how much of a
+    /// five-hour window is gone.
+    pub window: Option<crate::envelope::Window>,
 }
 
 /// Build one frame.
@@ -215,6 +222,7 @@ pub fn frame(data: &FleetLsData, filter: Option<&Filter>) -> Frame {
         spent_usd: rows.iter().map(|row| row.cost_usd).sum(),
         hidden: data.results.len() - rows.len(),
         filter: filter.map(|filter| filter.source.clone()),
+        window: data.window,
         rows,
     }
 }
@@ -894,6 +902,7 @@ mod tests {
                 wall_clock_ms: 1,
             },
             needs_attention: needs,
+            acting: None,
         }
     }
 
@@ -907,6 +916,7 @@ mod tests {
             needs_you: 1,
             spent_usd: 6.30,
             results,
+            window: None,
         }
     }
 

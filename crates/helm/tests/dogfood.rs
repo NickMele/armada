@@ -14,6 +14,20 @@
 //! command and comparing the two verdicts is the assertion that has content:
 //! whatever the truth is, Armada has to reach it.
 //!
+//! **This suite runs the real binary in the real repository, and that is the
+//! one thing about it that is dangerous.** Everything else here uses a scratch
+//! `Machine`; this cannot, because the config under test is the repository's
+//! own. So its `armada manifest check` writes a run directory into the working
+//! tree, with whatever environment `cargo test` was started with — and when
+//! that `cargo test` *is* `armada:test` inside a detached run, the environment
+//! included that run's `ARMADA_DETACH_RUN` (PLAN.md §4.5 inherits wholesale).
+//! Measured on run `01M048KKTG19V63A`: this test adopted the outer run and
+//! replaced its five-check `state.json` with a one-check record, and `--status`
+//! reported `PASS` for a run that was still going. The scratch `$HOME` below is
+//! why no lease stood in the way. `runs::claim_adoption` is the guard that
+//! makes the nesting harmless; keep this suite's invocations nested-safe rather
+//! than assuming the environment they meet is clean.
+//!
 //! **One check, not the suite.** `armada:test` runs `cargo test --workspace`,
 //! and running that from inside `cargo test` is a recursion, not a dogfood.
 //! `armada:fmt` is the check that is fast, deterministic, and has no

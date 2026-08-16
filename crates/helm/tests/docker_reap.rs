@@ -25,15 +25,61 @@
 mod support;
 
 use serde_json::Value;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 use support::Machine;
 
+/// How long the daemon gets to answer `docker version` before it is treated as
+/// unreachable.
+///
+/// A healthy daemon answers in well under a second; the generous ceiling is for
+/// a loaded CI box, not for a sick daemon.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Whether a daemon is reachable **and answering**, which are not the same
+/// thing.
+///
+/// **This was the whole suite's hang.** The probe used `Command::output()`,
+/// which waits for the child to exit however long that takes — and a *wedged*
+/// Docker Desktop does not refuse a connection, it accepts one and never
+/// replies. So `docker version` blocked for ever, and the guard written to skip
+/// this suite when there is no daemon became the reason the run never finished.
+/// Two `cargo test --workspace` runs sat here for over ten minutes each, with
+/// four hung `docker version` children apiece and an empty log, while the check
+/// that spawned them reported `RUNNING`.
+///
+/// Absent and wedged must therefore fail the same way, because the caller's
+/// question — *can I run these tests?* — has the same answer for both. Only the
+/// probe is bounded: once a daemon has answered, the commands the tests
+/// themselves run are talking to something known to be alive.
 fn daemon_is_up() -> bool {
-    Command::new("docker")
+    let Ok(mut child) = Command::new("docker")
         .args(["version", "--format", "{{.Server.Version}}"])
-        .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        // Docker is not installed. Ordinary, and not a failure.
+        return false;
+    };
+
+    let deadline = Instant::now() + PROBE_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            // Timed out, or the wait itself failed. **Kill the child before
+            // giving up** — an abandoned `docker version` holds its pipe open
+            // and is exactly what accumulated on the measured machine.
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return false;
+            }
+        }
+    }
 }
 
 fn docker(args: &[&str]) -> String {
@@ -479,3 +525,88 @@ manifest:
         cmd: ./serve
         ports: { web: 3000 }
 ";
+
+/// **A live workspace's own named volume is released by `armada manifest
+/// clean`** — which is the exact call a Job makes when it finishes.
+///
+/// # Why this is not covered by the orphan test above
+///
+/// That test proves the *reap* pass: a workspace whose directory is gone, found
+/// by label and removed on `ENOENT`. This proves the other half, and it is the
+/// half that leaks. A workspace that is alive and well, whose Job has just
+/// reached its last step, is `PathStat::Present` — so the reaper correctly
+/// leaves its resources alone, and the only thing that removes them is
+/// `clean_one`'s per-workspace pass. Nothing exercised that pass against a real
+/// volume, so nothing would have noticed if it had only ever removed containers.
+///
+/// **A named volume is the resource this is written for.** `down` stops the
+/// containers and the networks and leaves the volume standing, by design — that
+/// is what docker volumes are for. So it outlives the Job unless something goes
+/// and gets it, and nothing did: the machine this was written after held 171 of
+/// them and 12.0 GB.
+///
+/// The fixture is created by this test, carries this process's id in its name,
+/// and is removed on the way out whatever happens. **Nothing here can touch a
+/// volume the machine's owner created** — it is addressed by a name this test
+/// minted, never by a prune, never by a filter that could match anything else.
+#[test]
+fn a_live_workspaces_own_volume_is_released_when_it_cleans() {
+    if !daemon_is_up() {
+        eprintln!("skipping: no Docker daemon reachable");
+        return;
+    }
+
+    let machine = Machine::new();
+    let repo = machine.repo("main", CONFIG);
+    let payload: Value =
+        serde_json::from_slice(&machine.run(&repo, &["manifest", "init", "--json"]).stdout)
+            .unwrap();
+    let id = payload["workspace"].as_str().unwrap().to_string();
+    let namespace = namespace_of(&machine);
+
+    // Stamped exactly as the compose transform stamps a top-level `volumes:`
+    // entry — which is a separate stamp from the services', because measured,
+    // a service's labels do not reach the volume.
+    let volume = format!("armada-test-livevol-{}", std::process::id());
+    docker(&[
+        "volume",
+        "create",
+        "--label",
+        &format!("armada.workspace={id}"),
+        "--label",
+        &format!("armada.workspace_path={}", repo.display()),
+        "--label",
+        &format!("armada.namespace={namespace}"),
+        &volume,
+    ]);
+    assert!(exists("volume", &volume), "the fixture was not created");
+
+    let cleaned = machine.run(&repo, &["manifest", "clean", "--json"]);
+    assert!(
+        cleaned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&cleaned.stderr)
+    );
+
+    // **Reported, never silent.** A reclaim nobody can audit is one nobody
+    // trusts, and the count is what `armada fleet tick` puts on the row when a
+    // Job finishes.
+    let payload: Value = serde_json::from_slice(&cleaned.stdout).unwrap();
+    let released = &payload["data"]["results"][0]["released"];
+    assert_eq!(
+        released["volumes"], 1,
+        "the volume was not counted as released: {payload}"
+    );
+
+    let survived = exists("volume", &volume);
+    // Removed before the assertion, so a failure leaves nothing behind either:
+    // stray `armada-test-*` resources from an earlier run have twice been
+    // misdiagnosed as flakiness.
+    let _ = Command::new("docker")
+        .args(["volume", "rm", "-f", &volume])
+        .output();
+    assert!(
+        !survived,
+        "the workspace's own named volume survived its own `clean` — this is the leak"
+    );
+}

@@ -47,10 +47,25 @@ pub enum JobState {
     /// Deliberately held: it asked something and is waiting on an answer.
     Paused,
     /// **An observation rather than a state the Drone reports.** A Job is
-    /// stalled when its transcript has shown no activity inside a window — the
-    /// one condition a busy Drone cannot self-report, which is why it belongs
-    /// to the observer.
+    /// stalled when **its Drone is gone and nothing has ticked it** — the one
+    /// condition a busy Drone cannot self-report, which is why it belongs to
+    /// the observer.
+    ///
+    /// **This is the word that was missing for eight hours** (`020` §6). A Job
+    /// whose Drone exited and whose `Stop` hook never relayed the event drew as
+    /// `RUNNING`, which is the same word a Job with a live Drone gets — so a
+    /// dead Job and a working one were indistinguishable on the screen.
     Stalled,
+    /// **A Drone ended its exchange having said nothing through its tools**
+    /// (`020` §6) — no verdict, no progress note, no question in the inbox.
+    ///
+    /// **Not the same failure as [`JobState::Stalled`], and that is why it is a
+    /// second word.** A stalled Job produced a signal nothing carried; a silent
+    /// one produced no signal at all, so whatever it decided exists only in a
+    /// transcript nothing reads (PLAN.md §15.2 forbids reading it). The two
+    /// need different things done about them: a stall wants the relay fixed, a
+    /// silence wants the Drone's brief looked at.
+    Silent,
     /// It cannot proceed without an external change.
     Blocked,
     /// Stopped from outside — `armada fleet kill`.
@@ -67,11 +82,12 @@ impl JobState {
     /// that lived at that call site would go stale the first time an eighth
     /// state is added — which is the same argument that makes every `match` on
     /// this enum exhaustive.
-    pub const ALL: [JobState; 7] = [
+    pub const ALL: [JobState; 8] = [
         JobState::Queued,
         JobState::Running,
         JobState::Paused,
         JobState::Stalled,
+        JobState::Silent,
         JobState::Blocked,
         JobState::Aborted,
         JobState::Done,
@@ -84,6 +100,7 @@ impl JobState {
             JobState::Running => "RUNNING",
             JobState::Paused => "PAUSED",
             JobState::Stalled => "STALLED",
+            JobState::Silent => "SILENT",
             JobState::Blocked => "BLOCKED",
             JobState::Aborted => "ABORTED",
             JobState::Done => "DONE",
@@ -102,6 +119,9 @@ impl JobState {
     /// which is what the table already says; needing an *answer* is a claim the
     /// inbox backs with an entry, and conflating the two is how "needs my
     /// attention" becomes noise (PLAN.md §15.4).
+    /// **`SILENT` is not in this set either**, for the same reason: it is a
+    /// thing to look at, not a question with an entry behind it. A Drone that
+    /// said nothing asked nothing.
     pub const fn needs_a_person(self) -> bool {
         matches!(self, JobState::Blocked | JobState::Paused)
     }
@@ -130,9 +150,68 @@ impl JobState {
     pub const fn reaping(self) -> Reaping {
         match self {
             JobState::Done | JobState::Aborted => Reaping::Taken,
-            JobState::Stalled | JobState::Blocked | JobState::Paused => Reaping::Offered,
+            // `SILENT` joins the offered rows for `STALLED`'s reason exactly:
+            // its Drone is gone, it holds a worktree and a port block, and
+            // starting it again is a reasonable next move rather than a reason
+            // to delete the branch it was working on.
+            JobState::Stalled | JobState::Silent | JobState::Blocked | JobState::Paused => {
+                Reaping::Offered
+            }
             JobState::Running | JobState::Queued => Reaping::Never,
         }
+    }
+}
+
+/// What a Job is **in the middle of**, while a verb with a duration runs
+/// (`020` §5).
+///
+/// # The bug this is the state machine for
+///
+/// A Job was aborted, `y` was pressed, and the screen said nothing for several
+/// seconds while `armada manifest clean` talked to docker. **The abort
+/// succeeded** — and a working abort and a hung one looked identical, because
+/// neither of them said anything at all.
+///
+/// **A status word rather than a spinner**, which is the decision `020` §5
+/// takes: the row already has a status column, an action with a duration is a
+/// state the Job is genuinely in, and a spinner would be a second vocabulary
+/// for the same fact. What makes it legible is naming the slow part beside it
+/// — `docker 12s…` — because *which* of the three or four things an abort does
+/// is the part that is taking the time is the only thing the reader wants.
+///
+/// **These are not [`JobState`]s**, deliberately. A Job being aborted is still
+/// `RUNNING` on disk until the abort finishes; folding the two into one enum
+/// would mean a crash halfway through an abort left a record claiming a state
+/// no verb ever reached. This is a *transient* laid over the durable one, and
+/// [`crate::fleet::job::Job::status_word`] is where the two are composed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Acting {
+    /// `armada fleet kill` — stopping the Drone and releasing what it held.
+    Aborting,
+    /// `armada fleet reap` — the same, in bulk.
+    Reaping,
+    /// `armada fleet pause` — stopping the Drone and leaving everything else.
+    Pausing,
+}
+
+impl Acting {
+    /// Every one, so a render can be asserted over the set.
+    pub const ALL: [Acting; 3] = [Acting::Aborting, Acting::Reaping, Acting::Pausing];
+
+    /// The word, in both audiences and in the payload.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Acting::Aborting => "ABORTING",
+            Acting::Reaping => "REAPING",
+            Acting::Pausing => "PAUSING",
+        }
+    }
+}
+
+impl fmt::Display for Acting {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.word())
     }
 }
 
@@ -188,6 +267,78 @@ pub enum Verdict {
     NeedsHuman,
 }
 
+/// What a Drone's proposal is **about**
+/// ([`docs/reserved/008`](../../../../docs/reserved/008-armada-injects-its-own-skills.md)).
+///
+/// # `008`'s open question, answered: both, and the difference is written down
+///
+/// *"May a Drone propose a guild change, or only a manifest one?"* A guild is
+/// **the user** — their voice, their workflows, what they are willing to let an
+/// unattended agent do. A manifest is a repository's description of itself. The
+/// blast radius of an agent editing those two is not remotely the same.
+///
+/// **But nothing here edits either.** A proposal writes one inbox entry and
+/// changes nothing at all, so the question *may it* collapses into *is it worth
+/// reading* — and a Drone that has noticed the same workflow step fail in three
+/// repositories has noticed something about the person. Refusing that outright
+/// would lose it to keep a distinction the mechanism does not need.
+///
+/// So both are allowed, the asymmetry lives in
+/// [`crate::skill::BODY`] — which tells a Drone to be sparing with `guild`,
+/// because it is looking at one repository — and the enforcement is that
+/// **applying a proposal is somebody else's verb**. Armada verifies; it does not
+/// take an agent's word.
+///
+/// # Two, and a third is refused rather than guessed at
+///
+/// The same rule `Verdict` follows: a word outside the set is an error, not a
+/// nearest match. A proposal filed against a subject Armada has no concept of is
+/// a row nobody can act on, which is the whole complaint
+/// `docs/reserved/005-inbox-label-not-identity.md` was raised about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Subject {
+    /// This repository's `armada.yml` — a command, a check, a service, a port.
+    Manifest,
+    /// The person's own guild — a standing preference, a workflow step.
+    Guild,
+}
+
+impl Subject {
+    /// The word, as it is written and as it is read.
+    ///
+    /// **Lower case, unlike every status word in this module, and deliberately.**
+    /// `PASS` and `NEEDS_HUMAN` scream because they are *states* a table draws in
+    /// a STATUS column; this is a noun inside a sentence a person reads — *"a
+    /// Drone proposes a change to the manifest"* — and a shouted noun mid-prose
+    /// reads as a state that does not exist.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Subject::Manifest => "manifest",
+            Subject::Guild => "guild",
+        }
+    }
+
+    /// The word a caller wrote, as the enum.
+    ///
+    /// Case-insensitive for [`crate::fleet::Verdict`]'s reason — a model writing
+    /// `Manifest` meant `manifest`, and sending it round a loop over
+    /// capitalisation costs a turn to teach it nothing.
+    pub fn parse(word: &str) -> Option<Subject> {
+        match word.trim().to_ascii_lowercase().as_str() {
+            "manifest" => Some(Subject::Manifest),
+            "guild" => Some(Subject::Guild),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Subject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.word())
+    }
+}
+
 impl Verdict {
     /// The word, in both audiences. `NEEDS_HUMAN` carries its underscore into
     /// the render, because the payload spells it that way and one spelling is
@@ -236,6 +387,7 @@ mod tests {
             (JobState::Running, "RUNNING"),
             (JobState::Paused, "PAUSED"),
             (JobState::Stalled, "STALLED"),
+            (JobState::Silent, "SILENT"),
             (JobState::Blocked, "BLOCKED"),
             (JobState::Aborted, "ABORTED"),
             (JobState::Done, "DONE"),
@@ -273,18 +425,43 @@ mod tests {
     /// to hold.
     #[test]
     fn a_job_state_round_trips_through_the_index() {
-        for state in [
-            JobState::Queued,
-            JobState::Running,
-            JobState::Paused,
-            JobState::Stalled,
-            JobState::Blocked,
-            JobState::Aborted,
-            JobState::Done,
-        ] {
+        for state in JobState::ALL {
             let json = serde_json::to_string(&state).unwrap();
             let back: JobState = serde_json::from_str(&json).unwrap();
             assert_eq!(back, state);
+        }
+    }
+
+    /// **The three action words, in the one spelling.** They are drawn in a
+    /// status column beside [`JobState`]'s words, so they obey the same rule.
+    #[test]
+    fn every_acting_word_is_spelled_the_same_in_both_audiences() {
+        for (acting, word) in [
+            (Acting::Aborting, "ABORTING"),
+            (Acting::Reaping, "REAPING"),
+            (Acting::Pausing, "PAUSING"),
+        ] {
+            assert_eq!(acting.word(), word);
+            assert_eq!(acting.to_string(), word);
+            assert_eq!(
+                serde_json::to_string(&acting).unwrap(),
+                format!("\"{word}\"")
+            );
+        }
+        assert_eq!(Acting::ALL.len(), 3);
+    }
+
+    /// **An action word is never a Job state.** They are drawn in the same
+    /// column and they mean different things — one is what a Job *is*, the
+    /// other is what somebody is doing *to* it — so a reader who learns one
+    /// vocabulary must not find a word from the other in it.
+    #[test]
+    fn no_action_word_collides_with_a_job_state() {
+        for acting in Acting::ALL {
+            assert!(
+                !JobState::ALL.iter().any(|s| s.word() == acting.word()),
+                "`{acting}` is also a Job state"
+            );
         }
     }
 
@@ -299,6 +476,7 @@ mod tests {
             JobState::Queued,
             JobState::Running,
             JobState::Stalled,
+            JobState::Silent,
             JobState::Aborted,
             JobState::Done,
         ] {
@@ -315,6 +493,7 @@ mod tests {
             JobState::Running,
             JobState::Paused,
             JobState::Stalled,
+            JobState::Silent,
             JobState::Blocked,
         ] {
             assert!(!state.is_over(), "{state} reported itself finished");
@@ -330,5 +509,38 @@ mod tests {
         assert_eq!(Verdict::Failed.settles_to(), JobState::Running);
         assert_eq!(Verdict::Blocked.settles_to(), JobState::Blocked);
         assert_eq!(Verdict::NeedsHuman.settles_to(), JobState::Paused);
+    }
+
+    /// **Two subjects, read in any case, and nothing else is guessed at** — the
+    /// rule `word_to_verdict` follows, for the reason `docs/reserved/008` gives:
+    /// a proposal filed against a subject Armada has no concept of is a row
+    /// nobody can act on.
+    #[test]
+    fn a_proposal_is_about_the_manifest_or_the_guild_and_nothing_else() {
+        assert_eq!(Subject::parse("manifest"), Some(Subject::Manifest));
+        assert_eq!(Subject::parse("guild"), Some(Subject::Guild));
+        assert_eq!(Subject::parse("  Guild "), Some(Subject::Guild));
+        assert_eq!(Subject::parse("MANIFEST"), Some(Subject::Manifest));
+        // Inverted once: a parser that accepted everything would pass every
+        // assertion above.
+        assert_eq!(Subject::parse("armada.yml"), None);
+        assert_eq!(Subject::parse("workflow"), None);
+        assert_eq!(Subject::parse(""), None);
+    }
+
+    /// The word is lower case on purpose — it is a noun in a sentence, not a
+    /// state in a column — and it round-trips through its own parser so the
+    /// written form and the read form cannot drift.
+    #[test]
+    fn a_subjects_word_is_lower_case_and_parses_back_to_itself() {
+        for subject in [Subject::Manifest, Subject::Guild] {
+            let word = subject.word();
+            assert_eq!(word, word.to_ascii_lowercase(), "{word} is shouting");
+            assert_eq!(Subject::parse(word), Some(subject));
+            assert_eq!(
+                serde_json::to_string(&subject).unwrap(),
+                format!("\"{word}\"")
+            );
+        }
     }
 }

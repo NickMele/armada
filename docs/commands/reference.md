@@ -28,6 +28,7 @@ and the three status enums. These pages use them without re-explaining them.
 | [`manifest/init.md`](manifest/init.md) | `armada manifest init` | shipped |
 | [`manifest/status.md`](manifest/status.md) | `armada manifest status` | shipped |
 | [`manifest/clean.md`](manifest/clean.md) | `armada manifest clean` | shipped |
+| [`manifest/prune.md`](manifest/prune.md) | `armada manifest prune` — reclaim docker disk, including disk that is not Armada's | shipped |
 | [`manifest/commands.md`](manifest/commands.md) | `armada manifest commands` · `armada manifest <repo-command>` | shipped |
 | [`manifest/skills.md`](manifest/skills.md) | `armada manifest skills` · `render` | `skills` shipped · `render` not built |
 | [`manifest/components.md`](manifest/components.md) | `armada manifest components` | shipped |
@@ -74,7 +75,7 @@ and the three status enums. These pages use them without re-explaining them.
 | Page | Topic | Status |
 |---|---|---|
 | [`helm/helm.md`](helm/helm.md) | `armada helm` — the conversation | M3 |
-| [`helm/enable.md`](helm/enable.md) | `armada helm enable` · `disable` — the switch that gates `--exec` | M3 |
+| [`helm/enable.md`](helm/enable.md) | `armada helm enable` · `disable` — the switch that lets `armada helm` enter | M3 |
 | [`helm/bridge.md`](helm/bridge.md) | `armada bridge` — the live screen, and the palette | M3 |
 | [`helm/mcp.md`](helm/mcp.md) | The MCP toolbelt Helm drives | M3 |
 | [`helm/inbox.md`](helm/inbox.md) | How Fleet events reach you | M3 |

@@ -216,6 +216,18 @@ pub enum Status {
     Running,
     /// Progress: not executing; `waiting_on` says why.
     Waiting,
+    /// Progress: **not reached yet** (`020` §7).
+    ///
+    /// **The word that replaces `WAITING` for a step the run has not got to.**
+    /// The complaint was exact: *"WAITING sounds like it's waiting for
+    /// something to happen but in fact the workflow is just not at this step
+    /// yet"* — and `WAITING` is not a synonym gone wrong, it is a different
+    /// fact. A `WAITING` row is blocked on something nameable and carries a
+    /// `waiting_on` saying what; a `QUEUED` row is blocked on nothing at all,
+    /// and has no `waiting_on` because there is nothing to name.
+    ///
+    /// Never terminal and never mapped to an exit code, for `RUNNING`'s reason.
+    Queued,
 }
 
 impl Status {
@@ -225,7 +237,7 @@ impl Status {
     /// one. Only the three read verbs — `status`, `check --status`, `explain` —
     /// may put one in the envelope's top-level `status` (PLAN.md §3.1).
     pub const fn is_terminal(self) -> bool {
-        !matches!(self, Status::Running | Status::Waiting)
+        !matches!(self, Status::Running | Status::Waiting | Status::Queued)
     }
 }
 
@@ -247,6 +259,7 @@ impl fmt::Display for Status {
             Status::Timeout => "TIMEOUT",
             Status::Running => "RUNNING",
             Status::Waiting => "WAITING",
+            Status::Queued => "QUEUED",
         })
     }
 }

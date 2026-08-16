@@ -26,6 +26,13 @@ mode: dontAsk
 # `./scripts/ci` — and every one left off an enumeration is a Job that edits
 # code it cannot then verify. `deny` below is what makes that affordable: the
 # ways out of a worktree are a finite list and the ways to run a test are not.
+#
+# The last five are how a Drone speaks and how it performs a step, and leaving
+# any of them out is silent: under `dontAsk` a tool this list omits is denied
+# without telling anybody. Measured — a Drone handed a workflow step naming a
+# skill reported that it could not reach the skill it had been told it had, and
+# another answered its operator in prose because it had no `ask_human` to call.
+# Neither was ignoring instructions; neither could obey them.
 allow:
   - Read
   - Glob
@@ -35,6 +42,19 @@ allow:
   - NotebookEdit
   - TodoWrite
   - Bash
+  # A workflow step names the skill that runs it. Without this the step cannot
+  # run, however well the Drone understands what was asked.
+  - Skill
+  # The four tools a Drone reports through. Armada reads a Job's progress from
+  # these and from nothing else: a step with no verdict cannot be advanced, and
+  # a question asked in prose reaches nobody.
+  #
+  # Named one at a time rather than as a whole server, deliberately — a Drone
+  # may not spawn Jobs, and a wildcard would grant whatever Armada adds next.
+  - mcp__armada__fleet_report
+  - mcp__armada__fleet_verdict
+  - mcp__armada__fleet_ask_human
+  - mcp__armada__fleet_propose
 
 # What is refused however broadly `allow` grants. Deny beats allow.
 #

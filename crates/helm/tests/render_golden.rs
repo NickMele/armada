@@ -34,9 +34,9 @@ use armada_core::envelope::{
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxData, InboxRow,
     InitData, InitDryRun, JobRow, Locality, MachineInitData, NoteRow, PortReport, Problem,
-    Projection, Released, ResolvedSkillView, ResultRow, ScanData, ServicesData, SettingRow,
-    SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem, TickData,
-    TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
+    Projection, Released, ResolvedSkillView, ResultRow, RunView, ScanData, ServicesData,
+    SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData, Sync, SyncItem,
+    TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData, Window,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -429,6 +429,30 @@ fn status_matches_its_fixture() {
         "network:armada-3d9cc7ba".to_string(),
         "pgid:4212".to_string(),
         "volume:pgdata".to_string(),
+    ];
+    // **The one stale row is fourth in `owns`, so the fixture pins the reorder
+    // and not merely the word.** The human render names three and counts the
+    // rest; left in sorted order the leaked group would fall into the `+2` and a
+    // reader would never see the only row they can act on.
+    row.stale = vec!["pgid:4212".to_string()];
+    // A run in flight and one that stopped without deciding, because those are
+    // the only two words this table ever prints and a fixture with one of them
+    // pins half a rule.
+    row.runs = vec![
+        RunView {
+            run_id: "01M048YQMSD6YP48".to_string(),
+            status: Status::Running,
+            pgid: 4212,
+            log: ".armada/run/01M048YQMSD6YP48/detach.log".to_string(),
+            started_at: "2026-08-09T14:02:11Z".to_string(),
+        },
+        RunView {
+            run_id: "01M048KKTG19V63A".to_string(),
+            status: Status::Dead,
+            pgid: 4098,
+            log: ".armada/run/01M048KKTG19V63A/detach.log".to_string(),
+            started_at: "2026-08-09T13:40:02Z".to_string(),
+        },
     ];
     let output = Output::Status(Box::new(Envelope::ok(
         "status",
@@ -1041,6 +1065,95 @@ fn armada_init_matches_its_fixture() {
     assert_render("init-machine", &output);
 }
 
+/// The rows a prune draws, and **the fact the whole table exists to carry**:
+/// whose each volume is.
+///
+/// **Built by hand rather than by running the verb**, for the reason the suite's
+/// own rule gives — no test may remove a real docker resource on this machine.
+/// The numbers are the measured ones: a machine holding 171 volumes and 12.0 GB
+/// of which almost none is Armada's. Three rows stand for the three outcomes,
+/// because a fixture with only the easy one freezes a layout nobody will see.
+fn prune_row(
+    status: Status,
+    reference: &str,
+    owner: armada_core::disk::Ownership,
+    bytes: Option<u64>,
+    detail: Option<&str>,
+) -> armada_core::envelope::PruneRow {
+    armada_core::envelope::PruneRow {
+        status,
+        reference: reference.to_string(),
+        kind: armada_core::disk::DiskKind::Volumes,
+        owner,
+        bytes,
+        detail: detail.map(str::to_string),
+    }
+}
+
+fn prune_fixture() -> armada_core::envelope::PruneData {
+    use armada_core::disk::Ownership;
+    armada_core::envelope::PruneData {
+        results: vec![
+            // Armada's, idle, and taken — the only kind that opens ticked.
+            prune_row(
+                Status::Clean,
+                "armada-a3f91c02_pgdata",
+                Ownership::Armada,
+                Some(79_020_000),
+                None,
+            ),
+            // Armada's, and somebody is working in that worktree right now.
+            prune_row(
+                Status::Skipped,
+                "armada-b7c14e90_pgdata",
+                Ownership::Armada,
+                Some(48_210_000),
+                Some("armada's, in use"),
+            ),
+            // **The row the verb exists to get right.** Twelve gigabytes that
+            // Armada did not create and cannot identify.
+            prune_row(
+                Status::Skipped,
+                "someone-elses_pgdata",
+                Ownership::Unlabelled,
+                Some(12_010_000_000),
+                Some("not armada's"),
+            ),
+        ],
+        freed: Some(79_020_000),
+        withheld: Vec::new(),
+        skipped: Vec::new(),
+    }
+}
+
+#[test]
+fn prune_matches_its_fixture() {
+    let output = Output::Prune(Box::new(Envelope::ok(
+        "prune",
+        None,
+        Status::Partial,
+        prune_fixture(),
+    )));
+    assert_render("prune", &output);
+}
+
+/// **A run with nobody to ask removes nothing, and says which rule stopped it.**
+/// This is the shape an agent gets, and the fixture exists so that the sentence
+/// naming the flag cannot quietly go missing.
+#[test]
+fn prune_with_nobody_to_ask_matches_its_fixture() {
+    let mut data = prune_fixture();
+    data.freed = Some(0);
+    data.results[0].status = Status::Skipped;
+    data.results[0].detail = Some("would go".to_string());
+    data.withheld = vec![
+        "no terminal to ask at; `--yes` removes armada's own".to_string(),
+        "1 of these is not armada's; only a person can remove it".to_string(),
+    ];
+    let output = Output::Prune(Box::new(Envelope::ok("prune", None, Status::Skipped, data)));
+    assert_render("prune-preview", &output);
+}
+
 /// **`armada doctor`, and the `→` lines that are the point of it.**
 ///
 /// Two corrections to the transcribed fixture, both made by hand and recorded
@@ -1110,6 +1223,23 @@ fn doctor_matches_its_fixture() {
             "armada guild project",
         ),
         settled("manifest.db", Settled::Ok, "2 workspaces, 0 orphans"),
+        // **The two disk rows, and the reason there are two of them.** They sit
+        // beside `manifest.db` because they answer its question — what has
+        // quietly accumulated — and they are separate rows because the remedies
+        // differ: the machine's is the reader's own `docker volume prune`, and
+        // Armada's is `armada manifest clean --all`. The numbers here are the
+        // measured ones from the machine the check was written for, where every
+        // one of the 171 volumes was somebody else's compose work.
+        settled(
+            "docker disk",
+            Settled::Ok,
+            "12.0 GB reclaimable in 1 image, 171 volumes",
+        ),
+        settled(
+            "docker disk",
+            Settled::Ok,
+            "none of it is armada's; `docker volume prune` is yours",
+        ),
     ];
     let output = Output::Doctor(Box::new(Envelope::ok(
         "doctor",
@@ -1161,6 +1291,14 @@ fn settings_matches_its_fixture() {
                     Locality::Machine,
                     "helm.enter",
                     "on",
+                    "~/.armada/machine.yml",
+                ),
+                // **The one Helm setting no verb writes**, which is why the
+                // listing is where a reader finds out it exists at all.
+                row(
+                    Locality::Machine,
+                    "helm.mode",
+                    "auto",
                     "~/.armada/machine.yml",
                 ),
                 row(
@@ -1622,6 +1760,7 @@ fn fleet_ls_matches_its_fixture() {
                 wall_clock_ms: 1_860_000,
             },
             needs_attention,
+            acting: None,
         }
     }
 
@@ -1695,6 +1834,11 @@ fn fleet_ls_matches_its_fixture() {
             needs_you: results.iter().filter(|row| row.needs_attention).count(),
             spent_usd: results.iter().map(|row| row.cost_usd).sum(),
             results,
+            // **Carried and not drawn here.** `ls` is a listing of Jobs and the
+            // window is a fact about the account; the surface that leads with it
+            // is the Bridge (`020` §4), which reads this listing rather than a
+            // second source. A `--json` consumer gets it either way.
+            window: None,
         },
     )));
     assert_render("fleet-ls", &output);
@@ -1807,6 +1951,9 @@ fn fleet_tick_matches_its_fixture() {
             predicate: predicate.map(str::to_string),
             evidence: Vec::new(),
             why: why.to_string(),
+            // Absent on every pass but the one that ends a Job, so absent here:
+            // this fixture freezes the ordinary rows.
+            released: None,
         }
     }
 
@@ -1916,8 +2063,13 @@ fn fleet_tick_matches_its_fixture() {
 fn bridge_matches_its_fixture() {
     /// `on_step` is the step and how long it has been on it, together, because
     /// the second means nothing without the first.
+    // Eight fields of a nine-field row, written out rather than bundled: a
+    // struct literal here would be the `JobRow` this already builds, and a
+    // builder would be a second description of one fixture.
+    #[allow(clippy::too_many_arguments)]
     fn row(
         name: &str,
+        uuid: &str,
         state: JobState,
         on_step: (&str, Option<u64>),
         task: &str,
@@ -1927,7 +2079,12 @@ fn bridge_matches_its_fixture() {
     ) -> JobRow {
         let (step, on_step_s) = on_step;
         JobRow {
-            uuid: format!("{name}-uuid"),
+            // **The same five uuids `fleet-ls` uses**, because it is the same
+            // fleet drawn by a second surface — and because the point of the
+            // `ID` column is that the id is opaque where the handle is not, so a
+            // fixture whose ids were built out of the handles would prove
+            // nothing.
+            uuid: uuid.to_string(),
             name: name.to_string(),
             workflow: "feature".to_string(),
             state,
@@ -1945,12 +2102,14 @@ fn bridge_matches_its_fixture() {
                 wall_clock_ms: 1_860_000,
             },
             needs_attention,
+            acting: None,
         }
     }
 
-    let results = vec![
+    let mut results = vec![
         row(
             "rate-limit",
+            "c19d0a34-3069-4115-ad92-e81f486ce8b9",
             JobState::Running,
             ("implement", Some(12 * 60)),
             "add gateway limiter",
@@ -1960,6 +2119,7 @@ fn bridge_matches_its_fixture() {
         ),
         row(
             "carina-schema",
+            "94b1fd2e-6288-46f8-83f0-0d7d857e64cd",
             JobState::Running,
             ("plan", Some(3 * 60)),
             "migrate schema",
@@ -1973,6 +2133,7 @@ fn bridge_matches_its_fixture() {
         // nothing is drawn rather than a `0s` that reads as a measurement.
         row(
             "xlsx-report",
+            "3d9cc7ba-1f40-4a6e-9c21-5b8e0d2a7f13",
             JobState::Stalled,
             ("reproduce", None),
             "generate report",
@@ -1982,6 +2143,7 @@ fn bridge_matches_its_fixture() {
         ),
         row(
             "release-merge",
+            "7f2ab618-58d3-4c07-b9e4-1a6c39fd80ae",
             JobState::Blocked,
             ("implement", Some(18 * 60)),
             "merge release",
@@ -1990,6 +2152,12 @@ fn bridge_matches_its_fixture() {
             true,
         ),
     ];
+    // **`NEEDS YOU` carries the question, not `YES`** (`020` §"Also decided"),
+    // so most answers need no second screen. `armada fleet ls` folds an open
+    // inbox entry's body into `detail`, and this is the one row that has one —
+    // which is also why the other three keep `detail == step` and draw nothing
+    // in that column at all.
+    results[3].detail = "the CI timeout is 30s and the flake needs 90s. Raise it?".to_string();
 
     let output = Output::Bridge(Box::new(Envelope::ok(
         "bridge",
@@ -2004,6 +2172,14 @@ fn bridge_matches_its_fixture() {
                 .count(),
             filter: None,
             hidden: 0,
+            // **The window leads the summary line and spend follows it**
+            // (`020` §4). Both halves are here because both were measured: the
+            // percentage is Claude Code's `utilization` floored, and the reset
+            // is its `resetsAt` turned into a countdown.
+            window: Some(Window {
+                used_percent: Some(71),
+                resets_in_s: Some(2 * 3_600 + 14 * 60),
+            }),
             results,
         },
     )));
@@ -2022,7 +2198,7 @@ fn bridge_matches_its_fixture() {
 #[test]
 fn bridge_filtered_matches_its_fixture() {
     let results = vec![JobRow {
-        uuid: "carina-schema-uuid".to_string(),
+        uuid: "94b1fd2e-6288-46f8-83f0-0d7d857e64cd".to_string(),
         name: "carina-schema".to_string(),
         workflow: "feature".to_string(),
         state: JobState::Running,
@@ -2039,6 +2215,7 @@ fn bridge_filtered_matches_its_fixture() {
             tokens: 388_000,
             wall_clock_ms: 2_520_000,
         },
+        acting: None,
         needs_attention: false,
     }];
 
@@ -2052,6 +2229,19 @@ fn bridge_filtered_matches_its_fixture() {
             running: 1,
             filter: Some("state=RUNNING".to_string()),
             hidden: 3,
+            // **A window with no percentage, which is the ordinary case.** The
+            // `utilization` field only rides along once the service has crossed
+            // a threshold, so most frames know when the window resets and not
+            // how much of it is gone — and the line says what it has rather than
+            // computing the rest.
+            //
+            // **It survives the filter**, unlike every other number here: the
+            // rows are what `state=RUNNING` selected, and the window is the
+            // account's.
+            window: Some(Window {
+                used_percent: None,
+                resets_in_s: Some(43 * 60),
+            }),
             results,
         },
     )));
@@ -2103,6 +2293,11 @@ fn helm_matches_its_fixture() {
                 "~/.armada/helm/plugin".to_string(),
                 "--settings".to_string(),
                 "~/.armada/helm/settings.json".to_string(),
+                // The mode the session enters under. A Drone gets `dontAsk`
+                // because nobody is there to answer; this reader is sitting in
+                // front of it, so `auto` asks them the questions worth asking.
+                "--permission-mode".to_string(),
+                "auto".to_string(),
                 "--session-id".to_string(),
                 "15bfa340-33b1-4f81-bd7f-688f0f01dbb0".to_string(),
             ],
@@ -2112,10 +2307,11 @@ fn helm_matches_its_fixture() {
             // here as `"$(cat …)"` and the fixture freezes that it never
             // appears any other way.
             command: "claude --agent helm --append-system-prompt \
-                      \"$(cat ~/.armada/helm/guild-voice.md)\" \
+                      \"$(cat ~/.armada/helm/system-prompt.md)\" \
                       --mcp-config ~/.armada/helm/mcp.json \
                       --plugin-dir ~/.armada/helm/plugin \
                       --settings ~/.armada/helm/settings.json \
+                      --permission-mode auto \
                       --session-id 15bfa340-33b1-4f81-bd7f-688f0f01dbb0"
                 .to_string(),
             results: vec![
@@ -2136,7 +2332,7 @@ fn helm_matches_its_fixture() {
                 ),
                 wired(
                     "voice",
-                    "~/.armada/helm/guild-voice.md",
+                    "~/.armada/helm/system-prompt.md",
                     "voice.md, how-i-work.md: your words, and they outrank the persona",
                 ),
                 Wired {

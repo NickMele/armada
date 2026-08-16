@@ -1,4 +1,4 @@
-armada — one vocabulary for a repo's stack, and the agents working in it
+armada — agents that work while you do not
 
 USAGE
   armada <module> <verb> [flags]  the verbs Armada owns
@@ -15,6 +15,7 @@ MANIFEST — what a workspace is and how to operate it
   components            what this repository can be filtered by
   commands              the verbs this repository declares
   clean                 release what this workspace owns
+  prune                 reclaim docker disk, including disk that is not armada's
   <name>                a verb this repo declares; manifest commands lists them
 
 GUILD — you, portable: voice, skills, hooks, workflows
@@ -44,8 +45,8 @@ FLEET — the agents you do not talk to: Jobs, worktrees, budgets
   kill [<job>]          end a Job and release everything it owns
 
 HELM AND THE BRIDGE — where you talk, and what you watch
-  helm          the one agent you talk to: wire the toolbelt, report the launch
-  helm enable   let --exec become a session, on this machine
+  helm          the one agent you talk to: wire the toolbelt, enter the session
+  helm enable   let armada helm become a session, on this machine
   helm disable  the opposite of enable — the default on a fresh install
   bridge        the live screen: every Job, its state, its spend, who needs you
 
