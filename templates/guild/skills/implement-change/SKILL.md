@@ -38,6 +38,10 @@ But plans are written before the code is touched, and some of them are wrong. Wh
   make. Report it through `mcp__armada__fleet_report` so the record says what changed and why.
 - **A change to the approach** is not yours. That is `mcp__armada__fleet_ask_human`: the plan was
   approved on its merits and a different plan needs the same approval.
+- **A question the plan marked `NEEDS THE OWNER` and nobody answered is not yours either.** It is a
+  decision the planning step deliberately did not take, written down so that somebody else would take
+  it. If the plan was approved and the answer never came, that is not consent by silence — say so and
+  ask, naming the question so the reader does not have to find it.
 - **A defect in Armada itself**, or in the repository's own configuration, is
   `mcp__armada__fleet_propose`. It writes an inbox entry and changes nothing.
 
