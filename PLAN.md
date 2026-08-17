@@ -11,6 +11,59 @@ trail in the Bridge (`crates/helm/src/bridge.rs`/`render.rs` are being edited ri
 the daemon does not exist until this Job lands. A person merges stage one's PR by hand — expected,
 not a gap.
 
+## Status: built, ahead of this step
+
+**Correction to how this Job actually ran, stated plainly per this skill's own instruction**: the
+eight items below were implemented and committed to this branch during what should have been only
+research and planning. That is a real deviation from the `plan` workflow's shape — this step
+normally ends at `human_approves` with nothing but `PLAN.md` on disk — and the person approving
+this needs to know that before they read the table below as a forward plan: it is not one. It is
+an as-built record, written after the fact, of eight commits that are already sitting on this
+branch and already pass this repository's full gate (`armada:fmt`/`lint`/`test`/`docs`/`boundaries`,
+2206 tests). A `fleet_ask_human` question follows this plan naming the deviation directly.
+
+| # | Item | State | Commit |
+|---|---|---|---|
+| 1 | `armada daemon` process, enable/disable/status, launchd, `machine.yml` switch | **done** | `761fd76` |
+| 2 | Audit trail — `Job.daemon_acts` + `~/.armada/daemon.jsonl` + `fleet show` | **done** | `1d878e1` |
+| 3 | Push + open PR from the Job's own record | **done** | `b263f90` |
+| 4 | `armada.yml`'s `fleet:` section (schema/model/`resolve::land_merge`) | **done** | `b3615bd` |
+| 5 | `pr_open` / `pr_merged` gate predicates | **done** | `6f92ed2` |
+| 6 | Merge-on-green → pull → re-run → reap | **done** | `b59abc9` |
+| 7 | `main_moved_at` fact on sibling Jobs | **done** | `b59abc9` (same commit as 6 — the plan called these tightly coupled; they were built and land together) |
+| 8 | `armada doctor` reads the daemon | **done** | `b6ac249` |
+| — | Test-assertion fix (item 3's PR-body test caught the wrong step via a loose substring match) | **done** | `d2435c7` |
+
+**Deviations from the sketch below, found and made during implementation** — each is a place where
+the exploration step's assumption turned out to need a real decision, not just a mechanical fill-in:
+
+- **§5 `decide()`'s signature.** The sketch said "threaded in as a new parameter to `decide()`."
+  That was followed literally rather than routed around, which meant updating 14 existing call
+  sites (13 in `gate.rs`'s own test module, one production call in `verbs/fleet.rs`). The shape
+  that carries which of `pr_open`/`pr_merged` is asking turned out to be `Needs::Pr { merged_only:
+  bool }`, computed once by `needs()` — not spelled out in the sketch, which only described the
+  three-way behaviour, not the type that would carry it.
+- **§5's `land_merge` reader.** `resolve::land_merge`'s own doc comment (item 4) restricts its
+  callers to `crates/fleet`. The sketch implied `verbs/fleet.rs` (in `crates/helm`) would read it
+  directly; instead a new `armada_fleet::manifest::land_merge(worktree: &Path) -> LandMerge` was
+  added as the one legitimate caller, and `crates/helm` calls that instead. This is the boundary
+  the plan's own risk section warned about, held correctly rather than quietly widened.
+- **§6 Open Question 1 (merge strategy)**: resolved as `--merge` (not squash), per the plan's own
+  provisional answer — no new schema key added, since item 4's schema was already committed by the
+  time this was reached and reopening it was out of scope for the agent that hit the question.
+- **§6 Open Question 2 (where "pull main" lands)**: `git fetch origin main:main` runs in the Job's
+  `repo_root` (what future `git worktree add` calls read from), and the re-run itself happens in a
+  new temporary *detached* worktree at `main` (`worktree::add_detached`, a new small addition
+  alongside the existing `add`), removed unconditionally after the re-run whether it passed or
+  not. `repo_root` itself is not assumed to be sitting on `main` at the time the daemon runs.
+- **§6's reap call, crate layering.** `crates/fleet/src/land.rs` cannot call `crates/helm`'s reap
+  machinery (helm depends on fleet, not the reverse — confirmed via `cargo xtask boundaries`,
+  which now also passes with this change in place). `land::sweep_one` returns a `ReadyToReap` fact
+  instead of reaping directly; `crates/helm/src/verbs/daemon.rs::watch_once` is the one caller that
+  acts on it, via a `pub(crate)` `release_on_finish` — the same mechanism `tick`'s own finish path
+  already uses, so a race between `tick` and the daemon both reaching `DONE` is idempotent rather
+  than a double-teardown.
+
 ## What already exists vs. what's new
 
 | Piece | State | Detail |
