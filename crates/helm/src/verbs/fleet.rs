@@ -4017,6 +4017,7 @@ fn spawn_child<R: Run, C: Clock>(
         port_block: None,
         budget: carved(
             flow.budget,
+            flow.ends_at,
             &parent.budget,
             &parent.spend,
             &parent.budget_set,
@@ -4146,8 +4147,36 @@ fn child_task(parent: &Job, kind: gate::SubJobKind) -> String {
 /// still bounded by what the parent actually has, so the containment argument
 /// above is untouched; what changes is which number is the default and which is
 /// the instruction.
+/// How much of a parent's remaining budget a step that produces a document may
+/// take, when the caller has raised that budget.
+///
+/// **A third, and the number is a judgement rather than a measurement.** What is
+/// measured is the failure it answers: one `plan` sub-Job took $12.37 of $20
+/// before implementation began. A third leaves two thirds for the work the
+/// planning was for, which is the ordering the `feature` workflow already
+/// implies — `plan` is one step of five.
+const PLANNING_SHARE: f64 = 1.0 / 3.0;
+
+/// # A raise reaches a step that writes code; a step that writes a document gets a share
+///
+/// **Measured 2026-08-16, an hour after the raise above was built.** A `plan`
+/// sub-Job under a parent spawned with `--budget max_cost=20.00` spent **$12.37
+/// planning** — 177 turns and an hour of API time — and stopped at its approval
+/// gate with no code written. The raise had reached it, exactly as intended, and
+/// handed the whole remainder to the cheap half of the work.
+///
+/// So a child whose workflow [`workflow::EndsAt::Human`] — `design`, `plan`,
+/// `review`, the ones whose output is a document rather than a change — gets
+/// [`PLANNING_SHARE`] of what the parent has left rather than all of it.
+/// Planning is meant to be the cheap part, and a plan step that can take the
+/// whole budget inverts that before implementation begins.
+///
+/// **Never below what the workflow itself declares, and never above what the
+/// parent has.** The share is a ceiling on a raise, not a second way to starve a
+/// sub-Job — which was the original defect and must not come back.
 fn carved(
     declared: workflow::Budget,
+    ends_at: workflow::EndsAt,
     parent: &workflow::Budget,
     spent: &Spend,
     set: &[String],
@@ -4160,7 +4189,12 @@ fn carved(
         // child spawned with `--budget max_attempts` gets it on its own record.
         attempts: declared.attempts,
         cost_usd: match told("max_cost") {
-            true => left.cost_usd,
+            true => match ends_at {
+                workflow::EndsAt::Branch => left.cost_usd,
+                workflow::EndsAt::Human => (left.cost_usd * PLANNING_SHARE)
+                    .max(declared.cost_usd)
+                    .min(left.cost_usd),
+            },
             false => declared.cost_usd.min(left.cost_usd),
         },
         // The clock stays the child's own either way: the parent's is suspended
@@ -4362,7 +4396,7 @@ fn committed<R: Run>(run: &R, worktree: &Path, branch: &str) -> gate::Probed {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use armada_core::fleet::workflow::{Budget, OnExhausted};
+    use armada_core::fleet::workflow::{Budget, EndsAt, OnExhausted};
 
     fn budget(attempts: u32, cost_usd: f64) -> Budget {
         Budget {
@@ -4387,10 +4421,84 @@ mod tests {
 
         // Nobody said anything, so the child's own declaration holds. A
         // default must never be raised in silence.
-        assert_eq!(carved(declared, &parent, &spent, &[]).cost_usd, 5.00);
+        assert_eq!(
+            carved(declared, EndsAt::Branch, &parent, &spent, &[]).cost_usd,
+            5.00
+        );
 
-        let told = carved(declared, &parent, &spent, &["max_cost".to_string()]);
+        let told = carved(
+            declared,
+            EndsAt::Branch,
+            &parent,
+            &spent,
+            &["max_cost".to_string()],
+        );
         assert_eq!(told.cost_usd, 30.00, "the raise did not reach the sub-Job");
+    }
+
+    /// **A raise does not hand the whole budget to the planning step.**
+    ///
+    /// Measured 2026-08-16, an hour after the raise was built: a `plan` sub-Job
+    /// under a parent spawned `--budget max_cost=20.00` spent $12.37 planning —
+    /// 177 turns, an hour of API time — and stopped at its approval gate with no
+    /// code written. The raise reached it exactly as intended and gave the cheap
+    /// half of the work the expensive half's money.
+    #[test]
+    fn a_step_that_writes_a_document_gets_a_share_of_a_raise_rather_than_all_of_it() {
+        let spent = Spend::default();
+        let parent = budget(3, 30.00);
+
+        let planning = carved(
+            budget(3, 5.00),
+            EndsAt::Human,
+            &parent,
+            &spent,
+            &["max_cost".to_string()],
+        );
+        assert!(
+            planning.cost_usd < 30.00,
+            "the whole remainder went to a step that writes a document: {}",
+            planning.cost_usd
+        );
+        assert!(
+            (planning.cost_usd - 10.00).abs() < 1e-9,
+            "expected a third of the parent's remainder, got {}",
+            planning.cost_usd
+        );
+
+        // **The same parent, a step that writes code: the whole remainder.**
+        // The share is a ceiling on planning, not a new way to starve a sub-Job
+        // — which was the original defect and must not come back.
+        let building = carved(
+            budget(3, 5.00),
+            EndsAt::Branch,
+            &parent,
+            &spent,
+            &["max_cost".to_string()],
+        );
+        assert_eq!(building.cost_usd, 30.00);
+    }
+
+    /// **The share never drops a sub-Job below what its own workflow asks
+    /// for.** A third of a nearly-spent parent is pennies, and a `plan.yml`
+    /// declaring $5.00 means $5.00 is what planning is worth — the raise is
+    /// being capped, not the declaration.
+    #[test]
+    fn the_planning_share_never_undercuts_the_workflows_own_declaration() {
+        let spent = Spend {
+            cost_usd: 21.00,
+            ..Default::default()
+        };
+        let told = carved(
+            budget(3, 5.00),
+            EndsAt::Human,
+            &budget(3, 30.00),
+            &spent,
+            &["max_cost".to_string()],
+        );
+        // A third of the $9.00 left is $3.00, which is less than plan.yml's
+        // $5.00 — so the declaration wins, still bounded by the $9.00 remaining.
+        assert_eq!(told.cost_usd, 5.00);
     }
 
     /// **The attempt ceiling is not carved, because it is not a shared pool.**
@@ -4405,6 +4513,7 @@ mod tests {
         let spent = Spend::default();
         let told = carved(
             budget(3, 5.00),
+            EndsAt::Branch,
             &budget(3, 30.00),
             &spent,
             &["max_cost".to_string()],
@@ -4424,6 +4533,7 @@ mod tests {
         };
         let told = carved(
             budget(3, 5.00),
+            EndsAt::Branch,
             &budget(3, 30.00),
             &spent,
             &["max_cost".to_string()],
