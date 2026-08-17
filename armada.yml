@@ -27,7 +27,13 @@ manifest:
     armada:
       # No `root:` and no `match:`: the component *is* the repo, so the default
       # (`**`, PLAN.md §4.1.1) is the correct glob rather than an omission.
-      setup: cargo fetch
+      # **`cargo fetch` and the test runner, because a check a Drone cannot run
+      # is a check that does not exist.** `manifest init` runs this in every new
+      # worktree, so a Job spawned on a fresh machine gets `cargo-nextest`
+      # before its first gate calls `armada manifest check`. `--locked` so the
+      # runner is the same build everywhere, and installing an already-present
+      # version is a no-op rather than a rebuild.
+      setup: cargo fetch && cargo install cargo-nextest --locked
 
       owns:
         # Removed only by `clean --artifacts` (PLAN.md §3.3.1). It costs disk and
@@ -46,8 +52,19 @@ manifest:
           scope: component
           cost: 2
 
+        # **`nextest` rather than `cargo test`, measured at 3x.** `cargo test`
+        # runs each of the twenty test binaries to completion before starting
+        # the next; `nextest` pools every test across all of them. Warm, on this
+        # workspace: 83s against 27s for the same 2034 tests, with 35s of CPU
+        # inside that 83s — most of the old number was one binary blocking while
+        # the rest waited their turn.
+        #
+        # **It does not touch the cold number**, which is larger and is
+        # compilation: ~4 minutes after a merge, because the install hook
+        # rebuilds and invalidates the cache. That is a separate problem and
+        # this is not a fix for it.
         test:
-          cmd: cargo test --workspace
+          cmd: cargo nextest run --workspace
           scope: component
           cost: 2
 
