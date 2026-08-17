@@ -279,6 +279,52 @@ impl Cursor {
     }
 }
 
+/// One of the command centre's five boxes.
+///
+/// **Reachable whether or not it holds a cursor.** `tab`/`1`-`5` cycle or jump
+/// to all five (`docs/reserved/033-the-command-centre-designed.md`) — a digit
+/// key that changed nothing for three of them would be a key that lied about
+/// what it does. MANIFEST, GUILD and SYSTEM take focus today with no row a verb
+/// can act on: `enter`/`d`/`a`/`x`/`p`/`r` only fire while [`Panel::Jobs`] is
+/// focused, because those are the only rows a verb is wired to yet.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Panel {
+    /// The fleet table — the only panel with a verb wired to a row today.
+    #[default]
+    Jobs,
+    /// What's asked, failed or reported (`armada_fleet::inbox`).
+    Inbox,
+    /// Manifest checks and leased workspaces.
+    Manifest,
+    /// Skills, workflows and quick actions.
+    Guild,
+    /// Drones, docker, disk and stale process groups.
+    System,
+}
+
+impl Panel {
+    /// Every panel, in the order `tab` cycles and `1`-`5` name.
+    const ALL: [Panel; 5] = [
+        Panel::Jobs,
+        Panel::Inbox,
+        Panel::Manifest,
+        Panel::Guild,
+        Panel::System,
+    ];
+
+    /// `tab` — the next one, wrapping.
+    pub fn next(self) -> Panel {
+        let at = Self::ALL.iter().position(|panel| *panel == self).unwrap_or(0);
+        Self::ALL[(at + 1) % Self::ALL.len()]
+    }
+
+    /// `1`-`5`, or nothing for any other character.
+    pub fn from_digit(c: char) -> Option<Panel> {
+        let at = c.to_digit(10)? as usize;
+        at.checked_sub(1).and_then(|i| Self::ALL.get(i).copied())
+    }
+}
+
 /// The Bridge's key vocabulary.
 ///
 /// **Its own, rather than a terminal library's.** Core imports nothing of a
@@ -298,6 +344,8 @@ pub enum Key {
     Backspace,
     /// Any printable character.
     Char(char),
+    /// `tab` — the next panel (`docs/reserved/033-the-command-centre-designed.md`).
+    Tab,
     /// `ctrl-c`.
     Interrupt,
     /// `ctrl-d` — **the text area's submit, and only a text area's**.
@@ -569,6 +617,8 @@ pub enum Pressed {
 pub struct Screen {
     /// Which row.
     pub cursor: Cursor,
+    /// Which of the five boxes `tab`/`1`-`5` last landed on.
+    pub focus: Panel,
     /// The filter in force, if any.
     pub filter: Option<Filter>,
     /// What the screen is doing.
@@ -677,10 +727,32 @@ pub fn press(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
 }
 
 fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
-    let selected = screen.cursor.selected(rows).map(Target::of);
+    // **`tab` and the digits move focus and touch nothing else.** They are
+    // handled before everything below so a panel with no cursor yet still
+    // takes them — a digit key that changed nothing for three of five panels
+    // would be a key that lied about what it does.
     match key {
-        Key::Up | Key::Char('k') => screen.cursor.previous(rows.len()),
-        Key::Down | Key::Char('j') => screen.cursor.next(rows.len()),
+        Key::Tab => {
+            screen.focus = screen.focus.next();
+            return Pressed::Stay;
+        }
+        Key::Char(c) if Panel::from_digit(c).is_some() => {
+            screen.focus = Panel::from_digit(c).expect("guarded above");
+            return Pressed::Stay;
+        }
+        _ => {}
+    }
+
+    let selected = screen.cursor.selected(rows).map(Target::of);
+    // **Movement and the row verbs act on JOBS only, for now.** MANIFEST,
+    // GUILD and SYSTEM take focus (above) but have no verb wired to a row yet;
+    // acting on the Job under a cursor the reader is not looking at would be
+    // worse than the key doing nothing.
+    let on_jobs = screen.focus == Panel::Jobs;
+    match key {
+        Key::Up | Key::Char('k') if on_jobs => screen.cursor.previous(rows.len()),
+        Key::Down | Key::Char('j') if on_jobs => screen.cursor.next(rows.len()),
+        Key::Up | Key::Char('k') | Key::Down | Key::Char('j') => {}
 
         // **`esc` clears the filter before it quits.** A filtered screen is the
         // one place `esc` has an obvious smaller meaning, and a person who
@@ -707,7 +779,7 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         // the `armada fleet board` handoff it has always been. The key is the
         // same either way, because *step aboard this Job* is the same intent —
         // only the thing that carries it out differs.
-        Key::Enter => match (selected, screen.workspace) {
+        Key::Enter if on_jobs => match (selected, screen.workspace) {
             (Some(target), Workspace::Cmux) => return Pressed::Act(Action::Open(target)),
             (Some(target), Workspace::None) => return Pressed::Leave(Departure::Board(target)),
             (None, _) => screen.notice = Some(nothing_selected("board")),
@@ -721,7 +793,7 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         // of a whole fleet in order to report one unimplemented key.
         Key::Char('c') => return Pressed::Act(Action::Chat),
 
-        Key::Char('a') => match screen.cursor.selected(rows) {
+        Key::Char('a') if on_jobs => match screen.cursor.selected(rows) {
             // **Only a Job with something open can be answered.** `armada fleet
             // answer` refuses one that has nothing waiting, and finding that out
             // by leaving the screen and coming back is a worse way to be told.
@@ -742,12 +814,12 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         // as the line could only wrap or lie; now the line drops by priority and
         // says `? keys` when it has, so naming `d` costs the two pairs at the
         // end of the order rather than the frame's height.
-        Key::Char('d') => match selected {
+        Key::Char('d') if on_jobs => match selected {
             Some(target) => screen.mode = Mode::Detail(target.job),
             None => screen.notice = Some(nothing_selected("show")),
         },
 
-        Key::Char('x') => match selected {
+        Key::Char('x') if on_jobs => match selected {
             Some(target) => {
                 screen.notice = Some(format!("abort `{}`? press y", target.job));
                 screen.mode = Mode::Confirming(target);
@@ -758,7 +830,7 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         // **`p` reads the row it is on.** One key, two verbs, decided by what
         // the selected Job is doing — which is the same thing the key line says
         // it will do, because both ask [`pause_key`].
-        Key::Char('p') => match screen.cursor.selected(rows) {
+        Key::Char('p') if on_jobs => match screen.cursor.selected(rows) {
             Some(row) => {
                 let target = Target::of(row);
                 return Pressed::Act(match row.state {
@@ -772,15 +844,19 @@ fn watching(screen: &mut Screen, rows: &[JobRow], key: Key) -> Pressed {
         // **`r` opens the preview and reaps nothing.** Reading what would be
         // taken is the whole feature, so the key that starts it must be safe to
         // press out of curiosity.
-        Key::Char('r') => return Pressed::Act(Action::Preview),
+        Key::Char('r') if on_jobs => return Pressed::Act(Action::Preview),
 
         // **`?` is what a one-line key line costs.** The line drops its lowest
         // -priority pairs rather than wrapping, because wrapping would change
         // the frame's height; this is where the ones it dropped are.
         Key::Char('?') => screen.mode = Mode::Keys,
 
-        // `ctrl-d` belongs to the box and there is no box open.
-        Key::Save | Key::Backspace | Key::Char(_) => {}
+        // `ctrl-d` belongs to the box and there is no box open. `Tab` and the
+        // digits were already handled above and return before reaching here;
+        // `Enter` and every guarded `Char` land here too when a cursorless
+        // panel is focused — this arm exists so the match stays exhaustive
+        // and so those keys are inert rather than unreachable.
+        Key::Save | Key::Backspace | Key::Char(_) | Key::Tab | Key::Enter => {}
     }
     Pressed::Stay
 }
@@ -821,8 +897,9 @@ fn composing(screen: &mut Screen, mut typed: String, key: Key) -> Pressed {
 
         // The cursor belongs to the table underneath, and the table is still on
         // the screen — but moving it while typing would put the caret in two
-        // places, so the arrows do nothing here.
-        Key::Up | Key::Down => {}
+        // places, so the arrows do nothing here. Focus is not a thing a text
+        // box changes either.
+        Key::Up | Key::Down | Key::Tab => {}
     }
     screen.mode = Mode::Composing(typed);
     Pressed::Stay
@@ -868,7 +945,7 @@ fn reaping(screen: &mut Screen, mut reap: Reap, key: Key) -> Pressed {
             return Pressed::Stay;
         }
 
-        Key::Backspace | Key::Char(_) => {}
+        Key::Backspace | Key::Char(_) | Key::Tab => {}
     }
     screen.mode = Mode::Reaping(reap);
     Pressed::Stay
@@ -902,8 +979,10 @@ fn filtering(screen: &mut Screen, mut typed: String, key: Key) -> Pressed {
             }
         },
         // `ctrl-d` belongs to the compose box; the filter is one line and
-        // `enter` already commits it.
-        Key::Save | Key::Up | Key::Down => screen.mode = Mode::Filtering(typed),
+        // `enter` already commits it. While typing, every letter is a letter —
+        // `tab` is no exception, since `/` opening the filter is exactly why
+        // movement wants non-letter keys in the first place.
+        Key::Save | Key::Up | Key::Down | Key::Tab => screen.mode = Mode::Filtering(typed),
     }
     Pressed::Stay
 }
@@ -1742,5 +1821,121 @@ Usage:
         press(&mut screen, &rows, Key::Char('k'));
         assert_eq!(screen.cursor.at(), 0);
         assert_eq!(screen.mode, Mode::Detail("rate-limit".to_string()));
+    }
+
+    // -------------------------------------------------------------- the panels
+
+    /// **`tab` cycles all five, wrapping**, including the three with no verb
+    /// wired to a row — a `tab` that skipped them would be a key that lied
+    /// about which boxes exist.
+    #[test]
+    fn tab_cycles_focus_through_all_five_panels_and_wraps() {
+        let (mut screen, rows) = watching_at(3);
+        assert_eq!(screen.focus, Panel::Jobs, "the default focus");
+        for expected in [
+            Panel::Inbox,
+            Panel::Manifest,
+            Panel::Guild,
+            Panel::System,
+            Panel::Jobs,
+        ] {
+            assert_eq!(press(&mut screen, &rows, Key::Tab), Pressed::Stay);
+            assert_eq!(screen.focus, expected);
+        }
+    }
+
+    /// `1`-`5` jump straight to a panel, in the same order `tab` cycles.
+    #[test]
+    fn digits_one_through_five_jump_focus_directly() {
+        let (mut screen, rows) = watching_at(3);
+        for (digit, expected) in [
+            ('3', Panel::Manifest),
+            ('1', Panel::Jobs),
+            ('5', Panel::System),
+            ('2', Panel::Inbox),
+            ('4', Panel::Guild),
+        ] {
+            assert_eq!(press(&mut screen, &rows, Key::Char(digit)), Pressed::Stay);
+            assert_eq!(screen.focus, expected, "digit {digit}");
+        }
+    }
+
+    /// A digit outside `1`-`5`, or any other character, is not a panel jump —
+    /// it falls through to whatever that key ordinarily does.
+    #[test]
+    fn a_digit_outside_one_to_five_is_not_a_panel_jump() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('6'));
+        assert_eq!(screen.focus, Panel::Jobs, "6 is not a panel");
+        press(&mut screen, &rows, Key::Char('0'));
+        assert_eq!(screen.focus, Panel::Jobs, "0 is not a panel");
+    }
+
+    /// **Movement acts on JOBS only, today.** MANIFEST, GUILD and SYSTEM take
+    /// focus but have no cursor of their own yet, so `↑`/`↓`/`j`/`k` there are
+    /// no-ops rather than moving the Job cursor a reader focused elsewhere
+    /// cannot see move.
+    #[test]
+    fn movement_is_a_no_op_on_a_panel_with_no_cursor_of_its_own() {
+        let (mut screen, rows) = watching_at(3);
+        screen.focus = Panel::Manifest;
+        assert_eq!(press(&mut screen, &rows, Key::Down), Pressed::Stay);
+        assert_eq!(screen.cursor.at(), 0, "the Job cursor moved off-screen");
+
+        screen.focus = Panel::Jobs;
+        press(&mut screen, &rows, Key::Down);
+        assert_eq!(screen.cursor.at(), 1, "JOBS still moves once focused");
+    }
+
+    /// **The row verbs act on JOBS only, today**, for the same reason: `enter`,
+    /// `d`, `a`, `x`, `p` and `r` all read the Job under the cursor, and firing
+    /// one while looking at GUILD would act on a row the reader cannot see.
+    #[test]
+    fn row_verbs_are_inert_while_a_cursorless_panel_is_focused() {
+        let (mut screen, rows) = watching_at(3);
+        screen.focus = Panel::System;
+
+        assert_eq!(press(&mut screen, &rows, Key::Enter), Pressed::Stay);
+        assert_eq!(press(&mut screen, &rows, Key::Char('d')), Pressed::Stay);
+        assert_eq!(press(&mut screen, &rows, Key::Char('x')), Pressed::Stay);
+        assert_eq!(press(&mut screen, &rows, Key::Char('p')), Pressed::Stay);
+        assert_eq!(press(&mut screen, &rows, Key::Char('r')), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Watching, "a verb fired while unfocused");
+
+        screen.focus = Panel::Jobs;
+        assert_eq!(
+            press(&mut screen, &rows, Key::Enter),
+            Pressed::Leave(Departure::Board(target("rate-limit"))),
+            "the same key fires once JOBS is focused"
+        );
+    }
+
+    /// **Global keys work from every panel.** `n`, `c`, `/`, `?` and `q` are
+    /// not about a row, so focus must not gate them.
+    #[test]
+    fn global_keys_work_regardless_of_focus() {
+        for panel in Panel::ALL {
+            let (mut screen, rows) = watching_at(3);
+            screen.focus = panel;
+            assert_eq!(
+                press(&mut screen, &rows, Key::Char('n')),
+                Pressed::Stay,
+                "{panel:?}"
+            );
+            assert_eq!(screen.mode, Mode::Composing(String::new()), "{panel:?}");
+        }
+    }
+
+    /// `tab` and the digits are handled before the compose box, filter box and
+    /// reap preview see them, so those modes stay exhaustive without treating
+    /// a panel jump as a keystroke worth reacting to.
+    #[test]
+    fn tab_and_digits_do_not_disturb_a_mode_other_than_watching() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('n'));
+        assert_eq!(press(&mut screen, &rows, Key::Tab), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Composing(String::new()));
+        assert_eq!(press(&mut screen, &rows, Key::Char('3')), Pressed::Stay);
+        assert_eq!(screen.mode, Mode::Composing("3".to_string()));
     }
 }

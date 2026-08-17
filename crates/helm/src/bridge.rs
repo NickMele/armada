@@ -92,6 +92,7 @@ pub fn key_of(code: KeyCode, modifiers: KeyModifiers) -> Option<Key> {
         KeyCode::Enter => Some(Key::Enter),
         KeyCode::Esc => Some(Key::Esc),
         KeyCode::Backspace => Some(Key::Backspace),
+        KeyCode::Tab => Some(Key::Tab),
         KeyCode::Char(c) => Some(Key::Char(c)),
         _ => None,
     }
@@ -681,6 +682,7 @@ mod tests {
             (KeyCode::Enter, Some(Key::Enter)),
             (KeyCode::Esc, Some(Key::Esc)),
             (KeyCode::Backspace, Some(Key::Backspace)),
+            (KeyCode::Tab, Some(Key::Tab)),
             (KeyCode::Char('q'), Some(Key::Char('q'))),
             (KeyCode::Char('/'), Some(Key::Char('/'))),
             (KeyCode::F(4), None),
