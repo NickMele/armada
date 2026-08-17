@@ -41,3 +41,11 @@ regex = "1"
 # level for the same reason the YAML parser is: one hash, or two runs of one bug
 # stop matching across a version boundary.
 blake3 = "1"
+
+# **Line tables, not full debug info.** Measured on this workspace: the dev
+# profile's default `debug = 2` is the single biggest cost in a rebuild, because
+# twenty test binaries each link a full copy of it. `line-tables-only` keeps
+# what a backtrace actually needs — file and line for every frame — and drops
+# the type and variable descriptions a debugger would use.
+[profile.dev]
+debug = "line-tables-only"
