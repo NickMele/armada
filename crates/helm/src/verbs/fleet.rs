@@ -2944,14 +2944,11 @@ pub fn verdict<C: Clock>(
     }
     let attempts = record.attempts.get(&step).copied().unwrap_or(1);
 
-    let reached = match status {
+    let (reached, should_save_verdict) = match status {
         DroneStatus::Done => {
-            // **The Job gates immediately.** The Drone reports done, and the gate
-            // decides PASS (predicate holds) or FAILED (does not hold).
-            // This is called from the Drone's exchange, so we gate now.
-            let _gated = gate_of(place, &record.workflow, &step);
-
-            // Record the Attempted event (Drone finished its work)
+            // **The Drone reports done; tick will gate.** Record only the Attempted
+            // event. Don't set a verdict — tick will gate and call record_gate_verdict
+            // with the actual gate outcome.
             job::record(
                 &mut record.transitions,
                 now.wall_rfc3339(),
@@ -2960,26 +2957,27 @@ pub fn verdict<C: Clock>(
                 job::StepEvent::Attempted,
                 None,
             );
-
-            // The gate's predicate holds = PASS, doesn't hold = FAILED
-            // For now, assume PASS since the gate succeeded. The real verdict
-            // from the full gate logic will be set by record_gate_verdict.
-            // This is a temporary marking to allow the Drone to report completion.
-            Verdict::Pass
+            // Return Pass as response marker but don't persist it to record.verdict
+            (Verdict::Pass, false)
         }
         DroneStatus::Stuck => {
             // **The Drone hit a blocker.** Record it as BLOCKED via inbox.
             // The Drone can provide details via `fleet.ask_human` if needed.
-            Verdict::Blocked
+            (Verdict::Blocked, true)
         }
     };
 
     record.step = step.clone();
-    record.verdict = Some(reached);
-    record.state = reached.settles_to();
+
+    // Only set the verdict if this is a final state (Blocked/NeedsHuman)
+    // For Done status, leave verdict as None so tick can gate and decide
+    if should_save_verdict {
+        record.verdict = Some(reached);
+        record.state = reached.settles_to();
+    }
 
     let entry = match reached {
-        Verdict::Blocked => Some(raise(
+        Verdict::Blocked if should_save_verdict => Some(raise(
             place,
             now,
             &record,
