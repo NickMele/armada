@@ -20,7 +20,7 @@ means, section by section, is in the table below.
 |---|---|---|
 | 1 · the Stop hook ticks the Job | **yes** | every Drone carries `--settings` with a `Stop` hook that waits for its own process to go and then ticks |
 | 2 · the chain breaks silently | **yes** | the relay sweeps the **whole fleet**, and Helm's own `Stop` hook sweeps too — two mechanisms, [`PLAN.md`](../PLAN.md) §15.3's shape |
-| 3 · one signals listing | **no** | needs [`021`](021-the-work-hierarchy.md)'s rename first |
+| 3 · one signals listing | **designed, not built** | [`021`](021-the-work-hierarchy.md)'s *"The design, decided 2026-08-17"* settles all eleven decisions — the verb is `arm inbox`, it absorbs `fleet inbox` too, and the screen half is [`035`](035-the-bridge-becomes-a-ratatui-application.md). `021`'s own change list had to be corrected first: the five things do **not** share one store, and `untried` stays out |
 | 5 · an action gets a state word | **yes** | `Acting` and `Job.doing` were the state machine; the three surfaces that draw a Job now read them — `fleet ls`, the Bridge's table and its detail pane all say `ABORTING · docker 12s…` |
 | 6 · `SILENT` and `STALLED` | **yes** | both are real Job states, told apart by the tick watermark and by whether the Drone said anything |
 | 7 · `QUEUED`, not `WAITING` | **yes** | `Status::Queued`, in the enum and in [`glossary.md`](../glossary.md)'s status table |
@@ -81,7 +81,7 @@ blocked on a rename rather than on effort.
 |---|---|
 | §1 the Stop hook ticks the Job | **built** |
 | §2 the detail pane's `SAID` row | **built** |
-| §3 one signals listing, origin a filter | open — needs [`021`](021-the-work-hierarchy.md)'s rename first |
+| §3 one signals listing, origin a filter | **designed** 2026-08-17 — [`021`](021-the-work-hierarchy.md), plus [`035`](035-the-bridge-becomes-a-ratatui-application.md) for the screen. Not built; [`PLAN.md`](../../PLAN.md) is the plan |
 | §4 window usage first, dollars second | **built** |
 | §5 `ABORTING` / `REAPING` / `PAUSING` | **built** — the word *and* the rendering |
 | §6 counts, never an aggregate word | **built** |

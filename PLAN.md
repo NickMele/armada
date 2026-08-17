@@ -1,428 +1,248 @@
-# PLAN — The Job daemon, stage one: the mechanical half
+# PLAN — one `arm inbox`, and the screen it lands on
 
-Implements [`docs/reserved/034-the-job-daemon-lands-the-work.md`](docs/reserved/034-the-job-daemon-lands-the-work.md),
-stage one only — the eight items task `56bb1535` lists in dependency order. Stage one spends no
-tokens: it pushes, opens, watches, merges and reaps, all on mechanical conditions. It does **not**
-resume a Drone (034 §6.1's fleet-wide budget is stage two), does not rebase, and does not draw the
-trail in the Bridge (`crates/helm/src/bridge.rs`/`render.rs` are being edited right now by Job
-`wire-bridge-84`; this plan writes the data and exposes it through `fleet show` only).
+Implements [`docs/reserved/021-the-work-hierarchy.md`](docs/reserved/021-the-work-hierarchy.md)'s
+*"The design, decided 2026-08-17"* and
+[`docs/reserved/035-the-bridge-becomes-a-ratatui-application.md`](docs/reserved/035-the-bridge-becomes-a-ratatui-application.md).
+Both were decided with the owner over a rendered mock-up; this is the order to build them in and
+what proves each piece.
 
-**The bootstrap, restated from 034 §7**: this Job cannot use the daemon to land itself, because
-the daemon does not exist until this Job lands. A person merges stage one's PR by hand — expected,
-not a gap.
+**The previous plan — 034 stage one, the Job daemon's mechanical half — landed**, and the daemon is
+enabled on the owner's machine. Nothing here depends on it.
 
-## Status: built, ahead of this step
+## Two halves, and the second is larger
 
-**Correction to how this Job actually ran, stated plainly per this skill's own instruction**: the
-eight items below were implemented and committed to this branch during what should have been only
-research and planning. That is a real deviation from the `plan` workflow's shape — this step
-normally ends at `human_approves` with nothing but `PLAN.md` on disk — and the person approving
-this needs to know that before they read the table below as a forward plan: it is not one. It is
-an as-built record, written after the fact, of eight commits that are already sitting on this
-branch and already pass this repository's full gate (`armada:fmt`/`lint`/`test`/`docs`/`boundaries`,
-2206 tests). A `fleet_ask_human` question follows this plan naming the deviation directly.
-
-| # | Item | State | Commit |
-|---|---|---|---|
-| 1 | `armada daemon` process, enable/disable/status, launchd, `machine.yml` switch | **done** | `761fd76` |
-| 2 | Audit trail — `Job.daemon_acts` + `~/.armada/daemon.jsonl` + `fleet show` | **done** | `1d878e1` |
-| 3 | Push + open PR from the Job's own record | **done** | `b263f90` |
-| 4 | `armada.yml`'s `fleet:` section (schema/model/`resolve::land_merge`) | **done** | `b3615bd` |
-| 5 | `pr_open` / `pr_merged` gate predicates | **done** | `6f92ed2` |
-| 6 | Merge-on-green → pull → re-run → reap | **done** | `b59abc9` |
-| 7 | `main_moved_at` fact on sibling Jobs | **done** | `b59abc9` (same commit as 6 — the plan called these tightly coupled; they were built and land together) |
-| 8 | `armada doctor` reads the daemon | **done** | `b6ac249` |
-| — | Test-assertion fix (item 3's PR-body test caught the wrong step via a loose substring match) | **done** | `d2435c7` |
-
-**Deviations from the sketch below, found and made during implementation** — each is a place where
-the exploration step's assumption turned out to need a real decision, not just a mechanical fill-in:
-
-- **§5 `decide()`'s signature.** The sketch said "threaded in as a new parameter to `decide()`."
-  That was followed literally rather than routed around, which meant updating 14 existing call
-  sites (13 in `gate.rs`'s own test module, one production call in `verbs/fleet.rs`). The shape
-  that carries which of `pr_open`/`pr_merged` is asking turned out to be `Needs::Pr { merged_only:
-  bool }`, computed once by `needs()` — not spelled out in the sketch, which only described the
-  three-way behaviour, not the type that would carry it.
-- **§5's `land_merge` reader.** `resolve::land_merge`'s own doc comment (item 4) restricts its
-  callers to `crates/fleet`. The sketch implied `verbs/fleet.rs` (in `crates/helm`) would read it
-  directly; instead a new `armada_fleet::manifest::land_merge(worktree: &Path) -> LandMerge` was
-  added as the one legitimate caller, and `crates/helm` calls that instead. This is the boundary
-  the plan's own risk section warned about, held correctly rather than quietly widened.
-- **§6 Open Question 1 (merge strategy)**: resolved as `--merge` (not squash), per the plan's own
-  provisional answer — no new schema key added, since item 4's schema was already committed by the
-  time this was reached and reopening it was out of scope for the agent that hit the question.
-- **§6 Open Question 2 (where "pull main" lands)**: `git fetch origin main:main` runs in the Job's
-  `repo_root` (what future `git worktree add` calls read from), and the re-run itself happens in a
-  new temporary *detached* worktree at `main` (`worktree::add_detached`, a new small addition
-  alongside the existing `add`), removed unconditionally after the re-run whether it passed or
-  not. `repo_root` itself is not assumed to be sitting on `main` at the time the daemon runs.
-- **§6's reap call, crate layering.** `crates/fleet/src/land.rs` cannot call `crates/helm`'s reap
-  machinery (helm depends on fleet, not the reverse — confirmed via `cargo xtask boundaries`,
-  which now also passes with this change in place). `land::sweep_one` returns a `ReadyToReap` fact
-  instead of reaping directly; `crates/helm/src/verbs/daemon.rs::watch_once` is the one caller that
-  acts on it, via a `pub(crate)` `release_on_finish` — the same mechanism `tick`'s own finish path
-  already uses, so a race between `tick` and the daemon both reaching `DONE` is idempotent rather
-  than a double-teardown.
-
-## What already exists vs. what's new
-
-| Piece | State | Detail |
+| Half | What | Reserved design |
 |---|---|---|
-| A daemon, any daemon | **missing** | `rg -i 'daemon\|launchd\|plist\|systemd'` across `crates/` finds only prose explaining why Armada has *none* (`crates/helm/src/args.rs:954`, `crates/helm/src/verbs/fleet.rs:3505-3512`, `crates/core/src/fleet/advance.rs:102`, `docs/glossary.md:17`, `docs/PLAN.md:1925-1946` — the last already carries a correction dated 2026-08-17 citing 034 by name). Stage one is greenfield for process supervision. |
-| `armada fleet tick` | done, and the template | `crates/helm/src/verbs/fleet.rs:3513` — the needs→gather→decide→after loop this plan's landing pass mirrors. Its own doc comment (fleet.rs:3505-3512) is the "why not a daemon" argument 034 reverses; that comment goes stale the moment this lands and needs a line pointing at 034, same as `docs/PLAN.md`'s correction already does. |
-| `Job.transitions` / `Job.progress` | done, and explicitly not reusable | `crates/core/src/fleet/job.rs:119-120,158-159`. Doc comments already distinguish them from each other; 034 §6.5 extends the same argument to rule out both for the daemon's trail — a third field is required, not a repurposing of either. |
-| `Job.facts: BTreeMap<String,String>` | done, and **not** where "main moved" goes | `crates/core/src/fleet/job.rs:181` — doc comment: *"Seeded once, before anything runs"*, for `${task.*}` substitution at spawn. Writing into it mid-run contradicts its own contract. §7 below gets its own field. |
-| `~/.armada/inbox.jsonl` / `failures.jsonl` | done, the pattern to reuse | `crates/fleet/src/inbox.rs` (`Line` enum, `append()`, `read()`/fold-by-id, `home.rs:91-93` for the path) and `crates/core/src/failure.rs` (`fold()`, `fingerprint()`). No locking; atomicity is append-mode + tolerating a torn last line. `daemon.jsonl` follows this exactly. |
-| Gate predicates | 8 of 10 | `crates/core/src/fleet/gate.rs` / `workflow.rs:90-101`. `branch_exists`'s `Needs::Branch` (gate.rs ~343, ~653-664) is the closest existing shape to `pr_open`/`pr_merged`'s `Needs::Pr`. |
-| `armada.yml`'s `fleet:` section | **missing, but the schema already expects it** | `crates/core/schema/armada.schema.json:18` and `crates/core/src/config/model.rs:60-68` both say, in so many words, that a sibling section is coming and the nesting exists "so that adding one never has to move every key that is already there." Nobody has added it. |
-| `crates/fleet/src/machine.rs` | done, the template for the daemon switch | Owns machine.yml's `fleet:` section today — `{ carry: BTreeMap<String, Vec<String>> }` (machine.rs:49-55) — with the identical read/write/preserve-other-sections discipline `crates/helm/src/machine.rs`'s `HelmSection` uses. This is where `daemon:` joins, not a new file. |
-| `armada doctor` | done, and the template for the daemon check | `crates/helm/src/verbs/doctor.rs:51-83` builds an ordered `Vec<Finding>`; `helm_argv` (doctor.rs:309) already reads `machine.yml`'s `helm.enter` and reports it as a Finding — the daemon check is one more push in the same shape, reading `daemon.jsonl` instead. |
-| `gh` CLI | **no precedent** | Confirmed by `rg 'gh pr\|gh api'` — the only hit is 034's own doc. Shelling to `gh` is new, and it is the daemon's alone: `land-branch/SKILL.md` (already amended for 034) keeps `git push`/`git remote` denied to a Drone. |
+| **A · the listing** | Four origins under one verb, one sort, a fourth status word, `Entry` → `Signal` | [`021`](docs/reserved/021-the-work-hierarchy.md) |
+| **B · the screen** | The Bridge becomes a ratatui application, with fixtures that can see it | [`035`](docs/reserved/035-the-bridge-becomes-a-ratatui-application.md) |
 
-## Why this order
+**A can land alone; B cannot.** Half A is a verb and a reader — it ships useful on its own, at the
+command line, against the goldens the non-interactive path already has. Half B needs the merged
+payload to exist before there is anything to draw. So A goes first, and it is not a "phase one" in
+the sense of being incomplete: `arm inbox` at a terminal is the thing the owner asked for.
 
-Items 1–8 below are the task's own order, and it is load-bearing, not incidental:
+## Half A — one listing
 
-- **The audit trail (2) comes before push/PR (3)**, because item 3's own requirement — *"a
-  repository with no remote fails legibly at the land step, not inside the daemon"* — has no
-  mechanism to satisfy it until the trail exists. A push that fails writes a `daemon_acts` entry
-  with an outcome of `failed: no remote configured`, and `fleet show` is what makes that legible.
-  Build the pipe before the thing that needs to flow through it.
-- **The gate predicates (5) come after `fleet.land.merge` (4)**, because `pr_open`'s `decide()`
-  arm is policy-aware (see §5) and needs somewhere to read the policy from.
-- **Everything through (5) has to exist before (6)**, because merging on green is the first
-  irreversible daemon action and needs the trail, the PR, and the gate all already working so its
-  own outcome can be recorded and verified.
+### A1 · `Entry` → `Signal`, and the fourth state
 
-## 1. `armada daemon` — process, enable/disable/status, launchd
-
-**Machine switch** — `crates/fleet/src/machine.rs`'s `FleetSection` gains a nested field,
-following the exact pattern `carry` already sets:
+`crates/core/src/failure.rs`. The rename is mechanical and internal; the state is not.
 
 ```rust
-pub struct FleetSection {
-    #[serde(default)]
-    pub carry: BTreeMap<String, Vec<String>>,
-    #[serde(default)]
-    pub daemon: DaemonSwitch,
-}
-
-#[derive(Default)]
-pub struct DaemonSwitch {
-    #[serde(default)]
-    pub enter: bool,   // off by default — a fresh install must not act unattended
-}
+pub enum State { Open, NeedsHuman, Fixing, Cleared }
 ```
 
-This is the same field name (`enter`) `crates/helm/src/machine.rs`'s `HelmSection` uses, and for
-its stated reason: *"whether this box may act unattended is a fact about the box."* `read`/`write`
-already preserve unknown sections; adding a field to a section this module owns needs no new
-preserve-logic, only a new `#[serde(default)]` field (the same additive discipline `job.rs` uses
-throughout).
+**`NeedsHuman` is not a new word.** `arm fleet inbox` already draws it for exactly these rows
+(`crates/fleet/src/inbox.rs`'s `Kind::word()`), and it is already the Job verdict word for the same
+condition — so this promotes a word that ships on one screen to the state on the merged one.
 
-**Process module** — new `crates/fleet/src/daemon.rs`:
-- `pidfile(armada_home) -> PathBuf` (`home.rs`-style one-liner, `~/.armada/daemon.pid`).
-- `is_running(armada_home) -> Option<u32>` — reads the pidfile, checks liveness with the same
-  `pgid_is_live`-family check `crates/fleet/src/own.rs`/`crates/helm/src/verbs/status.rs` already
-  use for Drones. A stale pidfile (process gone) reads as not running, not as an error — same
-  fail-safe direction `crates/helm/src/machine.rs:122-130` documents for `read`.
-- `start(armada_home)` / `stop(armada_home)` — detached spawn reusing the `setsid` shape
-  `crates/fleet/src/drone.rs` already uses for a Drone, running a new hidden `armada daemon run`
-  entry point (the actual watch loop, §6). Writes/removes the pidfile. Every start/stop appends a
-  `daemon.jsonl` line (§2) — **the first daemon act ever recorded is starting**, matching 034
-  §6.5's "written from the first action."
+What it splits: `FIXING` currently means both *a Job is working on it* and *a Job is stopped, waiting
+on you*. `crates/fleet/src/inbox.rs:181-185` argues the current mapping well — *"a raised item is not
+a row nobody has started, it is a row with a Drone stopped in front of it"* — and that is why `Open`
+was wrong, not why `Fixing` was right. In one listing the distinction is the difference between
+nothing needed from you and everything waiting on you.
 
-**launchd (macOS only)** — `#[cfg(target_os = "macos")]`. A plist template at
-`~/Library/LaunchAgents/com.armada.daemon.plist` running `armada daemon run`,
-`RunAtLoad`/`KeepAlive` true, installed with `launchctl bootstrap`/`load` on `enable`, removed with
-`unload` on `disable`. **On any other OS, `armada daemon enable` refuses legibly** — `bad_config`
-or an equivalent named error, not a silent no-op — since 034 only asks for macOS in stage one and
-a switch that claims success while doing nothing is exactly the silent-stall shape 034 exists to
-end.
+`as_entry` (`inbox.rs:200`) maps an open raised entry to `NeedsHuman`; answered and closed stay
+`Cleared`. `docs/glossary.md`'s status table gains the word — it fixes the vocabulary, and every
+other word in it describes *a thing Armada did*, which this one also does.
 
-**CLI verbs** — new `crates/helm/src/verbs/daemon.rs`, modeled on `crates/helm/src/verbs/helm.rs`'s
-`enable()`/`disable()`/shared `switch()` (helm.rs:198-230) for the machine.yml half, plus a new
-`status()` that reports both the switch (`DaemonSwitch.enter`) and the live process
-(`daemon::is_running`) — two facts, since a switch that is on with no live process is exactly the
-gap `armada doctor` (§8) exists to surface. `crates/helm/src/args.rs` gains a `daemon` arm
-alongside `"doctor"`/`"helm"` (args.rs:1169-1172), and `fn daemon()` peeks `rest.first()` for
-`enable`/`disable`/`status`/`run`, mirroring `fn helm()` (args.rs:1717-1791) — **note `helm` has no
-`status` verb** (status lives in `armada doctor` for Helm), so `daemon status` is new shape, not a
-copy-paste. `main.rs` dispatch follows `Invocation::HelmEnable`/`Disable` (main.rs:447-452).
+### A2 · The reader sorts
 
-## 2. The audit trail — before anything it will record
+`crates/helm/src/verbs/failures.rs:587-599` extends the folded list (newest-first,
+`failure.rs:1114`) with inbox entries **in the inbox's own file order, and never sorts after**.
+`grep -n "sort" crates/helm/src/verbs/failures.rs` returns nothing.
 
-**On the Job** — `crates/core/src/fleet/job.rs` gains one field, additive:
+Invisible today only because `Lens::shows` excludes `Listing::Raised` from both listings. It becomes
+visible the instant one listing draws all origins, which is A3. One `sort_by` on `Reverse(last_ms)`,
+matching the fold's own order, and a test that a raised entry sorts among faults by time rather than
+landing at the end.
 
-```rust
-/// Every act the daemon has taken about this Job (`034` §6.5).
-///
-/// Not `transitions` — a push is not a state change. Not `progress` — a
-/// second writer there makes "who said this" unanswerable. A third voice,
-/// because it is a third kind of fact: not a step boundary, not the Drone's
-/// own words, but something Armada itself did *to* this Job unattended.
-#[serde(default, skip_serializing_if = "Vec::is_empty")]
-pub daemon_acts: Vec<DaemonAct>,
+### A3 · `arm inbox`, replacing three verbs
+
+| Goes | Becomes |
+|---|---|
+| `arm failures` | `arm inbox` |
+| `arm tasks` | `arm inbox --origin task` |
+| `arm fleet inbox` | `arm inbox --origin raised` |
+| `arm failures fix` / `arm tasks start` | `arm inbox start` — one name for one operation |
+| `arm failures show` / `clear` | `arm inbox show` / `clear` |
+
+**Removed, not aliased.** An alias keeps the five nouns alive, which is the *"running in circles"*
+complaint [`020`](docs/reserved/020-the-tui-decided.md) §3 recorded. `arm report` and `arm task`
+survive unchanged, because capture is a different act from reading.
+
+`crates/helm/src/args.rs`: `TOP_LEVEL_VERBS` goes 16 → 14; `INBOX_VERBS` is
+`["show", "start", "clear"]`; `fleet inbox` leaves the fleet verbs. `Lens` grows a raised arm — and
+`failures.rs:77-87` records why that has to be an enum rather than a bool: *"a raised item appeared
+under `armada tasks`"* the moment a fourth origin existed.
+
+`crates/helm/src/render/help.rs`: the three `THIS MACHINE` rows (`:987`, `:1070`, `:1108`) become
+one. `untried` stays — see A5.
+
+Columns, per [`033`](docs/reserved/033-the-command-centre-designed.md)'s rule and the owner's choice:
+
+```
+  ID        STATUS       ORIGIN  DETAIL                              TIME
+  4f2a91c8  NEEDS_HUMAN  raised  armada-failed is blocked on a de…    2h
+  d1ba9078  FIXING       fault   pulling a guild needs the remote…    3h
+  f1b22f05  OPEN         report  Bridge TUI freezes for several s…   40m
 ```
 
-```rust
-pub struct DaemonAct {
-    pub id: String,               // ties an outcome update to its intent row
-    pub at: String, pub at_ms: u64,
-    pub act: DaemonActKind,       // Pushed, Opened, ChecksGreen, Merged, Pulled,
-                                   // ReRan, Reaped, MarkedMainMoved,
-                                   // ReportedFailure, RefusedToMerge
-    pub target: String,           // branch, PR number, or run id
-    pub outcome: Option<DaemonOutcome>,   // None until the act settles
-    pub outcome_at: Option<String>,
-}
-```
+`ID` first. Three shipped goldens change, and `render_golden.rs`'s cross-audience invariants
+(`:3576`, `:3615`, `:3635`) hold them.
 
-Two new functions on `Job`, both following `record()`'s existing read-compare-write shape
-(job.rs:684-713): `begin_daemon_act(&mut self, act, target) -> String` (pushes an entry with
-`outcome: None`, returns the id) and `settle_daemon_act(&mut self, id, outcome)` (finds the entry
-by id, fills `outcome`/`outcome_at`). **Write the intent before the irreversible action, the
-outcome after** — 034 §6.5's own words — so a crash mid-merge leaves a `Merged` act with no
-outcome rather than nothing at all, which is the one case an audit trail exists for.
+### A4 · `--long`, because a few words is not enough
 
-**`~/.armada/daemon.jsonl`** — for what is about no Job: the daemon starting, stopping, reaching
-its (stage-two) limit, failing to reach `gh`. New `crates/fleet/src/daemon_log.rs`, the identical
-shape `inbox.rs` and `failure.rs` already use:
+The owner's own words on the truncated single line: *"A few words is not enough for me to determine
+if that is the one I want to act on."* At a terminal the answer is the preview pane (B3). At the
+command line and through a pipe it is `arm inbox --long`, which prints each signal's whole body under
+its summary row.
 
-```rust
-enum Line { Started { at, at_ms, pid }, Stopped { at, at_ms, reason },
-            GhUnreachable { at, at_ms, detail } }
-fn append(armada_home: &Path, line: &Line) -> std::io::Result<()>   // OpenOptions append, no lock
-fn fold(text: &str) -> Vec<Entry>                                  // skip unparseable lines
-fn last(entries: &[Entry]) -> Option<&Entry>                        // for `armada doctor` (§8)
-```
+That is what `Table`'s existing `row.note` is for — and it is also why `Table::spans` dropping the
+note (B0) blocks the Bridge half rather than this one.
 
-`home.rs` gains `daemon_log(armada_home) -> PathBuf` (`armada_home.join("daemon.jsonl")`),
-one-liner, matching `inbox`/`tick_lock`/`worktree` (home.rs:75-93).
+### A5 · What does not change
 
-**Surfaced by `fleet show`** — `crates/core/src/envelope.rs`'s `ShowData` (2332-2453) gains
-`pub daemon_acts: Vec<DaemonActRow>`, built in `crates/helm/src/verbs/fleet.rs`'s `show()`
-(~1502-1523) alongside `progress`/`transitions`, from `record.daemon_acts` directly — no new I/O,
-the field is already on the loaded `Job`. This is the whole of what stage one owes the Bridge:
-Job `wire-bridge-84` draws it later, from data that already exists on `ShowData`.
+- **`untried` stays its own verb**, per [`017`](docs/reserved/017-what-you-have-not-tried-yet.md) and
+  `021`'s correction. Four origins. Its record shares no field with `Signal` except a count, and it
+  has no id, no state and no promotion path to fold in.
+- **The stores stay three files.** `~/.armada/failures.jsonl` + `inbox.jsonl` + `untried.jsonl`,
+  append-only. Helm's Stop hook and monitor read `inbox.jsonl` at a hardcoded path; merging the
+  stores breaks the only mechanism that makes a raised item reach anybody.
+- **`resolve::parse`'s `map(|d| d.manifest)` is untouched.** Manifest gains no new import.
 
-## 3. Push and PR, from the Job's own record
+### A6 · `Line::Promoted` carries a uuid
 
-New `crates/fleet/src/land.rs` (impure — shells to `git`/`gh`), functions:
-- `push(worktree, branch) -> Result<(), LandError>` — `git push -u origin <branch>`. `LandError`
-  distinguishes *no remote configured* from *push rejected* from *`gh`/`git` not on `PATH`*, because
-  the first is 034's "fails legibly" case and the others are ordinary transient failures.
-- `open_pr(worktree, branch, &Job) -> Result<PrHandle, LandError>` — `gh pr create --title … --body
-  …`. The body is built by a pure helper (`crates/core/src/fleet/land.rs` or a function in
-  `job.rs` itself), from `record.task`, the `plan` step's `artifact_exists: PLAN.md` content (read
-  from the worktree — this plan's own text, for every Job after this one), and the transitions log
-  filtered to `PASS` events — **not** a Drone's own summary, which is 034 §4's whole reason the
-  daemon pushes instead of the Drone.
+`crates/core/src/failure.rs:528-536` stores the Job's **name**, written as `spawned.data.name`
+(`verbs/failures.rs:530`). That is [`005`](docs/reserved/005-inbox-label-not-identity.md)'s defect
+reproduced in the failure log — and it is live: `failures.jsonl` holds two `promoted` lines for
+`d1ba9078`, both `"job": "armada-failed"`, and signal `0a0c3b82` is the ambiguity error that caused.
 
-**On failure, no silent daemon-only log.** A push/open that fails calls
-`Job::begin_daemon_act(Pushed, branch)` immediately (intent), and
-`settle_daemon_act(id, Failed("no remote configured"))` (or the specific `LandError`) as soon as it
-knows — recorded on the **Job**, so `armada fleet show <job>` names it, satisfying 034's "fails
-legibly at the land step" without inventing a second failure channel. `daemon.jsonl` only gets a
-line if `gh`/`git` themselves are unreachable (a machine fact, not a Job fact).
+The inbox already learned this (`inbox.rs:105-120`): `job_uuid` is the identity, `job` is a label
+shown and never resolved against. `Line::Promoted` gains `job_uuid` and keeps `job` as the label.
+Old lines carrying only a name still fold — the field is `Option`, and absent means the label is all
+there is.
 
-## 4. `armada.yml`'s `fleet:` section
+`verbs/failures.rs:623-657`'s `no_longer_being_fixed` — which opens the Job store on every listing
+read to repair a stale `FIXING` — resolves against the uuid instead, and its
+`named.all(|job| job.state.is_over())` avoidance goes.
 
-**Schema** — `crates/core/schema/armada.schema.json`: add `fleet` to top-level `properties` (it
-stays out of `required`, since absence is meaningful — see below), and a new `$defs/fleet`:
+## Half B — the screen
 
-```json
-"fleet": {
-  "additionalProperties": false,
-  "properties": {
-    "land": {
-      "additionalProperties": false,
-      "properties": { "merge": { "enum": ["auto", "never"] } }
-    }
-  }
-}
-```
+### B0 · `Table::spans` stops dropping notes — first, and alone
 
-**Model** — `crates/core/src/config/model.rs`: `Document` (60-74) gains
-`pub fleet: Option<FleetSection>`, a small `FleetSection { land: Option<LandSection> }` /
-`LandSection { merge: Option<LandMerge> }` / `enum LandMerge { Auto, Never }`, all
-`#[serde(deny_unknown_fields)]` like `Document` already is.
+`Table::render` draws a hanging note under the second column (`render/table.rs:364-372`);
+`Table::spans` never reads `row.note` (`:414-419`). Every ratatui surface loses it, and the parity
+test at `:658` cannot catch it because it compares against a line `spans` never emits.
 
-**The boundary that keeps Manifest ignorant** — `crates/core/src/config/resolve.rs:77-79`'s
-`parse()` today does `from_str::<Document>(text).map(|d| d.manifest)`, discarding everything else.
-**That line does not change.** A new sibling function, `resolve::land_merge(text: &str) ->
-LandMerge` (defaulting `Auto`/`Never`-absent-and-unparseable to `Never` per 034 §6.4 — *"never must
-be the default when the section is absent"*), lives beside `parse()` in `armada_core::config` and
-is called **only** from `crates/fleet` (the daemon reading its own policy). `crates/manifest`
-never gains a new import, `armada_core::config::resolve::parse`'s manifest-only unwrap never
-widens, and `xtask boundaries` staying silent about this is expected, not a gap — see the risk
-section below.
+A test that a row **with** a note renders the same line count through both emitters, failing first.
+Nothing else in Half B can draw a second line until this is true.
 
-## 5. `pr_open` / `pr_merged`
+### B1 · `TestBackend` fixtures, before any widget changes
 
-`crates/core/src/fleet/workflow.rs`: `Predicate` gains `PrOpen`, `PrMerged` (90-101's word table:
-`"pr_open"`, `"pr_merged"`). `crates/core/src/fleet/gate.rs`: `Needs` gains `Pr`; `Facts` (451-466)
-gains `pub pr: Option<PrFact>` where `PrFact { number: u64, open: bool, merged: bool }`. `needs()`
-maps both new predicates to `Needs::Pr`. The impure gather in `crates/helm/src/verbs/fleet.rs`'s
-`gather()` (called from `tick`'s `pass`) runs `gh pr view <branch> --json state,mergedAt` when it
-sees `Needs::Pr`.
+Today **no golden can see an interactive surface**: all three Bridge fixtures route through
+`render.rs:882`, the `--once` path, which passes `None` for the cursor and `false` for keys
+(`:901-902`). Measured — no golden contains the focus marker, and none contains a KEYS box.
 
-**The per-repository resolution, decided here rather than left open.** Workflows are guild data,
-re-read fresh every tick by name (`workflow.rs`'s own doc: *"a file in your guild… syncs between
-machines"*) — the same `land` step's YAML is shared across every repository a person's guild
-touches, so the step's `must:` word in `templates/guild/workflows/{feature,bug}.yml` **cannot
-differ by repository as literal text**, and does not need to: it changes to `must: pr_open`,
-unconditionally, in both starter templates. What differs per repository is what `pr_open` *requires*:
-`decide()`'s `Predicate::PrOpen` arm reads the resolved `fleet.land.merge` (§4's `land_merge()`,
-threaded in as a new parameter to `decide()` — the one place this module stops being config-blind,
-and only for this one predicate) and holds on "open or merged" under `never`, "merged" under
-`auto`. This exactly matches 034's own sentence — *"`auto` lands on `pr_merged`, `never` lands on
-`pr_open`"* — as an outcome, while keeping the shipped YAML identical for every repository.
-`Predicate::PrMerged` ships as a second, unconditional, always-strict predicate (`decide()` holds
-only on `merged`) — not used by either starter template, available to a guild author who writes a
-custom step that must wait for a real merge regardless of repository policy.
+So the fixtures come first, against the screen **as it is**: `TestBackend::new(w, h)`, a `Terminal`
+over it, `paint`, and the buffer dumped as text beside the existing `.plain`/`.tty` files, under the
+same no-update-flag discipline (`render_golden.rs:24-29`, `ARCHITECTURE.md:433`). Cases: the cursor on
+a row, the KEYS box, the detail pane, the reap preview, the keys page, the compose box, the filter
+line — the seven surfaces with no byte-level coverage.
 
-Tests: `needs()`/`decide()` unit tests mirroring `branch_exists`'s (gate.rs ~978-986,
-~1213-1241) — `pr_open` holds on an open unmerged PR under `never` and does not hold under `auto`
-until merged; `pr_merged` holds only on `merged` regardless of policy. Each written failing first
-against today's `gate.rs`, which has no `Needs::Pr` arm to hold at all.
+**This is the step that makes the rest reviewable.** Every widget change after it has a snapshot that
+either agrees or says exactly what moved.
 
-## 6. Merge on green → pull → re-run → reap
+### B2 · `Layout` and `Block`
 
-New orchestration in `crates/fleet/src/land.rs`, run by the daemon's own loop (`armada daemon run`,
-§1) rather than `armada fleet tick` — **tick's own doc comment (fleet.rs:3505-3512) is the "why not
-a daemon" argument this plan reverses; it needs a line pointing at 034 alongside the correction
-`docs/PLAN.md:1939-1946` already carries**, or a future reader hits two documents disagreeing,
-which `docs/glossary.md` exists to prevent (034 §2's own opening argument).
+`Layout::vertical`/`horizontal` with `Constraint` for the panel rects, and `Block` with `Borders` for
+each panel's frame, replacing `frame::titled_box` and `frame::hjoin` **in the Bridge only**. `--once`
+keeps `frame.rs` and its own goldens.
 
-Per Job at the `land` step with an open PR and `fleet.land.merge == Auto`, once its checks read all
-green (`gh pr checks <branch>`):
-1. `begin_daemon_act(Merged, pr_number)`; `gh pr merge --merge` (or squash — **open question,
-   flagged below**); `settle_daemon_act` with the exit.
-2. Pull `main` in the shared clone Jobs branch from (**needs the exact path — open question**):
-   `git fetch origin main:main` (or checkout+pull if the ref cannot fast-forward), recorded as
-   `Pulled`.
-3. Re-run checks on the updated `main` — reusing the existing `armada manifest check --detach`
-   shell (`gate.rs`'s doc: *"the shell… starts an `armada manifest check --detach`"*), recorded as
-   `ReRan`. **This is the step that catches two green-alone PRs that are not green together** — 034
-   §3's own reason for it not being redundant.
-4. If the re-run is also green: reap this Job's worktree — `crates/fleet/src/worktree.rs`'s
-   `holds_uncommitted_work` guard still applies (a merged branch's worktree should be clean, but
-   the guard is not skipped on that assumption), recorded as `Reaped`.
-5. If the re-run is **red**: this is new information a green PR did not carry. Stage one's answer
-   matches its own boundary — **record `ReportedFailure` and raise one inbox entry; no resume**,
-   the identical shape 034's CI-failure case takes, not a special case.
+This is where `80d452a5` (resize) and `14cd98ab` (tint) become possible rather than fixed: content
+composed at `f.area().width` per frame instead of a width captured in `main`, and `Block::style`
+carrying a per-section background. **Fixing them is the separate pass** the owner chose; this makes
+them one-liners rather than rewrites.
 
-`fleet.land.merge == Never`: steps stop after `pr_open` holds (§5) — the daemon still pushed,
-opened, and watches checks, and reports failures the same way, it simply never reaches step 1
-above. Matches 034 §6.4: *"`never` is not a degraded mode."*
+### B3 · The preview pane
 
-## 7. `main` moved — a fact, and nothing more
+Side by side above `render::WIDE` (138), stacked below it — the branch `render.rs:1009` already makes,
+and `frame::shed_to_narrow` already implements for the five panels.
 
-**Not `Job.facts`** (see the table above — that field is spawn-time-only by its own contract).
-`crates/core/src/fleet/job.rs` gains one new additive field instead:
+The pane shows the selected signal's whole body plus its origin, age and count, and the next action as
+an offer rather than a record — `inbox.rs:193-199`'s reasoning about the `TYPED` column applies here
+too.
 
-```rust
-/// Set once, when the daemon pulls a `main` this Job's branch was not
-/// forked from. A fact for the Drone to notice on its own next turn — not
-/// an instruction, and not a rebase (034 §3: "asked for, never imposed").
-#[serde(default, skip_serializing_if = "Option::is_none")]
-pub main_moved_at: Option<String>,
-```
+### B4 · Scrolling, which needs a height
 
-After step 6.2 (pull) succeeds, the daemon walks every other `RUNNING`/`PAUSED` Job in the same
-repository (the same in-scope iteration `crates/helm/src/verbs/fleet.rs`'s `pass()` already does
-for `tick`) and sets this field via a `begin_daemon_act(MarkedMainMoved, job_id)` /
-`settle_daemon_act` pair on **its own** record (the mover), while writing `main_moved_at` directly
-on **each other Job's** record — two different writes, since the audit trail is about what the
-daemon did and this field is the fact it left behind. Stage one builds no `fleet_rebase` tool and
-no consumer of this field beyond it existing and being readable — 034 explicitly reserves both for
-later (*"a Drone may then ask…"*), and the task names the rebase out of stage one by name.
+Three facts, each verified rather than assumed:
 
-## 8. `armada doctor` reads the daemon
+| | |
+|---|---|
+| `Terminal` has `usable_width()` and **no height accessor** | `render/term.rs:98` |
+| No panel caps its rows; the screen is one `Paragraph` with no `.scroll()` | `bridge.rs:700` — ratatui clips the bottom silently |
+| `Cursor` is a bare wrapping index — no offset, no window | `core/fleet/bridge.rs:238-279` |
 
-`crates/helm/src/verbs/doctor.rs`: one more push in `run()` (51-83), following `helm_argv`'s exact
-shape (machine.yml → `Finding`): a new `daemon()` helper reads `daemon::is_running` (§1, the
-pidfile/liveness check — the *actual* process, not just the switch) and `daemon_log::last` (§2,
-`daemon.jsonl`'s most recent entry) and reports a `Finding` naming both — running-or-not, and what
-it last did, with `remedy: Some("armada daemon enable")` when the switch is off. **This is the row
-that names the keystroke** — the task's own words, and 020's eight-hour stall is the reason it is
-not optional: a Job whose `land` step gate never holds because the daemon that would push its
-branch is not running must be distinguishable, on the screen, from a Job whose PR is legitimately
-still red.
+So the cursor can already sit on a row nobody drew, and a preview pane makes the list shorter, which
+makes it arrive sooner. `Terminal` gains a height, `Cursor` gains an offset, each panel draws a
+window, and `Scrollbar` + `ScrollbarState` draw the indicator — all of it already in the pinned tree.
 
-## Testing order (each new test shown failing first)
+**`Cursor`'s offset stays in `crates/core` and stays pure**: it is state the screen owns, and core may
+not open a file or name a backend (`ARCHITECTURE.md` §1.5). The window's *height* is passed in,
+exactly as `needs`/`decide` take their facts as arguments.
 
-1. `crates/fleet/src/machine.rs` — `DaemonSwitch` round-trips, defaults off, preserves `carry`
-   (mirrors machine.rs's own existing test block).
-2. `crates/fleet/src/daemon.rs` — `is_running` against a live pgid, a stale pidfile, no pidfile.
-3. `crates/core/src/fleet/job.rs` — `begin_daemon_act`/`settle_daemon_act`: an act with no outcome
-   round-trips, a settled act's `outcome_at` is set, `daemon_acts` stays empty (and absent from
-   JSON, via `skip_serializing_if`) for a Job the daemon has never touched.
-4. `crates/fleet/src/daemon_log.rs` — append/fold mirrors `inbox.rs`'s tests: a torn last line is
-   skipped, not fatal; `last()` on empty is `None`.
-5. `crates/core/src/config/{schema,model,resolve}` — `fleet:` absent parses as `Never`; present
-   with `merge: auto` parses `Auto`; an unknown key under `fleet:` is `bad_config` (schema's
-   `additionalProperties: false`); `crates/manifest`'s own tests are run unchanged and must still
-   pass with **no new import** — the boundary is proven by *absence* of a change there, not a new
-   test.
-6. `crates/core/src/fleet/gate.rs` — `pr_open`/`pr_merged` `needs()`/`decide()`, both policies,
-   both predicates, per §5.
-7. `crates/fleet/src/land.rs` — `push`/`open_pr` against a fake `Run`, no-remote case produces the
-   specific `LandError` and the daemon-act failure shape from §3.
-8. Full sequence (fake `gh`/`git`): green PR + `auto` → merge, pull, re-run, reap, in order, each
-   recorded; red re-run → `ReportedFailure` + one inbox entry, no resume attempted (assert this
-   directly — a regression here silently reintroduces stage two).
-9. `crates/helm/src/verbs/doctor.rs` — daemon `Finding` for running/not-running/never-enabled,
-   each with the right `remedy`.
-10. `cargo xtask boundaries` and `armada manifest check` at the end, not as a substitute — see below.
+## Order, and why it is this one
 
-## The risk `cargo xtask boundaries` cannot catch
+1. **A1, A2, A6** — the record and the reader. No user-visible change; every later step reads them.
+2. **A3, A4** — the verb. Ships useful alone.
+3. **B0** — `spans` stops lying. Blocks everything after it.
+4. **B1** — fixtures over the screen as it is. Makes 5 reviewable.
+5. **B2, B3, B4** — `Layout`/`Block`, the pane, the scroll.
+6. The six recorded TUI complaints, **their own pass**, on top of B1's coverage. `docs/HANDOVER.md`
+   puts the freeze (`f1b22f05`) first in the owner's priority order, and it stays first — after this.
 
-Restating 034's own claim in my words, verified against `xtask/src/boundaries.rs` rather than
-assumed: it is a `cargo metadata` crate-dependency-graph checker (confirmed at
-`xtask/src/boundaries.rs:32-37`'s own comment — *"nothing stops someone adding `armada-manifest` to
-`core`'s manifest, which compiles fine"* is the general form of this exact gap). It enforces
-`Module::may_depend_on` from Cargo dependency edges, and `core` sits below every module and is
-always permissible (ARCHITECTURE.md 558-585's own note) — confirmed empirically too:
-`crates/manifest/src/discovery.rs` already imports `armada_core::config::declared_workspaces`, so
-`crates/manifest` → `armada-core` is an existing, legitimate, already-permitted edge. **That is
-exactly why the graph check cannot catch this violation**: there is no forbidden edge to add.
-`land_merge()` (§4) lives in `armada_core::config::resolve`, a module `crates/manifest` is already
-allowed to call into; the violation would be `crates/manifest` (or `armada_core::config::resolve`
-itself) actually calling it — a data-flow fact invisible to a dependency graph, which only sees
-`manifest → core` and reports it fine either way. The narrower, more likely version of the same
-gap: someone widens `resolve::parse`'s existing `map(|d| d.manifest)` (resolve.rs:77-79) to also
-fold `document.fleet` into the `Config`/`ResolvedConfig` that already flows, unchanged, into every
-Manifest-facing verb (`crates/helm/src/verbs/check.rs`, `status.rs`, etc.) — no new Cargo edge, no
-new import, compiles clean, and puts agent-shaped policy (`fleet.land.merge`) in front of code that
-today provably never sees a Job. The backstop is the same one the command-centre plan named: code
-review at `implement`'s `review` gate, reading this section and checking that `land_merge()` has
-exactly one caller, in `crates/fleet`, and that `resolve::parse`'s `map(|d| d.manifest)` line is
-untouched, and that `crates/manifest` gains no new reference to `land_merge` or `document.fleet`
-at all.
+Steps 1 and 2 are one Job; 3 and 4 are one Job; 5 is one Job. Splitting 5 further would mean two Jobs
+editing `bridge.rs` at once, which is what produced the `--once`/screen divergence
+`render.rs:885-893` records.
 
-## Open questions — resolved before implement, except where named
+## Testing, each shown failing first
 
-1. **Merge strategy** (`--merge` vs `--squash` vs `--rebase` on `gh pr merge`). **Not resolved
-   here** — this is a repository preference (squash-merge is common, plain merge preserves the
-   Drone's own commit history that `land-branch/SKILL.md` §"Make the history readable" already
-   asks for) and belongs in `fleet.land:` beside `merge:`, e.g. `fleet.land.strategy: squash|merge`,
-   defaulting to `merge` since a Drone's history was already asked to be clean before landing. Flag
-   for the person approving this plan — it is a one-line schema addition either way and does not
-   change the shape of §4 or §6, only their content.
-2. **Where "pull main locally" pulls into.** `crates/fleet/src/worktree.rs` manages per-Job
-   worktrees off a shared repository, but no code path found in this exploration names a single
-   canonical "the main checkout" location — every worktree shares one object store per Job-spawn's
-   `git worktree add`, and worktrees for *future* Jobs are created from whatever `main` looks like
-   at spawn time (`git worktree add` reads refs, not a checked-out tree). Resolved as: `git fetch
-   origin main:main` in the shared bare/origin the worktrees were added from is sufficient — it
-   updates the ref every future `worktree add` reads — and no separate checkout is needed. Confirm
-   this against `crates/fleet/src/worktree.rs`'s actual `add` call at implement time; if a
-   worktree literally named `main` also exists and is checked out, it needs the same fetch **and**
-   a fast-forward `pull`, not just the ref update.
-3. **`gh` authentication.** Assumed already configured on any machine where `armada daemon enable`
-   is run (the same assumption `land-branch/SKILL.md` makes about the environment a Drone runs in).
-   `armada doctor`'s daemon check (§8) should report `gh auth status` failing as a Finding rather
-   than let it surface only as a mysterious push failure — small addition to §8, worth doing in the
-   same pass since the check already runs a command and reads its exit code.
+| # | Test | Fails today because |
+|---|---|---|
+| A1 | an open raised entry reads `NEEDS_HUMAN`, not `FIXING` | `as_entry` maps it to `Fixing` |
+| A2 | a raised entry sorts among faults by time | nothing sorts the merged list at all |
+| A3 | `arm inbox` shows all four origins; `--origin task` shows one; `arm failures` is an unknown verb | `inbox` is not a verb |
+| A4 | `--long` prints a body longer than the DETAIL column, in full | there is no `--long` |
+| A5 | `arm untried` is unchanged, and `inbox` never lists an untried row | inverted — it must stay green |
+| A6 | a promoted signal resolves its Job by uuid when two Jobs share the name | it resolves by name and refuses |
+| B0 | a row with a note renders the same line count through `render` and `spans` | `spans` drops the note |
+| B1 | a `TestBackend` snapshot contains the focus marker and the KEYS box | no fixture can see either |
+| B4 | with more rows than height, the cursor stays inside the drawn window | there is no window and no height |
+
+`armada manifest check` at the end, not as a substitute.
+
+**`armada:test` is not reliable while another Job is running, and that is now a blocker rather than
+a nuisance.** Measured 2026-08-17 on the machine this plan was written on: load average **297** with
+two Jobs running their own suites, and six `armada-helm::fleet` tests failing at
+`fleet.rs:697` — *"the stub Drone never finished a turn"* — against an unmodified tree. Three
+separate Jobs hit it the same day on three different sets of tests, each passing in isolation. Job
+`e69b6235` (`test-flakiness-under-load`) is researching whether the answer is serialising test
+execution across Jobs, isolating per-Job resources, or reducing in-run parallelism under load.
+
+Until that lands, a red `armada:test` needs its log read before it is believed, and this plan's own
+steps should not be gated by a suite two other Jobs are competing for. Do **not** treat re-running
+as the fix — that advice was written here before the cost was visible, and it is what let three Jobs
+burn a day on it.
+
+## Open questions
+
+1. **Does `arm inbox` default to open signals or to everything?** `arm failures` reads the whole
+   machine and `arm tasks` filters by scope (`failures.rs:138-141`), so the merged verb has to pick
+   one. Leaning: open-and-needing-you by default, `--all` for cleared — the listing's job is what is
+   still yours.
+2. **Does `Signal` reach the envelope?** `ShowData`/`FailureRow` are `schema_version: 2`. Renaming the
+   Rust type is internal; renaming a JSON field is a schema change with `--json` consumers behind it.
+   Leaning: the type renames, the wire keeps its names, and that divergence gets one line of doc
+   comment saying so.
+3. **The KEYS panel.** `033` specifies bordered and two lines; `fa770bfc` says the shipped single line
+   is illegible. That sits in the separate complaints pass, but B2 is where a `Block` makes it cheap —
+   confirm the owner wants it there rather than earlier.
