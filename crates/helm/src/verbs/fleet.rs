@@ -1442,15 +1442,34 @@ fn end<R: Run, C: Clock>(
 ) -> Result<Output, ArmadaError> {
     let mut results: Vec<Killed> = Vec::new();
     for mut record in targets {
+        // Read before the record is borrowed for the teardown.
+        let already_over = record.state.is_over().then_some(record.state);
         results.push(tear_down(
             run,
             now,
             place,
             &mut record,
             Ending {
-                // **`kill` gave up on this Job**, whatever it was doing, so the
-                // state it lands in says so.
-                state: JobState::Aborted,
+                // **A Job that already finished keeps its verdict.**
+                //
+                // `kill` gave up on this Job, whatever it was doing, so
+                // `ABORTED` is the truth for it. `reap` shares this path and
+                // means something else entirely: it releases what a Job that is
+                // *already over* still holds. Writing `ABORTED` over a `DONE`
+                // record destroys the one durable answer to *did this work* —
+                // and it is the answer a person reads weeks later, long after
+                // the worktree is gone.
+                //
+                // Measured 2026-08-17: one `armada fleet reap --yes` turned
+                // seven finished Jobs into aborted ones, including
+                // `table-binds-cells-to-columns`, which had passed its
+                // `check_passes` gate, passed `review_clean`, landed on its
+                // branch, and been merged into `main` an hour earlier. Its
+                // record said `ABORTED/land` while its work was in the history.
+                //
+                // Releasing resources and rewriting a verdict are different
+                // acts, and only one of them was asked for.
+                state: already_over.unwrap_or(JobState::Aborted),
                 keep_branch,
                 keep_worktree,
                 observe: true,
