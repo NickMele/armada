@@ -20,6 +20,7 @@
 //! The `--json` envelope is what comes back, and the port block is read out of
 //! it — Fleet does not claim ports and does not know how.
 
+use armada_core::config::LandMerge;
 use armada_core::ctx::{Run, RunRequest, SpawnError, SpawnErrorKind};
 use armada_core::envelope::Released;
 use armada_core::error::{ArmadaError, ErrClass, Status};
@@ -237,6 +238,33 @@ pub struct Failed {
     pub log: Option<String>,
     /// Its own last word — `exited 101`.
     pub said: Option<String>,
+}
+
+/// Read a Job's own worktree for its repository's `fleet.land.merge` policy
+/// (034 §5, §6.4).
+///
+/// **A direct read, not one of the subprocess calls this module is otherwise
+/// made of.** Every other function here shells out to `armada manifest
+/// <verb>` because Manifest owns those verbs and must never learn it is being
+/// asked by an agent (`ARCHITECTURE.md` §1.9). `fleet:` is different: it is
+/// Fleet's own section of the same `armada.yml`, a sibling to `manifest:`
+/// that Manifest's verbs never read, so there is no verb to ask and no
+/// boundary crossed by reading the file directly.
+///
+/// **The one legitimate caller of
+/// [`armada_core::config::resolve::land_merge`].** That function's own doc
+/// comment states it is "meant to be called from `crates/fleet` alone,
+/// reading its own policy" — this is that one call, so `armada fleet tick`'s
+/// gate (`crates/helm/src/verbs/fleet.rs`) reaches the resolved policy
+/// through here rather than reading `armada.yml` and parsing it a second way.
+///
+/// **A worktree with no `armada.yml`, or one that will not parse, resolves
+/// the same way an absent `fleet:` section does**: [`LandMerge::Never`]. A
+/// repository that has said nothing has not consented to unattended merging.
+pub fn land_merge(worktree: &Path) -> LandMerge {
+    std::fs::read_to_string(worktree.join("armada.yml"))
+        .map(|text| armada_core::config::land_merge(&text))
+        .unwrap_or(LandMerge::Never)
 }
 
 /// `armada manifest clean` in a worktree — **step one of three**, and the order
@@ -669,5 +697,41 @@ mod tests {
         let error = init(&run, Path::new("/bin/armada"), Path::new("/w")).unwrap_err();
         assert_eq!(error.class, ErrClass::ArmadaBug);
         assert_eq!(error.class.exit_code(), 70);
+    }
+
+    /// **A worktree with no `armada.yml` has not consented to unattended
+    /// merging.** The same reading `armada_core::config::resolve::land_merge`
+    /// gives an absent `fleet:` section.
+    #[test]
+    fn a_worktree_with_no_armada_yml_lands_never() {
+        let worktree = tempfile::tempdir().unwrap();
+        assert_eq!(land_merge(worktree.path()), LandMerge::Never);
+    }
+
+    /// A repository that opts in reads `auto`, straight off its own
+    /// `armada.yml` — the file this function reads directly rather than
+    /// through a Manifest verb.
+    #[test]
+    fn a_worktrees_armada_yml_is_read_for_the_land_policy() {
+        let worktree = tempfile::tempdir().unwrap();
+        std::fs::write(
+            worktree.path().join("armada.yml"),
+            "manifest:\n  version: 1\nfleet:\n  land:\n    merge: auto\n",
+        )
+        .unwrap();
+        assert_eq!(land_merge(worktree.path()), LandMerge::Auto);
+    }
+
+    /// A repository that says nothing under `fleet:` still resolves `never`,
+    /// not a parse failure.
+    #[test]
+    fn a_repository_that_says_nothing_under_fleet_lands_never() {
+        let worktree = tempfile::tempdir().unwrap();
+        std::fs::write(
+            worktree.path().join("armada.yml"),
+            "manifest:\n  version: 1\n",
+        )
+        .unwrap();
+        assert_eq!(land_merge(worktree.path()), LandMerge::Never);
     }
 }
