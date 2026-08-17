@@ -72,9 +72,22 @@ pub fn check_detach(
     worktree: &Path,
     scope: Option<&str>,
 ) -> Result<String, ArmadaError> {
+    // **The selector is positional, and passing it as `--scope` was a flag that
+    // has never existed.**
+    //
+    // `armada manifest check [flags] [<selector>]` — a selector is
+    // `<component>:<check>`, a component, or a check name, and it is an
+    // argument rather than an option. Fleet spelled it `--scope <x>`, so every
+    // `check_passes` gate on a step that declared a `scope:` died with *"unknown
+    // flag `--scope`"* the moment it ran. Which is every `implement` step in the
+    // shipped `feature` and `bug` workflows, so the gate that decides whether a
+    // Job's code works has never once been reached.
+    //
+    // Found 2026-08-17 by a Job that got far enough to try it — the three
+    // earlier blockers each hid this one, and the misreported refusal above hid
+    // it again after that.
     let mut args: Vec<&str> = vec!["manifest", "check", "--detach", "--json"];
     if let Some(scope) = scope {
-        args.push("--scope");
         args.push(scope);
     }
     let envelope = call(run, exe, worktree, &args, "armada manifest check --detach")?;
@@ -348,6 +361,61 @@ mod tests {
     }
 
     const INITED: &str = r#"{"schema_version":2,"verb":"init","workspace":"3d9cc7ba","status":"READY","error":null,"data":{"port_block":{"from":5470,"to":5479},"claimed_at":"t","reaped":{},"results":[]}}"#;
+
+    /// **The selector is an argument, not a flag.**
+    ///
+    /// Fleet spelled it `--scope <x>`, which `armada manifest check` has never
+    /// accepted — its usage is `check [flags] [<selector>]`. So every
+    /// `check_passes` gate on a step declaring a `scope:` died with *"unknown
+    /// flag `--scope`"* the moment it ran, which is every `implement` step in
+    /// the shipped `feature` and `bug` workflows. The gate that decides whether
+    /// a Job's code works had never once been reached.
+    ///
+    /// **Nothing caught it because nothing asserted the argv.** The two tests
+    /// beside this one drive the envelope and never look at what was run — and
+    /// `AGENTS.md`'s own rule is that asserting on a string proves you built the
+    /// string you meant, not that it works. This asserts the argv *and* the
+    /// three earlier blockers had to be cleared before a Job could reach it.
+    #[test]
+    fn a_detached_checks_scope_is_a_selector_rather_than_a_flag() {
+        const STARTED: &str = r#"{"schema_version":2,"verb":"check","workspace":"3d9cc7ba","status":"RUNNING","error":null,"data":{"run_id":"01M0","results":[]}}"#;
+
+        let run = FakeRun::answering(STARTED);
+        check_detach(
+            &run,
+            Path::new("/usr/local/bin/armada"),
+            Path::new("/work"),
+            Some("armada:test"),
+        )
+        .unwrap();
+        let argv = run.seen.borrow()[0].clone();
+        assert!(
+            !argv.iter().any(|word| word == "--scope"),
+            "`--scope` is not a flag armada manifest check has: {argv:?}"
+        );
+        assert_eq!(
+            argv.last().map(String::as_str),
+            Some("armada:test"),
+            "the selector is not the last argument: {argv:?}"
+        );
+
+        // **No scope means no argument**, which is how a step gets the default:
+        // `check` already scopes to the working diff unless told otherwise.
+        let run = FakeRun::answering(STARTED);
+        check_detach(
+            &run,
+            Path::new("/usr/local/bin/armada"),
+            Path::new("/work"),
+            None,
+        )
+        .unwrap();
+        let argv = run.seen.borrow()[0].clone();
+        assert_eq!(
+            argv.last().map(String::as_str),
+            Some("--json"),
+            "an unscoped check grew an argument: {argv:?}"
+        );
+    }
 
     /// **A refusal comes back as the refusal, not as a missing field.**
     ///

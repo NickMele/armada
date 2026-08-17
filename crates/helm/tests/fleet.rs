@@ -4571,7 +4571,7 @@ fn the_loop_builds_the_check_argv_that_the_real_binary_accepts() {
         &scratch,
         "bug",
         "name: bug\ndescription: one checked step\nends_at: branch\nsteps:\n\
-         \x20 - id: fix\n    skill: implement-change\n    scope: changed\n    \
+         \x20 - id: fix\n    skill: implement-change\n    scope: armada:test\n    \
          verify: { must: check_passes }\n",
     );
     let run = scratch
@@ -4609,8 +4609,13 @@ fn the_loop_builds_the_check_argv_that_the_real_binary_accepts() {
             "check",
             "--detach",
             "--json",
-            "--scope",
-            "changed",
+            // **Positional, because a selector is an argument.** This asserted
+            // `--scope changed` and passed for months — the flag does not exist,
+            // and `changed` is not a selector either. The paired real-binary
+            // test named in the doc comment above only ever ran the *unscoped*
+            // argv, so the one flag that was wrong is the one the other half
+            // never received. `detach.rs` now runs this vector.
+            "armada:test",
         ],
     );
     assert_eq!(

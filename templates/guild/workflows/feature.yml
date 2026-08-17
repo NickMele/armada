@@ -29,9 +29,13 @@ steps:
   - id: approval
     verify: { must: human_approves }
 
+  # **No `scope:`, and its absence is the instruction.** `armada manifest check`
+  # already scopes to the working diff unless told otherwise, which is what this
+  # step wants — so the line that used to say `scope: changed` was asking for the
+  # default in a grammar that has no such word. A `scope:` here is a *selector*:
+  # `<component>:<check>`, a component, or a check name.
   - id: implement
     skill: implement-change
-    scope: changed
     verify: { must: check_passes }
 
   # No `skill:` — Fleet satisfies this one by spawning a Job that runs the

@@ -641,6 +641,36 @@ fn neither_flag_is_refused_as_unbuilt() {
             "`{flag}` is built and still says it is not: {payload}"
         );
     }
+
+    // **The scoped form, which is the one the loop actually builds.**
+    //
+    // This test is the *real binary* half of AGENTS.md's rule, and it was only
+    // ever handed the unscoped argv — so the half of the vector that was wrong
+    // is the half it never received. Fleet spelled the selector `--scope
+    // changed`, a flag `armada manifest check` has never had, and every
+    // `check_passes` gate on a step declaring a `scope:` died on it the moment
+    // it ran. `fleet.rs`'s `the_loop_builds_the_check_argv_that_the_real_binary
+    // _accepts` asserted that exact vector and passed throughout, because
+    // asserting on argv proves you built the string you meant and nothing more.
+    //
+    // A selector is positional. `app:pass` is a real check in `CONFIG`, so a
+    // refusal here is a refusal of the *shape* rather than of the name — which
+    // is what the neighbouring `nosuchcheck` test already covers from the other
+    // side.
+    let output = machine.run(
+        &repo,
+        &["manifest", "check", "--detach", "--json", "app:pass"],
+    );
+    let payload = envelope(&output);
+    stop(pgid_of(&payload));
+    assert!(
+        payload["error"].is_null(),
+        "the argv the loop builds was refused: {payload}"
+    );
+    assert!(
+        payload["data"]["run_id"].is_string(),
+        "a scoped detach reported no run id: {payload}"
+    );
 }
 
 /// **A bad selector fails in the caller's terminal, not in the detached run.**
