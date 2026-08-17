@@ -21,7 +21,7 @@
 //! else's verdict rests on.
 
 use armada_core::error::{ArmadaError, ErrClass};
-use armada_core::fleet::{Subject, Verdict};
+use armada_core::fleet::{DroneStatus, Subject, Verdict};
 use armada_manifest::clock::SystemClock;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ServerCapabilities, ServerInfo};
@@ -96,13 +96,9 @@ pub struct ReportArgs {
     ///
     /// **`completed` and `failed` are refused here**, and the refusal says where
     /// they go: a step is done when its `verify:` predicate holds, which is
-    /// `fleet.verdict`'s to record with the evidence.
+    /// the gate's to decide.
     #[serde(default)]
     pub event: Option<String>,
-    /// Which step, when it is not the one the Job is already on — as it is
-    /// spelled in the workflow file.
-    #[serde(default)]
-    pub step: Option<String>,
 }
 
 /// `fleet.ask_human`.
@@ -126,27 +122,10 @@ pub struct ProposeArgs {
 /// `fleet.verdict`.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct VerdictArgs {
-    /// Which step ended.
-    pub step: String,
-    /// How it ended: `PASS`, `FAILED`, `BLOCKED` or `NEEDS_HUMAN`.
-    pub verdict: String,
-    /// What the verdict rests on. **Required for a `PASS`** — an agent asserting
-    /// that the tests pass is not evidence, an `armada manifest check` exit code
-    /// is (PLAN.md §14.3).
-    #[serde(default)]
-    pub evidence: Vec<EvidenceArg>,
-}
-
-/// One piece of evidence, as a caller writes it.
-#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
-pub struct EvidenceArg {
-    /// What produced it — `check`, `command`.
-    pub kind: String,
-    /// Which one: a check id from `manifest.check`'s `results[]`, a command
-    /// name.
-    pub scope: String,
-    /// What it exited with.
-    pub exit: i32,
+    /// Whether you finished your work or hit a blocker: `done` or `stuck`.
+    /// The Job will verify that the step is complete and advance or retry
+    /// based on the predicate outcome.
+    pub status: String,
 }
 
 #[tool_router]
@@ -174,7 +153,7 @@ impl Toolbelt {
                 &world.place(),
                 &job,
                 &args.body,
-                args.step.as_deref(),
+                None,
                 args.event.as_deref(),
             )
         })
@@ -250,12 +229,12 @@ impl Toolbelt {
         .await
     }
 
-    /// Emit a step verdict.
+    /// Report step completion or blockage.
     #[tool(
         name = "fleet.verdict",
-        description = "Record how a step of your workflow ended: PASS, FAILED, BLOCKED or \
-                       NEEDS_HUMAN. A PASS must carry evidence an external command produced — \
-                       check ids and their exit codes — and is refused without it."
+        description = "Record whether you finished your work (`done`) or hit a blocker (`stuck`). \
+                       The Job will verify that the step is complete and advance or retry based on \
+                       the outcome of its predicate."
     )]
     async fn fleet_verdict(&self, Parameters(args): Parameters<VerdictArgs>) -> CallToolResult {
         let world = self.world.clone();
@@ -263,31 +242,12 @@ impl Toolbelt {
             Ok(job) => job,
             Err(error) => return super::answer::from("fleet verdict", Err(error)),
         };
-        let reached = match word_to_verdict(&args.verdict) {
-            Ok(reached) => reached,
+        let status = match word_to_status(&args.status) {
+            Ok(status) => status,
             Err(error) => return super::answer::from("fleet verdict", Err(error)),
         };
-        let evidence = args
-            .evidence
-            .into_iter()
-            .map(|e| armada_core::envelope::Evidence {
-                kind: e.kind,
-                scope: e.scope,
-                exit: e.exit,
-            })
-            .collect();
         run("fleet verdict", move || {
-            fleet::verdict(
-                &SystemClock,
-                &world.place(),
-                &job,
-                &args.step,
-                reached,
-                evidence,
-                // The Drone's own account is already in `fleet.report`; the
-                // generic inbox sentence is the right one here.
-                None,
-            )
+            fleet::verdict(&SystemClock, &world.place(), &job, status)
         })
         .await
     }
@@ -312,6 +272,23 @@ impl ServerHandler for Toolbelt {
                  decomposing, say so with mcp__armada__fleet_ask_human. Do not edit armada.yml \
                  to match something you learned: propose it.",
             )
+    }
+}
+
+/// Parse the status word a caller wrote.
+///
+/// **Case-insensitive** — a model writing `done` means `Done`.
+/// A word outside the two is refused rather than guessed at.
+fn word_to_status(word: &str) -> Result<DroneStatus, ArmadaError> {
+    match word.trim().to_ascii_lowercase().as_str() {
+        "done" => Ok(DroneStatus::Done),
+        "stuck" => Ok(DroneStatus::Stuck),
+        other => Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: "status".to_string(),
+            message: format!("`{other}` is not a valid status"),
+            next_action: Some("one of done, stuck".to_string()),
+        }),
     }
 }
 

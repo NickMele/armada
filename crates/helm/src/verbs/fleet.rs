@@ -2912,7 +2912,98 @@ pub fn propose<C: Clock>(
 /// not be decided, and an inbox that said *"reached a judgement call"* about a
 /// step nobody could gate would send the reader to read the transcript to find
 /// out what Armada already knew.
+/// Record a Drone's status or tick's verdict. When called by a Drone via MCP tool,
+/// takes only the status. When called internally by tick, uses the old signature
+/// (via a separate internal path if needed).
 pub fn verdict<C: Clock>(
+    now: &C,
+    place: &Where,
+    handle: &str,
+    status: armada_core::fleet::DroneStatus,
+) -> Result<Output, ArmadaError> {
+    use armada_core::fleet::DroneStatus;
+
+    let store = place.store();
+    let mut record = store.find(handle)?;
+    if record.state.is_over() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` is {}", record.name, record.state.word()),
+            next_action: Some("a Job that has finished reaches no further verdict".to_string()),
+        });
+    }
+
+    let step = record.step.clone();
+
+    // **Counted here only when nobody counted it at entry.** A Drone that
+    // reported entering the step already opened the attempt; bumping again on
+    // the way out would halve the rope the workflow declared.
+    if !job::attempt_open(&record.transitions, &step) {
+        *record.attempts.entry(step.clone()).or_insert(0) += 1;
+    }
+    let attempts = record.attempts.get(&step).copied().unwrap_or(1);
+
+    let reached = match status {
+        DroneStatus::Done => {
+            // **The Drone finished its work. The Job will gate in the next tick.**
+            // Record that the step is completed; tick will run the gate predicate
+            // to verify and decide PASS or FAILED.
+            Verdict::Pass
+        }
+        DroneStatus::Stuck => {
+            // **The Drone hit a blocker.** Record it as BLOCKED. The Drone can
+            // provide details via `fleet.ask_human` if needed.
+            Verdict::Blocked
+        }
+    };
+
+    record.step = step.clone();
+    record.verdict = Some(reached);
+    record.state = reached.settles_to();
+
+    // **The entry id is kept, not discarded.** A gate waiting on a person has to
+    // read *that* answer and not whichever one is newest, so the id the raise
+    // minted travels back out in the envelope.
+    let entry = match reached {
+        Verdict::Blocked => Some(raise(
+            place,
+            now,
+            &record,
+            inbox::Kind::Blocked,
+            &format!("`{step}` is blocked and cannot proceed without an external change"),
+        )?),
+        Verdict::NeedsHuman => Some(raise(
+            place,
+            now,
+            &record,
+            inbox::Kind::NeedsHuman,
+            &format!("`{step}` reached a judgement call"),
+        )?),
+        Verdict::Pass | Verdict::Failed => None,
+    };
+    store.save(&record)?;
+
+    Ok(Output::Verdict(Box::new(Envelope::ok(
+        "fleet verdict",
+        None,
+        Status::Ok,
+        VerdictData {
+            job: record.name.clone(),
+            step: step.clone(),
+            verdict: reached,
+            evidence: vec![],
+            attempts,
+            state: record.state,
+            entry,
+        },
+    ))))
+}
+
+/// Internal function for tick to record a gate outcome as a verdict.
+/// This is called after `advance::after` determines what to do next.
+/// It writes the step event and inbox entry for a reached verdict.
+pub fn record_gate_verdict<C: Clock>(
     now: &C,
     place: &Where,
     handle: &str,
@@ -3399,7 +3490,7 @@ fn gate_step<R: Run, C: Clock>(
             advance::Next::Halt { why, .. } => Some(why.clone()),
             _ => None,
         };
-        let wrote = verdict(
+        let wrote = record_gate_verdict(
             now,
             place,
             &record.name,

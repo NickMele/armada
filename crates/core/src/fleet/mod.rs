@@ -267,6 +267,21 @@ pub enum Verdict {
     NeedsHuman,
 }
 
+/// What a Drone reports about its progress: whether it finished or hit a blocker.
+///
+/// **The Drone reports its status; the Job determines the verdict.** The Drone
+/// says whether it completed the step or stopped mid-way. The Job runs the
+/// gate's predicate to verify the work and produce a verdict (`PASS`/`FAILED`),
+/// or records a blocker when the Drone says it hit one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DroneStatus {
+    /// The Drone completed its work; the Job will now gate the step.
+    Done,
+    /// The Drone could not continue; the Job will record this as blocked.
+    Stuck,
+}
+
 /// What a Drone's proposal is **about**
 /// ([`docs/reserved/008`](../../../../docs/reserved/008-armada-injects-its-own-skills.md)).
 ///

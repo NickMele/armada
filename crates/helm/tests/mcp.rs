@@ -463,7 +463,7 @@ fn an_assertion_and_the_gate_that_disagreed_are_both_kept() {
         Some("attempted"),
     )
     .expect("noted");
-    fleet::verdict(
+    fleet::record_gate_verdict(
         &FrozenClock,
         &place,
         "tidy-otter",
@@ -504,7 +504,7 @@ fn a_verdict_with_no_reported_entry_counts_the_attempt_as_it_always_did() {
     machine.job("tidy-otter", JobState::Running, "");
 
     for expected in 1..=2 {
-        fleet::verdict(
+        fleet::record_gate_verdict(
             &FrozenClock,
             &place,
             "tidy-otter",
@@ -543,7 +543,7 @@ fn a_verdict_that_stops_the_job_writes_no_boundary_and_leaves_the_attempt_open()
         Some("entered"),
     )
     .expect("noted");
-    fleet::verdict(
+    fleet::record_gate_verdict(
         &FrozenClock,
         &place,
         "tidy-otter",
@@ -760,7 +760,7 @@ fn a_pass_with_no_evidence_is_refused_and_nothing_is_written() {
     let machine = Machine::new();
     machine.job("tidy-otter", JobState::Running, "");
 
-    let error = fleet::verdict(
+    let error = fleet::record_gate_verdict(
         &FrozenClock,
         &machine.place(),
         "tidy-otter",
@@ -789,7 +789,7 @@ fn a_pass_with_evidence_advances_the_job_and_counts_the_attempt() {
     let machine = Machine::new();
     machine.job("tidy-otter", JobState::Running, "");
 
-    let output = fleet::verdict(
+    let output = fleet::record_gate_verdict(
         &FrozenClock,
         &machine.place(),
         "tidy-otter",
@@ -824,7 +824,7 @@ fn a_retried_step_counts_up_rather_than_starting_again() {
     machine.job("tidy-otter", JobState::Running, "");
 
     for expected in 1..=3 {
-        let output = fleet::verdict(
+        let output = fleet::record_gate_verdict(
             &FrozenClock,
             &place,
             "tidy-otter",
@@ -861,7 +861,7 @@ fn a_stopped_job_reaches_the_inbox_with_the_step_that_stopped_it() {
         let machine = Machine::new();
         machine.job("tidy-otter", JobState::Running, "");
 
-        fleet::verdict(
+        fleet::record_gate_verdict(
             &FrozenClock,
             &machine.place(),
             "tidy-otter",

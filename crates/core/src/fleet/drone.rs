@@ -328,22 +328,14 @@ your transcript. Three tools are how you are read. Nothing else you write is.
 `event: \"entered\"` when you begin a step and `event: \"attempted\"` when you stop working on \
 one. That is the only thing that makes which step you are on, and how long you have been on it, \
 visible to anybody. It is not narration: a note per thought puts your transcript into the \
-orchestrator's window, which is the one place it must never be. You cannot report a step \
-`completed`.
-- `mcp__armada__fleet_verdict` — how a step ended: `PASS`, `FAILED`, `BLOCKED` or \
-`NEEDS_HUMAN`. Emit one for every step you entered, including the ones that went wrong; a step \
-you leave silently is a Job nobody can advance. A `PASS` carries evidence an external command \
-produced — a check id and its exit code — and is refused without it. Your own assertion that \
-the tests pass is not evidence.
+orchestrator's window, which is the one place it must never be.
+- `mcp__armada__fleet_verdict` — record whether you finished your work (`done`) or hit a \
+blocker (`stuck`). The Job will verify the work and advance or retry based on the outcome.
 - `mcp__armada__fleet_ask_human` — only for a judgement that is genuinely the person's. Write \
 the question in full: it is read out of context, possibly hours later, by somebody who has not \
-seen your work. Brevity is the wrong instinct here and nowhere else.
+seen your work.
 
-You cannot spawn Jobs. If the task needs decomposing, say so with `mcp__armada__fleet_ask_human`.
-
-Your closing message is read beside a dozen others. A few lines: what you did, what you proved \
-it with, and what is left. Not a transcript — the record is already in your reports and your \
-verdicts.";
+You cannot spawn Jobs. If the task needs decomposing, say so with `mcp__armada__fleet_ask_human`.";
 
 /// **What a Drone may do unattended.**
 ///
@@ -1542,21 +1534,14 @@ mod tests {
             !BRIEF.contains("fleet.report"),
             "the dotted name matches nothing the model can call"
         );
-        // The step-boundary vocabulary, and the two words that are not verdicts.
+        // The step-boundary vocabulary.
         for word in ["entered", "attempted"] {
             assert!(BRIEF.contains(word), "the brief omits `{word}`");
         }
-        assert!(
-            BRIEF.contains("completed"),
-            "the brief does not say which boundary word is refused"
-        );
-        // Every verdict, so a Drone with a blocked step has a word for it.
-        for verdict in ["PASS", "FAILED", "BLOCKED", "NEEDS_HUMAN"] {
-            assert!(BRIEF.contains(verdict), "the brief omits {verdict}");
+        // The status words a Drone reports.
+        for status in ["done", "stuck"] {
+            assert!(BRIEF.contains(status), "the brief omits `{status}`");
         }
-        // And the rule the gate actually enforces (PLAN.md §14.3).
-        assert!(BRIEF.contains("evidence"), "{BRIEF}");
-        assert!(BRIEF.contains("not evidence"), "{BRIEF}");
         // It is not the reader's voice, and must never quietly become it: a
         // Drone that trimmed a question to a word count would be obeying the
         // one rule that is wrong in the one channel that reaches a person.
