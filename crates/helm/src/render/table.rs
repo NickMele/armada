@@ -53,6 +53,7 @@ pub enum Align {
 /// One column's description.
 #[derive(Debug, Clone)]
 pub struct Column {
+    key: String,
     header: String,
     align: Align,
     flexible: bool,
@@ -64,8 +65,9 @@ impl Column {
     ///
     /// For anything short and load-bearing — an id, a verdict, a port. Squeezing
     /// one of these loses the answer rather than a detail.
-    pub fn fixed(header: &str) -> Column {
+    pub fn fixed(key: &str, header: &str) -> Column {
         Column {
+            key: key.to_string(),
             header: header.to_string(),
             align: Align::Left,
             flexible: false,
@@ -76,8 +78,9 @@ impl Column {
     /// A column that gives up width first: paths, messages, commands.
     ///
     /// Long, and its tail is the least valuable part of the line.
-    pub fn flexible(header: &str) -> Column {
+    pub fn flexible(key: &str, header: &str) -> Column {
         Column {
+            key: key.to_string(),
             header: header.to_string(),
             align: Align::Left,
             flexible: true,
@@ -237,6 +240,31 @@ struct Row {
     note: Option<String>,
 }
 
+impl Row {
+    /// Build a row from keyed (column_key, cell) pairs, validating keys against table columns.
+    fn from_keyed(columns: &[Column], keyed_cells: Vec<(&str, Cell)>, note: Option<String>) -> Row {
+        use std::collections::HashMap;
+
+        let mut cell_map: HashMap<&str, Cell> = keyed_cells.into_iter().collect();
+        let mut cells = Vec::new();
+
+        for column in columns {
+            if let Some(cell) = cell_map.remove(column.key.as_str()) {
+                cells.push(cell);
+            } else {
+                cells.push(Cell::empty());
+            }
+        }
+
+        if !cell_map.is_empty() {
+            let unknown: Vec<&str> = cell_map.keys().copied().collect();
+            panic!("unknown column(s) in row: {:?}", unknown);
+        }
+
+        Row { cells, note }
+    }
+}
+
 impl Table {
     /// Describe a table by its columns.
     pub fn new(columns: Vec<Column>) -> Table {
@@ -279,6 +307,24 @@ impl Table {
     /// hanging off the row's name rather than as a row of its own.
     pub fn row_with_note(mut self, cells: Vec<Cell>, note: Option<String>) -> Table {
         self.rows.push(Row { cells, note });
+        self
+    }
+
+    /// Add a row with cells bound to column keys. Cells are reordered to match
+    /// the table's declared column order. Unknown column keys panic; missing
+    /// columns are filled with empty cells.
+    pub fn row_keyed(self, keyed_cells: Vec<(&str, Cell)>) -> Table {
+        self.row_keyed_with_note(keyed_cells, None)
+    }
+
+    /// A keyed row, plus one continuation line.
+    pub fn row_keyed_with_note(
+        mut self,
+        keyed_cells: Vec<(&str, Cell)>,
+        note: Option<String>,
+    ) -> Table {
+        let row = Row::from_keyed(&self.columns, keyed_cells, note);
+        self.rows.push(row);
         self
     }
 
@@ -582,9 +628,9 @@ mod tests {
 
     fn ids() -> Table {
         Table::new(vec![
-            Column::fixed("check"),
-            Column::fixed("status"),
-            Column::fixed("time").right(),
+            Column::fixed("name", "check"),
+            Column::fixed("status", "status"),
+            Column::fixed("time", "time").right(),
         ])
         .row(vec![
             Cell::plain("armada:boundaries"),
@@ -689,7 +735,7 @@ mod tests {
     /// nothing under it claims something was listed.
     #[test]
     fn a_table_with_no_rows_renders_nothing() {
-        let table = Table::new(vec![Column::fixed("check")]);
+        let table = Table::new(vec![Column::fixed("check", "check")]);
         assert!(table.is_empty());
         assert_eq!(table.render(Style::plain(), 80), "");
     }
@@ -698,15 +744,18 @@ mod tests {
     /// flexible column, and every row stays one line.
     #[test]
     fn a_narrow_terminal_truncates_a_column_rather_than_wrapping_a_row() {
-        let table = Table::new(vec![Column::fixed("id"), Column::flexible("log")])
-            .row(vec![
-                Cell::plain("api:lint"),
-                Cell::plain(".armada/run/01J8X2/logs/api.lint.log"),
-            ])
-            .row(vec![
-                Cell::plain("web:e2e"),
-                Cell::plain(".armada/run/01J8X2/logs/web.e2e.log"),
-            ]);
+        let table = Table::new(vec![
+            Column::fixed("id", "id"),
+            Column::flexible("log", "log"),
+        ])
+        .row(vec![
+            Cell::plain("api:lint"),
+            Cell::plain(".armada/run/01J8X2/logs/api.lint.log"),
+        ])
+        .row(vec![
+            Cell::plain("web:e2e"),
+            Cell::plain(".armada/run/01J8X2/logs/web.e2e.log"),
+        ]);
 
         let text = table.render(Style::plain(), 30);
         assert_eq!(text.lines().count(), 3, "one line per row plus the header");
@@ -724,8 +773,11 @@ mod tests {
     /// columns alone overhangs rather than losing the answer.
     #[test]
     fn a_fixed_column_keeps_its_width_even_when_nothing_fits() {
-        let table = Table::new(vec![Column::fixed("workspace"), Column::fixed("status")])
-            .row(vec![Cell::plain("a3f91c02"), Cell::plain("FAILED")]);
+        let table = Table::new(vec![
+            Column::fixed("workspace", "workspace"),
+            Column::fixed("status", "status"),
+        ])
+        .row(vec![Cell::plain("a3f91c02"), Cell::plain("FAILED")]);
         let text = table.render(Style::plain(), 10);
         assert_eq!(text.lines().count(), 2);
         assert!(text.contains("a3f91c02   FAILED"), "{text}");
@@ -752,9 +804,9 @@ mod tests {
     #[test]
     fn a_short_row_is_padded_rather_than_refused() {
         let text = Table::new(vec![
-            Column::fixed("id"),
-            Column::fixed("status"),
-            Column::fixed("note"),
+            Column::fixed("id", "id"),
+            Column::fixed("status", "status"),
+            Column::fixed("note", "note"),
         ])
         .row(vec![Cell::plain("api"), Cell::plain("PASS")])
         .row(vec![
@@ -772,9 +824,9 @@ mod tests {
     #[test]
     fn a_column_no_row_filled_is_dropped_header_and_all() {
         let table = Table::new(vec![
-            Column::fixed("check"),
-            Column::flexible("detail"),
-            Column::fixed("time").right(),
+            Column::fixed("check", "check"),
+            Column::flexible("detail", "detail"),
+            Column::fixed("time", "time").right(),
         ])
         .row(vec![
             Cell::plain("git"),
@@ -796,9 +848,12 @@ mod tests {
     /// the case the rule must not swallow: there the absence is the answer.
     #[test]
     fn a_column_one_row_filled_keeps_its_placeholders() {
-        let table = Table::new(vec![Column::fixed("check"), Column::fixed("time").right()])
-            .row(vec![Cell::plain("git"), Cell::nothing()])
-            .row(vec![Cell::plain("test"), Cell::plain("1.2s")]);
+        let table = Table::new(vec![
+            Column::fixed("check", "check"),
+            Column::fixed("time", "time").right(),
+        ])
+        .row(vec![Cell::plain("git"), Cell::nothing()])
+        .row(vec![Cell::plain("test"), Cell::plain("1.2s")]);
         assert_eq!(
             table.render(Style::plain(), 80),
             "CHECK  TIME\ngit       -\ntest   1.2s\n"
@@ -809,9 +864,12 @@ mod tests {
     /// it moves nothing. The pair property in `render_golden.rs` depends on it.
     #[test]
     fn a_placeholder_occupies_one_column_in_both_audiences() {
-        let table = Table::new(vec![Column::fixed("check"), Column::fixed("time").right()])
-            .row(vec![Cell::plain("git"), Cell::nothing()])
-            .row(vec![Cell::plain("test"), Cell::plain("1.2s")]);
+        let table = Table::new(vec![
+            Column::fixed("check", "check"),
+            Column::fixed("time", "time").right(),
+        ])
+        .row(vec![Cell::plain("git"), Cell::nothing()])
+        .row(vec![Cell::plain("test"), Cell::plain("1.2s")]);
         let plain = table.render(Style::plain(), 80);
         let painted = table.render(Style::painted(), 80);
         for (a, b) in plain.lines().zip(painted.lines()) {
@@ -826,9 +884,9 @@ mod tests {
     #[test]
     fn the_minimum_width_is_the_width_the_table_draws_at_when_squeezed() {
         let table = Table::new(vec![
-            Column::fixed("id"),
-            Column::flexible("log"),
-            Column::flexible("note"),
+            Column::fixed("id", "id"),
+            Column::flexible("log", "log"),
+            Column::flexible("note", "note"),
         ])
         .indent(2)
         .row(vec![
@@ -862,12 +920,28 @@ mod tests {
     /// gets alignment without inventing names for its columns.
     #[test]
     fn a_headerless_table_draws_only_its_rows() {
-        let text = Table::new(vec![Column::fixed(""), Column::flexible("")])
+        let text = Table::new(vec![Column::fixed("", ""), Column::flexible("", "")])
             .headerless()
             .indent(2)
             .row(vec![Cell::plain("--json"), Cell::plain("the envelope")])
             .row(vec![Cell::plain("--color"), Cell::plain("auto, always")])
             .render(Style::plain(), 80);
         assert_eq!(text, "  --json   the envelope\n  --color  auto, always\n");
+    }
+
+    /// A keyed row with an unknown column name panics rather than silently
+    /// dropping the cell. This is the core safety guarantee of keyed rows.
+    #[test]
+    #[should_panic(expected = "unknown column")]
+    fn a_keyed_row_with_unknown_column_panics() {
+        let table = Table::new(vec![
+            Column::fixed("name", "name"),
+            Column::fixed("status", "status"),
+        ]);
+        let _result = table.row_keyed(vec![
+            ("name", Cell::plain("test")),
+            ("status", Cell::plain("PASS")),
+            ("unknown_column", Cell::plain("value")),
+        ]);
     }
 }

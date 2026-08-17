@@ -150,8 +150,8 @@ pub fn paint(
     if screen.mode == Mode::Keys {
         let selected = screen.cursor.selected(&frame.rows).map(|row| row.state);
         let mut table = crate::render::table::Table::new(vec![
-            crate::render::table::Column::fixed("key"),
-            crate::render::table::Column::flexible("does"),
+            crate::render::table::Column::fixed("key", "key"),
+            crate::render::table::Column::flexible("does", "does"),
         ])
         .indent(2);
         for (key, does) in render::bridge_every_key(selected) {
@@ -336,16 +336,16 @@ fn detail_pane(job: &str, detail: Option<&ShowData>, style: Style, width: usize)
 /// different shapes. `take` and `keep` fold to themselves.
 fn preview(reap: &bridge::Reap, style: Style, width: usize) -> Vec<Vec<Span>> {
     let mut table = crate::render::table::Table::new(vec![
-        crate::render::table::Column::fixed(""),
-        crate::render::table::Column::fixed("status"),
-        crate::render::table::Column::fixed("job"),
+        crate::render::table::Column::fixed("", ""),
+        crate::render::table::Column::fixed("status", "status"),
+        crate::render::table::Column::fixed("job", "job"),
         // **The uuid is on the row, because a name is not unique.** Two Jobs can
         // share one — `name_is_taken` only refuses to reuse a *live* Job's name
         // — and a preview of what is about to be deleted that cannot tell two
         // rows apart is a preview that cannot be read.
-        crate::render::table::Column::fixed("uuid"),
-        crate::render::table::Column::fixed("state"),
-        crate::render::table::Column::flexible("holding"),
+        crate::render::table::Column::fixed("uuid", "uuid"),
+        crate::render::table::Column::fixed("state", "state"),
+        crate::render::table::Column::flexible("holding", "holding"),
     ])
     .indent(2);
 
