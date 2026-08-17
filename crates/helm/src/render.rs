@@ -1301,8 +1301,13 @@ pub fn system_box(system: &DoctorData, style: Style, width: usize) -> Vec<Vec<Sp
 pub fn command_centre_keys_wide(width: usize) -> Vec<Vec<Span>> {
     let movement = "↑↓←→ or hjkl move   tab next panel   1-5 jump to panel   \
                      enter act on the focused row   / filter";
+    // **`t tick` is not here, because `t` is unbound in `watching()`.** It fell
+    // to the catch-all and a test asserts it does nothing. `033` treats a
+    // legend as trustworthy — a verb behind `?` is still real, just hidden —
+    // and a key that is drawn and answers nothing is the opposite of that. It
+    // comes back with its handler.
     let verbs = "d detail   n new job   a answer   p pause   x abort   r reap   \
-                 t tick   ? all keys   q quit";
+                 ? all keys   q quit";
     let line = |text: &str| {
         vec![Span {
             text: format!(" {text}"),
@@ -1632,10 +1637,25 @@ pub fn facts_box(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> 
 /// The Job detail screen's own `KEYS` box — nothing the fleet screen offers,
 /// because none of it is reachable from here.
 pub fn detail_keys(width: usize) -> Vec<Vec<Span>> {
+    // **Only the keys that are bound.**
+    //
+    // This listed `a answer`, `t tick`, `r retry step`, `$ raise budget`,
+    // `p pause` and `x abort`, and `core::fleet::bridge::detail` handles none of
+    // them — there is no `Action::Tick` variant at all and nothing anywhere
+    // wires `$`. `esc` was listed and unhandled too, so the pane advertised its
+    // own exit and answered nothing, leaving `ctrl-c` — not in the legend, and
+    // it quits the whole Bridge rather than closing a page of it.
+    //
+    // `033`'s own principle is that a legend is trustworthy: a verb behind `?`
+    // is still real, just hidden. A legend naming seven keys of which one now
+    // works is the opposite, and it is worse on this screen than anywhere else
+    // because `033` makes the detail pane the primary full-screen destination
+    // rather than a small overlay. Found by the reviewer Job on that change.
+    //
+    // The rest come back as they are wired, one at a time, each with the
+    // handler that makes it true.
     let line = vec![Span {
-        text: " esc back   a answer   t tick   r retry step   $ raise budget   \
-               p pause   x abort"
-            .to_string(),
+        text: " ↑↓ or jk move   esc back   q back   ctrl-c quit the bridge".to_string(),
         role: None,
         bold: false,
     }];

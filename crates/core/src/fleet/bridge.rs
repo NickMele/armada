@@ -1015,6 +1015,26 @@ fn detail(screen: &mut Screen, job: String, rows: &[JobRow], key: Key) -> Presse
             };
             Pressed::Stay
         }
+        // **The way out, which the paragraph above has promised since M4 and
+        // the code never had.** `Esc`, `d` again and `q` all fell to the
+        // catch-all, so the detail pane advertised `esc back` in its own key
+        // legend and answered nothing — leaving `ctrl-c` as the only exit, a
+        // key the legend does not list and which quits the whole Bridge rather
+        // than closing a page of it.
+        //
+        // It was survivable while the pane was a small overlay. `033` makes it
+        // the primary full-screen destination with a seven-key legend, so a
+        // reader who presses `d` lands somewhere they cannot leave. Found by
+        // the reviewer Job on that change, which called it a legend that lies.
+        //
+        // `q` goes back rather than quitting, for the reason already argued
+        // above: closing an application when the reader meant to close a page
+        // of it is the worse mistake, and `ctrl-c` is still the way out of the
+        // Bridge itself.
+        Key::Esc | Key::Char('d') | Key::Char('q') => {
+            screen.mode = Mode::Watching;
+            Pressed::Stay
+        }
         _ => Pressed::Stay,
     }
 }
@@ -1824,6 +1844,56 @@ Usage:
         press(&mut screen, &rows, Key::Char('k'));
         assert_eq!(screen.cursor.at(), 0);
         assert_eq!(screen.mode, Mode::Detail("rate-limit".to_string()));
+    }
+
+    /// **Every key the detail pane's own documentation promises actually
+    /// leaves it.**
+    ///
+    /// `detail`'s doc comment has said *"`esc`, `d` again and `q` all go back"*
+    /// since M4, and the implementation handled none of them — all three fell
+    /// to the catch-all. So the pane advertised `esc back` in its own key
+    /// legend and answered nothing, and `ctrl-c` was the only way out: a key
+    /// the legend does not list, which quits the whole Bridge rather than
+    /// closing a page of it.
+    ///
+    /// Survivable while the pane was a small overlay. `033` makes it the
+    /// primary full-screen destination, so a reader who presses `d` lands
+    /// somewhere they cannot leave. Found by the reviewer Job on that change,
+    /// which called it a legend that lies — and it was the doc comment lying
+    /// first.
+    #[test]
+    fn every_key_the_detail_pane_promises_actually_goes_back() {
+        for key in [Key::Esc, Key::Char('d'), Key::Char('q')] {
+            let (mut screen, rows) = watching_at(3);
+            press(&mut screen, &rows, Key::Char('d'));
+            assert!(
+                matches!(screen.mode, Mode::Detail(_)),
+                "the pane did not open"
+            );
+
+            assert_eq!(press(&mut screen, &rows, key), Pressed::Stay, "{key:?}");
+            assert_eq!(
+                screen.mode,
+                Mode::Watching,
+                "`{key:?}` is advertised as the way out and did not take it"
+            );
+        }
+    }
+
+    /// **`q` closes the page, not the application.** `ctrl-c` is what leaves
+    /// the Bridge, and quitting an application when the reader meant to close
+    /// a page of it is the worse mistake — `detail`'s own paragraph argues this
+    /// and now the code does it.
+    #[test]
+    fn q_leaves_the_detail_pane_and_not_the_bridge() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('d'));
+        assert_eq!(press(&mut screen, &rows, Key::Char('q')), Pressed::Stay);
+        assert_eq!(
+            press(&mut screen, &rows, Key::Interrupt),
+            Pressed::Leave(Departure::Quit),
+            "ctrl-c is still the way out of the Bridge itself"
+        );
     }
 
     // -------------------------------------------------------------- the panels
