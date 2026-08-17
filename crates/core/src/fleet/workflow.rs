@@ -257,25 +257,29 @@ pub struct Budget {
     /// from tokens was a ceiling on context size rather than spend, and real
     /// Jobs halted at 1/240th of their allowed spend.
     ///
-    /// **A Job may exceed this by up to the cost of one exchange, and that is
-    /// the contract rather than a bug.** [`super::job::exhausted`] is evaluated
-    /// when a pass *looks* at a Job, and a pass cannot look at one mid-exchange:
-    /// the ledger it reads is built from completed turns. So an exchange that is
-    /// already running finishes, and the overshoot is whatever that exchange
-    /// cost.
+    /// **This ceiling currently fires far too EARLY, and the figure it is
+    /// compared against is wrong** — failure `a45d7234`. Read that before tuning
+    /// anything here.
     ///
-    /// Measured 2026-08-17: a Job with `cost_usd: 10.0` paused at `$20.48` — 105%
-    /// over — because its `implement` step ran 272 turns in one exchange on a
-    /// three-file signature change. It had committed green work before pausing,
-    /// so the ceiling did its job; what it did not do was bound the number a
-    /// reader had written down.
+    /// Claude Code's `result` event carries a `total_cost_usd` that is
+    /// **cumulative for the session**, not the cost of one exchange, and
+    /// [`super::super::fleet::drone::read`] sums those values. So a Job's reported
+    /// spend is inflated by roughly its exchange count. Measured 2026-08-17:
+    /// eleven exchanges reported `$352.47` against a real `$53.96`, a 6.5×
+    /// inflation, and the eleven values rise monotonically under one
+    /// `session_id` — the correct reading for cost is the **last** one.
     ///
-    /// **Documented rather than narrowed**, deliberately. Closing the window
-    /// means stopping a Drone mid-exchange, which means killing work in progress
-    /// to save money already committed — and the relay Armada has fires when an
-    /// exchange *ends* (`docs/reserved/024`). Set the figure knowing it is a
-    /// checkpoint: if one exchange of your workflow can cost `$13`, a `$10`
-    /// ceiling is a `$23` ceiling.
+    /// The inflation scales with exchange count, so **the longest and most
+    /// valuable Jobs are the ones a ceiling is most likely to strangle.**
+    ///
+    /// **An earlier version of this comment said the opposite** — that a Job may
+    /// *exceed* this by up to one exchange, citing a Job pausing at `$20.48`
+    /// against a `$10` ceiling. That was the same inflation read the wrong way
+    /// round: it had not overshot, its reported figure was too high. The
+    /// evaluation-at-pass-boundary point is still true and still allows some
+    /// overshoot in principle; it is simply swamped by an accounting error
+    /// pointing the other way, and nothing here can be calibrated until that is
+    /// fixed.
     #[serde(default = "default_cost")]
     pub cost_usd: f64,
     /// Wall clock, in milliseconds.

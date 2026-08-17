@@ -81,11 +81,27 @@ Three separate defects this session hid behind a message about the wrong subject
 
 **When a message names a subject, check that the subject is where the failure is.**
 
-### A ceiling is a checkpoint, and prose in a brief is not a mechanism
+### Every reported spend figure is inflated, and I misread it twice
 
-`Budget.cost_usd` is evaluated when a pass *looks* at a Job, and a pass cannot look mid-exchange. A
-Job with a `$10` ceiling paused at `$20.48`. Documented on the field rather than narrowed, because
-closing the window means killing work in progress to save money already spent.
+**Read failure `a45d7234` before trusting any cost number in this repository.** Claude Code's
+`result` event carries a `total_cost_usd` that is **cumulative for the session**, and
+`drone::read` sums those values — so a Job's reported spend is inflated by roughly its exchange
+count. Measured: eleven exchanges reported `$352.47` against a real `$53.96`. The correct reading is
+the **last** value, not the sum.
+
+The inflation scales with exchange count, so the longest and most valuable Jobs are the ones a
+ceiling is most likely to strangle. It also compounds with a *separate* bug fixed the same day, where
+a parent's spend already included its children's and the fleet total added both.
+
+**I got this wrong twice in one session, in opposite directions**, and both wrong readings were
+committed before the real cause was found: first that a ceiling *overshoots* by one exchange (it does
+not — the figure was inflated), then that a Job had burned `$352` of a weekly window (it had not).
+The lesson is narrow and worth keeping: **a derived number needs its derivation checked before it is
+used as evidence**, especially one used to raise an alarm.
+
+The one true thing in the original note survives: `exhausted` is evaluated when a pass *looks* at a
+Job, and a pass cannot look mid-exchange, so some overshoot is possible in principle. It is simply
+swamped by an accounting error pointing the other way.
 
 Separately: fifteen inbox entries were the string *"does this look right to you?"* and nothing else,
 while both the brief **and** the tool's own schema documentation already said to write the question in
