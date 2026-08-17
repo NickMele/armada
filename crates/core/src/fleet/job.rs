@@ -760,26 +760,6 @@ impl Job {
         )
     }
 
-    /// Whether this Job is stopped in front of a person rather than working.
-    ///
-    /// **Two shapes, and both are the Job's own record.** A gate waiting on an
-    /// answer is [`Waiting::Answer`]; a Job halted at a ceiling or by a Drone
-    /// that gave up is [`Verdict::NeedsHuman`]. Nothing here reads the inbox,
-    /// so the answer does not depend on a second file being consistent with
-    /// this one.
-    ///
-    /// **A gate waiting on a *check* or a *sub-Job* is not this.** Those are
-    /// waits on a machine, and a machine is not at lunch — the sub-Job case is
-    /// already credited from the other side by [`Kin::suspended_ms`], and
-    /// crediting it here as well would pay a parent twice.
-    pub fn waiting_on_a_person(&self) -> bool {
-        self.verdict == Some(super::Verdict::NeedsHuman)
-            || self
-                .pending
-                .as_ref()
-                .is_some_and(|pending| matches!(pending.on, Waiting::Answer(_)))
-    }
-
     /// Start the clock on a wait for a person, if one is not already running.
     ///
     /// **Idempotent, because a question can be re-raised.** A Job that asks,
@@ -1843,7 +1823,6 @@ mod tests {
         let mut record = watching(JobState::Paused);
         record.created_ms = 0;
         record.verdict = Some(super::super::Verdict::NeedsHuman);
-        assert!(record.waiting_on_a_person());
 
         // Ninety minutes in, all of it waiting on a review.
         record.began_waiting(60_000);
@@ -1874,40 +1853,6 @@ mod tests {
         record.began_waiting(6_000_000);
         record.began_waiting(6_600_000);
         assert_eq!(record.waiting_from_ms, Some(6_000_000));
-    }
-
-    /// **A wait on a machine is not a wait on a person.** A gate waiting for a
-    /// check to exit is waiting on something that is not at lunch, and a gate
-    /// waiting on a sub-Job is already credited from the other side by
-    /// `Kin::suspended_ms` — crediting it here as well would pay a parent twice.
-    #[test]
-    fn only_a_wait_on_a_person_stops_the_clock() {
-        let mut record = watching(JobState::Running);
-        assert!(
-            !record.waiting_on_a_person(),
-            "a working Job waits on nobody"
-        );
-
-        record.pending = Some(Pending {
-            step: "implement".to_string(),
-            attempt: 1,
-            on: Waiting::Check("01M0".to_string()),
-        });
-        assert!(!record.waiting_on_a_person(), "a check is not a person");
-
-        record.pending = Some(Pending {
-            step: "review".to_string(),
-            attempt: 1,
-            on: Waiting::SubJob("uuid".to_string()),
-        });
-        assert!(!record.waiting_on_a_person(), "a sub-Job is not a person");
-
-        record.pending = Some(Pending {
-            step: "approve".to_string(),
-            attempt: 1,
-            on: Waiting::Answer("entry".to_string()),
-        });
-        assert!(record.waiting_on_a_person());
     }
 
     /// Run time is wall clock, because a Job outlives a boot and a monotonic

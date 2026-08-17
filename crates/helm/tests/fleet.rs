@@ -2449,6 +2449,87 @@ fn answering_a_job_out_of_rope_with_a_raise_gives_it_more_and_continues() {
     assert!(error.message.contains("still at"), "{}", error.message);
 }
 
+/// **A Job's clock stops while it waits on you, and starts again when you
+/// answer.**
+///
+/// The owner's report: *"the drone run time shouldn't be ticking if it's paused
+/// waiting for something from the inbox."*
+///
+/// **The first attempt at this stamped the wait inside `settle`**, which only
+/// the mutating verbs call and which `answer` bypasses on its own success
+/// paths — so the clock started and never stopped. Measured across three live
+/// Jobs and it was wrong three different ways: one `RUNNING` with the wait still
+/// open, so its wall clock had frozen permanently; one `PAUSED` for fifty
+/// minutes with nothing recorded at all; and one correct. A ceiling that stops
+/// being enforced is worse than one that fires early.
+///
+/// So the wait is bound to the *entry* — begun where the question is raised,
+/// ended where it is answered — and those are the only two places it moves.
+#[test]
+fn a_job_banks_the_time_it_spent_waiting_and_does_not_keep_banking_it() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    await_turn(&scratch, &data.uuid);
+
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "asked",
+        &data.uuid,
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "t",
+        1,
+        "well?",
+    )
+    .unwrap();
+    let mut record = scratch.store().load(&data.uuid).unwrap();
+    // **The wait begins when the Job was minted and the answer lands ten
+    // minutes later**, which is the only way to model a wait against a clock
+    // that does not move: `FrozenClock::later` is that ten minutes. Stamping a
+    // wait that began *before* the Job existed would bank more than its whole
+    // age and saturate `run_time_ms` to zero — a test artefact, not a property.
+    let began = record.created_ms;
+    record.began_waiting(began);
+    scratch.store().save(&record).unwrap();
+
+    // Ten minutes of waiting is ten minutes the Job did not run.
+    let waiting = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(
+        waiting.run_time_ms(began + 600_000) - waiting.run_time_ms(began),
+        0,
+        "the clock ran while the Job was stopped in front of a question"
+    );
+
+    fleet::answer(
+        &run,
+        &FrozenClock::later(600_000),
+        &scratch.place(),
+        &data.name,
+        "yes",
+    )
+    .expect("an answer");
+
+    let answered = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(
+        answered.waiting_from_ms, None,
+        "the wait never stopped, so this Job's wall clock is frozen for ever"
+    );
+    assert_eq!(
+        answered.waited_ms, 600_000,
+        "the ten minutes it spent waiting were not banked"
+    );
+
+    // And the clock runs again: a minute after the answer is a minute of run
+    // time. Read past the banked wait, so the subtraction is not saturating.
+    let after = answered.created_ms + answered.waited_ms + 1_000_000;
+    assert_eq!(
+        answered.run_time_ms(after + 60_000) - answered.run_time_ms(after),
+        60_000,
+        "the clock did not start again after the answer"
+    );
+}
+
 /// **A raise settles the ceiling and nothing else.**
 ///
 /// Measured within the hour the raise was built, on the author's own fleet. A
