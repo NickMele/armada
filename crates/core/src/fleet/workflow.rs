@@ -256,6 +256,26 @@ pub struct Budget {
     /// but most tokens counted are cache reads, not work — a ceiling computed
     /// from tokens was a ceiling on context size rather than spend, and real
     /// Jobs halted at 1/240th of their allowed spend.
+    ///
+    /// **A Job may exceed this by up to the cost of one exchange, and that is
+    /// the contract rather than a bug.** [`super::job::exhausted`] is evaluated
+    /// when a pass *looks* at a Job, and a pass cannot look at one mid-exchange:
+    /// the ledger it reads is built from completed turns. So an exchange that is
+    /// already running finishes, and the overshoot is whatever that exchange
+    /// cost.
+    ///
+    /// Measured 2026-08-17: a Job with `cost_usd: 10.0` paused at `$20.48` — 105%
+    /// over — because its `implement` step ran 272 turns in one exchange on a
+    /// three-file signature change. It had committed green work before pausing,
+    /// so the ceiling did its job; what it did not do was bound the number a
+    /// reader had written down.
+    ///
+    /// **Documented rather than narrowed**, deliberately. Closing the window
+    /// means stopping a Drone mid-exchange, which means killing work in progress
+    /// to save money already committed — and the relay Armada has fires when an
+    /// exchange *ends* (`docs/reserved/024`). Set the figure knowing it is a
+    /// checkpoint: if one exchange of your workflow can cost `$13`, a `$10`
+    /// ceiling is a `$23` ceiling.
     #[serde(default = "default_cost")]
     pub cost_usd: f64,
     /// Wall clock, in milliseconds.
