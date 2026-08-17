@@ -4218,8 +4218,7 @@ fn two_jobs_sharing_a_name_each_get_their_own_entries_and_each_resolves() {
         "the live Job inherited its namesake's entry"
     );
 
-    // `show` separates them, and each sees only its own — by uuid, because the
-    // name is refused as ambiguous exactly as it was for the user.
+    // `show` separates them, and each sees only its own when addressed by uuid.
     for (data, expected) in [(&first, 1), (&second, 1)] {
         let Output::Show(envelope) =
             fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.uuid).unwrap()
@@ -4237,9 +4236,20 @@ fn two_jobs_sharing_a_name_each_get_their_own_entries_and_each_resolves() {
             Some(data.uuid.as_str())
         );
     }
-    assert!(
-        fleet::show(&run, &FrozenClock::new(), &scratch.place(), "this-test").is_err(),
-        "a name meaning two Jobs resolved to one of them"
+    // **And the shared name resolves to the Job that is live**, which is the one
+    // a person reading the table means. It used to be refused here as ambiguous;
+    // refusing it everywhere is what cost job `86d8cf8e` its whole toolbelt on
+    // 2026-08-17, because a Drone is addressed by its Job's handle too. `kill` is
+    // the one verb that still asks (`Store::find_to_end`).
+    let Output::Show(envelope) =
+        fleet::show(&run, &FrozenClock::new(), &scratch.place(), "this-test")
+            .expect("a shared name resolves to the live Job")
+    else {
+        panic!("not a show")
+    };
+    assert_eq!(
+        envelope.data.uuid, second.uuid,
+        "the name resolved to the Job that has ended"
     );
 
     // `inbox --job` takes a handle and resolves it the same way, so the two

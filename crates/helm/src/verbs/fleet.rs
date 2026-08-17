@@ -1832,7 +1832,11 @@ pub fn kill<R: Run, C: Clock>(
         // order inside [`end`] is the point: the child's Drone is stopped and
         // its worktree released before the branch it was created from is.
         Some(handle) => {
-            let named = store.find(handle)?;
+            // **The one lookup that refuses a shared name rather than resolving
+            // it.** Every other verb takes the live Job, because that is the one
+            // a person reading the table means; ending the wrong Job cannot be
+            // undone by re-running the command, so this one asks.
+            let named = store.find_to_end(handle)?;
             let mut family = descendants(&store.all()?, &named.uuid);
             family.retain(|child| !child.state.is_over());
             family.reverse();

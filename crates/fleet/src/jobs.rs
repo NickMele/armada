@@ -163,12 +163,31 @@ impl Store {
     /// to take the first match over a list sorted by creation, and say nothing
     /// about the choice.
     ///
-    /// **A live Job does not win the tie**, which was the tempting fix. It is
-    /// the same coin flip with better odds: a person who typed a name that
-    /// means two things knows which one they meant and Armada does not, and
-    /// `kill` is not undoable. So both candidates are named — with the state,
-    /// the step and the day that tell them apart — and the uuid is what
-    /// disambiguates.
+    /// # A live Job wins the tie, and `kill` is where that stops being safe
+    ///
+    /// **This used to refuse a shared name outright**, on the reasoning that
+    /// preferring the live Job was *"the same coin flip with better odds"*. It is
+    /// not a coin flip: [`Store::name_is_taken`] refuses to spawn a second live
+    /// Job under a name, so **at most one candidate is ever live** and picking it
+    /// is deterministic. What the old reasoning was really protecting was `kill`,
+    /// and that protection now lives in `kill`
+    /// ([`Store::find_to_end`]) where the irreversibility is.
+    ///
+    /// **Refusing it here cost a Job.** Measured 2026-08-17: `armada failures
+    /// fix` respawned a killed Job's failure, `derive_name` produced the same
+    /// `armada-failed`, and the name matched an `ABORTED` record and a `RUNNING`
+    /// one. `armada fleet board` reported the running Job as *"no longer in the
+    /// fleet"*, and every `mcp__armada__*` tool the new Drone called was refused
+    /// — `fleet_report`, `fleet_check`, and `fleet_ask_human`, which is the one it
+    /// would have used to say so. 42 turns and $2.69 of correct work recorded
+    /// nowhere.
+    ///
+    /// A name is what a person read off the table, and the Job they mean is the
+    /// one that is working. The ended one is still addressable by its uuid, which
+    /// is what identity is for.
+    ///
+    /// **A shared name with nothing live is still refused**, because then there
+    /// is no live Job to mean and this function may not pick between records.
     pub fn find(&self, handle: &str) -> Result<Job, ArmadaError> {
         // **An empty handle is refused before anything is matched.** Every uuid
         // starts with the empty string, so `starts_with("")` matched the whole
@@ -195,8 +214,12 @@ impl Store {
         match named.as_slice() {
             [job] => return Ok((*job).clone()),
             [] => {}
-            several => return Err(ambiguous(handle, several, "names")),
+            several => return Ok(the_live_one(handle, several)?.clone()),
         }
+        // **A uuid prefix is still refused when it is ambiguous.** A prefix is an
+        // abbreviation of an identity, so two matches mean the reader typed too
+        // few characters — there is no "the one they meant" to prefer, and one
+        // more character settles it.
         let matches: Vec<&Job> = jobs
             .iter()
             .filter(|job| job.uuid.starts_with(handle))
@@ -206,6 +229,27 @@ impl Store {
             [] => Err(unknown(handle, &jobs)),
             several => Err(ambiguous(handle, several, "is the start of")),
         }
+    }
+
+    /// One Job by handle, **for a verb that cannot be undone**.
+    ///
+    /// [`Store::find`] resolves a shared name to the live Job, because that is
+    /// the one a person reading the table means. `kill` is the one caller for
+    /// which that is not good enough: a name that means two things is a name
+    /// whose owner may be mistaken about which work it is, and ending the wrong
+    /// Job cannot be recovered by re-running the command.
+    ///
+    /// So the refusal that used to live in `find` lives here, where the
+    /// irreversibility is — it names both candidates with the state, step and day
+    /// that tell them apart, and the uuid is what disambiguates. Every other verb
+    /// goes through `find` and gets the live Job.
+    pub fn find_to_end(&self, handle: &str) -> Result<Job, ArmadaError> {
+        let jobs = self.all()?;
+        let named: Vec<&Job> = jobs.iter().filter(|job| job.name == handle).collect();
+        if named.len() > 1 {
+            return Err(ambiguous(handle, &named, "names"));
+        }
+        self.find(handle)
     }
 
     /// Whether a live Job already answers to this name.
@@ -295,6 +339,25 @@ pub fn short(uuid: &str) -> &str {
 /// "two Jobs" would leave the reader to run `ls` and match the rows up by eye;
 /// the state, the step and the day are what a person actually recognises a Job
 /// by, and the short uuid is what they type next.
+/// The one live Job among several sharing a name, or the refusal when there is
+/// none.
+///
+/// **At most one can be live**, which is exactly what [`Store::name_is_taken`]
+/// guarantees at spawn — so this is a lookup rather than a choice. More than one
+/// live would mean that invariant broke, and inventing an answer for it would
+/// hide the breakage; it is refused with the list, like the none-live case.
+fn the_live_one<'a>(handle: &str, several: &[&'a Job]) -> Result<&'a Job, ArmadaError> {
+    match several
+        .iter()
+        .filter(|job| !job.state.is_over())
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
+        [live] => Ok(**live),
+        _ => Err(ambiguous(handle, several, "names")),
+    }
+}
+
 fn ambiguous(handle: &str, several: &[&Job], verb: &str) -> ArmadaError {
     let described: Vec<String> = several
         .iter()
@@ -582,19 +645,27 @@ mod tests {
         assert!(error.next_action.unwrap().contains("uuid"));
     }
 
-    /// **A name two Jobs share is refused, and both are named.** This is the
-    /// shape a person actually had on disk: two records both called
-    /// `this-test`, the older one `ABORTED` at `explore` and the newer one
-    /// `RUNNING` at `plan` and holding a port block. Resolution took the first
-    /// match over a list sorted by creation and said nothing about the choice,
-    /// so `kill this-test` would have ended the wrong one — and a kill is not
-    /// undoable.
+    /// **A name two Jobs share resolves to the live one for every verb but
+    /// `kill`.**
     ///
-    /// **A live Job does not win the tie.** That is the same coin flip with
-    /// better odds: the person who typed the name knows which they meant and
-    /// Armada does not.
+    /// This is the shape a person actually had on disk twice: two records under
+    /// one name, the older ended and the newer running. Resolution originally
+    /// took the first match over a list sorted by creation and said nothing, so
+    /// `kill` could end the wrong Job; the fix at the time was to refuse the name
+    /// everywhere, on the reasoning that preferring the live one was *"the same
+    /// coin flip with better odds"*.
+    ///
+    /// **It is not a coin flip** — [`Store::name_is_taken`] refuses to spawn a
+    /// second live Job under a name, so at most one candidate is ever live — and
+    /// refusing everywhere cost a Job. 2026-08-17: `armada failures fix`
+    /// respawned a killed Job's failure, `derive_name` produced the same
+    /// `armada-failed`, and every `mcp__armada__*` tool the new Drone called was
+    /// refused, `fleet_ask_human` included. 42 turns and $2.69 recorded nowhere.
+    ///
+    /// So the refusal moved to where the irreversibility is: `find` takes the
+    /// live Job, [`Store::find_to_end`] asks.
     #[test]
-    fn a_name_two_jobs_share_is_refused_rather_than_resolved() {
+    fn a_name_two_jobs_share_resolves_to_the_live_one_and_kill_still_asks() {
         let (_home, store) = store();
         let mut old = job("this-test", "c19d0a34-1111", JobState::Aborted, 10);
         old.step = "explore".to_string();
@@ -603,11 +674,15 @@ mod tests {
         store.save(&old).unwrap();
         store.save(&new).unwrap();
 
-        let error = store.find("this-test").unwrap_err();
+        // Every ordinary verb gets the Job that is working.
+        assert_eq!(store.find("this-test").unwrap().uuid, "94b1fd2e-2222");
+        // And the ended one is still addressable, by the thing that is identity.
+        assert_eq!(store.find("c19d0a34").unwrap().uuid, "c19d0a34-1111");
+
+        // `kill` asks, because it cannot be taken back.
+        let error = store.find_to_end("this-test").unwrap_err();
         assert_eq!(error.class, ErrClass::BadInvocation);
         assert_eq!(error.class.exit_code(), 2);
-
-        // Both candidates, with what tells them apart.
         for word in [
             "c19d0a34", "94b1fd2e", "ABORTED", "RUNNING", "explore", "plan",
         ] {
@@ -617,19 +692,53 @@ mod tests {
                 error.message
             );
         }
-        // And the disambiguator is a uuid a person can retype.
-        let next = error.next_action.expect("a next action");
-        assert!(next.contains("uuid"), "{next}");
-        assert!(next.contains("c19d0a34"), "{next}");
+        assert!(error.next_action.expect("a next action").contains("uuid"));
 
-        // The uuid always works, whichever one was meant.
-        assert_eq!(store.find("94b1fd2e").unwrap().uuid, "94b1fd2e-2222");
-        assert_eq!(store.find("c19d0a34").unwrap().uuid, "c19d0a34-1111");
+        // A uuid handed to `kill` is unambiguous and goes straight through.
+        assert_eq!(store.find_to_end("94b1fd2e").unwrap().uuid, "94b1fd2e-2222");
     }
 
-    /// **Ended does not stop being a candidate.** Both Jobs are durable records
-    /// and either could be the one meant, so an `ABORTED` and a `DONE` of one
-    /// name are ambiguous exactly as a live pair would be.
+    /// **A shared name with nothing live is still refused**, by every verb: there
+    /// is no live Job to mean, and picking between two records is the choice this
+    /// store may not make for a caller.
+    #[test]
+    fn a_name_only_ended_jobs_share_is_refused_with_both_named() {
+        let (_home, store) = store();
+        store
+            .save(&job("armada-failed", "6e5e1a84", JobState::Aborted, 10))
+            .unwrap();
+        store
+            .save(&job("armada-failed", "86d8cf8e", JobState::Done, 20))
+            .unwrap();
+
+        let error = store.find("armada-failed").unwrap_err();
+        assert!(error.message.contains("names 2 Jobs"), "{}", error.message);
+        assert!(error.message.contains("6e5e1a84"), "{}", error.message);
+        assert!(error.message.contains("86d8cf8e"), "{}", error.message);
+    }
+
+    /// **An ambiguous uuid *prefix* is still refused**, and that is a different
+    /// question: a prefix abbreviates an identity, so two matches mean too few
+    /// characters were typed. There is no "the one they meant" to prefer and one
+    /// more character settles it.
+    #[test]
+    fn an_ambiguous_uuid_prefix_is_refused_even_when_one_match_is_live() {
+        let (_home, store) = store();
+        store
+            .save(&job("one", "ab000000", JobState::Aborted, 10))
+            .unwrap();
+        store
+            .save(&job("two", "ab111111", JobState::Running, 20))
+            .unwrap();
+
+        let error = store.find("ab").unwrap_err();
+        assert!(
+            error.message.contains("is the start of"),
+            "{}",
+            error.message
+        );
+    }
+
     #[test]
     fn a_name_only_finished_jobs_hold_is_ambiguous_too() {
         let (_home, store) = store();
