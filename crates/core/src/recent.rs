@@ -172,17 +172,49 @@ pub fn note(
 /// /x` is `fleet spawn`; `armada doctor` is `doctor`. It is a display label, so
 /// a line that names no verb at all answers `armada` rather than an empty cell —
 /// a blank NAME column is the one thing a table must not print.
+///
+/// **The second word is only taken when it could be a subcommand.** Several
+/// verbs take free text as their first argument — `armada report <what broke>`,
+/// `armada task <what to do>`, `armada answer <id> <the answer>` — and this
+/// spliced that text into the label. A six-hundred-word bug report became the
+/// "verb", and because the NAME column sizes to its widest cell, one such row
+/// stretched the whole attached table past six thousand characters and pushed
+/// every other column off the screen. Seen on `armada failures show`, which is
+/// the one screen whose whole job is to be readable after something broke.
+///
+/// A subcommand is one bare word. Whitespace, or a length no verb in the roster
+/// reaches, means an argument — and an argument is already printed in full in
+/// the DETAIL column beside this one, so dropping it here loses nothing.
 pub fn verb_of(argv: &[String]) -> String {
-    let words: Vec<&str> = argv
+    let mut words: Vec<&str> = argv
         .iter()
         .map(String::as_str)
         .filter(|word| !word.starts_with('-'))
         .take(2)
         .collect();
+    if words
+        .get(1)
+        .is_some_and(|word| !could_be_a_subcommand(word))
+    {
+        words.pop();
+    }
     match words.is_empty() {
         true => "armada".to_string(),
         false => words.join(" "),
     }
+}
+
+/// The longest subcommand in the roster is `expectations`, so this has room for
+/// one half again and still refuses a sentence.
+const SUBCOMMAND_ROOM: usize = 18;
+
+/// Whether a word is shaped like a verb rather than like an argument.
+fn could_be_a_subcommand(word: &str) -> bool {
+    !word.is_empty()
+        && word.len() <= SUBCOMMAND_ROOM
+        && word
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// The head of a payload, and a note saying the rest was dropped.
@@ -352,6 +384,41 @@ mod tests {
         assert_eq!(
             verb_of(&["--json".to_string(), "fleet".to_string(), "ls".to_string()]),
             "fleet ls"
+        );
+    }
+
+    /// **A verb that takes free text is one word, not two.**
+    ///
+    /// `armada report <what broke>` spliced the whole report into the label.
+    /// Because the NAME column sizes to its widest cell, one six-hundred-word
+    /// report stretched `armada failures show`'s attached table past six
+    /// thousand characters and pushed every other column off the screen — on
+    /// the one screen whose whole job is to be readable after something broke.
+    #[test]
+    fn free_text_after_a_verb_is_not_part_of_the_verb() {
+        let reported = verb_of(&[
+            "report".to_string(),
+            "armada:fmt failed a check run that had already been formatted, because a fix and a \
+             check raced. Twice tonight."
+                .to_string(),
+        ]);
+        assert_eq!(reported, "report");
+
+        // A real two-word verb still reads as two words, and so does a verb
+        // whose subcommand carries a digit or a hyphen.
+        assert_eq!(
+            verb_of(&["manifest".to_string(), "check".to_string()]),
+            "manifest check"
+        );
+        assert_eq!(
+            verb_of(&["guild".to_string(), "self-check".to_string()]),
+            "guild self-check"
+        );
+        // A uuid argument is not a subcommand either: it is neither lowercase
+        // alone nor short enough to be one.
+        assert_eq!(
+            verb_of(&["show".to_string(), "8077e742-e164-4d93-a496".to_string()]),
+            "show"
         );
     }
 }
