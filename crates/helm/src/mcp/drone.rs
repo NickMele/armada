@@ -344,5 +344,4 @@ mod tests {
             "the brief offers a Drone a tool this belt does not serve"
         );
     }
-
 }
