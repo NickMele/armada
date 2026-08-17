@@ -314,7 +314,10 @@ impl Panel {
 
     /// `tab` — the next one, wrapping.
     pub fn next(self) -> Panel {
-        let at = Self::ALL.iter().position(|panel| *panel == self).unwrap_or(0);
+        let at = Self::ALL
+            .iter()
+            .position(|panel| *panel == self)
+            .unwrap_or(0);
         Self::ALL[(at + 1) % Self::ALL.len()]
     }
 

@@ -139,7 +139,12 @@ const PAIR_GAP: &str = "  ";
 ///
 /// When even the movement pairs and `quit` overhang `width`, they are kept
 /// anyway — movement never sheds, so there is nothing left to drop.
-pub fn shed_to_narrow(movement: &[KeyPair], verbs: &[KeyPair], quit: &KeyPair, width: usize) -> Vec<Span> {
+pub fn shed_to_narrow(
+    movement: &[KeyPair],
+    verbs: &[KeyPair],
+    quit: &KeyPair,
+    width: usize,
+) -> Vec<Span> {
     let mut taken = verbs.len();
     loop {
         let mut line: Vec<String> = movement.iter().map(KeyPair::spelled).collect();
