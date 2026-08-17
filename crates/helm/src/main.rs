@@ -1418,7 +1418,7 @@ fn on_screen(
         Action::Open(target) => {
             let opened = verbs::fleet::board(place, &target.uuid).and_then(|output| {
                 let Output::Board(envelope) = &output else {
-                    return Ok(target.job.clone());
+                    return Ok((target.job.clone(), None));
                 };
                 let data = &envelope.data;
                 let cwd = place.expand(&data.worktree);
@@ -1439,7 +1439,24 @@ fn on_screen(
                 }
                 let argv = armada_core::fleet::bridge::cmux_open_argv(&cwd.to_string_lossy());
                 match run.call(&armada_core::ctx::RunRequest::new(argv, place.cwd.clone())) {
-                    Ok(output) if output.ok() => Ok(data.job.clone()),
+                    // **The resume command comes back with the job name**, and
+                    // it is the half that was missing.
+                    //
+                    // Reported: *"Boarding a job opens the cmux workspace and
+                    // navigates to the directory, but doesn't actually open the
+                    // claude code session."* That is Armada working as designed
+                    // — `cmux <path>` is "a path and nothing else", and
+                    // `bridge::cmux_open_argv` argues why: Armada does not
+                    // attach, does not take a pty, and does not tell the
+                    // workspace what to run.
+                    //
+                    // But `armada fleet board` at the CLI answers with a
+                    // `resume` row carrying the exact command to paste, and this
+                    // path had the same `BoardData` in hand and said only that
+                    // something had been opened. So the reader was handed half a
+                    // handoff and no way to know a half was missing. The
+                    // deliberate design was indistinguishable from a broken one.
+                    Ok(output) if output.ok() => Ok((data.job.clone(), Some(data.command.clone()))),
                     Ok(output) => Err(ArmadaError {
                         class: ErrClass::ToolFailed,
                         r#where: armada_core::fleet::bridge::CMUX.to_string(),
@@ -1459,7 +1476,10 @@ fn on_screen(
                 }
             });
             Done::said(match opened {
-                Ok(job) => format!("opened `{job}` in a cmux workspace"),
+                Ok((job, Some(command))) => {
+                    format!("opened `{job}` in a cmux workspace — resume it with: {command}")
+                }
+                Ok((job, None)) => format!("opened `{job}` in a cmux workspace"),
                 Err(error) => said(&error),
             })
         }
