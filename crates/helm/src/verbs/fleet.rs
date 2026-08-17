@@ -34,6 +34,7 @@ use armada_core::fleet::workflow::{self, Workflow};
 use armada_core::fleet::{advance, drone as argv, gate, Acting, JobState, Subject, Verdict};
 use armada_fleet::drone;
 use armada_fleet::jobs::Store;
+use armada_fleet::machine as fleet_machine;
 use armada_fleet::{home, inbox, manifest, own, worktree};
 use armada_guild::layout::Guild;
 use std::path::{Path, PathBuf};
@@ -361,6 +362,13 @@ pub fn spawn<R: Run, C: Clock>(
 ) -> Result<Output, ArmadaError> {
     let repo_root = repository(run, place, options)?;
     let repo = home::repo_name(&repo_root);
+    // **Read and refused here, before anything is created.** `fleet.carry`
+    // in `~/.armada/machine.yml` is this machine's declaration of which
+    // untracked paths this repository needs in every worktree; a path that
+    // escapes the repository root is `bad_config` at the moment the
+    // declaration is read, not discovered later while copying into a
+    // worktree that already exists.
+    let carry = fleet_machine::carry_for(&place.armada_home, &place.shown(&repo_root))?;
 
     // **All four rows from the first frame**, exactly as `check` plans its
     // table by name rather than by count: a spawn stuck making a worktree
@@ -544,6 +552,20 @@ pub fn spawn<R: Run, C: Clock>(
         // terminal write rather than with the ones that happen to need it —
         // an entry that outlives its Job is the defect, and remembering by
         // hand at each site is how it comes back.
+        close_entries(place, &record)?;
+        return Err(error);
+    }
+    // **Carried before `armada manifest init` runs**, because `setup:` may
+    // depend on a path this repository declared (`docs/commands/fleet/spawn.md`).
+    // `carry` was already refused at read time if it named anything unsafe
+    // (above), so this only copies what is trusted and present.
+    if let Err(error) = worktree::carry(&repo_root, &path, &carry) {
+        let _ = manifest::clean(run, &place.exe, &path);
+        let _ = worktree::remove(run, &repo_root, &path);
+        let _ = worktree::delete_branch(run, &repo_root, &branch);
+        record.state = JobState::Aborted;
+        record.verdict = Some(Verdict::Failed);
+        store.save(&record)?;
         close_entries(place, &record)?;
         return Err(error);
     }
@@ -4503,6 +4525,9 @@ fn spawn_child<R: Run, C: Clock>(
     let store = place.store();
     refuse_a_cycle(place, parent, named)?;
     let flow = read_workflow(place, named)?;
+    // Read and refused here, before anything is created — the same repository
+    // as the parent's, so the same `fleet.carry` entry applies (§[`spawn`]).
+    let carry = fleet_machine::carry_for(&place.armada_home, &parent.repo_root)?;
 
     let name = store.free_name(&format!("{}-{named}", parent.name))?;
     let uuid = job::mint_uuid(&format!(
@@ -4577,6 +4602,17 @@ fn spawn_child<R: Run, C: Clock>(
 
     let repo_root = place.expand(&parent.repo_root);
     if let Err(error) = worktree::add(run, &repo_root, &path, &branch, Some(&parent.branch)) {
+        let _ = manifest::clean(run, &place.exe, &path);
+        let _ = worktree::remove(run, &repo_root, &path);
+        let _ = worktree::delete_branch(run, &repo_root, &branch);
+        record.state = JobState::Aborted;
+        record.verdict = Some(Verdict::Failed);
+        store.save(&record)?;
+        return Err(error);
+    }
+    // Carried before `armada manifest init` runs, for the same reason
+    // `spawn`'s own copy step is: `setup:` may depend on it.
+    if let Err(error) = worktree::carry(&repo_root, &path, &carry) {
         let _ = manifest::clean(run, &place.exe, &path);
         let _ = worktree::remove(run, &repo_root, &path);
         let _ = worktree::delete_branch(run, &repo_root, &branch);

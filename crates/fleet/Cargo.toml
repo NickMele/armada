@@ -19,6 +19,10 @@ armada-guild = { path = "../guild" }
 armada-manifest = { path = "../manifest" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# `machine.rs` reads and writes its section of `~/.armada/machine.yml`, the
+# same document format `armada_helm::machine` and `armada_guild::machine`
+# already parse.
+serde_yaml_ng = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

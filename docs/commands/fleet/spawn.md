@@ -32,7 +32,9 @@ armada fleet spawn "<task>" [--workflow <name>] [--name <name>] [--budget <k=v>.
 2. **Mint the UUID** — before anything runs. The durable handle exists before the process does,
    which is what makes ownership recordable up front and cleanup possible afterwards.
 3. **Create the worktree** at `~/.armada/workspaces/<repo>/<name>` on a new branch. Plain
-   `git worktree`; Fleet adds policy, not a new concept.
+   `git worktree`; Fleet adds policy, not a new concept. Then **carry** whatever this machine has
+   declared for this repository (below) into it, because `git worktree add` never materialises a
+   gitignored file and the next step may depend on one existing.
 4. **`armada manifest init`** in it — claims a port block, runs setup. This is why parallel
    Jobs do not collide.
 5. **Start a Drone, detached**, on the workflow's first step — `setsid`, its `stream-json`
@@ -48,6 +50,52 @@ from its transcript by [`ls.md`](ls.md).
 reusing that shape is deliberate: an orphaned Drone — Armada died, the Drone did not — is reaped
 by the pass that already reaps an orphaned service, so there is no second mechanism to maintain
 and no second answer to *is this pid still mine*.
+
+### `fleet.carry` — untracked local paths a worktree needs
+
+A `git worktree` never gets a gitignored file: `git worktree add` checks out the commit, and a
+gitignored path by definition is not in it. A repository whose own checks need one — a private
+name file kept out of a public repository, a decrypted local secret, anything gitignored on
+purpose — fails that check in **every** worktree Fleet ever creates for it, silently, until
+somebody notices and copies the file in by hand.
+
+`~/.armada/machine.yml`'s `fleet.carry` section is this machine's answer to *which paths, for
+which repository*:
+
+```yaml
+fleet:
+  carry:
+    ~/code/armada:
+      - .claude/contamination.local
+    ~/code/some-other-repo:
+      - config/master.key
+```
+
+Keyed by the repository root exactly as this machine writes it elsewhere in `machine.yml` and in
+a Job record — `~` abbreviated, absolute otherwise. Written by hand: there is no verb that sets
+it, because the paths worth carrying are inherently local to one machine's checkout, the same
+argument [`../helm/enable.md`](../helm/enable.md) makes for `helm.enter` living in this file
+rather than in the guild or in `armada.yml`. A tracked file is exactly the wrong place for it —
+the whole reason a path like `.claude/contamination.local` is gitignored is that naming it is
+itself the thing being kept out of a public repository.
+
+**Copied, not `git add`ed.** `spawn` copies each declared path that exists at the source
+repository's root into the new worktree, after `git worktree add` and before `armada manifest
+init`. It stays exactly as untracked in the worktree as it was in the source — the same
+`.gitignore`, itself checked out onto the new branch, still matches it there — so a Job never
+commits what this machine carried in for it.
+
+**A declared path missing at the source is not an error.** A fresh clone that has not configured
+`fleet.carry` for a repository yet carries nothing for it, which is the ordinary case, not a
+failure — `spawn` proceeds exactly as it would with no `carry:` list at all. There is currently no
+mechanism that notices a repository whose checks need a gitignored path this machine has not
+declared; the check still fails the same way it always did, and configuring `fleet.carry` is the
+fix.
+
+**A declared path that escapes the repository root is refused when it is read, before anything is
+created.** `../../.ssh` under a repository's key is `bad_config`, naming the path and why, the
+moment `spawn` reads `fleet.carry` — not discovered later while copying into a worktree that
+already exists. No worktree, no branch and no Job record are left behind by the refusal.
 
 ## Output
 
@@ -174,12 +222,12 @@ ledger and [`ls.md`](ls.md) reads it.
 
 ## Exit codes
 
-`0` spawned · `1` `tool_failed` — the worktree or `manifest init` failed · `2` `bad_invocation` — unknown workflow, or the Job name is taken · `3` `bad_config` — no `armada.yml` · `6` `environment` — not a git repository, or the port pool is exhausted.
+`0` spawned · `1` `tool_failed` — the worktree, the carry copy, or `manifest init` failed · `2` `bad_invocation` — unknown workflow, or the Job name is taken · `3` `bad_config` — no `armada.yml`, or a `fleet.carry` entry names a path outside the repository · `6` `environment` — not a git repository, or the port pool is exhausted.
 
-**A failed spawn cleans up after itself.** A half-created worktree holding a claimed port block is released before the error returns.
+**A failed spawn cleans up after itself.** A half-created worktree holding a claimed port block is released before the error returns — and a refused `fleet.carry` entry never gets that far, because it is read and validated before the worktree exists at all.
 
 Full table and the one rule behind it: [`reference.md`](../reference.md).
 
 ## See also
 
-[`ls.md`](ls.md) · [`kill.md`](kill.md) · [`../helm/helm.md`](../helm/helm.md)
+[`ls.md`](ls.md) · [`kill.md`](kill.md) · [`../helm/helm.md`](../helm/helm.md) · [`../helm/enable.md`](../helm/enable.md) — the sibling section of `machine.yml` that makes the same machine-fact-not-repository-fact argument

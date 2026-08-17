@@ -1198,6 +1198,94 @@ fn spawn_classifies_then_worktrees_then_inits_then_starts_a_drone() {
     assert!(!recorded_argv(&data.uuid).is_empty());
 }
 
+/// **Carried after the worktree is made and before `armada manifest init`
+/// runs**, because `setup:` may depend on it. The declaration lives in
+/// `~/.armada/machine.yml`'s `fleet.carry` section — a fact about this
+/// machine's checkout, not about the repository — keyed by the repository
+/// root exactly as [`fleet::Where::shown`] would write it.
+#[test]
+fn spawn_carries_a_declared_path_from_the_source_repo_before_init() {
+    let scratch = Scratch::new();
+    std::fs::create_dir_all(scratch.repo.path().join(".claude")).unwrap();
+    std::fs::write(
+        scratch.repo.path().join(".claude/contamination.local"),
+        "local-secret\n",
+    )
+    .unwrap();
+    let armada_home = scratch.home.path().join(".armada");
+    std::fs::create_dir_all(&armada_home).unwrap();
+    std::fs::write(
+        armada_home.join("machine.yml"),
+        format!(
+            "fleet:\n  carry:\n    \"{}\":\n      - .claude/contamination.local\n",
+            scratch.repo.path().display()
+        ),
+    )
+    .unwrap();
+
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting to the API"));
+
+    let worktree_add = run.at_index(&["worktree", "add"]).expect("a worktree");
+    let init = run.at_index(&["manifest", "init"]).expect("manifest init");
+    assert!(
+        worktree_add < init,
+        "carried after init: {:#?}",
+        run.calls()
+    );
+
+    let worktree_path = scratch.place().expand(&data.worktree);
+    assert_eq!(
+        std::fs::read_to_string(worktree_path.join(".claude/contamination.local")).unwrap(),
+        "local-secret\n"
+    );
+}
+
+/// **A path a fresh clone has never configured is not an error.** The
+/// ordinary case — no `fleet.carry` entry for this repository at all — spawns
+/// exactly as it did before this feature existed.
+#[test]
+fn spawn_with_nothing_declared_to_carry_still_spawns() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting to the API"));
+    assert_eq!(data.state, JobState::Running);
+}
+
+/// **Refused before anything is created — no worktree, no Job record.** A
+/// `fleet.carry` entry naming a path outside the repository is `bad_config`,
+/// raised when the declaration is read rather than discovered later while
+/// copying into a worktree that already exists — the same intent the original
+/// design had for `armada.yml`, moved to its new home.
+#[test]
+fn a_carry_declaration_that_escapes_the_repo_is_refused_before_anything_is_created() {
+    let scratch = Scratch::new();
+    let armada_home = scratch.home.path().join(".armada");
+    std::fs::create_dir_all(&armada_home).unwrap();
+    std::fs::write(
+        armada_home.join("machine.yml"),
+        format!(
+            "fleet:\n  carry:\n    \"{}\":\n      - ../../.ssh\n",
+            scratch.repo.path().display()
+        ),
+    )
+    .unwrap();
+
+    let run = scratch.harness();
+    let error = spawn_err(&scratch, &run, &task("add rate limiting"));
+    assert_eq!(error.class, armada_core::error::ErrClass::BadConfig);
+    assert!(error.message.contains("../../.ssh"), "{}", error.message);
+    assert!(
+        run.at_index(&["worktree", "add"]).is_none(),
+        "a worktree was created despite the refusal: {:#?}",
+        run.calls()
+    );
+    assert!(
+        scratch.store().all().unwrap().is_empty(),
+        "a Job record was left behind by a refused spawn"
+    );
+}
+
 /// **Haiku 4.5, on every spawn** (PHASES.md §8.5).
 #[test]
 fn classification_uses_the_pinned_cheap_model() {
