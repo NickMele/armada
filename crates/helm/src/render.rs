@@ -42,6 +42,7 @@
 
 pub mod banner;
 pub mod format;
+pub mod frame;
 pub mod help;
 pub mod live;
 pub mod palette;
