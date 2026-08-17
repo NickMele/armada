@@ -117,10 +117,28 @@ pub fn key_of(code: KeyCode, modifiers: KeyModifiers) -> Option<Key> {
 ///
 /// **Built without a terminal**, which is the point: a frame is a value, so what
 /// the Bridge draws is asserted in a unit test instead of photographed.
+/// What an open detail pane has to draw.
+///
+/// **A refusal is not an absence, and conflating them cost a Job.** `detail_of`
+/// matched `Ok(Show)` and threw every error away as `None`, so the pane rendered
+/// *"`<job>` is no longer in the fleet"* for any reason `armada fleet show`
+/// declined — and on 2026-08-17 the reason was that the handle named two Jobs,
+/// one `ABORTED` and one `RUNNING`. The screen reported a live Job as gone while
+/// the CLI, given the same handle, answered with both and named the one to use.
+///
+/// So the reason travels. `None` still means the pane has no data at all, which
+/// is the ordinary `kill`-in-another-shell case and keeps its own words.
+pub enum Detail {
+    /// The Job, as `armada fleet show` describes it.
+    Job(Box<ShowData>),
+    /// Why it could not be described — the verb's own error, unedited.
+    Refused(ArmadaError),
+}
+
 pub fn paint(
     view: &BridgeView,
     screen: &Screen,
-    detail: Option<&ShowData>,
+    detail: Option<&Detail>,
     workspace_id: &str,
     cwd: &str,
     style: Style,
@@ -316,29 +334,35 @@ fn compose_box(typed: &str, style: Style, width: usize) -> Vec<Vec<Span>> {
 /// **Fed only by `ShowData`**, still "one description emitted three ways"
 /// (PLAN.md §3.1.1): `armada fleet show <job>` at a terminal, the same
 /// command through a pipe, and this screen all read the one payload.
-fn detail_pane(job: &str, detail: Option<&ShowData>, style: Style, width: usize) -> Vec<Vec<Span>> {
-    let Some(data) = detail else {
-        // **A Job that went while the pane was open says so.** `kill` in
-        // another shell is the ordinary way this happens, and a pane that
-        // simply emptied would read as a failed redraw.
-        return vec![
-            vec![
-                plain("  "),
-                bold("ARMADA BRIDGE", Role::SignalAmber),
-                plain("   "),
-                piece(job.to_string(), Role::NavalBlue),
-            ],
-            Vec::new(),
-            vec![
-                plain("  "),
-                piece(
-                    format!("`{job}` is no longer in the fleet"),
-                    Role::SteelGrey,
-                ),
-            ],
-        ];
+fn detail_pane(job: &str, detail: Option<&Detail>, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let said = match detail {
+        Some(Detail::Job(data)) => return drawn(data, style, width),
+        // **The verb's own sentence, and its next action.** A reader told a live
+        // Job is gone stops looking; a reader told the handle names two Jobs is
+        // one keystroke from the right one.
+        Some(Detail::Refused(error)) => match &error.next_action {
+            Some(next) => format!("{} — {next}", error.message),
+            None => error.message.clone(),
+        },
+        // **A Job that went while the pane was open says so.** `kill` in another
+        // shell is the ordinary way this happens, and a pane that simply emptied
+        // would read as a failed redraw.
+        None => format!("`{job}` is no longer in the fleet"),
     };
+    vec![
+        vec![
+            plain("  "),
+            bold("ARMADA BRIDGE", Role::SignalAmber),
+            plain("   "),
+            piece(job.to_string(), Role::NavalBlue),
+        ],
+        Vec::new(),
+        vec![plain("  "), piece(said, Role::SteelGrey)],
+    ]
+}
 
+/// The pane when there is a Job to draw — 033's own mock-up, unchanged.
+fn drawn(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> {
     let mut lines = render::detail_identity(data, width);
     lines.push(Vec::new());
 
@@ -519,7 +543,7 @@ pub fn watch<R: Run + Copy, C: Clock + Copy, F: Fetch>(
             &mut view,
             &centre,
             screen,
-            detail.as_deref(),
+            detail.as_ref(),
             workspace_id,
             &cwd,
             style,
@@ -561,7 +585,7 @@ pub fn watch<R: Run + Copy, C: Clock + Copy, F: Fetch>(
                         &mut view,
                         &centre,
                         screen,
-                        detail.as_deref(),
+                        detail.as_ref(),
                         workspace_id,
                         &cwd,
                         style,
@@ -618,18 +642,25 @@ pub fn watch<R: Run + Copy, C: Clock + Copy, F: Fetch>(
 /// is the whole of it, so the pane cannot drift from what the same command
 /// prints in a shell — and a Job that has gone comes back as `None` rather than
 /// as an error that would tear down the screen.
-fn detail_of<R: Run, C: Clock>(
-    run: &R,
-    now: &C,
-    place: &Where,
-    screen: &Screen,
-) -> Option<Box<ShowData>> {
+fn detail_of<R: Run, C: Clock>(run: &R, now: &C, place: &Where, screen: &Screen) -> Option<Detail> {
     let Mode::Detail(job) = &screen.mode else {
         return None;
     };
     match crate::verbs::fleet::show(run, now, place, job) {
-        Ok(crate::verbs::Output::Show(envelope)) => Some(Box::new(envelope.data)),
-        _ => None,
+        Ok(crate::verbs::Output::Show(envelope)) => Some(Detail::Job(Box::new(envelope.data))),
+        // **The reason travels.** This was `_ => None`, so every refusal became
+        // the same *"no longer in the fleet"* — and the refusal that mattered was
+        // a handle naming two Jobs, one of them running. The screen called a live
+        // Job gone while the CLI answered the same question correctly.
+        Err(error) => Some(Detail::Refused(error)),
+        // Any other `Output` is this function asking the wrong verb, which is
+        // Armada's own bug rather than something about the Job.
+        Ok(_) => Some(Detail::Refused(ArmadaError {
+            class: armada_core::error::ErrClass::ArmadaBug,
+            r#where: job.clone(),
+            message: "`armada fleet show` answered with something else".to_string(),
+            next_action: None,
+        })),
     }
 }
 
@@ -638,7 +669,7 @@ fn draw(
     view: &mut ratatui::Terminal<ratatui::backend::CrosstermBackend<Stdout>>,
     centre: &BridgeView,
     screen: &Screen,
-    detail: Option<&ShowData>,
+    detail: Option<&Detail>,
     workspace_id: &str,
     cwd: &str,
     style: Style,
@@ -1267,7 +1298,7 @@ mod tests {
         let all = text(&paint(
             &view(frame()),
             &screen,
-            Some(&shown),
+            Some(&Detail::Job(Box::new(shown.clone()))),
             "c24a68b6",
             "~/Development/armada",
             Style::plain(),
@@ -1308,7 +1339,7 @@ mod tests {
         let all = text(&paint(
             &view(frame()),
             &screen,
-            Some(&detail()),
+            Some(&Detail::Job(Box::new(detail()))),
             "c24a68b6",
             "~/Development/armada",
             Style::plain(),
@@ -1361,7 +1392,7 @@ mod tests {
         let all = text(&paint(
             &view(frame()),
             &screen,
-            Some(&shown),
+            Some(&Detail::Job(Box::new(shown.clone()))),
             "c24a68b6",
             "~/Development/armada",
             Style::plain(),
@@ -1417,6 +1448,52 @@ mod tests {
         assert!(
             all.contains("`release-merge` is no longer in the fleet"),
             "{all}"
+        );
+    }
+
+    /// **A refusal is not an absence, and the pane says which.**
+    ///
+    /// `detail_of` matched `Ok(Show)` and discarded every error as `None`, so any
+    /// reason `armada fleet show` declined rendered as *"is no longer in the
+    /// fleet"*. On 2026-08-17 the reason was that the handle named two Jobs — one
+    /// `ABORTED`, one `RUNNING` — so the screen reported a live Job as gone while
+    /// the CLI, asked the same question, listed both and named the one to use.
+    ///
+    /// Inverted once: collapsing `Refused` back into `None` prints the gone
+    /// sentence and fails this.
+    #[test]
+    fn a_detail_pane_whose_lookup_was_refused_says_what_refused_it() {
+        let screen = Screen {
+            mode: Mode::Detail("armada-failed".to_string()),
+            ..Screen::default()
+        };
+        let refused = Detail::Refused(ArmadaError {
+            class: armada_core::error::ErrClass::BadInvocation,
+            r#where: "armada-failed".to_string(),
+            message: "`armada-failed` names 2 Jobs: 6e5e1a84 ABORTED at reproduce; \
+                      86d8cf8e RUNNING at reproduce"
+                .to_string(),
+            next_action: Some("name one by uuid: `86d8cf8e`".to_string()),
+        });
+        let all = text(&paint(
+            &view(frame()),
+            &screen,
+            Some(&refused),
+            "c24a68b6",
+            "~/Development/armada",
+            Style::plain(),
+            80,
+        ))
+        .join("\n");
+
+        assert!(all.contains("names 2 Jobs"), "{all}");
+        // The way out travels with the reason, because it is what the reader
+        // does next.
+        assert!(all.contains("86d8cf8e"), "{all}");
+        // And it must not claim the opposite of what happened.
+        assert!(
+            !all.contains("no longer in the fleet"),
+            "a live Job was reported as gone: {all}"
         );
     }
 

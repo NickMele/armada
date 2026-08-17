@@ -215,6 +215,49 @@ mod tests {
         assert_eq!(Belt::decide(&world(&[("ARMADA_JOB", "")])), Belt::Helm);
     }
 
+    /// **A Drone reaches its own Job by uuid, not by the name it answers to.**
+    ///
+    /// A name is a handle: an ended Job releases it and the next Job may take it,
+    /// while the ended one keeps its record. `Store::find` then refuses the name
+    /// as ambiguous — deliberately, because a live Job winning a tie would let
+    /// `kill` end the wrong one.
+    ///
+    /// **So a Drone addressed by name loses its whole toolbelt.** Measured
+    /// 2026-08-17 on job `86d8cf8e`: `armada failures fix` respawned a killed
+    /// Job's failure, the derived name collided with the `ABORTED` record, and
+    /// `fleet_report`, `fleet_check` and `fleet_ask_human` were all refused
+    /// *"`armada-failed` names 2 Jobs"* — including the last one, which is what it
+    /// would have used to say so. 42 turns and $2.69 of correct work recorded
+    /// nowhere, while `armada fleet board` called the Job gone.
+    ///
+    /// A uuid is unambiguous by construction, so this closes the class rather
+    /// than one instance: no resolution rule has to be right for a Drone to reach
+    /// its own Job.
+    #[test]
+    fn a_drone_is_addressed_by_uuid_and_falls_back_to_the_name() {
+        let both = world(&[
+            ("ARMADA_JOB", "armada-failed"),
+            ("ARMADA_JOB_UUID", "86d8cf8e-8022-482e-96ff-acccecced671"),
+        ]);
+        assert_eq!(
+            both.job(),
+            Some("86d8cf8e-8022-482e-96ff-acccecced671"),
+            "the name won, so an ambiguous one takes the toolbelt with it"
+        );
+        assert_eq!(Belt::decide(&both), Belt::Drone);
+
+        // **The name still works alone**, for a Drone started by an older Armada
+        // whose environment carries only that.
+        let older = world(&[("ARMADA_JOB", "armada-failed")]);
+        assert_eq!(older.job(), Some("armada-failed"));
+        assert_eq!(Belt::decide(&older), Belt::Drone);
+
+        // And an exported-empty uuid is not an answer, so it falls through
+        // rather than handing a Drone an empty handle.
+        let empty = world(&[("ARMADA_JOB", "armada-failed"), ("ARMADA_JOB_UUID", "")]);
+        assert_eq!(empty.job(), Some("armada-failed"));
+    }
+
     #[test]
     fn a_child_of_a_job_gets_the_drones_belt() {
         assert_eq!(

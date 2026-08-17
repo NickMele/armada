@@ -52,15 +52,38 @@ impl World {
 
     /// The Job this process belongs to, when it belongs to one.
     ///
-    /// **`ARMADA_JOB` is set by [`armada_fleet::drone::job_env`] and by nothing
-    /// else**, so its presence is the machine's own answer to "is the caller a
-    /// Drone" — the same variable a `Stop` hook reads to say which Job stopped
-    /// (PLAN.md §15.3). It is read out of the environment map the entrypoint
-    /// captured rather than from a second `std::env` call.
+    /// **`ARMADA_JOB_UUID` first, `ARMADA_JOB` only as the fallback.** Both are
+    /// set by [`armada_fleet::drone::job_env`] and by nothing else, so either
+    /// one's presence is the machine's own answer to *"is the caller a Drone"* —
+    /// the same pair a `Stop` hook reads to say which Job stopped (PLAN.md
+    /// §15.3). Read out of the environment map the entrypoint captured rather
+    /// than from a second `std::env` call.
+    ///
+    /// # Why the uuid, and it is not a preference
+    ///
+    /// A name is a **handle**: a Job releases it when it ends and the next Job
+    /// may take it, while the ended Job keeps its record because that record is
+    /// how its transcript is found. Both are deliberate, and together they mean a
+    /// name can match two records — which
+    /// [`armada_fleet::jobs::Store::find`] now resolves to the live one.
+    ///
+    /// **A Drone must not depend on that resolution existing.** Measured
+    /// 2026-08-17 on job `86d8cf8e`: `armada failures fix` respawned a killed
+    /// Job's failure, the derived name collided with the `ABORTED` record, and
+    /// every tool on the Drone's belt was refused *"`armada-failed` names 2
+    /// Jobs"* — `fleet_report`, `fleet_check`, and `fleet_ask_human`, which is
+    /// the one it would have used to say so. It worked 42 turns and $2.69, wrote
+    /// a correct reproduction, and recorded nothing anywhere.
+    ///
+    /// A uuid is unambiguous by construction, so this closes the class rather
+    /// than the instance: no resolution rule has to be right for a Drone to
+    /// reach its own Job. The name stays as the fallback for a Drone started by
+    /// an older Armada, whose environment carries only that.
     pub fn job(&self) -> Option<&str> {
-        self.inherited
-            .get("ARMADA_JOB")
+        ["ARMADA_JOB_UUID", "ARMADA_JOB"]
+            .into_iter()
+            .filter_map(|key| self.inherited.get(key))
             .map(String::as_str)
-            .filter(|name| !name.is_empty())
+            .find(|handle| !handle.is_empty())
     }
 }
