@@ -65,5 +65,45 @@ End with what you could not settle, and resolve what you can before finishing. A
 `file:line` evidence attached is a decision the reader can make in a minute; a vague one is a
 round trip.
 
-Nothing else in the workflow will ask these questions again — the implement step reads your plan
-as settled.
+**Say which questions the implement step may answer and which it may not**, and put them where an
+approver cannot miss them. *"Nothing else will ask these again"* used to be the whole of this section
+and it is not enough — not because a Drone ignores them, but because **the person approving the plan
+may never reach them.**
+
+Measured here: a plan's fourth open question asked whether a change should extend to a second call
+site, stated its leaning and its cost, and said *this needs the owner's confirmation, not an
+assumption*. It was the right question, asked in the right place. The approver read questions one
+through three, said *"approved, implement it as written"*, and never saw the fourth. The implement
+step then did what the plan said — correctly — and the decision was never actually taken by anybody.
+
+So a plan's open questions are the part most likely to need an answer and the part most likely to be
+skimmed. Two things follow. **Lead with them if any of them blocks work**, rather than ending with
+them. And mark each one, in these words:
+
+- **`SETTLED BY IMPLEMENT`** — a detail you could not check but whoever writes the code can. A
+  signature, a column width, whether a helper already exists.
+- **`NEEDS THE OWNER`** — a decision about *what is being built* rather than how. A different
+  approach, a new config key, anything that widens what was asked for. The implement step must stop
+  and use `mcp__armada__fleet_ask_human` rather than decide it.
+
+An unmarked question reads as the first, so mark the second explicitly.
+
+## If you find yourself implementing, commit it
+
+Your gate is `artifact_exists: PLAN.md` and your workflow ends at a person, so **nothing downstream
+of you will commit anything you write.** A plan step that writes code leaves it as uncommitted
+changes in a worktree, where the only thing standing between it and deletion is the guard inside
+`armada fleet reap`.
+
+That is not hypothetical. A plan Job here implemented its whole feature — a new module and six
+modified files, 366 lines, green — and left every line uncommitted. It survived because that guard
+held.
+
+Sometimes implementing while planning is the right call: it is faster than the round trip and the
+plan comes out better for having been tested against real code. When you do it:
+
+- **Commit it**, in coherent pieces, with messages that say why.
+- **Say so in the plan**, at the top, so the reader knows they are reading a description of code that
+  exists rather than a proposal.
+- **Run the workspace's checks** with `mcp__armada__fleet_check` before you finish, because you have
+  now produced work that a gate will judge.
