@@ -1631,7 +1631,7 @@ mod tests {
         // two are joined into one value.
         assert!(probe[at + 1].starts_with(drone::BRIEF), "{probe:?}");
         assert!(
-            probe[at + 1].ends_with(armada_core::skill::BODY),
+            probe[at + 1].ends_with(armada_core::skill::DRONE),
             "the validator never saw Armada's own skill"
         );
         // The flag behind it survived, which is the collision this probe is

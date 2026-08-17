@@ -1030,76 +1030,58 @@ fn every_tool_the_helm_persona_grants_is_one_the_server_serves() {
 /// *a grant is not a connection* family, asserted between the prose Armada
 /// appends to a session and the belt that session actually holds.
 ///
-/// `armada_core::skill::BODY` goes to a Drone **and** to Helm, and the two belts
-/// are disjoint by design. The propose paragraph read *"Call
-/// `mcp__armada__fleet_propose`"* with no audience named, so every Helm session
-/// was told to reach for a tool that is on the Drone's belt and no other — and a
-/// model told to call a tool it has not got answers that it has not got it,
-/// which is the same dead end as Helm's persona asking for files it held no
-/// `Read` to open.
+/// **This is the test the shipped code could not have had.** There was one
+/// constant for both agents, so *"Call `mcp__armada__fleet_propose`"* was
+/// simultaneously right (a Drone holds it) and wrong (Helm never has) — and no
+/// assertion over one string can be both. Splitting it into
+/// `armada_core::skill::DRONE` and `::HELM` is what makes each body checkable
+/// against the belt of the session that reads it, which is what this does: every
+/// `mcp__armada__<tool>` either body names has to be on its own reader's belt.
 #[test]
-fn every_tool_armadas_own_skill_names_is_on_a_belt_and_names_its_audience() {
-    let body = armada_core::skill::BODY;
-    let served: Vec<String> = tool_names(Belt::Helm)
-        .into_iter()
-        .chain(tool_names(Belt::Drone))
-        .collect();
-
-    // Every `mcp__armada__<tool>` the prose names has to be a tool somebody
-    // serves. A sentence naming one that nothing serves is unactionable from
-    // either belt, and the model reports it as missing rather than as wrong.
-    let mut named = 0;
-    for rest in body.split("mcp__armada__").skip(1) {
-        let tool: String = rest
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-            .collect();
-        // `mcp__armada__…` — the prose naming the *prefix* rather than a tool,
-        // which is the one occurrence that is not a call.
-        if tool.is_empty() {
-            continue;
+fn each_bodys_tools_are_on_the_belt_of_the_session_that_reads_it() {
+    for (name, body, belt) in [
+        ("DRONE", armada_core::skill::DRONE, Belt::Drone),
+        ("HELM", armada_core::skill::HELM, Belt::Helm),
+    ] {
+        let served = tool_names(belt);
+        let mut named = 0;
+        for rest in body.split("mcp__armada__").skip(1) {
+            let tool: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            // `mcp__armada__…` — the prose naming the *prefix* rather than a
+            // tool, which is the one occurrence that is not a call.
+            if tool.is_empty() {
+                continue;
+            }
+            // Claude Code renames a dotted tool (`docs/traps.md`): the server
+            // serves `fleet.propose` and the model is offered
+            // `mcp__armada__fleet_propose`, so the comparison undoes exactly
+            // that one substitution.
+            assert!(
+                served.contains(&tool.replacen('_', ".", 1)),
+                "`{name}` tells its reader to call `{tool}`, which is not on the \
+                 belt that session holds: {served:?}"
+            );
+            named += 1;
         }
-        let dotted = tool.replacen('_', ".", 1);
+        // The Drone's body names two tools; Helm's names none, and needs none —
+        // asserting a count here would forbid the second from being true.
         assert!(
-            served.contains(&dotted),
-            "the skill tells its reader to call `{tool}`, which no belt serves: {served:?}"
-        );
-        named += 1;
-    }
-    assert!(named >= 2, "the skill named {named} tools; it names two");
-
-    // **An imperative has to name its audience when only one belt can obey it.**
-    // Every paragraph that tells its reader to *call* something is checked, and
-    // this is the assertion the shipped body failed: `Call
-    // `mcp__armada__fleet_propose`` stood on its own, addressed to whoever was
-    // reading, and half of the sessions reading it hold no such tool.
-    let helm = tool_names(Belt::Helm);
-    let mut imperatives = 0;
-    for paragraph in body.split("\n\n") {
-        // `Call …` at the start of a sentence and `, call …` mid-one are the
-        // same instruction, so the marker is matched without its first letter.
-        let Some(rest) = paragraph.split("all `mcp__armada__").nth(1) else {
-            continue;
-        };
-        imperatives += 1;
-        let tool: String = rest
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-            .collect();
-        if helm.contains(&tool.replacen('_', ".", 1)) {
-            continue;
-        }
-        assert!(
-            paragraph.contains("Drone"),
-            "`{tool}` is on no belt Helm holds, and the paragraph telling its \
-             reader to call it does not say who it is for: {paragraph:?}"
+            named > 0 || name == "HELM",
+            "`{name}` names no tool at all, which is not how it was written"
         );
     }
-    assert!(imperatives >= 1, "the skill tells nobody to call anything");
 
-    // And Helm is told outright rather than left to infer it from an absence.
-    assert!(
-        body.contains("**If you are Helm** you hold neither tool"),
-        "Helm is not told which tools it does not hold"
-    );
+    // Inverted once, on the exact defect: the two tools only a Drone holds are
+    // named in the Drone's body and in no other.
+    for drones_own in ["fleet_propose", "fleet_ask_human"] {
+        assert!(armada_core::skill::DRONE.contains(drones_own));
+        assert!(
+            !armada_core::skill::HELM.contains(drones_own),
+            "Helm is told about `{drones_own}`, which is on the Drone's belt and \
+             no other — the defect splitting the constant exists to close"
+        );
+    }
 }

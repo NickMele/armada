@@ -96,10 +96,11 @@ pub use crate::fleet::drone::CLAUDE;
 /// on the other — and that difference is argued where each prompt is assembled,
 /// not here.
 ///
-/// **What both launches append is [`crate::skill::BODY`]**, which is the one
-/// thing they do share: `docs/reserved/008`'s skill goes to every agent Armada
-/// runs, because *raise it rather than fixing it silently* is as true of the
-/// orchestrator as of the worker.
+/// **What this launch appends is [`crate::skill::HELM`]**, and a Drone's
+/// appends [`crate::skill::DRONE`]. They were one constant, on the argument that
+/// `docs/reserved/008`'s skill goes to every agent Armada runs; the two agents
+/// turned out to need different things said, and the bundling handed Helm an
+/// instruction to call a tool only a Drone holds. See [`crate::skill`].
 pub use crate::fleet::drone::APPEND;
 
 /// The flag [`MODE`] is passed as, and [`MODES`] is checked against — both
@@ -189,7 +190,7 @@ pub fn bad_mode(mode: &str) -> ArmadaError {
 ///
 /// **It was `guild-voice.md` until it stopped being only the guild's.** Since
 /// `docs/reserved/008` the same document also carries Armada's own skill
-/// ([`crate::skill::BODY`]), because one `--append-system-prompt` may be passed
+/// ([`crate::skill::HELM`]), because one `--append-system-prompt` may be passed
 /// once — so a name saying *guild* would now be wrong about most of the bytes in
 /// it, in the one file a reader opens to find out what their session was told.
 pub const VOICE: &str = "system-prompt.md";
@@ -334,8 +335,8 @@ const NOTE: usize = 256;
 /// not depend on whether the user has got round to describing themselves.
 pub fn appended(voice: Option<&str>) -> String {
     match voice {
-        Some(voice) => format!("{}\n\n{voice}", crate::skill::BODY),
-        None => crate::skill::BODY.to_string(),
+        Some(voice) => format!("{}\n\n{voice}", crate::skill::HELM),
+        None => crate::skill::HELM.to_string(),
     }
 }
 
@@ -1097,7 +1098,7 @@ mod tests {
             .iter()
             .position(|word| word == APPEND)
             .unwrap_or_else(|| panic!("{argv:?}"));
-        assert_eq!(argv[at + 1], crate::skill::BODY);
+        assert_eq!(argv[at + 1], crate::skill::HELM);
         // And none of the header that introduces the reader's own fragments,
         // which would be Armada announcing words nobody wrote.
         assert!(!argv[at + 1].contains(VOICE_HEADER), "{:?}", argv[at + 1]);
@@ -1124,19 +1125,24 @@ mod tests {
         );
         let at = argv.iter().position(|word| word == APPEND).unwrap();
         let prompt = &argv[at + 1];
+        // **Armada's half whole, and Armada's half first** — a byte-identical
+        // prefix on every launch is the half a prompt cache can keep. Precedence
+        // between the two is settled in the prose, not here.
+        //
+        // Asserted as the constant rather than as a phrase from it: the phrase
+        // this used to look for was `mcp__armada__fleet_propose`, which is on the
+        // *Drone's* belt and no other — and it was in Helm's appended prompt
+        // because one constant served both agents. Splitting them
+        // ([`crate::skill`]) took the phrase out of Helm's half, and a test
+        // pinned to a phrase rather than to the artefact would have read that as
+        // Armada's instructions going missing.
         assert!(
-            prompt.contains("mcp__armada__fleet_propose"),
-            "Armada's half is missing"
+            prompt.starts_with(crate::skill::HELM),
+            "Armada's half is missing or is not first: {prompt}"
         );
         assert!(
             prompt.contains("under 150 words"),
             "the reader's half is missing"
-        );
-        // Armada first: a byte-identical prefix on every launch is the half a
-        // prompt cache can keep. Precedence is settled in the prose, not here.
-        assert!(
-            prompt.find("mcp__armada__fleet_propose") < prompt.find("under 150 words"),
-            "{prompt}"
         );
     }
 

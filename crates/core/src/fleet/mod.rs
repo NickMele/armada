@@ -299,7 +299,7 @@ pub enum DroneStatus {
 /// would lose it to keep a distinction the mechanism does not need.
 ///
 /// So both are allowed, the asymmetry lives in
-/// [`crate::skill::BODY`] — which tells a Drone to be sparing with `guild`,
+/// [`crate::skill::DRONE`] — which tells a Drone to be sparing with `guild`,
 /// because it is looking at one repository — and the enforcement is that
 /// **applying a proposal is somebody else's verb**. Armada verifies; it does not
 /// take an agent's word.

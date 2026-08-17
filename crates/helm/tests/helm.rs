@@ -262,7 +262,7 @@ fn an_unwritten_guild_injects_none_of_the_readers_words_and_says_so() {
         .iter()
         .position(|word| word == "--append-system-prompt")
         .unwrap_or_else(|| panic!("{argv:?}"));
-    assert_eq!(argv[at + 1], armada_core::skill::BODY);
+    assert_eq!(argv[at + 1], armada_core::skill::HELM);
 
     let row = envelope["data"]["results"]
         .as_array()

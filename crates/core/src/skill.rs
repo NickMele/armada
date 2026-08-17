@@ -8,38 +8,61 @@
 //! saying so was part of the job. So it either edited the manifest inside a diff
 //! about something else, or it said nothing at all. Both are silent.
 //!
-//! # One skill, and the restraint is the design
+//! # Two bodies, because there are two agents and they are not variants of one
 //!
-//! `008` asks *which skills exist* and warns against a library. The answer is
-//! **one**, and it holds only what an agent cannot infer:
+//! There was one constant, [`DRONE`] under the name `BODY`, appended to both
+//! launches on the argument that it was *"the half both audiences need"*. That
+//! argument was wrong, and the shape of the wrongness is worth keeping:
 //!
-//! | In [`BODY`] | Because it cannot be inferred |
+//! **A Drone and Helm are different kinds of thing, not two settings of one.** A
+//! Drone is started *by* Armada, headless, in a worktree, on a budget, with
+//! nobody to answer a question — everything it may do is a grant Armada wrote,
+//! and Armada is the only thing that can tell it what those grants are. Helm is a
+//! session a **person** starts and sits in front of; it orchestrates, it holds
+//! read-only tools, and its operating knowledge is its persona
+//! (`templates/guild/subagents/helm.md`), which is the *user's* file.
+//!
+//! **The bundling produced an instruction one audience could not obey.** The
+//! propose paragraph read *"Call `mcp__armada__fleet_propose`"* with no audience
+//! named — and `fleet.propose` is on the Drone's belt and no other, so every Helm
+//! session ever launched was told to reach for a tool it has never been offered.
+//! That is `docs/reserved/031`'s *a grant is not a connection* family from the
+//! other side: not a grant with no tool behind it, but an instruction with no
+//! grant behind it. It could not have been caught by reading either constant,
+//! because there was only one and it was correct for one of its readers.
+//!
+//! **And the tell was in the prose.** [`DRONE`] opened by asking its reader which
+//! of two things it was. A body that has to begin *"either you are X or you are
+//! Y"* is two bodies that have not been separated yet.
+//!
+//! | Constant | Reader | Holds |
+//! |---|---|---|
+//! | [`DRONE`] | a Drone, appended after [`crate::fleet::drone::BRIEF`] | what a headless worker in a worktree cannot infer about the grants it was given |
+//! | [`HELM`] | Helm, appended before the reader's own fragments | the three things Armada's *orchestrator* cannot infer, and nothing its persona already says |
+//!
+//! # The restraint is still the design
+//!
+//! `008` asks *which skills exist* and warns against a library. Splitting one
+//! constant in two is not the library it warns about: neither restates the other,
+//! and the test that keeps that honest asserts it. Each holds only what its own
+//! reader cannot infer:
+//!
+//! | In [`DRONE`] | Because a Drone cannot infer it |
 //! |---|---|
 //! | Armada arrives as MCP tools, and the `armada` CLI is denied on purpose | a session that cannot find a tool reaches for the shell, and the shell writes the user's **real** `~/.armada/` ([`docs/reserved/011`](../../../docs/reserved/011-what-a-drone-may-do-unattended.md)) |
-//! | evidence is an exit code, never an assertion | every agent believes its own summary; `fleet.verdict` refuses a `PASS` without evidence and nothing said why |
 //! | a stale manifest is a **finding**, and findings are raised rather than fixed | this is the whole of `008`. Nothing in a repository says that noticing is part of the work |
 //! | `mcp__armada__fleet_propose` exists, returns at once, and is not `fleet.ask_human` | a tool description is read after a model has decided to reach for a tool; this is what makes it decide to |
 //!
-//! # One body, two audiences — so a tool one of them lacks has to say so
+//! | In [`HELM`] | Because Helm cannot infer it |
+//! |---|---|
+//! | it cannot change a file, and that is deliberate rather than an oversight | a model refused an `Edit` looks for another way to do it — measured, through `jq` and `mv`, onto the operator's own `~/.claude/settings.json` (`docs/reserved/031` §1) |
+//! | a Drone's summary is not evidence; the exit code its Job recorded is | Helm's job is to aggregate and report, and the thing it is aggregating is written by models that believe themselves |
+//! | a proposal in its inbox is carried to the person with its id and never applied | the entry looks exactly like a change somebody already agreed to |
 //!
-//! This constant is appended to a Drone's launch *and* to Helm's, and the two
-//! hold different belts: `fleet.propose` and `fleet.ask_human` are on the
-//! Drone's (`armada_helm::mcp::drone::TOOLS`) and on no other. The propose
-//! paragraph read *"Call `mcp__armada__fleet_propose`"* unconditionally, so
-//! every Helm session was instructed to reach for a tool it has never been
-//! offered — the same inert-instruction failure `docs/reserved/031` names as *a
-//! grant is not a connection*, arriving from the other side: not a grant with
-//! no tool behind it, but an instruction with no grant behind it.
-//!
-//! Helm needs no such tool. It is the session a person is sitting in front of,
-//! so what a Drone files an inbox entry to achieve, Helm achieves by saying it.
-//! So the instruction names its audience, and Helm is told what it actually does
-//! with a proposal — which is bring it to the person.
-//!
-//! Everything else an agent needs is already somewhere it will look: the
+//! Everything else either agent needs is already somewhere it will look: the
 //! workflow says what the steps are, the persona says how to talk, and the
-//! repository says what it is. A second skill restating any of that would be
-//! prose nobody reads, which is `008`'s own stated failure mode.
+//! repository says what it is. Prose restating any of that is prose nobody reads,
+//! which is `008`'s own stated failure mode.
 //!
 //! # Why it is compiled in rather than projected into `~/.claude/`
 //!
@@ -69,30 +92,30 @@
 //! `config scan` hand-over and [`crate::helm::voice`] proved for the user's own
 //! three files. This is the third use of one mechanism, not a third mechanism.
 //!
-//! # One appended prompt, never two — and this body is never the whole of it
+//! # One appended prompt per launch, never two — and neither body is the whole of it
 //!
 //! `claude --help` spells the flag `--append-system-prompt <prompt>` — singular,
 //! not variadic. Passing it twice is a Commander option without a collector,
 //! where the **last one wins and the first is dropped without a word**. So each
-//! launch composes one string, and this body is one half of it:
+//! launch composes one string, and each of these is one part of one of them:
 //!
 //! | Launch | Appends |
 //! |---|---|
-//! | a **Drone** | [`crate::fleet::drone::BRIEF`] — *how you report* — then this |
-//! | **Helm** | this, then the reader's own three fragments ([`crate::helm::appended`]) |
+//! | a **Drone** | [`crate::fleet::drone::BRIEF`] — *how you report* — then [`DRONE`] |
+//! | **Helm** | [`HELM`], then the reader's own three fragments ([`crate::helm::appended`]) |
 //!
 //! **The flag itself is [`crate::fleet::drone::APPEND`]**, defined once beside
 //! the brief and re-exported by [`crate::helm`]. Nothing here redefines it: two
 //! spellings of one flag are two things `armada doctor` would have to be told
 //! about separately, and it is already in both `FLAGS` lists.
 //!
-//! # What this body does *not* say, because the brief already does
+//! # What [`DRONE`] does *not* say, because the brief already does
 //!
 //! [`crate::fleet::drone::BRIEF`] names the three reporting tools, states that a
 //! `PASS` carries evidence an external command produced, and settles how long a
 //! Drone's closing message should be. That is a worker's contract with an
-//! orchestrator (`docs/reserved/019`) and Helm has no use for it. This is the
-//! half both audiences need, so it says nothing the brief says.
+//! orchestrator (`docs/reserved/019`), and it travels in the same appended prompt
+//! — so [`DRONE`] says none of it.
 
 /// What the skill is called, where a reader has to name it.
 ///
@@ -101,24 +124,28 @@
 /// a thing with one spelling rather than a description.
 pub const NAME: &str = "working-under-armada";
 
-/// The whole of it.
+/// **What a Drone cannot infer**, appended after
+/// [`crate::fleet::drone::BRIEF`] to every headless turn of every Job.
 ///
-/// **Roughly two kilobytes, and that ceiling is deliberate.** It is prepended to
-/// the system prompt of every Drone turn and every Helm launch, so every
-/// sentence is paid for on every exchange forever. [`crate::helm::VOICE_BUDGET`]
-/// is 24 KiB for the *reader's* prose because a person's standing instructions
-/// are worth that; Armada's own are worth what they cannot be inferred, and no
-/// more.
+/// **Roughly two kilobytes, and that ceiling is deliberate.** It is paid for on
+/// every turn any Job ever runs, so every sentence is bought again forever.
+/// [`crate::helm::VOICE_BUDGET`] is 24 KiB for the *reader's* prose because a
+/// person's standing instructions are worth that; Armada's own are worth what
+/// they cannot be inferred, and no more.
+///
+/// **Addressed to a Drone throughout, in the second person.** It used to open by
+/// asking its reader which of two agents it was, because one constant served
+/// both — see the module doc for what that cost.
 ///
 /// **Written to be read by a model, not by a person browsing docs.** Short
 /// headings, one table, and the rule stated before its rationale — the opposite
 /// of this repository's own prose style, on purpose.
-pub const BODY: &str = "\
+pub const DRONE: &str = "\
 # Working under Armada
 
-You are running under Armada. Either you are **Helm**, the session that orchestrates a fleet of
-Jobs, or you are a **Drone** — one Job, in its own git worktree, on its own `armada/<job>`
-branch, with nobody watching. This is what Armada expects of you and cannot work out for itself.
+You are a **Drone**: one Armada Job, in its own git worktree, on its own `armada/<job>` branch,
+headless, on a budget, with nobody watching. This is what Armada expects of you and cannot work
+out for itself.
 
 ## Armada reaches you as tools, not as a command line
 
@@ -140,10 +167,9 @@ finding, and reporting it is part of the job.**
 a claim nobody checked, arriving inside a diff about something else — and Armada verifies rather
 than taking an agent's word for anything.
 
-**If you are a Drone**, call `mcp__armada__fleet_propose`. It writes one inbox entry with an id,
-hands the id back, and returns at once: you are not waiting for an answer, and you carry on with
-the step you were on. A proposal is not a change, and nothing you propose takes effect until the
-person says so.
+Call `mcp__armada__fleet_propose`. It writes one inbox entry with an id, hands the id back, and
+returns at once: you are not waiting for an answer, and you carry on with the step you were on. A
+proposal is not a change, and nothing you propose takes effect until the person says so.
 
 | `subject` | Use it for |
 |---|---|
@@ -152,24 +178,63 @@ person says so.
 
 `mcp__armada__fleet_ask_human` is the other half of the pair and is not the same thing. It is for
 a question you cannot proceed without an answer to, and it waits. A proposal is something they
-should know that you are not blocked on.
+should know that you are not blocked on.";
 
-**If you are Helm** you hold neither tool, and you need neither: the person is right there, so
-say it. Proposals arrive in your inbox like anything else a Job raised — bring them to the person
-with their id, and do not apply one yourself.";
+/// **What Helm cannot infer**, appended before the reader's own three fragments
+/// to the session `armada helm` opens.
+///
+/// **Three things, and its shortness is the argument.** Helm's operating
+/// knowledge already has a home — `templates/guild/subagents/helm.md`, seeded
+/// into the reader's guild, merged forward by `armada guild upgrade` and editable
+/// by them. Anything Armada writes here is prose the reader cannot change, so it
+/// holds only what must not be editable: two facts about Helm's own grants, and
+/// one about what an inbox entry is not.
+///
+/// **It says nothing to a Drone**, which is the whole point of it being a second
+/// constant. See the module doc.
+pub const HELM: &str = "\
+# Working under Armada
+
+You are **Helm**: the session a person opens to run a fleet of Armada Jobs. You decompose what
+they ask into Jobs, delegate those, aggregate what comes back, and bring them the decisions that
+are theirs. This is what Armada expects of you and cannot work out for itself.
+
+## You read; you do not write
+
+You hold `Read`, `Grep` and `Glob` and no `Edit`, `Write` or `Bash`, **deliberately**. Authorship
+happens inside a Job — in its own worktree, on its own branch, against a budget, reviewed. If the
+right answer is a change to a file, that is a Job to spawn, not a refusal to work around. Say
+what the change should be and who should make it.
+
+## A Drone's summary is not evidence
+
+What comes back from a Job is written by a model that believes itself. The evidence is the exit
+code its checks recorded and the verdict Armada stored — those are facts, and everything else a
+Drone said about its own work is a claim. Report the two differently to the person. Never upgrade
+*it says it fixed it* into *it is fixed*.
+
+## A proposal in your inbox is not a decision
+
+Jobs raise proposals about this repository's `armada.yml` or about how this person works. They
+change nothing. Bring one to the person **with its id** and let them settle it; do not apply one
+yourself, and do not treat one as already agreed because it is written down.";
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Both constants, wherever an assertion is about *prose Armada hands a
+    /// model* rather than about one reader's contract.
+    const BOTH: [(&str, &str); 2] = [("DRONE", DRONE), ("HELM", HELM)];
+
     /// **The three facts the module doc says are the whole reason this exists.**
     ///
     /// Inverted once, as `ARCHITECTURE.md` §2.1.1 requires: deleting the
-    /// `fleet.propose` paragraph from [`BODY`] fails this, which is the check
+    /// `fleet.propose` paragraph from [`DRONE`] fails this, which is the check
     /// that the skill still carries `008`'s point rather than only its
     /// formatting.
     #[test]
-    fn the_skill_says_the_things_an_agent_cannot_infer() {
+    fn the_drones_skill_says_the_things_a_drone_cannot_infer() {
         for phrase in [
             // Armada is tools, and the CLI is denied on purpose.
             "denied to a Job on purpose",
@@ -181,9 +246,69 @@ mod tests {
             "mcp__armada__fleet_propose",
         ] {
             assert!(
-                BODY.contains(phrase),
+                DRONE.contains(phrase),
                 "the skill no longer says `{phrase}`, which is one of the four \
                  things `docs/reserved/008` exists to tell an agent"
+            );
+        }
+    }
+
+    /// **The three facts Helm cannot infer**, and they are three because Helm's
+    /// operating knowledge lives in its persona — a file the reader owns and
+    /// edits. What is here is only what must not be editable.
+    ///
+    /// Inverted once: deleting any of the three paragraphs fails this.
+    #[test]
+    fn helms_own_body_says_the_three_things_its_persona_cannot_own() {
+        for (phrase, why) in [
+            // It reads and does not write, and that is deliberate — a model
+            // refused an `Edit` looks for another way (`docs/reserved/031` §1).
+            (
+                "do not write",
+                "Helm is left to discover its own grants by being refused",
+            ),
+            // A Drone's summary is not evidence.
+            (
+                "is not evidence",
+                "Helm reports a Drone's claim to the person as a fact",
+            ),
+            // A proposal is not a decision.
+            ("not a decision", "Helm applies a proposal nobody agreed to"),
+        ] {
+            assert!(HELM.contains(phrase), "`{phrase}` is gone, so {why}");
+        }
+    }
+
+    /// **Neither body addresses the other's reader**, which is the whole of why
+    /// there are two.
+    ///
+    /// One constant served both and opened by asking its reader which it was;
+    /// the propose paragraph then told *whoever was reading* to call
+    /// `mcp__armada__fleet_propose`, a tool on the Drone's belt and no other. So
+    /// every Helm session ever launched was instructed to reach for a tool it
+    /// has never held. A body that has to say *"if you are Helm"* is two bodies
+    /// that have not been separated yet, and this is the assertion that keeps
+    /// them apart.
+    #[test]
+    fn neither_body_is_addressed_to_the_others_reader() {
+        assert!(
+            !DRONE.contains("Helm"),
+            "the Drone's body speaks to Helm: {DRONE}"
+        );
+        assert!(
+            !HELM.contains("If you are") && !DRONE.contains("Either you are"),
+            "a body that asks its reader which agent it is, is two bodies"
+        );
+        // The two tools only a Drone holds are named only where a Drone reads.
+        for drones_own in ["fleet_propose", "fleet_ask_human"] {
+            assert!(
+                DRONE.contains(drones_own),
+                "`{drones_own}` is the Drone's and it is not told about it"
+            );
+            assert!(
+                !HELM.contains(drones_own),
+                "Helm is told to call `{drones_own}`, which is on the Drone's belt \
+                 and no other — the defect the split exists to close"
             );
         }
     }
@@ -196,29 +321,35 @@ mod tests {
     /// enforcement is that a proposal changes nothing at all.
     #[test]
     fn both_subjects_are_named_and_the_guild_one_is_hedged() {
-        assert!(BODY.contains("`manifest`"));
-        assert!(BODY.contains("`guild`"));
+        assert!(DRONE.contains("`manifest`"));
+        assert!(DRONE.contains("`guild`"));
         assert!(
-            BODY.contains("Be sparing"),
+            DRONE.contains("Be sparing"),
             "the guild is the user, and a skill that offered it as an equal \
              option would be inviting a Drone to edit them"
         );
     }
 
-    /// **It has to fit in a system prompt that is paid for on every exchange.**
+    /// **Each has to fit in a system prompt that is paid for on every exchange.**
     ///
-    /// Not a style rule: this string is prepended to every Drone turn and every
-    /// Helm launch, so a paragraph added here is a paragraph bought again on
-    /// every turn any Job ever runs.
+    /// Not a style rule: [`DRONE`] is prepended to every headless turn of every
+    /// Job and [`HELM`] to every Helm launch, so a paragraph added to either is a
+    /// paragraph bought again every time.
+    ///
+    /// **The ceiling is per body rather than for the pair**, because no launch
+    /// ever carries both — splitting one constant in two did not double what
+    /// anybody pays.
     #[test]
-    fn the_skill_stays_small_enough_to_pay_for_on_every_turn() {
-        assert!(
-            BODY.len() < 4 * 1024,
-            "Armada's own skill is {} bytes; past 4 KiB it is a library, which \
-             is what `docs/reserved/008` says not to build",
-            BODY.len()
-        );
-        assert!(!BODY.is_empty());
+    fn each_body_stays_small_enough_to_pay_for_on_every_turn() {
+        for (name, body) in BOTH {
+            assert!(
+                body.len() < 4 * 1024,
+                "`{name}` is {} bytes; past 4 KiB it is a library, which is what \
+                 `docs/reserved/008` says not to build",
+                body.len()
+            );
+            assert!(!body.is_empty(), "`{name}` is empty");
+        }
     }
 
     /// A trailing newline would make the appended prompt and the file written
@@ -226,8 +357,14 @@ mod tests {
     /// [`crate::helm::launch_line`]'s `"$(cat …)"` substitution cannot survive —
     /// command substitution strips trailing newlines.
     #[test]
-    fn the_body_carries_no_trailing_newline() {
-        assert!(!BODY.ends_with('\n'), "{:?}", &BODY[BODY.len() - 40..]);
+    fn neither_body_carries_a_trailing_newline() {
+        for (name, body) in BOTH {
+            assert!(
+                !body.ends_with('\n'),
+                "`{name}`: {:?}",
+                &body[body.len() - 40..]
+            );
+        }
     }
 
     /// **The skill and the Drone's brief do not restate each other.**
@@ -240,14 +377,14 @@ mod tests {
     fn the_skill_leaves_the_reporting_contract_to_the_drones_brief() {
         for owned in ["fleet_verdict", "fleet_report", "PASS"] {
             assert!(
-                !BODY.contains(owned),
+                !DRONE.contains(owned),
                 "`{owned}` is the brief's (`docs/reserved/019`) and is now said twice"
             );
         }
         // Inverted once: the brief says nothing about proposing, which is why
         // this constant exists at all.
         assert!(!crate::fleet::drone::BRIEF.contains("fleet_propose"));
-        assert!(BODY.contains("mcp__armada__fleet_propose"));
+        assert!(DRONE.contains("mcp__armada__fleet_propose"));
     }
 
     /// **Every tool is named the way the model sees it, never the way the wire
@@ -259,28 +396,32 @@ mod tests {
     /// such tool — the same class of inert instruction that had Helm's persona
     /// asking for files it held no `Read` to open.
     #[test]
-    fn no_tool_in_the_skill_is_spelled_the_way_the_wire_spells_it() {
-        for dotted in [
-            "fleet.propose",
-            "fleet.ask_human",
-            "fleet.verdict",
-            "fleet.report",
-        ] {
-            assert!(
-                !BODY.contains(dotted),
-                "`{dotted}` matches nothing the model can call"
-            );
+    fn no_tool_in_either_body_is_spelled_the_way_the_wire_spells_it() {
+        for (name, body) in BOTH {
+            for dotted in [
+                "fleet.propose",
+                "fleet.ask_human",
+                "fleet.verdict",
+                "fleet.report",
+            ] {
+                assert!(
+                    !body.contains(dotted),
+                    "`{name}` says `{dotted}`, which matches nothing the model can call"
+                );
+            }
         }
-        assert!(BODY.contains("mcp__armada__fleet_propose"));
-        assert!(BODY.contains("mcp__armada__fleet_ask_human"));
+        assert!(DRONE.contains("mcp__armada__fleet_propose"));
+        assert!(DRONE.contains("mcp__armada__fleet_ask_human"));
     }
 
     /// **No absolute home anywhere in prose Armada ships.** The privacy gate
-    /// checks tracked files; this one is a tracked file that is also handed to a
+    /// checks tracked files; these are tracked files that are also handed to a
     /// model, so it is worth asserting rather than assuming.
     #[test]
-    fn the_skill_names_no_ones_home_directory() {
-        assert!(!BODY.contains("/Users/"), "{BODY}");
-        assert!(!BODY.contains("/home/"), "{BODY}");
+    fn neither_body_names_anyones_home_directory() {
+        for (name, body) in BOTH {
+            assert!(!body.contains("/Users/"), "`{name}`: {body}");
+            assert!(!body.contains("/home/"), "`{name}`: {body}");
+        }
     }
 }

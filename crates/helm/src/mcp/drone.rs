@@ -231,7 +231,7 @@ impl Toolbelt {
     /// Propose a change to the manifest or the guild, and carry on.
     ///
     /// **The description is the load-bearing half of `docs/reserved/008`.**
-    /// [`armada_core::skill::BODY`] tells a Drone that noticing is part of the
+    /// [`armada_core::skill::DRONE`] tells a Drone that noticing is part of the
     /// job; this is what it reads at the moment it reaches for a tool, so it has
     /// to say the two things that decide between this and `fleet.ask_human`: it
     /// does not wait, and it changes nothing.
@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn the_brief_names_every_tool_on_this_belt_as_the_model_sees_it() {
         // **The whole appended prompt, not one constant of it.** `fleet.propose`
-        // is named by `armada_core::skill::BODY` and the other three by
+        // is named by `armada_core::skill::DRONE` and the other three by
         // `BRIEF`; they ride in one `--append-system-prompt` because the flag is
         // singular, and a test reading half of it would go green against a
         // Drone offered a tool nothing had told it about.

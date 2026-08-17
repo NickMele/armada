@@ -12,7 +12,7 @@
 //!
 //! **`<brief>` is one `--append-system-prompt` carrying two things**: [`BRIEF`],
 //! without which a Drone reported at whatever length it liked, and then
-//! [`crate::skill::BODY`], without which it edited `armada.yml` rather than
+//! [`crate::skill::DRONE`], without which it edited `armada.yml` rather than
 //! saying what it had learned (`docs/reserved/019` and `docs/reserved/008`).
 //! [`brief`] is where they are joined and why they are not one constant.
 //!
@@ -225,10 +225,10 @@ fn headless(posture: &Posture, settings: Option<&str>, mcp: Option<&str>) -> Vec
 ///
 /// They answer different questions and were written for different reasons.
 /// [`BRIEF`] is *how you report* — the contract a worker owes an orchestrator,
-/// `docs/reserved/019`. [`crate::skill::BODY`] is *how you use Armada* —
-/// `docs/reserved/008` — and it goes to **Helm too**, where a reporting contract
-/// would make no sense. Merging them would mean Helm's launch carrying a
-/// paragraph about `fleet.verdict`, which Helm does not have.
+/// `docs/reserved/019`. [`crate::skill::DRONE`] is *how you use Armada* —
+/// `docs/reserved/008`. Both go to a Drone and only to a Drone; Helm's launch
+/// appends [`crate::skill::HELM`] instead, which says nothing about reporting
+/// because Helm reports to a person rather than to an orchestrator.
 ///
 /// **The brief comes first**, because it says who this session is; the skill is
 /// about the tools it holds, and a session has to be somebody before it can be
@@ -240,7 +240,7 @@ fn headless(posture: &Posture, settings: Option<&str>, mcp: Option<&str>) -> Vec
 /// singular — so `armada doctor`'s probe assertion and the belt's own
 /// tool-naming test both read this.
 pub fn brief() -> String {
-    format!("{BRIEF}\n\n{}", crate::skill::BODY)
+    format!("{BRIEF}\n\n{}", crate::skill::DRONE)
 }
 
 /// The flag that carries an appended system prompt into a session.
@@ -1570,7 +1570,7 @@ mod tests {
             //
             // **`starts_with` rather than `==` since `docs/reserved/008`**: the
             // one appended prompt now carries [`BRIEF`] and then
-            // [`crate::skill::BODY`], because the flag is singular and a second
+            // [`crate::skill::DRONE`], because the flag is singular and a second
             // occurrence would keep only the last. The equality this used to
             // make is now two assertions, one per half — a `contains` alone
             // would go green against an order that put the skill first, which
@@ -1581,7 +1581,7 @@ mod tests {
                 "{argv:?} appends something else, or appends it out of order"
             );
             assert!(
-                brief.ends_with(crate::skill::BODY),
+                brief.ends_with(crate::skill::DRONE),
                 "the reporting contract reached the session and Armada's own \
                  skill did not: {brief:?}"
             );
@@ -2087,7 +2087,7 @@ mod tests {
                 .position(|word| word == APPEND)
                 .unwrap_or_else(|| panic!("no appended system prompt: {argv:?}"));
             assert!(
-                argv[at + 1].contains(crate::skill::BODY),
+                argv[at + 1].contains(crate::skill::DRONE),
                 "the brief reached the session and the skill did not, which is \
                  what appending the flag twice would silently produce: {:?}",
                 argv[at + 1]
