@@ -42,6 +42,19 @@ pub const DEADLINE: Duration = Duration::from_secs(30 * 60);
 /// does not know how to claim a port and must not learn: the machine-global
 /// store is Manifest's, and a second claimer is how two workspaces end up with
 /// one span.
+///
+/// **A failed `init` is a failed spawn**, which is what
+/// `docs/commands/fleet/spawn.md` has always documented — *"`1` `tool_failed` —
+/// the worktree, the carry copy, or `manifest init` failed"*. This function read
+/// `data.port_block` and nothing else, so every reason `init` can fail came back
+/// as `Ok(None)`: a repository whose `setup:` did not run was reported to
+/// `spawn` as a workspace that simply claims no ports, the ports row was drawn
+/// green, and a Drone was started into a worktree with no working environment.
+///
+/// Measured 2026-08-17 on job `armada-failed` (6e5e1a84). This repository's own
+/// `setup:` had been failing on every spawn since it was written; the Job found
+/// out when its first `armada:test` answered `no such command: nextest`, an hour
+/// and $2.68 in, and the only thing that noticed was the agent.
 pub fn init(run: &impl Run, exe: &Path, worktree: &Path) -> Result<Option<PortBlock>, ArmadaError> {
     let envelope = call(
         run,
@@ -50,10 +63,40 @@ pub fn init(run: &impl Run, exe: &Path, worktree: &Path) -> Result<Option<PortBl
         &["manifest", "init", "--json"],
         "armada manifest init",
     )?;
+    if let Some(error) = refusal(&envelope, "armada manifest init") {
+        return Err(error);
+    }
     Ok(envelope
         .get("data")
         .and_then(|data| data.get("port_block"))
         .and_then(|block| serde_json::from_value(block.clone()).ok()))
+}
+
+/// The failure an envelope carried, as Armada's own error, or `None` when it
+/// carried none.
+///
+/// **The class it was refused with is kept.** A refusal Armada meant is not
+/// Armada's bug, and the two are answered by different people — a `setup:` step
+/// that is not on `PATH` is `bad_config` for the repository to fix, and
+/// reclassifying it as `tool_failed` sends the reader to look at the tool.
+fn refusal(envelope: &serde_json::Value, what: &str) -> Option<ArmadaError> {
+    let error = envelope.get("error").filter(|error| !error.is_null())?;
+    let said = |key: &str| {
+        error
+            .get(key)
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+    };
+    Some(ArmadaError {
+        class: error
+            .get("class")
+            .cloned()
+            .and_then(|class| serde_json::from_value::<ErrClass>(class).ok())
+            .unwrap_or(ErrClass::ToolFailed),
+        r#where: said("where").unwrap_or_else(|| what.to_string()),
+        message: said("message").unwrap_or_else(|| format!("`{what}` failed")),
+        next_action: said("next"),
+    })
 }
 
 /// `armada manifest check --detach` in a worktree, and the run id it opened.
@@ -115,26 +158,8 @@ pub fn check_detach(
     // same command run by hand in the same worktree answered with a run id and
     // five queued checks. The refusal it actually got was never shown to
     // anybody.
-    if let Some(error) = envelope.get("error").filter(|error| !error.is_null()) {
-        let said = |key: &str| {
-            error
-                .get(key)
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        };
-        return Err(ArmadaError {
-            // **The class it was refused with, kept.** A refusal Armada meant is
-            // not Armada's bug, and the two are answered by different people.
-            class: error
-                .get("class")
-                .cloned()
-                .and_then(|class| serde_json::from_value::<ErrClass>(class).ok())
-                .unwrap_or(ErrClass::ToolFailed),
-            r#where: said("where").unwrap_or_else(|| "armada manifest check --detach".to_string()),
-            message: said("message")
-                .unwrap_or_else(|| "the detached check would not start".to_string()),
-            next_action: said("next"),
-        });
+    if let Some(error) = refusal(&envelope, "armada manifest check --detach") {
+        return Err(error);
     }
 
     Err(ArmadaError {
@@ -573,6 +598,53 @@ mod tests {
                 from: 5470,
                 to: 5479
             })
+        );
+    }
+
+    /// **An `init` that failed is a failed spawn, not a workspace with no
+    /// ports.**
+    ///
+    /// This function read `data.port_block` and nothing else, so every reason
+    /// `init` can fail — a `setup:` step that exited non-zero, a step that is
+    /// not on `PATH`, an exhausted port pool — came back as `Ok(None)`. `spawn`
+    /// then drew its ports row green and started a Drone into a worktree whose
+    /// environment had never been prepared, while
+    /// `docs/commands/fleet/spawn.md` has documented the opposite since it was
+    /// written: *"`1` `tool_failed` — the worktree, the carry copy, or `manifest
+    /// init` failed"*.
+    ///
+    /// Measured 2026-08-17 on job `armada-failed` (6e5e1a84): this
+    /// repository's own `setup:` had failed on every spawn since it was
+    /// written, and the first thing to notice was the agent, an hour and $2.68
+    /// into a Job.
+    #[test]
+    fn an_init_whose_setup_failed_is_reported_rather_than_read_as_no_ports() {
+        const FAILED: &str = r#"{"schema_version":2,"verb":"init","workspace":"3d9cc7ba","status":"FAILED","error":{"class":"tool_failed","where":"armada","message":"`cargo install cargo-nextest --locked` exited 1"},"data":{"port_block":null,"results":[{"id":"armada","status":"FAILED"}]}}"#;
+        let run = FakeRun::answering(FAILED);
+        let error = init(&run, Path::new("/bin/armada"), Path::new("/w"))
+            .expect_err("a failed init is a failed spawn");
+
+        assert_eq!(error.class, ErrClass::ToolFailed);
+        assert_eq!(error.r#where, "armada");
+        assert!(
+            error.message.contains("cargo-nextest"),
+            "the setup step that failed is not named: {}",
+            error.message
+        );
+    }
+
+    /// **The class the refusal carried, kept.** A `setup:` command that is not
+    /// on `PATH` is the repository's statement being wrong, and telling the
+    /// reader a tool failed sends them to look at the tool.
+    #[test]
+    fn an_init_refused_for_a_bad_config_stays_a_bad_config() {
+        const REFUSED: &str = r#"{"schema_version":2,"verb":"init","status":"FAILED","error":{"class":"bad_config","where":"armada.yml:components.armada.setup[0]","message":"`bundle` could not be started","next":"install bundle , or correct the setup step"},"data":{"port_block":null,"results":[]}}"#;
+        let run = FakeRun::answering(REFUSED);
+        let error = init(&run, Path::new("/bin/armada"), Path::new("/w")).unwrap_err();
+        assert_eq!(error.class, ErrClass::BadConfig);
+        assert_eq!(
+            error.next_action.as_deref(),
+            Some("install bundle , or correct the setup step")
         );
     }
 

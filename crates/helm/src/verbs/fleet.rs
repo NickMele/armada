@@ -580,7 +580,30 @@ pub fn spawn<R: Run, C: Clock>(
     );
 
     progress.started(SpawnStep::Ports.id());
-    record.port_block = manifest::init(run, &place.exe, &path)?;
+    // **A failed `init` aborts the spawn and cleans up, exactly as a failed
+    // worktree does** (`docs/commands/fleet/spawn.md`: *"`1` `tool_failed` — the
+    // worktree, the carry copy, or `manifest init` failed"*).
+    //
+    // It never did, because `manifest::init` read `data.port_block` and dropped
+    // the envelope's `error` — so a repository whose `setup:` failed was
+    // reported here as a workspace that claims no ports, this row was drawn
+    // grey-but-fine, and a Drone was started into a worktree with no working
+    // environment. Which is what happened to this repository on every spawn it
+    // has ever done (job `armada-failed`, 2026-08-17).
+    let block = match manifest::init(run, &place.exe, &path) {
+        Ok(block) => block,
+        Err(error) => {
+            let _ = manifest::clean(run, &place.exe, &path);
+            let _ = worktree::remove(run, &repo_root, &path);
+            let _ = worktree::delete_branch(run, &repo_root, &branch);
+            record.state = JobState::Aborted;
+            record.verdict = Some(Verdict::Failed);
+            store.save(&record)?;
+            close_entries(place, &record)?;
+            return Err(error);
+        }
+    };
+    record.port_block = block;
     record.state = JobState::Running;
     store.save(&record)?;
     let prepare_ms = now.mono().saturating_sub(started);
@@ -4679,7 +4702,22 @@ fn spawn_child<R: Run, C: Clock>(
         return Err(error);
     }
 
-    record.port_block = manifest::init(run, &place.exe, &path)?;
+    // A failed `init` aborts and cleans up, for [`spawn`]'s reason: a Drone
+    // started into a worktree whose `setup:` never ran is a Job that will fail
+    // its first gate for a reason no agent can act on.
+    let block = match manifest::init(run, &place.exe, &path) {
+        Ok(block) => block,
+        Err(error) => {
+            let _ = manifest::clean(run, &place.exe, &path);
+            let _ = worktree::remove(run, &repo_root, &path);
+            let _ = worktree::delete_branch(run, &repo_root, &branch);
+            record.state = JobState::Aborted;
+            record.verdict = Some(Verdict::Failed);
+            store.save(&record)?;
+            return Err(error);
+        }
+    };
+    record.port_block = block;
     record.state = JobState::Running;
     store.save(&record)?;
 
