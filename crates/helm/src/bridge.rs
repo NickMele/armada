@@ -24,9 +24,7 @@ use std::time::{Duration, Instant};
 use armada_core::ctx::{Clock, Run};
 use armada_core::envelope::ShowData;
 use armada_core::error::ArmadaError;
-use armada_core::fleet::bridge::{
-    self, Action, Departure, Done, Frame, Key, Mode, Pressed, Screen,
-};
+use armada_core::fleet::bridge::{self, Action, Departure, Done, Key, Mode, Pressed, Screen};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
@@ -53,7 +51,7 @@ use crate::verbs::fleet::Where;
 /// §1.9) — so the width branch is the caller's, and `frame.rs`'s own
 /// `shed_to_narrow` stays scoped to the one thing it already does: trimming a
 /// single key line.
-const WIDE: usize = 138;
+use crate::render::GAP;
 
 /// The alternate screen, given back on drop **and on panic**.
 ///
@@ -206,47 +204,21 @@ fn watching_screen(
     keys: bool,
 ) -> Vec<Vec<Span>> {
     let frame = &view.fleet;
-    let data = crate::verbs::bridge::data(frame.clone());
-    let cursor = Some(screen.cursor.at());
 
-    let mut lines = render::armada_header(&frame.windows, workspace_id, cwd, width);
-    lines.push(Vec::new());
-
-    if width >= WIDE {
-        let jobs_inbox = frame::hjoin(
-            render::jobs_box(&data, style, cursor, jobs_width(width)),
-            render::inbox_box(&view.inbox, style, width - jobs_width(width) - GAP),
-            GAP,
-            width,
-        );
-        lines.extend(jobs_inbox);
-        lines.push(Vec::new());
-
-        let third = (width - 2 * GAP) / 3;
-        let manifest_guild = frame::hjoin(
-            render::manifest_box(third),
-            render::guild_box(&view.guild, style, third),
-            GAP,
-            2 * third + GAP,
-        );
-        let three = frame::hjoin(
-            manifest_guild,
-            render::system_box(&view.system, style, width - 2 * third - 2 * GAP),
-            GAP,
-            width,
-        );
-        lines.extend(three);
-        if keys {
-            lines.push(Vec::new());
-            lines.extend(render::command_centre_keys_wide(width));
-        }
-    } else {
-        lines.extend(render::jobs_box(&data, style, cursor, width));
-        lines.extend(render::inbox_box(&view.inbox, style, width));
-        if keys {
-            lines.extend(render::command_centre_keys_narrow(width));
-        }
-    }
+    // **One layout, drawn by `render.rs`.** The boxes, the two mock-ups and the
+    // width that chooses between them live beside every other box builder, so
+    // that `--once` draws this screen rather than a second one — which is the
+    // defect `033` shipped with and what `render.rs`'s own one-table comment
+    // already promised could not happen.
+    let mut lines = render::command_centre(
+        &crate::verbs::bridge::all(view.clone(), std::path::Path::new(cwd)),
+        workspace_id,
+        cwd,
+        style,
+        width,
+        Some(screen.cursor.at()),
+        keys,
+    );
 
     if frame.rows.is_empty() {
         lines.push(vec![
@@ -279,15 +251,6 @@ fn watching_screen(
     }
 
     lines
-}
-
-/// Two spaces between boxes, the width `hjoin` inserts between the two it
-/// joins.
-const GAP: usize = 2;
-
-/// JOBS gets the wider half of the top row — it carries the most columns.
-fn jobs_width(width: usize) -> usize {
-    (width - GAP) * 3 / 5
 }
 
 /// The new-Job box: what is being asked, what has been typed, and the keys.
@@ -505,7 +468,7 @@ pub fn watch<R: Run, C: Clock>(
     style: Style,
     terminal: Terminal,
     act: &mut dyn FnMut(&Action) -> Done,
-) -> Result<(Frame, Departure), ArmadaError> {
+) -> Result<(BridgeView, Departure), ArmadaError> {
     let raw = Restore::install().map_err(|_| crate::verbs::bridge::no_screen())?;
     let alt = Alt::enter().map_err(|_| crate::verbs::bridge::no_screen())?;
     let backend = ratatui::backend::CrosstermBackend::new(std::io::stdout());
@@ -608,7 +571,11 @@ pub fn watch<R: Run, C: Clock>(
             }
         };
         if let Some(departure) = departure {
-            break (frame, departure);
+            // **The whole view, not just the fleet.** The caller renders this
+            // into the scrollback the Bridge was covering, and it has to be the
+            // command centre the reader was just looking at rather than the
+            // pre-`033` table — which is what a `Frame` alone can draw.
+            break (centre, departure);
         }
     };
 
@@ -682,8 +649,14 @@ fn draw(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // **Only the tests need these now**: the layout and the width that chooses
+    // between its two shapes moved to `render.rs`, so that `--once` draws this
+    // screen instead of a second one, and `watch` hands back a whole view rather
+    // than a fleet-only `Frame`.
+    use crate::render::WIDE;
     use armada_core::envelope::JobRow;
     use armada_core::error::Status;
+    use armada_core::fleet::bridge::Frame;
     use armada_core::fleet::job::Remaining;
     use armada_core::fleet::JobState;
 

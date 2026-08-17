@@ -125,8 +125,80 @@ fn assert_render(case: &str, output: &Output) {
     );
 }
 
+/// The same comparison **at a width [`WIDTH`] cannot reach**.
+///
+/// **Only the command centre needs this, and it needs it because it has two
+/// shapes.** `033` draws all five boxes side by side at [`render::WIDE`] and
+/// drops whole panels below it, so a suite fixed at eighty columns can only ever
+/// see the narrow one — which is half of why the wide layout shipped untested.
+fn assert_render_at(case: &str, width: usize, output: &Output) {
+    report(
+        [
+            ("tty", Style::painted(), Terminal::at(width)),
+            ("plain", Style::plain(), Terminal::at(width)),
+        ]
+        .into_iter()
+        .filter_map(|(audience, style, terminal)| {
+            check_golden(case, audience, &render::human(output, style, terminal))
+        })
+        .collect(),
+    );
+}
+
 // ----------------------------------------------------------------- the world
 // the fixtures describe: one workspace, deterministic in every field
+
+/// **The four panels beside JOBS, small but real** — `033`'s command centre.
+///
+/// One row per box is enough to prove the layout: what these fixtures measure is
+/// whether the boxes are drawn, at what widths, and whether any line overruns
+/// the terminal, not the contents of tables the `fleet-inbox`, `guild-ls` and
+/// `doctor` fixtures already cover in full.
+fn panels() -> Box<armada_core::envelope::Panels> {
+    let findings = vec![
+        Finding::settled("drones", Settled::Ok, "2 alive, both with a Job"),
+        Finding::needs(
+            "disk",
+            Problem::Partial,
+            "~/.armada is 2.1 GiB",
+            "`armada fleet reap` frees most of it",
+        ),
+    ];
+    Box::new(armada_core::envelope::Panels {
+        inbox: InboxData {
+            open: 1,
+            results: vec![InboxRow {
+                uuid: "9f14c2ab".to_string(),
+                job_uuid: Some("2b9f4d81-3c7a-4e15-9a08-6f2d1e4b7c53".to_string()),
+                job: "nightly-flake".to_string(),
+                kind: "NEEDS_HUMAN".to_string(),
+                raised_at: "2026-08-09T14:02:11Z".to_string(),
+                waiting_s: 8 * 60,
+                body: "the CI timeout is 30s and the flake needs 90s. Raise it?".to_string(),
+                answered: None,
+                closed: None,
+            }],
+        },
+        guild: GuildListData {
+            at: "~/.armada/guild".to_string(),
+            facts: vec!["1 skill".to_string(), "4 workflows".to_string()],
+            template: None,
+            items: vec![GuildItemRow {
+                kind: "skill".to_string(),
+                name: "review-diff".to_string(),
+                path: "skills/review-diff/SKILL.md".to_string(),
+                opens: "~/.armada/guild/skills/review-diff/SKILL.md".to_string(),
+                detail: "read a diff and write REVIEW.md".to_string(),
+                bytes: 2_048,
+            }],
+        },
+        system: DoctorData {
+            tally: DoctorData::tally(&findings),
+            headline: DoctorData::headline(&findings),
+            results: findings,
+        },
+    })
+}
 
 fn workspace() -> WorkspaceId {
     WorkspaceId::from_stored("3d9cc7ba")
@@ -2063,6 +2135,23 @@ fn fleet_tick_matches_its_fixture() {
 /// measurement.
 #[test]
 fn bridge_matches_its_fixture() {
+    assert_render("bridge", &a_whole_frame());
+}
+
+/// **The same frame at [`render::WIDE`]** — `033`'s wide mock-up, all five boxes
+/// side by side.
+///
+/// **A second fixture rather than a second layout.** The screen chooses between
+/// two shapes by width and this is the one an eighty-column suite cannot see, so
+/// while `033`'s panels lived in the live `paint()` path alone there was no
+/// fixture over either shape — `--once` was still drawing the pre-`033` table.
+#[test]
+fn the_wide_bridge_matches_its_fixture() {
+    assert_render_at("bridge-wide", armada_helm::render::WIDE, &a_whole_frame());
+}
+
+/// One frame of the command centre: the fleet, and the four panels beside it.
+fn a_whole_frame() -> Output {
     /// `on_step` is the step and how long it has been on it, together, because
     /// the second means nothing without the first.
     // Eight fields of a nine-field row, written out rather than bundled: a
@@ -2175,6 +2264,12 @@ fn bridge_matches_its_fixture() {
                 .count(),
             filter: None,
             hidden: 0,
+            // **The whole command centre, because that is what `--once` emits**
+            // (`033`). This fixture is the only way the panels are seen without
+            // a live terminal, and while `033`'s boxes lived in `paint()` alone
+            // it was measuring the pre-`033` single table.
+            cwd: "~/code/api".to_string(),
+            panels: Some(panels()),
             // **The windows lead the summary line and spend follows them**
             // (`020` §4). Both halves of each are here because both were
             // measured: the percentage is Claude Code's `utilization` floored,
@@ -2199,7 +2294,7 @@ fn bridge_matches_its_fixture() {
             results,
         },
     )));
-    assert_render("bridge", &output);
+    output
 }
 
 /// A filtered frame, and the two columns that disappear when nothing fills
@@ -2246,6 +2341,13 @@ fn bridge_filtered_matches_its_fixture() {
             running: 1,
             filter: Some("state=RUNNING".to_string()),
             hidden: 3,
+            // **Fleet-only, which is the layout's other branch.** A frame read
+            // for the table alone says so with `None`, and the command centre
+            // draws the boxes it has rather than claiming panels nobody
+            // gathered. What this fixture is about is which columns disappear,
+            // and three tables of unrelated content around them would bury it.
+            cwd: "~/code/api".to_string(),
+            panels: None,
             // **A window with no percentage, which is the ordinary case.** The
             // `utilization` field only rides along once the service has crossed
             // a threshold, so most frames know when the window resets and not
@@ -3801,6 +3903,9 @@ fn fleet_ls_text(row: &JobRow) -> String {
     render::human(&output, Style::plain(), Terminal::piped())
 }
 
+/// **Fleet-only, deliberately.** These helpers measure one column against one
+/// row, and the four panels beside JOBS would put three tables of unrelated
+/// content around the thing being measured.
 fn bridge_text(row: &JobRow) -> String {
     let output = Output::Bridge(Box::new(Envelope::ok(
         "bridge",
@@ -3812,6 +3917,8 @@ fn bridge_text(row: &JobRow) -> String {
             running: 1,
             filter: None,
             hidden: 0,
+            cwd: String::new(),
+            panels: None,
             windows: Vec::new(),
             results: vec![row.clone()],
         },

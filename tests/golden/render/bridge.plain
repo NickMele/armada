@@ -1,10 +1,19 @@
-  ARMADA BRIDGE
+┌─ ARMADA ─────────────────────────────────────────────────────────────────────┐
+ armada   ~/code/api   5h 71% resets 2h14m   7d 24% resets 4d
+└──────────────────────────────────────────────────────────────────────────────┘
 
+┌─ JOBS (4) ───────────────────────────────────────────────────────────────────┐
   JOB            STATUS   ID        STEP           RUN  SPENT  NEEDS YOU
   rate-limit     RUNNING  c19d0a34  implement 12m  14m  $2.10  -
   carina-schema  RUNNING  94b1fd2e  plan 3m         3m  $0.45  -
   xlsx-report    STALLED  3d9cc7ba  reproduce      22m  $4.60  -
   release-merge  BLOCKED  7f2ab618  implement 18m   1h  $1.25  the CI timeout i…
+ 4 jobs   1 need you   1 stalled   $8.40 today
+└──────────────────────────────────────────────────────────────────────────────┘
+┌─ INBOX (1) ──────────────────────────────────────────────────────────────────┐
+  FROM           ORIGIN       DETAIL                                     WAITING
+  nightly-flake  NEEDS_HUMAN  the CI timeout is 30s and the flake need…       8m
+└──────────────────────────────────────────────────────────────────────────────┘
 
 4 jobs, 1 need you, 1 stalled, 5h 71% resets 2h14m, 7d 24% resets 4d, $8.40 today
 

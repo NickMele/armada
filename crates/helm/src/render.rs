@@ -876,35 +876,167 @@ const REAP_KEYS: [(&str, &str); 4] = [
 /// a measurement.
 fn bridge(envelope: &Envelope<BridgeData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut out = format!("{}\n\n", style.strong(Role::SignalAmber, "  ARMADA BRIDGE"));
 
-    // **No row is under a cursor here, so the cursor column is dropped.** One
-    // table describes both surfaces and the renderer decides which columns
-    // earned their width (`docs/commands/render.md`), which is what stops the
-    // screen and `--once` from becoming two layouts.
-    let table = bridge_table(data, style, None, width);
-    out.push_str(&table.render(style, width));
-    if table.is_empty() {
-        // **An empty fleet says so.** A screen that drew nothing would be
-        // indistinguishable from one that failed to read the index.
-        out.push_str(match data.filter {
-            Some(_) => "  no Jobs match\n",
-            None => "  no Jobs\n",
-        });
-    }
+    // **The same [`command_centre`] the live screen draws**, at the width this
+    // surface was given. It used to be a bare `ARMADA BRIDGE` heading over one
+    // `bridge_table`, which is the shape that predates `033` — so after `033`
+    // landed the panels in the live path only, `--once` and the screen were two
+    // layouts, and this function's own comment claimed they could not be.
+    //
+    // **No row is under a cursor here.** The frame a pipe reads describes the
+    // fleet rather than a selection, so the cursor column is dropped and the key
+    // line prints `p`'s default word rather than guessing at a state nobody is
+    // standing on.
+    let mut out = spans_to_text(
+        &command_centre(
+            data,
+            envelope.workspace.as_ref().map_or("", |id| id.as_str()),
+            &data.cwd,
+            style,
+            width,
+            None,
+            false,
+        ),
+        style,
+    );
 
     out.push('\n');
     out.push_str(&bridge_summary(data, envelope.status, style));
     out.push('\n');
-    // **No row is under a cursor in `--once`, so `p` prints its default word.**
-    // The frame a pipe reads describes the fleet rather than a selection, and a
-    // key line that guessed at a state nobody is standing on would be a claim
-    // about a cursor that does not exist.
     out.push_str(&format!(
         "  {}\n",
         style.paint(Role::SteelGrey, &bridge_keys(None, width))
     ));
     out
+}
+
+/// **Spans as a terminal string** — the second emitter for anything described in
+/// [`Span`]s.
+///
+/// `Table` already has this pair (`render` for `--once`, `spans` for the live
+/// screen) and the panel layout needs the same, because `033`'s boxes are built
+/// out of spans and `--once` writes to stdout. Without it the two surfaces could
+/// not share a layout, which is how they came to have two.
+///
+/// Trailing spaces are cut: a box's padding is real on a screen that has a
+/// background to paint, and in a pipe it is invisible noise that a golden fixture
+/// then has to store exactly.
+fn spans_to_text(lines: &[Vec<Span>], style: Style) -> String {
+    let mut out = String::new();
+    for line in lines {
+        let mut row = String::new();
+        for span in line {
+            let text = span.text.as_str();
+            row.push_str(&match (span.role, span.bold) {
+                (Some(role), true) => style.strong(role, text),
+                (Some(role), false) => style.paint(role, text),
+                (None, _) => text.to_string(),
+            });
+        }
+        out.push_str(row.trim_end());
+        out.push('\n');
+    }
+    out
+}
+
+/// **The width at which the command centre draws all five boxes side by side**
+/// — `033`'s wide mock-up.
+///
+/// Below it the screen drops whole panels rather than shedding their columns: a
+/// box one column too narrow wraps, and a wrapped box is a broken frame, whereas
+/// a missing box is a screen that admits what it could not fit.
+pub const WIDE: usize = 138;
+
+/// Two spaces between boxes, the width `hjoin` inserts between the two it joins.
+pub(crate) const GAP: usize = 2;
+
+/// JOBS gets the wider half of the top row — it carries the most columns.
+fn jobs_width(width: usize) -> usize {
+    (width - GAP) * 3 / 5
+}
+
+/// **The command centre, laid out once for both surfaces** — `033`'s two
+/// mock-ups, chosen by [`WIDE`].
+///
+/// **Here rather than in `bridge.rs` because `--once` has to draw it too.**
+/// `033` built the panels inside the live `paint()` path, so `armada bridge
+/// --once` went on printing the single pre-`033` JOB table at every width, with
+/// no boxes at all — while `verbs/bridge.rs` said *"the screen and `--once` draw
+/// the same value"* and the function that drew that table said one description
+/// *"is what stops the screen and `--once` from becoming two layouts"*. They had
+/// become two. This is the one description both call.
+///
+/// **It also makes the panels testable.** `--once` is how a golden fixture, a
+/// test and a person reading a report see the Bridge, so a panel that exists
+/// only in the live path is a panel no fixture covers — which is why `033`'s
+/// 138- and 96-column fixtures were measuring the old shape.
+///
+/// `cursor` is the row under the caret, or `None` when nobody is watching:
+/// `--once` has no cursor, and a frame a pipe reads describes the fleet rather
+/// than a selection.
+///
+/// **The four boxes beside JOBS are drawn only when the frame carries them.** A
+/// frame read for the fleet alone says so with `panels: None`, and this draws
+/// what it has — the alternative is three reads behind every redraw of one box.
+pub fn command_centre(
+    data: &BridgeData,
+    workspace_id: &str,
+    cwd: &str,
+    style: Style,
+    width: usize,
+    cursor: Option<usize>,
+    keys: bool,
+) -> Vec<Vec<Span>> {
+    let mut lines = armada_header(&data.windows, workspace_id, cwd, width);
+    lines.push(Vec::new());
+
+    let Some(panels) = data.panels.as_deref() else {
+        // **A fleet-only frame draws the fleet.** Not a different layout: the
+        // same header, the same JOBS box, and nothing claimed about panels
+        // nobody gathered.
+        lines.extend(jobs_box(data, style, cursor, width));
+        if keys {
+            lines.extend(command_centre_keys_narrow(width));
+        }
+        return lines;
+    };
+
+    if width >= WIDE {
+        let jobs_inbox = frame::hjoin(
+            jobs_box(data, style, cursor, jobs_width(width)),
+            inbox_box(&panels.inbox, style, width - jobs_width(width) - GAP),
+            GAP,
+            width,
+        );
+        lines.extend(jobs_inbox);
+        lines.push(Vec::new());
+
+        let third = (width - 2 * GAP) / 3;
+        let manifest_guild = frame::hjoin(
+            manifest_box(third),
+            guild_box(&panels.guild, style, third),
+            GAP,
+            2 * third + GAP,
+        );
+        let three = frame::hjoin(
+            manifest_guild,
+            system_box(&panels.system, style, width - 2 * third - 2 * GAP),
+            GAP,
+            width,
+        );
+        lines.extend(three);
+        if keys {
+            lines.push(Vec::new());
+            lines.extend(command_centre_keys_wide(width));
+        }
+    } else {
+        lines.extend(jobs_box(data, style, cursor, width));
+        lines.extend(inbox_box(&panels.inbox, style, width));
+        if keys {
+            lines.extend(command_centre_keys_narrow(width));
+        }
+    }
+    lines
 }
 
 /// The Bridge's table, described once for both surfaces.
@@ -1150,7 +1282,15 @@ pub fn armada_header(
     cwd: &str,
     width: usize,
 ) -> Vec<Vec<Span>> {
-    let mut pieces = vec![format!("armada {workspace_id}"), cwd.to_string()];
+    // **Empty pieces are dropped rather than joined.** A frame that knows no
+    // workspace or no directory would otherwise draw the separator anyway, and
+    // the line came out as `armada` followed by a gap wide enough to read as a
+    // missing column.
+    let mut pieces: Vec<String> = [format!("armada {workspace_id}").trim().to_string()]
+        .into_iter()
+        .chain(std::iter::once(cwd.to_string()))
+        .filter(|piece| !piece.is_empty())
+        .collect();
     pieces.extend(window_facts(windows));
     let line = vec![Span {
         text: format!(" {}", pieces.join("   ")),

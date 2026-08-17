@@ -296,65 +296,111 @@ pub fn titled_box(title: &str, lines: Vec<Vec<Span>>, width: usize) -> Vec<Vec<S
     result
 }
 
-/// Join two boxes side-by-side with a gap between them.
+/// Two boxes side by side, with `gap` spaces between them.
 ///
-/// Places the left box and right box beside each other with `gap` spaces
-/// between them. Pads the shorter box with blank lines to match the taller
-/// one's height. All output lines are padded to exactly `width`.
+/// **Every left-hand line is padded to the left box's own width**, not to the
+/// width of its own content, because that is what keeps the right box in one
+/// column. This padded the shorter box with *empty* lines instead, so a right
+/// box taller than the left one had its extra rows begin at column `gap`:
+///
+/// ```text
+/// ┌─ MANIFEST ──┐  ┌─ GUILD ─────┐
+///  not wired yet    1 skill
+/// └─────────────┘    4 workflows      <- MANIFEST has ended, so GUILD slid left
+///   └─────────────┘                   <- and its border with it
+/// ```
+///
+/// **Found by the first golden fixture the wide command centre ever had.** The
+/// bug is in the layout, so the live screen drew it too, for as long as `033`'s
+/// panels existed only in `paint()` where no fixture could reach them
+/// (`crates/helm/tests/render_golden.rs`'s `the_wide_bridge_matches_its_fixture`).
+///
+/// A ragged left box does the same thing at any height — a line shorter than its
+/// siblings shifts that row of the right box — so the padding is per line rather
+/// than only for the rows the left box does not have.
+///
+/// All output lines are padded to exactly `width`.
 pub fn hjoin(
     left: Vec<Vec<Span>>,
     right: Vec<Vec<Span>>,
     gap: usize,
     width: usize,
 ) -> Vec<Vec<Span>> {
-    let max_height = left.len().max(right.len());
+    let height = left.len().max(right.len());
+    // **The left box's width is the widest line in it**, which is what its own
+    // border makes it, rather than anything the caller has to tell us.
+    let column: usize = left.iter().map(|line| line_width(line)).max().unwrap_or(0);
+
+    let left_padded = grown_to(left, height);
+    let right_padded = grown_to(right, height);
+
     let mut result = Vec::new();
-
-    // Pad both boxes to max height with empty lines
-    let mut left_padded = left;
-    while left_padded.len() < max_height {
-        left_padded.push(Vec::new());
-    }
-
-    let mut right_padded = right;
-    while right_padded.len() < max_height {
-        right_padded.push(Vec::new());
-    }
-
-    // Combine lines
     for (left_line, right_line) in left_padded.iter().zip(right_padded.iter()) {
-        let left_width: usize = left_line.iter().map(|s| display_width(&s.text)).sum();
-        let right_width: usize = right_line.iter().map(|s| display_width(&s.text)).sum();
-
         let mut combined = left_line.clone();
 
-        // Add gap
-        if gap > 0 {
-            combined.push(Span {
-                text: " ".repeat(gap),
-                role: None,
-                bold: false,
-            });
-        }
-
-        // Add right content
+        // Out to the left box's column, then the gap, then the right box.
+        pad_by(
+            &mut combined,
+            column.saturating_sub(line_width(left_line)) + gap,
+        );
         combined.extend(right_line.clone());
 
-        // Pad to total width
-        let combined_width = left_width + gap + right_width;
-        if combined_width < width {
-            let padding = width - combined_width;
-            combined.push(Span {
-                text: " ".repeat(padding),
-                role: None,
-                bold: false,
-            });
-        }
-
+        pad_by(
+            &mut combined,
+            width.saturating_sub(column + gap + line_width(right_line)),
+        );
         result.push(combined);
     }
-
     result
+}
+
+/// A box grown to `height`, **with its bottom border still at the bottom**.
+///
+/// The blank rows go in above the last line rather than after it. Appending them
+/// left the shorter box's border where its content ended, so a row of boxes of
+/// unequal height closed on two or three different lines:
+///
+/// ```text
+/// ┌─ MANIFEST ──┐  ┌─ GUILD ─────┐
+///  not wired yet    1 skill
+/// └─────────────┘    4 workflows
+///                  └─────────────┘   <- one row lower than MANIFEST's
+/// ```
+///
+/// A box here is a top border, content, and a bottom border, with no sides —
+/// [`titled_box`] draws no `│`, which is what makes a blank interior row just
+/// spaces and this padding honest.
+///
+/// An empty box grows to blank lines: there is no border to keep at the bottom.
+fn grown_to(mut lines: Vec<Vec<Span>>, height: usize) -> Vec<Vec<Span>> {
+    if lines.len() >= height {
+        return lines;
+    }
+    if lines.is_empty() {
+        lines.resize(height, Vec::new());
+        return lines;
+    }
+    let bottom = lines.pop().unwrap_or_default();
+    lines.resize(height - 1, Vec::new());
+    lines.push(bottom);
+    lines
+}
+
+/// How many columns a line of spans occupies.
+fn line_width(line: &[Span]) -> usize {
+    line.iter().map(|span| display_width(&span.text)).sum()
+}
+
+/// `n` spaces on the end, and nothing at all when `n` is zero — an empty span
+/// would be a piece a caller has to skip.
+fn pad_by(line: &mut Vec<Span>, n: usize) {
+    if n > 0 {
+        line.push(Span {
+            text: " ".repeat(n),
+            role: None,
+            bold: false,
+        });
+    }
 }
 
 #[cfg(test)]

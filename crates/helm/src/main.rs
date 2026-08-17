@@ -1189,7 +1189,7 @@ fn bridge(
             // **Quitting leaves the last frame in the scrollback.** The screen
             // is gone and what it was showing is not, which is the difference
             // between closing a view and losing what you were looking at.
-            Departure::Quit => return Ok(verbs::bridge::envelope(frame)),
+            Departure::Quit => return Ok(verbs::bridge::envelope(frame, place)),
 
             // `armada fleet board <job> --exec`, exactly.
             //
@@ -1242,7 +1242,7 @@ fn bridge(
                     terminal,
                     &format!("Your answer to `{}`:", target.job),
                 ) else {
-                    return Ok(verbs::bridge::envelope(frame));
+                    return Ok(verbs::bridge::envelope(frame, place));
                 };
                 return verbs::fleet::answer(run, &SystemClock, place, &target.uuid, &said);
             }
