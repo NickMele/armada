@@ -11,13 +11,30 @@ branch in the state a person can merge without asking you anything.
 > Copied into your guild by `armada guild init`. It is yours from that moment —
 > `armada guild edit skills/land-branch/SKILL.md` changes it.
 
-## Landing is not merging, and it never will be
+## Landing is not merging — but something else now merges
 
 Your gate is `branch_exists`: the work is committed on this Job's own branch, and `git status` is
-clean. **Nothing in Armada merges to the default branch**, and that is deliberate — an agent
-merging unattended is the one thing that cannot be taken back.
+clean. **You do not merge, and you never will** — an *agent* merging unattended is the one thing
+that cannot be taken back.
 
-So the finished state is: a branch, complete, green, and readable. A person decides the rest.
+What changed is what happens after you. This section used to end *"a person decides the rest"*, and
+that was the defect: every finished Job piled up against somebody who had to read it, and while that
+queue went unread the fleet's output was invisible. [`034`](../../../../docs/reserved/034-the-job-daemon-lands-the-work.md)
+gives that job to a daemon, which pushes your branch, opens a PR, and merges it **only** when every
+CI check is green. That is a mechanical condition rather than a judgement, which is the whole reason
+it is allowed to be automatic and you are not.
+
+Two things follow for you:
+
+- **`git push` is still denied to you, and the daemon pushes.** A push is the first irreversible step
+  — it leaves the machine — and the PR's body is written from your Job's own record rather than from
+  your summary of yourself.
+- **CI can fail after you have finished.** If it does, you will be resumed with the failing checks
+  and their logs, exactly as a local gate failure resumes you. That is not a new kind of work; it is
+  the same fix-what-the-log-says loop, with the log coming from CI.
+
+So the finished state is: a branch, complete, green, readable, and **pushed by something other than
+you**.
 
 ## Commit everything, and check that you did
 

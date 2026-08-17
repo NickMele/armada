@@ -1936,6 +1936,15 @@ leases. There is no state that outlives all Armada processes and therefore nothi
 resident daemon to hold. (Contrast a tool whose pipeline outlives every command that touches
 it — that shape genuinely needs a daemon. Armada's does not.)
 
+**Corrected 2026-08-17 by [`034`](reserved/034-the-job-daemon-lands-the-work.md), and only the last
+sentence.** Everything above about *leases* still holds: a detached run is long-lived, it renews its
+own, and a daemon would buy only promptness. What no longer holds is *"there is no state that
+outlives all Armada processes"* — a pull request does. It is opened by one command, decided by CI
+minutes or hours later, and merged by nobody unless something is watching. That is precisely the
+"pipeline outlives every command that touches it" shape this paragraph names as the one that
+genuinely needs a daemon, and it arrived when landing stopped ending at a branch. So Armada gains a
+daemon for **that** state, and not for leases, which are still held by the process doing the work.
+
 ### 4.3.1 `~/.armada/machine.yml` — machine capacity, never committed
 
 ```yaml

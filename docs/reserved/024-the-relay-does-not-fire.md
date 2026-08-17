@@ -47,6 +47,15 @@ Two things follow, and the second is the sharper one:
   until a person runs `armada fleet tick`. The backstop sweep exists and is correct, and nothing
   calls it either.
 
+  **Answered 2026-08-17 by [`034`](034-the-job-daemon-lands-the-work.md): a daemon calls it.** Two
+  facts narrowed this first, and both are worth keeping. Every Drone's `Stop` hook already sweeps the
+  *whole* fleet rather than its own Job — which is why `armada_fleet::pass` takes a machine-wide lock
+  — so while anything at all is alive the fleet is being swept. The unrecoverable state is therefore
+  a fleet where **nothing** is alive: no hook will fire again and it stays frozen until a person
+  types a verb. And a Job is not a process — it is a record in `~/.armada/jobs/` — so it cannot
+  notice that time passed on its own account. The watcher is always some other process, and `034`
+  names it.
+
 ## What the hook does and does not explain — corrected 2026-08-16
 
 **A `Stop` hook does fire under `--print`.** Measured directly, with a minimal probe rather than
