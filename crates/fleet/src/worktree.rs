@@ -9,7 +9,7 @@
 //! worktree add` without `-b` checks out an existing branch, which silently puts
 //! two Jobs on one branch and makes their commits interleave.
 
-use armada_core::ctx::{Run, RunRequest};
+use armada_core::ctx::{Run, RunRequest, StdioMode};
 use armada_core::error::{ArmadaError, ErrClass};
 use armada_manifest::git::GIT_TIMEOUT;
 use std::path::Path;
@@ -42,6 +42,30 @@ pub fn add(
     branch: &str,
     from: Option<&str>,
 ) -> Result<(), ArmadaError> {
+    // # A branch that already exists is refused by name, not by git
+    //
+    // **`armada fleet kill --keep-branch` and `armada fleet spawn` are designed
+    // to be used together and collided.** Keeping a branch is how work survives
+    // a Job being ended; respawning the same handle then died with git's own
+    // sentence — *"could not create the worktree: Preparing worktree (new
+    // branch 'armada/column-order')"* — which names the operation that failed
+    // and not the reason, and offers nothing to do about it.
+    //
+    // Recorded twice on a real machine. The refusal now says which branch, that
+    // it holds work, and the two ways out — because a caller who typed
+    // `--keep-branch` an hour ago has forgotten, and a caller who did not is
+    // about to discover somebody else's branch.
+    if branch_exists(run, repo_root, branch) {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: branch.to_string(),
+            message: format!("`{branch}` already exists and holds work"),
+            next_action: Some(format!(
+                "spawn under another name, or `git branch -D {branch}` if that work is finished"
+            )),
+        });
+    }
+
     // The parent directory is Fleet's policy rather than git's: `git worktree
     // add` creates the leaf and not `~/.armada/workspaces/<repo>/`.
     if let Some(parent) = path.parent() {
@@ -207,6 +231,26 @@ fn first_line(stderr: &str) -> String {
         .to_string()
 }
 
+/// Whether a branch of this name is already in the repository.
+///
+/// **Answered with `git rev-parse --verify`, and a failure means no.** The
+/// command exits non-zero for a ref that is not there, which is the question
+/// being asked; a git that could not run at all is a problem the caller is
+/// about to hit anyway, one line later, with a better message than this
+/// function could invent.
+fn branch_exists(run: &impl Run, repo_root: &Path, branch: &str) -> bool {
+    let argv = vec![
+        "git".to_string(),
+        "rev-parse".to_string(),
+        "--verify".to_string(),
+        "--quiet".to_string(),
+        format!("refs/heads/{branch}"),
+    ];
+    let mut request = RunRequest::new(argv, repo_root.to_path_buf());
+    request.stdio = StdioMode::Capture;
+    run.call(&request).is_ok_and(|output| output.ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,6 +263,14 @@ mod tests {
         code: i32,
         stdout: String,
         stderr: String,
+        /// Whether `git rev-parse --verify refs/heads/<branch>` finds one.
+        ///
+        /// **Answered separately from `code`, because `add` now asks two
+        /// questions of git and they have different answers.** A fake that
+        /// said yes to everything reported every branch as already taken, so
+        /// `add` refused in every test — which is how this field earned its
+        /// place rather than being decoration.
+        branch_here: bool,
     }
 
     impl FakeRun {
@@ -228,6 +280,16 @@ mod tests {
                 code: 0,
                 stdout: String::new(),
                 stderr: String::new(),
+                branch_here: false,
+            }
+        }
+
+        /// The same, in a repository that already has the branch — what
+        /// `armada fleet kill --keep-branch` leaves behind.
+        fn holding_the_branch() -> FakeRun {
+            FakeRun {
+                branch_here: true,
+                ..FakeRun::ok()
             }
         }
 
@@ -239,14 +301,32 @@ mod tests {
             }
         }
 
+        /// The command the function under test actually performs.
+        ///
+        /// **The last one, not the first.** `add` asks git two questions now —
+        /// does this branch already exist, and then make the worktree — so a
+        /// helper returning `seen[0]` would assert about the probe. Every other
+        /// function here runs exactly one command, for which last and first are
+        /// the same.
         fn argv(&self) -> Vec<String> {
-            self.seen.borrow()[0].clone()
+            self.seen.borrow().last().cloned().unwrap_or_default()
         }
     }
 
     impl Run for FakeRun {
         fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
             self.seen.borrow_mut().push(request.argv.clone());
+            // The branch probe is its own question: absent unless this fake was
+            // built to hold one.
+            if request.argv.iter().any(|word| word == "rev-parse") {
+                return Ok(RunOutput {
+                    code: Some(i32::from(!self.branch_here)),
+                    signal: None,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    timed_out: false,
+                });
+            }
             Ok(RunOutput {
                 code: Some(self.code),
                 signal: None,
@@ -394,8 +474,12 @@ mod tests {
         impl Run for Cwd {
             fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
                 *self.0.borrow_mut() = Some(request.cwd.clone());
+                // **The branch probe answers "absent".** `add` refuses a branch
+                // that already exists, and a fake that succeeded at everything
+                // would report every branch as taken.
+                let probe = request.argv.iter().any(|word| word == "rev-parse");
                 Ok(RunOutput {
-                    code: Some(0),
+                    code: Some(i32::from(probe)),
                     signal: None,
                     stdout: String::new(),
                     stderr: String::new(),
@@ -455,6 +539,49 @@ mod tests {
         assert_eq!(error.class, ErrClass::ToolFailed);
         assert_eq!(error.class.exit_code(), 1);
         assert!(error.message.contains("already checked out"), "{error}");
+    }
+
+    /// **A branch that already exists is refused by name, not by git.**
+    ///
+    /// `armada fleet kill --keep-branch` and `armada fleet spawn` are designed
+    /// to be used together and collided: keeping a branch is how work survives
+    /// a Job ending, and respawning the same handle then died with git's own
+    /// sentence — *"could not create the worktree: Preparing worktree (new
+    /// branch 'armada/column-order')"* — which names the operation that failed
+    /// and not the reason, and offers nothing to do about it. Recorded twice on
+    /// a real machine before it was fixed.
+    #[test]
+    fn a_branch_that_already_holds_work_is_refused_by_name() {
+        let run = FakeRun::holding_the_branch();
+        let error = add(
+            &run,
+            Path::new("/code/api"),
+            Path::new("/w/rate-limit"),
+            "armada/rate-limit",
+            None,
+        )
+        .unwrap_err();
+
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert!(error.message.contains("armada/rate-limit"), "{error}");
+        assert!(error.message.contains("holds work"), "{error}");
+        // **Both ways out**, because a caller who typed `--keep-branch` an hour
+        // ago has forgotten and one who did not is about to discover somebody
+        // else's branch.
+        let next = error.next_action.unwrap_or_default();
+        assert!(next.contains("another name"), "{next}");
+        assert!(next.contains("git branch -D armada/rate-limit"), "{next}");
+
+        // **And nothing was created.** A refusal that had already run
+        // `git worktree add` would be the same failure with a nicer message.
+        assert!(
+            !run.seen
+                .borrow()
+                .iter()
+                .any(|argv| argv.contains(&"add".to_string())),
+            "the worktree was attempted anyway: {:?}",
+            run.seen.borrow()
+        );
     }
 
     /// git missing is the machine being incomplete rather than the repository
