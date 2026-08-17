@@ -53,17 +53,19 @@ directly. Only `JOBS` has a verb wired to a row today — `enter`, `d`, `a`, `x`
 the focused Job and are inert while a different panel is focused, because acting on a row the
 reader cannot see would be worse than the key doing nothing.
 
-**Two gaps, named rather than hidden**, both because they need App-level state
+**One gap left, named rather than hidden**, because it needs App-level state
 (`crates/helm/src/app.rs`) the Bridge's read path was built to do without:
 
-- `MANIFEST` draws one row saying it is not wired — `check::status`/`status::run` need
-  `App<R, C, F>`, which opens `manifest.db` and reads `MachineConfig`. Wiring it in is a real fix
-  (build the App once at `watch()`'s entry, not per redraw) but it reverses a deliberate line in
-  `main.rs`'s dispatch, so it is a decision rather than a Drone's to make unilaterally
-  (`PLAN.md`'s audit table).
 - `INBOX` is reachable by `tab`/`2` but has no cursor of its own yet — no verb acts on one of its
   rows today, so the churn of threading a row count through `core::fleet::bridge::press`'s 88 test
   call sites is not yet earned.
+
+`MANIFEST` draws two tables — `CHECK` (`armada manifest check --status`) and `WORKSPACE`
+(`armada manifest status --all`) — reading through an `App<R, C, F>` `watch()` builds once, at the
+screen's entry, not once per redraw (`crates/helm/src/bridge.rs`'s `watch()`,
+`crates/helm/src/verbs/bridge.rs`'s `build_app`/`manifest_of`). A machine with no `manifest.db`, or
+one where it will not open, still opens the Bridge — the panel draws the refusal in its own box,
+the same rule GUILD and SYSTEM already follow for their own reads.
 
 `d`, or `enter` from `INBOX` once it has a cursor, opens the Job detail full screen: identity,
 `WORKFLOW` beside `NEEDS YOU`, `TIMELINE · what the gate did` full width, `REPORTS · the Drone's

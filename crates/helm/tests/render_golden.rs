@@ -33,11 +33,11 @@ use armada_core::envelope::{
     ComponentsData, DispatchData, DoctorData, Envelope, Evidence, FailureData, FailuresData,
     Finding, FleetLsData, GateRow, GrantedCommand, GuildChange, GuildChangeData, GuildChoice,
     GuildItemData, GuildItemRow, GuildListData, GuildSyncData, Headline, InboxData, InboxRow,
-    InitData, InitDryRun, JobRow, Locality, MachineInitData, MenuData, MenuRow, NoteRow,
-    PortReport, Problem, Projection, Released, ResolvedSkillView, ResultRow, RunView, ScanData,
-    ServicesData, SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData,
-    StepRow, Sync, SyncItem, TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
-    Window,
+    InitData, InitDryRun, JobRow, Locality, MachineInitData, ManifestPanel, MenuData, MenuRow,
+    NoteRow, PortReport, Problem, Projection, Released, ResolvedSkillView, ResultRow, RunView,
+    ScanData, ServicesData, SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData,
+    StatusData, StepRow, Sync, SyncItem, TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun,
+    VerifyData, Window,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -165,6 +165,34 @@ fn panels() -> Box<armada_core::envelope::Panels> {
         ),
     ];
     Box::new(armada_core::envelope::Panels {
+        manifest: ManifestPanel::Read {
+            workspace: Some(CheckData {
+                run_id: "01M00WRY00CYTZ44".to_string(),
+                results: vec![
+                    check_row("armada:test", Status::Running, 165_000, None),
+                    check_row("armada:lint", Status::Pass, 46_000, None),
+                ],
+                reaped_runs: Vec::new(),
+                detached: None,
+            }),
+            machine: StatusData {
+                scope: "all".to_string(),
+                results: vec![
+                    {
+                        let mut row = ResultRow::new("armada", Status::Ok);
+                        row.leases = vec!["run:armada".to_string()];
+                        row
+                    },
+                    {
+                        let mut row = ResultRow::new("orders", Status::Ok);
+                        row.leases = vec!["run:orders".to_string()];
+                        row.port_block = Some(block());
+                        row
+                    },
+                ],
+                unreclaimed: Vec::new(),
+            },
+        },
         inbox: InboxData {
             open: 1,
             results: vec![InboxRow {

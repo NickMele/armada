@@ -18,10 +18,12 @@
 //! [`armada_core::fleet::bridge`]'s; what lives here is reading an event,
 //! reading a frame on a cadence, and drawing.
 
+use std::collections::BTreeMap;
 use std::io::Stdout;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
-use armada_core::ctx::{Clock, Run};
+use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::ShowData;
 use armada_core::error::ArmadaError;
 use armada_core::fleet::bridge::{self, Action, Departure, Done, Key, Mode, Pressed, Screen};
@@ -454,14 +456,28 @@ fn plain(text: impl Into<String>) -> Span {
 /// to whatever is left of the interval, so a keypress is answered immediately
 /// and the fleet is re-read exactly as often as `--interval` says — rather than
 /// the Bridge sleeping through a keystroke or spinning on an empty queue.
-// Eight, and each is a seam rather than a parameter: the two `ctx` ports, where
-// the fleet is, what was asked for, the filter, the two halves of the terminal,
-// and what to do when a key acts. Bundling them would be one struct per call
-// site with no other use.
+///
+/// **`App` is built once, here, before the screen is even taken.** MANIFEST
+/// needs `App<R, C, F>` and nothing else on this screen does
+/// (`crates/helm/src/verbs/bridge.rs`'s `build_app`) — building it before
+/// [`Alt::enter`] means a refusal never has to fight the alternate screen for
+/// somewhere to be seen, and building it once here rather than inside the
+/// loop below is the whole of what keeps the redraw "a directory read, a
+/// transcript tail and a `ps`" (`verbs/bridge.rs`'s own doc comment). A
+/// caller that re-enters `watch()` after a spawn (`main.rs`'s `bridge()`
+/// loop) rebuilds it — once per *call*, not once per *process*.
+// Eleven, and each is a seam rather than a parameter: the three `ctx` ports,
+// `home`/`inherited` for the `App` this now builds, where the fleet is, what
+// was asked for, the filter, the two halves of the terminal, and what to do
+// when a key acts. Bundling them would be one struct per call site with no
+// other use.
 #[allow(clippy::too_many_arguments)]
-pub fn watch<R: Run, C: Clock>(
+pub fn watch<R: Run + Copy, C: Clock + Copy, F: Fetch>(
     run: &R,
     now: &C,
+    fetch: F,
+    home: &Path,
+    inherited: &BTreeMap<String, String>,
     place: &Where,
     options: &Options,
     screen: &mut Screen,
@@ -469,6 +485,8 @@ pub fn watch<R: Run, C: Clock>(
     terminal: Terminal,
     act: &mut dyn FnMut(&Action) -> Done,
 ) -> Result<(BridgeView, Departure), ArmadaError> {
+    let mut app = crate::verbs::bridge::build_app(run, now, fetch, place, home, inherited);
+
     let raw = Restore::install().map_err(|_| crate::verbs::bridge::no_screen())?;
     let alt = Alt::enter().map_err(|_| crate::verbs::bridge::no_screen())?;
     let backend = ratatui::backend::CrosstermBackend::new(std::io::stdout());
@@ -484,7 +502,13 @@ pub fn watch<R: Run, C: Clock>(
 
     let interval = Duration::from_secs(options.interval_s);
     let outcome = loop {
-        let centre = crate::verbs::bridge::read_all(run, now, place, screen.filter.as_ref())?;
+        // **MANIFEST is re-read every redraw; `App` itself is not.** A check
+        // still `RUNNING` needs to be seen finishing, and `manifest_of` only
+        // ever calls the two verbs already public for exactly this — nothing
+        // here reopens `manifest.db`.
+        let manifest = crate::verbs::bridge::manifest_of(&mut app);
+        let centre =
+            crate::verbs::bridge::read_all(run, now, place, screen.filter.as_ref(), manifest)?;
         let frame = centre.fleet.clone();
         screen.cursor.clamp(frame.rows.len());
         // **Re-read on the same cadence as the frame.** An open detail pane is
@@ -720,6 +744,14 @@ mod tests {
         BridgeView {
             fleet,
             inbox: armada_core::envelope::InboxData::default(),
+            manifest: armada_core::envelope::ManifestPanel::Read {
+                workspace: None,
+                machine: armada_core::envelope::StatusData {
+                    scope: "all".to_string(),
+                    results: Vec::new(),
+                    unreclaimed: Vec::new(),
+                },
+            },
             guild: armada_core::envelope::GuildListData {
                 at: String::new(),
                 items: Vec::new(),
@@ -814,6 +846,44 @@ mod tests {
                     crate::render::term::display_width(&line)
                 );
             }
+        }
+    }
+
+    /// **A MANIFEST refusal draws inside its own box; it does not end the
+    /// screen.** The same rule GUILD/SYSTEM already follow —
+    /// `unreadable_guild`/`unreadable_system` (`75f697c`,
+    /// `verbs/bridge.rs`) — carried over to MANIFEST: a machine with no
+    /// `manifest.db`, or one where it will not open, still opens the Bridge.
+    #[test]
+    fn a_manifest_refusal_draws_in_its_own_box_and_the_bridge_still_opens() {
+        let screen = Screen::default();
+        let mut broken = view(frame());
+        broken.manifest = armada_core::envelope::ManifestPanel::Unreadable {
+            message: "manifest.db would not open".to_string(),
+        };
+        let drawn = text(&paint(
+            &broken,
+            &screen,
+            None,
+            "c24a68b6",
+            "~/Development/armada",
+            Style::plain(),
+            WIDE,
+        ));
+        let all = drawn.join("\n");
+        assert!(all.contains("MANIFEST"), "{all}");
+        assert!(all.contains("manifest.db would not open"), "{all}");
+        // The rest of the screen is untouched — a refusal here must not have
+        // taken the fleet table down with it.
+        assert!(all.contains("rate-limit"), "the fleet went away:\n{all}");
+        assert!(all.contains("JOBS ("), "{all}");
+
+        for line in &drawn {
+            assert!(
+                crate::render::term::display_width(line) <= WIDE,
+                "a line ran {} columns wide: {line}",
+                crate::render::term::display_width(line)
+            );
         }
     }
 

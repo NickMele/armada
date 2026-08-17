@@ -3097,9 +3097,20 @@ fn read_all_reads_the_fleet_the_inbox_the_guild_and_system_through_their_own_ver
         .status()
         .expect("git init the scratch guild");
 
-    let view =
-        armada_helm::verbs::bridge::read_all(&run, &FrozenClock::new(), &scratch.place(), None)
-            .expect("every panel but MANIFEST reads");
+    let view = armada_helm::verbs::bridge::read_all(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        None,
+        // **MANIFEST is not this test's subject.** It is computed by the
+        // caller now (`manifest_of`, over an `App` this test never builds),
+        // so `read_all` is handed a placeholder the same way a caller with
+        // no `App` would.
+        armada_core::envelope::ManifestPanel::Unreadable {
+            message: "not built for this test".to_string(),
+        },
+    )
+    .expect("every panel but MANIFEST reads");
 
     // The fleet half is `read`, unchanged — the Job just spawned is on it.
     assert_eq!(view.fleet.rows.len(), 1);
@@ -3116,6 +3127,70 @@ fn read_all_reads_the_fleet_the_inbox_the_guild_and_system_through_their_own_ver
 
     // `armada doctor` always answers with something, even a clean machine.
     assert!(!view.system.results.is_empty());
+}
+
+// -------------------------------------------------------- bridge::manifest_of
+//
+// `PLAN.md` §8: `App` is built once, at `watch()`'s entry, and `manifest_of`
+// is what turns that attempt — or its failure — into the MANIFEST panel.
+
+/// **`App::build` failing folds into the refusal box, not a torn-down
+/// screen.** The same rule `unreadable_guild`/`unreadable_system` already
+/// follow (`75f697c`) — `manifest_of` never needs a real, broken `manifest.db`
+/// to prove this, because it only ever sees the `Result` `build_app` handed
+/// it.
+#[test]
+fn manifest_of_folds_a_build_failure_into_the_refusal_box() {
+    let refusal = armada_core::error::ArmadaError {
+        class: armada_core::error::ErrClass::Environment,
+        r#where: "manifest.db".to_string(),
+        message: "could not open manifest.db".to_string(),
+        next_action: Some("check this machine's ~/.armada permissions".to_string()),
+    };
+    let mut built: Result<
+        armada_helm::app::App<
+            RealRun,
+            armada_manifest::clock::SystemClock,
+            armada_manifest::net::RealFetch,
+        >,
+        armada_core::error::ArmadaError,
+    > = Err(refusal);
+
+    assert_eq!(
+        armada_helm::verbs::bridge::manifest_of(&mut built),
+        armada_core::envelope::ManifestPanel::Unreadable {
+            message: "check this machine's ~/.armada permissions".to_string(),
+        }
+    );
+}
+
+/// **A machine with no workspace under it is the ordinary case, not a
+/// refusal.** The Bridge is machine-scoped — `main.rs` routes it around
+/// workspace resolution the same way `armada fleet`/`armada tasks` are — so
+/// `build_app` still succeeds over `Scratch`'s bare repo (no `armada.yml`),
+/// and `manifest_of` reports `Read` with an absent CHECK half rather than
+/// `Unreadable`.
+#[test]
+fn manifest_of_reads_the_machine_even_with_no_workspace_standing_under_it() {
+    let scratch = Scratch::new();
+    let mut built = armada_helm::verbs::bridge::build_app(
+        &RealRun,
+        &armada_manifest::clock::SystemClock,
+        armada_manifest::net::RealFetch,
+        &scratch.place(),
+        &scratch.place().home,
+        &std::collections::BTreeMap::new(),
+    );
+
+    match armada_helm::verbs::bridge::manifest_of(&mut built) {
+        armada_core::envelope::ManifestPanel::Read { workspace, .. } => {
+            assert!(
+                workspace.is_none(),
+                "no armada.yml under `Scratch`'s repo, so there is no CHECK half to report"
+            );
+        }
+        other => panic!("`App` should have built against a scratch $HOME: {other:?}"),
+    }
 }
 
 /// **A Job's own Drone is what `doctor`'s `drones` row counts**, over Fleet's
@@ -3592,9 +3667,16 @@ fn once_answers_with_the_frame_it_read() {
     );
     scratch.watch(&data.uuid);
 
-    let output =
-        armada_helm::verbs::bridge::once(&run, &FrozenClock::new(), &scratch.place(), None)
-            .expect("a frame");
+    let output = armada_helm::verbs::bridge::once(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        None,
+        armada_core::envelope::ManifestPanel::Unreadable {
+            message: "not built for this test".to_string(),
+        },
+    )
+    .expect("a frame");
     assert_eq!(output.exit_code(), 0);
     match output {
         Output::Bridge(envelope) => {
