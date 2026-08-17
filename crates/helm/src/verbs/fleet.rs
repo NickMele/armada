@@ -24,8 +24,7 @@ use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
     InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
     ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData, SpawnData, StepRow,
-    TickData,
-    TickRow, TransitionRow, VerdictData,
+    TickData, TickRow, TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
