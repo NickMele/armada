@@ -101,12 +101,54 @@ fn poll_until_done(machine: &Machine, repo: &Path, run: &str) -> serde_json::Val
     while Instant::now() < deadline {
         let output = machine.run(repo, &["manifest", "check", "--status", run, "--json"]);
         last = envelope(&output);
-        if last["status"] != "RUNNING" {
+        if last["status"] != "RUNNING" && !still_running(&last).is_empty() {
+            // Fall through and keep polling: the run says it is over and at
+            // least one of its own rows disagrees. See below.
+        } else if last["status"] != "RUNNING" {
             return last;
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    panic!("run {run} never left RUNNING; last poll was {last}");
+    panic!(
+        "run {run} never settled. envelope status {}, rows still running {:?}. \
+         last poll was {last}",
+        last["status"],
+        still_running(&last)
+    );
+}
+
+/// The ids of checks this run still reports as `RUNNING`.
+///
+/// # Why the envelope's own status is not enough to wait on
+///
+/// `a_detached_run_decides_exactly_what_a_foreground_run_decides` compares a
+/// detached run's `results[]` against a foreground run's, and it failed three
+/// times on 2026-08-17 while other Jobs were running on the same machine —
+/// passing every time in isolation. The diff each time was rows: `app:fail` and
+/// `app:pass` still `RUNNING` on the detached side where the foreground side had
+/// `FAILED` and `PASS`.
+///
+/// So waiting for the *envelope* to leave `RUNNING` is waiting on the wrong
+/// thing for what this test asserts. Whether that is a slow write this poll
+/// raced, or `--status` genuinely reporting a terminal run whose rows have not
+/// settled, is **not established** — the failing log was reaped before it could
+/// be read. This waits on what is actually compared, which fixes the flake
+/// either way; and if the second reading is true, the panic above now says so
+/// in those words instead of printing a confusing diff.
+///
+/// A test that only passes when nothing else is running is a test that fails on
+/// a shared CI runner and gets re-run until it goes green, which is how a real
+/// regression is waved through.
+fn still_running(envelope: &serde_json::Value) -> Vec<String> {
+    envelope["data"]["results"]
+        .as_array()
+        .map(|rows| {
+            rows.iter()
+                .filter(|row| row["status"] == "RUNNING" || row["status"] == "WAITING")
+                .filter_map(|row| row["id"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Stop whatever the detached run left behind.
