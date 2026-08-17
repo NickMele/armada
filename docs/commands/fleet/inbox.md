@@ -76,6 +76,10 @@ several is closed `UNRESOLVABLE` and never guessed at, because guessing is the c
 `--json` returns one result per entry with `uuid`, `job_uuid`, `job`, `kind`, `raised_at`,
 `waiting_s`, `body`, `answered` and `closed`. **Resolve on `job_uuid`, never on `job`.**
 
+`data.open` beside them is how many are still waiting on you, after the fold. **Helm's `Stop`
+hook reads exactly that integer** ([`../helm/inbox.md`](../helm/inbox.md)) rather than deciding
+it from the file, because a `raised` line alone cannot say whether a later line settled it.
+
 ## Dependencies
 
 `~/.armada/inbox.jsonl`, and `~/.armada/jobs/` while a legacy entry remains to migrate.

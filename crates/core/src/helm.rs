@@ -703,7 +703,7 @@ pub fn settings_json(hook: &str) -> String {
     crate::fleet::drone::settings_json(hook)
 }
 
-/// What the `Stop` hook runs: **nine lines of shell, and no daemon**.
+/// What the `Stop` hook runs: **a dozen lines of shell, and no daemon**.
 ///
 /// The shape was verified in the M0 spike (PHASES.md §9.1 F3): a hook answering
 /// `{"decision":"block","reason":"…"}` holds the turn open and feeds the reason
@@ -717,9 +717,36 @@ pub fn settings_json(hook: &str) -> String {
 /// exact way a context fills in three days. `fleet.inbox` is one tool call away
 /// and answers properly.
 ///
-/// **No `jq` and no `python`.** A hook that depends on a tool the machine may
-/// not have is a backstop that silently stops backing anything up, so this is
-/// `grep -c` and `printf` against a file of one JSON document per line.
+/// **The count comes from `armada fleet inbox`, and the shell only reads an
+/// integer out of the envelope.** It used to be `grep -c '"answered":false'`
+/// over `inbox.jsonl` directly, and that string is in no inbox anywhere:
+/// `armada_fleet::inbox::Entry::answered` is `Option<String>` with
+/// `skip_serializing_if`, so an unanswered entry has no `answered` key at all
+/// and an answered one carries the answer's text. Measured on the author's own
+/// machine — `grep -c '"answered":false' ~/.armada/inbox.jsonl` answered `0`
+/// against a file of four `raised` and four `closed` lines — the backstop had
+/// never once reported an unread entry, for as long as it had existed.
+///
+/// **And no `grep` over that file could.** The store is append-only and folded
+/// at read time: whether an entry is unread depends on the lines that come
+/// *after* its `raised` line, on whether it carries a `job_uuid` at all, and on
+/// a repeated `uuid` being dropped rather than counted twice — three rules that
+/// live in `armada_fleet::inbox::read` and `Entry::is_open`, each of them a
+/// recorded defect (`docs/reserved/005-inbox-label-not-identity.md`, and the
+/// entry that was written `closed` four times and still drew as open). A second
+/// implementation of that fold, in `sed`, in another crate, against a file
+/// whose format is deliberately private, is how this bug happened once already.
+/// So the hook stops deciding: it asks the verb that owns the question and
+/// reads `data.open`, which is the envelope's own documented contract.
+///
+/// **Still no `jq` and no `python`.** A hook that depends on a tool the machine
+/// may not have is a backstop that silently stops backing anything up. `sed` is
+/// POSIX and is on every machine `/bin/sh` is, and `armada` is not a dependency
+/// this adds — the line above it already runs the same binary, by the same
+/// absolute path, to sweep the fleet.
+///
+/// **The `[ -f "$inbox" ]` test stays, and is why `$inbox` is still written
+/// in.** A machine whose first Job has never run spawns nothing at all.
 /// **It also sweeps the fleet, which is `020` §2's backstop.**
 ///
 /// Every Drone's own `Stop` hook ticks the fleet when its exchange ends
@@ -746,7 +773,11 @@ pub fn stop_hook(inbox: &str, exe: &str) -> String {
          inbox={inbox}\n\
          {armada} fleet tick >/dev/null 2>&1 &\n\
          [ -f \"$inbox\" ] || exit 0\n\
-         unread=$(grep -c '\"answered\":false' \"$inbox\" 2>/dev/null || echo 0)\n\
+         unread=$({armada} fleet inbox --json 2>/dev/null \
+         | sed -n 's/^ *\"open\": *\\([0-9][0-9]*\\),*$/\\1/p')\n\
+         # Not a number is not an answer: a broken read is silence, never a turn\n\
+         # held open for ever over a count nobody could produce.\n\
+         case \"$unread\" in '' | *[!0-9]*) exit 0 ;; esac\n\
          [ \"$unread\" -gt 0 ] || exit 0\n\
          printf '{{\"decision\":\"block\",\"reason\":\"%s unread inbox %s. \
          Call fleet.inbox, then report what needs the user.\"}}\\n' \\\n\
@@ -1329,9 +1360,39 @@ mod tests {
         let script = stop_hook("/scratch/.armada/inbox.jsonl", "/scratch/bin/armada");
         assert!(script.starts_with("#!/bin/sh\n"));
         assert!(script.contains(r#"{"decision":"block""#), "{script}");
-        assert!(script.contains(r#""answered":false"#), "{script}");
         // It names the tool rather than pasting the bodies: §15.2's first rule.
         assert!(script.contains("fleet.inbox"), "{script}");
+    }
+
+    /// **The count is asked for, not guessed at from the file.**
+    ///
+    /// This assertion is the shape of the fix and not the fix itself — what
+    /// proves the hook counts correctly is
+    /// `crates/helm/tests/helm.rs`'s `the_stop_hook_that_was_written_actually
+    /// _blocks_a_turn`, which runs this script against an inbox written by
+    /// `armada_fleet::inbox::raise`. What is worth pinning here is the
+    /// *negative*: the hook must never again decide "unread" by matching a
+    /// string against `inbox.jsonl`, because the fold that decides it does not
+    /// live in any one line of that file.
+    #[test]
+    fn the_backstop_asks_the_verb_rather_than_reading_the_store_itself() {
+        let script = stop_hook("/scratch/.armada/inbox.jsonl", "/scratch/bin/armada");
+        assert!(
+            script.contains("'/scratch/bin/armada' fleet inbox --json"),
+            "{script}"
+        );
+        // The pattern that shipped for the life of the feature and matched
+        // nothing: `answered` is skipped when it is `None`, so the literal
+        // `false` is never written. Measured: `grep -c '"answered":false'` over
+        // a real inbox of eight lines answered 0.
+        assert!(!script.contains(r#""answered":false"#), "{script}");
+        // `$inbox` is read once, by `[ -f ]`, and never as a document. A second
+        // use of it is the hook deciding from the file again.
+        assert_eq!(
+            script.matches("\"$inbox\"").count(),
+            1,
+            "the hook reads the store rather than asking: {script}"
+        );
     }
 
     /// **No dependency the machine might not have.** A backstop that needs `jq`

@@ -162,9 +162,10 @@ impl Entry {
     /// nowhere else and an id off `armada failures` resolved nowhere here.
     ///
     /// **The inbox is not moved into that file**, and the reason is mechanical
-    /// rather than aesthetic: Helm's Stop hook greps `~/.armada/inbox.jsonl`
-    /// for unread entries and its monitor runs `tail -F` on that exact path
-    /// (`armada_core::helm`). Merging the two stores would break the mechanism
+    /// rather than aesthetic: Helm's monitor runs `tail -F` on
+    /// `~/.armada/inbox.jsonl` and its Stop hook tests that exact path before
+    /// asking `armada fleet inbox` how many are open (`armada_core::helm`).
+    /// Merging the two stores would break the mechanism
     /// that makes a raised item reach anybody at all, in exchange for tidier
     /// bytes. So the **writing** stays where it is and the **reading** is
     /// unified: this projection is what lets one `read` produce one list, and

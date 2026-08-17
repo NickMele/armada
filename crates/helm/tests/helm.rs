@@ -381,8 +381,24 @@ fn the_monitor_tails_this_machines_inbox() {
 /// them — the same gap `docs/traps.md` records for argv, arriving at a second
 /// kind of generated command.
 ///
-/// It costs nothing and starts no session: this is `/bin/sh`, `grep` and
-/// `printf` against a scratch inbox.
+/// It costs nothing and starts no session: this is `/bin/sh` and `printf`
+/// against a scratch inbox.
+///
+/// # The inbox is written by [`armada_fleet::inbox::raise`], and it has to be
+///
+/// This test used to write its own fixture lines — `{"job":"a","answered":
+/// false}` — and passed for the whole life of the feature while the hook
+/// matched nothing on any real machine. `Entry::answered` is `Option<String>`
+/// with `skip_serializing_if`, so `"answered":false` is a shape the writer
+/// cannot produce: an unanswered entry has no `answered` key, and an answered
+/// one carries the answer's text. A fixture the writer would never emit proves
+/// only that the fixture and the assertion agree, which is `AGENTS.md`'s rule
+/// about asserting on a string you built yourself.
+///
+/// So every line below goes through `raise`, `answer` and `close`, and the
+/// scratch `$HOME` is handed to `/bin/sh` — the hook names `armada` by absolute
+/// path, so without it both the count and the backgrounded sweep would run
+/// against the developer's own `~/.armada`.
 #[test]
 fn the_stop_hook_that_was_written_actually_blocks_a_turn() {
     let machine = Machine::new();
@@ -414,6 +430,11 @@ fn the_stop_hook_that_was_written_actually_blocks_a_turn() {
     let run = || {
         let out = std::process::Command::new("/bin/sh")
             .arg(hook)
+            // The hook names `armada` absolutely and asks it for the count, so
+            // the machine it reads is whichever `$HOME` says. Without this it is
+            // the developer's.
+            .env("HOME", machine.home.path())
+            .current_dir(machine.root.path())
             .output()
             .expect("/bin/sh runs");
         assert!(out.status.success(), "the hook exited non-zero");
@@ -425,15 +446,40 @@ fn the_stop_hook_that_was_written_actually_blocks_a_turn() {
     assert_eq!(run(), "", "an absent inbox blocked a turn");
 
     let inbox = machine.home.path().join(".armada/inbox.jsonl");
-    std::fs::create_dir_all(inbox.parent().unwrap()).unwrap();
-    std::fs::write(&inbox, "{\"job\":\"a\",\"answered\":true}\n").unwrap();
+    let raise = |id: &str, job_uuid: &str, job: &str, at_ms: u64, body: &str| {
+        armada_fleet::inbox::raise(
+            &inbox,
+            id,
+            job_uuid,
+            job,
+            armada_fleet::inbox::Kind::NeedsHuman,
+            "2026-08-17T09:14:02Z",
+            at_ms,
+            body,
+        )
+        .unwrap();
+    };
+
+    // An entry that has been answered is not unread, and the answer is a second
+    // line rather than an edit — which is exactly why the hook cannot decide
+    // this from any single line of the file.
+    raise("a1111111-e", "job-a", "alpha", 1, "raise the CI timeout?");
+    armada_fleet::inbox::answer(&inbox, "a1111111-e", "yes, 90s").unwrap();
     assert_eq!(run(), "", "an answered inbox blocked a turn");
 
-    std::fs::write(
-        &inbox,
-        "{\"job\":\"a\",\"answered\":true}\n{\"job\":\"b\",\"answered\":false}\n",
-    )
-    .unwrap();
+    // Nor is one whose Job has ended: `closed` is a third line shape, and a
+    // `grep` for anything on the `raised` line counts it as unread for ever.
+    raise("c1111111-e", "job-c", "charlie", 2, "reached its ceiling");
+    armada_fleet::inbox::close(&inbox, "job-c", armada_fleet::inbox::Closed::Ended).unwrap();
+    assert_eq!(run(), "", "a closed inbox blocked a turn");
+
+    raise(
+        "b1111111-e",
+        "job-b",
+        "bravo",
+        3,
+        "which branch do I cut from?",
+    );
     let blocked: Value = serde_json::from_str(run().trim()).expect("the hook emits JSON");
     assert_eq!(
         blocked["decision"], "block",
@@ -449,6 +495,14 @@ fn the_stop_hook_that_was_written_actually_blocks_a_turn() {
         !reason.contains("\"job\""),
         "the hook pasted the entries: {reason}"
     );
+
+    // **Inverted, because a hook that reported `1` unconditionally would pass
+    // every assertion above.** Three entries are on disk and two of them are
+    // settled, so the count is the fold's answer rather than a line count.
+    raise("d1111111-e", "job-d", "delta", 4, "and one more");
+    let blocked: Value = serde_json::from_str(run().trim()).expect("the hook emits JSON");
+    let reason = blocked["reason"].as_str().unwrap();
+    assert!(reason.starts_with("2 unread inbox entries."), "{reason}");
 }
 
 /// **The same conversation each day** (PLAN.md §15.1). A record that says the

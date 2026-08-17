@@ -16,13 +16,21 @@ else — the exact failure the design exists to prevent.
 `~/.armada/inbox.jsonl`. Append-only, one JSON object per line.
 
 ```json
-{"job":"nightly-flake","uuid":"…","kind":"needs_human","raised_at":"…",
- "body":"Reproduced 3/5 runs. Wants to raise CI timeout 30s → 90s.","answered":false}
+{"type":"raised","uuid":"…","job_uuid":"…","job":"nightly-flake","kind":"needs_human",
+ "raised_at":"…","raised_ms":…,"body":"Reproduced 3/5 runs. Wants CI timeout 30s → 90s."}
+{"type":"answered","uuid":"…","answer":"yes, 90s"}
+{"type":"closed","uuid":"…","why":"ended"}
 ```
 
 Append-only means it survives every kind of crash, and **no daemon is involved** — the same
 reasoning that put the ownership store on disk rather than in a process
 ([`PLAN.md`](../../PLAN.md) §4.3).
+
+**An answer is its own line, so "unread" is not a property of any single line.** A reader folds
+the lines that share a `uuid`: a `raised` line with no later `answered` or `closed` line, and a
+`job_uuid` to resolve against, is what open means. This page used to show a single object with
+an `"answered":false` field, and there has never been one — that fiction is what the `Stop` hook
+below was greping for.
 
 ## Who writes to it
 
@@ -76,8 +84,16 @@ cannot finish the work the inbox is about.
 unread body would put raw Drone output into Helm's window at the end of every single turn, which
 is exactly how a context fills in three days. `fleet.inbox` is one tool call away.
 
-**Nine lines of `/bin/sh`, and no `jq`.** A hook that depends on a tool the machine may not have
-is a backstop that silently stops backing anything up.
+**A dozen lines of `/bin/sh`, and no `jq`.** A hook that depends on a tool the machine may not
+have is a backstop that silently stops backing anything up.
+
+**The count comes from `armada fleet inbox --json`, not from a `grep` over the file.** The hook
+reads `data.open` out of the envelope with one `sed`. It cannot decide the question itself: the
+store is folded at read time, so being unread depends on the lines *after* a `raised` line, on
+whether the entry carries a `job_uuid`, and on a repeated `uuid` being dropped — and a second
+implementation of that fold, in shell, is how the hook came to spend the whole of M3 matching a
+string no writer emits. `armada` is not a new dependency; the line above already runs the same
+binary to sweep the fleet.
 
 The two overlap on purpose: the monitor is timely, the hook is **complete**. Neither alone
 gives both.
