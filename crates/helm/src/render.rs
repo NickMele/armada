@@ -1975,7 +1975,30 @@ fn helm(envelope: &Envelope<HelmData>, style: Style, width: usize) -> String {
         envelope.status,
         &[
             data.agent.clone(),
-            format!("conversation {}", data.conversation.word().to_lowercase()),
+            // **The uuid, and the way out of it.**
+            //
+            // This said only *"conversation resumed"*. A resume that Claude Code
+            // then refuses — *"Session ID 1836012e… is already in use"* — leaves
+            // the reader with somebody else's error and nothing to do about it,
+            // and `armada helm` cannot help after the fact: `--exec` replaces
+            // this process, so the refusal is printed by a program Armada is no
+            // longer running.
+            //
+            // Measured 2026-08-17: a session whose transcript was a day old and
+            // which nothing held was refused on every attempt, and the operator
+            // asked whether the process was mine. `--new` was the answer and it
+            // was only in `--help`.
+            //
+            // So the escape hatch goes where the reader is looking at the
+            // moment before the failure, which is `027`'s rule: an item a person
+            // may need to act on carries the keystroke that clears it.
+            match data.conversation {
+                armada_core::envelope::Conversation::Resumed => format!(
+                    "conversation resumed, {} — `armada helm --new` starts another",
+                    &data.uuid[..8.min(data.uuid.len())]
+                ),
+                other => format!("conversation {}", other.word().to_lowercase()),
+            },
             // **Said out loud, because the absence of a session is the point.**
             // A reader who assumed this had opened one would sit waiting for a
             // prompt that is never coming — and this render is now only ever
