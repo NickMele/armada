@@ -11,6 +11,7 @@ pub mod clean;
 pub mod commands;
 pub mod components;
 pub mod config;
+pub mod daemon;
 pub mod dispatch;
 pub mod doctor;
 pub mod failures;
@@ -35,13 +36,13 @@ use armada_core::config::{self as config_contract, ResolvedConfig};
 use armada_core::ctx::{Clock, Fetch, Run};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
-    CommandsData, ComponentsData, DispatchData, DoctorData, Envelope, FailureData, FailuresData,
-    FleetLsData, GuildBundleData, GuildChangeData, GuildInitData, GuildItemData, GuildListData,
-    GuildSyncData, GuildUpgradeData, HelmData, HelmSwitchData, InboxData, InitData, InitDryRun,
-    KillData, MachineInitData, McpData, MenuData, PauseData, ProbeData, Projection, ProposeData,
-    PruneData, ReapPlanData, ReportData, ResumeData, ScanData, ServicesData, SettingsData,
-    ShowData, SkillsData, SpawnData, StatusData, TickData, UntriedData, UpDryRun, VerdictData,
-    VerifyData,
+    CommandsData, ComponentsData, DaemonStatusData, DaemonSwitchData, DispatchData, DoctorData,
+    Envelope, FailureData, FailuresData, FleetLsData, GuildBundleData, GuildChangeData,
+    GuildInitData, GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, HelmData,
+    HelmSwitchData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, MenuData,
+    PauseData, ProbeData, Projection, ProposeData, PruneData, ReapPlanData, ReportData, ResumeData,
+    ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData,
+    UntriedData, UpDryRun, VerdictData, VerifyData,
 };
 use armada_core::workspace::Workspace;
 use armada_manifest::config_file;
@@ -130,6 +131,12 @@ pub enum Output {
     /// `armada helm enable` and `armada helm disable` — the machine switch
     /// that gates `--exec`, flipped.
     HelmSwitch(Box<Envelope<HelmSwitchData>>),
+    /// `armada daemon enable` and `armada daemon disable` — the machine
+    /// switch that lets `034`'s daemon run unattended here, flipped.
+    DaemonSwitch(Box<Envelope<DaemonSwitchData>>),
+    /// `armada daemon status` — the switch and the live process, as two
+    /// separate facts.
+    DaemonStatus(Box<Envelope<DaemonStatusData>>),
     /// `armada fleet show` — one Job, and why it wants you.
     Show(Box<Envelope<ShowData>>),
     /// `armada fleet board`.
@@ -207,6 +214,8 @@ impl Output {
             Output::Bridge(e) => e.to_json(),
             Output::Helm(e) => e.to_json(),
             Output::HelmSwitch(e) => e.to_json(),
+            Output::DaemonSwitch(e) => e.to_json(),
+            Output::DaemonStatus(e) => e.to_json(),
             Output::Show(e) => e.to_json(),
             Output::Board(e) => e.to_json(),
             Output::Kill(e) => e.to_json(),
@@ -282,6 +291,8 @@ impl Output {
             Output::Bridge(e) => e.exit_code(),
             Output::Helm(e) => e.exit_code(),
             Output::HelmSwitch(e) => e.exit_code(),
+            Output::DaemonSwitch(e) => e.exit_code(),
+            Output::DaemonStatus(e) => e.exit_code(),
             Output::Show(e) => e.exit_code(),
             Output::Board(e) => e.exit_code(),
             Output::Kill(e) => e.exit_code(),

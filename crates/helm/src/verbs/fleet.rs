@@ -19,12 +19,13 @@
 //! [`armada_core::fleet::job::observe`] reconciles the two, in one place, and
 //! `ls` renders that while `kill` and `answer` persist it.
 
+use armada_core::config::LandMerge;
 use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
-    AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
-    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
-    ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData, SpawnData, StepRow,
-    TickData, TickRow, TransitionRow, VerdictData,
+    AnswerData, AskData, BoardData, DaemonActRow, Disposition, Envelope, Evidence, FleetLsData,
+    GateRow, InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData,
+    ProposeData, ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData,
+    SpawnData, StepRow, TickData, TickRow, TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -516,6 +517,8 @@ pub fn spawn<R: Run, C: Clock>(
         kin: job::Kin::default(),
         ticked_turns: 0,
         doing: None,
+        daemon_acts: Vec::new(),
+        main_moved_at: None,
     };
 
     if options.dry_run {
@@ -1587,6 +1590,31 @@ pub fn show<R: Run, C: Clock>(
                         .unwrap_or_default(),
                 })
                 .collect(),
+            // **Newest first, the same as `transitions`** — both are logs of
+            // what already happened, off the Job's own record and no new I/O
+            // (`034` §6.5: "surfaced by `armada fleet show`").
+            daemon_acts: record
+                .daemon_acts
+                .iter()
+                .rev()
+                .map(|act| DaemonActRow {
+                    at: act.at.clone(),
+                    ago_s: wall.saturating_sub(act.at_ms) / 1_000,
+                    act: act.act.word().to_string(),
+                    target: act.target.clone(),
+                    outcome: act
+                        .outcome
+                        .as_ref()
+                        .map(|outcome| outcome.word().to_string()),
+                    outcome_detail: act
+                        .outcome
+                        .as_ref()
+                        .and_then(|outcome| outcome.detail())
+                        .map(str::to_string),
+                    outcome_at: act.outcome_at.clone(),
+                })
+                .collect(),
+            main_moved_at: record.main_moved_at.clone(),
             task: record.task.clone(),
             runtime_s: run_time / 1_000,
             created_at: record.created_at.clone(),
@@ -2076,7 +2104,7 @@ fn tear_down<R: Run, C: Clock>(
 /// **A `FAILED` or halted Job never reaches here.** `Next::Halt` leaves a Job
 /// `PAUSED` and asks a person; its worktree is the evidence for the question it
 /// just raised, and this function is only ever called on `Next::Finish`.
-fn release_on_finish<R: Run, C: Clock>(
+pub(crate) fn release_on_finish<R: Run, C: Clock>(
     run: &R,
     now: &C,
     place: &Where,
@@ -3787,8 +3815,8 @@ fn gate_step<R: Run, C: Clock>(
     );
     record.pending = pending;
     let predicate = Some(step.verify.must.word().to_string());
-    let facts = match gathered {
-        Ok(facts) => facts,
+    let (facts, land_merge) = match gathered {
+        Ok(gathered) => gathered,
         // **One Job's gate that cannot be gathered must not end the pass**, for
         // the reason [`stalled`] gives about a worktree that is gone: a fleet
         // of twenty would exit non-zero and move none of the other nineteen.
@@ -3806,7 +3834,7 @@ fn gate_step<R: Run, C: Clock>(
         .subjob
         .as_ref()
         .is_some_and(|child| child.state.needs_a_person());
-    let outcome = gate::decide(&want, &facts);
+    let outcome = gate::decide(&want, &facts, land_merge);
     // Whatever was started or read is recorded before anything acts on it: a
     // pass that started a check and then failed to save the run id would start
     // a second one on the next pass, for ever.
@@ -4265,6 +4293,16 @@ fn start_step<R: Run>(
 /// what the gate wants, which step, the transcript already read, and the pending
 /// slot. Bundling them into a struct would name the tuple `GatherArgs` and move
 /// the same eight things one line up.
+///
+/// **The resolved `fleet.land.merge` travels back alongside the facts,
+/// rather than living in [`gate::Facts`].** It answers a different question
+/// from every other field there — not *what did a command find*, but *what
+/// has this repository consented to* — and [`gate::decide`] takes it as its
+/// own parameter for exactly that reason (gate.rs's own doc comment: "the
+/// one place this module stops being config-blind, and only for this one
+/// predicate"). It is read here rather than in `gate_step` because this is
+/// still the only I/O in the gate — `armada_fleet::manifest::land_merge` is a
+/// local file read, gated behind the one predicate that needs it.
 #[allow(clippy::too_many_arguments)]
 fn gather<R: Run, C: Clock>(
     run: &R,
@@ -4275,9 +4313,10 @@ fn gather<R: Run, C: Clock>(
     step: &str,
     reading: &Reading,
     pending: &mut Option<job::Pending>,
-) -> Result<gate::Facts, ArmadaError> {
+) -> Result<(gate::Facts, LandMerge), ArmadaError> {
     let worktree = place.expand(&record.worktree);
     let mut facts = gate::Facts::default();
+    let mut land_merge = LandMerge::Never;
 
     match want {
         gate::Needs::Nothing => {
@@ -4384,15 +4423,24 @@ fn gather<R: Run, C: Clock>(
             if *kind == gate::SubJobKind::Review {
                 facts.branch = Some(committed(run, &worktree, &record.branch));
                 if !facts.branch.as_ref().is_some_and(gate::Probed::found) {
-                    return Ok(facts);
+                    return Ok((facts, land_merge));
                 }
             }
             facts.subjob = subjob(run, now, place, record, step, workflow, *kind, pending)?;
         }
+        gate::Needs::Pr { .. } => {
+            facts.pr = pr(run, &worktree, &record.branch);
+            // **Read once policy is actually in question, not on every
+            // step.** Every other step's gate has nothing to do with
+            // `fleet.land.merge`, and reading a repository's `armada.yml` on
+            // every pass over every step of every Job would be I/O this
+            // module's whole design keeps out of everywhere but here.
+            land_merge = manifest::land_merge(&worktree);
+        }
         // Nothing to look at: `decide` says why rather than guessing.
         gate::Needs::Unstated { .. } => {}
     }
-    Ok(facts)
+    Ok((facts, land_merge))
 }
 
 /// Start the sub-Job this attempt needs, or read the one already running.
@@ -4601,6 +4649,8 @@ fn spawn_child<R: Run, C: Clock>(
         // minted right now.
         ticked_turns: 0,
         doing: None,
+        daemon_acts: Vec::new(),
+        main_moved_at: None,
     };
     // Recorded before anything is created, for [`spawn`]'s reason: everything
     // after this line can fail, and each of those failures leaves a Job on disk
@@ -5025,6 +5075,48 @@ fn committed<R: Run>(run: &R, worktree: &Path, branch: &str) -> gate::Probed {
     }
 }
 
+/// What `gh pr view` reports about the branch's pull request.
+///
+/// **`None` on any failure, rather than a zeroed [`gate::PrFact`].** A
+/// repository with no PR yet — `land-branch` has not pushed and opened one —
+/// answers a non-zero exit on `gh pr view <branch>`, and that reads no
+/// differently here from `gh` being unauthenticated or unreachable: all three
+/// are *nothing found yet*, which is [`gate::decide`]'s `Needs::Pr` arm
+/// reading `facts.pr` as `None` and answering [`gate::Outcome::NotYet`] —
+/// the same shape every other unstarted probe in this module takes.
+fn pr<R: Run>(run: &R, worktree: &Path, branch: &str) -> Option<gate::PrFact> {
+    let output = run
+        .call(&RunRequest::new(
+            vec![
+                "gh".to_string(),
+                "pr".to_string(),
+                "view".to_string(),
+                branch.to_string(),
+                "--json".to_string(),
+                "number,state,mergedAt".to_string(),
+            ],
+            worktree.to_path_buf(),
+        ))
+        .ok()?;
+    if output.code != Some(0) {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_str(&output.stdout).ok()?;
+    let number = value.get("number")?.as_u64()?;
+    let state = value
+        .get("state")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let merged = value
+        .get("mergedAt")
+        .is_some_and(|merged_at| !merged_at.is_null());
+    Some(gate::PrFact {
+        number,
+        open: state == "OPEN",
+        merged,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5075,6 +5167,8 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
+            main_moved_at: None,
         }
     }
 

@@ -44,6 +44,7 @@
 
 use super::workflow::{Predicate, Step};
 use super::{JobState, Verdict};
+use crate::config::LandMerge;
 use crate::envelope::Evidence;
 use crate::error::Status;
 
@@ -110,6 +111,24 @@ pub enum Needs {
     Branch,
     /// A person's answer.
     Person,
+    /// **The work's pull request**, gathered once with a single `gh pr view`
+    /// for both [`super::workflow::Predicate::PrOpen`] and
+    /// [`super::workflow::Predicate::PrMerged`] — what a `gh pr view` reports
+    /// answers both, so the shell gathers it once regardless of which
+    /// predicate asked.
+    ///
+    /// **What tells the two predicates apart is carried here, not in
+    /// [`decide`]'s match.** `decide` already reads a second, policy
+    /// parameter for this one variant (the module doc's *"the one place this
+    /// module stops being config-blind, and only for this one predicate"*),
+    /// and a bare `Needs::Pr` would leave it no way to know which of the two
+    /// questions that policy is being read for.
+    Pr {
+        /// Whether this is [`super::workflow::Predicate::PrMerged`]'s
+        /// unconditional question — merged, full stop — rather than
+        /// [`super::workflow::Predicate::PrOpen`]'s policy-aware one.
+        merged_only: bool,
+    },
     /// **Another Job's verdict**, for the two predicates nothing this process
     /// runs can settle.
     ///
@@ -368,6 +387,8 @@ pub fn needs(step: &Step) -> Needs {
                 ),
             },
         },
+        Predicate::PrOpen => Needs::Pr { merged_only: false },
+        Predicate::PrMerged => Needs::Pr { merged_only: true },
     }
 }
 
@@ -442,6 +463,23 @@ pub struct FailedCheck {
     pub said: Option<String>,
 }
 
+/// What `gh pr view` reported about the work's pull request.
+///
+/// **Read out of `gh`, never re-derived.** `open` and `merged` are `gh`'s own
+/// `state`/`mergedAt`, carried rather than collapsed into one bool at the
+/// gather site — [`decide`]'s `Needs::Pr` arm is the one place that needs
+/// both at once, to tell *"open, not yet merged"* from *"closed without
+/// merging"*, which read identically if only one bit survived the gather.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrFact {
+    /// The PR's number, what the evidence names and what a person opens.
+    pub number: u64,
+    /// `gh`'s `state == "OPEN"`.
+    pub open: bool,
+    /// `gh`'s `mergedAt` is not null.
+    pub merged: bool,
+}
+
 /// Everything the shell looked at, for one step's gate.
 ///
 /// **Every field is optional and absence means *not looked at yet***, which is
@@ -463,6 +501,8 @@ pub struct Facts {
     pub answer: Option<String>,
     /// What the child Job this attempt started has reached.
     pub subjob: Option<SubjobFact>,
+    /// What `gh pr view` reported about the work's pull request.
+    pub pr: Option<PrFact>,
 }
 
 /// How a step's gate came out.
@@ -528,7 +568,13 @@ pub fn approves(answer: &str) -> bool {
 /// [`Predicate`] reaches here through [`needs`], and a missing arm has to be a
 /// compile error rather than a silent [`Outcome::CannotDecide`] — the same
 /// argument `ARCHITECTURE.md` §1.2 makes for the scheduler's events.
-pub fn decide(needs: &Needs, facts: &Facts) -> Outcome {
+///
+/// **`land_merge` is the one piece of config this module reads**, and it is
+/// read only by the `Needs::Pr` arm below. Every other predicate is decided
+/// from `needs` and `facts` alone, exactly as this module's own doc comment
+/// claims — a repository's `fleet.land.merge` changes what `pr_open` waits
+/// for and nothing else.
+pub fn decide(needs: &Needs, facts: &Facts, land_merge: LandMerge) -> Outcome {
     match needs {
         Needs::Nothing => match &facts.turn {
             None => Outcome::NotYet {
@@ -760,6 +806,48 @@ pub fn decide(needs: &Needs, facts: &Facts) -> Outcome {
                 },
             }
         }
+
+        Needs::Pr { merged_only } => match &facts.pr {
+            None => Outcome::NotYet {
+                why: "nothing has looked for the pull request yet".to_string(),
+            },
+            Some(pr) => {
+                // **The three-way behaviour 034 §5's own sentence states:**
+                // `pr_merged` never reads policy — merged, full stop. `pr_open`
+                // does: under `never` it holds on *open or merged*, because a
+                // human is the one who merges it from here and the daemon has
+                // nothing left to do; under `auto` it holds only on *merged*,
+                // because the daemon is about to merge it itself and "open" is
+                // not the outcome this step is waiting for.
+                let holds = match (*merged_only, land_merge) {
+                    (true, _) => pr.merged,
+                    (false, LandMerge::Never) => pr.open || pr.merged,
+                    (false, LandMerge::Auto) => pr.merged,
+                };
+                let evidence = vec![Evidence {
+                    kind: "pr".to_string(),
+                    scope: pr.number.to_string(),
+                    exit: i32::from(!holds),
+                }];
+                if holds {
+                    Outcome::Holds { evidence }
+                } else {
+                    let why = match (*merged_only, land_merge) {
+                        (true, _) => format!("pull request #{} has not merged yet", pr.number),
+                        (false, LandMerge::Auto) => format!(
+                            "pull request #{} is open but not merged yet — \
+                             `fleet.land.merge: auto` waits for the merge, not just the open PR",
+                            pr.number
+                        ),
+                        (false, LandMerge::Never) => {
+                            format!("pull request #{} is neither open nor merged", pr.number)
+                        }
+                    };
+                    Outcome::DoesNotHold { evidence, why }
+                }
+            }
+        },
+
         Needs::Unstated { why } => Outcome::CannotDecide { why: why.clone() },
     }
 }
@@ -902,7 +990,10 @@ mod tests {
             turn: Some(clean_turn()),
             ..Facts::default()
         };
-        assert!(matches!(decide(&needs, &facts), Outcome::Holds { .. }));
+        assert!(matches!(
+            decide(&needs, &facts, LandMerge::Never),
+            Outcome::Holds { .. }
+        ));
 
         let facts = Facts {
             turn: Some(Probed {
@@ -912,7 +1003,7 @@ mod tests {
             ..Facts::default()
         };
         assert!(matches!(
-            decide(&needs, &facts),
+            decide(&needs, &facts, LandMerge::Never),
             Outcome::DoesNotHold { .. }
         ));
     }
@@ -1010,9 +1101,20 @@ mod tests {
                     ..Facts::default()
                 },
             ),
+            (
+                Needs::Pr { merged_only: false },
+                Facts {
+                    pr: Some(PrFact {
+                        number: 42,
+                        open: true,
+                        merged: false,
+                    }),
+                    ..Facts::default()
+                },
+            ),
         ];
         for (want, facts) in cases {
-            match decide(&want, &facts) {
+            match decide(&want, &facts, LandMerge::Never) {
                 Outcome::Holds { evidence } => {
                     assert!(!evidence.is_empty(), "{want:?} held on nothing");
                 }
@@ -1059,7 +1161,8 @@ mod tests {
                     test: Some(present.clone()),
                     check: Some(red.clone()),
                     ..Facts::default()
-                }
+                },
+                LandMerge::Never
             ),
             Outcome::Holds { .. }
         ));
@@ -1071,6 +1174,7 @@ mod tests {
                 check: Some(green.clone()),
                 ..Facts::default()
             },
+            LandMerge::Never,
         );
         match outcome {
             Outcome::DoesNotHold { why, .. } => {
@@ -1086,6 +1190,7 @@ mod tests {
                 check: Some(red),
                 ..Facts::default()
             },
+            LandMerge::Never,
         );
         match outcome {
             Outcome::DoesNotHold { why, .. } => {
@@ -1110,7 +1215,10 @@ mod tests {
             }),
             ..Facts::default()
         };
-        assert!(matches!(decide(&want, &facts), Outcome::NotYet { .. }));
+        assert!(matches!(
+            decide(&want, &facts, LandMerge::Never),
+            Outcome::NotYet { .. }
+        ));
     }
 
     /// **Neither predicate guesses, and neither refuses any more.** Both wait
@@ -1141,7 +1249,7 @@ mod tests {
 
         // A `subjob_passed` step with nothing committed to review still asks
         // for its child; only `review_clean` gates on the branch first.
-        match decide(&needs(&named), &Facts::default()) {
+        match decide(&needs(&named), &Facts::default(), LandMerge::Never) {
             Outcome::NotYet { why } => assert!(why.contains("plan"), "{why}"),
             other => panic!("a sub-Job nobody started decided something: {other:?}"),
         }
@@ -1183,7 +1291,11 @@ mod tests {
             ..Facts::default()
         };
 
-        match decide(&want, &child(JobState::Done, Some(Verdict::Pass))) {
+        match decide(
+            &want,
+            &child(JobState::Done, Some(Verdict::Pass)),
+            LandMerge::Never,
+        ) {
             Outcome::Holds { evidence } => {
                 assert_eq!(evidence[0].kind, "job");
                 assert_eq!(evidence[0].scope, "8f2a1c40", "the uuid is the identity");
@@ -1193,7 +1305,7 @@ mod tests {
         }
 
         for reached in [Some(Verdict::Failed), Some(Verdict::Blocked), None] {
-            match decide(&want, &child(JobState::Done, reached)) {
+            match decide(&want, &child(JobState::Done, reached), LandMerge::Never) {
                 Outcome::DoesNotHold { evidence, why } => {
                     assert_eq!(evidence[0].exit, 1, "{reached:?}");
                     assert!(why.contains("rate-limit-review"), "{why}");
@@ -1222,7 +1334,7 @@ mod tests {
             }),
             ..Facts::default()
         };
-        match decide(&want, &dirty) {
+        match decide(&want, &dirty, LandMerge::Never) {
             Outcome::DoesNotHold { why, evidence } => {
                 assert!(why.contains("nothing committed"), "{why}");
                 assert_eq!(evidence[0].kind, "branch");
@@ -1237,7 +1349,10 @@ mod tests {
             }),
             ..Facts::default()
         };
-        assert!(matches!(decide(&want, &clean), Outcome::NotYet { .. }));
+        assert!(matches!(
+            decide(&want, &clean, LandMerge::Never),
+            Outcome::NotYet { .. }
+        ));
     }
 
     /// **A sub-Job somebody killed stops the parent rather than starting
@@ -1258,7 +1373,7 @@ mod tests {
             }),
             ..Facts::default()
         };
-        match decide(&want, &killed) {
+        match decide(&want, &killed, LandMerge::Never) {
             Outcome::CannotDecide { why } => {
                 assert!(why.contains("rate-limit-review"), "{why}");
             }
@@ -1292,7 +1407,7 @@ mod tests {
                 }),
                 ..Facts::default()
             };
-            match decide(&want, &facts) {
+            match decide(&want, &facts, LandMerge::Never) {
                 Outcome::NotYet { why } => assert!(why.contains("rate-limit-plan"), "{why}"),
                 other => panic!("a live sub-Job settled the step: {other:?}"),
             }
@@ -1375,7 +1490,7 @@ mod tests {
     #[test]
     fn human_approves_asks_when_nobody_has_answered() {
         assert!(matches!(
-            decide(&Needs::Person, &Facts::default()),
+            decide(&Needs::Person, &Facts::default(), LandMerge::Never),
             Outcome::AsksAPerson { .. }
         ));
     }
@@ -1403,11 +1518,125 @@ mod tests {
                 workflow: "plan".to_string(),
                 kind: SubJobKind::Workflow,
             },
+            Needs::Pr { merged_only: false },
+            Needs::Pr { merged_only: true },
         ] {
             assert!(
-                matches!(decide(&want, &Facts::default()), Outcome::NotYet { .. }),
+                matches!(
+                    decide(&want, &Facts::default(), LandMerge::Never),
+                    Outcome::NotYet { .. }
+                ),
                 "{want:?} decided something from nothing"
             );
         }
+    }
+
+    /// **`pr_open` holds on an open, unmerged PR when the repository has not
+    /// consented to unattended merging** (`fleet.land.merge: never`, or the
+    /// section absent). This is 034 §6.4's *"`never` lands on `pr_open`"* as
+    /// an outcome: a human does the merging from here, so the daemon's part
+    /// of `land` is done.
+    #[test]
+    fn pr_open_holds_on_an_open_unmerged_pr_under_never() {
+        let want = Needs::Pr { merged_only: false };
+        let open = Facts {
+            pr: Some(PrFact {
+                number: 7,
+                open: true,
+                merged: false,
+            }),
+            ..Facts::default()
+        };
+        assert!(matches!(
+            decide(&want, &open, LandMerge::Never),
+            Outcome::Holds { .. }
+        ));
+    }
+
+    /// **`pr_open` does not hold on a merely-open PR under `auto`** — it
+    /// becomes equivalent to `pr_merged`, because the daemon is about to
+    /// merge it itself and *open* is not the state `land` is waiting for.
+    /// 034 §6.4: *"`auto` lands on `pr_merged`"*.
+    #[test]
+    fn pr_open_waits_for_the_merge_under_auto() {
+        let want = Needs::Pr { merged_only: false };
+        let open_not_merged = Facts {
+            pr: Some(PrFact {
+                number: 7,
+                open: true,
+                merged: false,
+            }),
+            ..Facts::default()
+        };
+        match decide(&want, &open_not_merged, LandMerge::Auto) {
+            Outcome::DoesNotHold { why, .. } => assert!(why.contains("auto"), "{why}"),
+            other => panic!("an unmerged PR held `pr_open` under `auto`: {other:?}"),
+        }
+
+        let merged = Facts {
+            pr: Some(PrFact {
+                number: 7,
+                open: false,
+                merged: true,
+            }),
+            ..Facts::default()
+        };
+        assert!(matches!(
+            decide(&want, &merged, LandMerge::Auto),
+            Outcome::Holds { .. }
+        ));
+    }
+
+    /// **`pr_merged` never reads policy.** Open and unmerged does not hold
+    /// under either policy; merged holds under either policy — a guild
+    /// author who writes this predicate gets a real merge regardless of what
+    /// a repository's `fleet.land.merge` says.
+    #[test]
+    fn pr_merged_holds_only_on_a_merge_regardless_of_policy() {
+        let want = Needs::Pr { merged_only: true };
+        let open_not_merged = Facts {
+            pr: Some(PrFact {
+                number: 9,
+                open: true,
+                merged: false,
+            }),
+            ..Facts::default()
+        };
+        for policy in [LandMerge::Never, LandMerge::Auto] {
+            assert!(matches!(
+                decide(&want, &open_not_merged, policy),
+                Outcome::DoesNotHold { .. }
+            ));
+        }
+
+        let merged = Facts {
+            pr: Some(PrFact {
+                number: 9,
+                open: false,
+                merged: true,
+            }),
+            ..Facts::default()
+        };
+        for policy in [LandMerge::Never, LandMerge::Auto] {
+            assert!(matches!(
+                decide(&want, &merged, policy),
+                Outcome::Holds { .. }
+            ));
+        }
+    }
+
+    /// `needs()` maps both new predicates onto the same [`Needs::Pr`]
+    /// variant — what `gh pr view` reports answers both — carrying which one
+    /// asked so [`decide`] can tell them apart.
+    #[test]
+    fn pr_open_and_pr_merged_both_ask_for_the_same_gather() {
+        assert_eq!(
+            needs(&step(Predicate::PrOpen)),
+            Needs::Pr { merged_only: false }
+        );
+        assert_eq!(
+            needs(&step(Predicate::PrMerged)),
+            Needs::Pr { merged_only: true }
+        );
     }
 }

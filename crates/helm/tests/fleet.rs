@@ -3275,7 +3275,7 @@ fn show_carries_every_declared_step_queued_ahead_of_the_one_in_progress() {
             "human_approves",
             "check_passes",
             "review_clean",
-            "branch_exists"
+            "pr_open"
         ]
     );
     // The step this Job is actually on is not `QUEUED` — it is entered.
@@ -5035,6 +5035,121 @@ fn a_bug_workflow_reproduces_fixes_and_lands_with_no_human_turn_in_the_middle() 
     assert_eq!(found.scope, "regression_bad_parse");
 }
 
+/// **`pr_open` holds on an open, unmerged PR when the repository has not
+/// opted into unattended merging** — 034 §6.4's *"`never` lands on
+/// `pr_open`"*, as an outcome: a human does the merging from here, so the
+/// daemon's part of `land` is done.
+///
+/// The worktree's `armada.yml` here is the one the fake `git worktree add`
+/// handler writes (`version: 1\nname: api\n`), which has no `fleet:` section
+/// at all — so this also proves the wiring's default matches `land_merge`'s
+/// own: absence of policy is `never`, not a parse failure that could read
+/// either way.
+#[test]
+fn pr_open_holds_on_an_open_unmerged_pr_when_the_repository_says_nothing() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: land it\nends_at: branch\n\
+         budget:\n  attempts: 3\n  cost: 10.00\n  wall_clock: 90m\n  \
+         on_exhausted: needs_human\nsteps:\n\
+         \x20 - id: land\n    skill: land-branch\n    verify: { must: pr_open }\n",
+    );
+
+    let run = scratch.harness().answering(
+        "pr view",
+        0,
+        r#"{"number":42,"state":"OPEN","mergedAt":null}"#,
+    );
+
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("land the change")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
+    let last = rows.last().unwrap();
+    assert_eq!(last.did, "finished", "{rows:#?}");
+
+    // **`gh` was asked about the Job's own branch**, not the repository's.
+    let argv = run.argv_containing(&["pr", "view"]);
+    assert!(
+        argv.iter().any(|word| word == &data.branch),
+        "the wrong branch was asked about: {argv:?}"
+    );
+}
+
+/// **`pr_open` waits for the merge itself once a repository has opted into
+/// `fleet.land.merge: auto`** — 034 §6.4's *"`auto` lands on `pr_merged`"*
+/// as an outcome. An open, unmerged PR is not what this step is waiting for
+/// under that policy, so the gate does not hold and the step is retried
+/// until `gh` reports the merge.
+#[test]
+fn pr_open_waits_for_the_merge_itself_under_auto_merge_policy() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: land it\nends_at: branch\n\
+         budget:\n  attempts: 3\n  cost: 10.00\n  wall_clock: 90m\n  \
+         on_exhausted: needs_human\nsteps:\n\
+         \x20 - id: land\n    skill: land-branch\n    verify: { must: pr_open }\n",
+    );
+
+    let run = scratch
+        .harness()
+        .answering_once(
+            "pr view",
+            0,
+            r#"{"number":42,"state":"OPEN","mergedAt":null}"#,
+        )
+        .answering(
+            "pr view",
+            0,
+            r#"{"number":42,"state":"MERGED","mergedAt":"2026-08-17T00:00:00Z"}"#,
+        );
+
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("land the change")
+        },
+    );
+    await_turn(&scratch, &data.uuid);
+    forget_argv(&data.uuid);
+
+    // **A repository that opts in, read off its own worktree's `armada.yml`.**
+    // The worktree already exists — `git worktree add` runs during `spawn` —
+    // so the file the daemon's own `land_merge` reads is overwritten before
+    // the first gate reads it.
+    let record = scratch.store().load(&data.uuid).unwrap();
+    std::fs::write(
+        scratch.place().expand(&record.worktree).join("armada.yml"),
+        "manifest:\n  version: 1\nfleet:\n  land:\n    merge: auto\n",
+    )
+    .unwrap();
+
+    let rows = until_settled(&scratch, &run, &data.name, &data.uuid);
+    let last = rows.last().unwrap();
+    assert_eq!(last.did, "finished", "{rows:#?}");
+
+    // **The first pass retried rather than finishing early.** An open,
+    // unmerged PR under `auto` is exactly the case `pr_open` must not accept.
+    assert!(
+        rows.iter().any(|row| row.did == "retried"),
+        "an unmerged PR under `auto` was accepted as `pr_open`: {rows:#?}"
+    );
+}
+
 /// **`failing_test_exists` refuses a green suite**, which is the failure it
 /// exists to prevent: a Drone that "fixes" a bug it never reproduced and closes
 /// green, with its own assertion as the only evidence anybody has.
@@ -6205,6 +6320,15 @@ fn the_shipped_bug_workflow_runs_through_its_review_step_to_done() {
             "manifest check --status",
             0,
             r#"{"schema_version":2,"verb":"check","status":"PASS","error":null,"data":{"run_id":"01JQRSTUVWXYZ012","results":[]}}"#,
+        )
+        // The shipped `land` step now gates on `pr_open`, not `branch_exists`
+        // — `land-branch/SKILL.md` opens the PR itself, and this is `gh`
+        // reporting it open. The repository says nothing about
+        // `fleet.land.merge`, so `never` is the policy and open is enough.
+        .answering(
+            "pr view",
+            0,
+            r#"{"number":1,"state":"OPEN","mergedAt":null}"#,
         );
     let data = spawn(
         &scratch,

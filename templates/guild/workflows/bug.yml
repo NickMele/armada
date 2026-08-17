@@ -36,6 +36,10 @@ steps:
   - id: review
     verify: { must: review_clean }
 
+  # `pr_open` rather than `branch_exists`: `land-branch/SKILL.md` pushes and
+  # opens the PR itself, and the daemon (034 §5, §6) takes it from there —
+  # merging on green when a repository's `fleet.land.merge` is `auto`, and
+  # otherwise stopping once the PR is open for a person to merge by hand.
   - id: land
     skill: land-branch
-    verify: { must: branch_exists }
+    verify: { must: pr_open }

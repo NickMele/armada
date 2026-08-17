@@ -2396,6 +2396,25 @@ pub struct ShowData {
     /// Every step boundary this Job has crossed, **newest first**.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub transitions: Vec<TransitionRow>,
+    /// Every act the daemon has taken about this Job, **newest first**
+    /// (`034` §6.5).
+    ///
+    /// **A third list beside [`Self::transitions`] and [`Self::progress`],
+    /// not a column on either.** A push is not a step boundary and it is not
+    /// the Drone's own words — it is a fact about something Armada did to
+    /// this Job unattended, and folding it into a list that means something
+    /// else would make "who did this" unanswerable from the row alone.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub daemon_acts: Vec<DaemonActRow>,
+    /// When the daemon last pulled a `main` this Job's branch was not forked
+    /// from, off [`crate::fleet::job::Job::main_moved_at`] (PLAN.md §7).
+    ///
+    /// **A fact for a reader, not an instruction to a Drone.** Stage one
+    /// builds no consumer of it beyond this: it exists on the record and is
+    /// readable here, which is the whole of what `armada fleet show` owes it
+    /// until a later stage's `fleet_rebase` reads it for real.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub main_moved_at: Option<String>,
     /// The task, whole, in the words it was given in.
     ///
     /// **Never truncated at this width or any other.** The `TASK` column is a
@@ -2540,6 +2559,38 @@ pub struct TransitionRow {
     pub evidence: Vec<Evidence>,
 }
 
+/// One daemon act about this Job, as `show` reports it (`034` §6.5).
+///
+/// **The same shape [`TransitionRow`] takes, for the same reason.** What was
+/// done, what it was done to, when, and what came back — never a guess at how
+/// far along the daemon's own work is, which is the same discipline
+/// [`TransitionRow`]'s own doc comment states for a step.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DaemonActRow {
+    /// When the daemon began this act, RFC 3339.
+    pub at: String,
+    /// How long ago that was, in seconds.
+    pub ago_s: u64,
+    /// What the daemon did, or is doing — `pushed`, `opened`, `checks-green`,
+    /// `merged`, `pulled`, `re-ran`, `reaped`, `marked-main-moved`,
+    /// `reported-failure`, `refused-to-merge` (`034` §6.5's own table).
+    pub act: String,
+    /// What it acted on — the branch, the PR number, or the run id.
+    pub target: String,
+    /// `ok`, `failed`, or absent while the act is still in flight. **The
+    /// absent case is not a gap in the record** — it is what a crash mid-merge
+    /// leaves behind, and it is the reason this trail is written before the
+    /// action rather than after it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
+    /// Why, when [`Self::outcome`] is `failed`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome_detail: Option<String>,
+    /// When it settled, RFC 3339. `None` exactly when [`Self::outcome`] is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome_at: Option<String>,
+}
+
 /// `armada fleet board` — the two facts needed to enter a Job.
 ///
 /// **It does not attach, and it never will.** Boarding hands you the
@@ -2623,6 +2674,48 @@ pub struct HelmSwitchData {
     /// this value, so `armada helm enable` twice in a row does not claim to
     /// have done something the second time.
     pub changed: bool,
+}
+
+/// `armada daemon enable` and `armada daemon disable` — the machine switch
+/// that lets `034`'s daemon run unattended here, flipped and reported.
+///
+/// **[`HelmSwitchData`]'s own shape, for [`HelmSwitchData`]'s own reason.**
+/// This is a second fact about the same machine — whether an unattended
+/// process may push, open and merge on this box's behalf, rather than whether
+/// a Claude Code session may open — so it gets its own type rather than
+/// overloading the field names of a switch that answers a different
+/// question, while carrying exactly the two facts a switch ever needs to
+/// report: the value after this run, and whether this run actually changed
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct DaemonSwitchData {
+    /// The value after this run — `fleet.daemon.enter` in
+    /// `~/.armada/machine.yml`.
+    pub enter: bool,
+    /// Whether this run actually changed it — `false` when `armada daemon
+    /// enable` (or `disable`) is run twice in a row.
+    pub changed: bool,
+}
+
+/// `armada daemon status` — the switch and the live process, **as two
+/// separate facts**.
+///
+/// **Not folded into one boolean.** A switch that is on with no live process
+/// is exactly the gap a daemon-aware `armada doctor` exists to surface — a
+/// Job waiting on a daemon that is not actually running must be
+/// distinguishable, on the screen, from a Job whose PR is legitimately still
+/// red (`034` §5 item 9's own reasoning, applied one verb earlier here since
+/// `status` is where a person looks first).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct DaemonStatusData {
+    /// Whether `fleet.daemon.enter` is on, in `~/.armada/machine.yml`.
+    pub enter: bool,
+    /// The daemon's pid, if `~/.armada/daemon.pid` names a process that is
+    /// actually alive right now — `None` covers both "never started" and "the
+    /// pidfile is stale", which [`enter`](Self::enter) is what tells those
+    /// two apart: off and absent is never started, on and absent is a daemon
+    /// that stopped without anyone turning the switch off.
+    pub pid: Option<u32>,
 }
 
 /// Whether entering Helm continues yesterday's conversation or starts one.

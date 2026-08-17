@@ -25,10 +25,11 @@ mod resolved;
 mod schema;
 
 pub use model::{
-    Check, CommandEntry, Component, Config, Document, OneOrMany, OwnsCommand, OwnsComponent,
-    OwnsRun, Ready, Run, SecretProvider, SetupObject, SetupStep, SkillEntry, SkillVerify,
+    Check, CommandEntry, Component, Config, Document, FleetSection, LandMerge, LandSection,
+    OneOrMany, OwnsCommand, OwnsComponent, OwnsRun, Ready, Run, SecretProvider, SetupObject,
+    SetupStep, SkillEntry, SkillVerify,
 };
-pub use resolve::{declared_workspaces, parse, resolve, Defaults, SECTION};
+pub use resolve::{declared_workspaces, land_merge, parse, resolve, Defaults, SECTION};
 pub use resolved::{
     Need, ReadyKind, ResolvedCheck, ResolvedCommand, ResolvedComponent, ResolvedConfig,
     ResolvedReady, ResolvedRun, ResolvedService, ResolvedSetupStep, ResolvedSkill, Scope, Stdio,

@@ -98,7 +98,9 @@
         "review_clean",
         "human_approves",
         "branch_exists",
-        "subjob_passed"
+        "subjob_passed",
+        "pr_open",
+        "pr_merged"
       ]
     }
   }

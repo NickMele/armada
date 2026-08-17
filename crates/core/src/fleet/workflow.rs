@@ -79,6 +79,18 @@ pub enum Predicate {
     BranchExists,
     /// A sub-Job running another workflow returned `PASS`.
     SubjobPassed,
+    /// The work's pull request is open, or already merged — **which of the
+    /// two counts is the one predicate in this enum whose answer depends on
+    /// where it is asked**: a repository whose `fleet.land.merge` is `auto`
+    /// does not stop at *open*, because the daemon is about to merge it
+    /// itself and *open* would advance a step the merge has not happened
+    /// under yet. See [`super::gate::decide`]'s `Needs::Pr` arm.
+    PrOpen,
+    /// The work's pull request has merged, **regardless of
+    /// `fleet.land.merge`**. Unlike [`Predicate::PrOpen`] this never reads
+    /// policy — it is for a guild author who writes a step that must wait
+    /// for a real merge whatever a repository's own policy says.
+    PrMerged,
 }
 
 impl Predicate {
@@ -97,6 +109,8 @@ impl Predicate {
             Predicate::HumanApproves => "human_approves",
             Predicate::BranchExists => "branch_exists",
             Predicate::SubjobPassed => "subjob_passed",
+            Predicate::PrOpen => "pr_open",
+            Predicate::PrMerged => "pr_merged",
         }
     }
 

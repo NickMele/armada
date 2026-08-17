@@ -29,13 +29,15 @@
 //! which is a warning. A `doctor` that failed on a train would be a `doctor`
 //! nobody runs on a train, which is where you most want it.
 
-use armada_core::ctx::{Run, RunRequest};
+use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::disk;
 use armada_core::envelope::{DoctorData, Envelope, Finding, Problem, Settled};
 use armada_core::error::ArmadaError;
+use armada_fleet::daemon_log::Entry;
 use armada_fleet::jobs::Store;
 use armada_guild::layout::{self, Guild, DIRECTORIES};
 use armada_guild::{machine, memory, projector, repo};
+use armada_manifest::clock::SystemClock;
 use armada_manifest::docker;
 use std::path::Path;
 
@@ -59,6 +61,12 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     results.push(helm_argv(runner, &place.cwd, &place.armada_home));
     results.push(directories(&place.armada_home));
     results.push(drones_live(runner, &place.armada_home, &place.cwd));
+    // **The daemon, and then `gh` — the two facts `034` §5 item 9 and its own
+    // "open questions" §3 ask for, beside `drones_live` because they answer
+    // the same kind of question: is something that must be running actually
+    // running.**
+    results.push(daemon(&place.armada_home));
+    results.push(gh_auth(runner, &place.cwd));
     results.extend(drift(runner, &guild));
     results.extend(fragments(&guild));
     results.extend(projection(place, &guild));
@@ -522,6 +530,171 @@ fn drones_live(runner: &impl Run, armada_home: &Path, cwd: &Path) -> Finding {
         None => 0,
     };
     Finding::settled("drones", Settled::Ok, format!("{live} live"))
+}
+
+/// The check every daemon row belongs to.
+const DAEMON: &str = "daemon";
+
+/// **Is `034`'s daemon actually running, and what did it last do?**
+///
+/// This is the row `034` §5 item 9 names as not optional: *"a Job waiting on
+/// a daemon that is not running is the exact silent stall this session spent
+/// eight hours on. If the daemon is off, every Job blocked on a PR must say
+/// so on the screen, with the keystroke."*
+///
+/// **Two facts, read separately, because they can disagree.** The switch
+/// ([`armada_fleet::machine::FleetSection::daemon`]) is what a person typed;
+/// the process ([`armada_fleet::daemon::is_running`]) is what is actually
+/// alive. A Job whose `land` step gate never holds because the daemon that
+/// would push its branch is not running must be distinguishable, on the
+/// screen, from a Job whose PR is legitimately still red — and the switch
+/// alone cannot tell the two apart, because a launchd job can be enabled and
+/// still be dead (crashed past `KeepAlive`'s ability to keep up, or never
+/// actually loaded).
+///
+/// | Switch | Process | Row |
+/// |---|---|---|
+/// | off | not running | not enabled — `armada daemon enable` |
+/// | on | not running | **the silent-stall case**: enabled but not running |
+/// | on | running | healthy; still names what it last did |
+/// | off | running | a process is alive despite the switch — stale/orphaned |
+///
+/// **What it last did comes along on every row, not only the healthy one.**
+/// [`armada_fleet::daemon_log::last`] is the most recent
+/// [`Entry`] in `~/.armada/daemon.jsonl` — `034` §6.5's machine-level
+/// trail — and a reader deciding whether to wait or to intervene needs it
+/// whichever branch of the table they landed on: "not running, but it did
+/// stop cleanly nine minutes ago" reads differently than "not running, and
+/// it has never once started."
+fn daemon(armada_home: &Path) -> Finding {
+    let switch = armada_fleet::machine::read(armada_home).daemon.enter;
+    let running = armada_fleet::daemon::is_running(armada_home);
+    let entries = armada_fleet::daemon_log::read(armada_home).unwrap_or_default();
+    let last = armada_fleet::daemon_log::last(&entries);
+    daemon_finding(switch, running, last, SystemClock.wall_ms())
+}
+
+/// [`daemon`]'s decision, pulled out pure so a test can hand it every corner
+/// of the table above without writing a pidfile or a log line for each one.
+fn daemon_finding(
+    switch: bool,
+    running: Option<u32>,
+    last: Option<&Entry>,
+    now_ms: u64,
+) -> Finding {
+    let did = match last {
+        Some(entry) => what_it_last_did(entry, now_ms),
+        None => "has never started on this machine".to_string(),
+    };
+    match (switch, running) {
+        (false, None) => Finding::needs(
+            DAEMON,
+            Problem::Missing,
+            format!("not enabled; {did}"),
+            "armada daemon enable",
+        ),
+        // **The row that names the keystroke.** `034`'s own words: the switch
+        // says yes and nothing is actually there to push a branch or open a
+        // PR — indistinguishable, without this row, from a PR that is
+        // legitimately still red.
+        (true, None) => Finding::needs(
+            DAEMON,
+            Problem::Missing,
+            format!("enabled but not running; {did}"),
+            "check `armada daemon status`, or `launchctl list | grep com.armada.daemon`",
+        ),
+        // A process is alive though the switch says it should not be — a
+        // machine `armada daemon disable` did not actually stop, or one
+        // started outside `armada daemon enable` altogether.
+        (false, Some(pid)) => Finding::needs(
+            DAEMON,
+            Problem::Stale,
+            format!("running (pid {pid}) though disabled; {did}"),
+            "armada daemon disable to stop it, or investigate why it started",
+        ),
+        // Running, switch on, and yet the trail that would explain how it
+        // got here is empty — reachable only if something wrote the pidfile
+        // outside `record_started`, but worth its own row rather than
+        // reading as healthy on a trail with nothing in it.
+        (true, Some(pid)) if last.is_none() => Finding::needs(
+            DAEMON,
+            Problem::Partial,
+            format!("running (pid {pid}), but daemon.jsonl has no entry"),
+            "check `armada daemon status`",
+        ),
+        (true, Some(pid)) => {
+            Finding::settled(DAEMON, Settled::Ok, format!("running (pid {pid}); {did}"))
+        }
+    }
+}
+
+/// One [`Entry`] as a sentence a reader scans in a table cell — `elapsed`
+/// rather than a timestamp, on the same reasoning
+/// [`crate::render::format::elapsed`]'s own doc comment gives for a Job's
+/// age: the number is read to decide whether to wait, and a wall-clock
+/// stamp does not answer that without arithmetic.
+fn what_it_last_did(entry: &Entry, now_ms: u64) -> String {
+    match entry {
+        Entry::Started { at_ms, pid, .. } => format!(
+            "started {} ago (pid {pid})",
+            crate::render::format::elapsed(now_ms.saturating_sub(*at_ms))
+        ),
+        Entry::Stopped { at_ms, reason, .. } => format!(
+            "stopped {} ago: {reason}",
+            crate::render::format::elapsed(now_ms.saturating_sub(*at_ms))
+        ),
+        Entry::GhUnreachable { at_ms, detail, .. } => format!(
+            "gh unreachable {} ago: {detail}",
+            crate::render::format::elapsed(now_ms.saturating_sub(*at_ms))
+        ),
+    }
+}
+
+/// The deadline on `gh auth status` — it reaches the network, on
+/// [`DISK_PROBE`]'s own reasoning for `docker`: a `doctor` that hung against
+/// a wedged `gh` would be a `doctor` nobody runs.
+const GH_PROBE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The check every `gh` row belongs to.
+const GH_AUTH: &str = "gh auth";
+
+/// **`gh auth status` failing must not surface only as a mysterious push
+/// failure.** PLAN.md's "open questions" §3, verbatim: *"`armada doctor`'s
+/// daemon check should report `gh auth status` failing as a Finding rather
+/// than let it surface only as a mysterious push failure."*
+///
+/// The daemon pushes branches and opens PRs by shelling to `gh`
+/// ([`crate::land`](../../../fleet/src/land.rs)), unattended and with no
+/// session in the loop to notice a token has expired — the failure would
+/// otherwise arrive as a `land` step whose gate never holds, with nothing on
+/// screen naming why. `doctor` is where a person actually looks.
+///
+/// **A separate row from [`daemon`], not folded into it.** The two questions
+/// are independent — a daemon that is running fine can still push nothing
+/// because `gh` has lost its token — and a reader who saw one detail string
+/// naming two unrelated fixes would not know which command answers which
+/// half.
+fn gh_auth(runner: &impl Run, cwd: &Path) -> Finding {
+    let request = RunRequest::new(
+        vec!["gh".to_string(), "auth".to_string(), "status".to_string()],
+        cwd.to_path_buf(),
+    )
+    .timeout(GH_PROBE);
+    match runner.call(&request) {
+        Ok(output) if output.ok() => Finding::settled(GH_AUTH, Settled::Ok, "authenticated"),
+        Ok(output) => Finding::needs(
+            GH_AUTH,
+            Problem::Missing,
+            complaint(&output).unwrap_or_else(|| "`gh auth status` failed".to_string()),
+            "gh auth login",
+        ),
+        Err(_) => Finding::needs(
+            GH_AUTH,
+            Problem::Missing,
+            "`gh` is not on PATH, or would not run",
+            "install gh, then gh auth login",
+        ),
+    }
 }
 
 /// `jobs/ and workspaces/` — directory names, written as paths so a reader can
@@ -2345,5 +2518,201 @@ mod tests {
         let seen = runner.0.borrow();
         assert!(!seen.is_empty());
         assert!(seen.iter().all(|t| *t == Some(DISK_PROBE)), "{seen:?}");
+    }
+
+    // ---------------------------------------------------------------- daemon
+
+    /// **Off and nothing running is the ordinary, unconfigured case** — a
+    /// fresh install, reported as `armada daemon enable`'s row rather than a
+    /// crash.
+    #[test]
+    fn switch_off_and_no_process_says_not_enabled() {
+        let home = tempfile::tempdir().unwrap();
+        let finding = daemon(home.path());
+        assert_eq!(finding.status, Health::Missing);
+        assert!(finding.detail.contains("not enabled"), "{finding:?}");
+        assert_eq!(finding.remedy.as_deref(), Some("armada daemon enable"));
+    }
+
+    /// **The row that names the keystroke.** `034`'s own silent-stall case:
+    /// a person typed `armada daemon enable` and the process behind it is
+    /// not there — indistinguishable from a legitimately red PR without this
+    /// row, and this is the assertion that it is not.
+    #[test]
+    fn switch_on_and_no_process_is_the_distinct_silent_stall_finding() {
+        let home = tempfile::tempdir().unwrap();
+        let mut section = armada_fleet::machine::FleetSection::default();
+        section.daemon.enter = true;
+        armada_fleet::machine::write(home.path(), &section).unwrap();
+
+        let finding = daemon(home.path());
+        assert_eq!(finding.status, Health::Missing);
+        assert!(
+            finding.detail.contains("enabled but not running"),
+            "{finding:?}"
+        );
+        assert_ne!(
+            finding.remedy.as_deref(),
+            Some("armada daemon enable"),
+            "the fix for a crashed daemon is not the same as the fix for a disabled one"
+        );
+        assert!(
+            finding
+                .remedy
+                .as_deref()
+                .unwrap()
+                .contains("armada daemon status"),
+            "{finding:?}"
+        );
+    }
+
+    /// **Healthy, and it still says what it last did.** A row that only ever
+    /// said `ok` would tell a reader nothing about whether the daemon has
+    /// done anything at all today.
+    #[test]
+    fn switch_on_and_running_is_healthy_and_names_what_it_last_did() {
+        let home = tempfile::tempdir().unwrap();
+        let mut section = armada_fleet::machine::FleetSection::default();
+        section.daemon.enter = true;
+        armada_fleet::machine::write(home.path(), &section).unwrap();
+        armada_fleet::daemon::record_started(home.path(), std::process::id()).unwrap();
+
+        let finding = daemon(home.path());
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.remedy.is_none(), "{finding:?}");
+        assert!(finding.detail.contains("running (pid"), "{finding:?}");
+        assert!(finding.detail.contains("started"), "{finding:?}");
+        assert!(finding.detail.contains("ago"), "{finding:?}");
+    }
+
+    /// **A process alive despite the switch being off** — orphaned or
+    /// started outside `armada daemon enable` — is worth its own row rather
+    /// than reading as either of the two ordinary states.
+    #[test]
+    fn switch_off_and_running_is_flagged_as_stale_not_healthy() {
+        let home = tempfile::tempdir().unwrap();
+        armada_fleet::daemon::record_started(home.path(), std::process::id()).unwrap();
+
+        let finding = daemon(home.path());
+        assert_eq!(finding.status, Health::Stale);
+        assert!(finding.detail.contains("though disabled"), "{finding:?}");
+        assert!(
+            finding
+                .remedy
+                .as_deref()
+                .unwrap()
+                .contains("armada daemon disable"),
+            "{finding:?}"
+        );
+    }
+
+    /// `what_it_last_did` reads every one of the log's three shapes into a
+    /// sentence a table cell can hold, not just `Started`.
+    #[test]
+    fn every_entry_shape_reads_as_a_sentence() {
+        let now = 10 * 60 * 1_000;
+        let started = Entry::Started {
+            at: "t".to_string(),
+            at_ms: now - 9 * 60 * 1_000,
+            pid: 4212,
+        };
+        assert!(what_it_last_did(&started, now).contains("started 9m ago"));
+
+        let stopped = Entry::Stopped {
+            at: "t".to_string(),
+            at_ms: now - 60_000,
+            reason: "armada daemon disable".to_string(),
+        };
+        let said = what_it_last_did(&stopped, now);
+        assert!(said.contains("stopped"), "{said}");
+        assert!(said.contains("armada daemon disable"), "{said}");
+
+        let unreachable = Entry::GhUnreachable {
+            at: "t".to_string(),
+            at_ms: now - 5_000,
+            detail: "gh: command not found".to_string(),
+        };
+        let said = what_it_last_did(&unreachable, now);
+        assert!(said.contains("gh unreachable"), "{said}");
+        assert!(said.contains("gh: command not found"), "{said}");
+    }
+
+    /// A machine with no log at all is named as such, not read as a healthy
+    /// silence — `daemon_finding`'s own fallback for `last == None`.
+    #[test]
+    fn no_log_at_all_says_never_started() {
+        assert_eq!(
+            daemon_finding(false, None, None, 0).detail,
+            "not enabled; has never started on this machine"
+        );
+    }
+
+    // --------------------------------------------------------------- gh auth
+
+    /// A `gh` that answers `gh auth status` with a zero exit is reported
+    /// authenticated, and asks for nothing.
+    struct Gh {
+        ok: bool,
+        said: &'static str,
+    }
+
+    impl Run for Gh {
+        fn call(&self, request: &RunRequest) -> Result<RunOutput, SpawnError> {
+            let argv: Vec<&str> = request.argv.iter().map(String::as_str).collect();
+            assert_eq!(argv, ["gh", "auth", "status"], "{argv:?}");
+            Ok(RunOutput {
+                code: Some(if self.ok { 0 } else { 1 }),
+                signal: None,
+                stdout: String::new(),
+                stderr: self.said.to_string(),
+                timed_out: false,
+            })
+        }
+    }
+
+    #[test]
+    fn gh_authenticated_is_ok_and_carries_no_remedy() {
+        let run = Gh { ok: true, said: "" };
+        let finding = gh_auth(&run, Path::new("/srv/repo"));
+        assert_eq!(finding.status, Health::Ok);
+        assert!(finding.remedy.is_none(), "{finding:?}");
+    }
+
+    /// **PLAN.md's open question 3, answered**: a failing `gh auth status`
+    /// is its own `Finding`, not something that only ever shows up as a
+    /// mysterious push failure once the daemon tries to open a PR.
+    #[test]
+    fn gh_auth_status_failing_is_its_own_finding_with_a_remedy() {
+        let run = Gh {
+            ok: false,
+            said: "You are not logged into any GitHub hosts.\n",
+        };
+        let finding = gh_auth(&run, Path::new("/srv/repo"));
+        assert_eq!(finding.status, Health::Missing);
+        assert!(
+            finding.detail.contains("not logged into any GitHub hosts"),
+            "{finding:?}"
+        );
+        assert_eq!(finding.remedy.as_deref(), Some("gh auth login"));
+    }
+
+    /// `gh` missing from `PATH` entirely is reported too, distinctly from an
+    /// expired token, with the fix that actually applies.
+    #[test]
+    fn gh_missing_from_path_is_reported_and_not_confused_with_a_bad_token() {
+        struct NoGh;
+        impl Run for NoGh {
+            fn call(&self, _: &RunRequest) -> Result<RunOutput, SpawnError> {
+                Err(SpawnError {
+                    program: "gh".to_string(),
+                    kind: armada_core::ctx::SpawnErrorKind::NotFound,
+                    message: "No such file or directory".to_string(),
+                })
+            }
+        }
+        let finding = gh_auth(&NoGh, Path::new("/srv/repo"));
+        assert_eq!(finding.status, Health::Missing);
+        assert!(finding.detail.contains("not on PATH"), "{finding:?}");
+        assert!(finding.remedy.as_deref().unwrap().contains("install gh"));
     }
 }

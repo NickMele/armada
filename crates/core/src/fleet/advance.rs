@@ -357,6 +357,8 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
+            main_moved_at: None,
         }
     }
 

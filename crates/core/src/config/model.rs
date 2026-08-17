@@ -59,18 +59,85 @@ fn yaml_kind(value: &serde_yaml_ng::Value) -> &'static str {
 
 /// A parsed `armada.yml` — one section per module.
 ///
-/// **Only `manifest:` exists, and the nesting is there anyway.** Guild is
-/// machine-global and never repository content (`ARCHITECTURE.md` §1.9), so it
-/// will never appear here; Fleet's repo-level defaults might. The file is
+/// **`manifest:` and `fleet:` exist; the nesting was there from the start
+/// regardless.** Guild is machine-global and never repository content
+/// (`ARCHITECTURE.md` §1.9), so it will never appear here. The file is
 /// nested from the start because the alternative is moving every key in every
 /// config in the world the first time a second section is needed, which is the
 /// migration this milestone exists to do once rather than twice
-/// (`PHASES.md` §8.3).
+/// (`PHASES.md` §8.3) — `fleet:` is that second section landing.
+///
+/// **`fleet:` is a sibling of `manifest:`, not a key inside it** (034 §6.4).
+/// `resolve::parse` returns only `document.manifest`, and nothing in
+/// `crates/manifest` may read `document.fleet` — that is what keeps
+/// `ARCHITECTURE.md` §1.9's rule intact: Manifest does not learn about
+/// agents, even though the file it shares has gained a neighbour.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Document {
     /// What a workspace is and how to operate it.
     pub manifest: Config,
+    /// Fleet's repository-scoped policy. Absent on every `armada.yml`
+    /// written before this section existed, and that has to stay a legal,
+    /// fully-defaulted document — see [`LandMerge`] for what absence means.
+    #[serde(default)]
+    pub fleet: Option<FleetSection>,
+}
+
+/// The `fleet:` section of an `armada.yml` — a sibling to `manifest:`, owned
+/// by Fleet and read by it alone (034 §6.4).
+///
+/// Nested one level, the same discipline `manifest:` itself follows: `land:`
+/// today, room for a second Fleet-owned key later without moving this one.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSection {
+    /// Policy for the daemon's landing pass.
+    #[serde(default)]
+    pub land: Option<LandSection>,
+}
+
+/// The `fleet.land:` block (034 §6, §6.4).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LandSection {
+    /// Whether the daemon may merge a Job's PR unattended. Absent means
+    /// [`LandMerge::Never`] — see its own doc comment for why that is the
+    /// safe reading rather than a placeholder.
+    #[serde(default)]
+    pub merge: Option<LandMerge>,
+}
+
+/// Whether the daemon may merge a Job's pull request without a human.
+///
+/// **Per-repository, not per-machine** (034 §6.4). The test is the one
+/// `crates/helm/src/machine.rs` already applies to `carry`, decided the
+/// other way: a gitignored local path exists on one checkout, so `carry` is
+/// machine-scoped, but *"this repository's pull requests may not be merged
+/// without a human"* is true of the repository on every machine and in every
+/// clone — the organisation's rule, not this box's — so it belongs in
+/// `armada.yml`, committed, rather than in `~/.armada/machine.yml`.
+///
+/// **`Never` is not a degraded mode** (034 §6.4's own words). Under either
+/// value the daemon still pushes, opens the PR, watches its checks and
+/// reports failures; only the merge itself is withheld under `Never`, and a
+/// repository where a person merges still gets everything else this design
+/// is for.
+///
+/// **Absence means `Never`, never `Auto`.** A repository that has said
+/// nothing has not consented to unattended merging, and the two failure
+/// directions are not symmetrical: a daemon that never merges leaves a PR
+/// for a person to look at, and a daemon that merges when it should not have
+/// cannot be undone. `resolve::land_merge` is where that default is applied
+/// to a whole document, including one with no `fleet:` section at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LandMerge {
+    /// Merge on green, unattended.
+    Auto,
+    /// Open the PR and stop — the daemon still does everything up to that
+    /// point, and a human takes it from there.
+    Never,
 }
 
 /// The `manifest:` section of an `armada.yml`, before defaults and derivation.

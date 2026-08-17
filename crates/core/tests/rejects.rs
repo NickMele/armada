@@ -237,6 +237,18 @@ fn the_schema_rejects_what_the_contract_forbids() {
             "an env value that is not a string — YAML would make it a number",
             "manifest:\n  version: 1\n  commands:\n    build:\n      cmd: ./build.sh\n      env:\n        PORT: 3000\n",
         ),
+        (
+            "an unknown key under fleet: (034 §6.4) — additionalProperties: false must extend to the new section",
+            "manifest:\n  version: 1\nfleet:\n  rebase: always\n",
+        ),
+        (
+            "an unknown key under fleet.land: (034 §6.4)",
+            "manifest:\n  version: 1\nfleet:\n  land:\n    strategy: squash\n",
+        ),
+        (
+            "fleet.land.merge outside auto | never (034 §6.4)",
+            "manifest:\n  version: 1\nfleet:\n  land:\n    merge: sometimes\n",
+        ),
     ];
 
     let mut accepted = Vec::new();
@@ -309,6 +321,18 @@ fn the_core_rejects_what_it_cannot_turn_into_a_typed_value() {
         (
             "an env value that is not a string",
             "manifest:\n  version: 1\n  commands:\n    build:\n      cmd: ./build.sh\n      env:\n        PORT: 3000\n",
+        ),
+        (
+            "an unknown key under fleet: (034 §6.4) — deny_unknown_fields must extend to the new section",
+            "manifest:\n  version: 1\nfleet:\n  rebase: always\n",
+        ),
+        (
+            "an unknown key under fleet.land: (034 §6.4)",
+            "manifest:\n  version: 1\nfleet:\n  land:\n    strategy: squash\n",
+        ),
+        (
+            "fleet.land.merge outside auto | never (034 §6.4)",
+            "manifest:\n  version: 1\nfleet:\n  land:\n    merge: sometimes\n",
         ),
     ];
 

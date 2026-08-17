@@ -229,6 +229,28 @@ pub struct Job {
     /// still running.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub doing: Option<Doing>,
+    /// Every act the daemon has taken about this Job (`034` §6.5).
+    ///
+    /// Not `transitions` — a push is not a state change. Not `progress` — a
+    /// second writer there makes "who said this" unanswerable. A third voice,
+    /// because it is a third kind of fact: not a step boundary, not the Drone's
+    /// own words, but something Armada itself did *to* this Job unattended.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub daemon_acts: Vec<DaemonAct>,
+    /// Set once, when the daemon pulls a `main` this Job's branch was not
+    /// forked from. A fact for the Drone to notice on its own next turn — not
+    /// an instruction, and not a rebase (`034` §3: "asked for, never imposed").
+    ///
+    /// **Not [`Job::facts`].** That field is seeded once, at spawn, for
+    /// `${task.*}` substitution — its own doc comment states the contract —
+    /// and writing into it mid-run would contradict it. This is a second,
+    /// narrower field for a fact that only ever arrives after a Job has
+    /// started (PLAN.md §7).
+    ///
+    /// Additive, so `schema_version` stays 1, and defaulted so every Job
+    /// record written before this field existed still parses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_moved_at: Option<String>,
 }
 
 /// `serde`'s `skip_serializing_if` needs a path, and neither `usize::eq` nor
@@ -380,6 +402,221 @@ impl Doing {
     pub const fn elapsed_ms(&self, now_ms: u64) -> u64 {
         now_ms.saturating_sub(self.since_ms)
     }
+}
+
+// -------------------------------------------------------------- the daemon's
+// -------------------------------------------------------------- audit trail
+
+/// One thing the daemon did about this Job, unattended (`034` §6.5).
+///
+/// **Recorded before the action, not after it.** A merge that only gets a row
+/// on success is a trail with nothing in it for the one case an audit trail
+/// exists for: a merge that happened and then something went wrong. So
+/// [`Job::begin_daemon_act`] writes the intent — what the daemon is about to
+/// do, and to what — before the irreversible step runs, and
+/// [`Job::settle_daemon_act`] fills in what came back once it is known. A
+/// crash in between leaves a `Merged` act with no outcome rather than nothing
+/// at all, and that half-written row is itself the evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DaemonAct {
+    /// This act's own id — what [`Job::settle_daemon_act`] looks it up by,
+    /// once there is an outcome to attach.
+    pub id: String,
+    /// When the daemon began this act, wall clock, RFC 3339.
+    pub at: String,
+    /// The same moment, wall clock milliseconds, so "9m ago" is a subtraction.
+    pub at_ms: u64,
+    /// What the daemon did, or is doing.
+    pub act: DaemonActKind,
+    /// What it acted on — the branch, the PR number, or the run id, whichever
+    /// the act names.
+    pub target: String,
+    /// What came back. `None` until the act settles, which is deliberate: the
+    /// gap between an act with no outcome and the rest of the trail is what a
+    /// reader of `armada fleet show` needs to see when something is stuck
+    /// mid-merge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<DaemonOutcome>,
+    /// When the outcome above was recorded, wall clock, RFC 3339. `None`
+    /// exactly when [`Self::outcome`] is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_at: Option<String>,
+}
+
+/// What the daemon did to a Job, unattended — the word `armada fleet show`
+/// and `034` §6.5's own table both use.
+///
+/// **Ten words, not a free-form string.** The daemon's whole claim is that it
+/// only ever does one of a fixed, mechanical set of things — nothing here is
+/// a judgement call — and an enum is what makes that claim checkable: a
+/// method that matches every variant breaks the day an eleventh is added,
+/// rather than silently ignoring it the way a string would.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DaemonActKind {
+    /// The Job's branch reached the remote.
+    Pushed,
+    /// A pull request was opened from it.
+    Opened,
+    /// The open pull request's checks all read green.
+    ChecksGreen,
+    /// The pull request was merged.
+    Merged,
+    /// `main` was pulled after a merge, so every future worktree branches from
+    /// it.
+    Pulled,
+    /// Checks were re-run on the updated `main`, to catch two PRs that were
+    /// each green alone and are not green together (`034` §3).
+    ReRan,
+    /// The Job's worktree was reclaimed once its work landed.
+    Reaped,
+    /// Another running Job in the same repository was told `main` moved.
+    MarkedMainMoved,
+    /// A check's failure, with its logs, was reported back to the Drone.
+    ReportedFailure,
+    /// The daemon declined to merge — `fleet.land.merge: never`, or a check
+    /// that never went green.
+    RefusedToMerge,
+}
+
+impl DaemonActKind {
+    /// The word `armada fleet show` prints, matching `034` §6.5's own table
+    /// rather than this enum's `snake_case` storage — the same split
+    /// [`StepEvent::word`] draws between what is written and what is read.
+    pub const fn word(self) -> &'static str {
+        match self {
+            DaemonActKind::Pushed => "pushed",
+            DaemonActKind::Opened => "opened",
+            DaemonActKind::ChecksGreen => "checks-green",
+            DaemonActKind::Merged => "merged",
+            DaemonActKind::Pulled => "pulled",
+            DaemonActKind::ReRan => "re-ran",
+            DaemonActKind::Reaped => "reaped",
+            DaemonActKind::MarkedMainMoved => "marked-main-moved",
+            DaemonActKind::ReportedFailure => "reported-failure",
+            DaemonActKind::RefusedToMerge => "refused-to-merge",
+        }
+    }
+}
+
+/// What a [`DaemonAct`] came back with, once it has settled.
+///
+/// **Two shapes, because "it failed" without saying how is the same gap a
+/// wrong [`crate::error::ErrClass`] leaves in `armada_core::failure`.** A
+/// push that failed because there is no remote and a push that failed
+/// because it was rejected are different next actions, and a bare `Failed`
+/// with no message would send every reader of `armada fleet show` back to a
+/// log this record exists to replace.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DaemonOutcome {
+    /// The act did what it set out to do.
+    Ok,
+    /// It did not, and why.
+    Failed(String),
+}
+
+impl DaemonOutcome {
+    /// The word `armada fleet show` prints for the status column.
+    pub const fn word(&self) -> &'static str {
+        match self {
+            DaemonOutcome::Ok => "ok",
+            DaemonOutcome::Failed(_) => "failed",
+        }
+    }
+
+    /// The reason, when there is one.
+    pub fn detail(&self) -> Option<&str> {
+        match self {
+            DaemonOutcome::Ok => None,
+            DaemonOutcome::Failed(message) => Some(message.as_str()),
+        }
+    }
+}
+
+// ------------------------------------------------ the pull request, from the
+// ------------------------------------------------------------------ record
+
+/// The title `armada_fleet::land::open_pr` gives the pull request it opens.
+///
+/// **The task's first sentence, not the whole thing.** A title is a list
+/// column; the full task belongs in [`pr_body`], where truncation would lose
+/// something a reader needs. Cut at a word boundary rather than mid-word, so
+/// a long task still reads as English once GitHub truncates its own column
+/// further.
+pub fn pr_title(job: &Job) -> String {
+    const MAX_CHARS: usize = 72;
+    let first_sentence = job
+        .task
+        .split(['.', '\n'])
+        .next()
+        .unwrap_or(&job.task)
+        .trim();
+    if first_sentence.is_empty() {
+        return job.name.clone();
+    }
+    if first_sentence.chars().count() <= MAX_CHARS {
+        return first_sentence.to_string();
+    }
+    let truncated: String = first_sentence.chars().take(MAX_CHARS).collect();
+    let boundary = truncated.rfind(' ').unwrap_or(truncated.len());
+    format!("{}…", &truncated[..boundary])
+}
+
+/// The body `armada_fleet::land::open_pr` sends `gh pr create` — a pure
+/// function of the Job's own record, never the Drone's.
+///
+/// **This is `034` §4's whole reason the daemon pushes instead of the
+/// Drone**: *"the daemon pushing is also the only way the PR's body can be
+/// written from the Job's own record — the task, the plan, the steps it
+/// passed — rather than from a Drone's summary of itself."* So this function
+/// reads exactly three things:
+///
+/// - [`Job::task`], in the words it was given in;
+/// - `plan_md`, the worktree's own `PLAN.md`, handed in rather than read
+///   here — reading a file is I/O, and this function has none, so
+///   `armada_fleet::land` reads it and this stays a function a test can call
+///   with a string;
+/// - [`Job::transitions`], **filtered to [`StepEvent::Completed`]** — the
+///   events the gate wrote because a predicate actually held, never
+///   [`Job::progress`], which is the Drone's own note channel and exactly
+///   what `034` §4 says a PR body must not be built from.
+///
+/// PLAN.md §3 calls this filter "PASS events": a `Completed` transition is
+/// the record of a step's `verify: { must: … }` holding, which is what
+/// "passed" means everywhere else in this file (`Verdict::Pass`).
+pub fn pr_body(job: &Job, plan_md: Option<&str>) -> String {
+    let mut body = String::new();
+
+    body.push_str("## Task\n\n");
+    body.push_str(job.task.trim());
+    body.push_str("\n\n");
+
+    if let Some(plan) = plan_md {
+        body.push_str("## Plan\n\n");
+        body.push_str(plan.trim());
+        body.push_str("\n\n");
+    }
+
+    body.push_str("## Steps passed\n\n");
+    let passed: Vec<&Transition> = job
+        .transitions
+        .iter()
+        .filter(|transition| transition.event == StepEvent::Completed)
+        .collect();
+    if passed.is_empty() {
+        body.push_str("_none recorded yet._\n");
+    } else {
+        for transition in passed {
+            body.push_str(&format!(
+                "- `{}` — completed at {} (attempt {})\n",
+                transition.step, transition.at, transition.attempt
+            ));
+        }
+    }
+
+    body.push_str("\n_Opened by the Armada daemon from this Job's own record (`034` §4)._\n");
+    body
 }
 
 /// What a step's gate is waiting on.
@@ -832,6 +1069,55 @@ impl Job {
     /// its first gate.
     pub fn attempts_on_step(&self) -> u32 {
         self.attempts.get(&self.step).copied().unwrap_or(0)
+    }
+
+    /// Record that the daemon is about to act on this Job, before it does.
+    ///
+    /// **Written first, because the action might not finish.** `034` §6.5's
+    /// own words: *"a crash mid-merge leaves a `Merged` act with no outcome
+    /// rather than nothing at all"* — which is the one case this trail exists
+    /// for. Returns the id [`Job::settle_daemon_act`] needs to fill in what
+    /// came back.
+    pub fn begin_daemon_act(
+        &mut self,
+        at: String,
+        at_ms: u64,
+        act: DaemonActKind,
+        target: String,
+    ) -> String {
+        // Derived from the moment, the act and its target rather than drawn
+        // at random — the same reasoning [`mint_uuid`] states: randomness is
+        // not one of this codebase's three seams, and a hash of what already
+        // uniquely identifies this act costs nothing extra to mint.
+        let id = mint_uuid(&format!("daemon-act|{at_ms}|{}|{target}", act.word()));
+        self.daemon_acts.push(DaemonAct {
+            id: id.clone(),
+            at,
+            at_ms,
+            act,
+            target,
+            outcome: None,
+            outcome_at: None,
+        });
+        id
+    }
+
+    /// Fill in what a daemon act came back with.
+    ///
+    /// **The most recent match, defensively.** Ids are minted to be unique,
+    /// but a settle that raced a second `begin` for the same act, target and
+    /// millisecond must land on the row still open rather than on whichever
+    /// one `iter_mut` happened to reach first.
+    pub fn settle_daemon_act(&mut self, id: &str, at: String, outcome: DaemonOutcome) {
+        if let Some(entry) = self
+            .daemon_acts
+            .iter_mut()
+            .rev()
+            .find(|entry| entry.id == id)
+        {
+            entry.outcome = Some(outcome);
+            entry.outcome_at = Some(at);
+        }
     }
 }
 
@@ -1461,6 +1747,8 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
+            main_moved_at: None,
         }
     }
 
@@ -1889,6 +2177,8 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
+            main_moved_at: None,
         };
         assert_eq!(job.run_time_ms(1_840_000), 840_000);
         // A clock that stepped backwards costs a display value, never a panic.
@@ -2103,6 +2393,284 @@ mod tests {
         assert_eq!(serde_json::from_str::<Job>(&json).unwrap(), job);
     }
 
+    // -------------------------------------------------------- the daemon's own
+    // -------------------------------------------------------- audit trail
+
+    /// **A Job the daemon has never touched carries no trace of one** — the
+    /// same absence-is-honest rule every additive field in this file follows,
+    /// and the one `034` §6.5's own testing order names explicitly.
+    #[test]
+    fn a_job_the_daemon_has_never_touched_has_no_daemon_acts_in_its_json() {
+        let job = watching(JobState::Running);
+        assert!(job.daemon_acts.is_empty());
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(
+            !json.contains("daemon_acts"),
+            "an absent field is absent: {json}"
+        );
+    }
+
+    /// **The intent is written before the outcome is known, and it round-trips
+    /// that way.** This is the whole of `034` §6.5's argument: a Job whose
+    /// daemon act has no outcome yet is not a Job with a gap in its record —
+    /// it is the record of an act still in flight, or of a crash inside one.
+    #[test]
+    fn a_daemon_act_with_no_outcome_yet_round_trips() {
+        let mut job = watching(JobState::Running);
+        let id = job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Pushed,
+            "armada/rate-limit".to_string(),
+        );
+        assert_eq!(job.daemon_acts.len(), 1);
+        assert_eq!(job.daemon_acts[0].id, id);
+        assert!(job.daemon_acts[0].outcome.is_none());
+
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(
+            !json.contains("outcome_at"),
+            "an act with no outcome yet should not carry a settle time: {json}"
+        );
+        let back: Job = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, job);
+    }
+
+    /// Settling an act fills in what it came back with and when.
+    #[test]
+    fn settling_a_daemon_act_records_its_outcome_and_when() {
+        let mut job = watching(JobState::Running);
+        let id = job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Merged,
+            "142".to_string(),
+        );
+        job.settle_daemon_act(&id, "2026-08-17T10:01:00Z".to_string(), DaemonOutcome::Ok);
+        assert_eq!(job.daemon_acts[0].outcome, Some(DaemonOutcome::Ok));
+        assert_eq!(
+            job.daemon_acts[0].outcome_at.as_deref(),
+            Some("2026-08-17T10:01:00Z")
+        );
+    }
+
+    /// **A failure carries why**, not just that it failed — `034`'s own
+    /// example is a push with no remote configured, and a bare `failed` would
+    /// send a reader of `armada fleet show` straight back to a log this
+    /// record exists to replace.
+    #[test]
+    fn a_failed_act_carries_the_reason() {
+        let mut job = watching(JobState::Running);
+        let id = job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Pushed,
+            "armada/rate-limit".to_string(),
+        );
+        job.settle_daemon_act(
+            &id,
+            "2026-08-17T10:00:05Z".to_string(),
+            DaemonOutcome::Failed("no remote configured".to_string()),
+        );
+        assert_eq!(
+            job.daemon_acts[0].outcome.as_ref().unwrap().word(),
+            "failed"
+        );
+        assert_eq!(
+            job.daemon_acts[0].outcome.as_ref().unwrap().detail(),
+            Some("no remote configured")
+        );
+    }
+
+    /// Settling by id reaches the right row even when the Job has more than
+    /// one act on it, and the most recent match wins when ids collide.
+    #[test]
+    fn settling_reaches_the_right_act_among_several() {
+        let mut job = watching(JobState::Running);
+        let pushed = job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Pushed,
+            "armada/rate-limit".to_string(),
+        );
+        let opened = job.begin_daemon_act(
+            "2026-08-17T10:00:01Z".to_string(),
+            1_001,
+            DaemonActKind::Opened,
+            "142".to_string(),
+        );
+        job.settle_daemon_act(
+            &opened,
+            "2026-08-17T10:00:02Z".to_string(),
+            DaemonOutcome::Ok,
+        );
+        assert!(
+            job.daemon_acts[0].outcome.is_none(),
+            "the push settled instead"
+        );
+        assert_eq!(job.daemon_acts[1].id, opened);
+        assert_eq!(job.daemon_acts[1].outcome, Some(DaemonOutcome::Ok));
+
+        job.settle_daemon_act(
+            &pushed,
+            "2026-08-17T10:00:03Z".to_string(),
+            DaemonOutcome::Ok,
+        );
+        assert_eq!(job.daemon_acts[0].outcome, Some(DaemonOutcome::Ok));
+    }
+
+    /// An id nobody minted settles nothing, rather than inventing a row.
+    #[test]
+    fn settling_an_unknown_id_changes_nothing() {
+        let mut job = watching(JobState::Running);
+        job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Pushed,
+            "armada/rate-limit".to_string(),
+        );
+        job.settle_daemon_act(
+            "nonesuch",
+            "2026-08-17T10:00:03Z".to_string(),
+            DaemonOutcome::Ok,
+        );
+        assert_eq!(job.daemon_acts.len(), 1);
+        assert!(job.daemon_acts[0].outcome.is_none());
+    }
+
+    /// The word each act is shown by matches `034` §6.5's own table, even
+    /// though the enum's own storage is `snake_case` — the same split
+    /// [`StepEvent::word`] draws.
+    #[test]
+    fn a_daemon_act_kind_is_shown_by_the_words_034_names() {
+        for (kind, shown) in [
+            (DaemonActKind::Pushed, "pushed"),
+            (DaemonActKind::Opened, "opened"),
+            (DaemonActKind::ChecksGreen, "checks-green"),
+            (DaemonActKind::Merged, "merged"),
+            (DaemonActKind::Pulled, "pulled"),
+            (DaemonActKind::ReRan, "re-ran"),
+            (DaemonActKind::Reaped, "reaped"),
+            (DaemonActKind::MarkedMainMoved, "marked-main-moved"),
+            (DaemonActKind::ReportedFailure, "reported-failure"),
+            (DaemonActKind::RefusedToMerge, "refused-to-merge"),
+        ] {
+            assert_eq!(kind.word(), shown);
+        }
+    }
+
+    // -------------------------------------------------- the pull request body
+
+    /// The title is the task's first sentence, not the whole thing.
+    #[test]
+    fn the_title_is_the_tasks_first_sentence() {
+        let mut job = watching(JobState::Running);
+        job.task = "Add rate limiting to the API. It should use a token bucket.".to_string();
+        assert_eq!(pr_title(&job), "Add rate limiting to the API");
+    }
+
+    /// A task with no sentence break at all is still a title, whole.
+    #[test]
+    fn a_task_with_no_full_stop_is_the_whole_title() {
+        let mut job = watching(JobState::Running);
+        job.task = "add rate limiting".to_string();
+        assert_eq!(pr_title(&job), "add rate limiting");
+    }
+
+    /// A long task is cut at a word boundary, not mid-word.
+    #[test]
+    fn a_long_title_is_cut_at_a_word_boundary() {
+        let mut job = watching(JobState::Running);
+        job.task = "a ".repeat(40) + "task"; // far past 72 chars, all short words
+        let title = pr_title(&job);
+        assert!(title.chars().count() <= 73, "{title}"); // 72 + the ellipsis
+        assert!(title.ends_with('…'));
+        assert!(!title.contains("  "), "cut mid-word: {title}");
+    }
+
+    /// **The body carries the task, the plan and the passed steps — and
+    /// nothing from `progress`.** That absence is `034` §4's whole point: a
+    /// Drone's own summary of itself must not be what a reviewer reads.
+    #[test]
+    fn the_body_carries_the_record_and_not_the_drones_own_words() {
+        let mut job = watching(JobState::Running);
+        job.task = "add rate limiting to the API".to_string();
+        job.progress.push(Note {
+            at: "2026-08-17T09:00:00Z".to_string(),
+            at_ms: 1_000,
+            step: "implement".to_string(),
+            body: "I believe this is done and works great, trust me!".to_string(),
+        });
+        job.transitions = vec![
+            Transition {
+                at: "2026-08-17T09:00:00Z".to_string(),
+                at_ms: 1_000,
+                step: "plan".to_string(),
+                event: StepEvent::Entered,
+                attempt: 1,
+                gate: None,
+            },
+            Transition {
+                at: "2026-08-17T09:05:00Z".to_string(),
+                at_ms: 2_000,
+                step: "plan".to_string(),
+                event: StepEvent::Completed,
+                attempt: 1,
+                gate: None,
+            },
+            Transition {
+                at: "2026-08-17T10:00:00Z".to_string(),
+                at_ms: 3_000,
+                step: "implement".to_string(),
+                event: StepEvent::Failed,
+                attempt: 1,
+                gate: None,
+            },
+            Transition {
+                at: "2026-08-17T10:30:00Z".to_string(),
+                at_ms: 4_000,
+                step: "implement".to_string(),
+                event: StepEvent::Completed,
+                attempt: 2,
+                gate: None,
+            },
+        ];
+
+        let body = pr_body(&job, Some("# The Plan\n\nDo the thing."));
+
+        assert!(body.contains("add rate limiting to the API"));
+        assert!(body.contains("# The Plan"));
+        assert!(body.contains("Do the thing."));
+        assert!(body.contains("`plan` — completed at 2026-08-17T09:05:00Z (attempt 1)"));
+        assert!(body.contains("`implement` — completed at 2026-08-17T10:30:00Z (attempt 2)"));
+
+        // The failed attempt is not a passed step, so it is absent — checked
+        // by its own timestamp rather than a loose substring, which would
+        // also match `plan`'s unrelated "(attempt 1)" line above it.
+        assert!(!body.contains("2026-08-17T10:00:00Z"));
+        assert!(!body.contains("implement` — completed at 2026-08-17T10:00:00Z"));
+        // And the Drone's own words never appear.
+        assert!(!body.contains("I believe this is done"));
+    }
+
+    /// No `PLAN.md` in the worktree is not an error — the body just says so
+    /// rather than inventing a section for a file that is not there.
+    #[test]
+    fn a_missing_plan_md_omits_the_plan_section() {
+        let job = watching(JobState::Running);
+        let body = pr_body(&job, None);
+        assert!(!body.contains("## Plan"));
+        assert!(body.contains("## Task"));
+    }
+
+    /// A Job with no passed steps yet says so plainly, rather than printing
+    /// an empty list a reader might mistake for a rendering bug.
+    #[test]
+    fn a_job_with_no_passed_steps_says_so() {
+        let job = watching(JobState::Running);
+        assert!(pr_body(&job, None).contains("_none recorded yet._"));
+    }
+
     /// The record survives a reboot, so it has to survive a round trip through
     /// the index — including the fields that are absent when they are empty.
     #[test]
@@ -2145,6 +2713,8 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
+            main_moved_at: None,
         };
         let json = serde_json::to_string(&job).unwrap();
         assert!(!json.contains("confidence"), "an absent field is absent");

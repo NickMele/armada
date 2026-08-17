@@ -90,6 +90,40 @@ pub fn add(
     call(run, repo_root, argv, "could not create the worktree")
 }
 
+/// Check out `commit_ish` into a **detached, branchless** worktree —
+/// scratch space for the daemon's own re-run of checks against an updated
+/// `main` after a merge (`034` §3; PLAN.md §6, open question 2).
+///
+/// **Not [`add`].** That function always creates a new branch with `-b`,
+/// which is right for a Job's own worktree and wrong here: this worktree
+/// commits nothing and lives only as long as one check run, so `--detach`
+/// is what keeps it off any branch a person could mistake for real work —
+/// and off the namespace [`branch_for`] otherwise guarantees is Fleet's own.
+pub fn add_detached(
+    run: &impl Run,
+    repo_root: &Path,
+    path: &Path,
+    commit_ish: &str,
+) -> Result<(), ArmadaError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| ArmadaError {
+            class: ErrClass::Environment,
+            r#where: parent.display().to_string(),
+            message: format!("could not make room for the worktree: {e}"),
+            next_action: Some("check ~/.armada/workspaces/ is writable".to_string()),
+        })?;
+    }
+    let argv = vec![
+        "git".to_string(),
+        "worktree".to_string(),
+        "add".to_string(),
+        "--detach".to_string(),
+        path.display().to_string(),
+        commit_ish.to_string(),
+    ];
+    call(run, repo_root, argv, "could not create the re-run worktree")
+}
+
 /// Copy each declared path that exists in `repo_root` into `worktree`.
 ///
 /// **A path that does not exist in the source is not an error** — an
@@ -616,6 +650,29 @@ mod tests {
                 "-b",
                 "armada/rate-limit",
                 &path.display().to_string(),
+            ]
+        );
+    }
+
+    /// **`add_detached` never creates a branch**, which is the whole reason
+    /// it exists rather than reusing [`add`]: the daemon's own re-run
+    /// worktree (`034` §3; PLAN.md §6, open question 2) commits nothing and
+    /// must never land in [`branch_for`]'s namespace.
+    #[test]
+    fn add_detached_checks_out_a_commit_ish_with_no_branch_at_all() {
+        let run = FakeRun::ok();
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("workspaces/api/_daemon_rerun_8f2a1c40");
+        add_detached(&run, Path::new("/code/api"), &path, "main").unwrap();
+        assert_eq!(
+            run.argv(),
+            [
+                "git",
+                "worktree",
+                "add",
+                "--detach",
+                &path.display().to_string(),
+                "main",
             ]
         );
     }

@@ -11,6 +11,9 @@
   "properties": {
     "manifest": {
       "$ref": "#/$defs/manifest"
+    },
+    "fleet": {
+      "$ref": "#/$defs/fleet"
     }
   },
   "$defs": {
@@ -132,6 +135,27 @@
           },
           "additionalProperties": {
             "$ref": "#/$defs/secretProvider"
+          }
+        }
+      }
+    },
+    "fleet": {
+      "description": "Fleet's section: repository-scoped policy for the daemon, committed alongside `manifest:` rather than folded into it (034 \u00a76.4, ARCHITECTURE.md \u00a71.9). A sibling section, not a key inside `manifest:` \u2014 `manifest:` never reads this, which is what keeps Manifest agent-agnostic. Optional and out of `required`: a repository that says nothing here has not opted into any of it, and the safe reading of absence is `never` (see `fleet.land.merge` below).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "land": {
+          "description": "Policy for the daemon's landing pass (034 \u00a76.4, \u00a76).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "merge": {
+              "description": "Whether the daemon may merge a Job's PR once its checks are green, unattended. `auto` lands on `pr_merged`; `never` lands on `pr_open` and stops there \u2014 the daemon still pushes, opens the PR, watches checks and reports failures either way (034 \u00a76.4: \"`never` is not a degraded mode\"). Absent means `never`: the failure modes are not symmetrical, and a repository that has said nothing has not consented to unattended merging.",
+              "enum": [
+                "auto",
+                "never"
+              ]
+            }
           }
         }
       }

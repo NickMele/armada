@@ -226,6 +226,13 @@ fn json_wanted(invocation: &Invocation) -> bool {
         Invocation::Bridge(bridge) => bridge.json,
         Invocation::Helm(helm) => helm.json,
         Invocation::HelmEnable { json } | Invocation::HelmDisable { json } => *json,
+        Invocation::DaemonEnable { json }
+        | Invocation::DaemonDisable { json }
+        | Invocation::DaemonStatus { json } => *json,
+        // **Never `--json`.** Nobody types this by hand for output — it is
+        // launchd's own entrypoint, and it never reaches `emit` at all (see
+        // `dispatch`'s own arm): the loop it starts does not return.
+        Invocation::DaemonRun => false,
         Invocation::Guild(guild) => guild.json(),
         Invocation::Fleet(fleet) => fleet.json(),
         Invocation::Failures(failures) => failures.json(),
@@ -449,6 +456,38 @@ fn dispatch(
     }
     if let Invocation::HelmDisable { .. } = &invocation {
         return verbs::helm::disable(&armada_manifest::machine::armada_home(home));
+    }
+
+    // **`daemon enable`/`disable`/`status` are machine-scoped for the same
+    // reason `helm enable`/`disable` are just above**: each reads or writes
+    // one section of `~/.armada/machine.yml` and needs nothing about the
+    // workspace this command happened to be typed in — `034`'s daemon watches
+    // every repository's Jobs, not the one under the caller's feet.
+    if let Invocation::DaemonEnable { .. } = &invocation {
+        // The real binary path, resolved once here — the launchd job it
+        // installs has to exec *this build*, not whatever `armada` resolves
+        // to on `PATH` the next time the plist runs (`ARCHITECTURE.md` §1.4).
+        let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada"));
+        return verbs::daemon::enable(&armada_manifest::machine::armada_home(home), &exe);
+    }
+    if let Invocation::DaemonDisable { .. } = &invocation {
+        return verbs::daemon::disable(&armada_manifest::machine::armada_home(home));
+    }
+    if let Invocation::DaemonStatus { .. } = &invocation {
+        return verbs::daemon::status(&armada_manifest::machine::armada_home(home));
+    }
+    if let Invocation::DaemonRun = &invocation {
+        // **Never returns.** `armada daemon run` records its own arrival and
+        // then loops until something kills it — launchd's `KeepAlive`, a
+        // signal, or `armada daemon stop`'s own `SIGTERM`. There is no
+        // envelope to emit because there is no moment this call finishes.
+        //
+        // `home` is passed alongside `armada_home` because the watch loop's
+        // own `Where` needs both — `armada_home` for the Job index and the
+        // trail, `home` for `Where::expand`'s `~/…` — the same two facts
+        // every other `Where` on this page is built from.
+        verbs::daemon::run(home, &armada_manifest::machine::armada_home(home))?;
+        unreachable!("`armada daemon run` loops forever once it has started")
     }
 
     // **Fleet is machine-scoped too, and for its own reason.** A Job's worktree
@@ -912,6 +951,10 @@ fn dispatch(
         | Invocation::Helm(_)
         | Invocation::HelmEnable { .. }
         | Invocation::HelmDisable { .. }
+        | Invocation::DaemonEnable { .. }
+        | Invocation::DaemonDisable { .. }
+        | Invocation::DaemonStatus { .. }
+        | Invocation::DaemonRun
         | Invocation::Failures(_)
         | Invocation::Tasks(_)
         | Invocation::Untried { .. }

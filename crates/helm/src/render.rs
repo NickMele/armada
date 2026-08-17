@@ -53,13 +53,14 @@ pub mod term;
 
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, BridgeData, CheckData, CheckDryRun, CleanData, CleanDryRun,
-    CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, FailureData,
-    FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
-    GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData,
-    HelmSwitchData, InboxData, InboxRow, InitData, InitDryRun, KillData, MachineInitData, McpData,
-    PauseData, ProbeData, Projection, ProposeData, PruneData, ReapPlanData, ReportData, ResultRow,
-    ResumeData, ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData,
-    TickData, TransitionRow, Unreclaimed, UpDryRun, VerdictData, VerifyData, Window, Wiring,
+    CommandsData, ComponentsData, DaemonStatusData, DaemonSwitchData, DispatchData, Disposition,
+    DoctorData, Envelope, FailureData, FailuresData, Finding, FleetLsData, GuildBundleData,
+    GuildChangeData, GuildInitData, GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData,
+    Headline, HelmData, HelmSwitchData, InboxData, InboxRow, InitData, InitDryRun, KillData,
+    MachineInitData, McpData, PauseData, ProbeData, Projection, ProposeData, PruneData,
+    ReapPlanData, ReportData, ResultRow, ResumeData, ScanData, ServicesData, SettingsData,
+    ShowData, SkillsData, SpawnData, StatusData, TickData, TransitionRow, Unreclaimed, UpDryRun,
+    VerdictData, VerifyData, Window, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, Listing, State as FailureState};
@@ -122,6 +123,8 @@ pub fn human(output: &Output, style: Style, terminal: Terminal) -> String {
         Output::Bridge(envelope) => bridge(envelope, style, width),
         Output::Helm(envelope) => helm(envelope, style, width),
         Output::HelmSwitch(envelope) => helm_switch(envelope, style),
+        Output::DaemonSwitch(envelope) => daemon_switch(envelope, style),
+        Output::DaemonStatus(envelope) => daemon_status(envelope, style),
         Output::Show(envelope) => show(envelope, style, width),
         Output::Board(envelope) => board(envelope, style, width),
         Output::Kill(envelope) => kill(envelope, style, width),
@@ -2242,6 +2245,55 @@ fn helm_switch(envelope: &Envelope<HelmSwitchData>, style: Style) -> String {
     )
 }
 
+/// `armada daemon enable` and `armada daemon disable` — [`helm_switch`]'s own
+/// shape, for a different switch.
+fn daemon_switch(envelope: &Envelope<DaemonSwitchData>, style: Style) -> String {
+    let data = &envelope.data;
+    let state = match data.enter {
+        true => "on",
+        false => "off",
+    };
+    let changed = match data.changed {
+        true => "",
+        false => " — already there",
+    };
+    summary(
+        style,
+        envelope.status,
+        &[format!("the daemon is {state} on this machine{changed}")],
+    )
+}
+
+/// `armada daemon status` — the switch and the live process, **as two lines**
+/// because they are two separate facts (`envelope::DaemonStatusData`'s own
+/// reasoning): a switch that is on with no live process is exactly the gap
+/// this verb exists to make visible rather than folding into one word.
+fn daemon_status(envelope: &Envelope<DaemonStatusData>, style: Style) -> String {
+    let data = &envelope.data;
+    let switch = match data.enter {
+        true => "on",
+        false => "off",
+    };
+    let process = match data.pid {
+        Some(pid) => format!("running, pid {pid}"),
+        // **Named differently depending on the switch**, because the two
+        // absences mean different things: off-and-absent is a machine that
+        // has never enabled it, on-and-absent is a daemon that stopped
+        // without anyone turning the switch back off — the exact gap `034`
+        // §5 item 9 asks `armada doctor` to surface.
+        None if data.enter => "not running — enabled here, but nothing is alive".to_string(),
+        None => "not running".to_string(),
+    };
+    summary(
+        style,
+        envelope.status,
+        &[
+            format!("switch: {switch} on this machine"),
+            format!("process: {process}"),
+        ],
+    )
+}
+
 // ------------------------------------------------------------------- fleet show
 // one Job, and why it wants you — the view the Bridge's table cannot be
 
@@ -2335,6 +2387,7 @@ pub fn show_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>>
 
     lines.extend(transition_lines(data, style, width));
     lines.extend(progress_lines(data, style, width));
+    lines.extend(daemon_acts_lines(data, style, width));
 
     lines.push(Vec::new());
     lines.push(show_summary_pieces(data, style));
@@ -2707,6 +2760,55 @@ fn progress_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>>
             Cell::muted(note.step.clone()),
             detail_cell(style, Some(&note.body)),
             Cell::muted(format::elapsed(note.ago_s * 1_000)),
+        ]);
+    }
+    let mut lines = vec![Vec::new()];
+    lines.extend(table.spans(style, width));
+    lines
+}
+
+/// **What the daemon has done to this Job, unattended** — a third table
+/// beside [`transition_lines`] and [`progress_lines`], and never a column
+/// folded into either (`034` §6.5). A push is not a step boundary and it is
+/// not the Drone's own words; it is something Armada itself did, and it gets
+/// a voice of its own for the reason those two already have separate ones.
+///
+/// **This is the plain-text render only** — `armada fleet show` printed to a
+/// terminal. The Bridge's own drawing of this data is out of scope here and
+/// belongs to the Job wiring the command centre's panes (`034`'s stage-one
+/// plan, §2): this function only has to make the trail visible somewhere,
+/// which it now is.
+fn daemon_acts_lines(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    if data.daemon_acts.is_empty() {
+        return Vec::new();
+    }
+    let mut table = Table::new(vec![
+        Column::fixed("status", "status"),
+        Column::fixed("act", "act"),
+        Column::flexible("detail", "detail"),
+        Column::fixed("time", "time").right(),
+    ])
+    .indent(2);
+    for act in &data.daemon_acts {
+        let mut said = act.target.clone();
+        if let Some(detail) = &act.outcome_detail {
+            said.push_str(&format!(", {detail}"));
+        }
+        table = table.row(vec![
+            token(
+                act.outcome.as_deref().unwrap_or("in flight"),
+                match act.outcome.as_deref() {
+                    Some("ok") => Role::BeaconGreen,
+                    Some("failed") => Role::DistressRed,
+                    // Still in flight: not yet an outcome, so not painted as
+                    // one — the same restraint `transition_lines` uses for an
+                    // assertion the gate has not confirmed.
+                    _ => Role::SteelGrey,
+                },
+            ),
+            Cell::muted(act.act.clone()),
+            detail_cell(style, Some(&said)),
+            Cell::muted(format::elapsed(act.ago_s * 1_000)),
         ]);
     }
     let mut lines = vec![Vec::new()];

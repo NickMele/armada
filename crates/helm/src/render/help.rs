@@ -124,7 +124,7 @@ const EVERYWHERE: [(&str, &str); 2] = [
 /// `docs/commands/**` describes the verb Armada is going to have; this table
 /// describes the one it has, and the two are allowed to differ only in that
 /// direction.
-const PAGES: [Page; 46] = [
+const PAGES: [Page; 50] = [
     // ------------------------------------------------------------- Manifest
     Page {
         path: "manifest config",
@@ -903,6 +903,84 @@ const PAGES: [Page; 46] = [
             "Read-only. `armada helm enable`/`disable` and the guild's own verbs are",
             "still how a setting changes; this only shows what they left behind.",
             "A setting nobody has touched still gets a row, with its default.",
+        ],
+    },
+    Page {
+        path: "daemon",
+        synopsis: "daemon",
+        summary: "034's daemon — pushes, opens and merges — off until told to",
+        usage: &[
+            "armada daemon enable [--json]",
+            "armada daemon disable [--json]",
+            "armada daemon status [--json]",
+        ],
+        flags: &[],
+        examples: &[
+            (
+                "armada daemon enable",
+                "let it run unattended, on this machine",
+            ),
+            (
+                "armada daemon status",
+                "the switch and the live process, as two facts",
+            ),
+        ],
+        notes: &[
+            "Per machine, in ~/.armada/machine.yml under fleet.daemon.enter — off on a",
+            "fresh install, the same discipline armada helm enable/disable follows for",
+            "helm.enter. `armada daemon enable` also installs a launchd job on macOS,",
+            "the only OS this stage supports; every other machine is refused by name.",
+            "See armada daemon enable/disable/status --help for each on its own.",
+        ],
+    },
+    Page {
+        path: "daemon enable",
+        synopsis: "enable",
+        summary: "let the daemon run unattended, on this machine (macOS)",
+        usage: &["armada daemon enable [--json]"],
+        flags: &[],
+        examples: &[(
+            "armada daemon enable",
+            "flips the switch and loads the launchd job",
+        )],
+        notes: &[
+            "Writes fleet.daemon.enter: true to ~/.armada/machine.yml — the file that",
+            "never syncs, because whether this box may push, open and merge on your",
+            "behalf unattended is a fact about the box. Installs",
+            "~/Library/LaunchAgents/com.armada.daemon.plist and `launchctl load`s it;",
+            "RunAtLoad and KeepAlive are what actually start and restart the process.",
+            "Refused, by name, on anything but macOS — this stage builds launchd only.",
+        ],
+    },
+    Page {
+        path: "daemon disable",
+        synopsis: "disable",
+        summary: "the opposite of enable — the default on a fresh install",
+        usage: &["armada daemon disable [--json]"],
+        flags: &[],
+        examples: &[(
+            "armada daemon disable",
+            "unloads the launchd job and stops the process",
+        )],
+        notes: &[
+            "Writes the same boolean armada daemon enable does, false. Safe to run on",
+            "any machine, whatever enable did or did not do — a machine that never",
+            "enabled has nothing to unload and nothing running to stop.",
+        ],
+    },
+    Page {
+        path: "daemon status",
+        synopsis: "status",
+        summary: "the switch and the live process, as two separate facts",
+        usage: &["armada daemon status [--json]"],
+        flags: &[],
+        examples: &[(
+            "armada daemon status",
+            "on and running, on and not running, or off",
+        )],
+        notes: &[
+            "A switch that is on with no live process is not the same fact as a",
+            "machine that never enabled it — this is where the difference is visible.",
         ],
     },
     Page {
