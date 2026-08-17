@@ -8,6 +8,11 @@
 # Two things it is the only fixture to do, both of which fall out of being
 # small: a component with no `root:` and no `match:` (the component *is* the
 # repo), and a `secrets:` grant on a check rather than on a service.
+#
+# It is also the only fixture that exercises `fleet:` (034 §6.4) — a sibling
+# section to `manifest:`, never a key inside it, since Manifest never reads
+# it. `resolve()` never looks at `document.fleet` either, so its presence
+# here changes nothing in `resolved.json`.
 
 manifest:
   version: 1
@@ -50,3 +55,7 @@ manifest:
           needs: [postgres]
           secrets: [DB_PASSWORD]
           timeout: 600
+
+fleet:
+  land:
+    merge: auto

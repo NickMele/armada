@@ -17,8 +17,8 @@
 //! test suite runs both over every fixture, so a gap between them is visible.
 
 use super::model::{
-    Check, CommandEntry, Component, Config, Document, OneOrMany, OwnsCommand, OwnsComponent,
-    OwnsRun, Ready, Run, SetupStep, SkillEntry,
+    Check, CommandEntry, Component, Config, Document, LandMerge, OneOrMany, OwnsCommand,
+    OwnsComponent, OwnsRun, Ready, Run, SetupStep, SkillEntry,
 };
 use super::resolved::{
     Need, ReadyKind, ResolvedCheck, ResolvedCommand, ResolvedComponent, ResolvedConfig,
@@ -110,6 +110,38 @@ pub fn parse(text: &str, file: &str) -> Result<Config, ArmadaError> {
     }
 
     Ok(config)
+}
+
+/// Read a repository's `fleet.land.merge` policy (034 §6.4).
+///
+/// **A separate, sibling function to [`parse`], not a widening of it.**
+/// `parse`'s one job is producing Manifest's own [`Config`] — the line above,
+/// `.map(|document| document.manifest)`, discards everything else in the
+/// [`Document`] and that line does not change here. Folding `document.fleet`
+/// into `Config`/[`super::resolved::ResolvedConfig`] instead would put
+/// agent-shaped policy in front of every Manifest-facing verb that already
+/// consumes that type — exactly the crack `ARCHITECTURE.md` §1.9 exists to
+/// keep closed, and the one `cargo xtask boundaries` cannot see (it only
+/// checks the crate-dependency graph, and `crates/manifest` → `armada-core`
+/// is an existing, legitimate edge either way). This function is meant to be
+/// called from `crates/fleet` alone, reading its own policy; `crates/manifest`
+/// must gain no reference to it.
+///
+/// **`Never` whenever the document does not say `auto` unambiguously** —
+/// text that fails to parse, a document with no `fleet:` section, a `fleet:`
+/// with no `land:`, or a `land:` with no `merge:` all resolve the same way.
+/// 034 §6.4: *"`never` must be the default when the section is absent"* — a
+/// repository that has said nothing has not consented to unattended merging,
+/// and the failure modes are not symmetrical: a daemon that does not merge
+/// leaves a PR for a person, and one that merges when it should not have
+/// cannot be undone.
+pub fn land_merge(text: &str) -> LandMerge {
+    serde_yaml_ng::from_str::<Document>(text)
+        .ok()
+        .and_then(|document| document.fleet)
+        .and_then(|fleet| fleet.land)
+        .and_then(|land| land.merge)
+        .unwrap_or(LandMerge::Never)
 }
 
 /// Read only the `workspaces:` list, tolerating everything else.
@@ -780,5 +812,65 @@ mod tests {
     fn an_unknown_key_is_a_parse_error_not_a_silently_ignored_line() {
         let err = parse("manifest:\n  version: 1\n  componentz: {}\n", "armada.yml").unwrap_err();
         assert!(err.message.contains("unknown field"), "{}", err.message);
+    }
+
+    // `land_merge` — 034 §6.4. `Never` is the answer for every shape of
+    // "the document did not say `auto`", not just a bare absent `fleet:`.
+    #[test]
+    fn land_merge_is_never_when_fleet_is_absent() {
+        assert_eq!(
+            land_merge("manifest:\n  version: 1\n"),
+            crate::config::LandMerge::Never
+        );
+    }
+
+    #[test]
+    fn land_merge_is_never_when_land_is_absent() {
+        assert_eq!(
+            land_merge("manifest:\n  version: 1\nfleet: {}\n"),
+            crate::config::LandMerge::Never
+        );
+    }
+
+    #[test]
+    fn land_merge_is_never_when_merge_is_absent() {
+        assert_eq!(
+            land_merge("manifest:\n  version: 1\nfleet:\n  land: {}\n"),
+            crate::config::LandMerge::Never
+        );
+    }
+
+    #[test]
+    fn land_merge_is_never_on_unparseable_text() {
+        assert_eq!(land_merge("not: [valid"), crate::config::LandMerge::Never);
+    }
+
+    #[test]
+    fn land_merge_is_auto_when_the_document_says_so() {
+        assert_eq!(
+            land_merge("manifest:\n  version: 1\nfleet:\n  land:\n    merge: auto\n"),
+            crate::config::LandMerge::Auto
+        );
+    }
+
+    #[test]
+    fn land_merge_is_never_when_the_document_says_so_explicitly() {
+        assert_eq!(
+            land_merge("manifest:\n  version: 1\nfleet:\n  land:\n    merge: never\n"),
+            crate::config::LandMerge::Never
+        );
+    }
+
+    /// `parse()`'s own boundary: it still returns only `Config`, so a
+    /// `fleet:` section beside `manifest:` must not make it a parse error —
+    /// `document.fleet` is simply discarded by `.map(|document| document.manifest)`.
+    #[test]
+    fn parse_ignores_a_present_fleet_section_and_still_returns_only_manifest() {
+        let config = parse(
+            "manifest:\n  version: 1\nfleet:\n  land:\n    merge: auto\n",
+            "armada.yml",
+        )
+        .expect("a fleet: section beside manifest: is not a parse error");
+        assert_eq!(config.version, 1);
     }
 }
