@@ -2155,14 +2155,50 @@ fn a_reap_ends_exactly_what_it_was_given_and_releases_it() {
         other => panic!("not a kill: {other:?}"),
     }
 
+    // **It reached `DONE` and it still says so.** This asserted `ABORTED`, and
+    // that is what shipped: one `armada fleet reap --yes` turned seven finished
+    // Jobs into aborted ones, including one that had passed both its gates,
+    // landed on its branch and been merged into `main` an hour earlier. Its
+    // record read `ABORTED/land` while its work was in the history.
+    //
+    // Releasing what a finished Job holds and rewriting whether it succeeded
+    // are different acts, and only the first was asked for. The verdict is the
+    // one durable answer to *did this work*, read weeks later, long after the
+    // worktree is gone.
     let record = scratch.store().load(&taken.uuid).unwrap();
-    assert_eq!(record.state, JobState::Aborted);
+    assert_eq!(record.state, JobState::Done, "a reap rewrote a verdict");
     assert!(record.port_block.is_none(), "the port block was stranded");
     assert_eq!(
         scratch.store().load(&kept.uuid).unwrap().state,
         JobState::Running,
         "a reap took a Job it was not given"
     );
+}
+
+/// **A `kill` still means `ABORTED`, and that is the half this must not break.**
+///
+/// `reap` and `kill` share one teardown, and the fix that stopped `reap`
+/// rewriting a finished Job's verdict must not stop `kill` recording that it
+/// gave up on a running one. Killing a Job that is working is exactly the case
+/// where `ABORTED` is the truth.
+#[test]
+fn killing_a_working_job_still_records_that_it_was_aborted() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task(&format!("keep going {STAY_ALIVE}")));
+
+    fleet::kill(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        Some(&data.name),
+        false,
+        false,
+    )
+    .expect("the kill runs");
+
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_eq!(record.state, JobState::Aborted);
 }
 
 /// **A Job that came back to life between the preview and the `enter` is refused
