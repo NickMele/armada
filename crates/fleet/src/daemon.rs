@@ -296,13 +296,59 @@ pub mod launchd {
     /// `Disabled` in launchd's own database still loads.** Without it a second
     /// `enable` after a `disable` would silently stay off — the same
     /// silent-no-op `034` refuses to ship anywhere in this stage.
+    ///
+    /// # The load is verified, because `launchctl load` does not report failure
+    ///
+    /// **`launchctl load -w` exits 0 whether it worked or not.** Measured on
+    /// the author's own machine: it printed `Load failed: 5: Input/output
+    /// error` and exited `0`, and [`run_launchctl`]'s `status.success()` read
+    /// that as a success — so `armada daemon enable` answered `OK  the daemon
+    /// is on on this machine` over a launchd that held nothing.
+    ///
+    /// **Its stderr cannot be the signal either.** The same `Load failed: 5` is
+    /// what an *already loaded* job prints, which is the ordinary second
+    /// `enable` and is the state the caller asked for — failing on it would
+    /// break the idempotence `034` requires of every switch, and would report
+    /// a daemon that is running as off.
+    ///
+    /// So the question is asked of launchd instead of inferred from a stream:
+    /// `launchctl list <LABEL>` exits 0 when launchd holds the job and 113 when
+    /// it does not. That answers *is the daemon on this machine* — which is
+    /// what the envelope claims — rather than *did one command print
+    /// anything*.
     pub fn install(home: &Path, exe: &Path) -> Result<(), ArmadaError> {
         let path = plist_path(home);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| unwritable(&path, &e))?;
         }
         std::fs::write(&path, plist(exe)).map_err(|e| unwritable(&path, &e))?;
-        run_launchctl(&["load", "-w", &path.display().to_string()], "load")
+        run_launchctl(&["load", "-w", &path.display().to_string()], "load")?;
+        loaded(&path)
+    }
+
+    /// Whether launchd is actually holding the job, which is what `enable`
+    /// promises and what its own exit code could not tell.
+    fn loaded(path: &Path) -> Result<(), ArmadaError> {
+        match std::process::Command::new("launchctl")
+            .args(["list", LABEL])
+            .output()
+        {
+            Ok(output) if output.status.success() => Ok(()),
+            // An unreadable `launchctl` is not evidence the job is absent, and
+            // this module's fail-safe direction is never to invent a failure —
+            // `armada daemon status` reads the pidfile and answers separately.
+            Err(_) => Ok(()),
+            Ok(_) => Err(ArmadaError {
+                class: ErrClass::Environment,
+                r#where: "daemon".to_string(),
+                message: format!("launchd did not take `{LABEL}` from {}", path.display()),
+                next_action: Some(
+                    "run `launchctl load -w` on that path to read launchd's own words, then \
+                     `armada daemon enable` again"
+                        .to_string(),
+                ),
+            }),
+        }
     }
 
     /// `launchctl unload -w` the job and remove the plist.

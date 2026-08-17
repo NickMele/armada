@@ -468,10 +468,16 @@ fn dispatch(
         // installs has to exec *this build*, not whatever `armada` resolves
         // to on `PATH` the next time the plist runs (`ARCHITECTURE.md` §1.4).
         let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("armada"));
-        return verbs::daemon::enable(&armada_manifest::machine::armada_home(home), &exe);
+        // **`home` as well as `armada_home`, for the reason `daemon run` below
+        // is handed both**: the switch is a line in `~/.armada/machine.yml`, and
+        // the launchd job is a file in `~/Library/LaunchAgents/`, which is
+        // macOS's directory rather than Armada's. Passing `armada_home` for both
+        // put the plist under `~/.armada/Library/LaunchAgents/`, where launchd
+        // never looks at login.
+        return verbs::daemon::enable(home, &armada_manifest::machine::armada_home(home), &exe);
     }
     if let Invocation::DaemonDisable { .. } = &invocation {
-        return verbs::daemon::disable(&armada_manifest::machine::armada_home(home));
+        return verbs::daemon::disable(home, &armada_manifest::machine::armada_home(home));
     }
     if let Invocation::DaemonStatus { .. } = &invocation {
         return verbs::daemon::status(&armada_manifest::machine::armada_home(home));

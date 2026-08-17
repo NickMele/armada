@@ -10,6 +10,13 @@
 //! loads the launchd job ([`armada_fleet::daemon::launchd`]), and `disable`
 //! unloads and removes it.
 //!
+//! **Every verb here takes `$HOME` and `~/.armada` as two separate
+//! arguments**, because the two things a switch touches live in two
+//! directories: the switch itself is `~/.armada/machine.yml`, and the launchd
+//! job is `~/Library/LaunchAgents/`, which belongs to macOS. Passing
+//! `armada_home` for both is what put the plist under
+//! `~/.armada/Library/LaunchAgents/` — see [`enable`].
+//!
 //! # `enable` does not also call `armada_fleet::daemon::start`
 //!
 //! **launchd's `RunAtLoad` is what starts the process, and calling
@@ -36,18 +43,37 @@ use crate::verbs::Output;
 /// and nothing else; refused by name everywhere else, before anything is
 /// written — the same "never a silent no-op" rule `034` states for exactly
 /// this switch.
+///
+/// # `home` and `armada_home` are two different directories, and this verb
+/// needs both
+///
+/// The switch is a line in `~/.armada/machine.yml`, so it takes
+/// `armada_home`. The launchd job is a file in `~/Library/LaunchAgents/`,
+/// which is a directory of macOS's and not one of Armada's, so it takes
+/// `home` — the real `$HOME`, read once at the entrypoint and threaded down
+/// as a value (`ARCHITECTURE.md` §1.4), exactly as `armada daemon run`
+/// already takes both for its `Where`.
+///
+/// **This call site used to pass `armada_home` for both**, and
+/// [`armada_fleet::daemon::launchd::plist_path`] joined `Library/LaunchAgents`
+/// onto it without complaint: the plist landed at
+/// `~/.armada/Library/LaunchAgents/com.armada.daemon.plist`, a path launchd
+/// never reads at login. Measured on the author's own machine — that file
+/// present, `~/Library/LaunchAgents/` holding nothing matching `armada` — so
+/// the daemon this verb promises to keep alive "across logins" was gone at
+/// the next one.
 #[cfg(target_os = "macos")]
-pub fn enable(armada_home: &Path, exe: &Path) -> Result<Output, ArmadaError> {
+pub fn enable(home: &Path, armada_home: &Path, exe: &Path) -> Result<Output, ArmadaError> {
     let before = armada_fleet::machine::read(armada_home).daemon.enter;
     write_switch(armada_home, true)?;
-    armada_fleet::daemon::launchd::install(armada_home, exe)?;
+    armada_fleet::daemon::launchd::install(home, exe)?;
     Ok(switch_output("daemon enable", true, !before))
 }
 
 /// The refusal every other OS gets, in this stage.
 #[cfg(not(target_os = "macos"))]
-pub fn enable(armada_home: &Path, exe: &Path) -> Result<Output, ArmadaError> {
-    let _ = (armada_home, exe);
+pub fn enable(home: &Path, armada_home: &Path, exe: &Path) -> Result<Output, ArmadaError> {
+    let _ = (home, armada_home, exe);
     Err(armada_fleet::daemon::enable_unsupported())
 }
 
@@ -60,25 +86,31 @@ pub fn enable(armada_home: &Path, exe: &Path) -> Result<Output, ArmadaError> {
 /// "not loaded" and [`armada_fleet::daemon::stop`] of "no pidfile", so
 /// neither turns the ordinary case into a refusal — the same idempotence
 /// `armada helm disable` gives its own switch.
-pub fn disable(armada_home: &Path) -> Result<Output, ArmadaError> {
+///
+/// **`home` for the same reason [`enable`] takes it**, and it is the half that
+/// makes `disable` able to clean up: an `uninstall` handed `armada_home`
+/// unloads and removes a path launchd was never told about, and leaves the
+/// plist that is actually installed exactly where it is.
+pub fn disable(home: &Path, armada_home: &Path) -> Result<Output, ArmadaError> {
     let before = armada_fleet::machine::read(armada_home).daemon.enter;
     write_switch(armada_home, false)?;
-    uninstall_and_stop(armada_home)?;
+    uninstall_and_stop(home, armada_home)?;
     Ok(switch_output("daemon disable", false, before))
 }
 
 #[cfg(target_os = "macos")]
-fn uninstall_and_stop(armada_home: &Path) -> Result<(), ArmadaError> {
+fn uninstall_and_stop(home: &Path, armada_home: &Path) -> Result<(), ArmadaError> {
     // **Unload before cleaning up the pidfile.** `launchctl unload` is what
     // stops `KeepAlive` from resurrecting the process the moment `stop`'s own
     // signal reaches it; reversing the order would have `stop` kill it and
     // launchd bring it straight back.
-    armada_fleet::daemon::launchd::uninstall(armada_home)?;
+    armada_fleet::daemon::launchd::uninstall(home)?;
     armada_fleet::daemon::stop(armada_home)
 }
 
 #[cfg(not(target_os = "macos"))]
-fn uninstall_and_stop(armada_home: &Path) -> Result<(), ArmadaError> {
+fn uninstall_and_stop(home: &Path, armada_home: &Path) -> Result<(), ArmadaError> {
+    let _ = home;
     armada_fleet::daemon::stop(armada_home)
 }
 
@@ -259,10 +291,15 @@ fn switch_output(verb: &str, enter: bool, changed: bool) -> Output {
 mod tests {
     use super::*;
 
+    /// **Two directories, not one**, because that is the shape of the call and
+    /// a test that passed one path twice is what let the swap through: `$HOME`
+    /// for the launchd job, `~/.armada` for the switch. Where the plist lands
+    /// is `crates/helm/tests/daemon.rs`'s subject, through the real binary.
     #[test]
     fn disabling_a_machine_that_never_enabled_is_not_an_error() {
         let home = tempfile::tempdir().unwrap();
-        let output = disable(home.path()).unwrap();
+        let armada_home = home.path().join(".armada");
+        let output = disable(home.path(), &armada_home).unwrap();
         let Output::DaemonSwitch(envelope) = output else {
             panic!("expected DaemonSwitch");
         };
@@ -297,9 +334,15 @@ mod tests {
     #[test]
     fn enabling_off_macos_is_refused_and_writes_nothing() {
         let home = tempfile::tempdir().unwrap();
-        let error = enable(home.path(), Path::new("/usr/local/bin/armada")).unwrap_err();
+        let armada_home = home.path().join(".armada");
+        let error = enable(
+            home.path(),
+            &armada_home,
+            Path::new("/usr/local/bin/armada"),
+        )
+        .unwrap_err();
         assert_eq!(error.class, ErrClass::Environment);
-        assert!(!home.path().join("machine.yml").exists());
+        assert!(!armada_home.join("machine.yml").exists());
     }
 
     // -------------------------------------------------- watch_once — the
