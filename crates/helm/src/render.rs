@@ -56,10 +56,10 @@ use armada_core::envelope::{
     CommandsData, ComponentsData, DispatchData, Disposition, DoctorData, Envelope, FailureData,
     FailuresData, Finding, FleetLsData, GuildBundleData, GuildChangeData, GuildInitData,
     GuildItemData, GuildListData, GuildSyncData, GuildUpgradeData, Headline, HelmData,
-    HelmSwitchData, InboxData, InitData, InitDryRun, KillData, MachineInitData, McpData, PauseData,
-    ProbeData, Projection, ProposeData, PruneData, ReapPlanData, ReportData, ResultRow, ResumeData,
-    ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData, TickData,
-    Unreclaimed, UpDryRun, VerdictData, VerifyData, Wiring,
+    HelmSwitchData, InboxData, InboxRow, InitData, InitDryRun, KillData, MachineInitData, McpData,
+    PauseData, ProbeData, Projection, ProposeData, PruneData, ReapPlanData, ReportData, ResultRow,
+    ResumeData, ScanData, ServicesData, SettingsData, ShowData, SkillsData, SpawnData, StatusData,
+    TickData, TransitionRow, Unreclaimed, UpDryRun, VerdictData, VerifyData, Window, Wiring,
 };
 use armada_core::error::{ArmadaError, Status};
 use armada_core::failure::{Entry as FailureEntry, Listing, State as FailureState};
@@ -74,7 +74,7 @@ use crate::verbs::Output;
 use palette::Role;
 use style::Style;
 use table::{Cell, Column, Span, Table};
-use term::Terminal;
+use term::{display_width, Terminal};
 
 /// Render for a terminal.
 ///
@@ -1130,6 +1130,518 @@ fn step_cell(row: &armada_core::envelope::JobRow) -> Cell {
     }
 }
 
+// ==================================================== the command centre
+//
+// `docs/reserved/033-the-command-centre-designed.md`'s seven boxes. Each
+// function below draws exactly one — a `Table`/`titled_box` pair — and
+// nothing here reaches across panels: `frame.rs` "must know nothing about
+// Jobs, Manifest or Guild" and these functions are the other half of that
+// rule, each typed to take exactly one panel's own data (`PLAN.md` §7). None
+// takes a Job id and a `BridgeView` field at once.
+
+/// `ARMADA` — the workspace, where it is, and both usage windows.
+///
+/// **One line, always** — the 96-column mock collapses the same line rather
+/// than dropping it, because it is the one fact every other box is read
+/// against.
+pub fn armada_header(
+    windows: &[Window],
+    workspace_id: &str,
+    cwd: &str,
+    width: usize,
+) -> Vec<Vec<Span>> {
+    let mut pieces = vec![format!("armada {workspace_id}"), cwd.to_string()];
+    pieces.extend(window_facts(windows));
+    let line = vec![Span {
+        text: format!(" {}", pieces.join("   ")),
+        role: None,
+        bold: false,
+    }];
+    frame::titled_box("ARMADA", vec![line], width)
+}
+
+/// `JOBS (N)` — the fleet table the single-table Bridge already draws,
+/// unchanged, boxed.
+///
+/// **Reuses [`bridge_table`] rather than a second column set.** The mock
+/// draws a narrower set of columns (`JOB ID STATUS STEP ITER SPENT TIME`) and
+/// marks the cursor by replacing the row's leading space with `▸`
+/// ([`frame::focus`]) instead of a caret column — full parity with that exact
+/// layout is deferred; what ships here is the same table `armada bridge`
+/// already draws and tests, boxed rather than bare, which keeps one JOBS
+/// column set in the codebase rather than two.
+pub fn jobs_box(
+    data: &BridgeData,
+    style: Style,
+    cursor: Option<usize>,
+    width: usize,
+) -> Vec<Vec<Span>> {
+    let mut lines = bridge_table(data, style, cursor, width).spans(style, width);
+    if data.results.is_empty() {
+        lines.push(vec![Span {
+            text: format!(
+                " {}",
+                match data.filter {
+                    Some(_) => "no Jobs match",
+                    None => "no Jobs",
+                }
+            ),
+            role: Some(Role::SteelGrey),
+            bold: false,
+        }]);
+    }
+    // **The counts the mock's own footer draws** — `DONE today 3   aborted 1
+    // spent $8.40` — the same facts the single-table Bridge's summary line
+    // stated, without the leading status word (a box titled `JOBS (N)`
+    // already states the count) and without the usage windows, which
+    // `armada_header` already carries once, above every box.
+    lines.push(vec![Span {
+        text: format!(" {}", job_counts_and_spend(data).join("   ")),
+        role: Some(Role::SteelGrey),
+        bold: false,
+    }]);
+    frame::titled_box(&format!("JOBS ({})", data.results.len()), lines, width)
+}
+
+/// `INBOX (N)` — what's asked, failed, or reported, over
+/// [`InboxData::results`].
+///
+/// **`ORIGIN` is [`InboxRow::kind`] as raised, not yet the `ASKED`/`FAILURE`/
+/// `REPORT` vocabulary 033 draws.** That relabelling is tied to the `/asked
+/// /failure /report` filter grammar PLAN.md's open question 3 names as new
+/// grammar, not a rendering choice — this column is real and reads the real
+/// field, under the word the record already carries.
+pub fn inbox_box(inbox: &InboxData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut table = Table::new(vec![
+        Column::fixed("from", "from"),
+        Column::fixed("origin", "origin"),
+        Column::flexible("detail", "detail"),
+        Column::fixed("waiting", "waiting").right(),
+    ])
+    .indent(2);
+    for row in &inbox.results {
+        table = table.row(vec![
+            Cell::painted(row.job.clone(), Role::NavalBlue),
+            origin_cell(row),
+            Cell::muted(row.body.clone()),
+            Cell::muted(format::elapsed(row.waiting_s * 1_000)),
+        ]);
+    }
+    let lines = table.spans(style, width);
+    frame::titled_box(&format!("INBOX ({})", inbox.results.len()), lines, width)
+}
+
+fn origin_cell(row: &InboxRow) -> Cell {
+    Cell::painted(
+        row.kind.clone(),
+        match row.kind.as_str() {
+            "BLOCKED" => Role::DistressRed,
+            "NEEDS_HUMAN" => Role::FlareOrange,
+            _ => Role::SteelGrey,
+        },
+    )
+}
+
+/// `MANIFEST` — not wired this pass.
+///
+/// **A row saying why, rather than an absent box.** A missing panel reads as
+/// a layout bug; a panel that names the gap reads as the decision it is —
+/// `check::status`/`status::run` need `App<R, C, F>`
+/// (`crates/helm/src/app.rs`'s `build`), which the Bridge's call site does
+/// not build, and `PLAN.md`'s audit table names the tradeoff this is waiting
+/// on.
+pub fn manifest_box(width: usize) -> Vec<Vec<Span>> {
+    let line = vec![Span {
+        text: " not wired yet — needs `App`; see PLAN.md's MANIFEST row".to_string(),
+        role: Some(Role::SteelGrey),
+        bold: false,
+    }];
+    frame::titled_box("MANIFEST", vec![line], width)
+}
+
+/// `GUILD` — skills, workflows and what a fresh read already carries as
+/// `facts`.
+pub fn guild_box(guild: &GuildListData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut table = Table::new(vec![Column::flexible("fact", "fact")])
+        .indent(2)
+        .headerless();
+    for fact in &guild.facts {
+        table = table.row(vec![Cell::muted(fact.clone())]);
+    }
+    let lines = table.spans(style, width);
+    frame::titled_box("GUILD", lines, width)
+}
+
+/// `SYSTEM` — drones, docker, disk, every `armada doctor` finding.
+pub fn system_box(system: &DoctorData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut table = Table::new(vec![
+        Column::fixed("fact", "fact"),
+        Column::flexible("detail", "detail"),
+    ])
+    .indent(2)
+    .headerless();
+    for finding in &system.results {
+        table = table.row(vec![
+            Cell::muted(finding.check.clone()),
+            Cell::painted(
+                finding.detail.clone(),
+                match finding.status.is_failure() {
+                    true => Role::DistressRed,
+                    false => Role::SteelGrey,
+                },
+            ),
+        ]);
+    }
+    let lines = table.spans(style, width);
+    frame::titled_box("SYSTEM", lines, width)
+}
+
+/// The command centre's `KEYS` box at full width — two lines, the movement
+/// legend and the verbs, exactly as 033's 138-column mock draws them.
+pub fn command_centre_keys_wide(width: usize) -> Vec<Vec<Span>> {
+    let movement = "↑↓←→ or hjkl move   tab next panel   1-5 jump to panel   \
+                     enter act on the focused row   / filter";
+    let verbs = "d detail   n new job   a answer   p pause   x abort   r reap   \
+                 t tick   ? all keys   q quit";
+    let line = |text: &str| {
+        vec![Span {
+            text: format!(" {text}"),
+            role: None,
+            bold: false,
+        }]
+    };
+    frame::titled_box("KEYS", vec![line(movement), line(verbs)], width)
+}
+
+/// The `KEYS` box under the narrow threshold — one line, movement first and
+/// never dropped, verbs behind `?` (`frame::shed_to_narrow`, "movement never
+/// sheds; verbs do").
+pub fn command_centre_keys_narrow(width: usize) -> Vec<Vec<Span>> {
+    let movement = vec![
+        frame::KeyPair::new("↑↓←→ or hjkl", "move"),
+        frame::KeyPair::new("tab", "next panel"),
+        frame::KeyPair::new("enter", "act"),
+    ];
+    let verbs = vec![
+        frame::KeyPair::new("d", "detail"),
+        frame::KeyPair::new("n", "new job"),
+        frame::KeyPair::new("a", "answer"),
+        frame::KeyPair::new("p", "pause"),
+        frame::KeyPair::new("x", "abort"),
+        frame::KeyPair::new("r", "reap"),
+        frame::KeyPair::new("t", "tick"),
+    ];
+    let quit = frame::KeyPair::new("q", "quit");
+    let mut line = frame::shed_to_narrow(&movement, &verbs, &quit, width.saturating_sub(1));
+    line.insert(
+        0,
+        Span {
+            text: " ".to_string(),
+            role: None,
+            bold: false,
+        },
+    );
+    frame::titled_box("KEYS", vec![line], width)
+}
+
+// ============================================== the Job detail, full screen
+//
+// `docs/reserved/033-the-command-centre-designed.md`'s second mock-up: one
+// Job, full screen. Each function draws one of its boxes, over `ShowData`
+// alone — no second read, the same rule [`show_lines`] already follows.
+
+/// The identity block at the top: uuid, workflow, branch, started-ago, state
+/// and its reason, the task whole.
+pub fn detail_identity(data: &ShowData, width: usize) -> Vec<Vec<Span>> {
+    let mut lines = vec![vec![Span {
+        text: format!(
+            " {}   workflow {}   branch {}   started {} ago",
+            data.uuid,
+            data.workflow,
+            data.branch,
+            format::elapsed(data.runtime_s * 1_000)
+        ),
+        role: None,
+        bold: false,
+    }]];
+    let reason = match data.state.needs_a_person() {
+        true if !data.asked.is_empty() => data.asked.last().map(|row| row.body.as_str()),
+        _ => None,
+    };
+    lines.push(vec![
+        Span {
+            text: format!(" {}", data.status_word()),
+            role: Some(Role::for_job_state(data.state)),
+            bold: true,
+        },
+        Span {
+            text: match reason {
+                Some(reason) => format!("  {reason}"),
+                None => String::new(),
+            },
+            role: None,
+            bold: false,
+        },
+    ]);
+    if !data.task.is_empty() {
+        lines.push(Vec::new());
+        // **The task, whole, never truncated at this width or any other** —
+        // `render::show_lines`' own rule for the same field, carried here.
+        lines.push(vec![Span {
+            text: "  TASK".to_string(),
+            role: Some(Role::SteelGrey),
+            bold: true,
+        }]);
+        for line in prose_wrapped(&data.task, width.saturating_sub(2)) {
+            lines.push(vec![Span {
+                text: format!("  {line}"),
+                role: None,
+                bold: false,
+            }]);
+        }
+    }
+    frame::titled_box(&format!("JOB · {}", data.job), lines, width)
+}
+
+/// A crude word-wrap for the identity block's task line — `prose` in this
+/// file draws spans; this is plain text wrapped to a width.
+fn prose_wrapped(text: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        if !current.is_empty() && display_width(&current) + 1 + display_width(word) > width {
+            lines.push(std::mem::take(&mut current));
+        }
+        if !current.is_empty() {
+            current.push(' ');
+        }
+        current.push_str(word);
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
+
+/// `WORKFLOW` — the declared step order, over [`ShowData::steps`].
+pub fn workflow_box(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut table = Table::new(vec![
+        Column::fixed("step", "step"),
+        Column::fixed("status", "status"),
+        Column::flexible("gate", "gate"),
+    ])
+    .indent(2);
+    for step in &data.steps {
+        table = table.row(vec![
+            Cell::painted(step.id.clone(), Role::NavalBlue),
+            Cell::painted(
+                step.status.clone(),
+                match step.status.as_str() {
+                    "PASS" => Role::BeaconGreen,
+                    "QUEUED" => Role::SteelGrey,
+                    _ => Role::FlareOrange,
+                },
+            ),
+            Cell::muted(step.must.clone()),
+        ]);
+    }
+    frame::titled_box("WORKFLOW", table.spans(style, width), width)
+}
+
+/// `NEEDS YOU` — the open question, if the Job has one.
+pub fn needs_you_box(data: &ShowData, width: usize) -> Vec<Vec<Span>> {
+    let open = data.asked.iter().find(|row| row.answered.is_none());
+    let lines = match open {
+        Some(row) => {
+            let mut lines = vec![vec![Span {
+                text: format!(" ASKED {} ago", format::elapsed(row.waiting_s * 1_000)),
+                role: Some(Role::FlareOrange),
+                bold: true,
+            }]];
+            for line in prose_wrapped(&row.body, width.saturating_sub(2)) {
+                lines.push(vec![Span {
+                    text: format!(" {line}"),
+                    role: None,
+                    bold: false,
+                }]);
+            }
+            lines.push(Vec::new());
+            lines.push(vec![Span {
+                text: " a answer".to_string(),
+                role: Some(Role::SteelGrey),
+                bold: false,
+            }]);
+            lines
+        }
+        None => vec![vec![Span {
+            text: " nothing open".to_string(),
+            role: Some(Role::SteelGrey),
+            bold: false,
+        }]],
+    };
+    frame::titled_box("NEEDS YOU", lines, width)
+}
+
+/// `TIMELINE · what the gate did` — [`ShowData::transitions`], the machine's
+/// own record: the predicate and the exit code that settled each one.
+///
+/// **A separate table from [`reports_box`], deliberately** — 033's own
+/// section "The detail view names its two tables": one carries a gate's
+/// decision, the other an agent's summary, and collapsing them is how a
+/// Drone's claim gets read as evidence.
+pub fn timeline_box(transitions: &[TransitionRow], style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut table = Table::new(vec![
+        Column::fixed("step", "step"),
+        Column::fixed("event", "event"),
+        Column::flexible("evidence", "evidence"),
+        Column::fixed("when", "when").right(),
+    ])
+    .indent(2);
+    for row in transitions {
+        table = table.row(vec![
+            Cell::painted(row.step.clone(), Role::NavalBlue),
+            Cell::muted(row.event.to_uppercase()),
+            Cell::muted(evidence_of(row)),
+            Cell::muted(format::elapsed(row.ago_s * 1_000)),
+        ]);
+    }
+    frame::titled_box(
+        "TIMELINE · what the gate did",
+        table.spans(style, width),
+        width,
+    )
+}
+
+fn evidence_of(row: &TransitionRow) -> String {
+    let Some(must) = &row.must else {
+        return String::new();
+    };
+    match row.evidence.first() {
+        Some(evidence) => format!(
+            "{must} · {}:{} exit {}",
+            evidence.kind, evidence.scope, evidence.exit
+        ),
+        None => must.clone(),
+    }
+}
+
+/// `REPORTS · the Drone's own words` — [`ShowData::progress`], **a separate
+/// table from [`timeline_box`]**, never a column added to it — see that
+/// function's own doc for why the split is deliberate rather than cosmetic.
+pub fn reports_box(
+    progress: &[armada_core::envelope::NoteRow],
+    style: Style,
+    width: usize,
+) -> Vec<Vec<Span>> {
+    let mut table = Table::new(vec![
+        Column::fixed("step", "step"),
+        Column::flexible("the drone said", "the drone said"),
+    ])
+    .indent(2);
+    for row in progress {
+        table = table.row(vec![
+            Cell::muted(row.step.clone()),
+            Cell::painted(row.body.clone(), Role::Foreground),
+        ]);
+    }
+    frame::titled_box(
+        "REPORTS · the Drone's own words",
+        table.spans(style, width),
+        width,
+    )
+}
+
+/// `FACTS` — the Drone's process group, the worktree, the branch, and every
+/// ceiling spent against.
+///
+/// **`state`, `drone` and everything after it are three facts that disagree
+/// when something is wrong, kept apart rather than folded** — the same rule
+/// `render::show_lines`'s `facts_table` follows, and this is that table
+/// carried onto the full-screen pane.
+pub fn facts_box(data: &ShowData, style: Style, width: usize) -> Vec<Vec<Span>> {
+    let mut table = Table::new(vec![
+        Column::fixed("fact", "fact"),
+        Column::fixed("status", "status"),
+        Column::flexible("detail", "detail"),
+    ])
+    .indent(2)
+    .headerless();
+    // **What the record says, always drawn even when it agrees with what
+    // `state` above already said.** The two agreeing is the ordinary case;
+    // the two disagreeing is the whole diagnosis a reader opens this pane to
+    // find.
+    table = table.row(vec![
+        Cell::muted("state"),
+        token("RECORDED", Role::SteelGrey),
+        Cell::muted(format!(
+            "{}, as a verb last wrote it",
+            data.recorded_state.word()
+        )),
+    ]);
+    table = table.row(vec![
+        Cell::muted("drone"),
+        token(
+            if data.drone_alive { "ALIVE" } else { "GONE" },
+            if data.drone_alive {
+                Role::BeaconGreen
+            } else {
+                Role::SteelGrey
+            },
+        ),
+        Cell::muted(match data.drone_pgid {
+            Some(pgid) => format!("pgid {pgid}"),
+            None => "never started".to_string(),
+        }),
+    ]);
+    table = table.row(vec![
+        Cell::muted("worktree"),
+        token("HELD", Role::SteelGrey),
+        Cell::muted(data.worktree.clone()),
+    ]);
+    table = table.row(vec![
+        Cell::muted("branch"),
+        token("HELD", Role::SteelGrey),
+        Cell::muted(data.branch.clone()),
+    ]);
+    table = table.row(vec![
+        Cell::muted("cost"),
+        token("SPENT", Role::SteelGrey),
+        Cell::muted(format!(
+            "{} of {}",
+            format::money(data.cost_usd),
+            format::money(data.budget.cost_usd)
+        )),
+    ]);
+    table = table.row(vec![
+        Cell::muted("exchanges"),
+        token("SPENT", Role::SteelGrey),
+        Cell::muted(format!(
+            "{} of {}",
+            data.turns.saturating_sub(data.budget_remaining.attempts),
+            data.budget.attempts
+        )),
+    ]);
+    table = table.row(vec![
+        Cell::muted("tokens"),
+        Cell::empty(),
+        Cell::muted(format::count(data.tokens as usize, "token")),
+    ]);
+    frame::titled_box("FACTS", table.spans(style, width), width)
+}
+
+/// The Job detail screen's own `KEYS` box — nothing the fleet screen offers,
+/// because none of it is reachable from here.
+pub fn detail_keys(width: usize) -> Vec<Vec<Span>> {
+    let line = vec![Span {
+        text: " esc back   a answer   t tick   r retry step   $ raise budget   \
+               p pause   x abort"
+            .to_string(),
+        role: None,
+        bold: false,
+    }];
+    frame::titled_box("KEYS", vec![line], width)
+}
+
 /// The Bridge's summary line, painted, for `--once`.
 pub fn bridge_summary(data: &BridgeData, status: Status, style: Style) -> String {
     match aggregates(data) {
@@ -1289,7 +1801,41 @@ fn window_name(kind: &str) -> String {
     }
 }
 
-fn frame_facts(data: &BridgeData) -> Vec<String> {
+/// Both usage windows, as facts — `armada_header`'s and `frame_facts`' shared
+/// piece, so the two cannot come to spell one window two different ways.
+///
+/// **Both windows, soonest first**, which is the order they matter in: the
+/// five-hour window is what stops you this afternoon and the seven-day one is
+/// what stops you on Thursday having felt fine all week.
+///
+/// **One fact per window, not one per measurement.** `5h 71% resets 2h14m` is
+/// a single thing a reader takes in at a glance; splitting it into `5h 71%`
+/// and `5h resets 2h14m` puts the window's name on the line twice and makes
+/// two windows read as four unrelated numbers. Both halves are omitted when
+/// the service did not send them, because a percentage nobody measured is the
+/// one thing this may not carry.
+fn window_facts(windows: &[Window]) -> Vec<String> {
+    windows
+        .iter()
+        .map(|window| {
+            let mut said = window_name(&window.kind);
+            if let Some(used) = window.used_percent {
+                said.push_str(&format!(" {used}%"));
+            }
+            if let Some(resets_in_s) = window.resets_in_s {
+                said.push_str(&format!(
+                    " resets {}",
+                    format::countdown(resets_in_s * 1_000)
+                ));
+            }
+            said
+        })
+        .collect()
+}
+
+/// Jobs, needs-you and stalled — the counts at the front of every summary,
+/// whichever facts follow them.
+fn job_counts(data: &BridgeData) -> Vec<String> {
     let mut facts = vec![format::count(data.results.len(), "job")];
     if data.needs_you > 0 {
         facts.push(format!("{} need you", data.needs_you));
@@ -1308,38 +1854,35 @@ fn frame_facts(data: &BridgeData) -> Vec<String> {
     if stalled > 0 {
         facts.push(format!("{stalled} stalled"));
     }
-    // **What stops you working, ahead of what it cost** (`020` §4). The window
-    // is the account's rather than the frame's, so it survives a filter — and
-    // both halves are omitted when the service did not send them, because a
-    // percentage nobody measured is the one thing this line may not carry.
-    // **Both windows, soonest first**, which is the order they matter in: the
-    // five-hour window is what stops you this afternoon and the seven-day one is
-    // what stops you on Thursday having felt fine all week. The line used to
-    // carry one, chosen by furthest reset — an arithmetic that picked the weekly
-    // window every time it existed and hid the one about to run out.
-    //
-    // **One fact per window, not one per measurement.** `5h 71% resets 2h14m` is
-    // a single thing a reader takes in at a glance; splitting it into `5h 71%`
-    // and `5h resets 2h14m` puts the window's name on the line twice and makes
-    // two windows read as four unrelated numbers.
-    for window in &data.windows {
-        let mut said = window_name(&window.kind);
-        if let Some(used) = window.used_percent {
-            said.push_str(&format!(" {used}%"));
-        }
-        if let Some(resets_in_s) = window.resets_in_s {
-            said.push_str(&format!(
-                " resets {}",
-                format::countdown(resets_in_s * 1_000)
-            ));
-        }
-        facts.push(said);
+    facts
+}
+
+fn filter_facts(data: &BridgeData) -> Vec<String> {
+    match &data.filter {
+        Some(filter) => vec![
+            format!("filter {filter}"),
+            format!("{} hidden", data.hidden),
+        ],
+        None => Vec::new(),
     }
+}
+
+/// Every `frame_facts` fact **but the usage windows**, which the command
+/// centre's `armada_header` carries once for the whole screen rather than
+/// once per box (`docs/reserved/033-the-command-centre-designed.md`).
+fn job_counts_and_spend(data: &BridgeData) -> Vec<String> {
+    let mut facts = job_counts(data);
     facts.push(format!("{} today", format::money(data.spent_usd)));
-    if let Some(filter) = &data.filter {
-        facts.push(format!("filter {filter}"));
-        facts.push(format!("{} hidden", data.hidden));
-    }
+    facts.extend(filter_facts(data));
+    facts
+}
+
+fn frame_facts(data: &BridgeData) -> Vec<String> {
+    let mut facts = job_counts(data);
+    // **What stops you working, ahead of what it cost** (`020` §4).
+    facts.extend(window_facts(&data.windows));
+    facts.push(format!("{} today", format::money(data.spent_usd)));
+    facts.extend(filter_facts(data));
     facts
 }
 

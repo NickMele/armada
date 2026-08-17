@@ -33,6 +33,7 @@ use armada_core::ctx::{Run, RunRequest};
 use armada_core::disk;
 use armada_core::envelope::{DoctorData, Envelope, Finding, Problem, Settled};
 use armada_core::error::ArmadaError;
+use armada_fleet::jobs::Store;
 use armada_guild::layout::{self, Guild, DIRECTORIES};
 use armada_guild::{machine, memory, projector, repo};
 use armada_manifest::docker;
@@ -57,6 +58,7 @@ pub fn run(runner: &impl Run, place: &Where) -> Result<Output, ArmadaError> {
     results.push(drone_argv(runner, &place.cwd, &place.armada_home));
     results.push(helm_argv(runner, &place.cwd, &place.armada_home));
     results.push(directories(&place.armada_home));
+    results.push(drones_live(runner, &place.armada_home, &place.cwd));
     results.extend(drift(runner, &guild));
     results.extend(fragments(&guild));
     results.extend(projection(place, &guild));
@@ -473,6 +475,33 @@ fn directories(armada_home: &Path) -> Finding {
         // (`verbs/machine.rs`), which is what makes naming it here safe.
         "armada init --force",
     )
+}
+
+/// **How many Jobs' Drones are actually running**, right now —
+/// `docs/reserved/033-the-command-centre-designed.md`'s SYSTEM panel.
+///
+/// **Fleet's own registry, not Manifest's.** A Job's `drone_pgid` and whether
+/// it is provably this boot's is exactly what `armada fleet show` already
+/// reads for the same reason (`verbs/fleet.rs`'s `show`) — this is that same
+/// check, counted rather than shown one row at a time. It is never a warning:
+/// a machine with every Drone finished for the day is not a problem, and
+/// `doctor` stays safe to run in a shell prompt only if a fact like this one
+/// never turns it red.
+fn drones_live(runner: &impl Run, armada_home: &Path, cwd: &Path) -> Finding {
+    let jobs = Store::at(armada_home).all().unwrap_or_default();
+    let live = match armada_manifest::machine::boot_id(runner, cwd) {
+        Some(boot_id) => jobs
+            .iter()
+            .filter(|job| {
+                armada_fleet::drone::alive(runner, armada_home, job.drone.as_ref(), &boot_id)
+            })
+            .count(),
+        // No boot id, no way to tell a live pgid from a recycled one — the
+        // same refusal `app::build` makes of it, here answered as "unknown"
+        // rather than failing a read verb over it.
+        None => 0,
+    };
+    Finding::settled("drones", Settled::Ok, format!("{live} live"))
 }
 
 /// `jobs/ and workspaces/` — directory names, written as paths so a reader can
@@ -1615,6 +1644,23 @@ mod tests {
             claude_home: home.path().join(".claude"),
         };
         (home, place)
+    }
+
+    /// **A machine with no Jobs at all reports zero, not nothing.** The SYSTEM
+    /// panel's `drones N live` row (`docs/reserved/033`) is a count over
+    /// Fleet's own `jobs/` index — `drones_live` on an empty one is the base
+    /// case every other machine's number is counted against.
+    #[test]
+    fn drones_live_on_an_empty_index_reports_zero() {
+        let (_home, place) = machine_with_a_guild();
+        let finding = drones_live(
+            &armada_manifest::process::RealRun,
+            &place.armada_home,
+            &place.cwd,
+        );
+        assert_eq!(finding.check, "drones");
+        assert_eq!(finding.status, Health::Ok, "an idle machine is not a fault");
+        assert_eq!(finding.detail, "0 live");
     }
 
     fn data(output: &Output) -> DoctorData {

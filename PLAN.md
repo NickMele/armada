@@ -16,7 +16,50 @@ what order, and what proves each piece before it's built on.
 | GUILD data | done | `verbs::guild::ls()` → `GuildListData{items: Vec<GuildItemRow>, facts: Vec<String>, ...}`. |
 | SYSTEM data | done, needs widening | `verbs::doctor::run()` → `DoctorData{results: Vec<Finding>}`, and `Finding{check, status, detail, remedy}` is already the FACT/STATUS/DETAIL shape the mock draws. Today's checks (`drift`, `store`, `docker_disk`, `drone_argv`, `helm_argv`, `directories`) don't yet emit rows for "drones N live" or "docker up \<version\>" by those exact names — see §3. |
 | Job detail data | done | `ShowData` already carries `gate`, `transitions: Vec<TransitionRow>`, `progress: Vec<NoteRow>`, `asked: Vec<InboxRow>`, `budget`/`budget_remaining`, `drone_pgid`, `drone_alive`, `worktree`, `branch` — the five detail panels are a reducer over fields that exist, not new data. |
-| Panel focus / multi-cursor | **partial, cherry-picked from `armada/bridge-command-centre`** | `Panel` enum, `Panel::next()`/`from_digit()`, `Key::Tab`, `Screen.focus`, and `watching()` routing (`Up/Down/j/k/Enter/d/a/x/p/r` all gated `on_jobs`, global keys `n`/`c`/`?`/`q` ungated) are built and tested — 5 new tests in `crates/core/src/fleet/bridge.rs`, all red-then-green per this plan's own rule. `shed_to_narrow` is also done for real (`KeyPair`-based, movement-never-verbs-do, 8 new tests in `frame.rs`). **Still missing**: INBOX's own `Cursor` over `InboxData.results` — INBOX is reachable by `Tab`/`2` but is cursorless like MANIFEST/GUILD/SYSTEM today, since `InboxData` is a `helm`-layer type `core::fleet::bridge` cannot see yet (§2 below has to land first). Nothing in `crates/helm/src/render.rs`, `bridge.rs`'s `paint`/`detail_pane`, or `verbs/bridge.rs`/`verbs/doctor.rs` (§2–§5) has been touched — the panels described in this plan draw nothing yet. |
+| Panel focus / multi-cursor | **partial, cherry-picked from `armada/bridge-command-centre`** | `Panel` enum, `Panel::next()`/`from_digit()`, `Key::Tab`, `Screen.focus`, and `watching()` routing (`Up/Down/j/k/Enter/d/a/x/p/r` all gated `on_jobs`, global keys `n`/`c`/`?`/`q` ungated) are built and tested — 5 new tests in `crates/core/src/fleet/bridge.rs`, all red-then-green per this plan's own rule. `shed_to_narrow` is also done for real (`KeyPair`-based, movement-never-verbs-do, 8 new tests in `frame.rs`). **Corrected in the implement step**: this row previously said INBOX's cursor was blocked on `InboxData` being a `helm`-layer type — that was wrong, unverified against the code. `InboxData`/`InboxRow` are defined in `crates/core/src/envelope.rs`, the *same crate* `core::fleet::bridge` is in; there is no crate boundary in the way. **Still deferred, for a different and real reason**: `press(screen, rows, key)` has 88 call sites in this file's own tests, every one of which would need a new parameter to carry an inbox row count for `Up`/`Down`/`j`/`k` wrapping — mechanical churn disproportionate to what it buys this pass (INBOX has no verb wired to a row yet either, per `commands/helm/bridge.md`). INBOX stays reachable by `Tab`/`2` like MANIFEST/GUILD/SYSTEM, rendered but cursorless, until a row action on it earns the churn. Nothing in `crates/helm/src/render.rs`, `bridge.rs`'s `paint`/`detail_pane`, or `verbs/bridge.rs`/`verbs/doctor.rs` (§2–§5) has been touched — the panels described in this plan draw nothing yet. |
+| MANIFEST verb signatures (§2, §7) | **corrected in the implement step: `done` was wrong** | PLAN.md's §2 sketch assumed `check::status(run, now, place)` and `status::run(run, now, place)` — checked against the real code (`crates/helm/src/verbs/check.rs:761`, `crates/helm/src/verbs/status.rs:59`) and both actually take `app: &mut App<R, C, F>`, not bare `run`/`now`/`place`. `App` opens `manifest.db` and reads `MachineConfig`/`boot_id` (`crates/helm/src/app.rs:746`'s `build()`), and `main.rs`'s dispatch (`main.rs:911`) deliberately routes `Bridge` *around* `app::build` — every other verb pays that cost once per invocation, and the Bridge was kept out of that group on purpose so a 2-second redraw stays "a directory read, a transcript tail and a `ps`" (`verbs/bridge.rs`'s own doc comment). Wiring `App` into the Bridge's long-lived `watch()` loop is a real, bounded change (build it once at entry, not per frame) but it reverses a deliberate architectural line and touches `main.rs`, which PLAN.md's "files touched" list never named. **Descoped from this implement pass**, proposed separately (`fleet.propose`, subject `manifest`) rather than decided unilaterally. `BridgeView`/`read_all` ships with `fleet`/`inbox`/`guild`/`system` only; the MANIFEST panel is not drawn this pass. |
+
+## Implement step — closed out
+
+Built, tested (`cargo fmt`/`clippy -D warnings`/`nextest run --workspace` 2080/2080/`xtask doclint`/
+`xtask boundaries` all clean): `ShowData.steps` (§5's open question 2), `verbs::bridge::BridgeView`/
+`read_all` (§2, minus MANIFEST — see above), `doctor.rs`'s `drones_live` (§3 — `stale_pgids` also
+needs `App`/Manifest's registry and is descoped with MANIFEST, not built under a different, weaker
+metric), the seven `render.rs` panel functions (§4) and the Job detail screen's six (§5), `bridge.rs`'s
+`paint()`/`detail_pane` assembling them at the 138-column and under-138 widths (§4.1, §6). Every new
+function has a passing test; several are demonstrated red-without-the-change explicitly
+(`step_rows`, `read_all`'s wiring) and the rest are new code with no prior passing state to regress
+from. `TIMELINE`/`REPORTS` reading different `ShowData` fields is enforced by both a test and by
+the two functions taking different argument types (`&[TransitionRow]` vs `&[NoteRow]`) — the two
+cannot be swapped without a compile error.
+
+**Simplifications made under time, named so a later pass can pick them up rather than rediscover
+them:**
+- JOBS box reuses `bridge_table`'s existing column set (`JOB STATUS ID [WORKFLOW] STEP [TASK] RUN
+  [TURNS] SPENT NEEDS YOU`) rather than the mock's own narrower `JOB ID STATUS STEP ITER SPENT
+  TIME`, and marks the cursor with the single-table Bridge's `›` caret column rather than 033's
+  `▸`-in-the-leading-space (`frame::focus`). Full parity is real work (a second column set, a
+  `TransitionRow`-shaped iteration count nowhere on `JobRow` today) rather than a rendering choice.
+- INBOX's `ORIGIN` column shows `InboxRow.kind` (`NEEDS_HUMAN`/`BLOCKED`/`IDLE`) as raised, not
+  033's `ASKED`/`FAILURE`/`REPORT` — tied to the `/asked /failure /report` filter grammar §3.3's
+  open question already named as new grammar, not built this pass.
+- GUILD box draws `GuildListData.facts` (already-summarised strings) rather than a table over
+  `items`; SYSTEM box draws every `Finding` as `FACT`/`DETAIL` without the mock's exact five-row
+  set (drones/docker/volumes/disk/stale-pgid) — `drones` is real and new, `docker`/`volumes`/`disk`
+  already exist under `preflight`/`docker_disk`'s own check names, `stale pgid` needs Manifest's
+  registry (App) and is not faked under a different meaning.
+- The Job detail's `WORKFLOW` box has no `TIME` column — `StepRow` (this pass's own new type)
+  carries `id`/`status`/`must`, not per-step elapsed time, which is not on any existing record;
+  `TIMELINE`'s `WHEN` column is the same data.
+- Golden fixtures (§6.5) for the fleet screen at 138/96 columns and the Job detail screen are not
+  built. The existing `tests/golden/render/bridge*` fixtures (the `--once`/`--json` single-table
+  render, untouched by this pass) still pass. Freezing the live-screen layout needs a
+  `bridge::paint()`-shaped harness the golden-fixture system doesn't have yet (today's harness
+  renders `Output` envelopes through `render::human`, and the live screen isn't one) — building
+  that harness is real, separable work from drawing the panels.
+
+None of these narrow what any panel is *for*; each is named so `armada bridge` at a live terminal
+and this document agree about what is real.
 
 ## 1. Core state (`crates/core/src/fleet/bridge.rs`)
 
@@ -55,6 +98,8 @@ pub fn read_all<R: Run, C: Clock>(run: &R, now: &C, place: &Where, filter: Optio
 ```
 
 Every call is exactly the signature today's single-purpose command uses — `place`, `run`, `now`, no Job id. That's not incidental; see §5.
+
+**Implemented shape, corrected against the audit table's MANIFEST row above:** `BridgeView` ships with `fleet`, `inbox`, `guild` and `system` — `manifest: CheckData` is not in it this pass. `check::status`/`status::run` need `App`, which the Bridge's call site does not build (see the audit table); `read_all` calls exactly `crate::verbs::fleet::inbox`, `crate::verbs::guild::ls` and `crate::verbs::doctor::run` with the same argument shapes those verbs already take, none of which admits a Job id.
 
 ## 3. SYSTEM panel — widen `doctor.rs`, don't add a verb
 

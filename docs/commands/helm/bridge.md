@@ -40,6 +40,38 @@ not change it — the same rule that governs probe ([`PLAN.md`](../../PLAN.md) �
 **It holds no state.** The Bridge is a renderer over Fleet; closing it loses nothing, and
 everything it shows is available from [`../fleet/ls.md`](../fleet/ls.md) as a table.
 
+## The command centre
+
+[`033`](../../reserved/033-the-command-centre-designed.md) is the design; this section is what of
+it is built. At 138 columns and above, seven boxes: `ARMADA` (the workspace and both usage
+windows), `JOBS`, `INBOX`, `MANIFEST`, `GUILD`, `SYSTEM`, `KEYS`. Under that threshold, four:
+`ARMADA`, `JOBS`, `INBOX`, `KEYS` — whole panels drop rather than shedding columns, because
+`MANIFEST`/`GUILD`/`SYSTEM` have nothing left to shed once their own minimum content overhangs.
+
+`tab` cycles focus through all five row-bearing and read-only panels; `1`-`5` jump to one
+directly. Only `JOBS` has a verb wired to a row today — `enter`, `d`, `a`, `x`, `p`, `r` all act on
+the focused Job and are inert while a different panel is focused, because acting on a row the
+reader cannot see would be worse than the key doing nothing.
+
+**Two gaps, named rather than hidden**, both because they need App-level state
+(`crates/helm/src/app.rs`) the Bridge's read path was built to do without:
+
+- `MANIFEST` draws one row saying it is not wired — `check::status`/`status::run` need
+  `App<R, C, F>`, which opens `manifest.db` and reads `MachineConfig`. Wiring it in is a real fix
+  (build the App once at `watch()`'s entry, not per redraw) but it reverses a deliberate line in
+  `main.rs`'s dispatch, so it is a decision rather than a Drone's to make unilaterally
+  (`PLAN.md`'s audit table).
+- `INBOX` is reachable by `tab`/`2` but has no cursor of its own yet — no verb acts on one of its
+  rows today, so the churn of threading a row count through `core::fleet::bridge::press`'s 88 test
+  call sites is not yet earned.
+
+`d`, or `enter` from `INBOX` once it has a cursor, opens the Job detail full screen: identity,
+`WORKFLOW` beside `NEEDS YOU`, `TIMELINE · what the gate did` full width, `REPORTS · the Drone's
+own words` beside `FACTS`, and its own key line. `TIMELINE` and `REPORTS` are two separate tables
+reading two separate fields (`transitions`, `progress`) — 033's own point, restated here: one is a
+machine's decision carrying the predicate and exit code that settled it, the other is an agent's
+summary, and collapsing them is how a Drone's claim gets read as gate evidence.
+
 ### The filter
 
 A bare word matches the Job's name, its workflow, its state or its task; `key=value` asks about
@@ -105,7 +137,13 @@ the three.
 | `c` | Drop into Helm | [`helm.md`](helm.md) · **the Bridge does not exec on this key**, and it names `armada helm` and whether entering is on for this machine |
 | `?` | Every binding, including the ones the key line could not carry | — |
 | `q`, `esc`, `ctrl-c` | Leave, printing the last frame | — |
-| `↑` `↓`, `k` `j` | Move the cursor | — |
+| `↑` `↓`, `k` `j` | Move the cursor **on the focused panel** | — |
+| `tab` | Next panel, wrapping | — |
+| `1`-`5` | Jump to a panel directly — `JOBS`, `INBOX`, `MANIFEST`, `GUILD`, `SYSTEM` | — |
+
+**Movement never sheds; verbs do.** Under the narrow threshold the `KEYS` box keeps every
+movement pair and drops verbs from lowest priority first, behind `?` — a dropped verb is one
+keypress away; a dropped movement key is a screen you cannot get around.
 
 Every key maps to a verb that already exists and is reachable from a shell. **The Bridge adds no
 capability**, which is what keeps it a rendering choice rather than an architectural one. A key

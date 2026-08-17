@@ -36,7 +36,8 @@ use armada_core::envelope::{
     InitData, InitDryRun, JobRow, Locality, MachineInitData, MenuData, MenuRow, NoteRow,
     PortReport, Problem, Projection, Released, ResolvedSkillView, ResultRow, RunView, ScanData,
     ServicesData, SettingRow, SettingsData, Settled, ShowData, SkillsData, SpawnData, StatusData,
-    Sync, SyncItem, TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData, Window,
+    StepRow, Sync, SyncItem, TickData, TickRow, TransitionRow, Unreclaimed, UpDryRun, VerifyData,
+    Window,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::job::Remaining;
@@ -2619,6 +2620,28 @@ fn show_data() -> ShowData {
                 ago_s: 41 * 60,
                 step: "plan".to_string(),
                 body: "approach agreed: squash the two migrations".to_string(),
+            },
+        ],
+        steps: vec![
+            StepRow {
+                id: "plan".to_string(),
+                status: "PASS".to_string(),
+                must: "subjob_passed".to_string(),
+            },
+            StepRow {
+                id: "implement".to_string(),
+                status: "BLOCKED".to_string(),
+                must: "check_passes".to_string(),
+            },
+            StepRow {
+                id: "review".to_string(),
+                status: "QUEUED".to_string(),
+                must: "review_clean".to_string(),
+            },
+            StepRow {
+                id: "land".to_string(),
+                status: "QUEUED".to_string(),
+                must: "branch_exists".to_string(),
             },
         ],
     }

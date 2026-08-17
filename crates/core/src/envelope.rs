@@ -2265,6 +2265,42 @@ pub struct ShowData {
     pub asked: Vec<InboxRow>,
     /// What the Drone said about its own progress, **newest first**.
     pub progress: Vec<NoteRow>,
+    /// **The workflow's declared step order**, in the order the document
+    /// states them — a fact [`Self::transitions`] alone cannot answer, because
+    /// a transition exists only for a step that has already been entered.
+    ///
+    /// **A count in the list, the declared order in the detail** — the line
+    /// `docs/reserved/033-the-command-centre-designed.md` draws: the fleet
+    /// table's `STEP` column already carries `implement 3/4`, a fact; this is
+    /// what lets the detail view draw the same fact as a table with `land`
+    /// sitting there `QUEUED` rather than invented. **Never a percentage or a
+    /// position drawn as a fraction of time** (PHASES.md §9.1 F2) — a step
+    /// that comes third is a step that comes third, not 60% of the work.
+    ///
+    /// Empty when the workflow document could not be read, the same case
+    /// [`Self::gate`] is already `None` for.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<StepRow>,
+}
+
+/// One step in the workflow's declared order, as `show` reports it.
+///
+/// **`status` is a word, never a position.** `PASS` when a `Completed`
+/// transition exists for this step, the Job's own current status word when
+/// this is [`ShowData::step`], `QUEUED` for everything after it — derived from
+/// [`ShowData::transitions`] and the workflow document, never carried as a
+/// fraction.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct StepRow {
+    /// The step's id, as the workflow document spells it.
+    pub id: String,
+    /// `PASS`, `QUEUED`, or the Job's own status word while this is the step
+    /// it is on.
+    pub status: String,
+    /// The predicate that gates it, by its schema name — the same word
+    /// [`GateRow::must`] carries for the current step, named here for every
+    /// step so the whole workflow reads as one table.
+    pub must: String,
 }
 
 /// One `fleet.report` note, as `show` reports it.

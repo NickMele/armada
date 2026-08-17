@@ -36,9 +36,24 @@ use crate::render::palette::Role;
 use crate::render::style::Style;
 use crate::render::table::Span;
 use crate::render::term::Terminal;
-use crate::render::{self, live};
-use crate::verbs::bridge::Options;
+use crate::render::{self, frame, live};
+use crate::verbs::bridge::{BridgeView, Options};
 use crate::verbs::fleet::Where;
+
+/// **The threshold between 033's two mock-ups.** At or above it, all seven
+/// boxes draw; below it, whole panels drop rather than shed columns — MANIFEST,
+/// GUILD and SYSTEM disappear and only ARMADA, JOBS, INBOX and KEYS remain,
+/// matching the 96-column mock exactly (measured: the 138-column mock is the
+/// narrowest width every box's own minimum content fits inside without
+/// overhanging).
+///
+/// **This lives here, not in `render/frame.rs`.** Which boxes exist at a given
+/// width is a decision about Jobs, Inbox, Manifest, Guild and System — the
+/// four modules `frame.rs` "must know nothing about" (`ARCHITECTURE.md`
+/// §1.9) — so the width branch is the caller's, and `frame.rs`'s own
+/// `shed_to_narrow` stays scoped to the one thing it already does: trimming a
+/// single key line.
+const WIDE: usize = 138;
 
 /// The alternate screen, given back on drop **and on panic**.
 ///
@@ -103,40 +118,28 @@ pub fn key_of(code: KeyCode, modifiers: KeyModifiers) -> Option<Key> {
 /// **Built without a terminal**, which is the point: a frame is a value, so what
 /// the Bridge draws is asserted in a unit test instead of photographed.
 pub fn paint(
-    frame: &Frame,
+    view: &BridgeView,
     screen: &Screen,
     detail: Option<&ShowData>,
-    status: armada_core::error::Status,
+    workspace_id: &str,
+    cwd: &str,
     style: Style,
     width: usize,
 ) -> Vec<Vec<Span>> {
-    // **The detail view covers the table rather than sitting beside it.** The
-    // question it answers — *why does this one need me* — is about one row, and
-    // a pane squeezed in next to six columns would truncate the one sentence the
-    // whole view exists to show in full.
+    let frame = &view.fleet;
+
+    // **The detail view covers the whole screen rather than sitting beside
+    // it.** The question it answers — *why does this one need me* — is about
+    // one Job, and 033's own mock-up gives it a screen of its own.
     if let Mode::Detail(job) = &screen.mode {
         return detail_pane(job.as_str(), detail, style, width);
     }
 
-    let data = crate::verbs::bridge::data(frame.clone());
-    let mut lines: Vec<Vec<Span>> = vec![
-        vec![
-            plain("  "),
-            bold("ARMADA BRIDGE", Role::SignalAmber),
-            // **Beacon green is the live indicator** (`docs/commands/render.md`),
-            // and it is a word rather than a bullet: a screen reader and a
-            // monochrome terminal lose emphasis and no information.
-            plain("   "),
-            piece("LIVE", Role::BeaconGreen),
-        ],
-        Vec::new(),
-    ];
-
-    // **The preview replaces the table rather than sitting under it.** It is a
-    // different question — what would be deleted — and drawing both would put
-    // two cursors on one screen.
+    // **The preview replaces the command centre rather than sitting under
+    // it.** It is a different question — what would be deleted — and drawing
+    // both would put two cursors on one screen.
     if let Mode::Reaping(reap) = &screen.mode {
-        lines.extend(preview(reap, style, width));
+        let mut lines = preview(reap, style, width);
         lines.push(Vec::new());
         lines.push(vec![
             plain("  "),
@@ -161,8 +164,10 @@ pub fn paint(
                 crate::render::table::Cell::muted(does),
             ]);
         }
-        lines.push(vec![plain("  "), bold("KEYS", Role::SignalAmber)]);
-        lines.push(Vec::new());
+        let mut lines = vec![
+            vec![plain("  "), bold("KEYS", Role::SignalAmber)],
+            Vec::new(),
+        ];
         lines.extend(table.spans(style, width));
         lines.push(Vec::new());
         lines.push(vec![
@@ -172,9 +177,77 @@ pub fn paint(
         return lines;
     }
 
-    lines.extend(
-        render::bridge_table(&data, style, Some(screen.cursor.at()), width).spans(style, width),
-    );
+    // **The compose box takes the KEYS box's place and leaves every other box
+    // standing.** `n` used to end the screen to ask for a task, and what a
+    // first reader reported was *"it took me to a screen that felt like it
+    // took me out of the bridge"* — writing a task is a thing you do while
+    // watching, not a different screen. Its own key line already names
+    // `ctrl-d`/`esc`, so drawing the command centre's KEYS box too would be
+    // two key lines answering one question.
+    let composing = matches!(screen.mode, Mode::Composing(_));
+    let mut lines = watching_screen(view, screen, workspace_id, cwd, style, width, !composing);
+
+    if let Mode::Composing(typed) = &screen.mode {
+        lines.push(Vec::new());
+        lines.extend(compose_box(typed, style, width));
+    }
+    lines
+}
+
+/// The command centre, watching — 033's two mock-ups, chosen by [`WIDE`].
+#[allow(clippy::too_many_arguments)]
+fn watching_screen(
+    view: &BridgeView,
+    screen: &Screen,
+    workspace_id: &str,
+    cwd: &str,
+    style: Style,
+    width: usize,
+    keys: bool,
+) -> Vec<Vec<Span>> {
+    let frame = &view.fleet;
+    let data = crate::verbs::bridge::data(frame.clone());
+    let cursor = Some(screen.cursor.at());
+
+    let mut lines = render::armada_header(&frame.windows, workspace_id, cwd, width);
+    lines.push(Vec::new());
+
+    if width >= WIDE {
+        let jobs_inbox = frame::hjoin(
+            render::jobs_box(&data, style, cursor, jobs_width(width)),
+            render::inbox_box(&view.inbox, style, width - jobs_width(width) - GAP),
+            GAP,
+            width,
+        );
+        lines.extend(jobs_inbox);
+        lines.push(Vec::new());
+
+        let third = (width - 2 * GAP) / 3;
+        let manifest_guild = frame::hjoin(
+            render::manifest_box(third),
+            render::guild_box(&view.guild, style, third),
+            GAP,
+            2 * third + GAP,
+        );
+        let three = frame::hjoin(
+            manifest_guild,
+            render::system_box(&view.system, style, width - 2 * third - 2 * GAP),
+            GAP,
+            width,
+        );
+        lines.extend(three);
+        if keys {
+            lines.push(Vec::new());
+            lines.extend(render::command_centre_keys_wide(width));
+        }
+    } else {
+        lines.extend(render::jobs_box(&data, style, cursor, width));
+        lines.extend(render::inbox_box(&view.inbox, style, width));
+        if keys {
+            lines.extend(render::command_centre_keys_narrow(width));
+        }
+    }
+
     if frame.rows.is_empty() {
         lines.push(vec![
             plain("  "),
@@ -188,49 +261,33 @@ pub fn paint(
         ]);
     }
 
-    lines.push(Vec::new());
-    lines.push(render::bridge_summary_pieces(&data, status, style));
-
-    // **One line for whatever the screen has to say back**, kept even when it is
-    // empty so the key line does not walk up and down as notices come and go.
-    lines.push(match &screen.mode {
-        Mode::Filtering(typed) => vec![
+    // **One line for whatever the screen has to say back**, and the filter box
+    // while it is open — kept even when empty so nothing above it moves.
+    match &screen.mode {
+        Mode::Filtering(typed) => lines.push(vec![
             plain("  "),
             piece("filter ", Role::SignalAmber),
             plain(format!("{typed}{}", style.caret())),
-        ],
-        _ => match &screen.notice {
+        ]),
+        // **One line reserved either way**, empty when there is nothing to
+        // say — the same rule the single-table Bridge followed, so the key
+        // line below never walks up and down as a notice comes and goes.
+        _ => lines.push(match &screen.notice {
             Some(notice) => vec![plain("  "), piece(notice.clone(), Role::FlareOrange)],
             None => Vec::new(),
-        },
-    });
-
-    lines.push(Vec::new());
-    // **The compose box takes the key line's place and leaves the table
-    // standing.** That is the whole of the second fix: `n` used to end the
-    // screen to ask for a task, and what a first reader reported was *"it took
-    // me to a screen that felt like it took me out of the bridge"*. The detail
-    // pane and the reap preview cover the table because they are questions
-    // *about* a row; writing a task is a thing you do while watching, so the
-    // fleet stays where it was.
-    if let Mode::Composing(typed) = &screen.mode {
-        lines.extend(compose_box(typed, style, width));
-        return lines;
+        }),
     }
-    // **The key line reads the row the cursor is on**, so `p` over a paused Job
-    // says `resume`. A line that always said `pause` advertised the one thing
-    // that key would not do and left no way at all to start a held Job again.
-    lines.push(vec![
-        plain("  "),
-        piece(
-            render::bridge_keys(
-                screen.cursor.selected(&frame.rows).map(|row| row.state),
-                width,
-            ),
-            Role::SteelGrey,
-        ),
-    ]);
+
     lines
+}
+
+/// Two spaces between boxes, the width `hjoin` inserts between the two it
+/// joins.
+const GAP: usize = 2;
+
+/// JOBS gets the wider half of the top row — it carries the most columns.
+fn jobs_width(width: usize) -> usize {
+    (width - GAP) * 3 / 5
 }
 
 /// The new-Job box: what is being asked, what has been typed, and the keys.
@@ -287,46 +344,57 @@ fn compose_box(typed: &str, style: Style, width: usize) -> Vec<Vec<Span>> {
     lines
 }
 
-/// One Job, in full, drawn over the table.
+/// One Job, in full — 033's own mock-up: identity, then `hjoin(WORKFLOW,
+/// NEEDS YOU)`, then `TIMELINE` full width, then `hjoin(REPORTS, FACTS)`,
+/// then its own `KEYS` box.
 ///
-/// **`render::show_lines` and nothing of its own**, which is what makes this a
-/// second *surface* rather than a second view: `armada fleet show <job>` at a
-/// terminal, the same command through a pipe and this pane are one description
-/// emitted three ways (PLAN.md §3.1.1).
+/// **Fed only by `ShowData`**, still "one description emitted three ways"
+/// (PLAN.md §3.1.1): `armada fleet show <job>` at a terminal, the same
+/// command through a pipe, and this screen all read the one payload.
 fn detail_pane(job: &str, detail: Option<&ShowData>, style: Style, width: usize) -> Vec<Vec<Span>> {
-    let mut lines: Vec<Vec<Span>> = vec![
-        vec![
-            plain("  "),
-            bold("ARMADA BRIDGE", Role::SignalAmber),
-            plain("   "),
-            piece(job.to_string(), Role::NavalBlue),
-        ],
-        Vec::new(),
-    ];
-    match detail {
-        Some(data) => lines.extend(render::show_lines(data, style, width)),
-        // **A Job that went while the pane was open says so.** `kill` in another
-        // shell is the ordinary way this happens, and a pane that simply emptied
-        // would read as a failed redraw.
-        None => lines.push(vec![
-            plain("  "),
-            piece(
-                format!("`{job}` is no longer in the fleet"),
-                Role::SteelGrey,
-            ),
-        ]),
-    }
+    let Some(data) = detail else {
+        // **A Job that went while the pane was open says so.** `kill` in
+        // another shell is the ordinary way this happens, and a pane that
+        // simply emptied would read as a failed redraw.
+        return vec![
+            vec![
+                plain("  "),
+                bold("ARMADA BRIDGE", Role::SignalAmber),
+                plain("   "),
+                piece(job.to_string(), Role::NavalBlue),
+            ],
+            Vec::new(),
+            vec![
+                plain("  "),
+                piece(
+                    format!("`{job}` is no longer in the fleet"),
+                    Role::SteelGrey,
+                ),
+            ],
+        ];
+    };
+
+    let mut lines = render::detail_identity(data, width);
     lines.push(Vec::new());
-    lines.push(vec![
-        plain("  "),
-        // **Its own key line, not the Bridge's.** Nothing else on this screen is
-        // reachable from here, so listing the Bridge's eight keys would name
-        // seven that do nothing.
-        piece(
-            "esc back  up/down another job  ctrl-c quit",
-            Role::SteelGrey,
-        ),
-    ]);
+
+    let half = (width - GAP) / 2;
+    lines.extend(frame::hjoin(
+        render::workflow_box(data, style, half),
+        render::needs_you_box(data, width - half - GAP),
+        GAP,
+        width,
+    ));
+    lines.push(Vec::new());
+    lines.extend(render::timeline_box(&data.transitions, style, width));
+    lines.push(Vec::new());
+    lines.extend(frame::hjoin(
+        render::reports_box(&data.progress, style, half),
+        render::facts_box(data, style, width - half - GAP),
+        GAP,
+        width,
+    ));
+    lines.push(Vec::new());
+    lines.extend(render::detail_keys(width));
     lines
 }
 
@@ -444,9 +512,17 @@ pub fn watch<R: Run, C: Clock>(
     let mut view: ratatui::Terminal<ratatui::backend::CrosstermBackend<Stdout>> =
         ratatui::Terminal::new(backend).map_err(|_| crate::verbs::bridge::no_screen())?;
 
+    // **Read once, not once per frame.** `WorkspaceId::derive` hashes a path —
+    // no IO — so this costs nothing to compute every redraw, but it is the
+    // same value every time and reads better named once.
+    let workspace_id = armada_core::id::WorkspaceId::derive(&place.cwd);
+    let workspace_id = workspace_id.as_str();
+    let cwd = place.cwd.display().to_string();
+
     let interval = Duration::from_secs(options.interval_s);
     let outcome = loop {
-        let frame = crate::verbs::bridge::read(run, now, place, screen.filter.as_ref())?;
+        let centre = crate::verbs::bridge::read_all(run, now, place, screen.filter.as_ref())?;
+        let frame = centre.fleet.clone();
         screen.cursor.clamp(frame.rows.len());
         // **Re-read on the same cadence as the frame.** An open detail pane is
         // the Bridge, and a Bridge that froze one Job while the rest kept moving
@@ -454,9 +530,11 @@ pub fn watch<R: Run, C: Clock>(
         let mut detail = detail_of(run, now, place, screen);
         draw(
             &mut view,
-            &frame,
+            &centre,
             screen,
             detail.as_deref(),
+            workspace_id,
+            &cwd,
             style,
             terminal,
         );
@@ -494,9 +572,11 @@ pub fn watch<R: Run, C: Clock>(
                     detail = detail_of(run, now, place, screen);
                     draw(
                         &mut view,
-                        &frame,
+                        &centre,
                         screen,
                         detail.as_deref(),
+                        workspace_id,
+                        &cwd,
                         style,
                         terminal,
                     );
@@ -562,20 +642,23 @@ fn detail_of<R: Run, C: Clock>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw(
     view: &mut ratatui::Terminal<ratatui::backend::CrosstermBackend<Stdout>>,
-    frame: &Frame,
+    centre: &BridgeView,
     screen: &Screen,
     detail: Option<&ShowData>,
+    workspace_id: &str,
+    cwd: &str,
     style: Style,
     terminal: Terminal,
 ) {
-    let status = crate::verbs::bridge::status_of(frame);
     let lines: Vec<ratatui::text::Line<'static>> = paint(
-        frame,
+        centre,
         screen,
         detail,
-        status,
+        workspace_id,
+        cwd,
         style,
         terminal.usable_width(),
     )
@@ -656,18 +739,39 @@ mod tests {
             .collect()
     }
 
+    /// An empty inbox, guild and system reading, over a given fleet frame —
+    /// what every test that is not itself about a panel other than JOBS wants.
+    fn view(fleet: Frame) -> BridgeView {
+        BridgeView {
+            fleet,
+            inbox: armada_core::envelope::InboxData::default(),
+            guild: armada_core::envelope::GuildListData {
+                at: String::new(),
+                items: Vec::new(),
+                facts: Vec::new(),
+                template: None,
+            },
+            system: armada_core::envelope::DoctorData {
+                results: Vec::new(),
+                headline: None,
+                tally: Vec::new(),
+            },
+        }
+    }
+
     fn drawn(screen: &Screen) -> Vec<String> {
         drawn_at(&frame(), screen, 80)
     }
 
     /// The same, at a stated width — for the layout that grows into a wide
     /// terminal, which is the one thing a fixed-width helper cannot show.
-    fn drawn_at(frame: &Frame, screen: &Screen, width: usize) -> Vec<String> {
+    fn drawn_at(fleet: &Frame, screen: &Screen, width: usize) -> Vec<String> {
         text(&paint(
-            frame,
+            &view(fleet.clone()),
             screen,
             None,
-            Status::Running,
+            "c24a68b6",
+            "~/Development/armada",
             Style::plain(),
             width,
         ))
@@ -721,8 +825,8 @@ mod tests {
     fn a_frame_draws_the_columns_the_summary_and_the_keys() {
         let drawn = drawn(&Screen::default());
         let all = drawn.join("\n");
-        assert!(all.contains("ARMADA BRIDGE"), "{all}");
-        assert!(all.contains("LIVE"), "{all}");
+        assert!(all.contains("ARMADA"), "{all}");
+        assert!(all.contains("c24a68b6"), "{all}");
         // **`TASK` is not in this list any more**, and its absence at eighty
         // columns is the trade `render.rs`'s `SHED` states: a row needs you, so
         // the question is on the line and the task is one keypress away.
@@ -762,6 +866,14 @@ mod tests {
     /// The assertion is on the *order* rather than on three widths, because the
     /// widths themselves depend on how long the Jobs happen to be called — what
     /// must not change is that a column never survives one that outranks it.
+    ///
+    /// **Checked within each of 033's two regimes, not across their boundary.**
+    /// The command centre gives JOBS the *whole* screen under [`WIDE`] and
+    /// three-fifths of it at or above — a deliberate jump at the one width
+    /// where a whole different box (INBOX) starts sharing the row, not a
+    /// continuous shrink. `no_row_overhangs_the_terminal_at_any_width` still
+    /// covers the property that actually has to hold across the jump: nothing
+    /// ever draws off the edge.
     #[test]
     fn the_table_sheds_workflow_then_turns_then_task_as_the_terminal_narrows() {
         let frame = frame();
@@ -773,26 +885,31 @@ mod tests {
                 all.contains("TASK"),
             )
         };
-        // Wide enough for everything.
-        assert_eq!(seen(200), (true, true, true), "a wide terminal sheds");
-        // Narrow enough for none of the three.
-        assert_eq!(seen(80), (false, false, false), "eighty carried an extra");
+        // Wide enough for everything, and narrow enough for none of it.
+        assert_eq!(seen(400), (true, true, true), "a wide terminal sheds");
+        assert_eq!(seen(60), (false, false, false), "sixty carried an extra");
 
-        // And nothing survives a column that outranks it, at any width between.
-        let mut previous = (true, true, true);
-        for width in (60..=200).rev() {
-            let (workflow, turns, task) = seen(width);
-            assert!(
-                !(workflow && !turns) && !(turns && !task),
-                "at {width} the shed order broke: \
-                 workflow={workflow} turns={turns} task={task}"
-            );
-            let (was_workflow, was_turns, was_task) = previous;
-            assert!(
-                !(workflow && !was_workflow) && !(turns && !was_turns) && !(task && !was_task),
-                "a column came back at {width}, going narrower"
-            );
-            previous = (workflow, turns, task);
+        // Nothing survives a column that outranks it, at any width within a
+        // regime — checked separately either side of `WIDE`.
+        for regime in [
+            (WIDE..=400).rev().collect::<Vec<_>>(),
+            (60..WIDE).rev().collect(),
+        ] {
+            let mut previous = seen(*regime.first().unwrap());
+            for width in regime {
+                let (workflow, turns, task) = seen(width);
+                assert!(
+                    !(workflow && !turns) && !(turns && !task),
+                    "at {width} the shed order broke: \
+                     workflow={workflow} turns={turns} task={task}"
+                );
+                let (was_workflow, was_turns, was_task) = previous;
+                assert!(
+                    !(workflow && !was_workflow) && !(turns && !was_turns) && !(task && !was_task),
+                    "a column came back at {width}, going narrower"
+                );
+                previous = (workflow, turns, task);
+            }
         }
     }
 
@@ -822,7 +939,9 @@ mod tests {
         let asked = "the CI timeout is 30s and the flake needs 90s. Raise it?";
         let mut asking = frame();
         asking.rows[1].detail = asked.to_string();
-        let all = drawn_at(&asking, &Screen::default(), 200).join("\n");
+        // Wide enough that the JOBS box's own share of a wide screen still
+        // carries the whole sentence, even split beside INBOX.
+        let all = drawn_at(&asking, &Screen::default(), 400).join("\n");
         assert!(
             all.contains(asked),
             "the question is not on the row:\n{all}"
@@ -834,7 +953,7 @@ mod tests {
 
         // The fallback: `detail` is the step, which `STEP` already says, so
         // repeating it in this column would put one fact on the row twice.
-        let all = drawn_at(&frame(), &Screen::default(), 200).join("\n");
+        let all = drawn_at(&frame(), &Screen::default(), 400).join("\n");
         assert!(
             all.contains("YES"),
             "no fallback for a bare needs-you:\n{all}"
@@ -867,6 +986,11 @@ mod tests {
     /// **A single Job keeps its status word, because there it means something.**
     /// It is that Job's state rather than a summary of anything, and dropping it
     /// would take a fact off the line to satisfy a rule about a case this is not.
+    ///
+    /// **The command centre's JOBS box states it on the row and not on a
+    /// second summary line** — the `STATUS` column 033's own mock draws —
+    /// which is the same fact the single-table Bridge's summary line used to
+    /// lead with for exactly one Job, said once rather than twice.
     #[test]
     fn one_job_keeps_the_status_word() {
         let frame = Frame {
@@ -877,9 +1001,9 @@ mod tests {
         let all = drawn_at(&frame, &Screen::default(), 200).join("\n");
         let line = all
             .lines()
-            .find(|line| line.contains("1 job"))
-            .expect("a summary line");
-        assert!(line.starts_with("RUNNING"), "{line}");
+            .find(|line| line.contains("rate-limit"))
+            .expect("the Job's own row");
+        assert!(line.contains("RUNNING"), "{line}");
     }
 
     /// **Window usage leads and spend follows** (`020` §4). Claude Code has
@@ -891,6 +1015,12 @@ mod tests {
     /// service's own `utilization` floored, not a fraction of a turn count
     /// (PHASES.md §9.1 F2) — which is also why it is absent rather than
     /// estimated when the event did not carry one.
+    ///
+    /// **The window is in the `ARMADA` header now, not the summary line.**
+    /// 033's mock-up draws both usage windows once, above every box, rather
+    /// than repeating them on a per-Job summary — so "ahead of the spend" is
+    /// now "above the JOBS box that states the spend", which this asserts by
+    /// checking each line rather than one line's own ordering.
     #[test]
     fn the_window_is_drawn_ahead_of_the_spend_and_omits_what_was_not_measured() {
         let mut frame = frame();
@@ -899,15 +1029,19 @@ mod tests {
             used_percent: Some(71),
             resets_in_s: Some(2 * 3_600 + 14 * 60),
         }];
-        let all = drawn_at(&frame, &Screen::default(), 200).join("\n");
-        let line = all
-            .lines()
-            .find(|line| line.contains("5h"))
-            .expect("a summary line");
-        assert!(line.contains("5h 71% resets 2h14m"), "{line}");
+        let drawn = drawn_at(&frame, &Screen::default(), 200);
+        let all = drawn.join("\n");
+        let window_at = drawn
+            .iter()
+            .position(|line| line.contains("5h 71% resets 2h14m"))
+            .expect("the window line");
+        let spend_at = drawn
+            .iter()
+            .position(|line| line.contains("$4.20"))
+            .expect("the spend line");
         assert!(
-            line.find("5h").unwrap() < line.find("$4.20").unwrap(),
-            "spend is drawn ahead of the window: {line}"
+            window_at < spend_at,
+            "the window is not ahead of the spend:\n{all}"
         );
 
         // A window the service reported without a percentage says what it has.
@@ -1021,10 +1155,11 @@ mod tests {
         };
         let shown = detail();
         let all = text(&paint(
-            &frame(),
+            &view(frame()),
             &screen,
             Some(&shown),
-            Status::Running,
+            "c24a68b6",
+            "~/Development/armada",
             Style::plain(),
             80,
         ))
@@ -1061,19 +1196,93 @@ mod tests {
             ..Screen::default()
         };
         let all = text(&paint(
-            &frame(),
+            &view(frame()),
             &screen,
             Some(&detail()),
-            Status::Running,
+            "c24a68b6",
+            "~/Development/armada",
             Style::plain(),
             80,
         ))
         .join("\n");
         assert!(
             !all.contains("rate-limit"),
-            "the table is still drawn:\n{all}"
+            "the fleet table is still drawn:\n{all}"
         );
-        assert!(!all.contains("NEEDS YOU"), "{all}");
+        assert!(
+            !all.contains("JOBS ("),
+            "the JOBS box is still drawn:\n{all}"
+        );
+    }
+
+    /// **`TIMELINE` and `REPORTS` never source a row from the same field.**
+    /// 033's own section "The detail view names its two tables": one carries
+    /// the gate's decision — the predicate and exit code that settled it —
+    /// and the other carries an agent's own summary. Collapsing them is how a
+    /// Drone's claim gets read as evidence, so this asserts the two tables
+    /// draw from `transitions` and `progress` and never swap.
+    #[test]
+    fn timeline_and_reports_read_from_different_fields() {
+        let mut shown = detail();
+        shown.transitions = vec![armada_core::envelope::TransitionRow {
+            at: "2026-08-09T14:49:11Z".to_string(),
+            ago_s: 60,
+            step: "implement".to_string(),
+            event: "failed".to_string(),
+            attempt: 1,
+            must: Some("check_passes".to_string()),
+            evidence: vec![armada_core::envelope::Evidence {
+                kind: "check".to_string(),
+                scope: "orders:test".to_string(),
+                exit: 1,
+            }],
+        }];
+        shown.progress = vec![armada_core::envelope::NoteRow {
+            at: "2026-08-09T14:50:11Z".to_string(),
+            ago_s: 30,
+            step: "implement".to_string(),
+            body: "reproduced the cold-start failure locally".to_string(),
+        }];
+
+        let screen = Screen {
+            mode: Mode::Detail("release-merge".to_string()),
+            ..Screen::default()
+        };
+        let all = text(&paint(
+            &view(frame()),
+            &screen,
+            Some(&shown),
+            "c24a68b6",
+            "~/Development/armada",
+            Style::plain(),
+            160,
+        ))
+        .join("\n");
+
+        let timeline_at = all.find("TIMELINE").expect("a TIMELINE box");
+        let reports_at = all.find("REPORTS").expect("a REPORTS box");
+        let gate_evidence_at = all
+            .find("check_passes")
+            .expect("the gate's predicate is drawn");
+        let drone_words_at = all
+            .find("reproduced the cold-start failure locally")
+            .expect("the Drone's own words are drawn");
+
+        // The gate's predicate is on the TIMELINE side, before REPORTS starts.
+        assert!(
+            timeline_at < gate_evidence_at && gate_evidence_at < reports_at,
+            "the gate's predicate is not inside TIMELINE:\n{all}"
+        );
+        // The Drone's own words are on the REPORTS side, after TIMELINE ends.
+        assert!(
+            drone_words_at > reports_at,
+            "the Drone's words are not inside REPORTS:\n{all}"
+        );
+        // Neither field's content appears on the other's side.
+        assert!(
+            !all[timeline_at..reports_at].contains("reproduced the cold-start"),
+            "REPORTS' content leaked into TIMELINE:\n{all}"
+        );
     }
 
     /// A Job that went while the pane was open says so. `armada fleet kill` in
@@ -1086,10 +1295,11 @@ mod tests {
             ..Screen::default()
         };
         let all = text(&paint(
-            &frame(),
+            &view(frame()),
             &screen,
             None,
-            Status::Running,
+            "c24a68b6",
+            "~/Development/armada",
             Style::plain(),
             80,
         ))
@@ -1151,14 +1361,22 @@ mod tests {
                 closed: None,
             }],
             progress: Vec::new(),
+            steps: Vec::new(),
         }
     }
 
     /// **The key line reads the row the cursor is on.** A line that always said
     /// `pause` over a `PAUSED` Job advertised the one thing that key would not
     /// do, and left the reader with no way at all to start a held Job again.
+    ///
+    /// **The command centre's `KEYS` box is 033's own fixed legend, and this is
+    /// the trade-off named plainly.** The single-table Bridge's key line read
+    /// the selected row's state and said `p resume` over a paused Job; 033's
+    /// mock-up draws one static legend for the whole screen (`p pause`, no
+    /// per-row variant), and this box follows the mock rather than carrying
+    /// the personalization forward.
     #[test]
-    fn the_key_line_says_resume_over_a_paused_job_and_pause_over_a_running_one() {
+    fn the_keys_box_names_pause_regardless_of_which_row_is_selected() {
         let frame = Frame {
             rows: vec![
                 row("rate-limit", JobState::Running, false),
@@ -1166,15 +1384,11 @@ mod tests {
             ],
             ..frame()
         };
+        // Wide enough (still under `WIDE`) that `p pause` survives the
+        // narrow legend's own shedding — the movement legend and `q quit`
+        // alone already cost about 65 columns.
         let line = |screen: &Screen| {
-            let drawn = text(&paint(
-                &frame,
-                screen,
-                None,
-                Status::Running,
-                Style::plain(),
-                80,
-            ));
+            let drawn = drawn_at(&frame, screen, 120);
             drawn
                 .iter()
                 .find(|line| line.contains("q quit"))
@@ -1183,17 +1397,10 @@ mod tests {
         };
 
         let mut screen = Screen::default();
-        let running = line(&screen);
-        assert!(running.contains("p pause"), "{running}");
-        assert!(!running.contains("p resume"), "{running}");
+        assert!(line(&screen).contains("p pause"), "{}", line(&screen));
 
         screen.cursor.next(2);
-        let held = line(&screen);
-        assert!(
-            held.contains("p resume"),
-            "a paused Job is still offered `pause`: {held}"
-        );
-        assert!(!held.contains("p pause"), "{held}");
+        assert!(line(&screen).contains("p pause"), "{}", line(&screen));
     }
 
     /// **The key line stays one line and never wraps**, at every width the
@@ -1345,13 +1552,14 @@ mod tests {
         );
 
         let long = text(&paint(
-            &frame(),
+            &view(frame()),
             &Screen {
                 mode: Mode::Composing("x".repeat(200)),
                 ..Screen::default()
             },
             None,
-            Status::Running,
+            "c24a68b6",
+            "~/Development/armada",
             Style::plain(),
             80,
         ));
@@ -1386,10 +1594,11 @@ mod tests {
                 windows: Vec::new(),
             };
             let drawn = text(&paint(
-                &empty,
+                &view(empty),
                 &Screen::default(),
                 None,
-                Status::Ok,
+                "c24a68b6",
+                "~/Development/armada",
                 Style::plain(),
                 80,
             ));
