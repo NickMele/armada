@@ -78,17 +78,57 @@ pub fn check_detach(
         args.push(scope);
     }
     let envelope = call(run, exe, worktree, &args, "armada manifest check --detach")?;
-    envelope
+    if let Some(id) = envelope
         .get("data")
         .and_then(|data| data.get("run_id"))
         .and_then(|id| id.as_str())
-        .map(str::to_string)
-        .ok_or_else(|| ArmadaError {
-            class: ErrClass::ArmadaBug,
-            r#where: "armada manifest check --detach".to_string(),
-            message: "a detached check did not report its run id".to_string(),
-            next_action: None,
-        })
+    {
+        return Ok(id.to_string());
+    }
+
+    // **The envelope's own refusal, when it carried one.**
+    //
+    // Every reason a detached check declines to start — the pass lock is held,
+    // the selector matched nothing, the working tree is not a workspace — comes
+    // back as a populated `error` and no `run_id`. Reporting the absence of the
+    // id instead of the reason it is absent turned all of them into one
+    // sentence, and an [`ErrClass::ArmadaBug`] at that: a Job that could not
+    // start a check because another was already running was told Armada had
+    // malfunctioned, and the operator was told to file it rather than to wait.
+    //
+    // Measured on a live Job 2026-08-17: `job-drives-the-drone` stopped at
+    // `implement` with *"a detached check did not report its run id"*, and the
+    // same command run by hand in the same worktree answered with a run id and
+    // five queued checks. The refusal it actually got was never shown to
+    // anybody.
+    if let Some(error) = envelope.get("error").filter(|error| !error.is_null()) {
+        let said = |key: &str| {
+            error
+                .get(key)
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+        };
+        return Err(ArmadaError {
+            // **The class it was refused with, kept.** A refusal Armada meant is
+            // not Armada's bug, and the two are answered by different people.
+            class: error
+                .get("class")
+                .cloned()
+                .and_then(|class| serde_json::from_value::<ErrClass>(class).ok())
+                .unwrap_or(ErrClass::ToolFailed),
+            r#where: said("where").unwrap_or_else(|| "armada manifest check --detach".to_string()),
+            message: said("message")
+                .unwrap_or_else(|| "the detached check would not start".to_string()),
+            next_action: said("next"),
+        });
+    }
+
+    Err(ArmadaError {
+        class: ErrClass::ArmadaBug,
+        r#where: "armada manifest check --detach".to_string(),
+        message: "a detached check reported neither a run id nor an error".to_string(),
+        next_action: None,
+    })
 }
 
 /// What a detached check has decided, read with `armada manifest check --status`.
@@ -308,6 +348,56 @@ mod tests {
     }
 
     const INITED: &str = r#"{"schema_version":2,"verb":"init","workspace":"3d9cc7ba","status":"READY","error":null,"data":{"port_block":{"from":5470,"to":5479},"claimed_at":"t","reaped":{},"results":[]}}"#;
+
+    /// **A refusal comes back as the refusal, not as a missing field.**
+    ///
+    /// Measured on a live Job 2026-08-17. `job-drives-the-drone` stopped at
+    /// `implement` saying *"a detached check did not report its run id"* —
+    /// classed `ArmadaBug`, so the operator was told Armada had malfunctioned
+    /// and that retrying would not help. The same command run by hand in the
+    /// same worktree answered with a run id and five queued checks. Every
+    /// reason a detached check declines to start arrives as a populated
+    /// `error` and no `run_id`, and all of them were being reported as one
+    /// sentence about the field that was missing rather than the reason it was.
+    #[test]
+    fn a_detached_check_that_was_refused_reports_what_refused_it() {
+        const REFUSED: &str = r#"{"schema_version":2,"verb":"check","workspace":"3d9cc7ba","status":"FAILED","error":{"class":"aborted","where":"armada:test","message":"another pass holds this workspace","next":"wait for run 01M0 to finish, then retry"},"data":{"results":[]}}"#;
+        let run = FakeRun::answering(REFUSED);
+        let error = check_detach(
+            &run,
+            Path::new("/usr/local/bin/armada"),
+            Path::new("/work"),
+            None,
+        )
+        .expect_err("a refused check is an error");
+
+        assert_eq!(error.message, "another pass holds this workspace");
+        assert_eq!(error.r#where, "armada:test");
+        assert_eq!(
+            error.next_action.as_deref(),
+            Some("wait for run 01M0 to finish, then retry")
+        );
+        // **Not `ArmadaBug`.** A refusal Armada meant is not Armada breaking,
+        // and the two are answered by different people.
+        assert_eq!(error.class, ErrClass::Aborted);
+    }
+
+    /// An envelope with neither a run id nor an error is the only case left
+    /// that really is Armada's bug, and it says so in those words.
+    #[test]
+    fn a_detached_check_with_no_id_and_no_error_is_armadas_own_bug() {
+        const EMPTY: &str = r#"{"schema_version":2,"verb":"check","workspace":"3d9cc7ba","status":"OK","error":null,"data":{"results":[]}}"#;
+        let run = FakeRun::answering(EMPTY);
+        let error = check_detach(
+            &run,
+            Path::new("/usr/local/bin/armada"),
+            Path::new("/work"),
+            None,
+        )
+        .expect_err("an envelope with nothing in it is an error");
+        assert_eq!(error.class, ErrClass::ArmadaBug);
+        assert!(error.message.contains("neither"), "{}", error.message);
+    }
 
     /// **The verb is run in the worktree**, which is the whole point: it claims
     /// a block for *that* directory, and running it anywhere else would claim a

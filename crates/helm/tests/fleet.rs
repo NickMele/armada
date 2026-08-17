@@ -3507,7 +3507,15 @@ fn killing_a_job_closes_what_it_had_open_and_answering_it_is_refused() {
         armada_helm::render::style::Style::plain(),
         armada_helm::render::term::Terminal::piped(),
     );
-    assert!(text.contains("ceiling"), "the entry vanished:\n{text}");
+    // **The keystroke, not the explanation.** This asserted on the word
+    // `ceiling`, which sat at the front of the body until the body was reordered
+    // to lead with what to type — the column elides from the right, so exactly
+    // one half survives and it should be the actionable one. Asserting on the
+    // half that gets cut is asserting that the truncation has not moved.
+    assert!(
+        text.contains("max_cost"),
+        "the entry vanished, or lost the keystroke that clears it:\n{text}"
+    );
     assert!(
         !text.contains("armada fleet answer"),
         "the footer offers an answer with nothing open:\n{text}"

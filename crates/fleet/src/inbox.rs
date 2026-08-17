@@ -460,17 +460,43 @@ pub fn read(path: &Path) -> Result<Vec<Entry>, ArmadaError> {
                 raised_at,
                 raised_ms,
                 body,
-            } => entries.push(Entry {
-                uuid,
-                job_uuid,
-                job,
-                kind,
-                raised_at,
-                raised_ms,
-                body,
-                answered: None,
-                closed: None,
-            }),
+            } => {
+                // **First raise wins, and a repeat is dropped** — the same rule
+                // [`Line::Bound`] states below, for a sharper reason.
+                //
+                // An entry's uuid is minted from its Job, the millisecond, and
+                // its body, so two raises of one question inside a millisecond
+                // are one uuid. Pushing both made **two entries answerable by
+                // one id**, and every arm that settles an entry uses `find` —
+                // which reaches only the first. The second could never be
+                // answered, never be closed, and never leave the inbox.
+                //
+                // Measured on the author's own machine: entry `47fb4860` was
+                // written `closed` four times over seventeen hours and still
+                // drew as open, because the line closing it kept landing on its
+                // twin. A permanent row that no verb can clear is worse than a
+                // missing one — it is what stops a list being trusted, which is
+                // exactly what [`Closed::Unresolvable`] exists to prevent in the
+                // other direction.
+                //
+                // **Dropped in the fold rather than refused at `raise`**, so the
+                // duplicates already on disk are repaired by reading them. A
+                // guard that only protected new writes would leave every
+                // existing phantom in place for ever.
+                if !entries.iter().any(|entry| entry.uuid == uuid) {
+                    entries.push(Entry {
+                        uuid,
+                        job_uuid,
+                        job,
+                        kind,
+                        raised_at,
+                        raised_ms,
+                        body,
+                        answered: None,
+                        closed: None,
+                    });
+                }
+            }
             Line::Answered { uuid, answer } => {
                 if let Some(entry) = entries.iter_mut().find(|entry| entry.uuid == uuid) {
                     entry.answered = Some(answer);
@@ -614,6 +640,53 @@ mod tests {
             body,
         )
         .unwrap();
+    }
+
+    /// **An entry raised twice is one entry, and closing it closes it.**
+    ///
+    /// An entry's uuid is minted from its Job, the millisecond and its body, so
+    /// two raises of one question inside a millisecond share a uuid. The fold
+    /// used to push both, and every arm that settles an entry uses `find` —
+    /// which reaches only the first. The twin could never be answered, closed,
+    /// or cleared.
+    ///
+    /// Measured on a real machine: entry `47fb4860` was written `closed` four
+    /// times over seventeen hours and still drew as open, because each closing
+    /// line landed on its twin. A row no verb can clear is what stops a list
+    /// being trusted.
+    #[test]
+    fn one_question_raised_twice_is_one_entry_that_can_actually_be_closed() {
+        let (_home, path) = scratch();
+        raised(&path, "dupe", "job-uuid", "nightly", 1, "well?");
+        raised(&path, "dupe", "job-uuid", "nightly", 1, "well?");
+
+        let entries = read(&path).unwrap();
+        assert_eq!(
+            entries.len(),
+            1,
+            "a repeat became a second row: {entries:#?}"
+        );
+
+        close(&path, "job-uuid", Closed::Ended).unwrap();
+        let entries = read(&path).unwrap();
+        assert!(
+            entries.iter().all(|entry| !entry.is_open()),
+            "a closed entry is still waiting on somebody: {entries:#?}"
+        );
+    }
+
+    /// The same for an answer, which settles by the same `find`.
+    #[test]
+    fn answering_a_question_raised_twice_settles_it() {
+        let (_home, path) = scratch();
+        raised(&path, "dupe", "job-uuid", "nightly", 1, "well?");
+        raised(&path, "dupe", "job-uuid", "nightly", 1, "well?");
+        answer(&path, "dupe", "yes").unwrap();
+
+        let entries = read(&path).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].answered.as_deref(), Some("yes"));
+        assert!(!entries[0].is_open());
     }
 
     /// A legacy line: what every entry on a machine looked like before `005`
