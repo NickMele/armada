@@ -57,8 +57,31 @@ jobs:
         run: cargo build --workspace --all-targets
 
       # 3. tests — every tier.
+      #
+      # **`nextest` rather than `cargo test`, and the two must not drift.**
+      # `crates/core/tests/dogfood.rs` asserts that every command `armada.yml`
+      # declares is one this file runs, so changing the check without changing
+      # the gate fails the gate — which is how this step got here.
+      #
+      # Measured warm on the workspace: 83s for `cargo test` against 27s for the
+      # same 2034 tests. `cargo test` runs each of the twenty test binaries to
+      # completion before starting the next; `nextest` pools every test across
+      # all of them.
+      #    Cached the way `cargo-llvm-cov` is below: installing it from source
+      #    on every run of a two-OS matrix costs more than the 56 seconds the
+      #    switch saves.
+      - name: Cache cargo-nextest
+        id: nextest-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/cargo-nextest
+          key: cargo-nextest-${{ runner.os }}-v1
+
+      - name: Install cargo-nextest
+        if: steps.nextest-cache.outputs.cache-hit != 'true'
+        run: cargo install cargo-nextest --locked
       - name: test
-        run: cargo test --workspace
+        run: cargo nextest run --workspace
 
       # 6. the contamination grep, run from its single source of truth in
       #    ARCHITECTURE.md §2.4 rather than from a copy, plus the privacy gate
