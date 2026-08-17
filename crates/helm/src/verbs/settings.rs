@@ -107,7 +107,7 @@ fn manifest_settings(armada_home: &Path) -> Result<Vec<SettingRow>, ArmadaError>
 fn helm_settings(armada_home: &Path) -> Vec<SettingRow> {
     // Exhaustive destructuring for the same reason as above: a third field
     // added there without being named here would not compile.
-    let crate::machine::HelmSection { enter, mode } = crate::machine::read(armada_home);
+    let crate::machine::HelmSection { enter, mode, model } = crate::machine::read(armada_home);
     let at = shown(&armada_home.join("machine.yml"));
     vec![
         machine_row(
@@ -116,6 +116,7 @@ fn helm_settings(armada_home: &Path) -> Vec<SettingRow> {
             &at,
         ),
         machine_row("helm.mode", mode, &at),
+        machine_row("helm.model", model, &at),
     ]
 }
 

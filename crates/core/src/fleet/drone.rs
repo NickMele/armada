@@ -639,6 +639,15 @@ pub const DENY: [&str; 16] = [
 /// reason.
 pub const PERMISSION_MODE: &str = "--permission-mode";
 
+/// The flag a session's model is passed as.
+///
+/// **Named here beside [`PERMISSION_MODE`] rather than in `helm.rs`**, for the
+/// reason that constant gives: `armada doctor` holds every flag the launches use
+/// against `claude --help`, and a flag defined where only one launch can see it
+/// is a flag the other launch's audit cannot check. Only Helm passes it today;
+/// a Drone that wanted a model per step would take it from here.
+pub const MODEL_FLAG: &str = "--model";
+
 /// The flag [`ALLOW`] is passed as. Variadic — see [`headless`].
 pub const ALLOWED: &str = "--allowedTools";
 

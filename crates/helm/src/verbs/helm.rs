@@ -174,6 +174,17 @@ pub fn mode(armada_home: &Path) -> Result<String, ArmadaError> {
     }
 }
 
+/// The `--model` this machine's Helm enters under.
+///
+/// **Read but not validated**, which is the difference from [`mode`] above and
+/// is argued at [`armada_core::helm::MODEL`]: Claude Code publishes a closed set
+/// of permission modes and an open set of models, so a list here would refuse a
+/// model released after this build. The binary's own refusal is the check, and
+/// it is the current one.
+pub fn model(armada_home: &Path) -> String {
+    crate::machine::read(armada_home).model
+}
+
 /// `armada helm enable` — let `armada helm` become a session on this machine.
 ///
 /// **This is the yes, and the only one.** Nothing downstream asks again: with
@@ -294,6 +305,7 @@ pub fn run<C: armada_core::ctx::Clock>(
         plugin_dir: paths(place).plugin_dir.display().to_string(),
         settings: paths(place).settings.display().to_string(),
         mode,
+        model: model(&place.armada_home),
         voice: voice.as_ref().map(|voice| voice.prompt.clone()),
     };
     let argv = helm::launch_argv(&launch);
