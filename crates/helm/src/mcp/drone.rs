@@ -292,44 +292,9 @@ fn word_to_status(word: &str) -> Result<DroneStatus, ArmadaError> {
     }
 }
 
-/// The word a caller writes, as the enum PLAN.md §14.3 defines.
-///
-/// **One spelling, and it is the JSON spelling** — `FAILED`, never `FAIL`.
-/// Accepted case-insensitively because a model writing `pass` meant `PASS`, and
-/// refusing that would send an agent round a loop over capitalisation; a word
-/// outside the four is refused rather than guessed at, for the reason
-/// classification refuses a fifth label.
-fn word_to_verdict(word: &str) -> Result<Verdict, ArmadaError> {
-    match word.trim().to_ascii_uppercase().as_str() {
-        "PASS" => Ok(Verdict::Pass),
-        "FAILED" => Ok(Verdict::Failed),
-        "BLOCKED" => Ok(Verdict::Blocked),
-        "NEEDS_HUMAN" => Ok(Verdict::NeedsHuman),
-        other => Err(ArmadaError {
-            class: ErrClass::BadInvocation,
-            r#where: "verdict".to_string(),
-            message: format!("`{other}` is not a verdict"),
-            next_action: Some("one of PASS, FAILED, BLOCKED, NEEDS_HUMAN".to_string()),
-        }),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_four_verdicts_are_read_in_any_case_and_nothing_else_is() {
-        assert_eq!(word_to_verdict("PASS").unwrap(), Verdict::Pass);
-        assert_eq!(word_to_verdict("pass").unwrap(), Verdict::Pass);
-        assert_eq!(
-            word_to_verdict(" needs_human ").unwrap(),
-            Verdict::NeedsHuman
-        );
-        // The split PLAN.md §14.3 says Fleet must not reinvent.
-        assert!(word_to_verdict("FAIL").is_err());
-        assert!(word_to_verdict("ok").is_err());
-    }
 
     /// **The Drone's brief names this belt and no other.**
     ///
