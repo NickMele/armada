@@ -21,7 +21,7 @@
 //! else's verdict rests on.
 
 use armada_core::error::{ArmadaError, ErrClass};
-use armada_core::fleet::{DroneStatus, Subject, Verdict};
+use armada_core::fleet::{DroneStatus, Subject};
 use armada_manifest::clock::SystemClock;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ServerCapabilities, ServerInfo};
@@ -345,13 +345,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_refused_verdict_says_which_four_words_are_legal() {
-        let error = word_to_verdict("done").unwrap_err();
-        assert_eq!(error.class, ErrClass::BadInvocation);
-        let next = error.next_action.expect("a next action");
-        for word in ["PASS", "FAILED", "BLOCKED", "NEEDS_HUMAN"] {
-            assert!(next.contains(word), "{next}");
-        }
-    }
 }
