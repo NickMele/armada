@@ -1652,10 +1652,17 @@ pub fn detail_keys(width: usize) -> Vec<Vec<Span>> {
     // because `033` makes the detail pane the primary full-screen destination
     // rather than a small overlay. Found by the reviewer Job on that change.
     //
-    // The rest come back as they are wired, one at a time, each with the
-    // handler that makes it true.
+    // **`a answer` is back — `core::fleet::bridge::detail` now wires it**, the
+    // same `Departure::Answer` the fleet table's own `a` calls. It is named
+    // unconditionally, the way the fleet's own key line names it regardless of
+    // whether the row under the cursor has anything open: pressing it on a Job
+    // with nothing to answer says so rather than doing nothing silently.
+    //
+    // `t tick`, `r retry step`, `$ raise budget`, `p pause` and `x abort`
+    // remain unwired and stay off the line until each has the handler that
+    // makes it true.
     let line = vec![Span {
-        text: " ↑↓ or jk move   esc back   q back   ctrl-c quit the bridge".to_string(),
+        text: " ↑↓ or jk move   esc back   q back   a answer   ctrl-c quit the bridge".to_string(),
         role: None,
         bold: false,
     }];

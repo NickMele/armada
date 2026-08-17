@@ -997,9 +997,22 @@ fn filtering(screen: &mut Screen, mut typed: String, key: Key) -> Pressed {
 /// `q` closing the whole screen from in here would quit an application when the
 /// reader meant to close a page of it.
 fn detail(screen: &mut Screen, job: String, rows: &[JobRow], key: Key) -> Pressed {
-    let _ = job;
     match key {
         Key::Interrupt => Pressed::Leave(Departure::Quit),
+        // **The same verb the row's own `a` calls, on the Job the pane is
+        // already open to** — `Departure::Answer` rather than an `Action`,
+        // because answering needs a text box the alternate screen cannot
+        // hold, exactly as it does from the fleet table.
+        Key::Char('a') => match rows.iter().find(|row| row.name == job) {
+            Some(row) if row.needs_attention => Pressed::Leave(Departure::Answer(Target::of(row))),
+            Some(row) => {
+                screen.notice = Some(format!("`{}` has nothing open to answer", row.name));
+                Pressed::Stay
+            }
+            // The Job left the fleet while the pane was open — `paint()`
+            // already says so; there is nothing here to answer.
+            None => Pressed::Stay,
+        },
         // **Moving the cursor moves the pane with it**, so a fleet is read one
         // Job at a time rather than closed and reopened between each.
         Key::Up | Key::Char('k') | Key::Down | Key::Char('j') => {
@@ -1893,6 +1906,40 @@ Usage:
             press(&mut screen, &rows, Key::Interrupt),
             Pressed::Leave(Departure::Quit),
             "ctrl-c is still the way out of the Bridge itself"
+        );
+    }
+
+    /// **`a` from the detail pane answers the same Job the row's own `a`
+    /// would** — `Departure::Answer`, not an `Action`, for the reason
+    /// `watching`'s `a` already is one: answering needs a text box the
+    /// alternate screen cannot hold.
+    #[test]
+    fn a_from_the_detail_pane_answers_the_job_it_is_open_on() {
+        let (mut screen, rows) = watching_at(3);
+        screen.cursor.next(3); // release-merge, index 2, needs_attention.
+        screen.cursor.next(3);
+        press(&mut screen, &rows, Key::Char('d'));
+        assert_eq!(screen.mode, Mode::Detail("release-merge".to_string()));
+
+        assert_eq!(
+            press(&mut screen, &rows, Key::Char('a')),
+            Pressed::Leave(Departure::Answer(target("release-merge")))
+        );
+    }
+
+    /// **`a` on a Job with nothing open says so, rather than doing nothing
+    /// silently** — the same refusal `watching`'s `a` gives, read from the
+    /// pane instead of the row.
+    #[test]
+    fn a_on_a_job_with_nothing_open_says_so_from_the_detail_pane() {
+        let (mut screen, rows) = watching_at(3);
+        press(&mut screen, &rows, Key::Char('d'));
+        assert_eq!(screen.mode, Mode::Detail("rate-limit".to_string()));
+
+        assert_eq!(press(&mut screen, &rows, Key::Char('a')), Pressed::Stay);
+        assert_eq!(
+            screen.notice,
+            Some("`rate-limit` has nothing open to answer".to_string())
         );
     }
 
