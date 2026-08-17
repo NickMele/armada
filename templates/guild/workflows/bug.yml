@@ -27,7 +27,6 @@ steps:
 
   - id: fix
     skill: implement-change
-    scope: changed
     verify: { must: check_passes }
 
   # No `skill:` — Fleet satisfies this one by spawning a Job that runs the
