@@ -594,7 +594,75 @@ fn read<C: Clock>(now: &C, place: &Where) -> Result<Vec<Entry>, ArmadaError> {
             .map(armada_fleet::inbox::Entry::as_entry),
     );
     failure::age(&mut entries, now.wall_ms());
+    no_longer_being_fixed(&mut entries, place);
     Ok(entries)
+}
+
+/// **`FIXING` means a Job is on it, so a Job that ended un-means it.**
+///
+/// The state is written when a failure is promoted (`failure.rs`'s
+/// `Line::Promoted`) and nothing ever wrote it back. One entry sat at `FIXING`
+/// for thirty hours on this machine while the Job named on it had aborted
+/// twenty-nine hours earlier — the listing claimed somebody was working on a
+/// bug that nobody was, which is worse than showing it open, because a reader
+/// who trusts the word leaves it alone.
+///
+/// **Derived here rather than written by whoever ends the Job.** Armada is not a
+/// daemon and nothing runs between commands (`ARCHITECTURE.md` §1.9), so a state
+/// that has to be *corrected* by a later writer is a state that goes stale the
+/// first time that writer is a `SIGKILL`. Reading it from the Job store at the
+/// moment somebody looks cannot go stale at all.
+///
+/// **It could not live in the fold.** `failure::fold` is in `armada-core`,
+/// below `armada-fleet`, and nothing points upward — the fold cannot look up a
+/// Job. This is the lowest place that can see both stores.
+///
+/// The entry keeps its `job`, so `show` still names the Job that tried and the
+/// reader can go read what it did. What changes is only the claim that it is
+/// still trying.
+fn no_longer_being_fixed(entries: &mut [Entry], place: &Where) {
+    let fixing: Vec<String> = entries
+        .iter()
+        .filter(|entry| entry.state == State::Fixing)
+        .filter_map(|entry| entry.job.clone())
+        .collect();
+    if fixing.is_empty() {
+        return;
+    }
+    // One read of the Job store for the whole listing, not one per row.
+    let store = armada_fleet::jobs::Store::at(&place.armada_home);
+    let Ok(jobs) = store.all() else {
+        // **A Job store that will not read leaves every word alone.** `failures`
+        // reports rather than judges, and demoting a row because the fleet was
+        // unreadable would be inventing a fact from a missing one.
+        return;
+    };
+    let over: Vec<&str> = fixing
+        .iter()
+        .filter(|handle| {
+            // **A handle that names no Job leaves the word alone: absence is not
+            // evidence.** The first version of this treated "no such Job" as
+            // over too, on the reasoning that a reaped Job is gone for good —
+            // and a test caught it demoting a *raised* inbox entry, which names
+            // the Job that asked the question and whose Job may legitimately not
+            // be in this store. Reaping, a record written by another home and an
+            // entry that outlived its Job all arrive as the same absence, so the
+            // only fact worth acting on is a Job that is here and is finished.
+            let mut named = jobs
+                .iter()
+                .filter(|job| &job.name == *handle || &job.uuid == *handle)
+                .peekable();
+            named.peek().is_some() && named.all(|job| job.state.is_over())
+        })
+        .map(String::as_str)
+        .collect();
+    for entry in entries.iter_mut() {
+        if entry.state == State::Fixing
+            && entry.job.as_deref().is_some_and(|job| over.contains(&job))
+        {
+            entry.state = State::Open;
+        }
+    }
 }
 
 /// The entry an id names — **by prefix, when the prefix names exactly one**.
@@ -684,6 +752,111 @@ fn unwritable(path: &std::path::Path) -> ArmadaError {
 mod tests {
     use super::*;
     use armada_core::error::ErrClass;
+    use armada_core::fleet::JobState;
+
+    /// A Job in one state, enough of one for the Job store to save and read.
+    fn a_job(name: &str, state: armada_core::fleet::JobState) -> armada_core::fleet::job::Job {
+        armada_core::fleet::job::Job {
+            budget_set: Vec::new(),
+            uuid: format!("uuid-of-{name}"),
+            name: name.to_string(),
+            workflow: "bug".to_string(),
+            confidence: None,
+            repo: "api".to_string(),
+            repo_root: "~/code/api".to_string(),
+            worktree: format!("~/.armada/workspaces/api/{name}"),
+            branch: format!("armada/{name}"),
+            port_block: None,
+            budget: armada_core::fleet::workflow::DEFAULT_BUDGET,
+            state,
+            step: "reproduce".to_string(),
+            verdict: None,
+            drone: None,
+            created_at: "2026-08-16T01:00:00Z".to_string(),
+            created_ms: 1_000,
+            spend: Default::default(),
+            task: "fix the thing".to_string(),
+            progress: Vec::new(),
+            attempts: Default::default(),
+            waited_ms: 0,
+            waiting_from_ms: None,
+            transitions: Vec::new(),
+            pending: None,
+            facts: Default::default(),
+            kin: Default::default(),
+            ticked_turns: 0,
+            doing: None,
+        }
+    }
+
+    fn a_place(home: &std::path::Path) -> Where {
+        Where {
+            home: home.to_path_buf(),
+            armada_home: home.join(".armada"),
+            cwd: home.join("code/api"),
+            exe: std::path::PathBuf::from("/usr/local/bin/armada"),
+            boot_id: "boot".to_string(),
+        }
+    }
+
+    /// **`FIXING` outlived the Job it was named after by twenty-nine hours.**
+    ///
+    /// The state is written on promotion and nothing wrote it back, so one entry
+    /// on this machine claimed a Job was working on it while that Job had long
+    /// since aborted. A reader who trusts the word leaves the row alone, which
+    /// makes a stale `FIXING` worse than an honest `OPEN`.
+    #[test]
+    fn a_failure_whose_job_ended_is_open_again() {
+        let home = tempfile::tempdir().unwrap();
+        let place = a_place(home.path());
+        let store = armada_fleet::jobs::Store::at(&place.armada_home);
+        store
+            .save(&a_job("still-going", JobState::Running))
+            .unwrap();
+        store.save(&a_job("gave-up", JobState::Aborted)).unwrap();
+        store.save(&a_job("finished", JobState::Done)).unwrap();
+
+        let mut entries = ["live", "aborted", "done", "not-in-the-store"]
+            .iter()
+            .zip(["still-going", "gave-up", "finished", "no-such-job"])
+            .map(|(id, job)| {
+                let mut entry = entry(id);
+                entry.state = State::Fixing;
+                entry.job = Some(job.to_string());
+                entry
+            })
+            .collect::<Vec<_>>();
+        no_longer_being_fixed(&mut entries, &place);
+
+        assert_eq!(entries[0].state, State::Fixing, "a live Job is still on it");
+        assert_eq!(entries[1].state, State::Open, "the Job aborted");
+        assert_eq!(entries[2].state, State::Open, "the Job finished");
+        // **A handle naming no Job keeps its word**: absence is not evidence.
+        // Reaping, a record from another home and a raised entry that outlived
+        // its Job all look identical from here.
+        assert_eq!(entries[3].state, State::Fixing, "no such Job is not a fact");
+        // The Job that tried is still named, so `show` can point at what it did.
+        assert_eq!(entries[1].job.as_deref(), Some("gave-up"));
+    }
+
+    /// **An unreadable Job store leaves every word alone.** `failures` reports
+    /// rather than judges, and demoting a row because the fleet could not be
+    /// read would be inventing a fact out of a missing one.
+    #[test]
+    fn a_fleet_that_cannot_be_read_demotes_nothing() {
+        let home = tempfile::tempdir().unwrap();
+        // A file where the jobs directory should be: `all()` cannot read it.
+        let place = a_place(home.path());
+        std::fs::create_dir_all(&place.armada_home).unwrap();
+        std::fs::write(place.armada_home.join("jobs"), "not a directory").unwrap();
+
+        let mut entries = vec![entry("a1b2c3d4")];
+        entries[0].state = State::Fixing;
+        entries[0].job = Some("who-knows".to_string());
+        no_longer_being_fixed(&mut entries, &place);
+
+        assert_eq!(entries[0].state, State::Fixing);
+    }
 
     fn entry(id: &str) -> Entry {
         Entry {
