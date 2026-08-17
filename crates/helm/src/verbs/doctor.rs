@@ -143,7 +143,20 @@ fn drone_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
     // `doctor` over a scratch write would report a machine as broken for a
     // reason that has nothing to do with Claude Code; the probe simply runs
     // without the flag, and every other check stands.
-    let no_hooks = armada_home.join(format!("probe-{}.json", argv::PROBE_SESSION));
+    // **This writer's own name, not the probe session's.** The name was
+    // `probe-<PROBE_SESSION>.json`, and `PROBE_SESSION` is a constant — so every
+    // `doctor` on the machine wrote, and deleted, the identical path. Two at once
+    // is one deleting the file the other is about to assert is gone, and the
+    // Bridge runs `doctor` on **every redraw**, so a redrawing screen beside a
+    // typed `armada doctor` is enough. It surfaced as
+    // `the_probe_runs_the_drones_own_argv_and_not_an_approximation` failing three
+    // times under concurrent load and passing alone every time — the same shape,
+    // and the same cause, as the Job index's shared `<uuid>.json.new` staging
+    // path.
+    //
+    // The constant still names the *session*; it just no longer names the file.
+    let mine = std::process::id();
+    let no_hooks = armada_home.join(format!("probe-{}-{mine}.json", argv::PROBE_SESSION));
     let registered = (armada_home.is_dir() && std::fs::write(&no_hooks, argv::NO_HOOKS).is_ok())
         .then(|| no_hooks.display().to_string());
 
@@ -161,7 +174,7 @@ fn drone_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
     // run. Written beside the hooks document and on the same terms — into an
     // existing `~/.armada/` only, and a path that will not take the file simply
     // runs without it.
-    let probe_mcp = armada_home.join(format!("probe-{}.mcp.json", argv::PROBE_SESSION));
+    let probe_mcp = armada_home.join(format!("probe-{}-{mine}.mcp.json", argv::PROBE_SESSION));
     let attached = (armada_home.is_dir()
         && std::fs::write(&probe_mcp, armada_core::helm::mcp_json("armada")).is_ok())
     .then(|| probe_mcp.display().to_string());
@@ -259,10 +272,17 @@ fn drone_argv(runner: &impl Run, cwd: &Path, armada_home: &Path) -> Finding {
         );
     }
 
-    // The probe's scratch document goes with it: it is a fixed name beside the
-    // caller's directory, and leaving one behind on every `doctor` run would be
-    // litter in somebody's repository.
+    // The probe's scratch documents go with it: leaving one behind on every
+    // `doctor` run would be litter in `~/.armada/`, and the Bridge runs `doctor`
+    // once per redraw.
+    //
+    // **Both of them.** Only the settings document was removed here; the MCP one
+    // was written on the same terms and never cleaned up, so every `doctor` since
+    // it was added has left a `probe-*.mcp.json` behind. No test caught it
+    // because the assertion covered the other file — which is why the test below
+    // now names both.
     let _ = std::fs::remove_file(&no_hooks);
+    let _ = std::fs::remove_file(&probe_mcp);
 
     Finding::settled(
         "drone argv",
@@ -1363,22 +1383,29 @@ mod tests {
     #[test]
     fn the_probe_runs_the_drones_own_argv_and_not_an_approximation() {
         let run = Watching(std::cell::RefCell::new(Vec::new()));
-        drone_argv(&run, Path::new("/tmp"), Path::new("/tmp"));
+        // **Its own directory, not `/tmp`.** This wrote and asserted-absent a
+        // path under the shared `/tmp`, so any other suite on the machine running
+        // the same test raced it: one deletes the document the other is about to
+        // find missing. It failed three times while Jobs were running their own
+        // `cargo nextest` beside it and passed alone every time.
+        let home = tempfile::tempdir().expect("a scratch home");
+        drone_argv(&run, Path::new("/tmp"), home.path());
 
         let probe = run.0.borrow().last().cloned().expect("a probe ran");
+        let mine = std::process::id();
         // **The relay's own settings, on the real path this check writes**
         // (`020` §1). Passing `None` here would have let `--settings` vanish
         // from the probe while `doctor` went on reporting the argv checked.
-        let registered = Path::new("/tmp").join(format!(
-            "probe-{}.json",
+        let registered = home.path().join(format!(
+            "probe-{}-{mine}.json",
             armada_core::fleet::drone::PROBE_SESSION
         ));
         // **And the MCP config, on the real path this check writes**, for the
         // same reason: a probe that lost `--mcp-config` would still be reported
         // as the argv checked, while the flag that decides whether a Drone can
         // report at all went unexercised.
-        let attached = Path::new("/tmp").join(format!(
-            "probe-{}.mcp.json",
+        let attached = home.path().join(format!(
+            "probe-{}-{mine}.mcp.json",
             armada_core::fleet::drone::PROBE_SESSION
         ));
         assert_eq!(
@@ -1389,10 +1416,17 @@ mod tests {
             ),
             "the probe drifted from the Drone's own argv"
         );
-        assert!(
-            std::fs::read_to_string(&registered).is_err(),
-            "the probe left its scratch document behind"
-        );
+        // **Both documents, because only one was ever checked.** The MCP config
+        // was written on the same terms as the settings document and never
+        // removed, so every `doctor` run since it was added left one behind, and
+        // the assertion that would have caught it named the other file.
+        for (what, path) in [("settings", &registered), ("mcp config", &attached)] {
+            assert!(
+                std::fs::read_to_string(path).is_err(),
+                "the probe left its {what} document behind: {}",
+                path.display()
+            );
+        }
     }
 
     /// **The brief goes through the real validator, and the posture survives
