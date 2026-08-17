@@ -2961,8 +2961,16 @@ pub fn verdict<C: Clock>(
             (Verdict::Pass, false)
         }
         DroneStatus::Stuck => {
-            // **The Drone hit a blocker.** Record it as BLOCKED via inbox.
-            // The Drone can provide details via `fleet.ask_human` if needed.
+            // **The Drone hit a blocker.** Mark that it attempted and then stopped.
+            // Record Attempted to close the attempt, then set Blocked verdict.
+            job::record(
+                &mut record.transitions,
+                now.wall_rfc3339(),
+                now.wall_ms(),
+                &step,
+                job::StepEvent::Attempted,
+                None,
+            );
             (Verdict::Blocked, true)
         }
     };
