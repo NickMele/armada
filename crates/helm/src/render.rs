@@ -4181,23 +4181,56 @@ fn doctor(envelope: &Envelope<DoctorData>, style: Style, width: usize) -> String
 /// §13.1's line a row is on, so that is the STATUS word rather than a verdict.
 fn settings(envelope: &Envelope<SettingsData>, style: Style, width: usize) -> String {
     let data = &envelope.data;
-    let mut table = Table::new(columns("name", "detail", true)).indent(2);
+
+    // # One table per file, with the path said once
+    //
+    // Reported by the owner: *"The settings 'DETAIL' column doesn't need the
+    // file path. I think that we should have a table for the machine.yml and
+    // another table for the guild/settings.json. Basically each file for
+    // settings should have its own table."*
+    //
+    // He is right, and the reason is the one `docs/commands/render.md` gives for
+    // every other column: a cell that is identical on every row of a group is
+    // not information, it is a heading printed eleven times. Eleven rows each
+    // ending `— ~/.armada/machine.yml` spent the widest column in the table
+    // saying the same thing, and the values it was crowding — `2400`, `sonnet`,
+    // `on` — are the thing being read.
+    //
+    // **Grouped by the file rather than by locality**, because the file is what
+    // a reader opens to change one. `MACHINE` and `SYNCED` stay as the status
+    // column: they answer *does this travel between machines*, which is a
+    // different question from *where do I edit it* and is not derivable from
+    // the path by anyone who has not learned the layout.
+    //
+    // Order comes from the rows, so a settings file added to `verbs::settings`
+    // appears without this function being told about it — the same rule
+    // `checks_in_order` below follows.
+    let mut out = String::new();
+    let mut files: Vec<&str> = Vec::new();
     for row in &data.settings {
-        table = table.row_keyed(vec![
-            ("name", Cell::plain(row.name.clone())),
-            (
-                "status",
-                token(row.locality.word(), Role::for_locality(row.locality)),
-            ),
-            (
-                "detail",
-                detail_cell(style, Some(&format!("{} — {}", row.value, row.at))),
-            ),
-            ("time", time_cell(None)),
-        ]);
+        if !files.contains(&row.at.as_str()) {
+            files.push(row.at.as_str());
+        }
     }
-    let mut out = table.render(style, width);
-    if !table.is_empty() {
+
+    for at in &files {
+        out.push_str(&format!(
+            "{}\n",
+            style.paint(Role::SteelGrey, &format!("  {at}"))
+        ));
+        let mut table = Table::new(columns("name", "detail", true)).indent(2);
+        for row in data.settings.iter().filter(|row| row.at == *at) {
+            table = table.row_keyed(vec![
+                ("name", Cell::plain(row.name.clone())),
+                (
+                    "status",
+                    token(row.locality.word(), Role::for_locality(row.locality)),
+                ),
+                ("detail", detail_cell(style, Some(&row.value))),
+                ("time", time_cell(None)),
+            ]);
+        }
+        out.push_str(&table.render(style, width));
         out.push('\n');
     }
     out.push_str(&summary(
