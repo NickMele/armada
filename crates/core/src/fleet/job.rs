@@ -520,6 +520,91 @@ impl DaemonOutcome {
     }
 }
 
+// ------------------------------------------------ the pull request, from the
+// ------------------------------------------------------------------ record
+
+/// The title `armada_fleet::land::open_pr` gives the pull request it opens.
+///
+/// **The task's first sentence, not the whole thing.** A title is a list
+/// column; the full task belongs in [`pr_body`], where truncation would lose
+/// something a reader needs. Cut at a word boundary rather than mid-word, so
+/// a long task still reads as English once GitHub truncates its own column
+/// further.
+pub fn pr_title(job: &Job) -> String {
+    const MAX_CHARS: usize = 72;
+    let first_sentence = job
+        .task
+        .split(['.', '\n'])
+        .next()
+        .unwrap_or(&job.task)
+        .trim();
+    if first_sentence.is_empty() {
+        return job.name.clone();
+    }
+    if first_sentence.chars().count() <= MAX_CHARS {
+        return first_sentence.to_string();
+    }
+    let truncated: String = first_sentence.chars().take(MAX_CHARS).collect();
+    let boundary = truncated.rfind(' ').unwrap_or(truncated.len());
+    format!("{}…", &truncated[..boundary])
+}
+
+/// The body `armada_fleet::land::open_pr` sends `gh pr create` — a pure
+/// function of the Job's own record, never the Drone's.
+///
+/// **This is `034` §4's whole reason the daemon pushes instead of the
+/// Drone**: *"the daemon pushing is also the only way the PR's body can be
+/// written from the Job's own record — the task, the plan, the steps it
+/// passed — rather than from a Drone's summary of itself."* So this function
+/// reads exactly three things:
+///
+/// - [`Job::task`], in the words it was given in;
+/// - `plan_md`, the worktree's own `PLAN.md`, handed in rather than read
+///   here — reading a file is I/O, and this function has none, so
+///   `armada_fleet::land` reads it and this stays a function a test can call
+///   with a string;
+/// - [`Job::transitions`], **filtered to [`StepEvent::Completed`]** — the
+///   events the gate wrote because a predicate actually held, never
+///   [`Job::progress`], which is the Drone's own note channel and exactly
+///   what `034` §4 says a PR body must not be built from.
+///
+/// PLAN.md §3 calls this filter "PASS events": a `Completed` transition is
+/// the record of a step's `verify: { must: … }` holding, which is what
+/// "passed" means everywhere else in this file (`Verdict::Pass`).
+pub fn pr_body(job: &Job, plan_md: Option<&str>) -> String {
+    let mut body = String::new();
+
+    body.push_str("## Task\n\n");
+    body.push_str(job.task.trim());
+    body.push_str("\n\n");
+
+    if let Some(plan) = plan_md {
+        body.push_str("## Plan\n\n");
+        body.push_str(plan.trim());
+        body.push_str("\n\n");
+    }
+
+    body.push_str("## Steps passed\n\n");
+    let passed: Vec<&Transition> = job
+        .transitions
+        .iter()
+        .filter(|transition| transition.event == StepEvent::Completed)
+        .collect();
+    if passed.is_empty() {
+        body.push_str("_none recorded yet._\n");
+    } else {
+        for transition in passed {
+            body.push_str(&format!(
+                "- `{}` — completed at {} (attempt {})\n",
+                transition.step, transition.at, transition.attempt
+            ));
+        }
+    }
+
+    body.push_str("\n_Opened by the Armada daemon from this Job's own record (`034` §4)._\n");
+    body
+}
+
 /// What a step's gate is waiting on.
 ///
 /// **The attempt is carried with it, and that is the point.** A check started
@@ -2456,6 +2541,115 @@ mod tests {
         ] {
             assert_eq!(kind.word(), shown);
         }
+    }
+
+    // -------------------------------------------------- the pull request body
+
+    /// The title is the task's first sentence, not the whole thing.
+    #[test]
+    fn the_title_is_the_tasks_first_sentence() {
+        let mut job = watching(JobState::Running);
+        job.task = "Add rate limiting to the API. It should use a token bucket.".to_string();
+        assert_eq!(pr_title(&job), "Add rate limiting to the API");
+    }
+
+    /// A task with no sentence break at all is still a title, whole.
+    #[test]
+    fn a_task_with_no_full_stop_is_the_whole_title() {
+        let mut job = watching(JobState::Running);
+        job.task = "add rate limiting".to_string();
+        assert_eq!(pr_title(&job), "add rate limiting");
+    }
+
+    /// A long task is cut at a word boundary, not mid-word.
+    #[test]
+    fn a_long_title_is_cut_at_a_word_boundary() {
+        let mut job = watching(JobState::Running);
+        job.task = "a ".repeat(40) + "task"; // far past 72 chars, all short words
+        let title = pr_title(&job);
+        assert!(title.chars().count() <= 73, "{title}"); // 72 + the ellipsis
+        assert!(title.ends_with('…'));
+        assert!(!title.contains("  "), "cut mid-word: {title}");
+    }
+
+    /// **The body carries the task, the plan and the passed steps — and
+    /// nothing from `progress`.** That absence is `034` §4's whole point: a
+    /// Drone's own summary of itself must not be what a reviewer reads.
+    #[test]
+    fn the_body_carries_the_record_and_not_the_drones_own_words() {
+        let mut job = watching(JobState::Running);
+        job.task = "add rate limiting to the API".to_string();
+        job.progress.push(Note {
+            at: "2026-08-17T09:00:00Z".to_string(),
+            at_ms: 1_000,
+            step: "implement".to_string(),
+            body: "I believe this is done and works great, trust me!".to_string(),
+        });
+        job.transitions = vec![
+            Transition {
+                at: "2026-08-17T09:00:00Z".to_string(),
+                at_ms: 1_000,
+                step: "plan".to_string(),
+                event: StepEvent::Entered,
+                attempt: 1,
+                gate: None,
+            },
+            Transition {
+                at: "2026-08-17T09:05:00Z".to_string(),
+                at_ms: 2_000,
+                step: "plan".to_string(),
+                event: StepEvent::Completed,
+                attempt: 1,
+                gate: None,
+            },
+            Transition {
+                at: "2026-08-17T10:00:00Z".to_string(),
+                at_ms: 3_000,
+                step: "implement".to_string(),
+                event: StepEvent::Failed,
+                attempt: 1,
+                gate: None,
+            },
+            Transition {
+                at: "2026-08-17T10:30:00Z".to_string(),
+                at_ms: 4_000,
+                step: "implement".to_string(),
+                event: StepEvent::Completed,
+                attempt: 2,
+                gate: None,
+            },
+        ];
+
+        let body = pr_body(&job, Some("# The Plan\n\nDo the thing."));
+
+        assert!(body.contains("add rate limiting to the API"));
+        assert!(body.contains("# The Plan"));
+        assert!(body.contains("Do the thing."));
+        assert!(body.contains("`plan` — completed at 2026-08-17T09:05:00Z (attempt 1)"));
+        assert!(body.contains("`implement` — completed at 2026-08-17T10:30:00Z (attempt 2)"));
+
+        // The failed attempt is not a passed step, so it is absent.
+        assert!(!body.contains("attempt 1)\n- `implement`"));
+        // And the Drone's own words never appear.
+        assert!(!body.contains("I believe this is done"));
+    }
+
+    /// No `PLAN.md` in the worktree is not an error — the body just says so
+    /// rather than inventing a section for a file that is not there.
+    #[test]
+    fn a_missing_plan_md_omits_the_plan_section() {
+        let job = watching(JobState::Running);
+        let body = pr_body(&job, None);
+        assert!(!body.contains("## Plan"));
+        assert!(body.contains("## Task"));
+    }
+
+    /// A Job with no passed steps yet says so plainly, rather than printing
+    /// an empty list a reader might mistake for a rendering bug.
+    #[test]
+    fn a_job_with_no_passed_steps_says_so() {
+        let job = watching(JobState::Running);
+        assert!(pr_body(&job, None).contains("_none recorded yet._"));
     }
 
     /// The record survives a reboot, so it has to survive a round trip through

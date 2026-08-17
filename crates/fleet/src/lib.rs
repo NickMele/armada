@@ -24,6 +24,7 @@ pub mod drone;
 pub mod home;
 pub mod inbox;
 pub mod jobs;
+pub mod land;
 pub mod machine;
 pub mod manifest;
 pub mod own;
