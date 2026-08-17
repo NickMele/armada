@@ -76,7 +76,7 @@ pub const WORKFLOWS: [Starter; 5] = [
 /// Everything else `guild init` copies: the schema the workflows are checked
 /// against, the starter skill, the starter persona, and the Drone permission
 /// posture.
-pub const OTHERS: [Starter; 5] = [
+pub const OTHERS: [Starter; 11] = [
     Starter {
         path: crate::permissions::FILE,
         body: include_str!("../../../templates/guild/permissions.yml"),
@@ -96,6 +96,39 @@ pub const OTHERS: [Starter; 5] = [
     Starter {
         path: "skills/review-diff/SKILL.md",
         body: include_str!("../../../templates/guild/skills/review-diff/SKILL.md"),
+    },
+    // **The six the starter workflows name.** Until 2026-08-17 `guild init`
+    // shipped two skills and the four starter workflows named seven, so a fresh
+    // guild was missing six of the seven its own steps pointed at — and every
+    // step handed its Drone a prompt reading "Use the `implement-change` skill"
+    // for a file that was not there. Nothing broke visibly, because the task
+    // text also describes the work and a Drone proceeds; what it did instead
+    // was teach every Drone to ignore the first line of its own prompt. Found
+    // by a Drone that went looking for the file and used `fleet.propose` to say
+    // so.
+    Starter {
+        path: "skills/explore-codebase/SKILL.md",
+        body: include_str!("../../../templates/guild/skills/explore-codebase/SKILL.md"),
+    },
+    Starter {
+        path: "skills/write-plan/SKILL.md",
+        body: include_str!("../../../templates/guild/skills/write-plan/SKILL.md"),
+    },
+    Starter {
+        path: "skills/write-design/SKILL.md",
+        body: include_str!("../../../templates/guild/skills/write-design/SKILL.md"),
+    },
+    Starter {
+        path: "skills/reproduce-failure/SKILL.md",
+        body: include_str!("../../../templates/guild/skills/reproduce-failure/SKILL.md"),
+    },
+    Starter {
+        path: "skills/implement-change/SKILL.md",
+        body: include_str!("../../../templates/guild/skills/implement-change/SKILL.md"),
+    },
+    Starter {
+        path: "skills/land-branch/SKILL.md",
+        body: include_str!("../../../templates/guild/skills/land-branch/SKILL.md"),
     },
     Starter {
         path: "subagents/helm.md",
