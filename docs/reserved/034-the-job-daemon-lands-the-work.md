@@ -118,15 +118,22 @@ Nothing here is a small change. Roughly in dependency order:
 3. **Push and PR** — `gh pr create` from the Job's record. Needs a remote; a repository without one
    must fail legibly at the `land` step rather than at the daemon.
 4. **Two gate predicates** — `pr_open` and `pr_merged`, joining the eight in
-   [`gate.rs`](../../crates/core/src/fleet/gate.rs). `land`'s gate stops being `branch_exists`.
-5. **CI failure → a fixing step**, carrying the failing checks' logs. This is the same shape as the
+   [`gate.rs`](../../crates/core/src/fleet/gate.rs). `land`'s gate stops being `branch_exists`, and
+   **which of the two it becomes is the repository's `fleet.land.merge` answer** (§6.4): `auto` lands
+   on `pr_merged`, `never` lands on `pr_open`.
+5. **The audit trail** (§6.5) — a field on the Job carrying every daemon act about it, surfaced by
+   `armada fleet show` so the Bridge's detail pane can draw it without becoming a second source, plus
+   `~/.armada/daemon.jsonl` for what is about no Job. Written from the first action, not added later:
+   a trail that starts once the mechanism works has nothing in it for the failure somebody will
+   actually need it for.
+6. **CI failure → a fixing step**, carrying the failing checks' logs. This is the same shape as the
    local retry that already works: the gate hands back each failing check's id, message and the last
    forty lines of its log. The only new part is that the log comes from `gh` instead of
    `.armada/run/`.
-6. **`main` moved → a fact on every running Job**, and a `fleet_rebase` tool a Drone can call.
-7. **Conflict reporting** — a rebase that stops goes back to the Drone with the conflicted paths; a
+7. **`main` moved → a fact on every running Job**, and a `fleet_rebase` tool a Drone can call.
+8. **Conflict reporting** — a rebase that stops goes back to the Drone with the conflicted paths; a
    Drone that cannot resolve it reports `blocked`, which is an existing state and needs no new word.
-8. **`armada doctor` reports the daemon.** Not optional: a Job waiting on a daemon that is not
+9. **`armada doctor` reports the daemon.** Not optional: a Job waiting on a daemon that is not
    running is the exact silent stall this session spent eight hours on. If the daemon is off, every
    Job blocked on a PR must say so on the screen, with the keystroke.
 
@@ -196,6 +203,79 @@ things follow, and neither is a defect to fix:
 Unknown must mean **resume once and re-read**, not *refuse*: a daemon that will not act on a stale
 reading is a daemon that never starts after an idle night, which is the stall this whole design
 exists to end.
+
+## 6.4 Auto-merge is a per-repository policy, not a machine one
+
+**The owner's requirement: *"auto merging PRs should be a configuration per manifest. At work I can
+not auto merge."*** So the daemon's most consequential action is switchable off, per repository.
+
+**It goes in `armada.yml`, and that is consistent with sending `carry:` the other way.** The test is
+the same one [`crates/helm/src/machine.rs`](../../crates/helm/src/machine.rs) applies: is the fact
+about *this machine* or about *the thing itself*? A gitignored local path exists on one checkout, so
+`carry` is machine-scoped. *"This repository's pull requests may not be merged without a human"* is
+true of the repository on every machine and in every clone — it is the organisation's rule, not this
+box's — so it belongs with the repository.
+
+**It is a sibling section, not a key inside `manifest:`.** `armada.yml` already carries exactly one
+top-level section named for a module, which is the same discipline `machine.yml` follows: one section
+per module, and no module reads another's. A `fleet:` section beside `manifest:` is that pattern
+rather than an exception to it, and **Manifest never reads it** — which is what keeps
+`ARCHITECTURE.md` §1.9's rule intact. Manifest does not learn about agents; the file it shares gains
+a neighbour.
+
+The schema has `additionalProperties: false`, so it must be extended to permit the section. That is a
+smaller claim than adding a key *inside* `manifest:` would have been, and it is the change the frozen
+config contract has to absorb either way once a second module has repository-scoped config.
+
+```yaml
+fleet:
+  land:
+    merge: auto    # auto | never — `never` opens the PR and stops there
+```
+
+`never` is not a degraded mode. The daemon still pushes, opens the PR, watches its checks and reports
+failures; it simply does not merge, and the Job's `land` step is satisfied by `pr_open` rather than
+`pr_merged`. A repository where a human merges still gets everything else this design is for.
+
+**`never` must be the default when the section is absent.** A repository that has said nothing has
+not consented to unattended merging, and the failure modes are not symmetrical: a daemon that does
+not merge leaves a PR for a person, and a daemon that merges when it should not have cannot be
+undone.
+
+## 6.5 The audit trail, and it is on the Job
+
+**The owner's requirement: an audit trail for the daemon, and *"I must be able to see what the daemon
+has done in the job detail view of the bridge."*** Those are one requirement, and the second decides
+where the first lives.
+
+The Bridge is **a renderer over Fleet and never a second source** — `commands/helm/bridge.md`, and
+the rule that stopped its JOBS panel reading transcripts directly. Its Job detail pane draws
+`ShowData`, which is `armada fleet show`'s payload. So anything the pane must show has to reach it
+through that verb, off the Job's own record. A daemon log the Bridge read directly would be exactly
+the second source that rule forbids.
+
+So **every daemon act about a Job is recorded on that Job's record**, and `fleet show` carries them:
+
+| Recorded | Example |
+|---|---|
+| what it did | `pushed`, `opened`, `checks-green`, `merged`, `pulled`, `re-ran`, `reaped`, `marked-main-moved`, `reported-failure`, `refused-to-merge` |
+| what it acted on | the branch, the PR number, the run id |
+| when | wall clock, so the pane can age it |
+| what came back | the PR's check names and conclusions; the exit status of the re-run |
+
+**Not `transitions`, and not `progress`.** `transitions` records state changes and a push is not one;
+`progress` is the Drone's own note channel and mixing another writer into it would make *"who said
+this"* unanswerable. A separate field keeps the two voices distinct, which is the same argument
+`020` made for `SILENT` being its own word.
+
+**A machine-level log as well, for what is about no Job**: the daemon starting, stopping, reaching its
+limit, failing to reach `gh`. `~/.armada/daemon.jsonl`, appended and folded on read, which is the
+shape `failures.jsonl` and `inbox.jsonl` already use — so it needs no new mechanism and `armada
+doctor` can read it to answer *is the daemon running and what did it last do*.
+
+**The trail is written before the action where the action is irreversible.** A merge recorded only on
+success is a trail with nothing in it for the one case somebody will need it for: a merge that
+happened and then something went wrong. Record the intent, act, record the outcome.
 
 ## 7. The bootstrap, stated
 
