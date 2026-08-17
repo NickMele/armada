@@ -615,7 +615,9 @@ fn dispatch(
         };
         let fleet = match invocation {
             Invocation::Bridge(options) => {
-                return bridge(&run, &place, &options, progress, style, terminal)
+                return bridge(
+                    &run, &place, &options, home, &inherited, progress, style, terminal,
+                )
             }
             Invocation::Failures(failures) => {
                 return match *failures {
@@ -1173,10 +1175,16 @@ fn reap(
 /// progress table and, when the guess is not confident, the workflow question,
 /// both of which want the terminal Armada draws every other prompt in
 /// (PLAN.md §3.1.1) — and then takes the screen again.
+// Eight, and each is a seam: the runner, where the fleet is, what was asked
+// for, `home`/`inherited` for the `App` the MANIFEST panel now needs, the
+// progress reporter and the two halves of the terminal.
+#[allow(clippy::too_many_arguments)]
 fn bridge(
     run: &RealRun,
     place: &verbs::fleet::Where,
     options: &args::Bridge,
+    home: &std::path::Path,
+    inherited: &BTreeMap<String, String>,
     progress: &mut dyn render::progress::Progress,
     style: Style,
     terminal: render::term::Terminal,
@@ -1186,7 +1194,15 @@ fn bridge(
     let filter = armada_core::fleet::bridge::parse_filter(options.filter.as_deref().unwrap_or(""))?;
 
     if options.once {
-        return verbs::bridge::once(run, &SystemClock, place, filter.as_ref());
+        // **`App` built for this one read, exactly as `watch()` builds one for
+        // the life of the screen** (`verbs/bridge::build_app`) — so `--once`
+        // and the live screen answer MANIFEST from the same kind of read,
+        // which is what keeps this module's own "`--once` and `--json` are
+        // the same read" true of all five panels, not four.
+        let mut app =
+            verbs::bridge::build_app(run, &SystemClock, RealFetch, place, home, inherited);
+        let manifest = verbs::bridge::manifest_of(&mut app);
+        return verbs::bridge::once(run, &SystemClock, place, filter.as_ref(), manifest);
     }
     // **Both streams, the same rule every widget follows.** stdout decides
     // whether the screen was seen and stdin decides whether a key can arrive; a
@@ -1220,6 +1236,9 @@ fn bridge(
         let (frame, departure) = armada_helm::bridge::watch(
             run,
             &SystemClock,
+            RealFetch,
+            home,
+            inherited,
             place,
             &watching,
             &mut screen,

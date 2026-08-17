@@ -1018,7 +1018,7 @@ pub fn command_centre(
 
         let third = (width - 2 * GAP) / 3;
         let manifest_guild = frame::hjoin(
-            manifest_box(third),
+            manifest_box(&panels.manifest, style, third),
             guild_box(&panels.guild, style, third),
             GAP,
             2 * third + GAP,
@@ -1438,21 +1438,78 @@ fn origin_cell(row: &InboxRow) -> Cell {
     )
 }
 
-/// `MANIFEST` — not wired this pass.
+/// `MANIFEST` — `armada manifest check --status` and `armada manifest status
+/// --all`, read once `watch()` has built an `App` at entry
+/// (`crates/helm/src/bridge.rs`'s `watch()`, `crates/helm/src/verbs/bridge.rs`'s
+/// `build_app`/`manifest_of`).
 ///
-/// **A row saying why, rather than an absent box.** A missing panel reads as
-/// a layout bug; a panel that names the gap reads as the decision it is —
-/// `check::status`/`status::run` need `App<R, C, F>`
-/// (`crates/helm/src/app.rs`'s `build`), which the Bridge's call site does
-/// not build, and `PLAN.md`'s audit table names the tradeoff this is waiting
-/// on.
-pub fn manifest_box(width: usize) -> Vec<Vec<Span>> {
-    let line = vec![Span {
-        text: " not wired yet — needs `App`; see PLAN.md's MANIFEST row".to_string(),
-        role: Some(Role::SteelGrey),
-        bold: false,
-    }];
-    frame::titled_box("MANIFEST", vec![line], width)
+/// **Two stacked tables, the same columns their own verbs already draw** —
+/// CHECK is `armada manifest check`'s own `CHECK/STATUS/DETAIL/TIME`, only
+/// present when the Bridge is standing in a workspace; WORKSPACE is a compact
+/// `WORKSPACE/STATUS/PORTS` over `armada manifest status --all`'s rows,
+/// because the Bridge is machine-scoped and reads every workspace the same
+/// way `main.rs`'s own `Lens::All` invocations already do. Neither table
+/// invents a vocabulary the verb that draws it standalone does not already
+/// have.
+///
+/// **A refusal draws inside the box rather than failing the frame** —
+/// `75f697c`'s rule for GUILD/SYSTEM (`unreadable_guild`/`unreadable_system`
+/// in `crates/helm/src/verbs/bridge.rs`), carried over here: a screen that
+/// would not open because `manifest.db` is missing is worse than the box
+/// that says so.
+pub fn manifest_box(
+    manifest: &armada_core::envelope::ManifestPanel,
+    style: Style,
+    width: usize,
+) -> Vec<Vec<Span>> {
+    use armada_core::envelope::ManifestPanel;
+
+    let lines = match manifest {
+        ManifestPanel::Unreadable { message } => vec![vec![Span {
+            text: format!(" {message}"),
+            role: Some(Role::SteelGrey),
+            bold: false,
+        }]],
+        ManifestPanel::Read { workspace, machine } => {
+            let mut lines = Vec::new();
+            if let Some(check) = workspace {
+                let mut table = Table::new(columns_for(progress::Shape::Check)).indent(2);
+                for row in &check.results {
+                    let detail = row
+                        .error
+                        .as_ref()
+                        .map(|e| e.message.clone())
+                        .or_else(|| row.reason.clone());
+                    table = table.row(vec![
+                        Cell::plain(row.id.clone()),
+                        verdict(row.status),
+                        detail_cell(style, detail.as_deref()),
+                        time_cell(row.duration_ms),
+                    ]);
+                }
+                lines.extend(table.spans(style, width));
+                if !check.results.is_empty() {
+                    lines.push(Vec::new());
+                }
+            }
+            let mut table = Table::new(columns("workspace", "ports", false)).indent(2);
+            for row in &machine.results {
+                table = table.row(vec![
+                    Cell::plain(row.id.clone()),
+                    verdict(row.status),
+                    match row.port_block {
+                        Some(block) => {
+                            Cell::painted(style.span(block.from, block.to), Role::NavalBlue)
+                        }
+                        None => Cell::muted("none declared"),
+                    },
+                ]);
+            }
+            lines.extend(table.spans(style, width));
+            lines
+        }
+    };
+    frame::titled_box("MANIFEST", lines, width)
 }
 
 /// `GUILD` — skills, workflows and what a fresh read already carries as

@@ -12,8 +12,13 @@
 └───────────────────────────────────────────────────────────────────────────────┘  └─────────────────────────────────────────────────────┘
 
 ┌─ MANIFEST ───────────────────────────────┐  ┌─ GUILD ──────────────────────────────────┐  ┌─ SYSTEM ───────────────────────────────────┐
- not wired yet — needs `App`; see PLAN.md's…    1 skill                                       drones  2 alive, both with a Job
-                                                4 workflows                                   disk    ~/.armada is 2.1 GiB
+  CHECK        STATUS   DETAIL    TIME          1 skill                                       drones  2 alive, both with a Job
+  armada:test  RUNNING  -       2m 45s          4 workflows                                   disk    ~/.armada is 2.1 GiB
+  armada:lint  PASS     -        46.0s
+
+  WORKSPACE  STATUS  PORTS
+  armada     OK      none declared
+  orders     OK      5460-5469
 └──────────────────────────────────────────┘  └──────────────────────────────────────────┘  └────────────────────────────────────────────┘
 
 4 jobs, 1 need you, 1 stalled, 5h 71% resets 2h14m, 7d 24% resets 4d, $8.40 today

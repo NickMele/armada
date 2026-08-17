@@ -2288,15 +2288,49 @@ pub struct BridgeData {
     pub panels: Option<Box<Panels>>,
 }
 
-/// The four panels beside JOBS, as one frame gathered them.
+/// The MANIFEST panel's contents — `armada manifest check --status` and
+/// `armada manifest status --all`, read once the Bridge's `watch()` has built
+/// an `App<R, C, F>` at entry (`crates/helm/src/bridge.rs`'s `watch()`,
+/// `crates/helm/src/verbs/bridge.rs`'s `build_app`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub enum ManifestPanel {
+    /// `App` was built. `workspace` is `None` when the Bridge is not
+    /// currently standing in a workspace — the ordinary case for a
+    /// machine-scoped screen, not a refusal, so the CHECK half of the panel
+    /// is simply absent rather than an error.
+    Read {
+        /// This workspace's last check run — `armada manifest check --status`
+        /// — or `None` when the Bridge is not standing in one.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        workspace: Option<CheckData>,
+        /// Every workspace on the machine — `armada manifest status --all`,
+        /// the same lens `main.rs` already uses for its own machine-scoped
+        /// invocations.
+        machine: StatusData,
+    },
+    /// `App::build` itself could not run — no `manifest.db`, or it would not
+    /// open. **The Bridge still opens** (`75f697c`'s rule for GUILD/SYSTEM,
+    /// carried over here): a screen that refused because a database is
+    /// missing would be worse than the box that says so.
+    Unreadable {
+        /// The refusal's own next action when it has one, its message
+        /// otherwise — the same rule [`GuildListData`]'s and [`DoctorData`]'s
+        /// own refusal paths already follow.
+        message: String,
+    },
+}
+
+/// The five panels beside JOBS, as one frame gathered them.
 ///
 /// **Boxed on [`BridgeData`] rather than inlined**, because [`DoctorData`] alone
 /// is large and every fleet-only frame would otherwise carry the space for
-/// three payloads it never fills.
+/// four payloads it never fills.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Panels {
     /// What needs you, failed, or was reported — `armada fleet inbox`.
     pub inbox: InboxData,
+    /// `armada manifest check --status` and `armada manifest status --all`.
+    pub manifest: ManifestPanel,
     /// Skills, workflows and quick actions — `armada guild ls`.
     pub guild: GuildListData,
     /// Drones, docker, disk and stale process groups — `armada doctor`.

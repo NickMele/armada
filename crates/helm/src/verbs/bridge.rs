@@ -13,20 +13,36 @@
 //! directory read, a transcript tail and a `ps`, none of which any Drone
 //! notices.
 //!
+//! **Entry pays a cost the redraw does not.** `watch()` resolves the workspace
+//! and opens `manifest.db` once, when the screen is taken (`bridge.rs`'s
+//! `watch()`, `build_app`) — the MANIFEST panel needs `App<R, C, F>`, and that
+//! is the one read this module does not repeat every two seconds. The redraw
+//! sentence above is unchanged: what happens on every tick is still a
+//! directory read, a transcript tail and a `ps`, plus whatever `App` already
+//! open lets MANIFEST re-read cheaply.
+//!
 //! **It holds nothing.** What survives between two frames is a cursor position
 //! and a filter expression, both of which live in the core's `Screen` and are
 //! questions about what you are *looking at*. Closing the Bridge loses a cursor
 //! position.
 
-use armada_core::ctx::{Clock, Run};
-use armada_core::envelope::{BridgeData, DoctorData, Envelope, GuildListData, InboxData};
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use armada_core::ctx::{Clock, Ctx, Fetch, Run};
+use armada_core::envelope::{
+    BridgeData, DoctorData, Envelope, GuildListData, InboxData, ManifestPanel,
+};
 use armada_core::error::{ArmadaError, Status};
 use armada_core::fleet::bridge::{self, Filter, Frame};
+use armada_core::scope::Lens;
 
+use crate::app::App;
+use crate::args::{Check, Common};
 use crate::ask::Defaults;
 use crate::verbs::fleet::Where;
 use crate::verbs::guild::Look;
-use crate::verbs::Output;
+use crate::verbs::{check, status, Output};
 
 /// What `armada bridge` was asked for.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -98,6 +114,7 @@ pub fn all(view: BridgeView, cwd: &std::path::Path) -> BridgeData {
         cwd: cwd.display().to_string(),
         panels: Some(Box::new(armada_core::envelope::Panels {
             inbox: view.inbox,
+            manifest: view.manifest,
             guild: view.guild,
             system: view.system,
         })),
@@ -108,40 +125,51 @@ pub fn all(view: BridgeView, cwd: &std::path::Path) -> BridgeData {
 /// The command centre's four other panels, read alongside the fleet
 /// (`docs/reserved/033-the-command-centre-designed.md`, `PLAN.md` §2).
 ///
-/// **`manifest` is not here.** `check::status` and `status::run` both need
-/// `App<R, C, F>` — `manifest.db` opened, `MachineConfig` read, a boot id
-/// probed (`crates/helm/src/app.rs`'s `build`) — and `main.rs`'s dispatch
-/// deliberately routes the Bridge around `app::build`, so its redraw stays
-/// "a directory read, a transcript tail and a `ps`" the way this module's own
-/// doc comment promises. `PLAN.md` names this gap and the decision it is
-/// waiting on; `render.rs`'s MANIFEST box draws one row saying so rather than
-/// omitting the panel.
+/// **`manifest` is read through whatever `App` the caller already built at
+/// `watch()`'s entry** (`crates/helm/src/bridge.rs`'s `watch()`,
+/// [`build_app`]) — never built here, and never rebuilt per frame. A caller
+/// with no `App` (or one `App::build` refused) passes [`manifest_of`] a
+/// build failure instead of a live one, and the panel draws that refusal in
+/// its own box rather than the whole frame failing (`PLAN.md` §8, the same
+/// rule [`unreadable_guild`]/[`unreadable_system`] already follow for
+/// GUILD/SYSTEM).
 #[derive(Debug, Clone, PartialEq)]
 pub struct BridgeView {
     /// The fleet table — unchanged from [`read`].
     pub fleet: Frame,
     /// What needs you, failed, or was reported — `armada fleet inbox`.
     pub inbox: InboxData,
+    /// `armada manifest check --status` and `armada manifest status --all`,
+    /// or the refusal in their place.
+    pub manifest: ManifestPanel,
     /// Skills, workflows and quick actions — `armada guild ls`.
     pub guild: GuildListData,
     /// Drones, docker, disk and stale process groups — `armada doctor`.
     pub system: DoctorData,
 }
 
-/// One read of every panel but MANIFEST.
+/// One read of every panel.
 ///
-/// **Every call is the identical signature `armada fleet inbox`, `armada
-/// guild ls` and `armada doctor` already take** — `place`, `run`, `now`, no
-/// Job id — which is `PLAN.md` §7's answer to `ARCHITECTURE.md` §1.9's risk
-/// made concrete: nothing downstream of this function can hand a Job-shaped
-/// value to Guild or Manifest, because none of these signatures has a
-/// parameter one could be threaded through. **This function is not permitted
-/// to grow one** — that is the one-line review rule for anyone touching it.
+/// **Every call but MANIFEST's is the identical signature `armada fleet
+/// inbox`, `armada guild ls` and `armada doctor` already take** — `place`,
+/// `run`, `now`, no Job id — which is `PLAN.md` §7's answer to
+/// `ARCHITECTURE.md` §1.9's risk made concrete: nothing downstream of this
+/// function can hand a Job-shaped value to Guild or Manifest, because none of
+/// these signatures has a parameter one could be threaded through. **This
+/// function is not permitted to grow one** — that is the one-line review rule
+/// for anyone touching it.
+///
+/// **MANIFEST is the one panel this function does not read itself.** It takes
+/// the already-computed [`ManifestPanel`], because reading it needs
+/// `App<R, C, F>` — built once at `watch()`'s entry ([`build_app`]), never
+/// here, never per frame. [`manifest_of`] is what turns an `App` (or the
+/// refusal that kept one from being built) into this parameter.
 pub fn read_all<R: Run, C: Clock>(
     run: &R,
     now: &C,
     place: &Where,
     filter: Option<&Filter>,
+    manifest: ManifestPanel,
 ) -> Result<BridgeView, ArmadaError> {
     // **Guild and doctor take their own, smaller `Where`** — `armada_home`,
     // `cwd` and `claude_home`, with no `boot_id` and no `exe` — and this is
@@ -160,6 +188,7 @@ pub fn read_all<R: Run, C: Clock>(
         // withholding the fleet over a fact about docker.
         fleet: read(run, now, place, filter)?,
         inbox: inbox_of(crate::verbs::fleet::inbox(now, place, None, false)?),
+        manifest,
         // **A panel that cannot be read says so inside its own box.**
         //
         // `guild ls` refuses on a machine with no guild — *"there is no guild
@@ -213,6 +242,21 @@ fn unreadable_system(refusal: &ArmadaError) -> DoctorData {
         tally: DoctorData::tally(&results),
         headline: DoctorData::headline(&results),
         results,
+    }
+}
+
+/// The MANIFEST box's contents when `App` could not be built at all — no
+/// `manifest.db`, or it would not open.
+///
+/// **The same rule as [`unreadable_guild`]/[`unreadable_system`]**: the
+/// refusal's own next action, because it is the useful half, and the
+/// panel-not-the-frame is what fails.
+fn unreadable_manifest(refusal: &ArmadaError) -> ManifestPanel {
+    ManifestPanel::Unreadable {
+        message: refusal
+            .next_action
+            .clone()
+            .unwrap_or_else(|| refusal.message.clone()),
     }
 }
 
@@ -274,11 +318,19 @@ pub fn envelope(view: BridgeView, place: &Where) -> Output {
 }
 
 /// `armada bridge --once` and `armada bridge --json`: read once, answer, stop.
+///
+/// **Takes the same already-computed [`ManifestPanel`] `watch()` does**, for
+/// the reason this module's own doc comment states twice: *"the screen and
+/// `--once` draw the same value"*, and *"`--once` and `--json` are the same
+/// read."* Its caller builds one `App` for this single invocation the same
+/// way `watch()` builds one for the life of the screen — [`build_app`] is
+/// the one place either does it.
 pub fn once<R: Run, C: Clock>(
     run: &R,
     now: &C,
     place: &Where,
     filter: Option<&Filter>,
+    manifest: ManifestPanel,
 ) -> Result<Output, ArmadaError> {
     // **[`read_all`], not [`read`].** A frame carrying the fleet alone cannot
     // draw the command centre, and `--once` drawing something else is the defect
@@ -286,7 +338,85 @@ pub fn once<R: Run, C: Clock>(
     // 80 and 140 columns `--once` printed one bare JOB table with no boxes at
     // all, while `verbs/bridge.rs` and `render.rs` both claimed in comments that
     // it could not.
-    read_all(run, now, place, filter).map(|view| envelope(view, place))
+    read_all(run, now, place, filter, manifest).map(|view| envelope(view, place))
+}
+
+/// Build the `App<R, C, F>` the MANIFEST panel needs — once, at the Bridge's
+/// entry (`watch()`'s or `once()`'s caller), never per redraw.
+///
+/// **The workspace is optional and its absence is never a refusal.** The
+/// Bridge is machine-scoped — `main.rs`'s dispatch routes it, `armada
+/// fleet`, `armada tasks` and `armada failures` around workspace resolution
+/// entirely — so running it from a directory with no `armada.yml` is the
+/// ordinary case, not an error. `App::build` itself works fine with
+/// `workspace: None`; only `check::status` needs one, and [`manifest_of`]
+/// is where that distinction is made, not here.
+pub fn build_app<R: Run + Copy, C: Clock + Copy, F: Fetch>(
+    run: &R,
+    now: &C,
+    fetch: F,
+    place: &Where,
+    home: &Path,
+    inherited: &BTreeMap<String, String>,
+) -> Result<App<R, C, F>, ArmadaError> {
+    let workspace = armada_manifest::discovery::resolve(run, &place.cwd).ok();
+    let ctx = Ctx {
+        workspace,
+        run: *run,
+        now: *now,
+        fetch,
+    };
+    crate::app::build(ctx, home, inherited.clone())
+}
+
+/// The MANIFEST panel's contents, from whatever [`build_app`] returned.
+///
+/// **Two verbs, both already public and both already taking exactly the
+/// arguments `armada manifest check --status`/`armada manifest status --all`
+/// give them** — no Job id admitted, the same rule [`read_all`]'s own doc
+/// comment states for Guild and Manifest. `status::run` uses
+/// [`Lens::All`] unconditionally: it is the one lens that tolerates no
+/// workspace (`main.rs` already special-cases `Lens::All` for its own two
+/// machine-scoped invocations), and the Bridge is a machine-scoped screen.
+/// `check::run` with `status: true` reads only when a workspace resolved,
+/// and a workspace that has simply never run a check (`no_runs`) folds to
+/// "nothing to show" rather than a refusal — that is not the same fact as
+/// the database being unreadable.
+pub fn manifest_of<R: Run, C: Clock, F: Fetch>(
+    built: &mut Result<App<R, C, F>, ArmadaError>,
+) -> ManifestPanel {
+    let app = match built {
+        Ok(app) => app,
+        Err(refusal) => return unreadable_manifest(refusal),
+    };
+    let machine = match status::run(
+        app,
+        Common {
+            lens: Lens::All,
+            ..Common::default()
+        },
+    ) {
+        Ok(Output::Status(envelope)) => envelope.data,
+        Ok(other) => unreachable!("status run answers with a listing: {other:?}"),
+        Err(refusal) => return unreadable_manifest(&refusal),
+    };
+    let workspace = app.ctx.workspace.is_some().then(|| {
+        check::run(
+            app,
+            &Check {
+                status: true,
+                ..Check::default()
+            },
+            &mut crate::render::progress::Silent,
+        )
+    });
+    let workspace = workspace
+        .and_then(Result::ok)
+        .and_then(|output| match output {
+            Output::Check(envelope) => Some(envelope.data),
+            _ => None,
+        });
+    ManifestPanel::Read { workspace, machine }
 }
 
 /// The refusal when there is no screen to take.
