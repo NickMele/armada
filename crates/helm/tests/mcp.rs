@@ -494,6 +494,49 @@ fn an_assertion_and_the_gate_that_disagreed_are_both_kept() {
     assert!(!job::attempt_open(&record.transitions, "implement"));
 }
 
+/// **A Drone reporting `done` is not told it passed.**
+///
+/// The response used to carry `"verdict":"PASS"` with an empty evidence list,
+/// before any gate had run — filled in by an arm whose own comment called it a
+/// "response marker" and correctly kept it out of the record. The record was
+/// honest; the message was not, and the message is what the Drone reads.
+///
+/// That is the sentence `docs/reserved/032` says only the Job may say, spoken
+/// by Armada's own tool response rather than by the Drone — which carries more
+/// authority, not less. It also stepped around the invariant `envelope.rs`
+/// states beside the field: a verdict is only `PASS` if it carries evidence,
+/// and the verb refuses a `PASS` with an empty list rather than recording one.
+///
+/// Found by a reviewer Job reading the change that introduced it.
+#[test]
+fn a_drone_that_reports_done_is_told_what_was_recorded_and_no_verdict() {
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    let output = fleet::verdict(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        armada_core::fleet::DroneStatus::Done,
+    )
+    .expect("a done report is accepted");
+
+    let payload = json(&output);
+    // **No verdict key at all**, rather than one holding a placeholder: the
+    // state is unrepresentable instead of merely unwritten.
+    assert!(
+        !payload.contains("\"verdict\""),
+        "a Drone reporting done was handed a verdict: {payload}"
+    );
+    assert!(!payload.contains("PASS"), "{payload}");
+    assert!(payload.contains("\"recorded\": \"ATTEMPTED\""), "{payload}");
+
+    // And the record still says nothing about how the step ended — the gate
+    // has not run.
+    let record = machine.reload("tidy-otter");
+    assert_eq!(record.verdict, None, "a done report wrote a verdict");
+}
+
 /// **A verdict for a Drone that never reported entering still counts an
 /// attempt.** The count is what a ceiling is enforced against, and a Drone that
 /// forgets to report must not get unlimited retries for free.

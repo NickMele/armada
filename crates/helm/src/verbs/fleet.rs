@@ -23,8 +23,8 @@ use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
     InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
-    ReapCandidate, ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow,
-    TransitionRow, VerdictData,
+    ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData, SpawnData, TickData,
+    TickRow, TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -2944,7 +2944,7 @@ pub fn verdict<C: Clock>(
     }
     let attempts = record.attempts.get(&step).copied().unwrap_or(1);
 
-    let (reached, should_save_verdict) = match status {
+    let (recorded, settled) = match status {
         DroneStatus::Done => {
             // **The Drone reports done; tick will gate.** Record only the Attempted
             // event. Don't set a verdict — tick will gate and call record_gate_verdict
@@ -2957,8 +2957,15 @@ pub fn verdict<C: Clock>(
                 job::StepEvent::Attempted,
                 None,
             );
-            // Return Pass as response marker but don't persist it to record.verdict
-            (Verdict::Pass, false)
+            // **Nothing has been decided, and the answer says so.** This
+            // returned `Verdict::Pass` as what its own comment called a
+            // "response marker" — correctly kept out of the record, and
+            // serialised to the Drone anyway as `"verdict":"PASS"` with an
+            // empty evidence list, before any gate had run. `032` says only
+            // the Job may say a step passed; saying it in Armada's own tool
+            // response is that rule broken with Armada's authority behind it.
+            // Found by a reviewer Job reading the change that introduced it.
+            (Recorded::Attempted, None)
         }
         DroneStatus::Stuck => {
             // **The Drone hit a blocker.** Mark that it attempted and then stopped.
@@ -2971,24 +2978,24 @@ pub fn verdict<C: Clock>(
                 job::StepEvent::Attempted,
                 None,
             );
-            (Verdict::Blocked, true)
+            (Recorded::Blocked, Some(Verdict::Blocked))
         }
     };
 
     record.step = step.clone();
 
-    // Only set the verdict if this is a final state (Blocked/NeedsHuman)
-    // For Done status, leave verdict as None so tick can gate and decide
-    if should_save_verdict {
-        record.verdict = Some(reached);
-        record.state = reached.settles_to();
+    // **A verdict is written only when the Drone really produced one.** A
+    // `done` report produces none: the attempt is closed and `tick` gates it.
+    if let Some(verdict) = settled {
+        record.verdict = Some(verdict);
+        record.state = verdict.settles_to();
     }
 
-    let entry = match reached {
-        Verdict::Blocked if should_save_verdict => Some(raise(
+    let entry = match settled {
+        Some(Verdict::Blocked) => Some(raise(
             place,
             now,
-            &record,
+            &mut record,
             inbox::Kind::Blocked,
             &format!("`{step}` is blocked and cannot proceed without an external change"),
         )?),
@@ -3003,7 +3010,8 @@ pub fn verdict<C: Clock>(
         VerdictData {
             job: record.name.clone(),
             step: step.clone(),
-            verdict: reached,
+            recorded,
+            verdict: None,
             evidence: vec![],
             attempts,
             state: record.state,
@@ -3121,7 +3129,12 @@ pub fn record_gate_verdict<C: Clock>(
         VerdictData {
             job: record.name.clone(),
             step: step.to_string(),
-            verdict: reached,
+            recorded: match reached {
+                Verdict::Blocked => Recorded::Blocked,
+                Verdict::NeedsHuman => Recorded::NeedsHuman,
+                Verdict::Pass | Verdict::Failed => Recorded::Attempted,
+            },
+            verdict: Some(reached),
             evidence,
             attempts,
             state: record.state,

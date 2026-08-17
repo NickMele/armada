@@ -2941,14 +2941,99 @@ pub struct TickRow {
 /// `data` rather than beside `status` for the reason the envelope is nested at
 /// all: a Job's verdict and a workspace's `Status` are different enums, and a
 /// future field called `status` in a body must not collide with the wrapper's.
+/// What Armada did with a Drone's report — **not how the step ended**.
+///
+/// The distinction is the whole of `docs/reserved/032`: a Drone may say it has
+/// stopped and why, and may not say whether the step passed. So this enum has
+/// no word for passing, and cannot grow one: the gate writes
+/// [`crate::fleet::Verdict`] and nothing a Drone calls does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Recorded {
+    /// The attempt is closed and nothing has been decided. What a Drone
+    /// reporting `done` is told, because it is the truth: `armada fleet tick`
+    /// will run the step's predicate and the Job will decide.
+    ///
+    /// **The name is `019`'s and it is a poor one.** *Attempted* reads in
+    /// English as *tried and probably failed*, which is a verdict — the exact
+    /// implication this field exists to avoid. It is kept because the
+    /// transition log has spoken this word since M4 and two names for one event
+    /// is worse than one bad name. `docs/reserved/019` is where to rename it,
+    /// for the whole vocabulary at once.
+    Attempted,
+    /// The Drone stopped and cannot continue without something outside its
+    /// worktree changing.
+    Blocked,
+    /// The Drone stopped on a judgement that is not its to make.
+    NeedsHuman,
+}
+
+impl Recorded {
+    /// The word, in both audiences — the payload and the screen.
+    pub const fn word(self) -> &'static str {
+        match self {
+            Recorded::Attempted => "ATTEMPTED",
+            Recorded::Blocked => "BLOCKED",
+            Recorded::NeedsHuman => "NEEDS_HUMAN",
+        }
+    }
+}
+
+/// `fleet.verdict` — what a Drone reported, and what the gate later decided.
+///
+/// **The one added field on the §3.1 envelope is the outcome**, and it rides in
+/// `data` rather than beside `status` for the reason the envelope is nested at
+/// all: a Job's verdict and a workspace's `Status` are different enums, and a
+/// future field called `status` in a body must not collide with the wrapper's.
+///
+/// **One payload answers two callers, and only one of them has a verdict.** A
+/// Drone reporting through `fleet.verdict` says it stopped; the gate's own
+/// record says how the step ended. [`VerdictData::recorded`] is filled by both
+/// and [`VerdictData::verdict`] only by the second.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct VerdictData {
     /// The handle.
     pub job: String,
     /// The step this verdict is about.
     pub step: String,
-    /// How it ended.
-    pub verdict: crate::fleet::Verdict,
+    /// What Armada did with the report.
+    ///
+    /// # Why this is not a verdict
+    ///
+    /// **A Drone reporting `done` has not been judged, so it is not told it
+    /// passed.** This field used to be a [`crate::fleet::Verdict`], and the
+    /// `done` arm filled it with `Pass` as what its own comment called a
+    /// "response marker" — deliberately not persisted to the record, and
+    /// serialised to the Drone anyway as `"verdict":"PASS"` with an empty
+    /// evidence list, before any gate had run.
+    ///
+    /// That is precisely the sentence `docs/reserved/032` says only the Job may
+    /// say, spoken by Armada's own tool response rather than by the Drone —
+    /// which carries more authority, not less. It also went around the
+    /// invariant stated four lines below: *a verdict is only `PASS` if it
+    /// carries evidence*, and the verb refuses a `PASS` with an empty list
+    /// rather than recording one. The refusal was real; the response path
+    /// stepped past it.
+    ///
+    /// Found by a reviewer Job reading the change that introduced it.
+    ///
+    /// **So the field answers what happened rather than how it ended.** A
+    /// `done` report is [`Recorded::Attempted`] — the attempt is closed and
+    /// nothing has been decided. A `stuck` report is the outcome the Drone
+    /// really is entitled to state, because *"I stopped and here is why"* is
+    /// the one thing only it can say.
+    pub recorded: Recorded,
+    /// How the step ended, **once something has decided** — the gate, never a
+    /// Drone.
+    ///
+    /// **Absent on a Drone's own report, and that absence is the fix.** The
+    /// same payload answers `fleet.verdict` (a Drone saying it stopped) and the
+    /// gate's own record of what it then decided; only the second has a verdict
+    /// to carry. `skip_serializing_if` means a Drone reporting `done` receives
+    /// no `verdict` key at all rather than one holding a placeholder — the
+    /// state is unrepresentable instead of merely unwritten.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<crate::fleet::Verdict>,
     /// What the verdict rests on.
     ///
     /// **A verdict is only `PASS` if it carries evidence an external command
