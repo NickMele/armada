@@ -833,6 +833,31 @@ fn reachable_workflows_exist(place: &Where, from: &Workflow) -> Result<(), Armad
     Ok(())
 }
 
+/// Whether a workflow declares a step by this id.
+///
+/// **Unreadable guild means yes.** A workflow file that will not parse is a
+/// separate failure with its own message, and turning it into *"no such step"*
+/// would send a reader to the wrong file — so the guard opens only when it can
+/// actually answer.
+fn flow_has_step(place: &Where, workflow: &str, step: &str) -> bool {
+    match read_workflow(place, workflow) {
+        Ok(flow) => flow.steps.iter().any(|declared| declared.id == step),
+        Err(_) => true,
+    }
+}
+
+/// The step ids a workflow declares, in order, for a refusal to name.
+fn flow_steps(place: &Where, workflow: &str) -> Vec<String> {
+    read_workflow(place, workflow)
+        .map(|flow| {
+            flow.steps
+                .into_iter()
+                .map(|declared| format!("`{}`", declared.id))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Read one workflow out of the guild.
 fn read_workflow(place: &Where, name: &str) -> Result<Workflow, ArmadaError> {
     let guild = Guild::at(&place.armada_home);
@@ -2578,6 +2603,43 @@ pub fn report<C: Clock>(
 
     let crossing = event.map(reportable).transpose()?;
     let step = step.unwrap_or(&record.step).to_string();
+
+    // # A step this workflow does not declare is refused, not stored
+    //
+    // **Measured four times on 2026-08-17, and the fourth corrupted a Job.**
+    // A Drone reported `verify`, then `approve` twice, then `approve` again —
+    // none of which is a step in the workflow it was running. The name was
+    // written to the record every time, and `bridge-command-centre` ended up
+    // with `step: approve` while running `feature`, whose steps are `plan`,
+    // `approval`, `implement`, `review` and `land`. The gate then had nothing to
+    // look up, so `tick` reported *"its Drone is still working"* for ever and
+    // the Job could not advance, fail, or reach a ceiling. $14 of work stranded
+    // in a state machine pointing at a state that does not exist.
+    //
+    // **The real fix deletes the parameter** — `docs/reserved/032` says a Drone
+    // may not name a step at all, because the Job already holds it — and that is
+    // being built. This is the guard that belongs here regardless: a state
+    // machine must refuse a state it does not have, whoever proposed it. Even
+    // once the argument is gone, the same refusal protects a resumed Job whose
+    // guild workflow has since been edited.
+    //
+    // The refusal names the steps that do exist, because the caller is an agent
+    // that guessed and a list is what stops it guessing again.
+    if !flow_has_step(place, &record.workflow, &step) {
+        let known = flow_steps(place, &record.workflow);
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: step.clone(),
+            message: format!(
+                "the `{}` workflow has no step called `{step}`",
+                record.workflow
+            ),
+            next_action: Some(match known.is_empty() {
+                true => format!("`{}` is on `{}`", record.name, record.step),
+                false => format!("its steps are {}", known.join(", ")),
+            }),
+        });
+    }
 
     // **Entering a step is what moves the Job onto it.** The record's `step` is
     // what every other surface reads, and a boundary that left it pointing at
