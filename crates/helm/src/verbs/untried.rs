@@ -57,7 +57,16 @@ pub use crate::verbs::fleet::Where;
 pub use crate::verbs::guild::Look;
 
 /// What the last option says, and what it says about itself.
-const DONE: (&str, &str) = ("done", "stop looking");
+/// **`write nothing` rather than `stop looking`.** Paired with the prompt above:
+/// a reader who has just been told the list writes tasks needs the way out to
+/// say that it writes none, because *stop looking* reads as *I have finished
+/// reading* and not as *do not file anything*.
+///
+/// **Kept short because it sets the width budget for every other row.**
+/// `choices` subtracts this string's length from the room each label gets, and
+/// the selector's own width test refused a longer wording outright: at 40
+/// columns `done · write nothing and stop looking` drew 43.
+const DONE: (&str, &str) = ("done", "write nothing");
 
 /// `armada untried` — the roster, and what this machine has done with each.
 ///
@@ -114,7 +123,25 @@ fn wander<C: Clock>(
         // ended both leave rather than acting on the way out.
         options.push(Choice::new(DONE.0, DONE.1));
         let done = options.len();
-        let picked = ask.choose("What have you not tried?", &options, done);
+        // # The prompt names what picking does
+        //
+        // Reported by the owner: *"When I was in the untried view, I was hitting
+        // enter on the item thinking that it would just run it, but instead it
+        // seems like it created reports for someone to try it. It didn't tell me
+        // that hitting enter was doing that. I thought it was just broken."*
+        //
+        // The prompt was *"What have you not tried?"* — a question about status,
+        // asked by a screen whose whole answer is already on it. So enter looked
+        // like the only thing enter usually means, which is *do this*, and what
+        // it did instead was file a task and print a confirmation for something
+        // the reader had not asked for. A person who reads that as broken is
+        // reading it correctly: the screen said nothing about writing anything.
+        //
+        // Naming the verb in the question is the whole fix. It is the same rule
+        // `docs/reserved/027` states for a raised item — the thing a keystroke
+        // does belongs where the keystroke is offered, not in the confirmation
+        // afterwards.
+        let picked = ask.choose("Write a task to try which one?", &options, done);
         if picked >= done || picked == 0 {
             return Ok(());
         }
