@@ -956,3 +956,150 @@ fn a_drone_is_offered_nothing_that_spawns_and_the_belts_are_disjoint() {
     assert!(drone.contains(&"fleet.check".to_string()), "{drone:?}");
     assert!(!drone.contains(&"manifest.check".to_string()), "{drone:?}");
 }
+
+/// **A grant is not a connection** (`docs/reserved/031`), asserted on the two
+/// artefacts that have to agree: the tools `armada mcp serve` puts on the Helm
+/// belt, and the `tools:` list in `templates/guild/subagents/helm.md` that
+/// decides which of them a Helm session is offered at all.
+///
+/// **It had drifted in both directions at once.** The persona named
+/// `mcp__armada__fleet_ls`, `mcp__armada__fleet_inbox` and
+/// `mcp__armada__fleet_board`, none of which the server has ever served — so
+/// three of Helm's nine grants were for nothing — and it omitted `fleet.status`,
+/// `fleet.probe`, `manifest.check`, `manifest.up`, `manifest.down` and
+/// `manifest.clean`, all six of which it does serve. The observable result was a
+/// Helm that could not read the fleet table, could not probe a Job and could not
+/// run a check, with nothing anywhere saying why: an agent definition's `tools:`
+/// is an allowlist, so an absent tool is silently unavailable and a misspelled
+/// one is silently useless.
+///
+/// The existing assertion in `armada_core::helm` checks that the persona names
+/// the *server*, which a rename would break and this drift did not.
+#[test]
+fn every_tool_the_helm_persona_grants_is_one_the_server_serves() {
+    const PERSONA: &str = include_str!("../../../templates/guild/subagents/helm.md");
+
+    let granted: Vec<String> = PERSONA
+        .lines()
+        // The frontmatter list, one `  - <tool>` per line, up to its `---`.
+        .take_while(|line| !line.starts_with("# Helm"))
+        .filter_map(|line| line.trim().strip_prefix("- "))
+        .filter_map(|tool| tool.strip_prefix("mcp__armada__"))
+        // Claude Code renames a dotted tool (`docs/traps.md`): the server serves
+        // `fleet.spawn` and the model is offered `mcp__armada__fleet_spawn`, so
+        // the comparison has to undo exactly that one substitution.
+        .map(|tool| tool.replacen('_', ".", 1))
+        .collect();
+
+    let served = tool_names(Belt::Helm);
+    for tool in &granted {
+        assert!(
+            served.contains(tool),
+            "the persona grants `{tool}`, which `armada mcp serve` does not serve: {served:?}"
+        );
+    }
+    for tool in &served {
+        assert!(
+            granted.contains(tool),
+            "`{tool}` is on the Helm belt and the persona does not grant it, \
+             so no Helm session is ever offered it"
+        );
+    }
+
+    // **Read-only filesystem tools, and the omissions are the assertion.** Helm
+    // reads a repository to decompose work over it; it may not change one, and
+    // `Bash` is how `Edit` gets routed around — measured on the operator's own
+    // `~/.claude/settings.json` (`docs/reserved/031` §1).
+    for read_only in ["Read", "Grep", "Glob"] {
+        assert!(
+            PERSONA.contains(&format!("\n  - {read_only}\n")),
+            "Helm cannot open a file it is asked about: `{read_only}` is not granted"
+        );
+    }
+    for writes in ["Edit", "Write", "NotebookEdit", "Bash"] {
+        assert!(
+            !PERSONA.contains(&format!("\n  - {writes}\n")),
+            "Helm was granted `{writes}` — authorship happens in a worktree with \
+             a budget, and a session that can write can route around every other \
+             refusal"
+        );
+    }
+}
+
+/// **An instruction without a grant** — the other side of `docs/reserved/031`'s
+/// *a grant is not a connection* family, asserted between the prose Armada
+/// appends to a session and the belt that session actually holds.
+///
+/// `armada_core::skill::BODY` goes to a Drone **and** to Helm, and the two belts
+/// are disjoint by design. The propose paragraph read *"Call
+/// `mcp__armada__fleet_propose`"* with no audience named, so every Helm session
+/// was told to reach for a tool that is on the Drone's belt and no other — and a
+/// model told to call a tool it has not got answers that it has not got it,
+/// which is the same dead end as Helm's persona asking for files it held no
+/// `Read` to open.
+#[test]
+fn every_tool_armadas_own_skill_names_is_on_a_belt_and_names_its_audience() {
+    let body = armada_core::skill::BODY;
+    let served: Vec<String> = tool_names(Belt::Helm)
+        .into_iter()
+        .chain(tool_names(Belt::Drone))
+        .collect();
+
+    // Every `mcp__armada__<tool>` the prose names has to be a tool somebody
+    // serves. A sentence naming one that nothing serves is unactionable from
+    // either belt, and the model reports it as missing rather than as wrong.
+    let mut named = 0;
+    for rest in body.split("mcp__armada__").skip(1) {
+        let tool: String = rest
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        // `mcp__armada__…` — the prose naming the *prefix* rather than a tool,
+        // which is the one occurrence that is not a call.
+        if tool.is_empty() {
+            continue;
+        }
+        let dotted = tool.replacen('_', ".", 1);
+        assert!(
+            served.contains(&dotted),
+            "the skill tells its reader to call `{tool}`, which no belt serves: {served:?}"
+        );
+        named += 1;
+    }
+    assert!(named >= 2, "the skill named {named} tools; it names two");
+
+    // **An imperative has to name its audience when only one belt can obey it.**
+    // Every paragraph that tells its reader to *call* something is checked, and
+    // this is the assertion the shipped body failed: `Call
+    // `mcp__armada__fleet_propose`` stood on its own, addressed to whoever was
+    // reading, and half of the sessions reading it hold no such tool.
+    let helm = tool_names(Belt::Helm);
+    let mut imperatives = 0;
+    for paragraph in body.split("\n\n") {
+        // `Call …` at the start of a sentence and `, call …` mid-one are the
+        // same instruction, so the marker is matched without its first letter.
+        let Some(rest) = paragraph.split("all `mcp__armada__").nth(1) else {
+            continue;
+        };
+        imperatives += 1;
+        let tool: String = rest
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        if helm.contains(&tool.replacen('_', ".", 1)) {
+            continue;
+        }
+        assert!(
+            paragraph.contains("Drone"),
+            "`{tool}` is on no belt Helm holds, and the paragraph telling its \
+             reader to call it does not say who it is for: {paragraph:?}"
+        );
+    }
+    assert!(imperatives >= 1, "the skill tells nobody to call anything");
+
+    // And Helm is told outright rather than left to infer it from an absence.
+    assert!(
+        body.contains("**If you are Helm** you hold neither tool"),
+        "Helm is not told which tools it does not hold"
+    );
+}

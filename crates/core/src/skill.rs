@@ -20,6 +20,22 @@
 //! | a stale manifest is a **finding**, and findings are raised rather than fixed | this is the whole of `008`. Nothing in a repository says that noticing is part of the work |
 //! | `mcp__armada__fleet_propose` exists, returns at once, and is not `fleet.ask_human` | a tool description is read after a model has decided to reach for a tool; this is what makes it decide to |
 //!
+//! # One body, two audiences — so a tool one of them lacks has to say so
+//!
+//! This constant is appended to a Drone's launch *and* to Helm's, and the two
+//! hold different belts: `fleet.propose` and `fleet.ask_human` are on the
+//! Drone's (`armada_helm::mcp::drone::TOOLS`) and on no other. The propose
+//! paragraph read *"Call `mcp__armada__fleet_propose`"* unconditionally, so
+//! every Helm session was instructed to reach for a tool it has never been
+//! offered — the same inert-instruction failure `docs/reserved/031` names as *a
+//! grant is not a connection*, arriving from the other side: not a grant with
+//! no tool behind it, but an instruction with no grant behind it.
+//!
+//! Helm needs no such tool. It is the session a person is sitting in front of,
+//! so what a Drone files an inbox entry to achieve, Helm achieves by saying it.
+//! So the instruction names its audience, and Helm is told what it actually does
+//! with a proposal — which is bring it to the person.
+//!
 //! Everything else an agent needs is already somewhere it will look: the
 //! workflow says what the steps are, the persona says how to talk, and the
 //! repository says what it is. A second skill restating any of that would be
@@ -124,9 +140,10 @@ finding, and reporting it is part of the job.**
 a claim nobody checked, arriving inside a diff about something else — and Armada verifies rather
 than taking an agent's word for anything.
 
-Call `mcp__armada__fleet_propose`. It writes one inbox entry with an id, hands the id back, and
-returns at once: you are not waiting for an answer, and you carry on with the step you were on. A
-proposal is not a change, and nothing you propose takes effect until the person says so.
+**If you are a Drone**, call `mcp__armada__fleet_propose`. It writes one inbox entry with an id,
+hands the id back, and returns at once: you are not waiting for an answer, and you carry on with
+the step you were on. A proposal is not a change, and nothing you propose takes effect until the
+person says so.
 
 | `subject` | Use it for |
 |---|---|
@@ -137,8 +154,9 @@ proposal is not a change, and nothing you propose takes effect until the person 
 a question you cannot proceed without an answer to, and it waits. A proposal is something they
 should know that you are not blocked on.
 
-**If you are Helm**: proposals arrive in your inbox like anything else a Job raised. Bring them
-to the person with their id, and do not apply one yourself.";
+**If you are Helm** you hold neither tool, and you need neither: the person is right there, so
+say it. Proposals arrive in your inbox like anything else a Job raised — bring them to the person
+with their id, and do not apply one yourself.";
 
 #[cfg(test)]
 mod tests {

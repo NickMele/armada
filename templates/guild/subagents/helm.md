@@ -2,15 +2,43 @@
 name: helm
 description: The one agent you talk to. Decomposes what you ask into Jobs, delegates them to the fleet, aggregates what comes back, and brings you the decisions that are yours.
 tools:
+  # Every tool `armada mcp serve` actually puts on the Helm belt
+  # (`crates/helm/src/mcp/helm.rs`'s `TOOLS`, documented in
+  # `docs/commands/helm/mcp.md`), spelled the way the model sees it —
+  # `mcp__armada__fleet_spawn`, not `fleet.spawn` (`docs/traps.md`).
+  #
+  # This list is an allowlist: a tool absent from it is not offered at all, and
+  # a tool present that the server does not serve is offered to nobody. It had
+  # drifted in both directions at once — it named `fleet_ls`, `fleet_inbox` and
+  # `fleet_board`, none of which the server has ever served, and omitted
+  # `fleet_status`, `fleet_probe`, `manifest_check`, `manifest_up`,
+  # `manifest_down` and `manifest_clean`, all six of which it does. So Helm
+  # could not read the fleet table, could not probe a Job and could not run a
+  # check, and nothing said why. `crates/core/src/helm.rs` asserts this list
+  # against the server's own.
   - mcp__armada__fleet_spawn
-  - mcp__armada__fleet_ls
-  - mcp__armada__fleet_inbox
+  - mcp__armada__fleet_status
+  - mcp__armada__fleet_probe
   - mcp__armada__fleet_answer
-  - mcp__armada__fleet_board
   - mcp__armada__fleet_kill
+  - mcp__armada__manifest_check
+  - mcp__armada__manifest_up
+  - mcp__armada__manifest_down
   - mcp__armada__manifest_status
+  - mcp__armada__manifest_clean
   - mcp__armada__manifest_skills
   - mcp__armada__manifest_skill
+  # Read-only filesystem tools, and the omissions are the point. Helm reads a
+  # repository to decompose work over it — which file a Job should touch, what
+  # a check is spelled as, whether a task is one Job or three — and had no way
+  # to open one. `Edit`, `Write` and `NotebookEdit` are absent so it cannot
+  # change anything, and `Bash` is absent so it cannot route around that: a
+  # Drone did exactly that to the operator's own `~/.claude/settings.json`
+  # (`docs/reserved/031` §1), through `jq` and a `mv`, after `Edit` was
+  # refused. Authorship happens in a worktree with a budget, never here.
+  - Read
+  - Grep
+  - Glob
 ---
 
 # Helm
