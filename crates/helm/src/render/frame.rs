@@ -92,18 +92,80 @@ fn clip_line(line: Vec<Span>, max_width: usize) -> Vec<Span> {
     result
 }
 
-/// Shedding rule: decide what lines to keep at a narrow width.
+/// One `key does` pair on a key line, already worded by the caller.
 ///
-/// Movement keys (↑↓←→ or hjkl) always appear. Verbs (a, d, n, etc.) drop
-/// at narrow widths. The key line (last line if it contains verb shortcuts)
-/// is the only line that sheds. All other lines are preserved.
+/// **A pair rather than two strings threaded separately**, so a caller cannot
+/// hand `shed_to_narrow` a key with the wrong `does` for it — the two travel
+/// together from wherever they were decided (`docs/reserved/033`'s legend).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyPair {
+    /// The key, or chord, as it reads on the line — `"↑↓←→ or hjkl"`, `"d"`.
+    pub key: String,
+    /// What it does — `"move"`, `"detail"`.
+    pub does: String,
+}
+
+impl KeyPair {
+    /// Build one, from anything that reads as a string.
+    pub fn new(key: impl Into<String>, does: impl Into<String>) -> KeyPair {
+        KeyPair {
+            key: key.into(),
+            does: does.into(),
+        }
+    }
+
+    fn spelled(&self) -> String {
+        format!("{} {}", self.key, self.does)
+    }
+}
+
+/// Two spaces between pairs — the one separator on this screen that reads the
+/// same for a person and for a pipe (`render.rs`'s `bridge_keys`).
+const PAIR_GAP: &str = "  ";
+
+/// **Movement never sheds; verbs do** (`docs/reserved/033-the-command-centre-designed.md`).
 ///
-/// Returns the layout as-is for now; full implementation when command centre
-/// panels are integrated and we know which lines are key lines.
-fn apply_shedding(layout: Vec<Vec<Span>>, _width: usize) -> Vec<Vec<Span>> {
-    // TODO: When full command centre is built, detect key line by examining
-    // its content and apply verb-dropping rules. For now, pass through.
-    layout
+/// Builds the widest key line that fits `width`: every `movement` pair,
+/// always; then as many `verbs` as fit, dropped from the end (lowest
+/// priority last) until it does; `quit` is pinned last and is never dropped —
+/// a full-screen program with no way off the line is a trap.
+///
+/// **Two lists rather than one flagged list**, so a caller cannot mis-mark a
+/// verb as movement by mistake — the type says which is which, and this
+/// function is the one place that distinction is spent. It is what keeps
+/// [`titled_box`] and [`hjoin`] ignorant of Jobs, Manifest and Guild
+/// (`ARCHITECTURE.md` §1.9): nothing here reads a key's *meaning*, only which
+/// of two lists it arrived in.
+///
+/// When even the movement pairs and `quit` overhang `width`, they are kept
+/// anyway — movement never sheds, so there is nothing left to drop.
+pub fn shed_to_narrow(
+    movement: &[KeyPair],
+    verbs: &[KeyPair],
+    quit: &KeyPair,
+    width: usize,
+) -> Vec<Span> {
+    let mut taken = verbs.len();
+    loop {
+        let mut line: Vec<String> = movement.iter().map(KeyPair::spelled).collect();
+        line.extend(verbs[..taken].iter().map(KeyPair::spelled));
+        // **The honest overflow.** Naming what it could not carry is the third
+        // option next to wrapping (which would change the frame's height) and
+        // silently dropping keys nobody can then find.
+        if taken < verbs.len() {
+            line.push("? keys".to_string());
+        }
+        line.push(quit.spelled());
+        let text = line.join(PAIR_GAP);
+        if display_width(&text) <= width || taken == 0 {
+            return vec![Span {
+                text,
+                role: None,
+                bold: false,
+            }];
+        }
+        taken -= 1;
+    }
 }
 
 /// A titled bordered box around content lines.
@@ -293,22 +355,6 @@ pub fn hjoin(
     }
 
     result
-}
-
-/// Responsive layout: shed verbs from the key line when terminal is too narrow.
-///
-/// Movement keys (↑↓←→ or hjkl) never shed. Verbs (a, d, n, x, p, r, t, etc.)
-/// disappear at narrow widths, available behind `?`. This follows
-/// docs/reserved/033's rule: "Movement never sheds; verbs do."
-///
-/// Applies shedding rules when moving from wide to narrow layout. The
-/// transformation is driven by the actual width rather than a transition point.
-pub fn shed_to_narrow(
-    wide_layout: Vec<Vec<Span>>,
-    _wide_width: usize,
-    narrow_width: usize,
-) -> Vec<Vec<Span>> {
-    apply_shedding(wide_layout, narrow_width)
 }
 
 #[cfg(test)]
@@ -623,5 +669,127 @@ mod tests {
             let w = line_width(line);
             assert!(w <= 20, "line width {} exceeds max 20", w);
         }
+    }
+
+    // ------------------------------------------------------- shed_to_narrow
+
+    /// The movement legend and verbs 033's wide mock names, in priority order
+    /// — `?` and `q` are the two the verb list is never without.
+    fn movement() -> Vec<KeyPair> {
+        vec![
+            KeyPair::new("↑↓←→ or hjkl", "move"),
+            KeyPair::new("tab", "next panel"),
+            KeyPair::new("1-5", "jump to panel"),
+            KeyPair::new("enter", "act"),
+        ]
+    }
+
+    fn verbs() -> Vec<KeyPair> {
+        vec![
+            KeyPair::new("d", "detail"),
+            KeyPair::new("n", "new job"),
+            KeyPair::new("a", "answer"),
+            KeyPair::new("p", "pause"),
+            KeyPair::new("x", "abort"),
+            KeyPair::new("r", "reap"),
+            KeyPair::new("t", "tick"),
+        ]
+    }
+
+    fn quit() -> KeyPair {
+        KeyPair::new("q", "quit")
+    }
+
+    fn text_of(line: &[Span]) -> String {
+        line.iter().map(|s| s.text.as_str()).collect()
+    }
+
+    /// **Movement never sheds — the failure this rule exists to prevent.**
+    /// Before this change `shed_to_narrow` returned its input untouched, which
+    /// happened to keep movement too; this asserts the property itself, not
+    /// the accident.
+    #[test]
+    fn movement_pairs_are_never_dropped_at_any_width() {
+        for width in [10, 40, 80, 138] {
+            let line = shed_to_narrow(&movement(), &verbs(), &quit(), width);
+            let text = text_of(&line);
+            for pair in movement() {
+                assert!(
+                    text.contains(&pair.key),
+                    "`{}` dropped at width {width}: {text}",
+                    pair.key
+                );
+            }
+        }
+    }
+
+    /// `quit` is pinned last and never dropped, even when nothing else fits —
+    /// a full-screen program with no way off the line is a trap.
+    #[test]
+    fn quit_is_never_dropped_even_at_the_narrowest_width() {
+        let line = shed_to_narrow(&movement(), &verbs(), &quit(), 1);
+        assert!(text_of(&line).contains("q quit"));
+    }
+
+    /// Verbs drop from the end — lowest priority last in the list — before
+    /// movement gives up anything. (Measured: movement alone is 63 columns,
+    /// every verb present is 136; 95 lands exactly between "d detail" alone
+    /// fitting and "n new job" pushing it over.)
+    #[test]
+    fn verbs_drop_from_the_end_as_the_width_narrows() {
+        let wide = text_of(&shed_to_narrow(&movement(), &verbs(), &quit(), 200));
+        for pair in verbs() {
+            assert!(wide.contains(&pair.does), "`{}` missing at 200", pair.does);
+        }
+
+        // Narrow enough that only the highest-priority verb survives.
+        let narrow = text_of(&shed_to_narrow(&movement(), &verbs(), &quit(), 95));
+        assert!(narrow.contains("detail"), "{narrow}");
+        assert!(!narrow.contains("tick"), "{narrow}");
+        assert!(!narrow.contains("new job"), "{narrow}");
+    }
+
+    /// **The line names what it dropped**, rather than silently shrinking —
+    /// the third option next to wrapping (which would change the frame's
+    /// height) and dropping keys nobody can then find.
+    #[test]
+    fn a_narrowed_line_says_keys_were_hidden_and_a_wide_one_does_not() {
+        let narrow = text_of(&shed_to_narrow(&movement(), &verbs(), &quit(), 95));
+        assert!(narrow.contains("? keys"), "{narrow}");
+
+        let wide = text_of(&shed_to_narrow(&movement(), &verbs(), &quit(), 200));
+        assert!(!wide.contains("? keys"), "{wide}");
+    }
+
+    /// The line never exceeds its budget once the width is at least as wide
+    /// as movement, quit and the overflow marker alone (measured: 79).
+    #[test]
+    fn the_shed_line_never_overhangs_a_width_it_can_fit_in() {
+        for width in [90, 100, 120, 138, 200] {
+            let line = shed_to_narrow(&movement(), &verbs(), &quit(), width);
+            let w = line_width(&line);
+            assert!(w <= width, "line is {w} wide at budget {width}");
+        }
+    }
+
+    /// **Movement never sheds even where it does not fit** — the floor this
+    /// rule has. Below 79 columns even a bare movement-and-quit line
+    /// overhangs, and the line is kept anyway rather than truncated, because
+    /// truncating movement is the one thing 033 forbids outright.
+    #[test]
+    fn movement_overhangs_rather_than_shedding_below_its_own_floor() {
+        let line = shed_to_narrow(&movement(), &verbs(), &quit(), 40);
+        assert!(line_width(&line) > 40, "should overhang, not truncate");
+        assert!(text_of(&line).contains("q quit"));
+    }
+
+    /// Nothing to shed at all: an empty verb list still carries movement and
+    /// quit, and never claims to have hidden anything.
+    #[test]
+    fn no_verbs_at_all_still_draws_movement_and_quit() {
+        let line = text_of(&shed_to_narrow(&movement(), &[], &quit(), 200));
+        assert!(line.contains("move"));
+        assert!(line.contains("q quit"));
+        assert!(!line.contains("? keys"));
     }
 }

@@ -23,8 +23,8 @@ use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
     InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
-    ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData, SpawnData, TickData,
-    TickRow, TransitionRow, VerdictData,
+    ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData, SpawnData, StepRow,
+    TickData, TickRow, TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -1492,8 +1492,61 @@ pub fn show<R: Run, C: Clock>(
             needs_attention: waiting_on_you,
             asked,
             progress,
+            steps: step_rows(
+                place,
+                &record.workflow,
+                &record.step,
+                record
+                    .doing
+                    .as_ref()
+                    .map_or_else(|| observed.state.word(), |doing| doing.acting.word()),
+                &record.transitions,
+            ),
         },
     ))))
+}
+
+/// The workflow's declared step order, each one's gate and where it stands —
+/// [`ShowData::steps`], the WORKFLOW panel's own table
+/// (`docs/reserved/033-the-command-centre-designed.md`).
+///
+/// **A count in the list, the declared order here** — never a fraction: a step
+/// is `PASS`, the current one carries the Job's own status word, and
+/// everything after it is `QUEUED` because it has not been entered.
+///
+/// Empty when the workflow document could not be read, the same case
+/// [`gate_of`] is already `None` for.
+fn step_rows(
+    place: &Where,
+    workflow: &str,
+    current_step: &str,
+    current_word: &str,
+    transitions: &[job::Transition],
+) -> Vec<StepRow> {
+    let Ok(document) = read_workflow(place, workflow) else {
+        return Vec::new();
+    };
+    document
+        .steps
+        .iter()
+        .map(|step| {
+            let completed = transitions
+                .iter()
+                .any(|entry| entry.step == step.id && entry.event == job::StepEvent::Completed);
+            let status = if completed {
+                "PASS".to_string()
+            } else if step.id == current_step {
+                current_word.to_string()
+            } else {
+                "QUEUED".to_string()
+            };
+            StepRow {
+                id: step.id.clone(),
+                status,
+                must: step.verify.must.word().to_string(),
+            }
+        })
+        .collect()
 }
 
 // ------------------------------------------------------------------------ kill

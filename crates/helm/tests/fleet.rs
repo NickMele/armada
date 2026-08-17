@@ -2937,6 +2937,95 @@ fn an_empty_inbox_succeeds_and_reports_nothing() {
     }
 }
 
+// -------------------------------------------------------- bridge::read_all
+//
+// `docs/reserved/033-the-command-centre-designed.md`'s command centre: one
+// read of the fleet, the inbox, the guild and doctor's findings, each through
+// the exact verb `armada fleet inbox` / `armada guild ls` / `armada doctor`
+// already calls — never a second source, never a Job id threaded into Guild
+// or Manifest (`PLAN.md` §7, `ARCHITECTURE.md` §1.9).
+
+/// **Every panel but MANIFEST reads through its own verb**, over the same
+/// `~/.armada` a Job actually lives in — proving `read_all` is a fan-out over
+/// real verbs and not a stub returning empty structures.
+#[test]
+fn read_all_reads_the_fleet_the_inbox_the_guild_and_system_through_their_own_verbs() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    // A guild is a git repository (`crates/guild/src/layout.rs`'s `exists`);
+    // `Scratch` seeds the workflow templates without initialising one, since
+    // every other test in this file only ever spawns through it.
+    std::process::Command::new("git")
+        .arg("init")
+        .arg("--quiet")
+        .current_dir(scratch.place().armada_home.join("guild"))
+        .status()
+        .expect("git init the scratch guild");
+
+    let view =
+        armada_helm::verbs::bridge::read_all(&run, &FrozenClock::new(), &scratch.place(), None)
+            .expect("every panel but MANIFEST reads");
+
+    // The fleet half is `read`, unchanged — the Job just spawned is on it.
+    assert_eq!(view.fleet.rows.len(), 1);
+    assert_eq!(view.fleet.rows[0].uuid, data.uuid);
+
+    // The guild `Scratch` seeds: five workflow templates, which is what makes
+    // this the same read `armada guild ls` would report for this `~/.armada`
+    // rather than an empty stand-in.
+    assert!(
+        view.guild.items.iter().any(|item| item.kind == "workflow"),
+        "{:?}",
+        view.guild.items
+    );
+
+    // `armada doctor` always answers with something, even a clean machine.
+    assert!(!view.system.results.is_empty());
+}
+
+/// **A Job's own Drone is what `doctor`'s `drones` row counts**, over Fleet's
+/// `jobs/` index rather than Manifest's process registry — proving the count
+/// is real rather than always zero.
+#[test]
+fn doctor_counts_a_just_spawned_jobs_drone_as_live() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    spawn(
+        &scratch,
+        &run,
+        &task(&format!("add rate limiting {STAY_ALIVE}")),
+    );
+
+    // **`RealRun`, not the harness.** `doctor` shells out to `sysctl`/`ps` for
+    // the boot id and the process probe the same way it would from a real
+    // shell; the harness only stubs the calls `spawn`'s own path makes.
+    let Output::Doctor(envelope) =
+        armada_helm::verbs::doctor::run(&RealRun, &guild_where(&scratch)).unwrap()
+    else {
+        panic!("not a doctor")
+    };
+    let drones = envelope
+        .data
+        .results
+        .iter()
+        .find(|finding| finding.check == "drones")
+        .expect("a drones row");
+    assert_eq!(drones.detail, "1 live", "{drones:?}");
+}
+
+/// The `guild::Where` `doctor`/`guild ls` take, built from a `fleet::Where`
+/// the same way `verbs/report.rs`'s own `doctor` helper and `bridge::read_all`
+/// already do.
+fn guild_where(scratch: &Scratch) -> armada_helm::verbs::guild::Where {
+    let place = scratch.place();
+    armada_helm::verbs::guild::Where {
+        armada_home: place.armada_home.clone(),
+        cwd: place.cwd.clone(),
+        claude_home: place.home.join(".claude"),
+    }
+}
+
 // ------------------------------------------------------------------ show
 //
 // The defect: a Bridge row saying `NEEDS YOU: YES` with no way to find out why.
@@ -3005,6 +3094,68 @@ fn show_reports_the_inbox_entry_that_raised_needs_you_in_full() {
         shown.budget_remaining.attempts, shown.budget.attempts,
         "a Job that has attempted nothing has every attempt left"
     );
+}
+
+/// **The declared step order, never a fraction of it.** `transitions` alone
+/// only holds steps a Job has already entered, so a fresh Job's `implement`,
+/// `review` and `land` cannot be answered from it — the WORKFLOW panel
+/// (`docs/reserved/033-the-command-centre-designed.md`) needs the workflow
+/// document's own list, folded with what has actually happened.
+#[test]
+fn show_carries_every_declared_step_queued_ahead_of_the_one_in_progress() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("feature".to_string()),
+            ..task("cut the 4.2 release")
+        },
+    );
+
+    let output = fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.name).unwrap();
+    let Output::Show(envelope) = output else {
+        panic!("not a show")
+    };
+    let shown = envelope.data;
+
+    // The `feature` template's own declared order — never re-derived from
+    // `transitions`, which a fresh Job has almost none of.
+    assert_eq!(
+        shown
+            .steps
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["plan", "approval", "implement", "review", "land"]
+    );
+    assert_eq!(
+        shown
+            .steps
+            .iter()
+            .map(|s| s.must.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "subjob_passed",
+            "human_approves",
+            "check_passes",
+            "review_clean",
+            "branch_exists"
+        ]
+    );
+    // The step this Job is actually on is not `QUEUED` — it is entered.
+    assert_eq!(shown.steps[0].id, shown.step);
+    assert_ne!(
+        shown.steps[0].status, "QUEUED",
+        "the current step reads as not yet reached"
+    );
+    // **Never a position or a percentage** — every step after it is `QUEUED`
+    // because it has not been entered, and that is the whole of what the word
+    // says (PHASES.md §9.1 F2).
+    for step in &shown.steps[1..] {
+        assert_eq!(step.status, "QUEUED", "{} has not been entered", step.id);
+    }
 }
 
 /// **A handle is reusable, and a new Job does not inherit its namesake's
