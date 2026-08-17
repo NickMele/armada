@@ -37,6 +37,14 @@
 # whatever the session was about — same reasoning as .gnhf/ above.
 .lavish/
 
+# Guild bundles. `armada guild export` writes the whole guild to one file —
+# voice, how-i-work, settings, skills, hooks, subagents — which is personal
+# configuration and has no business in a public repository. One was committed
+# by accident on 2026-08-15 and served publicly for two days before anybody
+# noticed, so this is a rule rather than a habit.
+guild.tar.zst
+*.guild.tar.zst
+
 # macOS
 .DS_Store
 
