@@ -1269,6 +1269,46 @@ failure, against 91.10s on the branch.
 a docker-touching verb is measuring the daemon rather than the code. Check `docker version`
 before believing a failure in this class, and re-run once it answers.
 
+## A rate-limit window reports no percentage until it is already warning
+
+Measured 2026-08-17 against Claude Code 2.1.233, reading the `rate_limits` events a Drone's
+transcript carries (`crates/core/src/fleet/drone.rs`'s `RateLimit`).
+
+`status` is always present — `allowed`, `allowed_warning`, `rejected`. **`utilization` is not.** It
+rides along only once the service has crossed a threshold of its own, so a window well inside its
+limits reports its `resets_at` and no percentage at all. Claude Code fills the field from the
+`anthropic-ratelimit-unified-<window>-utilization` header and only surfaces it in the
+`allowed_warning` shape.
+
+**If you assume otherwise:** you will build a ceiling that cannot fire. `stop_at_percent: 40` is not
+a 40% ceiling on a machine that reports nothing until 80 — it is an 80% ceiling wearing a smaller
+number, and it will read as working right up until somebody checks what it actually stopped at. Any
+guard that must evaluate below the service's own warning threshold has to be built on `status`, which
+is always there, or on something Armada measures itself.
+
+This is why [`034`](reserved/034-the-job-daemon-lands-the-work.md) makes `stop_on_warning` the daemon's
+default rather than a figure, and why a percentage there may only ever be *stricter* than the warning.
+
+## `turns` counts finished exchanges, so a working Drone can report nothing at all
+
+Measured 2026-08-17. A Job sat at `RUNNING` for eleven minutes reporting `turns=0` and `cost=0.00`,
+which `armada fleet ls` draws as a dash in both number columns. Nothing was wrong: its transcript held
+1,299 lines and had been written three seconds earlier.
+
+`drone::transcript` builds its ledger from **completed** turns, because a turn's spend is only known
+when the turn ends. So a Drone in a long first exchange is indistinguishable, on every number the
+fleet reports, from a Drone that started and hung.
+
+**If you assume otherwise:** you will read a dash as "stalled" and kill live work, or read it as
+"fine" and leave a wedged Drone running. `ps` does not settle it either — a `claude` process can be
+alive and making no progress.
+
+**What does settle it is the transcript's modification time**, and taking it does not breach
+PLAN.md §15.2. That rule forbids reading a transcript's *content* for progress; a file stat is not a
+read of what the Drone said. Two cases separate cleanly with it: a working Drone's stream was written
+seconds ago, and a Job suspended waiting on a sub-Job has a stream minutes or hours stale — which is
+correct, because its own Drone is gone.
+
 ## Two golden snapshots fail under parallel load and pass alone
 
 `status_matches_its_snapshot` and `up_and_down_match_their_snapshots` (both in
