@@ -55,9 +55,25 @@ the answer:
 **If nothing blocks it, say so in those words and write the file anyway.** The empty review is
 the common case and the file is the evidence that somebody looked.
 
+## A blocking finding has to stop the Job, not just be written down
+
+**Writing it in `REVIEW.md` is not enough, because nothing reads the file.** The step you are
+running is gated on `artifact_exists: REVIEW.md` — the file existing is what proves a reviewer
+looked — and the Job under review advances on *your Job's verdict*, not on your prose. So a
+review that says *"one thing blocks landing this"* and then finishes cleanly lands the work it
+just refused. That happened: a reviewer named a real defect with file and line numbers, returned
+`PASS`, and the Job it was reviewing went straight to `land`.
+
+**So if the `## Blocking` section has anything in it, call
+`mcp__armada__fleet_ask_human` with the blocking findings as the question, before you finish.**
+That is what holds the Job under review short of landing until somebody answers. One call, with
+every blocker in it — not one per finding.
+
+If the `## Blocking` section is empty, finish normally. That is the pass.
+
 ## When the finding is genuinely a person's
 
 Something you cannot judge from the diff — the task is ambiguous, the change is right but the
-approach commits everyone to something — is `mcp__armada__fleet_ask_human`. That stops this Job
-before it finishes, which is what holds the Job under review short of landing until somebody
-answers. Use it for that and not for an opinion you can simply write down.
+approach commits everyone to something — is the same call, for a different reason: not *this is
+wrong* but *this is not mine to decide*. Say which of the two it is in the question, because the
+answer that unblocks them is different.
