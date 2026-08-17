@@ -2628,8 +2628,11 @@ mod tests {
         assert!(body.contains("`plan` — completed at 2026-08-17T09:05:00Z (attempt 1)"));
         assert!(body.contains("`implement` — completed at 2026-08-17T10:30:00Z (attempt 2)"));
 
-        // The failed attempt is not a passed step, so it is absent.
-        assert!(!body.contains("attempt 1)\n- `implement`"));
+        // The failed attempt is not a passed step, so it is absent — checked
+        // by its own timestamp rather than a loose substring, which would
+        // also match `plan`'s unrelated "(attempt 1)" line above it.
+        assert!(!body.contains("2026-08-17T10:00:00Z"));
+        assert!(!body.contains("implement` — completed at 2026-08-17T10:00:00Z"));
         // And the Drone's own words never appear.
         assert!(!body.contains("I believe this is done"));
     }
