@@ -464,6 +464,31 @@ impl Run for Harness {
             // that only knew the four-word form would answer the seven-word one
             // with the catch-all `["git", ..]` arm, which makes no directory at
             // all and turns the whole spawn into an `ENOENT` two calls later.
+            // **The branch probe answers "absent", because the catch-all below
+            // answers "yes" to everything.** `worktree::add` refuses a branch
+            // that already exists — `armada fleet kill --keep-branch` leaves one
+            // behind and respawning the same handle used to die on git's own
+            // sentence — and a harness that succeeded at `rev-parse` reported
+            // every branch as taken, so every spawn in this file refused.
+            //
+            // A test that wants the collision uses `answering` to make this
+            // exit zero.
+            // **Told apart by where it runs, because the argv is identical.**
+            // `worktree::add`'s probe and the `branch_exists` gate ask git the
+            // same question with the same words; the first runs in the
+            // repository root and the second in the Job's own worktree. Only
+            // the first answers "absent" here — a harness that answered absent
+            // to both would fail every `land` step, and one that answered
+            // present to both refuses every spawn.
+            ["git", "rev-parse", "--verify", "--quiet", _] if request.cwd == self.repo => {
+                Ok(RunOutput {
+                    code: Some(1),
+                    signal: None,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    timed_out: false,
+                })
+            }
             ["git", "worktree", "add", "-b", _, path]
             | ["git", "worktree", "add", "-b", _, path, _] => {
                 std::fs::create_dir_all(path).unwrap();
