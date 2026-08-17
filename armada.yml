@@ -33,7 +33,24 @@ manifest:
       # before its first gate calls `armada manifest check`. `--locked` so the
       # runner is the same build everywhere, and installing an already-present
       # version is a no-op rather than a rebuild.
-      setup: cargo fetch && cargo install cargo-nextest --locked
+      #
+      # **Two steps, not one line joined by `&&`.** A bare `setup:` string is
+      # split into argv and expanded by nobody — `${port.x}` aside,
+      # `armada_core::template::split_argv` treats `&&` as an ordinary token, on
+      # purpose (a repo that wants a shell says `shell: true`). So
+      # `cargo fetch && cargo install …` ran as *one* command and cargo answered
+      # `error: unexpected argument '&&' found`, exit 1 — every worktree Armada
+      # has ever spawned for itself failed its own setup on the first step and
+      # installed nothing. The comment above was a claim nobody checked; found
+      # 2026-08-17 by job `armada-failed`, whose first `armada:test` said
+      # `no such command: nextest`.
+      #
+      # `setup:` steps run in declaration order and stop at the first failure,
+      # which is exactly what `&&` was reaching for — so the list spelling is
+      # the same semantics without a shell.
+      setup:
+        - cargo fetch
+        - cargo install cargo-nextest --locked
 
       owns:
         # Removed only by `clean --artifacts` (PLAN.md §3.3.1). It costs disk and
