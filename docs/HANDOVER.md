@@ -146,14 +146,53 @@ it belongs with the repository.
 
 ## 7. What is still owed, in the owner's own priority order
 
-1. **`034` stage one** — in flight as `build-034`. Stage two (anything that resumes a Drone, and the
+1. **The Bridge freezes for seconds at a time** — task `e8809480`. The owner's own words, and the
+   most visible defect in the product: *"it freezes for a few seconds then unfreezes and I can
+   navigate for a second and then freezes again."* That pattern is a synchronous call inside the
+   redraw loop, and the leading suspect is named in the task: `read_all` calls `doctor::run` on
+   **every redraw**, and `doctor` spawns processes — it probes `claude`, shells out for `docker`,
+   reads disk. `verbs/bridge.rs`'s own module doc promises the redraw is *"a directory read, a
+   transcript tail and a `ps`"*, and that promise is currently untrue. Measure the four reads before
+   fixing anything.
+2. **A ceiling request must justify itself** — task `76535ce1`. Today an entry says only *"it reached
+   its cost ceiling on the implement step"*, which is not enough to decide whether raising it is
+   wise, and deciding that is the whole reason the entry exists. Split along `032`'s line: the **Job**
+   supplies spend, turns, step, attempts, wall clock and sub-Job costs for free; the **Drone**
+   supplies only what only it can say — what it finished, what remains, and what it thinks the rest
+   needs.
+3. **`034` stage one** — in flight as `build-034`. Stage two (anything that resumes a Drone, and the
    rebase) waits on the spend limit being built.
-2. **Land `armada/wire-bridge`, or decide not to** — task `dd81460f`, which carries the one thing worth weighing first.
-3. **`arm failures`** — 4 open. `c6c1dd80` (the `review_clean` gate's structural half) is the oldest
+4. **Land `armada/wire-bridge`, or decide not to** — task `dd81460f`, which carries the one thing worth weighing first.
+5. **`arm failures`** — 4 open. `c6c1dd80` (the `review_clean` gate's structural half) is the oldest
    real defect; `599657a8` needs the owner's decision on whether `config scan` may propose *actions*
    as well as lines, and its diagnosis is complete in task `183ae03b`.
-4. **`arm tasks`** — 14 open, several of them decisions rather than work: `eefc8a26`, `2829154e`,
+6. **`arm tasks`** — 16 open, several of them decisions rather than work: `eefc8a26`, `2829154e`,
    `9cc81375`, `183ae03b`.
 
 **Nothing in this file is a substitute for reading those two listings.** They are written to be read
 cold, each with its measurement in it, which is the one habit worth inheriting.
+
+## 9. `main` was rewritten on 2026-08-17 — every SHA in this file is from before it
+
+The owner published `main`, then had its history rewritten to replace a private repository's name
+that appeared in two commit diffs and one commit message. `git filter-branch` rewrote 120 commits,
+so **every commit hash quoted anywhere in this file, in `arm tasks`, and in `arm failures` refers to
+a commit that no longer exists under that hash.** The subjects and the content are unchanged; only
+the identities moved.
+
+- Pre-rewrite `main` was `859ca11`. It survives at `refs/original/refs/heads/main` and as a bundle in
+  the session scratchpad, so the old hashes can still be resolved from either.
+- **Nineteen local branches and four worktrees still sit on the old commits**, including the two
+  belonging to the live `build-034`. The rewrite was deliberately scoped to `main` so it could not
+  disturb them. Anything still wanted from those branches needs rebasing onto the new `main`.
+- **`cargo xtask history` will keep reporting findings**, and that is expected rather than a blocker.
+  It is *"a report, not a gate"* (`xtask/src/main.rs`) and it scans **every** ref, so the `no-mistakes`
+  remote-tracking refs and the unrewritten Job branches still carry the string. Five of its findings
+  are stale tracking refs for a **local** mirror at `~/.no-mistakes/` and have nothing to do with
+  GitHub; `git remote prune no-mistakes` clears those for free. Verify `main` specifically instead —
+  the one-liner that does it is in the session transcript and reports `0` today.
+- **The first build after the rewrite is a full rebuild**, because `filter-branch` touched every
+  file's mtime and cargo fingerprints on mtime. A five-minute `arm manifest check` immediately
+  afterwards is that, not a regression in the `line-tables-only` fix, which is still in `Cargo.toml`.
+  `target/` had also grown to 8.8 GB against the 2.5 GB that fix achieved, and the bloat is itself
+  part of the cost — `cargo clean` recovers it for one full rebuild.
