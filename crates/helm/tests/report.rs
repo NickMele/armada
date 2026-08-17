@@ -281,6 +281,29 @@ fn a_filed_report_promotes_into_a_job_through_the_same_verb() {
         )
         .unwrap();
     }
+
+    // **And the skills those workflows name.** `fleet spawn` refuses a Job
+    // whose named skill is in neither the guild nor the repository — a guild
+    // with workflows and no skills is not a state `guild init` produces, it is
+    // the state that shipped until 2026-08-17.
+    let skills = machine.home.path().join(".armada/guild/skills");
+    for name in [
+        "reproduce-failure",
+        "implement-change",
+        "land-branch",
+        "review-diff",
+    ] {
+        let to = skills.join(name);
+        std::fs::create_dir_all(&to).unwrap();
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../templates/guild/skills")
+                .join(name)
+                .join("SKILL.md"),
+            to.join("SKILL.md"),
+        )
+        .unwrap();
+    }
     let filed = machine.run(&repo, &["report", "the dry-run made nothing", "--json"]);
     assert!(filed.status.success(), "{}", why(&filed));
     let payload: serde_json::Value = serde_json::from_str(&stdout(&filed)).expect("an envelope");
