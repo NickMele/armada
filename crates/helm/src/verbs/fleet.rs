@@ -1387,8 +1387,15 @@ fn detail(record: &Job, state: JobState, waiting: Option<&inbox::Entry>, alive: 
         // (task 34a8afa8). Until it is made, the screen at least stops implying
         // that waiting is the answer.
         None if !alive => match record.pending.as_ref().map(|pending| &pending.on) {
-            Some(job::Waiting::Check(_)) => "holding a check — `arm fleet tick`".to_string(),
-            Some(job::Waiting::SubJob(_)) => "holding a sub-Job — `arm fleet tick`".to_string(),
+            // **"waiting on", not "holding".** `holding` was the first word and it
+            // over-promises: it reads as *the answer is here*, and the common
+            // case is a check that is still running, where a tick reports
+            // `WAITING` and the reader has learnt nothing. Found by using it —
+            // `wire-bridge` drew `holding a check` while its check had 20s left.
+            // The keystroke is still right, because it is right either way; what
+            // changed is the claim beside it.
+            Some(job::Waiting::Check(_)) => "waiting on a check — `arm fleet tick`".to_string(),
+            Some(job::Waiting::SubJob(_)) => "waiting on a sub-Job — `arm fleet tick`".to_string(),
             // An `Answer` is the one gate a tick cannot settle: it is waiting on a
             // person, the inbox entry above is how they answer, and this row is
             // reached only when that entry is already closed.
@@ -5088,13 +5095,13 @@ mod tests {
         let check = holding(Some(job::Waiting::Check("01M06YB0EZZ9JC5J".to_string())));
         assert_eq!(
             detail(&check, JobState::Running, None, false),
-            "holding a check — `arm fleet tick`"
+            "waiting on a check — `arm fleet tick`"
         );
 
         let subjob = holding(Some(job::Waiting::SubJob("uuid-of-reviewer".to_string())));
         assert_eq!(
             detail(&subjob, JobState::Running, None, false),
-            "holding a sub-Job — `arm fleet tick`"
+            "waiting on a sub-Job — `arm fleet tick`"
         );
     }
 
