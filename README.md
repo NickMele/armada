@@ -61,9 +61,74 @@ Every verb takes `--json`.
 
 ## Install
 
-Not yet published. One static binary — **there is no runtime to install**, no interpreter, no
-toolchain. `tmux` is not required and no terminal multiplexer is bundled: agent sessions are
-ordinary resumable Claude Code sessions, so anything that opens one already works.
+**Not yet published**, so today the only route is from source. Once it is, Armada ships as one
+static binary — **there is no runtime to install**, no interpreter, no toolchain. `tmux` is not
+required and no terminal multiplexer is bundled: agent sessions are ordinary resumable Claude Code
+sessions, so anything that opens one already works.
+
+### Prerequisites
+
+**The split matters more than the list.** Manifest — `check`, `up`, `down`, `status` — knows nothing
+about agents and needs no AI tooling at all; you can use it on a repository and never start a Job.
+Everything under Fleet and Helm runs Claude Code sessions and needs `claude`.
+
+| | Needed for | Why |
+|---|---|---|
+| **Rust ≥ 1.97, stable** | building from source | The MSRV is pinned in `Cargo.toml`; 2021 edition |
+| **`git`** | everything | Fleet gives each Job its own `git worktree`; Manifest resolves the workspace by walking up to a repository root |
+| **`claude`** | Fleet, Helm, the Bridge | A Drone *is* a `claude --print` exchange. Manifest does not need it |
+| `docker` | only repos whose own config declares services or docker checks | This repository's `armada.yml` declares none, so Armada builds and tests without it |
+| `cargo-nextest` | running *this* repository's `armada:test` check | Declared as that check's `setup:`, so `armada manifest init` installs it |
+| `gh` | nothing yet | Reserved by [`034`](docs/reserved/034-the-job-daemon-lands-the-work.md) for the daemon that pushes and merges. Not required today |
+
+`armada doctor` is the authority on all of this — it probes each one on the machine in front of you
+and every row it reports names what fixes it. Prefer it to this table, which is a summary and can
+go stale.
+
+### Rust, if you do not have it
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+That installs `rustc` and `cargo` together and puts them on `PATH`. Nothing else here needs a
+package manager.
+
+### Build and install the binaries
+
+```sh
+git clone git@github.com:NickMele/armada.git
+cd armada
+cargo install --path crates/helm
+```
+
+**That installs two binaries, `armada` and `arm`, and they are the same program.** `arm` is a second
+`[[bin]]` rather than a symlink or a shell alias, because `cargo install` does not install a symlink
+and an alias lives in a shell rc that no `armada` verb can see or repair — so both names behave
+identically by construction rather than by upkeep.
+
+### First run
+
+Two `init`s, and they are different scopes. **The machine one is not per-repository:**
+
+```sh
+armada init                 # this machine: ~/.armada/, your guild, the checks it can find
+armada doctor               # what is missing, and the command that fixes each row
+cd path/to/your/repo
+armada manifest init        # this workspace: its port block, .armada/, its setup:
+armada manifest check       # the verb a gate calls — no agent involved
+```
+
+To use the agent half as well:
+
+```sh
+armada helm enable          # off by default on a fresh install, deliberately
+armada helm                 # enter Helm, the agent you talk to
+```
+
+`helm enable` is a per-machine switch and is **off until you turn it on**, because whether *this*
+box may open a real Claude Code session unattended is a fact about the box rather than about you —
+the reasoning is in [`crates/helm/src/machine.rs`](crates/helm/src/machine.rs).
 
 ## Documentation
 
@@ -95,7 +160,20 @@ cargo xtask doclint      # the docs are a deliverable; they are linted like one
 ```
 
 Rust stable, 2021 edition. The MSRV is pinned in `Cargo.toml`. `cargo xtask` needs no
-interpreter and no virtualenv — that is why the doc lint is Rust and not a script.
+interpreter and no virtualenv — that is why the doc lint is Rust and not a script. The prerequisites
+are the same ones [Install](#prerequisites) lists, and `armada doctor` is what actually checks them.
+
+**`cargo test` is not the gate.** `armada manifest check` is what CI runs and what a Job's gate
+evaluates, and it uses `cargo nextest` — declared as that check's `setup:`, so `armada manifest init`
+installs it. Run the real thing before pushing:
+
+```sh
+armada manifest check          # all five checks, the way the gate runs them
+armada manifest check --fix    # runs each check's declared `fix:` instead
+```
+
+Do not reach for `cargo fmt` directly; `--fix` is the verb that knows which fixer each check
+declares.
 
 Optional: `git config core.hooksPath .githooks` reinstalls the `armada`/`arm` binaries
 automatically whenever a merge or checkout updates `main` with a change that touches Rust
