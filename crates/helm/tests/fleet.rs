@@ -551,6 +551,30 @@ impl Scratch {
                 .join(format!("{name}.yml"));
             std::fs::copy(from, workflows.join(format!("{name}.yml"))).unwrap();
         }
+        // **And the skills those workflows name**, because a guild with
+        // workflows and no skills is not a state `guild init` produces — it is
+        // the state that shipped until 2026-08-17, where six of seven named
+        // skills were absent and every step told its Drone to use one that did
+        // not exist. `spawn` refuses that now, so a fixture that modelled the
+        // broken guild would refuse every spawn in this file.
+        let skills = home.path().join(".armada/guild/skills");
+        for name in [
+            "explore-codebase",
+            "write-plan",
+            "write-design",
+            "reproduce-failure",
+            "implement-change",
+            "land-branch",
+            "review-diff",
+        ] {
+            let to = skills.join(name);
+            std::fs::create_dir_all(&to).unwrap();
+            let from = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../templates/guild/skills")
+                .join(name)
+                .join("SKILL.md");
+            std::fs::copy(from, to.join("SKILL.md")).unwrap();
+        }
         let boot_id = armada_manifest::machine::boot_id(&RealRun, repo.path())
             .expect("this machine reports a boot id");
         Scratch {
@@ -2537,7 +2561,7 @@ fn a_drone_cannot_report_a_step_its_workflow_does_not_declare() {
         "name: bug\ndescription: two steps\nends_at: branch\n\
          budget:\n  attempts: 3\n  cost: 10.00\n  wall_clock: 90m\n  \
          on_exhausted: needs_human\nsteps:\n\
-         \x20 - id: reproduce\n    skill: reproduce-bug\n    verify: { must: always }\n\
+         \x20 - id: reproduce\n    skill: reproduce-failure\n    verify: { must: always }\n\
          \x20 - id: land\n    skill: land-branch\n    verify: { must: branch_exists }\n",
     );
     let run = scratch.harness();
@@ -5490,7 +5514,7 @@ fn a_workflow_that_ends_at_a_person_hands_the_job_over_rather_than_closing_it() 
         &scratch,
         "design",
         "name: design\ndescription: one step, ending at you\nends_at: human\nsteps:\n\
-         \x20 - id: explore\n    skill: explore\n    verify: { must: always }\n",
+         \x20 - id: explore\n    skill: explore-codebase\n    verify: { must: always }\n",
     );
     let run = scratch.harness();
     let data = spawn(
@@ -5679,6 +5703,79 @@ fn watch_drives_a_job_to_its_end_in_one_invocation() {
 /// reviewer shipped bought `reproduce` and `fix` before finding out. The check
 /// costs a directory read and the alternative costs a Job, and the money is
 /// gone whatever the reader does next.
+/// **The same guard, for the skill half — which did not exist.**
+///
+/// `reachable_workflows_exist` refused a Job whose reachable workflow was
+/// missing, and nothing did the equivalent for a skill. The shipped starters
+/// named seven skills and `guild init` wrote two, so every step of every
+/// workflow handed its Drone a prompt reading *"Use the `implement-change`
+/// skill"* for a file that was not there, in six cases out of seven. Nothing
+/// broke visibly, because the step's task text also describes the work and a
+/// Drone proceeds — what it did instead was teach every Drone to ignore the
+/// first line of its own prompt. Found by a Drone that went looking for the
+/// file and said so through `fleet.propose`.
+#[test]
+fn spawning_is_refused_when_a_skill_a_step_names_is_missing() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    std::fs::remove_dir_all(
+        scratch
+            .home
+            .path()
+            .join(".armada/guild/skills/implement-change"),
+    )
+    .expect("the starter skill is there to remove");
+
+    let error = spawn_err(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("feature".to_string()),
+            ..Default::default()
+        },
+    );
+
+    assert_eq!(error.class, armada_core::error::ErrClass::BadConfig);
+    assert!(error.message.contains("implement-change"), "{error:?}");
+    assert!(error.message.contains("there is none"), "{error:?}");
+    // **Both places are named**, because a skill legitimately comes from either:
+    // Armada never parses the file, and the Drone resolves the name in its own
+    // worktree so the repository's copy wins a collision. A refusal naming only
+    // the guild sends a reader to the wrong file.
+    let next = error.next_action.unwrap_or_default();
+    assert!(next.contains("skills/implement-change"), "{next}");
+    assert!(next.contains(".claude/skills/implement-change"), "{next}");
+}
+
+/// **A skill the repository supplies is not missing**, even when the guild has
+/// never heard of it. The Drone resolves the name in its own worktree and the
+/// repo's copy is meant to win, so a guard that looked only at the guild would
+/// refuse Jobs that would have worked.
+#[test]
+fn a_skill_the_repository_supplies_is_enough_for_a_spawn() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    std::fs::remove_dir_all(
+        scratch
+            .home
+            .path()
+            .join(".armada/guild/skills/implement-change"),
+    )
+    .unwrap();
+    let in_repo = scratch.repo.path().join(".claude/skills/implement-change");
+    std::fs::create_dir_all(&in_repo).unwrap();
+    std::fs::write(in_repo.join("SKILL.md"), "# ours\n").unwrap();
+
+    spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("feature".to_string()),
+            ..task("add rate limiting")
+        },
+    );
+}
+
 #[test]
 fn spawning_is_refused_when_a_workflow_the_bug_flow_reaches_is_missing() {
     let scratch = Scratch::new();

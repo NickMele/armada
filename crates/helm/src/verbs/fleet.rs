@@ -437,6 +437,7 @@ pub fn spawn<R: Run, C: Clock>(
     // money is spent whatever the reader does next. The check costs a directory
     // read; the alternative costs a Job.
     reachable_workflows_exist(place, &workflow)?;
+    reachable_skills_exist(place, &repo_root, &workflow)?;
     let budget = workflow::override_budget(workflow.budget, &options.budget)?;
     // The keys, not the values: a value is this Job's ceiling and a key is the
     // caller saying *this tree, not the default*.
@@ -827,6 +828,81 @@ fn reachable_workflows_exist(place: &Where, from: &Workflow) -> Result<(), Armad
                 continue;
             }
             seen.push(name.clone());
+            queue.push(read_workflow(place, &name)?);
+        }
+    }
+    Ok(())
+}
+
+/// Every skill a reachable workflow names, and where each was looked for.
+///
+/// # Why this exists beside the workflow check and not inside it
+///
+/// `reachable_workflows_exist` refuses a Job whose reachable *workflow* is
+/// missing, because a missing `review` workflow stopped Jobs dead. There was no
+/// equivalent for a **skill**, and the shipped starters named seven while
+/// `guild init` wrote two — so every step of every workflow handed its Drone a
+/// prompt reading *"Use the `implement-change` skill"* for a file that was not
+/// there, in six cases out of seven.
+///
+/// Nothing broke visibly, because the step's task text also describes the work
+/// and a Drone proceeds. What it did instead was teach every Drone to ignore
+/// the first line of its own prompt. Found by a Drone that went looking for the
+/// file and said so through `fleet.propose`.
+///
+/// # Two places, because a skill legitimately comes from either
+///
+/// **Armada never parses a skill file** — `prompt` hands the Drone a name and
+/// the Drone resolves it in its own worktree, *"which is what makes the repo's
+/// version win a collision"* (PLAN.md §14.5). So a name absent from the guild
+/// is not missing if the repository being worked on supplies it, and a guard
+/// that looked only at the guild would refuse Jobs that would have worked.
+///
+/// Both places are named in the refusal, because *"no such skill"* about a name
+/// the repository was expected to provide sends the reader to the wrong file.
+fn reachable_skills_exist(
+    place: &Where,
+    repo_root: &std::path::Path,
+    from: &Workflow,
+) -> Result<(), ArmadaError> {
+    let guild = Guild::at(&place.armada_home);
+    let mut seen: Vec<String> = Vec::new();
+    let mut queue: Vec<Workflow> = vec![from.clone()];
+    let mut flows: Vec<String> = vec![from.name.clone()];
+    while let Some(flow) = queue.pop() {
+        for step in &flow.steps {
+            if let Some(skill) = &step.skill {
+                if seen.contains(skill) {
+                    continue;
+                }
+                seen.push(skill.clone());
+                let in_guild = guild.path(&format!("skills/{skill}/SKILL.md"));
+                let in_repo = repo_root.join(format!(".claude/skills/{skill}/SKILL.md"));
+                if !in_guild.exists() && !in_repo.exists() {
+                    return Err(ArmadaError {
+                        class: ErrClass::BadConfig,
+                        r#where: format!("workflows/{}.yml", flow.name),
+                        message: format!(
+                            "the `{}` step names a skill called `{skill}`, and there is none",
+                            step.id
+                        ),
+                        next_action: Some(format!(
+                            "looked in {} and {}; `armada guild upgrade` adds what a later                              release added",
+                            place.shown(&in_guild),
+                            place.shown(&in_repo)
+                        )),
+                    });
+                }
+            }
+            let named = step.workflow.clone().or_else(|| {
+                (step.verify.must == workflow::Predicate::ReviewClean)
+                    .then(|| workflow::REVIEWER.to_string())
+            });
+            let Some(name) = named else { continue };
+            if flows.contains(&name) {
+                continue;
+            }
+            flows.push(name.clone());
             queue.push(read_workflow(place, &name)?);
         }
     }
