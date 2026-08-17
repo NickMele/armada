@@ -3711,10 +3711,21 @@ fn start_step<R: Run>(
         // **The gate's own words, handed back.** A retry that started with the
         // same prompt as the first attempt is an agent asked to do the same
         // thing again with no idea what was wrong with the last answer.
+        //
+        // **And the log's own words with them**, which is the half that was
+        // missing. The sentence names the check and its log path; a Drone that
+        // has to open the file is a Drone that may not, and one measured Job
+        // failed the same gate nine times in an hour on a single dead-code
+        // warning it was never shown. The Job ran the check and holds the
+        // output — handing down a path instead of the text is asking an agent
+        // to rediscover a fact its Job already established.
         ask = format!(
             "{ask}\n\nThe previous attempt did not pass this step's gate: {failed}\n\
              Fix that. Armada re-runs the gate when your turn ends."
         );
+        for tail in logs(&path, failed) {
+            ask.push_str(&tail);
+        }
     }
     record.state = JobState::Running;
     record.drone = Some(start_drone(
@@ -4328,7 +4339,8 @@ fn check<R: Run>(
         return Ok(None);
     };
 
-    let (status, exit) = armada_fleet::manifest::check_status(run, &place.exe, &worktree, &run_id)?;
+    let (status, exit, failed) =
+        armada_fleet::manifest::check_status(run, &place.exe, &worktree, &run_id)?;
     if status.is_terminal() {
         // **Cleared the moment it decided.** A settled run left pending would be
         // read again on the next attempt and answer about the wrong worktree.
@@ -4338,8 +4350,80 @@ fn check<R: Run>(
         run: run_id,
         status,
         exit,
+        // **Carried across the module boundary by shape, not by type.** Fleet's
+        // reader and the gate's fact are two crates' spellings of one thing, and
+        // the gate may not depend on the shell that produced it.
+        failed: failed
+            .into_iter()
+            .map(|one| gate::FailedCheck {
+                id: one.id,
+                log: one.log,
+                said: one.said,
+            })
+            .collect(),
     }))
 }
+
+/// The tail of each log the gate's sentence named, ready to append to a retry
+/// prompt.
+///
+/// # Why the text and not the path
+///
+/// The `why` a failed gate produces already names the check and where it wrote
+/// — `armada:lint exited 101, in .armada/run/01M0…/logs/armada.lint.log`. That
+/// is enough for a person and demonstrably not enough for a Drone: measured
+/// 2026-08-17, `job-drives-the-drone` failed its `implement` gate **nine
+/// consecutive times over an hour** on one dead-code warning, committing clean
+/// work each attempt, and was never shown the compiler's sentence. It cost $12.
+///
+/// The Job ran the check and the output is on its disk. Handing down a path
+/// instead of the text asks an agent to rediscover a fact its Job already has —
+/// which is the rule this codebase keeps relearning: **a Drone cannot be
+/// trusted with anything the Job can establish itself.**
+///
+/// # Bounded, and from the end
+///
+/// [`LOG_TAIL`] lines from the bottom. A compiler puts the error last and the
+/// summary after it, so the tail is where the answer is; the head is where the
+/// noise is. Bounded because a failing test suite writes megabytes and a prompt
+/// that carried all of it would spend the exchange on output nobody reads.
+///
+/// **Every read is best effort.** A log that cannot be opened is one absent
+/// block, never a retry that fails to start — the gate has already decided, and
+/// this is the explanation rather than the decision.
+fn logs(worktree: &Path, why: &str) -> Vec<String> {
+    why.split_whitespace()
+        .filter_map(|word| word.strip_suffix(&[',', ';'][..]).or(Some(word)))
+        .filter(|word| word.ends_with(".log"))
+        .filter_map(|relative| {
+            let text = std::fs::read_to_string(worktree.join(relative)).ok()?;
+            let tail: Vec<&str> = text
+                .lines()
+                .rev()
+                .take(LOG_TAIL)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+            match tail.iter().all(|line| line.trim().is_empty()) {
+                true => None,
+                false => Some(format!(
+                    "\n\nThe last {} lines of `{relative}`:\n\n{}\n",
+                    tail.len(),
+                    tail.join("\n")
+                )),
+            }
+        })
+        .collect()
+}
+
+/// How many lines of a failed check's log a retry prompt carries.
+///
+/// **Forty, from the end.** Enough for a compiler error with its span, its note
+/// and its help — the shape `-D warnings` produces is six lines and a summary —
+/// and enough for the last few failures of a test suite. Not so many that a
+/// megabyte of output becomes the exchange.
+const LOG_TAIL: usize = 40;
 
 /// Whether a named test is anywhere in the Job's worktree.
 ///
@@ -4433,6 +4517,61 @@ mod tests {
             wall_clock_ms: 90 * 60_000,
             on_exhausted: OnExhausted::NeedsHuman,
         }
+    }
+
+    /// **A failed check's own words reach the retry, not just its path.**
+    ///
+    /// Measured 2026-08-17: `job-drives-the-drone` failed its `implement` gate
+    /// nine consecutive times over an hour on one dead-code warning. It
+    /// committed clean work each attempt and was never shown what the compiler
+    /// said — the gate handed back *"`armada manifest check` reached FAILED"*
+    /// and nothing else. $12 on a one-line error the Job was holding the answer
+    /// to.
+    #[test]
+    fn a_retry_is_handed_the_last_lines_of_the_log_that_failed_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join(".armada/run/01M0/logs/armada.lint.log");
+        std::fs::create_dir_all(log.parent().unwrap()).unwrap();
+        std::fs::write(
+            &log,
+            "Compiling armada-helm\n\
+             error: function `word_to_verdict` is never used\n   \
+             --> crates/helm/src/mcp/drone.rs:302:4\n\
+             error: could not compile `armada-helm` (lib) due to 1 previous error\n",
+        )
+        .unwrap();
+
+        let why = "`armada manifest check` reached FAILED — armada:lint exited 101, \
+                   in .armada/run/01M0/logs/armada.lint.log";
+        let blocks = logs(dir.path(), why);
+        assert_eq!(
+            blocks.len(),
+            1,
+            "the log named in the sentence was not read"
+        );
+        assert!(
+            blocks[0].contains("`word_to_verdict` is never used"),
+            "the compiler's own sentence did not reach the Drone: {}",
+            blocks[0]
+        );
+        assert!(
+            blocks[0].contains("armada.lint.log"),
+            "the block does not say which log it is: {}",
+            blocks[0]
+        );
+    }
+
+    /// **A log the sentence names but the disk does not have is one absent
+    /// block, never a retry that fails to start.** The gate has already decided;
+    /// this is the explanation, not the decision.
+    #[test]
+    fn a_log_that_cannot_be_read_costs_the_retry_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let why = "`armada manifest check` reached FAILED — armada:lint exited 101, \
+                   in .armada/run/gone/logs/armada.lint.log";
+        assert!(logs(dir.path(), why).is_empty());
+        // And a sentence naming no log at all is not an error either.
+        assert!(logs(dir.path(), "`armada manifest check` reached FAILED").is_empty());
     }
 
     /// **A ceiling the caller set reaches the whole tree.**

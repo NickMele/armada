@@ -157,7 +157,7 @@ pub fn check_status(
     exe: &Path,
     worktree: &Path,
     run_id: &str,
-) -> Result<(Status, i32), ArmadaError> {
+) -> Result<(Status, i32, Vec<Failed>), ArmadaError> {
     let envelope = call(
         run,
         exe,
@@ -180,7 +180,63 @@ pub fn check_status(
         .and_then(|error| error.get("class"))
         .and_then(|class| serde_json::from_value::<ErrClass>(class.clone()).ok())
         .map_or(0, |class| i32::from(class.exit_code()));
-    Ok((status, exit))
+
+    // **Which checks failed, and where each one wrote what it said.** The
+    // envelope carries this per check and it was being discarded, so a gate
+    // that failed handed its Drone the sentence *"`armada manifest check`
+    // reached FAILED"* and nothing else — no check id, no exit code, no log.
+    //
+    // Measured 2026-08-17: `job-drives-the-drone` failed its `implement` gate
+    // nine consecutive times over an hour on one dead-code warning, and was
+    // never told which check or what it said. It committed clean work each time
+    // and the same line failed the same way. $12 on a one-line error the Job
+    // was holding the answer to.
+    let failed = envelope
+        .get("data")
+        .and_then(|data| data.get("results"))
+        .and_then(|results| results.as_array())
+        .map(|results| {
+            results
+                .iter()
+                .filter(|row| {
+                    row.get("status")
+                        .and_then(|status| serde_json::from_value::<Status>(status.clone()).ok())
+                        .is_some_and(|status| status != Status::Pass)
+                })
+                .filter_map(|row| {
+                    Some(Failed {
+                        id: row.get("id")?.as_str()?.to_string(),
+                        log: row
+                            .get("log")
+                            .and_then(|log| log.as_str())
+                            .map(str::to_string),
+                        said: row
+                            .get("error")
+                            .and_then(|error| error.get("message"))
+                            .and_then(|message| message.as_str())
+                            .map(str::to_string),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok((status, exit, failed))
+}
+
+/// One check that did not pass, as the gate hands it back to a Drone.
+///
+/// **The Job establishes this and the Drone is told it.** Everything here is a
+/// fact the Job already had — the check's own id, the path it wrote to, and the
+/// sentence it ended with — and none of it was reaching the agent that had to
+/// act on it. A Drone cannot be trusted to rediscover a fact the Job can state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Failed {
+    /// The check's id, as `armada.yml` spells it — `armada:lint`.
+    pub id: String,
+    /// Where it wrote what it said, relative to the worktree.
+    pub log: Option<String>,
+    /// Its own last word — `exited 101`.
+    pub said: Option<String>,
 }
 
 /// `armada manifest clean` in a worktree — **step one of three**, and the order

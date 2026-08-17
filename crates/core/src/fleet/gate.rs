@@ -406,6 +406,40 @@ pub struct CheckFact {
     pub status: Status,
     /// The exit code that status maps to.
     pub exit: i32,
+    /// Which checks did not pass, and what each one said.
+    ///
+    /// **The gate says which, not just that.** A `why` reading *"`armada
+    /// manifest check` reached FAILED"* is the whole of what a Drone used to be
+    /// told, and it is the one sentence that cannot be acted on: five checks
+    /// ran, one of them is red, and the agent has to go and find out which.
+    ///
+    /// Measured 2026-08-17: a Job failed the same gate nine times in an hour on
+    /// one dead-code warning, committing clean work each time, because nobody
+    /// ever told it what the compiler had said. The Job was holding the answer.
+    ///
+    /// **Empty on a pass, and empty for a run that reported no rows** — the
+    /// second is a shell that could not read the run, which the status already
+    /// says.
+    pub failed: Vec<FailedCheck>,
+}
+
+/// One check that did not pass, as the gate names it.
+///
+/// **Everything here is a fact the Job established.** The check's own id, the
+/// path it wrote to, and the sentence it ended with — all read out of the
+/// envelope `armada manifest check --status` already returns. None of it is the
+/// Drone's to rediscover, which is the whole rule: a Drone cannot be trusted
+/// with a fact the Job can state.
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct FailedCheck {
+    /// The check's id as `armada.yml` spells it — `armada:lint`.
+    pub id: String,
+    /// Where it wrote what it said, relative to the worktree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log: Option<String>,
+    /// Its own last word — `exited 101`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub said: Option<String>,
 }
 
 /// Everything the shell looked at, for one step's gate.
@@ -530,10 +564,34 @@ pub fn decide(needs: &Needs, facts: &Facts) -> Outcome {
                     Status::Pass => Outcome::Holds { evidence },
                     other => Outcome::DoesNotHold {
                         evidence,
-                        why: format!(
-                            "`armada manifest check{}` reached {other}",
-                            scoped(scope.as_deref())
-                        ),
+                        // **Which check, and what it said.** This used to name
+                        // only the verb and the word it reached, so a Drone was
+                        // told five checks ran and one was red, and had to go
+                        // and find out which. See [`CheckFact::failed`] for the
+                        // Job that failed nine times on one warning nobody
+                        // repeated to it.
+                        why: match check.failed.is_empty() {
+                            true => format!(
+                                "`armada manifest check{}` reached {other}",
+                                scoped(scope.as_deref())
+                            ),
+                            false => format!(
+                                "`armada manifest check{}` reached {other} — {}",
+                                scoped(scope.as_deref()),
+                                check
+                                    .failed
+                                    .iter()
+                                    .map(|failed| match (&failed.said, &failed.log) {
+                                        (Some(said), Some(log)) =>
+                                            format!("{} {said}, in {log}", failed.id),
+                                        (Some(said), None) => format!("{} {said}", failed.id),
+                                        (None, Some(log)) => format!("{} in {log}", failed.id),
+                                        (None, None) => failed.id.clone(),
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join("; ")
+                            ),
+                        },
                     },
                 }
             }
@@ -880,6 +938,7 @@ mod tests {
                         run: "01J".to_string(),
                         status: Status::Pass,
                         exit: 0,
+                        failed: Vec::new(),
                     }),
                     ..Facts::default()
                 },
@@ -898,6 +957,7 @@ mod tests {
                         run: "01J".to_string(),
                         status: Status::Failed,
                         exit: 1,
+                        failed: Vec::new(),
                     }),
                     ..Facts::default()
                 },
@@ -982,11 +1042,13 @@ mod tests {
             run: "01JRED".to_string(),
             status: Status::Failed,
             exit: 1,
+            failed: Vec::new(),
         };
         let green = CheckFact {
             run: "01JGRN".to_string(),
             status: Status::Pass,
             exit: 0,
+            failed: Vec::new(),
         };
 
         // Present and red: reproduced.
@@ -1044,6 +1106,7 @@ mod tests {
                 run: "01JRUN".to_string(),
                 status: Status::Running,
                 exit: 0,
+                failed: Vec::new(),
             }),
             ..Facts::default()
         };
