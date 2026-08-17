@@ -1203,7 +1203,7 @@ pub fn ls<R: Run, C: Clock>(
         if !all && record.state.is_over() {
             continue;
         }
-        let (observed, reading, _) = look(run, place, &record, wall);
+        let (observed, reading, alive) = look(run, place, &record, wall);
         windows.extend(reading.rate_limits);
         // **By uuid, and never for a Job that is over.** The first is the
         // defect `005` records; the second is its first consequence, and it is
@@ -1240,7 +1240,7 @@ pub fn ls<R: Run, C: Clock>(
             name: record.name.clone(),
             workflow: record.workflow.clone(),
             state: observed.state,
-            detail: detail(&record, observed.state, waiting),
+            detail: detail(&record, observed.state, waiting, alive),
             // **The step on its own, because `detail` is already a fold.** A
             // Job with an open inbox entry shows the entry's body there, so a
             // `STEP` column reading `detail` would go blank on exactly the rows
@@ -1334,10 +1334,44 @@ pub fn ls<R: Run, C: Clock>(
 }
 
 /// The one thing a state word cannot say: which step, and what it is waiting on.
-fn detail(record: &Job, state: JobState, waiting: Option<&inbox::Entry>) -> String {
+fn detail(record: &Job, state: JobState, waiting: Option<&inbox::Entry>, alive: bool) -> String {
     match waiting {
         Some(entry) => entry.body.clone(),
         None if state == JobState::Queued => String::new(),
+        // **A Job holding a gate with no Drone to relay it says what it needs.**
+        //
+        // Measured 2026-08-17: `job-drives-the-drone` sat at `implement` for over
+        // an hour holding a check that had passed 5 of 5. Nothing was wrong with
+        // the Job, the gate or the check — the answer was there and nobody had
+        // asked for it, and one `armada fleet tick` advanced it at once. The row
+        // said `RUNNING` and `implement`, which is a Job working on a step, so
+        // there was nothing on the screen to suggest a keystroke would end it.
+        //
+        // **The relay is the Drone's `Stop` hook** (`docs/reserved/024`), which
+        // fires when a Drone stops *cleanly*. A `SIGKILL`, a crash and a failing
+        // hook all break the chain in silence, so this is the ordinary end of a
+        // Job rather than a rare one.
+        //
+        // **It does not ask whether the gate has settled.** That means
+        // `armada manifest check --status`, which is a process, and this line is
+        // drawn for every row of a listing the Bridge redraws every two seconds —
+        // `verbs/bridge.rs` promises that redraw is a directory read, a
+        // transcript tail and a `ps`. The keystroke is right either way: a
+        // settled gate advances and an unsettled one is reported as still going.
+        //
+        // **Naming the sweep rather than performing it.** Nothing calls the
+        // backstop sweep and `ARCHITECTURE.md` forbids a daemon, so what
+        // invokes `armada fleet tick` is a decision for the machine's owner
+        // (task 34a8afa8). Until it is made, the screen at least stops implying
+        // that waiting is the answer.
+        None if !alive => match record.pending.as_ref().map(|pending| &pending.on) {
+            Some(job::Waiting::Check(_)) => "holding a check — `arm fleet tick`".to_string(),
+            Some(job::Waiting::SubJob(_)) => "holding a sub-Job — `arm fleet tick`".to_string(),
+            // An `Answer` is the one gate a tick cannot settle: it is waiting on a
+            // person, the inbox entry above is how they answer, and this row is
+            // reached only when that entry is already closed.
+            Some(job::Waiting::Answer(_)) | None => record.step.clone(),
+        },
         None => record.step.clone(),
     }
 }
@@ -4960,6 +4994,95 @@ mod tests {
             wall_clock_ms: 90 * 60_000,
             on_exhausted: OnExhausted::NeedsHuman,
         }
+    }
+
+    /// A record holding a gate, with whatever `pending` names.
+    fn holding(on: Option<job::Waiting>) -> Job {
+        Job {
+            budget_set: Vec::new(),
+            uuid: "8077e742-e164-4d93-a496-391f947f550a".to_string(),
+            name: "job-drives-the-drone".to_string(),
+            workflow: "feature".to_string(),
+            confidence: None,
+            repo: "armada".to_string(),
+            repo_root: "~/code/armada".to_string(),
+            worktree: "~/.armada/workspaces/armada/job-drives-the-drone".to_string(),
+            branch: "armada/job-drives-the-drone".to_string(),
+            port_block: None,
+            budget: armada_core::fleet::workflow::DEFAULT_BUDGET,
+            state: JobState::Running,
+            step: "implement".to_string(),
+            verdict: None,
+            drone: None,
+            created_at: "2026-08-17T03:00:00Z".to_string(),
+            created_ms: 1_000,
+            spend: Default::default(),
+            task: "make the Job drive the Drone".to_string(),
+            progress: Vec::new(),
+            attempts: Default::default(),
+            waited_ms: 0,
+            waiting_from_ms: None,
+            transitions: Vec::new(),
+            pending: on.map(|on| job::Pending {
+                step: "implement".to_string(),
+                on,
+                attempt: 1,
+            }),
+            facts: Default::default(),
+            kin: Default::default(),
+            ticked_turns: 0,
+            doing: None,
+        }
+    }
+
+    /// **A Job holding a gate with no Drone to relay it names the keystroke.**
+    ///
+    /// Measured 2026-08-17: `job-drives-the-drone` sat at `implement` for over an
+    /// hour holding a check that had passed 5 of 5. Nothing was wrong with the
+    /// Job, the gate or the check — the answer was there and nobody had asked for
+    /// it, and one `armada fleet tick` advanced it at once. The row said `RUNNING`
+    /// and `implement`, which is what a Job working on a step says, so there was
+    /// nothing on the screen to suggest a keystroke would end it.
+    ///
+    /// The relay is the Drone's `Stop` hook (`docs/reserved/024`), which fires
+    /// when a Drone stops *cleanly*; a `SIGKILL`, a crash and a failing hook all
+    /// break the chain in silence.
+    #[test]
+    fn a_job_holding_a_gate_with_no_drone_says_what_it_needs() {
+        let check = holding(Some(job::Waiting::Check("01M06YB0EZZ9JC5J".to_string())));
+        assert_eq!(
+            detail(&check, JobState::Running, None, false),
+            "holding a check — `arm fleet tick`"
+        );
+
+        let subjob = holding(Some(job::Waiting::SubJob("uuid-of-reviewer".to_string())));
+        assert_eq!(
+            detail(&subjob, JobState::Running, None, false),
+            "holding a sub-Job — `arm fleet tick`"
+        );
+    }
+
+    /// **A live Drone is working, and says so.** The keystroke would be wrong
+    /// advice: the gate is not waiting to be read, it is waiting to be reached.
+    #[test]
+    fn a_job_with_a_live_drone_still_reports_its_step() {
+        let record = holding(Some(job::Waiting::Check("01M06YB0EZZ9JC5J".to_string())));
+        assert_eq!(detail(&record, JobState::Running, None, true), "implement");
+    }
+
+    /// **An answer is the one gate a tick cannot settle.** It is waiting on a
+    /// person, and the inbox entry is how they answer — telling them to tick
+    /// would send them to the wrong verb.
+    #[test]
+    fn a_job_waiting_on_a_person_is_not_told_to_tick() {
+        let record = holding(Some(job::Waiting::Answer("93438134".to_string())));
+        assert_eq!(detail(&record, JobState::Paused, None, false), "implement");
+
+        // And a Job holding nothing at all is just on its step.
+        assert_eq!(
+            detail(&holding(None), JobState::Running, None, false),
+            "implement"
+        );
     }
 
     /// **A failed check's own words reach the retry, not just its path.**
