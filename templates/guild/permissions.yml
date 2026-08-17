@@ -55,6 +55,11 @@ allow:
   - mcp__armada__fleet_verdict
   - mcp__armada__fleet_ask_human
   - mcp__armada__fleet_propose
+  # The route to `armada manifest check` a Drone would otherwise not have:
+  # `Bash(armada:*)` is denied below because the CLI writes the machine-global
+  # store, and until this tool existed that deny also removed the only way to
+  # run the command the gate judges every step by.
+  - mcp__armada__fleet_check
 
 # What is refused however broadly `allow` grants. Deny beats allow.
 #

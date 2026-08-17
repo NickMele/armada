@@ -775,7 +775,7 @@ fn lens(project: bool, all: bool) -> Result<Lens, ArmadaError> {
 }
 
 /// Build the runtime a Manifest verb needs, for a workspace that must exist.
-fn app(
+pub(super) fn app(
     world: &World,
     path: Option<&str>,
 ) -> Result<App<RealRun, SystemClock, RealFetch>, ArmadaError> {

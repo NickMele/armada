@@ -934,11 +934,23 @@ fn a_drone_is_offered_nothing_that_spawns_and_the_belts_are_disjoint() {
     let drone = tool_names(Belt::Drone);
     let helm = tool_names(Belt::Helm);
 
-    assert_eq!(drone.len(), 4, "{drone:?}");
+    assert_eq!(drone.len(), 5, "{drone:?}");
     for tool in &drone {
         assert!(!tool.contains("spawn"), "a Drone was offered `{tool}`");
         assert!(!helm.contains(tool), "`{tool}` is on both belts");
     }
     assert!(helm.contains(&"fleet.spawn".to_string()));
     assert!(helm.contains(&"manifest.check".to_string()));
+
+    // **The fifth is `fleet.check`, and its name is load-bearing.** A Drone had
+    // no route to `armada manifest check` at all — `Bash(armada:*)` is denied
+    // because the CLI writes the machine-global store — while the `check_passes`
+    // gate ran that exact command and judged every Drone by it. It is
+    // `fleet.check` rather than `manifest.check` because it is a different
+    // capability: Helm's checks any workspace it is pointed at, this one checks
+    // the Job's own worktree and takes no path. One name for both would need a
+    // runtime filter to tell them apart, which is what the disjointness assert
+    // above exists to refuse.
+    assert!(drone.contains(&"fleet.check".to_string()), "{drone:?}");
+    assert!(!drone.contains(&"manifest.check".to_string()), "{drone:?}");
 }
