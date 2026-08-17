@@ -75,11 +75,33 @@ pub struct HelmSection {
     /// argument-parse time with Claude Code's usage error on top of it.
     #[serde(default = "default_mode")]
     pub mode: String,
+
+    /// Which model the session runs on — `--model`, defaulting to
+    /// [`armada_core::helm::MODEL`].
+    ///
+    /// **A machine fact for [`mode`](Self::mode)'s reason**: it is the same
+    /// question — how this box is willing to spend — answered in a different
+    /// currency, and a laptop answers it differently from a shared machine.
+    ///
+    /// **Not validated against a list, unlike the mode.** Claude Code publishes
+    /// six permission modes and rejects a seventh at argument-parse time, so
+    /// holding `helm.mode` against them turns a typo into a named `bad_config`.
+    /// Model names are added between releases, so a list baked in here would
+    /// refuse a model that works — and refusing to launch because Armada has not
+    /// heard of a model is worse than the binary's own refusal, which is
+    /// specific and current.
+    #[serde(default = "default_model")]
+    pub model: String,
 }
 
 /// The mode a machine that has never said otherwise launches under.
 fn default_mode() -> String {
     armada_core::helm::MODE.to_string()
+}
+
+/// The model a machine that has never said otherwise launches under.
+fn default_model() -> String {
+    armada_core::helm::MODEL.to_string()
 }
 
 /// **Written out rather than derived**, because a derived `Default` for a
@@ -92,6 +114,7 @@ impl Default for HelmSection {
         HelmSection {
             enter: false,
             mode: default_mode(),
+            model: default_model(),
         }
     }
 }
@@ -155,12 +178,14 @@ pub fn write(armada_home: &Path, section: &HelmSection) -> std::io::Result<()> {
 /// have done something twice.
 pub fn set_enter(armada_home: &Path, enter: bool) -> std::io::Result<HelmSection> {
     let before = read(armada_home);
-    // **The mode is carried through, not defaulted back.** `enable` answers one
-    // question, and rewriting a `helm.mode:` the reader had chosen as the price
-    // of answering it would be this file's own version of the second lock.
+    // **The mode and the model are carried through, not defaulted back.**
+    // `enable` answers one question, and rewriting a `helm.mode:` or a
+    // `helm.model:` the reader had chosen as the price of answering it would be
+    // this file's own version of the second lock.
     let section = HelmSection {
         enter,
         mode: before.mode.clone(),
+        model: before.model.clone(),
     };
     if before.enter != enter {
         write(armada_home, &section)?;

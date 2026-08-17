@@ -1165,8 +1165,8 @@ mod tests {
         let run = Helm::healthy();
         let finding = helm_argv(&run, Path::new("/tmp"), Path::new("/nonexistent"));
         assert_eq!(finding.status, Health::Ok);
-        assert!(finding.detail.contains("8 flags accepted"), "{finding:?}");
-        // **`--permission-mode` is one of the eight**, and it is the flag whose
+        assert!(finding.detail.contains("9 flags accepted"), "{finding:?}");
+        // **`--permission-mode` is one of the nine**, and it is the flag whose
         // absence from the launch was the second defect of that first real
         // session: no mode at all meant Claude Code's default, which asked the
         // reader to approve every tool call by hand. `doctor` holding it here
@@ -1177,7 +1177,7 @@ mod tests {
             armada_core::helm::FLAGS.contains(&armada_core::helm::PERMISSION_MODE),
             "the flag that decides what Helm may do without asking is not checked"
         );
-        // **`--append-system-prompt` is another of the eight, and this is the
+        // **`--append-system-prompt` is another of the nine, and this is the
         // whole of the preflight for it.** It is what carries the reader's own
         // `voice.md`, `expectations.md` and `how-i-work.md` into the session; a
         // release that renamed it would otherwise surface as a Helm that will
@@ -1186,6 +1186,14 @@ mod tests {
         assert!(
             armada_core::helm::FLAGS.contains(&armada_core::helm::APPEND),
             "the flag that carries the reader's voice is not checked at all"
+        );
+        // **`--model` is the ninth**, added when Helm stopped launching on
+        // whatever the account default happened to be. The flag is audited
+        // here; the value is deliberately not, because models are added between
+        // releases and a list baked into Armada would refuse one that works.
+        assert!(
+            armada_core::helm::FLAGS.contains(&armada_core::helm::MODEL_FLAG),
+            "the flag that decides what Helm costs to run is not checked"
         );
     }
 
@@ -1267,7 +1275,7 @@ mod tests {
     }
 
     /// **`doctor` says entering is off, and the row still fits its column.**
-    /// Both halves are the assertion: a reader who saw only *"8 flags accepted"*
+    /// Both halves are the assertion: a reader who saw only *"9 flags accepted"*
     /// would conclude `armada helm` opens a session, and a row that says so and
     /// then truncates mid-word has told them nothing either.
     #[test]

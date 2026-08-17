@@ -111,7 +111,7 @@ pub use crate::fleet::drone::APPEND;
 /// seventh, and the copy that was not updated is the one that refuses a mode the
 /// binary accepts — the defect `docs/glossary.md` exists to prevent, arriving as
 /// code.
-pub use crate::fleet::drone::{MODES, PERMISSION_MODE};
+pub use crate::fleet::drone::{MODEL_FLAG, MODES, PERMISSION_MODE};
 
 /// What Helm does with a tool call the session's permissions do not settle.
 ///
@@ -130,6 +130,26 @@ pub use crate::fleet::drone::{MODES, PERMISSION_MODE};
 /// the reader's presence rather than use it: the whole reason a terminal is
 /// worth more than an allowlist is that it can be asked.
 pub const MODE: &str = "auto";
+
+/// The model Helm enters under — `helm.model` in `~/.armada/machine.yml`.
+///
+/// **Sonnet, because Helm's own work is orchestration rather than authorship.**
+/// It decomposes what you ask into Jobs, delegates them, and brings back the
+/// decisions that are yours ([`crate::glossary`]); the writing and the reasoning
+/// happen inside Drones, each of which picks its own model for its own step. A
+/// session that spends the largest model on *routing* spends it on the cheapest
+/// thinking in the system, and it is also the session that stays open all day —
+/// so it is the one place where the model choice compounds.
+///
+/// **Configurable, and this is only the default.** A reader who wants Opus at
+/// the helm sets `helm.model` and gets it; the point is that the expensive
+/// answer should be the one somebody chose rather than the one nobody did.
+///
+/// **Not validated against a list here.** Unlike [`MODES`], where Claude Code
+/// publishes six values and rejects a seventh at argument-parse time, model
+/// names are added between releases and a list baked into Armada would refuse a
+/// model that works. The binary's own refusal is the check.
+pub const MODEL: &str = "sonnet";
 
 /// The refusal a `helm.mode` Claude Code has never heard of gets.
 ///
@@ -455,6 +475,12 @@ pub struct Launch {
     /// module cannot vouch for is refused, by [`bad_mode`], before a single
     /// document is written.
     pub mode: String,
+    /// Which model the session runs on — `helm.model` in
+    /// `~/.armada/machine.yml`, [`MODEL`] by default.
+    ///
+    /// A value for [`Launch::mode`]'s reason: the machine file belongs to the
+    /// caller. Unlike the mode, nothing refuses an unknown one — see [`MODEL`].
+    pub model: String,
     /// The reader's own standing instructions, assembled by [`voice`].
     ///
     /// **[`None`] is a guild nobody has written yet**, not an error and not a
@@ -525,6 +551,13 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
         // sitting in front of it.
         PERMISSION_MODE.to_string(),
         launch.mode.clone(),
+        // **The model is passed rather than left to the account default**, for
+        // the same reason the mode is: a default nobody chose is a default
+        // nobody can see. Helm is the longest-lived session on the machine and
+        // the one doing the least authorship, so [`MODEL`] is the cheap answer
+        // and `helm.model` is how a reader overrides it.
+        MODEL_FLAG.to_string(),
+        launch.model.clone(),
     ]);
     argv.push(
         match launch.session.resumable_as(&launch.agent) {
@@ -546,7 +579,7 @@ pub fn launch_argv(launch: &Launch) -> Vec<String> {
 /// (`docs/traps.md`). A flag renamed or removed under Armada would otherwise
 /// surface as a Helm that will not start, in the one session the reader cannot
 /// ask Armada about — because Helm is how they ask.
-pub const FLAGS: [&str; 8] = [
+pub const FLAGS: [&str; 9] = [
     "--agent",
     APPEND,
     "--mcp-config",
@@ -557,6 +590,12 @@ pub const FLAGS: [&str; 8] = [
     // array's business; a value the binary does not accept is [`bad_mode`]'s,
     // one launch earlier.
     PERMISSION_MODE,
+    // **The flag is audited here; the value deliberately is not.** Unlike the
+    // mode above, models are added between releases — a list baked into Armada
+    // would refuse one that works, and `claude`'s own refusal is both specific
+    // and current. What this array is for is the *rename*, which is the failure
+    // it exists to catch.
+    MODEL_FLAG,
     "--session-id",
     "--resume",
 ];
@@ -793,6 +832,7 @@ mod tests {
             plugin_dir: "/scratch/.armada/helm/plugin".to_string(),
             settings: "/scratch/.armada/helm/settings.json".to_string(),
             mode: MODE.to_string(),
+            model: MODEL.to_string(),
             voice: None,
         }
     }
@@ -843,6 +883,8 @@ mod tests {
                 "/scratch/.armada/helm/settings.json",
                 "--permission-mode",
                 "auto",
+                "--model",
+                "sonnet",
                 "--session-id",
                 UUID,
             ]
@@ -871,6 +913,42 @@ mod tests {
             "Helm entered under the mode written for a session nobody is watching"
         );
         assert!(MODES.contains(&MODE), "{MODE} is not a mode the CLI offers");
+    }
+
+    /// **Helm enters on Sonnet, and the model is passed rather than defaulted.**
+    ///
+    /// Left off entirely, the session runs on whatever the account's default is
+    /// — a choice nobody made and nobody can see, which is the same defect the
+    /// missing `--permission-mode` was. Sonnet because Helm's own work is
+    /// routing: it decomposes what you ask into Jobs, delegates, and brings back
+    /// the decisions that are yours, while the authorship happens inside Drones
+    /// that pick their own model per step. It is also the session that stays
+    /// open all day, so the choice compounds here and nowhere else.
+    #[test]
+    fn the_session_enters_on_a_model_and_it_is_the_cheap_one() {
+        let argv = launch_argv(&a_launch(false));
+        let at = argv
+            .iter()
+            .position(|word| word == MODEL_FLAG)
+            .expect("the launch passes no model at all");
+        assert_eq!(argv[at + 1], MODEL);
+        assert_eq!(MODEL, "sonnet");
+    }
+
+    /// **A machine that chose another model gets the one it chose**, which is
+    /// the whole point of the setting — the default is a default, not a policy.
+    #[test]
+    fn a_machine_that_chose_another_model_gets_the_one_it_chose() {
+        let launch = Launch {
+            model: "opus".to_string(),
+            ..a_launch(false)
+        };
+        let argv = launch_argv(&launch);
+        let at = argv
+            .iter()
+            .position(|word| word == MODEL_FLAG)
+            .expect("the launch passes no model at all");
+        assert_eq!(argv[at + 1], "opus");
     }
 
     /// **The machine's mode reaches the argv**, rather than the default being

@@ -175,6 +175,11 @@ fn the_first_launch_is_assembled_and_nothing_is_started() {
             // default and the reader approved every tool call by hand.
             "--permission-mode".to_string(),
             "auto".to_string(),
+            // **And the model, for the same reason.** Left off, the session ran
+            // on whatever the account default happened to be — a choice nobody
+            // made and nobody could see. `helm.model` overrides it.
+            "--model".to_string(),
+            "sonnet".to_string(),
             "--session-id".to_string(),
             data["uuid"].as_str().unwrap().to_string(),
         ]
