@@ -151,6 +151,22 @@ pub fn propose(evidence: &Evidence) -> Vec<Proposal> {
         });
     }
 
+    // **A candidate's own members are its business, not this scan's.** A
+    // directory that resolves its own dependencies (`Package::independent`) is
+    // a separate product sharing the repository (PLAN.md §4.6) whether or not
+    // it has an `armada.yml` yet, and anything nested below it — its own
+    // workspace members, if it runs one of its own — belongs to the config
+    // that directory will eventually have, not to this one. The candidate
+    // itself is still proposed: only what is nested *under* it is out of
+    // bounds, which is why `the_nearest_lockfile_wins` still sees `web`'s own
+    // checks and only a monorepo nested inside a candidate loses its members.
+    let candidates: Vec<&str> = evidence
+        .packages
+        .iter()
+        .filter(|package| package.independent)
+        .map(|package| package.dir.as_str())
+        .collect();
+
     let mut taken: Vec<String> = Vec::new();
     for package in &evidence.packages {
         // **A package inside a nested workspace belongs to that workspace, not
@@ -162,6 +178,14 @@ pub fn propose(evidence: &Evidence) -> Vec<Proposal> {
             .iter()
             .any(|nested| package.dir == *nested || package.dir.starts_with(&format!("{nested}/")))
         {
+            continue;
+        }
+        // Same overlap, one step earlier: a directory nested under a candidate
+        // that has not been declared a workspace yet is still that
+        // candidate's to flatten, not this scan's.
+        if candidates.iter().any(|candidate| {
+            package.dir != *candidate && package.dir.starts_with(&format!("{candidate}/"))
+        }) {
             continue;
         }
 
@@ -575,6 +599,38 @@ mod tests {
             ats(&proposals),
             ["components.backend", "components.backend.checks.test"],
             "a target that is not a check name was proposed, or uv grew a setup line"
+        );
+    }
+
+    /// **The bug this raised** (`armada report 599657a8`): `web/` is a
+    /// candidate — it has its own lockfile, so it resolves its own
+    /// dependencies — and it is *also* a pnpm workspace in its own right, with
+    /// real members below it. Root's scan is not where those members get
+    /// proposed: once `web` has its own `armada.yml`, `root: web/apps/agency`
+    /// is exactly the overlap PLAN.md §4.6 makes illegal, and until then it is
+    /// a flat wall of near-duplicate checks standing between the reader and
+    /// the one real candidate underneath them. The candidate itself is still
+    /// proposed — only what is nested under it is out of bounds.
+    #[test]
+    fn a_candidates_own_members_are_not_flattened_into_the_parent() {
+        let proposals = of(&[
+            file(
+                "web/package.json",
+                r#"{"name":"web","scripts":{"build":"turbo run build","test":"turbo run test"}}"#,
+            ),
+            file("web/pnpm-lock.yaml", ""),
+            file("web/pnpm-workspace.yaml", "packages:\n  - apps/*\n"),
+            file("web/apps/agency/package.json", SCRIPTS),
+        ]);
+        assert_eq!(
+            ats(&proposals),
+            [
+                "components.web",
+                "components.web.setup",
+                "components.web.checks.build",
+                "components.web.checks.test",
+            ],
+            "a member of web's own workspace was flattened into the parent scan, or web itself was lost"
         );
     }
 
