@@ -2635,6 +2635,52 @@ fn a_drone_cannot_report_a_step_its_workflow_does_not_declare() {
     assert_eq!(scratch.store().load(&data.uuid).unwrap().step, "reproduce");
 }
 
+/// **An inbox entry's id shows the Job that raised it.**
+///
+/// `answer` takes an entry id and `show` refused one, so an id copied off the
+/// `ID` column `armada fleet inbox` prints was accepted by one verb and rejected
+/// by its neighbour — with a refusal reading "no Job called c530ce2a" about
+/// something nobody claimed was a Job. Five recorded failures on one machine
+/// were exactly that, each sending the reader after the wrong mistake.
+#[test]
+fn showing_an_inbox_entry_shows_the_job_that_raised_it() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    let data = spawn(&scratch, &run, &task("add rate limiting"));
+    armada_fleet::inbox::raise(
+        &scratch.inbox(),
+        "asked-about-it",
+        &data.uuid,
+        &data.name,
+        armada_fleet::inbox::Kind::NeedsHuman,
+        "t",
+        1,
+        "well?",
+    )
+    .unwrap();
+
+    let output = fleet::show(
+        &run,
+        &FrozenClock::new(),
+        &scratch.place(),
+        "asked-about-it",
+    )
+    .expect("an entry id resolves to the Job that raised it");
+    match output {
+        Output::Show(envelope) => assert_eq!(envelope.data.job, data.name),
+        other => panic!("not a show: {other:?}"),
+    }
+
+    // **A Job handle still works**, because the two id spaces cannot be merged
+    // and the order is the decision: entry first, Job second, never both.
+    let output = fleet::show(&run, &FrozenClock::new(), &scratch.place(), &data.name)
+        .expect("a Job handle resolves as it always did");
+    match output {
+        Output::Show(envelope) => assert_eq!(envelope.data.job, data.name),
+        other => panic!("not a show: {other:?}"),
+    }
+}
+
 /// **A Job's clock stops while it waits on you, and starts again when you
 /// answer.**
 ///

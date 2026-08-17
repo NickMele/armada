@@ -1366,7 +1366,31 @@ pub fn show<R: Run, C: Clock>(
     place: &Where,
     handle: &str,
 ) -> Result<Output, ArmadaError> {
-    let record = place.store().find(handle)?;
+    // # An inbox entry id resolves here, exactly as it does at `answer`
+    //
+    // **An id you can act on should be an id you can read.** `answer` tries the
+    // handle as an entry before trying it as a Job — that is deliberate and
+    // `docs/reserved/001` argues it: naming the row says exactly which question
+    // you mean, where naming the Job says it only by accident. `show` never
+    // learned the same trick, so an id copied off the `ID` column that
+    // `armada fleet inbox` prints was taken by one verb and rejected by its
+    // neighbour, with a refusal reading *"no Job called c530ce2a"* about
+    // something nobody claimed was a Job.
+    //
+    // Five recorded failures on one machine were this — `c530ce2a`,
+    // `a058890c`, `f05ac0bf`, `b316971b` — each one a person or an agent
+    // reading the inbox and reaching for the wrong verb, and each one sent
+    // looking for the wrong mistake.
+    //
+    // **Entry first, Job second, and never both**, which is `answer`'s own
+    // ordering: the two id spaces cannot be merged, so the order is the
+    // decision. Nothing that worked stops working, because a Job handle has
+    // never been an entry's uuid.
+    let handle = match inbox::find_open(&entries(place)?, handle) {
+        Ok(Some(entry)) => entry.job_uuid.clone().unwrap_or_else(|| handle.to_string()),
+        _ => handle.to_string(),
+    };
+    let record = place.store().find(&handle)?;
     let wall = now.wall_ms();
     let (observed, _, _) = look(run, place, &record, wall);
     let run_time = record.run_time_ms(wall);
