@@ -251,16 +251,6 @@ fn settle<C: Clock>(
     record.spend = observed.spend;
     record.state = observed.state;
 
-    // **The wall clock stops while the Job is stopped in front of you.** Every
-    // verb that persists an observation runs this, so the stamp is set by
-    // whichever one first sees the Job waiting and banked by whichever first
-    // sees it moving again — which is what makes the credit survive a Job
-    // nobody looks at for an hour ([`job::Job::waited_ms`]).
-    match record.waiting_on_a_person() {
-        true => record.began_waiting(now.wall_ms()),
-        false => record.stopped_waiting(now.wall_ms()),
-    }
-
     if let Some(ceiling) = observed.ceiling {
         // **Exhaustion is an outcome, never a silent stop** (PLAN.md §14.3):
         // the Job records what it spent and where it reached, and is raised.
@@ -899,14 +889,32 @@ fn prompt(workflow: &Workflow, step: &str, task: &str) -> String {
 /// name the thing it is waiting on — and because every item a person is asked to
 /// act on needs an identity they can acknowledge one row at a time (PLAN.md
 /// §15.3.1). The callers that only raise ignore it, which costs nothing.
+///
+/// # The Job's clock stops here
+///
+/// **A wait begins when the question is raised**, which is this function and
+/// nothing else, and it ends where the entry is answered. Binding it to the
+/// *entry* rather than inferring it from the Job's state is what makes it
+/// reliable: the first attempt stamped it inside `settle`, which only the
+/// mutating verbs call and which `answer` bypasses on its own success paths, so
+/// the clock started and never stopped.
+///
+/// Measured 2026-08-17 across three live Jobs, three different wrong answers:
+/// one was `RUNNING` with the wait still open, so its wall clock had frozen
+/// permanently; one had sat `PAUSED` for fifty minutes with nothing recorded at
+/// all; and one was right. A ceiling that stops being enforced is worse than one
+/// that fires early.
+///
+/// The Job is written by the caller — this only stamps the record it is handed.
 fn raise<C: Clock>(
     place: &Where,
     now: &C,
-    record: &Job,
+    record: &mut Job,
     kind: inbox::Kind,
     body: &str,
 ) -> Result<String, ArmadaError> {
     let at_ms = now.wall_ms();
+    record.began_waiting(at_ms);
     inbox::raise(
         &place.inbox(),
         &job::mint_uuid(&format!("{}|{at_ms}|{body}", record.uuid)),
@@ -2362,6 +2370,10 @@ pub fn answer<R: Run, C: Clock>(
         });
 
     inbox::answer(&place.inbox(), &entry.uuid, said)?;
+    // **The wait ends here, at the entry that was being waited on.** Paired with
+    // [`raise`], which starts it; between them they are the only two places a
+    // Job's wait clock moves, so it cannot start without stopping.
+    record.stopped_waiting(now.wall_ms());
 
     if settles_a_gate {
         // **Ticked rather than resumed**, and ticked here rather than left for
@@ -2683,8 +2695,12 @@ pub fn ask_human<C: Clock>(
     question: &str,
     wait_ms: u64,
 ) -> Result<Output, ArmadaError> {
-    let record = place.store().find(handle)?;
-    let entry = raise(place, now, &record, inbox::Kind::NeedsHuman, question)?;
+    let mut record = place.store().find(handle)?;
+    let entry = raise(place, now, &mut record, inbox::Kind::NeedsHuman, question)?;
+    // **Persisted, because the wait started on it.** `raise` stamps the record;
+    // a caller that dropped it would leave the clock running on a Job that is
+    // demonstrably stopped in front of a question.
+    place.store().save(&record)?;
 
     let deadline = now.mono().saturating_add(wait_ms);
     let mut answered = None;
@@ -2778,7 +2794,7 @@ pub fn propose<C: Clock>(
             )),
         });
     }
-    let record = place.store().find(handle)?;
+    let mut record = place.store().find(handle)?;
     // **`NEEDS_HUMAN` rather than a fourth [`inbox::Kind`].** The kind answers
     // *why does the fleet want you*, and the answer here is the one it already
     // has: a judgement call is yours. A `PROPOSAL` kind would be a second word
@@ -2787,7 +2803,7 @@ pub fn propose<C: Clock>(
     let entry = raise(
         place,
         now,
-        &record,
+        &mut record,
         inbox::Kind::NeedsHuman,
         // **The subject is in the body, not beside it.** An inbox entry is read
         // out of context and possibly hours later, and a bare sentence about a
@@ -2796,6 +2812,8 @@ pub fn propose<C: Clock>(
         // entry ever written, to carry one word.
         &format!("proposes a change to the {subject}: {proposal}"),
     )?;
+    // Persisted for [`ask_human`]'s reason: the wait began on this record.
+    place.store().save(&record)?;
 
     Ok(Output::Propose(Box::new(Envelope::ok(
         "fleet propose",
@@ -2908,7 +2926,7 @@ pub fn verdict<C: Clock>(
         Verdict::Blocked => Some(raise(
             place,
             now,
-            &record,
+            &mut record,
             inbox::Kind::Blocked,
             &match why {
                 Some(why) => why.to_string(),
@@ -2920,7 +2938,7 @@ pub fn verdict<C: Clock>(
         Verdict::NeedsHuman => Some(raise(
             place,
             now,
-            &record,
+            &mut record,
             inbox::Kind::NeedsHuman,
             &match why {
                 Some(why) => why.to_string(),
@@ -3449,7 +3467,7 @@ fn gate_step<R: Run, C: Clock>(
             record.pending = None;
             record.state = JobState::Paused;
             record.verdict = Some(Verdict::NeedsHuman);
-            raise(place, now, &record, inbox::Kind::NeedsHuman, &why)?;
+            raise(place, now, &mut record, inbox::Kind::NeedsHuman, &why)?;
             place.store().save(&record)?;
             Ok(tick_row(
                 &record,
@@ -3530,7 +3548,7 @@ fn halt<C: Clock>(
 ) -> Result<TickRow, ArmadaError> {
     record.state = JobState::Paused;
     record.verdict = Some(Verdict::NeedsHuman);
-    raise(place, now, &record, inbox::Kind::NeedsHuman, &why)?;
+    raise(place, now, &mut record, inbox::Kind::NeedsHuman, &why)?;
     place.store().save(&record)?;
     Ok(tick_row(
         &record,
