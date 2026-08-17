@@ -518,6 +518,7 @@ pub fn spawn<R: Run, C: Clock>(
         ticked_turns: 0,
         doing: None,
         daemon_acts: Vec::new(),
+        main_moved_at: None,
     };
 
     if options.dry_run {
@@ -1613,6 +1614,7 @@ pub fn show<R: Run, C: Clock>(
                     outcome_at: act.outcome_at.clone(),
                 })
                 .collect(),
+            main_moved_at: record.main_moved_at.clone(),
             task: record.task.clone(),
             runtime_s: run_time / 1_000,
             created_at: record.created_at.clone(),
@@ -2102,7 +2104,7 @@ fn tear_down<R: Run, C: Clock>(
 /// **A `FAILED` or halted Job never reaches here.** `Next::Halt` leaves a Job
 /// `PAUSED` and asks a person; its worktree is the evidence for the question it
 /// just raised, and this function is only ever called on `Next::Finish`.
-fn release_on_finish<R: Run, C: Clock>(
+pub(crate) fn release_on_finish<R: Run, C: Clock>(
     run: &R,
     now: &C,
     place: &Where,
@@ -4648,6 +4650,7 @@ fn spawn_child<R: Run, C: Clock>(
         ticked_turns: 0,
         doing: None,
         daemon_acts: Vec::new(),
+        main_moved_at: None,
     };
     // Recorded before anything is created, for [`spawn`]'s reason: everything
     // after this line can fail, and each of those failures leaves a Job on disk
@@ -5165,6 +5168,7 @@ mod tests {
             ticked_turns: 0,
             doing: None,
             daemon_acts: Vec::new(),
+            main_moved_at: None,
         }
     }
 

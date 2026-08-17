@@ -237,6 +237,20 @@ pub struct Job {
     /// own words, but something Armada itself did *to* this Job unattended.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub daemon_acts: Vec<DaemonAct>,
+    /// Set once, when the daemon pulls a `main` this Job's branch was not
+    /// forked from. A fact for the Drone to notice on its own next turn — not
+    /// an instruction, and not a rebase (`034` §3: "asked for, never imposed").
+    ///
+    /// **Not [`Job::facts`].** That field is seeded once, at spawn, for
+    /// `${task.*}` substitution — its own doc comment states the contract —
+    /// and writing into it mid-run would contradict it. This is a second,
+    /// narrower field for a fact that only ever arrives after a Job has
+    /// started (PLAN.md §7).
+    ///
+    /// Additive, so `schema_version` stays 1, and defaulted so every Job
+    /// record written before this field existed still parses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_moved_at: Option<String>,
 }
 
 /// `serde`'s `skip_serializing_if` needs a path, and neither `usize::eq` nor
@@ -1734,6 +1748,7 @@ mod tests {
             ticked_turns: 0,
             doing: None,
             daemon_acts: Vec::new(),
+            main_moved_at: None,
         }
     }
 
@@ -2163,6 +2178,7 @@ mod tests {
             ticked_turns: 0,
             doing: None,
             daemon_acts: Vec::new(),
+            main_moved_at: None,
         };
         assert_eq!(job.run_time_ms(1_840_000), 840_000);
         // A clock that stepped backwards costs a display value, never a panic.
@@ -2698,6 +2714,7 @@ mod tests {
             ticked_turns: 0,
             doing: None,
             daemon_acts: Vec::new(),
+            main_moved_at: None,
         };
         let json = serde_json::to_string(&job).unwrap();
         assert!(!json.contains("confidence"), "an absent field is absent");

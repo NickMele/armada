@@ -481,7 +481,12 @@ fn dispatch(
         // then loops until something kills it — launchd's `KeepAlive`, a
         // signal, or `armada daemon stop`'s own `SIGTERM`. There is no
         // envelope to emit because there is no moment this call finishes.
-        verbs::daemon::run(&armada_manifest::machine::armada_home(home))?;
+        //
+        // `home` is passed alongside `armada_home` because the watch loop's
+        // own `Where` needs both — `armada_home` for the Job index and the
+        // trail, `home` for `Where::expand`'s `~/…` — the same two facts
+        // every other `Where` on this page is built from.
+        verbs::daemon::run(home, &armada_manifest::machine::armada_home(home))?;
         unreachable!("`armada daemon run` loops forever once it has started")
     }
 

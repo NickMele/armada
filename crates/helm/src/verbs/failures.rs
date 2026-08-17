@@ -787,6 +787,7 @@ mod tests {
             ticked_turns: 0,
             doing: None,
             daemon_acts: Vec::new(),
+            main_moved_at: None,
         }
     }
 

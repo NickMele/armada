@@ -2406,6 +2406,15 @@ pub struct ShowData {
     /// else would make "who did this" unanswerable from the row alone.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub daemon_acts: Vec<DaemonActRow>,
+    /// When the daemon last pulled a `main` this Job's branch was not forked
+    /// from, off [`crate::fleet::job::Job::main_moved_at`] (PLAN.md §7).
+    ///
+    /// **A fact for a reader, not an instruction to a Drone.** Stage one
+    /// builds no consumer of it beyond this: it exists on the record and is
+    /// readable here, which is the whole of what `armada fleet show` owes it
+    /// until a later stage's `fleet_rebase` reads it for real.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub main_moved_at: Option<String>,
     /// The task, whole, in the words it was given in.
     ///
     /// **Never truncated at this width or any other.** The `TASK` column is a
