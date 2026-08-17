@@ -90,6 +90,55 @@ pub fn add(
     call(run, repo_root, argv, "could not create the worktree")
 }
 
+/// Copy each declared path that exists in `repo_root` into `worktree`.
+///
+/// **A path that does not exist in the source is not an error** — an
+/// unconfigured machine is the ordinary case for a fresh clone, and this is
+/// the one place that fact has to be honoured mechanically rather than stated
+/// in a doc comment. `paths` is trusted to already be safe: escaping the
+/// repository root is refused where the list is read
+/// ([`crate::machine::carry_for`]), not here.
+///
+/// **Never `git add`s anything.** A plain filesystem copy leaves the file
+/// exactly as untracked in the worktree as it is in the source, and the same
+/// `.gitignore` — itself checked out onto the new branch — still matches it
+/// there.
+///
+/// **Called after [`add`] and before `armada manifest init`** — `setup:` may
+/// depend on a carried path already being there.
+pub fn carry(repo_root: &Path, worktree: &Path, paths: &[String]) -> Result<(), ArmadaError> {
+    for rel in paths {
+        let source = repo_root.join(rel);
+        if !source.exists() {
+            continue;
+        }
+        let dest = worktree.join(rel);
+        copy_path(&source, &dest).map_err(|e| ArmadaError {
+            class: ErrClass::Environment,
+            r#where: worktree.display().to_string(),
+            message: format!("could not carry `{rel}` into the worktree: {e}"),
+            next_action: Some("check the worktree's directory is writable".to_string()),
+        })?;
+    }
+    Ok(())
+}
+
+fn copy_path(source: &Path, dest: &Path) -> std::io::Result<()> {
+    if source.is_dir() {
+        std::fs::create_dir_all(dest)?;
+        for entry in std::fs::read_dir(source)? {
+            let entry = entry?;
+            copy_path(&entry.path(), &dest.join(entry.file_name()))?;
+        }
+        Ok(())
+    } else {
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::copy(source, dest).map(|_| ())
+    }
+}
+
 /// Remove a Job's worktree.
 ///
 /// **`--force`, because a Drone leaves a dirty tree behind.** That is the
@@ -257,6 +306,141 @@ mod tests {
     use armada_core::ctx::{RunOutput, SpawnError};
     use std::cell::RefCell;
     use std::path::PathBuf;
+
+    // ------------------------------------------------------------------ carry
+
+    #[test]
+    fn carry_copies_a_declared_path_that_exists_in_the_source() {
+        let repo = tempfile::tempdir().unwrap();
+        let worktree = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(repo.path().join(".claude")).unwrap();
+        std::fs::write(
+            repo.path().join(".claude/contamination.local"),
+            "local-secret\n",
+        )
+        .unwrap();
+
+        carry(
+            repo.path(),
+            worktree.path(),
+            &[".claude/contamination.local".to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(worktree.path().join(".claude/contamination.local")).unwrap(),
+            "local-secret\n"
+        );
+    }
+
+    /// **Not an error** — an unconfigured machine is the ordinary case for a
+    /// fresh clone, so a declared path with nothing at the source is silently
+    /// skipped rather than failing the spawn it would otherwise abort.
+    #[test]
+    fn carry_silently_skips_a_path_that_does_not_exist_in_the_source() {
+        let repo = tempfile::tempdir().unwrap();
+        let worktree = tempfile::tempdir().unwrap();
+
+        carry(
+            repo.path(),
+            worktree.path(),
+            &[".claude/contamination.local".to_string()],
+        )
+        .unwrap();
+
+        assert!(!worktree.path().join(".claude/contamination.local").exists());
+    }
+
+    #[test]
+    fn carry_copies_a_directory_recursively() {
+        let repo = tempfile::tempdir().unwrap();
+        let worktree = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(repo.path().join("local/nested")).unwrap();
+        std::fs::write(repo.path().join("local/a.txt"), "a").unwrap();
+        std::fs::write(repo.path().join("local/nested/b.txt"), "b").unwrap();
+
+        carry(repo.path(), worktree.path(), &["local".to_string()]).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(worktree.path().join("local/a.txt")).unwrap(),
+            "a"
+        );
+        assert_eq!(
+            std::fs::read_to_string(worktree.path().join("local/nested/b.txt")).unwrap(),
+            "b"
+        );
+    }
+
+    /// **The test that matters most.** A carried file that dirties the tree
+    /// breaks `branch_exists`-style gates for every Job forever, because
+    /// `carry` never `git add`s anything — it is a plain filesystem copy of a
+    /// file the source's own `.gitignore` already matches, and that same
+    /// `.gitignore` is checked out onto the new branch along with everything
+    /// else. Real `git`, not `FakeRun`: what is under test is `git status`'s
+    /// real opinion of the tree, which nothing in this module computes.
+    #[test]
+    fn a_carried_file_stays_untracked_and_git_status_is_clean() {
+        fn git(dir: &Path, args: &[&str]) {
+            let status = std::process::Command::new("git")
+                .args(args)
+                .current_dir(dir)
+                .env("GIT_AUTHOR_NAME", "test")
+                .env("GIT_AUTHOR_EMAIL", "test@example.com")
+                .env("GIT_COMMITTER_NAME", "test")
+                .env("GIT_COMMITTER_EMAIL", "test@example.com")
+                .status()
+                .expect("git runs on any POSIX machine");
+            assert!(status.success(), "git {args:?} failed in {}", dir.display());
+        }
+
+        let home = tempfile::tempdir().unwrap();
+        let repo = home.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        std::fs::write(repo.join(".gitignore"), ".claude/contamination.local\n").unwrap();
+        std::fs::create_dir_all(repo.join(".claude")).unwrap();
+        git(&repo, &["add", ".gitignore"]);
+        git(&repo, &["commit", "-q", "-m", "initial"]);
+        // Gitignored in the source, exactly as `.claude/contamination.local`
+        // is in the real repository this fix is for.
+        std::fs::write(repo.join(".claude/contamination.local"), "local-secret\n").unwrap();
+
+        let worktree = home.path().join("worktree");
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "armada/x",
+                worktree.to_str().unwrap(),
+            ],
+        );
+        assert!(
+            !worktree.join(".claude/contamination.local").exists(),
+            "a git worktree already had the gitignored file — the test proves nothing"
+        );
+
+        carry(
+            &repo,
+            &worktree,
+            &[".claude/contamination.local".to_string()],
+        )
+        .unwrap();
+        assert!(worktree.join(".claude/contamination.local").exists());
+
+        let output = std::process::Command::new("git")
+            .args(["status", "--porcelain", "--untracked-files=normal"])
+            .current_dir(&worktree)
+            .output()
+            .expect("git runs on any POSIX machine");
+        assert!(output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stdout).trim().is_empty(),
+            "git status was not clean after carry: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
 
     struct FakeRun {
         seen: RefCell<Vec<Vec<String>>>,
