@@ -1519,7 +1519,7 @@ fn verb(page: &Page, style: Style, terminal: Terminal) -> String {
     );
 
     out.push_str(&heading(style, "USAGE"));
-    let mut usage = Table::new(vec![Column::flexible("")])
+    let mut usage = Table::new(vec![Column::flexible("", "")])
         .headerless()
         .indent(2);
     for line in page.usage {
@@ -1576,7 +1576,7 @@ fn heading(style: Style, text: &str) -> String {
 /// A name and what it does, aligned. The one shape every list on these pages
 /// takes, so no two of them align differently.
 fn two_column(rows: &[(&str, &str)]) -> Table {
-    let mut table = Table::new(vec![Column::fixed(""), Column::flexible("")])
+    let mut table = Table::new(vec![Column::fixed("", ""), Column::flexible("", "")])
         .headerless()
         .indent(2);
     for (name, description) in rows {
@@ -1606,7 +1606,7 @@ fn not_built(style: Style, width: usize) -> String {
     let manifest_verbs = not_built_verbs();
     let guild_verbs: Vec<&str> = RESERVED_GUILD_VERBS.iter().map(|(name, _)| *name).collect();
 
-    let mut table = Table::new(vec![Column::fixed(""), Column::flexible("")])
+    let mut table = Table::new(vec![Column::fixed("", ""), Column::flexible("", "")])
         .headerless()
         .indent(2);
     // **The row is skipped when nothing is in it**, rather than printing
