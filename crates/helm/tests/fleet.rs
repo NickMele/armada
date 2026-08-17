@@ -790,7 +790,10 @@ fn the_drone_execve_receives_both_its_brief_and_its_task() {
     let brief = &argv[at + 1];
     assert_eq!(brief, &armada_core::fleet::drone::brief(), "{argv:?}");
     assert!(brief.contains("mcp__armada__fleet_verdict"), "{brief}");
-    assert!(brief.contains("not evidence"), "{brief}");
+    // **032 shortened the brief**: Drone no longer needs to know about evidence,
+    // verdict words, or step naming. The new contract is simpler: report status,
+    // Job decides verdict.
+    assert!(brief.contains("done") || brief.contains("stuck"), "{brief}");
     // **Both halves reached `execve`.** The reporting contract
     // (`docs/reserved/019`) and Armada's own skill (`docs/reserved/008`) share
     // one flag; a Drone given only the first would edit `armada.yml` rather

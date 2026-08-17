@@ -1,7 +1,7 @@
 ---
 id: 032
 title: The Job drives, the Drone reports
-status: RESERVED
+status: BUILT
 module: fleet
 raised: two Jobs stalled on step names a Drone invented, 2026-08-16
 ---
@@ -68,9 +68,32 @@ and here is why"* is the Drone's to say and nothing else can. `fleet.ask_human` 
 question it needs answered. What is missing is the flat *"I am done"* and *"I am stuck"*, which is
 what the tool should become — and the gate decides what either means for the workflow.
 
+## Implementation
+
+**Simplify the Drone's reporting contract.** Three changes:
+
+1. **`fleet.verdict` API change** — The tool no longer asks a Drone for step, verdict, or evidence.
+   The new signature takes only `status: "done" | "stuck"`. When a Drone reports "done", the Job
+   gates the step in the next tick cycle and decides PASS or FAILED. When a Drone reports "stuck",
+   the Job records BLOCKED.
+
+2. **`fleet.report` API change** — Removed the optional `step` parameter. The Job already tracks
+   which step the Drone is on; the Drone cannot override it anymore. The step boundary vocabulary
+   (`entered`, `attempted`) still reaches through `event`, but the Drone never names the step.
+
+3. **`BRIEF` is shorter** — The new brief is ~500 bytes instead of ~1200, because it no longer
+   mentions step names, verdict words (PASS/FAILED/BLOCKED/NEEDS_HUMAN), or evidence requirements.
+   The Drone's instruction is now: report your status, the Job decides the verdict.
+
+**Separation of concerns:** 
+- `fleet.verdict` called by Drone: accepts status, records only that the exchange finished
+- `record_gate_verdict` called by tick: accepts gate outcome (Verdict), writes step events
+- The gate predicate is evaluated only in tick, never in a Drone's exchange
+
 ## What it touches
 
-`crates/helm/src/mcp/drone.rs` (the two tools' schemas), `crates/core/src/fleet/drone.rs`'s
-[`BRIEF`], which instructs a Drone to report through them, `advance`'s handling of a verdict, and
-`019`'s account of what a Drone is told. The brief gets **shorter**, which is the tell that this is
-the right direction: a contract a model cannot get wrong is one it is not asked to fill in.
+- `crates/helm/src/mcp/drone.rs` — simplified `VerdictArgs` and `ReportArgs`; removed step override
+- `crates/core/src/fleet/drone.rs` — added `DroneStatus` enum; shortened `BRIEF` constant
+- `crates/helm/src/verbs/fleet.rs` — split verdict into two functions: `verdict` (Drone-facing,
+  takes status) and `record_gate_verdict` (internal, tick-facing, takes Verdict)
+- Test suite updated to use `record_gate_verdict` for gate outcomes

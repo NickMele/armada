@@ -8,12 +8,17 @@ raised: real use, 2026-08-15 — a Drone reported at whatever length it liked, a
 
 # 019 — The brief a Drone reports through
 
-> **Built.** `armada_core::fleet::drone::BRIEF`, appended by
+> **Built and refined.** `armada_core::fleet::drone::BRIEF`, appended by
 > [`headless`](../../crates/core/src/fleet/drone.rs) on every turn a Job takes, and held against
 > the router that serves the tools by
-> [`crates/helm/src/mcp/drone.rs`](../../crates/helm/src/mcp/drone.rs). What follows is the
-> design — whose voice a Drone speaks in, and the one risk this leaves open in
-> [011](011-what-a-drone-may-do-unattended.md).
+> [`crates/helm/src/mcp/drone.rs`](../../crates/helm/src/mcp/drone.rs). 
+>
+> **Updated by [032](032-the-job-drives-the-drone.md):** The brief is now ~40% shorter. A Drone
+> no longer reports which step ended, which verdict was reached, or what evidence was gathered —
+> the Job determines all three by gating. The brief now simply states: report your status (`done`
+> or `stuck`), and the Job decides what comes next. This simplification is exactly what the
+> section below prophesied — *a contract a model cannot get wrong is one it is not asked to fill
+> in*.
 >
 > **`BRIEF` is no longer the whole of what `headless` appends.**
 > [008](008-armada-injects-its-own-skills.md) landed alongside it and shares the flag:

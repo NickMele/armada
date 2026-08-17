@@ -23,8 +23,8 @@ use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
     AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
     InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
-    ReapCandidate, ReapPlanData, ReportData, ResumeData, ShowData, SpawnData, TickData, TickRow,
-    TransitionRow, VerdictData,
+    ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData, SpawnData, TickData,
+    TickRow, TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -2912,7 +2912,118 @@ pub fn propose<C: Clock>(
 /// not be decided, and an inbox that said *"reached a judgement call"* about a
 /// step nobody could gate would send the reader to read the transcript to find
 /// out what Armada already knew.
+/// Record a Drone's status or tick's verdict. When called by a Drone via MCP tool,
+/// takes only the status. When called internally by tick, uses the old signature
+/// (via a separate internal path if needed).
 pub fn verdict<C: Clock>(
+    now: &C,
+    place: &Where,
+    handle: &str,
+    status: armada_core::fleet::DroneStatus,
+) -> Result<Output, ArmadaError> {
+    use armada_core::fleet::DroneStatus;
+
+    let store = place.store();
+    let mut record = store.find(handle)?;
+    if record.state.is_over() {
+        return Err(ArmadaError {
+            class: ErrClass::BadInvocation,
+            r#where: record.name.clone(),
+            message: format!("`{}` is {}", record.name, record.state.word()),
+            next_action: Some("a Job that has finished reaches no further verdict".to_string()),
+        });
+    }
+
+    let step = record.step.clone();
+
+    // **Counted here only when nobody counted it at entry.** A Drone that
+    // reported entering the step already opened the attempt; bumping again on
+    // the way out would halve the rope the workflow declared.
+    if !job::attempt_open(&record.transitions, &step) {
+        *record.attempts.entry(step.clone()).or_insert(0) += 1;
+    }
+    let attempts = record.attempts.get(&step).copied().unwrap_or(1);
+
+    let (recorded, settled) = match status {
+        DroneStatus::Done => {
+            // **The Drone reports done; tick will gate.** Record only the Attempted
+            // event. Don't set a verdict — tick will gate and call record_gate_verdict
+            // with the actual gate outcome.
+            job::record(
+                &mut record.transitions,
+                now.wall_rfc3339(),
+                now.wall_ms(),
+                &step,
+                job::StepEvent::Attempted,
+                None,
+            );
+            // **Nothing has been decided, and the answer says so.** This
+            // returned `Verdict::Pass` as what its own comment called a
+            // "response marker" — correctly kept out of the record, and
+            // serialised to the Drone anyway as `"verdict":"PASS"` with an
+            // empty evidence list, before any gate had run. `032` says only
+            // the Job may say a step passed; saying it in Armada's own tool
+            // response is that rule broken with Armada's authority behind it.
+            // Found by a reviewer Job reading the change that introduced it.
+            (Recorded::Attempted, None)
+        }
+        DroneStatus::Stuck => {
+            // **The Drone hit a blocker.** Mark that it attempted and then stopped.
+            // Record Attempted to close the attempt, then set Blocked verdict.
+            job::record(
+                &mut record.transitions,
+                now.wall_rfc3339(),
+                now.wall_ms(),
+                &step,
+                job::StepEvent::Attempted,
+                None,
+            );
+            (Recorded::Blocked, Some(Verdict::Blocked))
+        }
+    };
+
+    record.step = step.clone();
+
+    // **A verdict is written only when the Drone really produced one.** A
+    // `done` report produces none: the attempt is closed and `tick` gates it.
+    if let Some(verdict) = settled {
+        record.verdict = Some(verdict);
+        record.state = verdict.settles_to();
+    }
+
+    let entry = match settled {
+        Some(Verdict::Blocked) => Some(raise(
+            place,
+            now,
+            &mut record,
+            inbox::Kind::Blocked,
+            &format!("`{step}` is blocked and cannot proceed without an external change"),
+        )?),
+        _ => None,
+    };
+    store.save(&record)?;
+
+    Ok(Output::Verdict(Box::new(Envelope::ok(
+        "fleet verdict",
+        None,
+        Status::Ok,
+        VerdictData {
+            job: record.name.clone(),
+            step: step.clone(),
+            recorded,
+            verdict: None,
+            evidence: vec![],
+            attempts,
+            state: record.state,
+            entry,
+        },
+    ))))
+}
+
+/// Internal function for tick to record a gate outcome as a verdict.
+/// This is called after `advance::after` determines what to do next.
+/// It writes the step event and inbox entry for a reached verdict.
+pub fn record_gate_verdict<C: Clock>(
     now: &C,
     place: &Where,
     handle: &str,
@@ -3018,7 +3129,12 @@ pub fn verdict<C: Clock>(
         VerdictData {
             job: record.name.clone(),
             step: step.to_string(),
-            verdict: reached,
+            recorded: match reached {
+                Verdict::Blocked => Recorded::Blocked,
+                Verdict::NeedsHuman => Recorded::NeedsHuman,
+                Verdict::Pass | Verdict::Failed => Recorded::Attempted,
+            },
+            verdict: Some(reached),
             evidence,
             attempts,
             state: record.state,
@@ -3399,7 +3515,7 @@ fn gate_step<R: Run, C: Clock>(
             advance::Next::Halt { why, .. } => Some(why.clone()),
             _ => None,
         };
-        let wrote = verdict(
+        let wrote = record_gate_verdict(
             now,
             place,
             &record.name,

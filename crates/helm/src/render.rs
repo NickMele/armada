@@ -320,7 +320,7 @@ fn stepped(envelope: &Envelope<VerdictData>, style: Style, width: usize) -> Stri
         data.state,
         &[
             data.job.clone(),
-            format!("{} {}", data.step, data.verdict.word()),
+            format!("{} {}", data.step, data.recorded.word()),
             format!("attempt {}", data.attempts),
         ],
     ));
