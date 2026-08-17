@@ -47,15 +47,71 @@ impl Store {
             next_action: None,
         })?;
         let final_path = self.path(&job.uuid);
-        let staging = final_path.with_extension("json.new");
+        // # The staging name is this writer's, not this Job's
+        //
+        // **It was `<uuid>.json.new` — one fixed path per Job, shared by every
+        // process saving it.** Two concurrent saves of one Job both wrote that
+        // file, the first `rename` moved it, and the second failed `ENOENT`
+        // trying to move a path that no longer existed. The error read "could
+        // not write the Job index: No such file or directory" and named the
+        // *final* path, which is the one place that was fine.
+        //
+        // Recorded twice on one machine, both times during concurrent activity
+        // — a Drone's `Stop` hook ticking its Job while a verb was writing the
+        // same record. Concurrency here is ordinary and expected: the relay is
+        // a process Armada does not own, and PLAN.md §15.3 has it firing
+        // whenever an exchange ends.
+        //
+        // A pid **and a counter** make the staging file this writer's alone, so
+        // a race is two harmless writes and two renames, and the last one wins.
+        // The counter is not decoration: the first fix here was the pid alone,
+        // and the test below reproduced the collision anyway, because two
+        // threads of one process share a pid. Processes are the case seen in the
+        // wild; threads are the case the test could run.
+        // **That is the same outcome the single-path version was trying to
+        // have** — a whole record replaced atomically — minus the failure. It
+        // does not order the writers, and it is not meant to: whoever renames
+        // last has the newest observation, which is what every reader of this
+        // store already assumes.
+        static WRITER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let mine = WRITER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let staging = final_path.with_extension(format!("json.{}.{mine}.new", std::process::id()));
         std::fs::write(&staging, text).map_err(|e| self.broken("write", &staging, &e))?;
-        std::fs::rename(&staging, &final_path).map_err(|e| self.broken("write", &final_path, &e))
+        std::fs::rename(&staging, &final_path).map_err(|e| {
+            // **Take our own staging file with us.** A per-writer name cannot be
+            // reused by the next attempt the way the old fixed one was, so a
+            // failed rename that left it behind would leak one file per failure
+            // forever. A `SIGKILL` between the write and the rename still
+            // leaks, which is why `all()` skips anything not named `*.json`
+            // rather than trusting the directory to hold only records.
+            let _ = std::fs::remove_file(&staging);
+            self.broken("write", &final_path, &e)
+        })
     }
 
     /// One Job by uuid.
     pub fn load(&self, uuid: &str) -> Result<Job, ArmadaError> {
         let path = self.path(uuid);
-        let text = std::fs::read_to_string(&path).map_err(|e| self.broken("read", &path, &e))?;
+        let text = std::fs::read_to_string(&path).map_err(|e| {
+            // **A record that is not there is not a broken machine.** This said
+            // "could not read the Job index: No such file or directory" and
+            // told the reader to check that `~/.armada/jobs/` was readable —
+            // advice for a directory that was fine. The ordinary causes are a
+            // reaped Job and a mistyped handle, and neither is helped by
+            // retrying unchanged, which is what `Environment` invites.
+            if e.kind() == std::io::ErrorKind::NotFound {
+                return ArmadaError {
+                    class: ErrClass::BadInvocation,
+                    r#where: uuid.to_string(),
+                    message: format!("no Job here with the id {uuid}"),
+                    next_action: Some(
+                        "`armada fleet ls` lists every Job; a reaped Job is gone for good"
+                            .to_string(),
+                    ),
+                };
+            }
+            self.broken("read", &path, &e)
+        })?;
         serde_json::from_str(&text).map_err(|e| ArmadaError {
             class: ErrClass::Environment,
             r#where: path.display().to_string(),
@@ -326,6 +382,88 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let store = Store::at(home.path());
         (home, store)
+    }
+
+    /// **Two writers saving one Job do not fail.**
+    ///
+    /// The staging path was `<uuid>.json.new` — one fixed name per Job, shared
+    /// by every process saving it. Two concurrent saves both wrote that file,
+    /// the first `rename` moved it, and the second failed `ENOENT` trying to
+    /// move a path that no longer existed. The error read "could not write the
+    /// Job index: No such file or directory" and named the *final* path, which
+    /// is the one place that was fine.
+    ///
+    /// Recorded twice on a real machine, both times while a Drone's `Stop` hook
+    /// was ticking its Job and a verb was writing the same record. Concurrency
+    /// here is ordinary: the relay is a process Armada does not own and PLAN.md
+    /// §15.3 has it firing whenever an exchange ends.
+    ///
+    /// **Threads rather than a contrived interleaving**, because the failure is
+    /// a genuine race and the honest way to catch it is to run it. Fifty rounds
+    /// across two writers hit it reliably before the fix; a test that only saved
+    /// twice in sequence never would, which is why the fixed staging name
+    /// survived this long.
+    #[test]
+    fn two_writers_saving_one_job_do_not_collide() {
+        let (home, _) = store();
+        let root = home.path().to_path_buf();
+        let record = job("shared", "one-uuid", JobState::Running, 10);
+
+        let failures: Vec<String> = std::thread::scope(|scope| {
+            let hands: Vec<_> = (0..2)
+                .map(|_| {
+                    let root = root.clone();
+                    let record = record.clone();
+                    scope.spawn(move || {
+                        let store = Store::at(&root);
+                        (0..50)
+                            .filter_map(|_| store.save(&record).err())
+                            .map(|error| error.message)
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            hands
+                .into_iter()
+                .flat_map(|hand| hand.join().unwrap())
+                .collect()
+        });
+
+        assert!(
+            failures.is_empty(),
+            "a concurrent save failed {} times: {:?}",
+            failures.len(),
+            &failures[..failures.len().min(3)]
+        );
+        // And the record is still readable — a race that left a torn file would
+        // be the same bug with a different symptom.
+        assert_eq!(Store::at(&root).load("one-uuid").unwrap().name, "shared");
+    }
+
+    /// **A Job that is not there is a bad handle, not a broken machine.**
+    ///
+    /// `load` reported every `read_to_string` failure as `Environment` with
+    /// "could not read the Job index: No such file or directory" and the next
+    /// action "check `~/.armada/jobs/` is readable, then retry unchanged" —
+    /// which is advice for a directory that was fine, and a retry that cannot
+    /// help. A reaped Job and a mistyped handle both arrive this way, and both
+    /// were recorded as a failure of the environment.
+    #[test]
+    fn asking_for_a_job_that_is_not_there_is_a_bad_handle() {
+        let (_home, store) = store();
+        let error = store.load("no-such-uuid").unwrap_err();
+
+        assert_eq!(error.class, ErrClass::BadInvocation);
+        assert!(
+            error
+                .message
+                .contains("no Job here with the id no-such-uuid"),
+            "the message still blames the index: {}",
+            error.message
+        );
+        // A real permission or corruption failure must still read as one, so
+        // the two are not collapsed into a single friendly message.
+        assert!(!error.message.contains("Job index"));
     }
 
     #[test]
