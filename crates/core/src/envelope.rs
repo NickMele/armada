@@ -2132,6 +2132,57 @@ pub struct BridgeData {
     /// does not change how much of a five-hour window is gone.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub windows: Vec<Window>,
+    /// **What the ARMADA header names** — the workspace this frame is about, and
+    /// the directory it was read from.
+    ///
+    /// **On the frame because both surfaces draw the header.** The live screen
+    /// reads them from `place`; `--once` has no `place` by the time the renderer
+    /// runs, so a frame without them drew `armada` and a bare window countdown
+    /// where the screen drew the workspace and the path — the two surfaces
+    /// differing in the *value* they show, which is the thing
+    /// `verbs/bridge.rs`'s *"the screen and `--once` draw the same value"* is
+    /// about.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub cwd: String,
+    /// **The other four panels of the command centre** (`033`).
+    ///
+    /// **Here because `--once` and the screen have to draw the same value.**
+    /// `verbs/bridge.rs` states both halves of that: *"the screen and `--once`
+    /// draw the same value"* and *"`--once` and `--json` are the same read"*.
+    /// When `033` gave the Bridge five panels it gave them only to the live
+    /// path, and `--once` kept drawing the single pre-`033` table — two shapes,
+    /// which is what those two sentences exist to forbid. A frame that carries
+    /// the fleet and nothing else cannot render the screen, so the frame carries
+    /// the panels.
+    ///
+    /// **This is what makes the screen testable.** `--once` and `--json` are the
+    /// only ways to see the Bridge without a live terminal, so they are how a
+    /// golden fixture, a test and a person reading a report see it; panels that
+    /// exist only in `paint()` are panels no fixture can cover.
+    ///
+    /// **`Option`, because one caller legitimately has no panels.** A frame read
+    /// for the fleet table alone — `bridge_table`'s own callers, and the live
+    /// screen's JOBS box, which is handed this struct — never gathers the inbox,
+    /// the guild or the doctor, and making it do so would put three reads behind
+    /// every redraw of one box. `None` means *nobody asked*, and the layout
+    /// draws the boxes it has rather than a second shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub panels: Option<Box<Panels>>,
+}
+
+/// The four panels beside JOBS, as one frame gathered them.
+///
+/// **Boxed on [`BridgeData`] rather than inlined**, because [`DoctorData`] alone
+/// is large and every fleet-only frame would otherwise carry the space for
+/// three payloads it never fills.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Panels {
+    /// What needs you, failed, or was reported — `armada fleet inbox`.
+    pub inbox: InboxData,
+    /// Skills, workflows and quick actions — `armada guild ls`.
+    pub guild: GuildListData,
+    /// Drones, docker, disk and stale process groups — `armada doctor`.
+    pub system: DoctorData,
 }
 
 /// `armada fleet show` — **one Job, and why it wants you.**
