@@ -1,12 +1,18 @@
 //! Fleet's section of `~/.armada/machine.yml` — **the file that never syncs**
 //! (`PLAN.md` §13.1, §4.3.1).
 //!
-//! One fact lives here: `carry`, a repository root — as the person writes it,
-//! `~` abbreviated ([`crate::home::tilde`]) — to the untracked paths that
+//! Two facts live here. `carry` is a repository root — as the person writes
+//! it, `~` abbreviated ([`crate::home::tilde`]) — to the untracked paths that
 //! repository needs copied into every worktree `armada fleet spawn` creates
 //! for it. `.claude/contamination.local` is gitignored on purpose and `git
 //! worktree add` never materialises a gitignored file, so a check that needs
 //! it fails in every worktree forever unless something puts it there.
+//!
+//! `daemon.enter` ([`DaemonSwitch`]) is whether `armada daemon` may run
+//! unattended here at all — `034`'s switch, off on a fresh install for the
+//! same reason `carry`'s absence means nothing is carried: this file answers
+//! for one machine, and a machine that has said nothing has not consented to
+//! either.
 //!
 //! # Why a machine fact and not a repository one
 //!
@@ -52,6 +58,40 @@ pub struct FleetSection {
     /// it.
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub carry: BTreeMap<String, Vec<String>>,
+
+    /// Whether `armada daemon` may run unattended, on this machine.
+    #[serde(default)]
+    pub daemon: DaemonSwitch,
+}
+
+/// Whether the Job daemon (`034`) may run on this machine, at all.
+///
+/// **The identical argument [`armada_helm::machine::HelmSection::enter`]
+/// makes**, one level further out: `helm.enter` decides whether *this box* may
+/// open a Claude Code session unattended, and this decides whether *this box*
+/// may run the process that pushes branches, opens PRs and merges them
+/// unattended. Both are facts about the machine — a laptop somebody is sitting
+/// at answers differently than a shared box or one nobody has opened a
+/// terminal on in a week — and `034` §1 names this switch by the same field
+/// Helm's already uses, `enter`, for the reason Helm's own header gives:
+/// *"whether this box may act unattended is a fact about the box."*
+///
+/// **Off is the default, and it is not a preference — `034`'s own words:**
+/// *"It is opt-in, per-machine, and off until enabled."* A fresh install must
+/// not push, open or merge anything until a person has typed `armada daemon
+/// enable` on that exact machine.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DaemonSwitch {
+    /// Whether `armada daemon enable` has been run here.
+    ///
+    /// **Off is what a missing file, a missing section and an unparseable
+    /// section all mean too** — the same fail-safe direction
+    /// [`armada_helm::machine::HelmSection::enter`] documents, and for the same
+    /// reason: a `machine.yml` a person is mid-edit on must not be the thing
+    /// that lets an unattended process start pushing branches.
+    #[serde(default)]
+    pub enter: bool,
 }
 
 /// Read Fleet's section, or the default — nothing configured — when the
@@ -305,5 +345,72 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         std::fs::write(home.path().join("machine.yml"), "fleet:\n  carr: {}\n").unwrap();
         assert!(carry_for(home.path(), "~/code/armada").unwrap().is_empty());
+    }
+
+    // ------------------------------------------------------------- daemon.enter
+
+    /// **Off is the default**, on a machine that has never touched this file —
+    /// the same requirement `034` §1 states for the switch: "off until told
+    /// to".
+    #[test]
+    fn a_machine_with_no_file_has_the_daemon_off() {
+        let home = tempfile::tempdir().unwrap();
+        assert!(!read(home.path()).daemon.enter);
+    }
+
+    #[test]
+    fn the_daemon_switch_round_trips() {
+        let home = tempfile::tempdir().unwrap();
+        let mut section = FleetSection::default();
+        section.daemon.enter = true;
+        write(home.path(), &section).unwrap();
+        assert!(read(home.path()).daemon.enter);
+    }
+
+    /// **Writing `daemon` leaves `carry` alone, and writing `carry` leaves
+    /// `daemon` alone** — they are two fields of one section this module owns
+    /// outright, so there is no preserve-logic to write for either, only the
+    /// ordinary `FleetSection` round trip.
+    #[test]
+    fn writing_daemon_preserves_carry_and_writing_carry_preserves_daemon() {
+        let home = tempfile::tempdir().unwrap();
+        let mut section = FleetSection::default();
+        section
+            .carry
+            .insert("~/code/armada".to_string(), vec![".env".to_string()]);
+        write(home.path(), &section).unwrap();
+
+        let mut with_daemon = read(home.path());
+        with_daemon.daemon.enter = true;
+        write(home.path(), &with_daemon).unwrap();
+
+        let after = read(home.path());
+        assert!(after.daemon.enter);
+        assert_eq!(
+            after.carry.get("~/code/armada"),
+            Some(&vec![".env".to_string()])
+        );
+    }
+
+    /// A file this module cannot parse reads the daemon switch as off too —
+    /// the same fail-safe direction as `carry`'s own equivalent test.
+    #[test]
+    fn an_unparseable_file_reads_the_daemon_switch_as_off() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(home.path().join("machine.yml"), "fleet: [\n").unwrap();
+        assert!(!read(home.path()).daemon.enter);
+    }
+
+    /// A mistyped key under `daemon:` is dropped rather than trusted, same as
+    /// `carry`'s.
+    #[test]
+    fn a_mistyped_daemon_key_reads_as_off() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("machine.yml"),
+            "fleet:\n  daemon:\n    entr: true\n",
+        )
+        .unwrap();
+        assert!(!read(home.path()).daemon.enter);
     }
 }

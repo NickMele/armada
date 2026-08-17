@@ -182,6 +182,36 @@ pub enum Invocation {
         /// Emit the envelope.
         json: bool,
     },
+    /// `armada daemon enable` — let `034`'s daemon run unattended on this
+    /// machine, and install its launchd job (macOS only in this stage).
+    ///
+    /// **A separate top-level variant, on [`Invocation::HelmEnable`]'s own
+    /// reasoning.** Two small variants cost less than folding a switch with no
+    /// flags of its own into a shape built for a launch that has several.
+    DaemonEnable {
+        /// Emit the envelope.
+        json: bool,
+    },
+    /// `armada daemon disable` — the opposite, and the default on a fresh
+    /// install. Always safe to run, on every OS: it puts the switch back and
+    /// removes the launchd job if one was installed.
+    DaemonDisable {
+        /// Emit the envelope.
+        json: bool,
+    },
+    /// `armada daemon status` — the switch and the live process, as two
+    /// separate facts. **Not a copy of `helm`'s shape**: Helm has no `status`
+    /// verb of its own (`armada doctor` covers it), so this is new rather than
+    /// reused.
+    DaemonStatus {
+        /// Emit the envelope.
+        json: bool,
+    },
+    /// `armada daemon run` — the hidden entrypoint launchd (or
+    /// [`armada_fleet::daemon::start`]) execs directly. **Not on any help
+    /// page**: nobody types this by hand, the same way nobody types the
+    /// `Stop` hook's own command.
+    DaemonRun,
     /// `armada guild <verb>`.
     Guild(Box<GuildInvocation>),
     /// `armada fleet <verb>`.
@@ -965,7 +995,7 @@ pub const FLEET_VERBS: [&str; 11] = [
 ///
 /// **`init` here is a different verb from `manifest init`, and the help says
 /// so**: this one sets up *you, here*; that one claims a workspace.
-pub const TOP_LEVEL_VERBS: [&str; 12] = [
+pub const TOP_LEVEL_VERBS: [&str; 16] = [
     "init",
     "doctor",
     "settings",
@@ -973,6 +1003,10 @@ pub const TOP_LEVEL_VERBS: [&str; 12] = [
     "helm",
     "helm enable",
     "helm disable",
+    "daemon",
+    "daemon enable",
+    "daemon disable",
+    "daemon status",
     "failures",
     "report",
     "task",
@@ -1170,6 +1204,7 @@ fn parse_into(args: &[String], color: &mut ColorChoice) -> Result<Invocation, Pa
             "settings" => return settings(rest, json, color),
             "bridge" => return bridge(rest, json, color),
             "helm" => return helm(rest, json, color),
+            "daemon" => return daemon(rest, json, color),
             "guild" => return guild(rest, json, color),
             "fleet" => return fleet(rest, json, color),
             "failures" => return failures(rest, json, color),
@@ -1788,6 +1823,99 @@ fn helm(rest: &[String], json: bool, color: &mut ColorChoice) -> Result<Invocati
         exec: parsed.on(crate::verbs::helm::ENTER),
         print_command: parsed.on(crate::verbs::helm::PRINT),
     })))
+}
+
+/// `armada daemon` — `034`'s daemon, as a machine switch around a process.
+///
+/// **`enable`/`disable`/`status` mirror [`helm`]'s own `enable`/`disable`
+/// shape**, and `status` is the one this module does not already have a
+/// pattern for: Helm's own liveness question is answered by `armada doctor`,
+/// not by a `helm status`, because Helm is a session that opens and ends —
+/// there is nothing to poll between launches. The daemon is a background
+/// process that is supposed to still be there an hour after `enable`, so
+/// whether it actually is belongs on its own verb, read the moment it is
+/// asked rather than inferred from `machine.yml` alone.
+///
+/// **`run` is parsed here and answered by nothing else** — no `--help`, no
+/// flags, no listing. It is `034`'s hidden entrypoint: what launchd execs,
+/// and what [`crate::verbs::daemon::run`]'s own detached spawn execs when
+/// launchd is not the one starting it. A person who types it by hand gets
+/// exactly what launchd gets — a process that records its own arrival and
+/// then does nothing until it is killed.
+const DAEMON_VERBS: [&str; 3] = ["enable", "disable", "status"];
+
+fn daemon(
+    rest: &[String],
+    json: bool,
+    color: &mut ColorChoice,
+) -> Result<Invocation, ParseFailure> {
+    // **Bare `armada daemon`, and `-h`/`--help`/`--json` with no verb after
+    // them, all read as a question and get the page.** Unlike `armada helm`,
+    // where the bare word *is* the action, there is no default act a
+    // switch-and-a-process verb could take that would not surprise a reader
+    // who typed only the module name.
+    let Some(first) = rest.first() else {
+        return page_or_bug("daemon");
+    };
+    if is_help(first) {
+        return page_or_bug("daemon");
+    }
+    if first.starts_with('-') {
+        return page_or_bug("daemon");
+    }
+
+    let name = first.as_str();
+    let tail = &rest[1..];
+
+    // **`run` is parsed here and answered by nothing else** — no `--help`, no
+    // flags, no listing, not in [`DAEMON_VERBS`]. It is `034`'s hidden
+    // entrypoint: what launchd execs, and what
+    // [`crate::verbs::daemon::run`]'s own detached spawn execs when launchd is
+    // not the one starting it. A person who types it by hand gets exactly
+    // what launchd gets — a process that records its own arrival and then
+    // does nothing until it is killed.
+    if name == "run" {
+        return Ok(Invocation::DaemonRun);
+    }
+
+    if !DAEMON_VERBS.contains(&name) {
+        let json = json || tail.iter().any(|a| a == "--json");
+        return Err(unknown(
+            ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: format!("daemon {name}"),
+                message: format!("unknown verb `armada daemon {name}`"),
+                next_action: Some("`armada daemon --help` lists them".to_string()),
+            },
+            json,
+            &format!("daemon {name}"),
+        ));
+    }
+
+    if wants_help(tail) {
+        if let Some(topic) = help_page("daemon", name) {
+            return Ok(Invocation::Help(topic));
+        }
+    }
+    let parsed = flags(tail, json, color, &format!("daemon {name}"), &[], &[])?;
+    Ok(match name {
+        "enable" => Invocation::DaemonEnable { json: parsed.json },
+        "disable" => Invocation::DaemonDisable { json: parsed.json },
+        _ => Invocation::DaemonStatus { json: parsed.json },
+    })
+}
+
+/// The named top-level page, or — if it is somehow not registered — Armada's
+/// own bug rather than a caller's mistake: [`help_page`] answering `None` here
+/// would mean the page table shipped without an entry [`every_verb`]'s own
+/// completeness test requires every top-level verb to have.
+fn page_or_bug(path: &str) -> Result<Invocation, ParseFailure> {
+    match help_page("", path) {
+        Some(topic) => Ok(Invocation::Help(topic)),
+        None => {
+            unreachable!("`{path}` is in TOP_LEVEL_VERBS and every_verb() checks it has a page")
+        }
+    }
 }
 
 fn doctor(
