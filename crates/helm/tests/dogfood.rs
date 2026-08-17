@@ -28,6 +28,22 @@
 //! makes the nesting harmless; keep this suite's invocations nested-safe rather
 //! than assuming the environment they meet is clean.
 //!
+//! **It leaves a run directory in the working tree, and that looks like a run
+//! nobody invoked.** The scratch `$HOME` keeps the lease and the port block out
+//! of the developer's `manifest.db`, but the run directory is resolved from the
+//! *workspace* root, and running against the real root is the whole point of a
+//! dogfood. So every `armada:test` phase deposits a one-check `armada:fmt` run
+//! under `.armada/run/` that appears in no `recent.jsonl` entry, because a test
+//! does not write the ring buffer.
+//!
+//! **That cost a real diagnosis.** Two runs holding the same `cargo fmt --all
+//! --check` diff, seconds apart, one of them recorded by nothing, was filed as a
+//! race between a fix and a check (failure `40239355`) — and the run directory
+//! is reaped soon enough that the evidence for the real explanation was gone by
+//! the time anybody looked. It is left as it is because the alternative is a
+//! flag that exists only for this test, but a reader who finds an unattributed
+//! `armada:fmt` run should look here first.
+//!
 //! **One check, not the suite.** `armada:test` runs `cargo test --workspace`,
 //! and running that from inside `cargo test` is a recursion, not a dogfood.
 //! `armada:fmt` is the check that is fast, deterministic, and has no
