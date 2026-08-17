@@ -73,8 +73,8 @@ pub fn extra_alternatives(root: &Path, from_env: Option<String>) -> Vec<String> 
     let raw = match from_env {
         // Exported-empty yields no alternatives, which is the off switch.
         Some(v) => v.split('|').map(str::to_string).collect(),
-        None => match std::fs::read_to_string(root.join(EXTRA_FILE)) {
-            Ok(text) => text
+        None => match read_config(root) {
+            Some(text) => text
                 .lines()
                 .filter(|l| !l.trim_start().starts_with('#'))
                 .map(str::to_string)
@@ -82,13 +82,76 @@ pub fn extra_alternatives(root: &Path, from_env: Option<String>) -> Vec<String> 
             // Unreadable and absent are the same answer: nothing was named. The
             // run is then reported as unconfigured and fails loudly rather than
             // passing quietly — see `unconfigured_finding`.
-            Err(_) => Vec::new(),
+            None => Vec::new(),
         },
     };
     raw.iter()
         .map(|a| a.trim().to_string())
         .filter(|a| !a.is_empty())
         .collect()
+}
+
+/// [`EXTRA_FILE`] from this checkout, or from the **primary** one when this is a
+/// linked worktree.
+///
+/// # Why a worktree needs a second place to look
+///
+/// The file is gitignored, which is the entire point of it — it names a private
+/// repository and this one is public — and **`git worktree add` never
+/// materialises a gitignored file**. So a worktree of a checkout that has armed
+/// the rule arrives with the rule disarmed, and [`unconfigured_finding`] then
+/// fails the gate for a condition nothing inside the worktree can act on: the
+/// file cannot be committed, and writing one by hand puts a private name into a
+/// path `git status` reports as untracked, in a repository somebody may then
+/// `git add -A`.
+///
+/// **That is not hypothetical.** `armada fleet spawn` gives every Job its own
+/// worktree, so every Job this repository has ever run inherited an
+/// `armada:docs` check that was red on arrival and that no Drone could clear.
+/// Measured 2026-08-17 on job `armada-failed`, which spent two exchanges on it
+/// and then correctly raised it to a person rather than inventing a name.
+///
+/// # Why the primary checkout is the right second place
+///
+/// `--git-common-dir` is the one directory every worktree of a repository
+/// shares, and its parent is the working tree that owns it. So arming the
+/// checkout a person actually configured arms every worktree cut from it,
+/// permanently, with nothing per-worktree to remember — and a machine that has
+/// armed nothing still gets the loud failure, because there is then nothing to
+/// find in either place.
+///
+/// **In the primary checkout it resolves to the directory it started from**, so
+/// this is one code path rather than two.
+fn read_config(root: &Path) -> Option<String> {
+    if let Ok(text) = std::fs::read_to_string(root.join(EXTRA_FILE)) {
+        return Some(text);
+    }
+    std::fs::read_to_string(primary_worktree(root)?.join(EXTRA_FILE)).ok()
+}
+
+/// The working tree that owns this repository's shared git directory.
+///
+/// `None` when git cannot answer — not a repository, no `git` on `PATH`, a bare
+/// repository. The caller then has nowhere else to look, which is the same
+/// answer as an absent file and reports as unconfigured.
+fn primary_worktree(root: &Path) -> Option<std::path::PathBuf> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        // **Absolute, because the relative form is `.git`** in the primary
+        // checkout, and joining that onto `root` would name a directory instead
+        // of the working tree above it. `--path-format` is git 2.31 and later.
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let common = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if common.is_empty() {
+        return None;
+    }
+    Path::new(&common).parent().map(Path::to_path_buf)
 }
 
 /// Exempt from rule 1 only, per `ARCHITECTURE.md` §2.4: the harvest doc's whole
@@ -737,6 +800,109 @@ mod tests {
         // precedence contamination and the clean-room hook use.
         let from_env = extra_alternatives(&root, Some(String::new()));
         assert!(scan(&root, &files, &from_env, None).unwrap().is_empty());
+    }
+
+    /// **A linked worktree reads the primary checkout's config**, because
+    /// `git worktree add` never materialises a gitignored file and this file is
+    /// gitignored on purpose.
+    ///
+    /// Every Job `armada fleet spawn` has ever created got a worktree with the
+    /// name rule disarmed, so `armada:docs` was red on arrival and no Drone could
+    /// clear it: the file cannot be committed, and there was nothing inside the
+    /// worktree to read. Measured 2026-08-17 on job `armada-failed`.
+    ///
+    /// **A real `git worktree add`, not a constructed layout.** What this depends
+    /// on is git's own answer to `--git-common-dir`; a fake directory tree would
+    /// assert that the author believes what git does.
+    ///
+    /// Inverted once: making `read_config` skip the fallback fails this on
+    /// *"the worktree did not find the primary checkout's names"*.
+    #[test]
+    fn a_linked_worktree_reads_the_primary_checkouts_configured_names() {
+        let primary = repo("worktree-config");
+        commit(&primary, "README.md", "clean\n", "one");
+        std::fs::create_dir_all(primary.join(".claude")).expect("scratch .claude");
+        std::fs::write(
+            primary.join(".claude/contamination.local"),
+            format!("# armed here, and only here\n{INVENTED}\n"),
+        )
+        .expect("scratch config");
+
+        let linked = primary
+            .parent()
+            .expect("a parent")
+            .join(format!("worktree-config-linked-{}", std::process::id()));
+        std::fs::remove_dir_all(&linked).ok();
+        git_ok(
+            &primary,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "--detach",
+                linked.to_str().expect("a path"),
+                "HEAD",
+            ],
+        );
+
+        // The premise: git really did not carry the file across.
+        assert!(
+            !linked.join(".claude/contamination.local").exists(),
+            "git materialised a gitignored file, and this fallback is unnecessary"
+        );
+        assert_eq!(
+            extra_alternatives(&linked, None),
+            vec![INVENTED.to_string()],
+            "the worktree did not find the primary checkout's names"
+        );
+
+        // And a worktree of a checkout that armed nothing is still unconfigured,
+        // so the fallback cannot pass a machine that configured nothing.
+        std::fs::remove_file(primary.join(".claude/contamination.local")).expect("disarm");
+        assert!(extra_alternatives(&linked, None).is_empty());
+
+        git_ok(
+            &primary,
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                linked.to_str().expect("a path"),
+            ],
+        );
+    }
+
+    /// **The primary checkout is unchanged by the fallback existing.** There the
+    /// file is beside the tree, and the second lookup resolves to the directory it
+    /// started from — one code path, not two.
+    #[test]
+    fn the_primary_checkout_reads_its_own_file_exactly_as_before() {
+        let primary = repo("primary-config");
+        commit(&primary, "README.md", "clean\n", "one");
+        assert!(
+            extra_alternatives(&primary, None).is_empty(),
+            "nothing configured is nothing found"
+        );
+
+        std::fs::create_dir_all(primary.join(".claude")).expect("scratch .claude");
+        std::fs::write(
+            primary.join(".claude/contamination.local"),
+            format!("{INVENTED}\n"),
+        )
+        .expect("scratch config");
+        assert_eq!(
+            extra_alternatives(&primary, None),
+            vec![INVENTED.to_string()]
+        );
+    }
+
+    /// A directory that is not a repository has nowhere to fall back to, and
+    /// reports as unconfigured rather than failing — the same fail-safe direction
+    /// an unreadable file already took.
+    #[test]
+    fn a_directory_that_is_not_a_repository_reports_nothing_configured() {
+        let (root, _) = scratch("not-a-repo", &[("README.md", "clean\n")]);
+        assert!(extra_alternatives(&root, None).is_empty());
     }
 
     #[test]
