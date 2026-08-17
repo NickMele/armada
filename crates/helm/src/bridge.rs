@@ -777,6 +777,71 @@ mod tests {
         ))
     }
 
+    /// **The two mock-ups `033` draws, and the line between them.**
+    ///
+    /// At [`WIDE`] all seven boxes are there; one column below it, MANIFEST,
+    /// GUILD and SYSTEM are gone whole and ARMADA, JOBS, INBOX and KEYS remain
+    /// — the 96-column mock exactly. Whole panels drop rather than shedding
+    /// columns, because a panel squeezed to two columns says less than its own
+    /// absence does.
+    ///
+    /// **This is the test the panel-dropping shipped without.** `033`'s plan
+    /// called for fixtures at both widths and the implement step deferred them;
+    /// a fixture at 138 columns cannot notice that narrow is unbuilt, which is
+    /// how `apply_shedding` sat as a pass-through stub with a TODO through two
+    /// Jobs. Asserting the wide case alone would leave the same hole.
+    #[test]
+    fn the_narrow_screen_drops_whole_panels_and_the_wide_one_keeps_them() {
+        let screen = Screen::default();
+        let fleet = frame();
+
+        let wide = drawn_at(&fleet, &screen, WIDE).join("\n");
+        for panel in [
+            "ARMADA", "JOBS", "INBOX", "MANIFEST", "GUILD", "SYSTEM", "KEYS",
+        ] {
+            assert!(
+                wide.contains(panel),
+                "`{panel}` is missing at {WIDE}: {wide}"
+            );
+        }
+
+        let narrow = drawn_at(&fleet, &screen, WIDE - 1).join("\n");
+        for kept in ["ARMADA", "JOBS", "INBOX", "KEYS"] {
+            assert!(
+                narrow.contains(kept),
+                "`{kept}` must survive a narrow terminal: {narrow}"
+            );
+        }
+        for dropped in ["MANIFEST", "GUILD", "SYSTEM"] {
+            assert!(
+                !narrow.contains(dropped),
+                "`{dropped}` should drop whole below {WIDE}, not shed columns: {narrow}"
+            );
+        }
+    }
+
+    /// **Nothing overflows its terminal at either width**, which is the property
+    /// a panel layout can break silently: a box one column too wide wraps, and
+    /// every box below it on the screen is then drawn at the wrong offset.
+    ///
+    /// `033` names the trap — *"line width cannot see column drift"* — for the
+    /// focus marker. This is the other half: column drift cannot be seen by a
+    /// test that only reads content, so the width is asserted directly.
+    #[test]
+    fn no_line_is_wider_than_the_terminal_at_either_width() {
+        let screen = Screen::default();
+        let fleet = frame();
+        for width in [WIDE, WIDE - 1, 96, 80] {
+            for line in drawn_at(&fleet, &screen, width) {
+                assert!(
+                    crate::render::term::display_width(&line) <= width,
+                    "a line ran {} columns wide at {width}: {line}",
+                    crate::render::term::display_width(&line)
+                );
+            }
+        }
+    }
+
     /// **Every binding the page names, and nothing that is not one.**
     #[test]
     fn each_crossterm_key_maps_to_the_bridges_own() {
