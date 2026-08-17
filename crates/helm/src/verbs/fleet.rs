@@ -1196,6 +1196,9 @@ pub fn ls<R: Run, C: Clock>(
     // the whole listing and is made once, below, by
     // [`armada_core::fleet::drone::window`].
     let mut windows: Vec<armada_core::fleet::drone::RateLimit> = Vec::new();
+    // Accumulated per row, because the rows that are filtered out never spent
+    // anything this listing is accounting for.
+    let mut own_spend: f64 = 0.0;
     for record in place.store().all()? {
         if !all && record.state.is_over() {
             continue;
@@ -1216,6 +1219,22 @@ pub fn ls<R: Run, C: Clock>(
             continue;
         }
         let run_time = record.run_time_ms(wall);
+        // **What this Job spent by itself, before its children are added in.**
+        //
+        // `observe` reports `own + kin` so that a ceiling bounds the whole tree
+        // ([`job::Kin::spend`]), which is right for a ceiling and wrong for a
+        // total: summing every row's figure counted each sub-Job twice, once on
+        // itself and once inside its parent, and the `$… today` on the Bridge and
+        // at the foot of every listing over-reported the fleet by the cost of its
+        // entire second generation. Measured on this machine: $180.56 against a
+        // real $133.64.
+        //
+        // **Subtracted rather than summing the roots only.** A parent's roll-up
+        // happens when a tick sees the child over, so a parent that was killed
+        // while its child was still running never received it — and counting only
+        // roots would then lose that child's spend entirely. Every Job's own
+        // share is on its own record, so this needs neither assumption.
+        own_spend += (observed.spend.cost_usd - record.kin.spend.cost_usd).max(0.0);
         rows.push(JobRow {
             uuid: record.uuid.clone(),
             name: record.name.clone(),
@@ -1270,11 +1289,20 @@ pub fn ls<R: Run, C: Clock>(
                 // to attach it to.
                 .filter(|doing| doing.slow.is_some())
                 .map(|doing| doing.elapsed_ms(wall) / 1_000),
+            // **Off the record, where `016` put it.** A sub-Job knows which Job
+            // started it, which step of that Job's workflow it satisfies and
+            // which attempt it belongs to; the parent keeps no list of children,
+            // because *"what did I start"* is asked while walking the whole index
+            // anyway — and a listing is exactly that walk.
+            parent: record.kin.parent.clone(),
+            // Set by `as_a_tree`, which is where the order is decided.
+            depth: 0,
         });
     }
 
+    let rows = armada_core::envelope::as_a_tree(rows);
     let needs_you = rows.iter().filter(|row| row.needs_attention).count();
-    let spent_usd = rows.iter().map(|row| row.cost_usd).sum();
+    let spent_usd = own_spend;
     let running = rows.iter().any(|row| row.state == JobState::Running);
 
     Ok(Output::FleetLs(Box::new(Envelope::ok(
