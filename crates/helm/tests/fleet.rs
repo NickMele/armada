@@ -2682,6 +2682,7 @@ fn a_drone_cannot_report_a_step_its_workflow_does_not_declare() {
         "beginning verification",
         Some("verify"),
         Some("entered"),
+        &Default::default(),
     )
     .expect_err("a step the workflow has never heard of is refused");
     assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
@@ -2718,6 +2719,7 @@ fn a_drone_cannot_report_a_step_its_workflow_does_not_declare() {
         "starting the reproduction",
         Some("reproduce"),
         Some("entered"),
+        &Default::default(),
     )
     .expect("a declared step is reported as it always was");
     assert_eq!(scratch.store().load(&data.uuid).unwrap().step, "reproduce");

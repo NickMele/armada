@@ -266,6 +266,7 @@ fn a_report_appends_to_the_jobs_own_record_and_says_how_many() {
         "reproduced the flake on the third run",
         None,
         None,
+        &Default::default(),
     )
     .expect("noted");
 
@@ -293,6 +294,7 @@ fn a_job_that_is_over_gains_no_more_notes() {
         "one more thing",
         None,
         None,
+        &Default::default(),
     )
     .expect_err("a refusal");
 
@@ -319,6 +321,7 @@ fn reporting_entry_moves_the_job_onto_the_step_and_opens_an_attempt() {
         "starting the reproduction",
         Some("reproduce"),
         Some("entered"),
+        &Default::default(),
     )
     .expect("noted");
 
@@ -351,6 +354,7 @@ fn entering_a_step_a_second_time_comes_back_as_a_restart() {
             "going again",
             Some("implement"),
             Some("entered"),
+            &Default::default(),
         )
         .expect("noted");
     }
@@ -379,6 +383,7 @@ fn a_drone_cannot_report_a_step_completed_and_is_sent_to_the_verdict() {
             "all done I think",
             None,
             Some(word),
+            &Default::default(),
         )
         .expect_err("a worker graded its own work");
         assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
@@ -405,6 +410,7 @@ fn a_drone_cannot_report_a_restart_because_armada_works_it_out() {
         "going again",
         None,
         Some("restarted"),
+        &Default::default(),
     )
     .expect_err("a refusal");
     assert!(error
@@ -427,6 +433,7 @@ fn a_word_that_is_not_a_boundary_is_refused_with_the_two_that_are() {
             "note",
             None,
             Some("finished"),
+            &Default::default(),
         )
         .expect_err("a refusal")
     };
@@ -454,6 +461,7 @@ fn an_assertion_and_the_gate_that_disagreed_are_both_kept() {
         "entering",
         Some("implement"),
         Some("entered"),
+        &Default::default(),
     )
     .expect("noted");
     fleet::report(
@@ -463,6 +471,7 @@ fn an_assertion_and_the_gate_that_disagreed_are_both_kept() {
         "I believe the suite is green now",
         None,
         Some("attempted"),
+        &Default::default(),
     )
     .expect("noted");
     fleet::record_gate_verdict(
@@ -586,6 +595,7 @@ fn a_verdict_that_stops_the_job_writes_no_boundary_and_leaves_the_attempt_open()
         "entering",
         Some("implement"),
         Some("entered"),
+        &Default::default(),
     )
     .expect("noted");
     fleet::record_gate_verdict(
@@ -621,6 +631,7 @@ fn recording_a_boundary_starts_no_subprocess() {
         "entering",
         Some("implement"),
         Some("entered"),
+        &Default::default(),
     )
     .expect("noted");
 
@@ -1084,4 +1095,108 @@ fn each_bodys_tools_are_on_the_belt_of_the_session_that_reads_it() {
              no other — the defect splitting the constant exists to close"
         );
     }
+}
+
+/// **The Drone names the test its gate will be judged against, because nobody
+/// else can.**
+///
+/// A step's `verify:` may read `test: ${task.test}`, which `gate::resolve` fills
+/// from the Job's facts, and the only source of a fact used to be
+/// `armada fleet spawn --set`. The two callers that put a Job on the `bug`
+/// workflow cannot supply one — `armada failures fix` holds a stack trace and
+/// `armada report` holds somebody's observation, and neither knows the name of a
+/// test nobody has written. So the gate had nothing to search for and the step
+/// could not be decided at all.
+///
+/// Measured 2026-08-17 on job `armada-failed` (6e5e1a84): 39 turns, $2.68, a real
+/// failing test written into the tree, and the step ended on *"the `reproduce`
+/// step names its test as `${task.test}`, which nothing has substituted"*.
+///
+/// **Asserted through `gate::resolve`, not just on the record.** That a fact was
+/// stored proves storage; what matters is that the placeholder the workflow was
+/// written with now resolves to the name the Drone gave.
+#[test]
+fn a_reported_name_is_what_the_gate_goes_looking_for() {
+    use armada_core::fleet::gate;
+    use armada_core::fleet::workflow::{Predicate, Step, Verify};
+
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    fleet::report(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        "wrote the failing test",
+        Some("reproduce"),
+        Some("attempted"),
+        &BTreeMap::from([(
+            "test".to_string(),
+            "answering_pull_from_a_remote".to_string(),
+        )]),
+    )
+    .expect("noted");
+
+    let record = machine.reload("tidy-otter");
+    let step = Step {
+        id: "reproduce".to_string(),
+        skill: None,
+        workflow: None,
+        scope: None,
+        verify: Verify {
+            must: Predicate::FailingTestExists,
+            test: Some("${task.test}".to_string()),
+            artifact: None,
+        },
+    };
+    assert_eq!(
+        gate::needs(&gate::resolve(&step, &record.facts)),
+        gate::Needs::RedCheck {
+            test: "answering_pull_from_a_remote".to_string(),
+            scope: None,
+        },
+        "the gate is not looking for the test the Drone reported"
+    );
+}
+
+/// **A name the person supplied wins over the Drone's.**
+///
+/// `--set test=` is a contract stated before the work; a reported name is a fact
+/// discovered during it. If the Drone could overwrite the first it could move its
+/// own goalposts — and the reason that is safe either way is that naming the test
+/// is not deciding the gate: Armada still searches the tree for the name and
+/// still requires the check run red.
+#[test]
+fn a_name_the_caller_supplied_is_not_overwritten_by_the_drone() {
+    let machine = Machine::new();
+    machine.job("tidy-otter", JobState::Running, "");
+
+    let mut record = machine.reload("tidy-otter");
+    record
+        .facts
+        .insert("test".to_string(), "the_contract".to_string());
+    Store::at(&machine.place().armada_home)
+        .save(&record)
+        .expect("saved");
+
+    fleet::report(
+        &FrozenClock,
+        &machine.place(),
+        "tidy-otter",
+        "wrote a test",
+        Some("reproduce"),
+        Some("attempted"),
+        &BTreeMap::from([("test".to_string(), "something_else".to_string())]),
+    )
+    .expect("noted");
+
+    assert_eq!(
+        machine
+            .reload("tidy-otter")
+            .facts
+            .get("test")
+            .map(String::as_str),
+        Some("the_contract"),
+        "a Drone moved the goalposts the caller set"
+    );
 }

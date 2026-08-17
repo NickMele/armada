@@ -132,6 +132,18 @@ pub struct ReportArgs {
     /// the gate's to decide.
     #[serde(default)]
     pub event: Option<String>,
+    /// What this step's gate should look for, as `key=value`.
+    ///
+    /// Use it when your task prompt said nobody had named the test or the
+    /// artifact yet: `set: ["test=<the test function you wrote>"]`, or
+    /// `set: ["artifact=<the path you wrote>"]`. Armada searches your worktree
+    /// for that name, so give it exactly as it appears in the tree.
+    ///
+    /// A value the person who started this Job supplied wins over one given
+    /// here: theirs was a contract stated before the work, and this is a fact
+    /// discovered during it.
+    #[serde(default)]
+    pub set: Vec<String>,
 }
 
 /// `fleet.ask_human`.
@@ -191,6 +203,15 @@ impl Toolbelt {
                 &args.body,
                 None,
                 args.event.as_deref(),
+                // Parsed the same way `fleet.spawn`'s `set` is, because it is the
+                // same vocabulary: a `task.<key>` the gate will fill. One
+                // spelling of one idea (`ARCHITECTURE.md` §1.3).
+                &args
+                    .set
+                    .iter()
+                    .filter_map(|pair| pair.split_once('='))
+                    .map(|(key, value)| (key.trim().to_string(), value.trim().to_string()))
+                    .collect(),
             )
         })
         .await

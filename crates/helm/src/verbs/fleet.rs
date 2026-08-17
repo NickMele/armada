@@ -638,7 +638,7 @@ pub fn spawn<R: Run, C: Clock>(
         &path,
         argv::spawn_argv(
             &uuid,
-            &prompt(&workflow, &step, &options.task),
+            &prompt(&workflow, &step, &options.task, &options.set),
             &place.posture()?,
             // **The relay, written before the first Drone starts** (`020` §1).
             // Nothing observed an exchange ending until this line existed.
@@ -1078,13 +1078,49 @@ fn read_workflow(place: &Where, name: &str) -> Result<Workflow, ArmadaError> {
 /// pointer to a markdown file (`glossary.md`), and Armada never parses that file
 /// — the Drone resolves the name in its own worktree, which is what makes the
 /// repo's version win a collision (PLAN.md §14.5).
-fn prompt(workflow: &Workflow, step: &str, task: &str) -> String {
-    let skill = workflow
-        .steps
-        .iter()
-        .find(|candidate| candidate.id == step)
-        .and_then(|candidate| candidate.skill.clone());
-    match skill {
+///
+/// # The gate's own resolved terms, stated
+///
+/// **A Drone was judged against a name it was never given.** A `bug` Job's
+/// `reproduce` step gates on `failing_test_exists` with `test: ${task.test}`,
+/// which [`gate::resolve`] fills from the Job's facts — and this prompt carried
+/// the step, the skill and the task and *not the filled value*. So the Drone
+/// wrote whatever test it thought reasonable, the gate went looking for the one
+/// the caller had named, found nothing, and reported that the Drone had not
+/// written a test. Both were doing exactly as told; only one of them had been
+/// told.
+///
+/// Every `task.*` fact a step's own `verify:` names is stated **resolved** when
+/// the Job holds it, and **asked for** when it does not.
+///
+/// # Why asking is the other half, and why nothing refuses at spawn
+///
+/// A `${task.<key>}` is a fact by that name, and two things can supply one: the
+/// caller, with `armada fleet spawn --set test=…`, and — since this — the Drone
+/// itself, with `fleet.report`. So a fact the Job does not hold at spawn is not a
+/// misconfiguration to refuse; it is a fact nobody knows yet.
+///
+/// **Which is the only reading that works for the callers that exist.** `armada
+/// failures fix` and `armada tasks start` both put a Job on the `bug` workflow,
+/// and neither can name a test: a recorded failure is a stack trace and a report
+/// is somebody's observation. Refusing them at spawn would make the primary way
+/// into the fleet unusable, and asking a person to invent a test name for a bug
+/// nobody has looked at yet is asking them for the answer to the step.
+///
+/// The caller still wins where there is one: a `--set test=` is a contract stated
+/// before the work, so it is stated to the Drone as a contract. Where there is
+/// none, the Drone writes the test it thinks reproduces the bug and names it, and
+/// Armada verifies that name — `PLAN.md` §5's sandwich, rather than the caller
+/// guessing.
+fn prompt(
+    workflow: &Workflow,
+    step: &str,
+    task: &str,
+    facts: &std::collections::BTreeMap<String, String>,
+) -> String {
+    let declared = workflow.steps.iter().find(|candidate| candidate.id == step);
+    let skill = declared.and_then(|candidate| candidate.skill.clone());
+    let mut ask = match skill {
         Some(skill) => format!(
             "Use the `{skill}` skill for the `{step}` step of the `{}` workflow.\n\n\
              Task: {task}",
@@ -1094,7 +1130,54 @@ fn prompt(workflow: &Workflow, step: &str, task: &str) -> String {
             "Work the `{step}` step of the `{}` workflow.\n\nTask: {task}",
             workflow.name
         ),
+    };
+
+    let Some(declared) = declared else { return ask };
+    // The *resolved* verify, so what is stated is the value the gate will look
+    // for rather than the placeholder the document was written with.
+    let resolved = gate::resolve(declared, facts);
+    let unfilled = |value: &Option<String>| value.as_ref().is_some_and(|v| v.contains("${"));
+
+    match (&resolved.verify.test, unfilled(&resolved.verify.test)) {
+        // **The Drone was judged against a name it was never given.** The prompt
+        // carried the step, the skill and the task and not the filled value, so
+        // the Drone wrote whatever test looked reasonable while the gate hunted
+        // for the one the caller had named. Both did as told; one was told.
+        (Some(test), false) => ask.push_str(&format!(
+            "\n\nThis step's gate is `failing_test_exists` and it looks for a test called \
+             `{test}`. Write that test, under that name, and make it fail for the reason the \
+             task describes — a test by another name does not satisfy it."
+        )),
+        // Nobody named one, so name it yourself. Without this the gate had
+        // nothing to look for and the step could not be decided at all, which is
+        // where a live Job stopped after 39 turns.
+        (Some(_), true) => ask.push_str(
+            "\n\nThis step's gate is `failing_test_exists` and **nobody has named the test \
+             yet**. Write the test that fails for the reason the task describes, then name it \
+             when you report this step: `fleet.report` takes a `set` of \
+             `[\"test=<the test function you wrote>\"]`. Armada searches your worktree for that \
+             name and requires the check run to be red — so the name has to be the one in the \
+             tree, and the test has to actually fail.",
+        ),
+        (None, _) => {}
     }
+
+    match (
+        &resolved.verify.artifact,
+        unfilled(&resolved.verify.artifact),
+    ) {
+        (Some(path), false) => ask.push_str(&format!(
+            "\n\nThis step's gate is `artifact_exists` and it looks for `{path}`. That exact \
+             path is what satisfies it."
+        )),
+        (Some(_), true) => ask.push_str(
+            "\n\nThis step's gate is `artifact_exists` and **nobody has named the path yet**. \
+             Write the artifact, then name it when you report this step: `fleet.report` takes a \
+             `set` of `[\"artifact=<the path you wrote>\"]`, relative to the worktree.",
+        ),
+        (None, _) => {}
+    }
+    ask
 }
 
 /// Raise an entry, and hand back the id it was given.
@@ -2964,6 +3047,7 @@ pub fn report<C: Clock>(
     body: &str,
     step: Option<&str>,
     event: Option<&str>,
+    set: &std::collections::BTreeMap<String, String>,
 ) -> Result<Output, ArmadaError> {
     let store = place.store();
     let mut record = store.find(handle)?;
@@ -3026,6 +3110,29 @@ pub fn report<C: Clock>(
     // column each on a different step.
     if crossing.is_some_and(job::StepEvent::opens) {
         record.step.clone_from(&step);
+    }
+
+    // **What the gate should look for, from the only party that can know it.**
+    //
+    // A step's `verify:` may be written `test: ${task.test}`, which
+    // [`gate::resolve`] fills from these facts. Until now the *only* source was
+    // `armada fleet spawn --set`, and the callers that put a Job on the `bug`
+    // workflow cannot supply one: a recorded failure is a stack trace and
+    // `armada report` is somebody's observation, so neither knows the name of a
+    // test nobody has written yet. The gate then had nothing to search for and
+    // the step could not be decided at all — measured 2026-08-17 on job
+    // `armada-failed`, 39 turns and a real failing test in the tree, stopped on
+    // *"the `reproduce` step names its test as `${task.test}`, which nothing has
+    // substituted"*.
+    //
+    // **The caller still wins, and that ordering is the point.** A `--set test=`
+    // is a contract stated before the work began; this is a fact discovered
+    // during it. Letting a Drone overwrite the first would let it move its own
+    // goalposts — and what it cannot do either way is decide whether the gate
+    // holds: Armada still searches the tree for the name and still requires the
+    // check run to be red (`PLAN.md` §5).
+    for (key, value) in set {
+        record.facts.entry(key.clone()).or_insert(value.clone());
     }
 
     let crossed = crossing.map(|event| {
@@ -4263,7 +4370,7 @@ fn start_step<R: Run>(
             )),
         });
     }
-    let mut ask = prompt(flow, step, &record.task);
+    let mut ask = prompt(flow, step, &record.task, &record.facts);
     if let Some(failed) = failed {
         // **The gate's own words, handed back.** A retry that started with the
         // same prompt as the first attempt is an agent asked to do the same
@@ -4728,7 +4835,7 @@ fn spawn_child<R: Run, C: Clock>(
         &path,
         argv::spawn_argv(
             &uuid,
-            &prompt(&flow, &first, &task),
+            &prompt(&flow, &first, &task, &record.facts),
             &place.posture()?,
             // **Both of these are load-bearing for a sub-Job in particular.**
             // Without the relay (`020` §1) nothing observes the child's
