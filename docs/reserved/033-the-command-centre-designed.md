@@ -81,6 +81,58 @@ the five-hour window and the weekly one, each with a percentage and a time to re
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+## What shipped differently — corrected 2026-08-17
+
+**The two mock-ups above are kept as drawn, because they are what was agreed.** This section is what
+the code does instead, and why. A mock-up quietly edited to match its implementation stops being a
+record of a decision.
+
+**The rendering is now a fixture rather than a picture.** `tests/golden/render/bridge-wide.{plain,tty}`
+is this screen at 138 columns and `bridge.{plain,tty}` is it at 80, both compared byte for byte on
+every run, with a test asserting no line exceeds the terminal. Those files are the authority on the
+shape; read them rather than these drawings. They exist because `033` first shipped its panels into
+the live `paint()` path only — `armada bridge --once` went on printing the pre-`033` single table at
+every width, and no fixture could see either shape. Closed by `75f697c`.
+
+Three things in the JOBS panel differ from the drawing, and each is a decision taken since:
+
+| Drawn | Ships as | Why |
+|---|---|---|
+| `ITER` column, `7/20` | `TURNS`, a count | `budget.iterations` was **deleted**. It counted model turns, which is not a thing worth bounding — a Job is bounded by cost, wall clock, and consecutive failed gates at one step (`max_attempts`). `7/20` is also a fraction of a ceiling that no longer exists. |
+| `implement 3/4 12m` | `implement 12m` | A step and an elapsed time, never a fraction. `3/4` is the progress bar PHASES.md §9.1 F2 bans, drawn in words: nothing emits percent-complete, and a fraction over a step count implies the remaining steps are equal in size. |
+| four unrelated Jobs, flat | sub-Jobs nested under the step they satisfy | The fleet is a tree and the drawing showed it as a list. `job-drives-the-drone-plan` is not a peer of `job-drives-the-drone`, it **is** its `plan` step — and three Jobs with three sub-Jobs read as six, which made the fleet look twice as busy as it was. Landed in `6f5ae58`. |
+
+So the JOBS panel a reader meets today looks like this — one `feature` Job with the sub-Jobs its own
+gates started, `#2` marking a `review` step that failed once and was tried again:
+
+```text
+┌─ JOBS (4) ───────────────────────────────────────────────────────────────────┐
+  JOB                         STATUS   ID        STEP      RUN  SPENT  NEEDS YOU
+  command-centre              PAUSED   bafe1e02  review     2h  $2.50  -
+  └ command-centre-plan       DONE     28e048ca  approve    1h  $4.52  -
+  └ command-centre-review     ABORTED  bd8762f3  read      15m  $2.28  -
+  └ command-centre-review #2  RUNNING  0e5047b0  read       5m  $1.10  -
+ 4 jobs   $10.40 today
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**The glyph carries the attempt and not the parent's step name, and that is a width decision.** `armada
+fleet ls`'s table came to exactly eighty columns before nesting, so `└ review: ` took it to
+eighty-seven — wider than the terminal, which no listing may be. The glyph alone leaves four columns
+of slack and the attempt spends three of them, because it is the half that cannot be inferred: two
+rows carry one name when a review is retried. The step is in `--json` as `parent.step`, in `armada
+fleet show`, and in `fleet ls`'s own `WORKFLOW` column.
+
+**The `$ today` figure changed meaning too.** It was the sum of every row, which counted each sub-Job
+twice — once on itself and once inside the parent that had rolled its spend up. On this machine that
+read `$180.56` against a real `$148.82`. It is now the sum of each Job's own share.
+
+**MANIFEST is still the one panel drawn from a placeholder** at the time of writing, because it needs
+`App` — `manifest.db` opened, `MachineConfig` read, a boot id probed — and the Bridge's dispatch
+deliberately routes around `app::build` so a redraw stays a directory read, a transcript tail and a
+`ps`. The owner decided on 2026-08-17 to build `App` once at `watch()` entry, which keeps that
+per-frame promise; the work is in flight.
+
 ## The Job detail, full screen
 
 `d` on any Job, or `enter` from the inbox.
