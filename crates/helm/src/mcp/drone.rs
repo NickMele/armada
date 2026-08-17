@@ -137,6 +137,9 @@ pub struct ReportArgs {
 /// `fleet.ask_human`.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct AskArgs {
+    /// What this is about — name the file, the decision, or the step. One line.
+    /// A person sees this first, and in a listing it is all they see.
+    pub about: String,
     /// The question, in full. It is what a person reads in the inbox, out of
     /// context and possibly hours later.
     pub question: String,
@@ -197,9 +200,12 @@ impl Toolbelt {
     #[tool(
         name = "fleet.ask_human",
         description = "Raise a question to the person running this fleet and wait for an answer. \
-                       Use it only for a judgement that is genuinely theirs. It returns with the \
-                       answer, or with the entry still open if nobody has replied yet — the \
-                       question is not lost either way."
+                       Use it only for a judgement that is genuinely theirs. `about` names what \
+                       the question concerns — the file, the decision, the step — and `question` \
+                       asks it in full; the reader has not seen your work and may be reading \
+                       hours later, so a question that says only `does this look right?` cannot \
+                       be answered. It returns with the answer, or with the entry still open if \
+                       nobody has replied yet — the question is not lost either way."
     )]
     async fn fleet_ask_human(&self, Parameters(args): Parameters<AskArgs>) -> CallToolResult {
         let world = self.world.clone();
@@ -207,14 +213,17 @@ impl Toolbelt {
             Ok(job) => job,
             Err(error) => return super::answer::from("fleet ask_human", Err(error)),
         };
+        // **The two halves are composed here and the verb keeps one body.**
+        // `armada fleet answer` reads an entry, the Bridge draws one, and
+        // `failures show` resolves one — none of them should learn that a
+        // question has parts. What the person needs is that the subject arrives,
+        // which [`armada_core::fleet::drone::asked`] is what guarantees.
+        let body = match armada_core::fleet::drone::asked(&args.about, &args.question) {
+            Ok(body) => body,
+            Err(error) => return super::answer::from("fleet ask_human", Err(error)),
+        };
         run("fleet ask_human", move || {
-            fleet::ask_human(
-                &SystemClock,
-                &world.place(),
-                &job,
-                &args.question,
-                ASK_WAIT_MS,
-            )
+            fleet::ask_human(&SystemClock, &world.place(), &job, &body, ASK_WAIT_MS)
         })
         .await
     }
