@@ -92,6 +92,24 @@ pub fn inbox(armada_home: &Path) -> PathBuf {
     armada_home.join("inbox.jsonl")
 }
 
+/// `~/.armada/daemon.jsonl` — what the daemon did that is about no Job (`034`
+/// §6.5). The same append-only shape [`inbox`] is, for the same reason: a
+/// crash mid-write must leave a torn last line, never a corrupt file.
+pub fn daemon_log(armada_home: &Path) -> PathBuf {
+    armada_home.join("daemon.jsonl")
+}
+
+/// `~/.armada/daemon.pid` — the running daemon's pid, while it is running.
+///
+/// **A bare number, not a handle.** The daemon is a single process this
+/// machine starts and stops through `armada daemon enable`/`disable`, never
+/// signalled by anything that has to prove a pgid was not recycled the way a
+/// Drone's group does ([`crate::drone::stop`]) — so the file holds exactly
+/// what `armada daemon start` wrote and `armada daemon stop` removes it.
+pub fn daemon_pidfile(armada_home: &Path) -> PathBuf {
+    armada_home.join("daemon.pid")
+}
+
 /// A path as a person writes it: `~/…` when it is under `$HOME`.
 ///
 /// **The payload carries this form, not the absolute one**, which is the
@@ -128,6 +146,14 @@ mod tests {
             inbox(home),
             PathBuf::from("/scratch/.armada/inbox.jsonl"),
             "the inbox is a file, not a directory"
+        );
+        assert_eq!(
+            daemon_log(home),
+            PathBuf::from("/scratch/.armada/daemon.jsonl")
+        );
+        assert_eq!(
+            daemon_pidfile(home),
+            PathBuf::from("/scratch/.armada/daemon.pid")
         );
     }
 

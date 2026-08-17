@@ -18,6 +18,8 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod daemon;
+pub mod daemon_log;
 pub mod drone;
 pub mod home;
 pub mod inbox;

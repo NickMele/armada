@@ -229,6 +229,14 @@ pub struct Job {
     /// still running.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub doing: Option<Doing>,
+    /// Every act the daemon has taken about this Job (`034` §6.5).
+    ///
+    /// Not `transitions` — a push is not a state change. Not `progress` — a
+    /// second writer there makes "who said this" unanswerable. A third voice,
+    /// because it is a third kind of fact: not a step boundary, not the Drone's
+    /// own words, but something Armada itself did *to* this Job unattended.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub daemon_acts: Vec<DaemonAct>,
 }
 
 /// `serde`'s `skip_serializing_if` needs a path, and neither `usize::eq` nor
@@ -379,6 +387,136 @@ impl Doing {
     /// How long the named stage has been running.
     pub const fn elapsed_ms(&self, now_ms: u64) -> u64 {
         now_ms.saturating_sub(self.since_ms)
+    }
+}
+
+// -------------------------------------------------------------- the daemon's
+// -------------------------------------------------------------- audit trail
+
+/// One thing the daemon did about this Job, unattended (`034` §6.5).
+///
+/// **Recorded before the action, not after it.** A merge that only gets a row
+/// on success is a trail with nothing in it for the one case an audit trail
+/// exists for: a merge that happened and then something went wrong. So
+/// [`Job::begin_daemon_act`] writes the intent — what the daemon is about to
+/// do, and to what — before the irreversible step runs, and
+/// [`Job::settle_daemon_act`] fills in what came back once it is known. A
+/// crash in between leaves a `Merged` act with no outcome rather than nothing
+/// at all, and that half-written row is itself the evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DaemonAct {
+    /// This act's own id — what [`Job::settle_daemon_act`] looks it up by,
+    /// once there is an outcome to attach.
+    pub id: String,
+    /// When the daemon began this act, wall clock, RFC 3339.
+    pub at: String,
+    /// The same moment, wall clock milliseconds, so "9m ago" is a subtraction.
+    pub at_ms: u64,
+    /// What the daemon did, or is doing.
+    pub act: DaemonActKind,
+    /// What it acted on — the branch, the PR number, or the run id, whichever
+    /// the act names.
+    pub target: String,
+    /// What came back. `None` until the act settles, which is deliberate: the
+    /// gap between an act with no outcome and the rest of the trail is what a
+    /// reader of `armada fleet show` needs to see when something is stuck
+    /// mid-merge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<DaemonOutcome>,
+    /// When the outcome above was recorded, wall clock, RFC 3339. `None`
+    /// exactly when [`Self::outcome`] is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_at: Option<String>,
+}
+
+/// What the daemon did to a Job, unattended — the word `armada fleet show`
+/// and `034` §6.5's own table both use.
+///
+/// **Ten words, not a free-form string.** The daemon's whole claim is that it
+/// only ever does one of a fixed, mechanical set of things — nothing here is
+/// a judgement call — and an enum is what makes that claim checkable: a
+/// method that matches every variant breaks the day an eleventh is added,
+/// rather than silently ignoring it the way a string would.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DaemonActKind {
+    /// The Job's branch reached the remote.
+    Pushed,
+    /// A pull request was opened from it.
+    Opened,
+    /// The open pull request's checks all read green.
+    ChecksGreen,
+    /// The pull request was merged.
+    Merged,
+    /// `main` was pulled after a merge, so every future worktree branches from
+    /// it.
+    Pulled,
+    /// Checks were re-run on the updated `main`, to catch two PRs that were
+    /// each green alone and are not green together (`034` §3).
+    ReRan,
+    /// The Job's worktree was reclaimed once its work landed.
+    Reaped,
+    /// Another running Job in the same repository was told `main` moved.
+    MarkedMainMoved,
+    /// A check's failure, with its logs, was reported back to the Drone.
+    ReportedFailure,
+    /// The daemon declined to merge — `fleet.land.merge: never`, or a check
+    /// that never went green.
+    RefusedToMerge,
+}
+
+impl DaemonActKind {
+    /// The word `armada fleet show` prints, matching `034` §6.5's own table
+    /// rather than this enum's `snake_case` storage — the same split
+    /// [`StepEvent::word`] draws between what is written and what is read.
+    pub const fn word(self) -> &'static str {
+        match self {
+            DaemonActKind::Pushed => "pushed",
+            DaemonActKind::Opened => "opened",
+            DaemonActKind::ChecksGreen => "checks-green",
+            DaemonActKind::Merged => "merged",
+            DaemonActKind::Pulled => "pulled",
+            DaemonActKind::ReRan => "re-ran",
+            DaemonActKind::Reaped => "reaped",
+            DaemonActKind::MarkedMainMoved => "marked-main-moved",
+            DaemonActKind::ReportedFailure => "reported-failure",
+            DaemonActKind::RefusedToMerge => "refused-to-merge",
+        }
+    }
+}
+
+/// What a [`DaemonAct`] came back with, once it has settled.
+///
+/// **Two shapes, because "it failed" without saying how is the same gap a
+/// wrong [`crate::error::ErrClass`] leaves in `armada_core::failure`.** A
+/// push that failed because there is no remote and a push that failed
+/// because it was rejected are different next actions, and a bare `Failed`
+/// with no message would send every reader of `armada fleet show` back to a
+/// log this record exists to replace.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DaemonOutcome {
+    /// The act did what it set out to do.
+    Ok,
+    /// It did not, and why.
+    Failed(String),
+}
+
+impl DaemonOutcome {
+    /// The word `armada fleet show` prints for the status column.
+    pub const fn word(&self) -> &'static str {
+        match self {
+            DaemonOutcome::Ok => "ok",
+            DaemonOutcome::Failed(_) => "failed",
+        }
+    }
+
+    /// The reason, when there is one.
+    pub fn detail(&self) -> Option<&str> {
+        match self {
+            DaemonOutcome::Ok => None,
+            DaemonOutcome::Failed(message) => Some(message.as_str()),
+        }
     }
 }
 
@@ -832,6 +970,55 @@ impl Job {
     /// its first gate.
     pub fn attempts_on_step(&self) -> u32 {
         self.attempts.get(&self.step).copied().unwrap_or(0)
+    }
+
+    /// Record that the daemon is about to act on this Job, before it does.
+    ///
+    /// **Written first, because the action might not finish.** `034` §6.5's
+    /// own words: *"a crash mid-merge leaves a `Merged` act with no outcome
+    /// rather than nothing at all"* — which is the one case this trail exists
+    /// for. Returns the id [`Job::settle_daemon_act`] needs to fill in what
+    /// came back.
+    pub fn begin_daemon_act(
+        &mut self,
+        at: String,
+        at_ms: u64,
+        act: DaemonActKind,
+        target: String,
+    ) -> String {
+        // Derived from the moment, the act and its target rather than drawn
+        // at random — the same reasoning [`mint_uuid`] states: randomness is
+        // not one of this codebase's three seams, and a hash of what already
+        // uniquely identifies this act costs nothing extra to mint.
+        let id = mint_uuid(&format!("daemon-act|{at_ms}|{}|{target}", act.word()));
+        self.daemon_acts.push(DaemonAct {
+            id: id.clone(),
+            at,
+            at_ms,
+            act,
+            target,
+            outcome: None,
+            outcome_at: None,
+        });
+        id
+    }
+
+    /// Fill in what a daemon act came back with.
+    ///
+    /// **The most recent match, defensively.** Ids are minted to be unique,
+    /// but a settle that raced a second `begin` for the same act, target and
+    /// millisecond must land on the row still open rather than on whichever
+    /// one `iter_mut` happened to reach first.
+    pub fn settle_daemon_act(&mut self, id: &str, at: String, outcome: DaemonOutcome) {
+        if let Some(entry) = self
+            .daemon_acts
+            .iter_mut()
+            .rev()
+            .find(|entry| entry.id == id)
+        {
+            entry.outcome = Some(outcome);
+            entry.outcome_at = Some(at);
+        }
     }
 }
 
@@ -1461,6 +1648,7 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
         }
     }
 
@@ -1889,6 +2077,7 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
         };
         assert_eq!(job.run_time_ms(1_840_000), 840_000);
         // A clock that stepped backwards costs a display value, never a panic.
@@ -2103,6 +2292,172 @@ mod tests {
         assert_eq!(serde_json::from_str::<Job>(&json).unwrap(), job);
     }
 
+    // -------------------------------------------------------- the daemon's own
+    // -------------------------------------------------------- audit trail
+
+    /// **A Job the daemon has never touched carries no trace of one** — the
+    /// same absence-is-honest rule every additive field in this file follows,
+    /// and the one `034` §6.5's own testing order names explicitly.
+    #[test]
+    fn a_job_the_daemon_has_never_touched_has_no_daemon_acts_in_its_json() {
+        let job = watching(JobState::Running);
+        assert!(job.daemon_acts.is_empty());
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(
+            !json.contains("daemon_acts"),
+            "an absent field is absent: {json}"
+        );
+    }
+
+    /// **The intent is written before the outcome is known, and it round-trips
+    /// that way.** This is the whole of `034` §6.5's argument: a Job whose
+    /// daemon act has no outcome yet is not a Job with a gap in its record —
+    /// it is the record of an act still in flight, or of a crash inside one.
+    #[test]
+    fn a_daemon_act_with_no_outcome_yet_round_trips() {
+        let mut job = watching(JobState::Running);
+        let id = job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Pushed,
+            "armada/rate-limit".to_string(),
+        );
+        assert_eq!(job.daemon_acts.len(), 1);
+        assert_eq!(job.daemon_acts[0].id, id);
+        assert!(job.daemon_acts[0].outcome.is_none());
+
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(
+            !json.contains("outcome_at"),
+            "an act with no outcome yet should not carry a settle time: {json}"
+        );
+        let back: Job = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, job);
+    }
+
+    /// Settling an act fills in what it came back with and when.
+    #[test]
+    fn settling_a_daemon_act_records_its_outcome_and_when() {
+        let mut job = watching(JobState::Running);
+        let id = job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Merged,
+            "142".to_string(),
+        );
+        job.settle_daemon_act(&id, "2026-08-17T10:01:00Z".to_string(), DaemonOutcome::Ok);
+        assert_eq!(job.daemon_acts[0].outcome, Some(DaemonOutcome::Ok));
+        assert_eq!(
+            job.daemon_acts[0].outcome_at.as_deref(),
+            Some("2026-08-17T10:01:00Z")
+        );
+    }
+
+    /// **A failure carries why**, not just that it failed — `034`'s own
+    /// example is a push with no remote configured, and a bare `failed` would
+    /// send a reader of `armada fleet show` straight back to a log this
+    /// record exists to replace.
+    #[test]
+    fn a_failed_act_carries_the_reason() {
+        let mut job = watching(JobState::Running);
+        let id = job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Pushed,
+            "armada/rate-limit".to_string(),
+        );
+        job.settle_daemon_act(
+            &id,
+            "2026-08-17T10:00:05Z".to_string(),
+            DaemonOutcome::Failed("no remote configured".to_string()),
+        );
+        assert_eq!(
+            job.daemon_acts[0].outcome.as_ref().unwrap().word(),
+            "failed"
+        );
+        assert_eq!(
+            job.daemon_acts[0].outcome.as_ref().unwrap().detail(),
+            Some("no remote configured")
+        );
+    }
+
+    /// Settling by id reaches the right row even when the Job has more than
+    /// one act on it, and the most recent match wins when ids collide.
+    #[test]
+    fn settling_reaches_the_right_act_among_several() {
+        let mut job = watching(JobState::Running);
+        let pushed = job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Pushed,
+            "armada/rate-limit".to_string(),
+        );
+        let opened = job.begin_daemon_act(
+            "2026-08-17T10:00:01Z".to_string(),
+            1_001,
+            DaemonActKind::Opened,
+            "142".to_string(),
+        );
+        job.settle_daemon_act(
+            &opened,
+            "2026-08-17T10:00:02Z".to_string(),
+            DaemonOutcome::Ok,
+        );
+        assert!(
+            job.daemon_acts[0].outcome.is_none(),
+            "the push settled instead"
+        );
+        assert_eq!(job.daemon_acts[1].id, opened);
+        assert_eq!(job.daemon_acts[1].outcome, Some(DaemonOutcome::Ok));
+
+        job.settle_daemon_act(
+            &pushed,
+            "2026-08-17T10:00:03Z".to_string(),
+            DaemonOutcome::Ok,
+        );
+        assert_eq!(job.daemon_acts[0].outcome, Some(DaemonOutcome::Ok));
+    }
+
+    /// An id nobody minted settles nothing, rather than inventing a row.
+    #[test]
+    fn settling_an_unknown_id_changes_nothing() {
+        let mut job = watching(JobState::Running);
+        job.begin_daemon_act(
+            "2026-08-17T10:00:00Z".to_string(),
+            1_000,
+            DaemonActKind::Pushed,
+            "armada/rate-limit".to_string(),
+        );
+        job.settle_daemon_act(
+            "nonesuch",
+            "2026-08-17T10:00:03Z".to_string(),
+            DaemonOutcome::Ok,
+        );
+        assert_eq!(job.daemon_acts.len(), 1);
+        assert!(job.daemon_acts[0].outcome.is_none());
+    }
+
+    /// The word each act is shown by matches `034` §6.5's own table, even
+    /// though the enum's own storage is `snake_case` — the same split
+    /// [`StepEvent::word`] draws.
+    #[test]
+    fn a_daemon_act_kind_is_shown_by_the_words_034_names() {
+        for (kind, shown) in [
+            (DaemonActKind::Pushed, "pushed"),
+            (DaemonActKind::Opened, "opened"),
+            (DaemonActKind::ChecksGreen, "checks-green"),
+            (DaemonActKind::Merged, "merged"),
+            (DaemonActKind::Pulled, "pulled"),
+            (DaemonActKind::ReRan, "re-ran"),
+            (DaemonActKind::Reaped, "reaped"),
+            (DaemonActKind::MarkedMainMoved, "marked-main-moved"),
+            (DaemonActKind::ReportedFailure, "reported-failure"),
+            (DaemonActKind::RefusedToMerge, "refused-to-merge"),
+        ] {
+            assert_eq!(kind.word(), shown);
+        }
+    }
+
     /// The record survives a reboot, so it has to survive a round trip through
     /// the index — including the fields that are absent when they are empty.
     #[test]
@@ -2145,6 +2500,7 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
         };
         let json = serde_json::to_string(&job).unwrap();
         assert!(!json.contains("confidence"), "an absent field is absent");

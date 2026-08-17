@@ -21,10 +21,10 @@
 
 use armada_core::ctx::{Clock, Run, RunRequest};
 use armada_core::envelope::{
-    AnswerData, AskData, BoardData, Disposition, Envelope, Evidence, FleetLsData, GateRow,
-    InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData, ProposeData,
-    ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData, SpawnData, StepRow,
-    TickData, TickRow, TransitionRow, VerdictData,
+    AnswerData, AskData, BoardData, DaemonActRow, Disposition, Envelope, Evidence, FleetLsData,
+    GateRow, InboxData, InboxRow, JobRow, KillData, Killed, NoteRow, PauseData, ProbeData,
+    ProposeData, ReapCandidate, ReapPlanData, Recorded, ReportData, ResumeData, ShowData,
+    SpawnData, StepRow, TickData, TickRow, TransitionRow, VerdictData,
 };
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_core::fleet::classify::Classification;
@@ -516,6 +516,7 @@ pub fn spawn<R: Run, C: Clock>(
         kin: job::Kin::default(),
         ticked_turns: 0,
         doing: None,
+        daemon_acts: Vec::new(),
     };
 
     if options.dry_run {
@@ -1585,6 +1586,30 @@ pub fn show<R: Run, C: Clock>(
                         .as_ref()
                         .map(|gate| gate.evidence.clone())
                         .unwrap_or_default(),
+                })
+                .collect(),
+            // **Newest first, the same as `transitions`** — both are logs of
+            // what already happened, off the Job's own record and no new I/O
+            // (`034` §6.5: "surfaced by `armada fleet show`").
+            daemon_acts: record
+                .daemon_acts
+                .iter()
+                .rev()
+                .map(|act| DaemonActRow {
+                    at: act.at.clone(),
+                    ago_s: wall.saturating_sub(act.at_ms) / 1_000,
+                    act: act.act.word().to_string(),
+                    target: act.target.clone(),
+                    outcome: act
+                        .outcome
+                        .as_ref()
+                        .map(|outcome| outcome.word().to_string()),
+                    outcome_detail: act
+                        .outcome
+                        .as_ref()
+                        .and_then(|outcome| outcome.detail())
+                        .map(str::to_string),
+                    outcome_at: act.outcome_at.clone(),
                 })
                 .collect(),
             task: record.task.clone(),
@@ -4601,6 +4626,7 @@ fn spawn_child<R: Run, C: Clock>(
         // minted right now.
         ticked_turns: 0,
         doing: None,
+        daemon_acts: Vec::new(),
     };
     // Recorded before anything is created, for [`spawn`]'s reason: everything
     // after this line can fail, and each of those failures leaves a Job on disk
@@ -5075,6 +5101,7 @@ mod tests {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
         }
     }
 

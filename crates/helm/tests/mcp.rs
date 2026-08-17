@@ -151,6 +151,7 @@ impl Machine {
             kin: Default::default(),
             ticked_turns: 0,
             doing: None,
+            daemon_acts: Vec::new(),
         };
         Store::at(&place.armada_home).save(&record).expect("saved");
         if !transcript.is_empty() {

@@ -1367,6 +1367,7 @@ mod tests {
             on_step_s: Some(720),
             gate: None,
             transitions: Vec::new(),
+            daemon_acts: Vec::new(),
             task: "raise the nightly CI timeout so the flake stops failing the run".to_string(),
             runtime_s: 840,
             created_at: "2026-08-09T14:02:11Z".to_string(),

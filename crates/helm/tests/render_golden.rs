@@ -2794,6 +2794,10 @@ fn show_data() -> ShowData {
                 evidence: Vec::new(),
             },
         ],
+        // Empty here rather than populated, so this golden output is
+        // unaffected by the daemon's trail — a Job this fixture predates
+        // ever having a daemon act recorded on it.
+        daemon_acts: Vec::new(),
         task: "merge the release branch and cut 4.2, resolving the migration \
                conflict in orders before the tag goes out"
             .to_string(),
