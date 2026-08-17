@@ -438,6 +438,7 @@ pub fn spawn<R: Run, C: Clock>(
     // read; the alternative costs a Job.
     reachable_workflows_exist(place, &workflow)?;
     reachable_skills_exist(place, &repo_root, &workflow)?;
+    the_projection_is_current(place)?;
     let budget = workflow::override_budget(workflow.budget, &options.budget)?;
     // The keys, not the values: a value is this Job's ceiling and a key is the
     // caller saying *this tree, not the default*.
@@ -832,6 +833,70 @@ fn reachable_workflows_exist(place: &Where, from: &Workflow) -> Result<(), Armad
         }
     }
     Ok(())
+}
+
+/// Refuse to spawn under a projection the guild has moved past.
+///
+/// # A Drone reads the projection, not the guild
+///
+/// `~/.armada/guild/` is the source and `~/.claude/` is what Claude Code
+/// actually loads, and `armada guild project` is what carries one to the other.
+/// A Drone resolving `implement-change` reads the projected copy, so a guild
+/// edited and not projected is a guild whose change no Drone will ever see.
+///
+/// **Measured 2026-08-17, on a fix that mattered.** The `review-diff` skill was
+/// changed so a blocking review calls `fleet.ask_human` and stops the Job —
+/// `review_clean` could not fail without it. The change was written to the
+/// template and to the guild, verified in both, checked and merged. The next
+/// reviewer wrote *"One thing blocks landing this"*, named a real defect, and
+/// finished `PASS` anyway. The projected copy was eight hours old and contained
+/// none of it. The fix was inert and nothing said so.
+///
+/// # Refuse rather than project
+///
+/// Projecting here would have `armada fleet spawn` write `~/.claude/` as a side
+/// effect, which is the operator's own configuration and not this verb's to
+/// touch. So this refuses and names the one command that fixes it — the same
+/// shape as the missing workflow and missing skill guards above, and for the
+/// same reason: the check costs a directory read and the alternative costs a
+/// Job that runs under instructions nobody meant to give it.
+///
+/// **`armada doctor` has reported this all along** — *"STALE ~/.claude: 1 file
+/// not what the guild says"* — and a diagnostic nobody runs at the moment it
+/// matters is a diagnostic that gets read past. This is the same finding, at
+/// the moment it costs something.
+fn the_projection_is_current(place: &Where) -> Result<(), ArmadaError> {
+    let guild = Guild::at(&place.armada_home);
+    let claude = place.home.join(".claude");
+    let behind: Vec<String> = armada_guild::projector::survey(&guild, &claude, &place.armada_home)
+        .into_iter()
+        .filter(|step| step.writes() || step.deletes())
+        .map(|step| step.at)
+        .collect();
+    match behind.is_empty() {
+        true => Ok(()),
+        false => Err(ArmadaError {
+            class: ErrClass::BadConfig,
+            r#where: place.shown(&claude),
+            message: format!(
+                "{} in your guild {} not been projected, and a Drone reads the projection",
+                crate::render::format::count(behind.len(), "change"),
+                match behind.len() {
+                    1 => "has",
+                    _ => "have",
+                }
+            ),
+            next_action: Some(format!(
+                "`armada guild project` writes {}",
+                behind
+                    .iter()
+                    .take(3)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        }),
+    }
 }
 
 /// Every skill a reachable workflow names, and where each was looked for.

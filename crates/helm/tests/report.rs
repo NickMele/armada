@@ -304,6 +304,16 @@ fn a_filed_report_promotes_into_a_job_through_the_same_verb() {
         )
         .unwrap();
     }
+
+    // **And projected**, because a Drone reads `~/.claude/`, not the guild, and
+    // `fleet spawn` refuses when the two have diverged. A guild edited and not
+    // projected is a change no Drone will ever see.
+    armada_guild::projector::project(
+        &armada_guild::layout::Guild::at(&machine.home.path().join(".armada")),
+        &machine.home.path().join(".claude"),
+        &machine.home.path().join(".armada"),
+    )
+    .unwrap();
     let filed = machine.run(&repo, &["report", "the dry-run made nothing", "--json"]);
     assert!(filed.status.success(), "{}", why(&filed));
     let payload: serde_json::Value = serde_json::from_str(&stdout(&filed)).expect("an envelope");

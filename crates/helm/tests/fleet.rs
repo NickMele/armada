@@ -575,6 +575,19 @@ impl Scratch {
                 .join("SKILL.md");
             std::fs::copy(from, to.join("SKILL.md")).unwrap();
         }
+        // **And projected, because a Drone reads `~/.claude/`, not the guild.**
+        // `fleet spawn` refuses under a projection the guild has moved past —
+        // a change written to the guild and not projected is a change no Drone
+        // will ever see, which is how a `review-diff` fix sat inert for eight
+        // hours. A fixture with a guild and no projection is a machine that has
+        // never run `armada guild project`, and every spawn on it refuses.
+        armada_guild::projector::project(
+            &armada_guild::layout::Guild::at(&home.path().join(".armada")),
+            &home.path().join(".claude"),
+            &home.path().join(".armada"),
+        )
+        .expect("the fixture guild projects");
+
         let boot_id = armada_manifest::machine::boot_id(&RealRun, repo.path())
             .expect("this machine reports a boot id");
         Scratch {
@@ -5703,6 +5716,59 @@ fn watch_drives_a_job_to_its_end_in_one_invocation() {
 /// reviewer shipped bought `reproduce` and `fix` before finding out. The check
 /// costs a directory read and the alternative costs a Job, and the money is
 /// gone whatever the reader does next.
+/// **A guild change nobody projected is refused at the moment it would cost
+/// something.**
+///
+/// `~/.armada/guild/` is the source and `~/.claude/` is what Claude Code
+/// loads, so a Drone resolving `implement-change` reads the *projected* copy. A
+/// guild edited and not projected is a guild whose change no Drone will ever
+/// see.
+///
+/// Measured 2026-08-17 on a fix that mattered: `review-diff` was changed so a
+/// blocking review stops the Job — `review_clean` could not fail without it —
+/// written to the template and the guild, verified in both, checked, merged.
+/// The next reviewer named a real defect and finished `PASS` anyway. The
+/// projected copy was eight hours old and contained none of it.
+///
+/// `armada doctor` had reported it all along as *"STALE ~/.claude"*. A
+/// diagnostic nobody runs at the moment it matters is one that gets read past.
+#[test]
+fn spawning_is_refused_when_the_guild_has_moved_past_its_projection() {
+    let scratch = Scratch::new();
+    let run = scratch.harness();
+    // A skill edited in the guild and not projected — the exact shape of the
+    // `review-diff` fix that sat inert.
+    std::fs::write(
+        scratch
+            .home
+            .path()
+            .join(".armada/guild/skills/implement-change/SKILL.md"),
+        "# edited and not projected\n",
+    )
+    .unwrap();
+
+    let error = spawn_err(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("feature".to_string()),
+            ..Default::default()
+        },
+    );
+
+    assert_eq!(error.class, armada_core::error::ErrClass::BadConfig);
+    assert!(error.message.contains("not been projected"), "{error:?}");
+    assert!(
+        error.message.contains("a Drone reads the projection"),
+        "{error:?}"
+    );
+    let next = error.next_action.unwrap_or_default();
+    assert!(next.contains("armada guild project"), "{next}");
+    // **It names what changed**, because "something is stale" sends a reader to
+    // diff two trees by hand.
+    assert!(next.contains("implement-change"), "{next}");
+}
+
 /// **The same guard, for the skill half — which did not exist.**
 ///
 /// `reachable_workflows_exist` refused a Job whose reachable workflow was
@@ -5760,6 +5826,16 @@ fn a_skill_the_repository_supplies_is_enough_for_a_spawn() {
             .home
             .path()
             .join(".armada/guild/skills/implement-change"),
+    )
+    .unwrap();
+    // **Re-projected, because removing it from the guild left the projection
+    // ahead** — and `spawn` refuses when the two disagree in either direction.
+    // The projection holding a file the guild no longer has is as much a
+    // divergence as the guild holding one the projection has not seen.
+    armada_guild::projector::project(
+        &armada_guild::layout::Guild::at(&scratch.home.path().join(".armada")),
+        &scratch.home.path().join(".claude"),
+        &scratch.home.path().join(".armada"),
     )
     .unwrap();
     let in_repo = scratch.repo.path().join(".claude/skills/implement-change");
