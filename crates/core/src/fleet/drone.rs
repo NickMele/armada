@@ -331,9 +331,11 @@ visible to anybody. It is not narration: a note per thought puts your transcript
 orchestrator's window, which is the one place it must never be.
 - `mcp__armada__fleet_verdict` — record whether you finished your work (`done`) or hit a \
 blocker (`stuck`). The Job will verify the work and advance or retry based on the outcome.
-- `mcp__armada__fleet_ask_human` — only for a judgement that is genuinely the person's. Write \
-the question in full: it is read out of context, possibly hours later, by somebody who has not \
-seen your work.
+- `mcp__armada__fleet_ask_human` — only for a judgement that is genuinely the person's. It takes \
+two things: `about`, naming what the question concerns — the file, the decision, the step — and \
+`question`, asking it in full. The reader has not seen your work and may be reading hours later, \
+so `does this look right to you?` names nothing and cannot be answered. If you just wrote \
+something, say what you wrote and what specifically you want judged.
 - `mcp__armada__fleet_check` — run this workspace's checks in your worktree. **This is the \
 same command the gate runs to decide whether your step passed, so run it before you report \
 `done`.** A failure here is a failure there. Pass `fix: true` to run each check's fixing form \
@@ -1199,6 +1201,79 @@ fn read_rate_limit(event: &serde_json::Value) -> Option<RateLimit> {
     })
 }
 
+/// **A question with its subject, or a refusal naming what is missing.**
+///
+/// # The measured failure
+///
+/// Fifteen entries in one machine's inbox are the string *"does this look right
+/// to you?"* and nothing else. Answering one means opening the Job's worktree
+/// and reading its diff by hand — which is the work the question was supposed to
+/// save. One of them arrived attached to an excellent 354-line plan the Drone had
+/// just written and then declined to describe in six words.
+///
+/// # Why a second field and not better wording
+///
+/// **Because the wording is already there and was already ignored.** [`BRIEF`]
+/// tells a Drone *"write the question in full: it is read out of context,
+/// possibly hours later, by somebody who has not seen your work"*, and the
+/// `question` parameter's own schema documentation says the same thing again. Two
+/// statements of the rule, in the two places a model reads, produced fifteen
+/// identical failures. A third statement is not the instrument.
+///
+/// So the shape carries the requirement instead: a Drone is asked for the subject
+/// **separately**, and a required field is one a model fills. That is
+/// [`019`](../../../../docs/reserved/019-the-brief-a-drone-reports-through.md)'s
+/// own principle — *a contract a model cannot get wrong is one it is not asked to
+/// fill in* — used from the other side: the omission becomes impossible rather
+/// than detectable.
+///
+/// # Why not a length floor
+///
+/// It was the first thing tried and the inbox itself refuses it. Measured across
+/// 77 entries: the median body is 52 characters and 63 of them are under 80,
+/// because most short entries are **Armada's own** — *"reached its wall clock
+/// ceiling on the plan step"*, *"the `plan` workflow has no step called
+/// `verify`"*. A floor tuned to reject 28 characters rejects those too. And a
+/// genuinely answerable question can be short: *"Should the carry list live in
+/// `armada.yml` or `machine.yml`?"* is 56 characters and needs no more.
+///
+/// What separates the bad one is not length, it is a bare demonstrative with no
+/// antecedent — *"does **this** look right"* — and detecting that in prose is a
+/// heuristic on natural language in a gate, which is the wrong place for one.
+///
+/// # What it refuses
+///
+/// Only emptiness, in either half. The field being *required* does the work; this
+/// catches the Drone that sends `about: ""` to satisfy the schema, and the
+/// refusal says what to put there rather than that something was wrong.
+pub fn asked(about: &str, question: &str) -> Result<String, ArmadaError> {
+    let about = about.trim();
+    let question = question.trim();
+    for (field, value, want) in [
+        (
+            "about",
+            about,
+            "name the file, the decision or the step this concerns",
+        ),
+        ("question", question, "ask it in full"),
+    ] {
+        if value.is_empty() {
+            return Err(ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: format!("fleet.ask_human.{field}"),
+                message: format!("`{field}` was empty, so the question names nothing to answer"),
+                next_action: Some(format!(
+                    "{want} — it is read out of context, hours later, by somebody who has not seen your work"
+                )),
+            });
+        }
+    }
+    // **The subject leads.** It is what a person reads first in a listing, where
+    // the body is truncated to a column — so the half that says *what this is
+    // about* has to be the half that survives the truncation.
+    Ok(format!("{about}\n\n{question}"))
+}
+
 /// The failure a Drone that could not be started reports.
 ///
 /// **`environment`, not `tool_failed`.** `claude` missing from `PATH` is the
@@ -1216,6 +1291,66 @@ pub fn not_on_path() -> ArmadaError {
 
 #[cfg(test)]
 mod tests {
+    /// **The question that came fifteen times.**
+    ///
+    /// *"does this look right to you?"* is the whole body of fifteen entries in
+    /// one machine's inbox, one of them attached to a 354-line plan the Drone had
+    /// just written. It names nothing, so answering it means reading the diff by
+    /// hand — the work the question exists to save.
+    ///
+    /// The subject is a separate argument now, so the omission is impossible
+    /// rather than detectable: [`BRIEF`] and the tool's own schema both already
+    /// asked for a question in full, and two statements of the rule in the two
+    /// places a model reads produced fifteen identical failures.
+    #[test]
+    fn a_question_carries_its_subject_or_is_refused() {
+        let body = asked(
+            "crates/fleet/src/machine.rs — whether the carry list belongs here",
+            "Should this key live in machine.yml or armada.yml? PLAN.md line 14 says the config \
+             contract is frozen.",
+        )
+        .expect("a question with a subject");
+        // The subject leads, because a listing truncates the body to a column and
+        // the half saying *what this is about* has to survive that.
+        assert!(body.starts_with("crates/fleet/src/machine.rs"), "{body}");
+        assert!(body.contains("machine.yml or armada.yml"), "{body}");
+
+        // **Only emptiness is refused.** The field being required does the work;
+        // this catches a Drone that sends "" to satisfy the schema.
+        let no_subject = asked("   ", "does this look right to you?").unwrap_err();
+        assert_eq!(no_subject.class, ErrClass::BadInvocation);
+        assert!(
+            no_subject.r#where.ends_with("about"),
+            "{}",
+            no_subject.r#where
+        );
+        assert!(
+            no_subject.message.contains("names nothing to answer"),
+            "{}",
+            no_subject.message
+        );
+
+        let no_question = asked("PLAN.md", "").unwrap_err();
+        assert!(
+            no_question.r#where.ends_with("question"),
+            "{}",
+            no_question.r#where
+        );
+    }
+
+    /// **A short question is not a bad one**, which is why this refuses emptiness
+    /// and not brevity.
+    ///
+    /// Measured across the 77 entries in one inbox: the median body is 52
+    /// characters and 63 are under 80, because most short entries are Armada's own
+    /// — *"reached its wall clock ceiling on the plan step"*. A floor tuned to
+    /// reject 28 characters rejects those too.
+    #[test]
+    fn a_short_question_with_a_subject_is_accepted() {
+        let body = asked("armada.yml", "Tabs or spaces?").expect("short is fine");
+        assert_eq!(body, "armada.yml\n\nTabs or spaces?");
+    }
+
     /// **The relay waits on the Drone, not on itself.**
     ///
     /// Claude Code runs a hook in its own process group, so `$$`'s pgid names
