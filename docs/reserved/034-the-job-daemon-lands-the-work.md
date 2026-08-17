@@ -130,30 +130,79 @@ Nothing here is a small change. Roughly in dependency order:
    running is the exact silent stall this session spent eight hours on. If the daemon is off, every
    Job blocked on a PR must say so on the screen, with the keystroke.
 
-## 6. The open question, and it is the owner's
+## 6. What bounds the daemon — decided, and it is not one number
 
-**A daemon that reports CI failures to a Drone resumes that Drone, and resuming a Drone spends
-money.** `start_step` calls `start_drone` with `resume_argv`; there is no version of "report the
-failures to the drone to fix" that does not launch a `claude` session.
+**A daemon that reports CI failures to a Drone resumes that Drone, and resuming spends.**
+`start_step` calls `start_drone` with `resume_argv`; there is no version of *"report the failures to
+the drone to fix"* that does not launch a `claude` session. So this daemon spends unattended, which
+the fleet has never done, and per-Job ceilings do not bound it: ten Jobs each inside its own ceiling
+still sum to a window.
 
-So this daemon spends unattended, which is the one thing the fleet has never done. Per-Job ceilings
-are not sufficient: ten Jobs each inside its own ceiling still add up to a weekly window, and this
-session put 87% of one through the fleet in a day with a human watching every spawn.
+**Decided: a fleet-wide limit, and on reaching it the daemon keeps merging and stops resuming.**
+Merging, pulling, re-running and reaping cost nothing and are the half that unblocks a person, so
+they continue; only the spending half stops, and one inbox entry says so. A fleet that stopped
+*landing* because it ran out of tokens would strand finished work, which is the defect at the top of
+this document.
 
-What is needed before the daemon may resume anything:
+### 6.1 One limit, several ways of expressing it — because machines are billed differently
 
-- a **fleet-wide** budget the daemon refuses to cross, distinct from any Job's;
-- a decision about what it does on reaching it — stop and raise one inbox entry, or keep merging
-  green PRs (which costs nothing) while refusing to resume Drones (which costs);
-- and whether a daemon that has stopped spending should still merge, pull, re-run and reap. I think
-  yes: those are free, they are the half that unblocks a human, and a fleet that stops landing
-  because it ran out of tokens is a fleet whose finished work is stranded again — which is the
-  defect at the top of this document.
+**This is the owner's correction, and it invalidates the dollar figures this section first carried.**
+His words: *"the way Claude bills, I'm not paying like that. I pay for a plan that gives me a percent
+of usage on a rolling 5 hour window. But on my work machine I am limited by $ spend. So two machines
+and two different ways of thinking. It needs to be easily configurable with different approaches."*
 
-The numbers to set it from are on this machine already: `$65.39` for one `feature` Job with its
-sub-Jobs, `$148.82` across a day of 41 Jobs, and a seven-day window that reached 87%.
+So a dollar total is a *proxy* on a plan machine and the *actual* constraint on a metered one. The
+limit therefore has more than one spelling, and it lives in `~/.armada/machine.yml` — which is
+already the right file for exactly this reason: it never syncs, so two machines hold two different
+answers without either overwriting the other.
 
-## 7. What this does not do
+Three spellings, any of which may be set, and **whichever trips first wins**:
+
+| Spelling | For | What it reads |
+|---|---|---|
+| `stop_on_warning: true` | a plan machine | [`RateLimit::status`](../../crates/core/src/fleet/drone.rs) — `allowed`, `allowed_warning`, `rejected` |
+| `stop_at_percent: N` | a plan machine, tighter | `RateLimit::utilization`, floored the way Claude Code floors it |
+| `daily_usd: N` | a metered machine | the same spend the fleet already totals |
+
+### 6.2 Why `stop_on_warning` is the default and not a percentage
+
+**`utilization` is `None` in the ordinary case.** It rides along only once a threshold is crossed —
+the `allowed_warning` shape — so a window well inside its limits reports its reset and no percentage
+at all. That has a hard consequence for a ceiling: **a percentage cannot be enforced below the point
+at which the service begins reporting the percentage.** `stop_at_percent: 40` is not a 40% ceiling on
+a machine that says nothing until 80; it is an 80% ceiling wearing a smaller number.
+
+`status` is always present, so `stop_on_warning` is the one guard that always evaluates. It is also
+the honest one: the service is saying *you are near your limit*, which is a better trigger than any
+figure Armada could guess on its behalf.
+
+`stop_at_percent` therefore has a documented rule: it can only ever be **stricter than** the warning,
+never looser, and the config must refuse a value it cannot honour rather than accept a number that
+does nothing.
+
+### 6.3 The reading is a turn old, and the daemon may overshoot by one
+
+A window's utilisation reaches Armada through a **Drone's own transcript** — each turn reports the
+window it passed through — so the fleet only learns where the window stands *after* an exchange. Two
+things follow, and neither is a defect to fix:
+
+- **The daemon can overshoot by one exchange.** It resumes on the last reading it has, and that
+  resume is what produces the next one. One exchange of overshoot is the floor for any design that
+  does not poll the service directly, which is not a thing Armada does.
+- **An idle fleet has a stale reading.** If nothing has run for hours the last window fact may be
+  from a window that has since reset. `RateLimit::resets_at` is what tells it so, and a reading whose
+  window has reset must be treated as *unknown* rather than as the number it last held.
+
+Unknown must mean **resume once and re-read**, not *refuse*: a daemon that will not act on a stale
+reading is a daemon that never starts after an idle night, which is the stall this whole design
+exists to end.
+
+## 7. The bootstrap, stated
+
+Whoever builds this cannot use it to land it. The first version reaches `main` by hand, and that is
+expected rather than an exception to §1.
+
+## 8. What this does not do
 
 - **No approval is removed.** A `feature` workflow still has its `approve` step and a human still
   reads the plan. The daemon acts after the work is reviewed, not instead of the review.
