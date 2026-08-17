@@ -277,15 +277,25 @@ fn settle<C: Clock>(
                 // a reader who found it had to already know that `board` and
                 // `kill` were the only two moves. Now there is a third and it is
                 // the one they want, so the row carries it.
+                // **The keystroke leads, because the sentence is elided from the
+                // right.** This said the fact first and the action last, and
+                // `armada fleet inbox` truncates a body to its column — so the
+                // row read *"reached its wall c…"* and the half telling you what
+                // to type was the half that got cut. Reported by the owner, who
+                // could see that a Job wanted something and not what.
+                //
+                // An action a reader cannot see is `027`'s whole subject, and
+                // putting it after the explanation is how a message obeys that
+                // rule in full text and breaks it on screen.
                 &format!(
-                    "reached its {} ceiling on the {} step — answer with `{}=…` to give it more",
-                    ceiling.word(),
-                    record.step,
+                    "answer `{}=…` — it reached its {} ceiling on the {} step",
                     match ceiling {
                         job::Ceiling::Attempts => "max_attempts",
                         job::Ceiling::Cost => "max_cost",
                         job::Ceiling::WallClock => "max_wall_clock",
-                    }
+                    },
+                    ceiling.word(),
+                    record.step,
                 ),
             )?;
         }
