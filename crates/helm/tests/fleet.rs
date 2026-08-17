@@ -2449,6 +2449,91 @@ fn answering_a_job_out_of_rope_with_a_raise_gives_it_more_and_continues() {
     assert!(error.message.contains("still at"), "{}", error.message);
 }
 
+/// **A step the workflow does not declare is refused, not stored.**
+///
+/// Measured four times on 2026-08-17, and the fourth corrupted a Job. A Drone
+/// reported `verify`, then `approve`, against workflows that declare neither.
+/// The name was written to the record every time, and `bridge-command-centre`
+/// ended up holding `step: approve` while running `feature` — whose steps are
+/// `plan`, `approval`, `implement`, `review` and `land`. The gate then had
+/// nothing to look up, so `tick` answered *"its Drone is still working"* for
+/// ever: the Job could not advance, could not fail, and could not even reach a
+/// ceiling. $14 of real work stranded in a state machine pointing at a state
+/// that does not exist.
+///
+/// `docs/reserved/032` deletes the argument entirely, which is the right fix and
+/// is being built. This is the guard that belongs here either way — a state
+/// machine must refuse a state it does not have, whoever proposed it.
+#[test]
+fn a_drone_cannot_report_a_step_its_workflow_does_not_declare() {
+    let scratch = Scratch::new();
+    workflow(
+        &scratch,
+        "bug",
+        "name: bug\ndescription: two steps\nends_at: branch\n\
+         budget:\n  attempts: 3\n  cost: 10.00\n  wall_clock: 90m\n  \
+         on_exhausted: needs_human\nsteps:\n\
+         \x20 - id: reproduce\n    skill: reproduce-bug\n    verify: { must: always }\n\
+         \x20 - id: land\n    skill: land-branch\n    verify: { must: branch_exists }\n",
+    );
+    let run = scratch.harness();
+    let data = spawn(
+        &scratch,
+        &run,
+        &Spawn {
+            workflow: Some("bug".to_string()),
+            ..task("the parser drops the last field")
+        },
+    );
+
+    let error = fleet::report(
+        &FrozenClock::new(),
+        &scratch.place(),
+        &data.name,
+        "beginning verification",
+        Some("verify"),
+        Some("entered"),
+    )
+    .expect_err("a step the workflow has never heard of is refused");
+    assert_eq!(error.class, armada_core::error::ErrClass::BadInvocation);
+    assert!(
+        error.message.contains("no step called `verify`"),
+        "{error:?}"
+    );
+    // **The refusal names the steps that exist**, because the caller is an agent
+    // that guessed and a list is what stops it guessing again.
+    let next = error.next_action.unwrap_or_default();
+    assert!(
+        next.contains("reproduce") && next.contains("land"),
+        "{next}"
+    );
+
+    // **And the record is untouched.** The whole defect was that the name got
+    // stored: a refusal that still wrote it would be the same bug with a message.
+    let record = scratch.store().load(&data.uuid).unwrap();
+    assert_ne!(
+        record.step, "verify",
+        "the invented step reached the record"
+    );
+    assert!(
+        !record.transitions.iter().any(|t| t.step == "verify"),
+        "the invented step reached the transition log: {:?}",
+        record.transitions
+    );
+
+    // A step the workflow *does* declare still works.
+    fleet::report(
+        &FrozenClock::new(),
+        &scratch.place(),
+        &data.name,
+        "starting the reproduction",
+        Some("reproduce"),
+        Some("entered"),
+    )
+    .expect("a declared step is reported as it always was");
+    assert_eq!(scratch.store().load(&data.uuid).unwrap().step, "reproduce");
+}
+
 /// **A Job's clock stops while it waits on you, and starts again when you
 /// answer.**
 ///
