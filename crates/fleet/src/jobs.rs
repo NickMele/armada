@@ -114,6 +114,26 @@ impl Store {
     /// the step and the day that tell them apart — and the uuid is what
     /// disambiguates.
     pub fn find(&self, handle: &str) -> Result<Job, ArmadaError> {
+        // **An empty handle is refused before anything is matched.** Every uuid
+        // starts with the empty string, so `starts_with("")` matched the whole
+        // fleet and the refusal read *"`` is the start of 12 Jobs"* — a sentence
+        // about a prefix nobody typed, listing every Job on the machine, and
+        // ending in *"name one by uuid"* as though the reader had been too
+        // vague rather than passed nothing at all.
+        //
+        // Recorded twice on this machine before it was noticed, because a
+        // refusal that lists twelve real Jobs looks like a hard question rather
+        // than a bug.
+        if handle.trim().is_empty() {
+            return Err(ArmadaError {
+                class: ErrClass::BadInvocation,
+                r#where: "job".to_string(),
+                message: "no Job was named".to_string(),
+                next_action: Some(
+                    "`armada fleet ls` lists them; name one by handle or uuid".to_string(),
+                ),
+            });
+        }
         let jobs = self.all()?;
         let named: Vec<&Job> = jobs.iter().filter(|job| job.name == handle).collect();
         match named.as_slice() {
@@ -369,6 +389,33 @@ mod tests {
             .unwrap();
         assert_eq!(store.find("rate-limit").unwrap().uuid, "8f2a1c40-33b1");
         assert_eq!(store.find("8f2a").unwrap().name, "rate-limit");
+    }
+
+    /// **An empty handle is refused as an empty handle, not as a vague prefix.**
+    ///
+    /// Every uuid starts with the empty string, so `starts_with("")` matched the
+    /// whole fleet and the refusal read *"`` is the start of 12 Jobs"* — listing
+    /// every Job on the machine and ending in *"name one by uuid"*, as though
+    /// the reader had been imprecise rather than passed nothing at all.
+    /// Recorded twice on a real machine before anybody noticed, because a
+    /// refusal that lists twelve real Jobs reads like a hard question.
+    #[test]
+    fn no_handle_at_all_is_refused_without_listing_the_whole_fleet() {
+        let (_home, store) = store();
+        for (name, uuid) in [("one", "8f2a-aaa"), ("two", "91bc-bbb")] {
+            store.save(&job(name, uuid, JobState::Running, 10)).unwrap();
+        }
+        for handle in ["", "   "] {
+            let error = store.find(handle).unwrap_err();
+            assert_eq!(error.class, ErrClass::BadInvocation);
+            assert_eq!(error.message, "no Job was named");
+            assert!(
+                !error.message.contains("8f2a") && !error.message.contains("91bc"),
+                "the refusal listed the fleet at a caller who named nothing: {}",
+                error.message
+            );
+            assert!(error.next_action.unwrap().contains("armada fleet ls"));
+        }
     }
 
     /// **An ambiguous prefix is refused rather than resolved to the first
