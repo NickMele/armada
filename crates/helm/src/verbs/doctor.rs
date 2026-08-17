@@ -468,11 +468,25 @@ fn complaint(output: &armada_core::ctx::RunOutput) -> Option<String> {
 /// which paths are absent and what writes to them.
 fn directories(armada_home: &Path) -> Finding {
     let home = crate::verbs::machine::shown(armada_home);
-    if !armada_home.is_dir() {
+    if !layout::set_up(armada_home) {
+        // **A `~/.armada/` that only this command's own recorder made is not a
+        // machine that has been set up**, and the two verbs have to agree about
+        // that or `doctor` names a repair `init` will refuse — which is the
+        // half of failure `1988c87d` that reads as `doctor` sending somebody in
+        // a circle. Same predicate at both ends
+        // (`armada_guild::layout::set_up`), and the detail says which of the
+        // two states this is rather than claiming the directory is absent when
+        // it is not.
         return Finding::needs(
             &home,
             Problem::Missing,
-            format!("{home} is not there; nothing Armada keeps is on this machine"),
+            match armada_home.is_dir() {
+                true => format!(
+                    "{home} holds none of {}; nothing has set this machine up",
+                    paths(&DIRECTORIES)
+                ),
+                false => format!("{home} is not there; nothing Armada keeps is on this machine"),
+            },
             "armada init",
         );
     }
@@ -2080,6 +2094,38 @@ mod tests {
             .unwrap(),
         );
         let row = find(&data, "~/.armada", "is not there").expect("no directories row");
+        assert_eq!(row.status, Health::Missing);
+        assert_eq!(row.remedy.as_deref(), Some("armada init"));
+    }
+
+    /// **The two verbs agree about what a set-up machine is**, or `doctor`
+    /// sends a reader in a circle: `armada init --force` on a machine that has
+    /// never been set up is a flag for a repair there is nothing to repair, and
+    /// `init` used to refuse the run without it (failure `1988c87d`). The
+    /// directory here is the one `doctor`'s own recorder leaves behind.
+    #[test]
+    fn a_home_holding_only_a_previous_runs_record_says_to_run_init() {
+        let home = tempfile::tempdir().unwrap();
+        let place = Where {
+            armada_home: home.path().join(".armada"),
+            cwd: home.path().to_path_buf(),
+            claude_home: home.path().join(".claude"),
+        };
+        std::fs::create_dir_all(&place.armada_home).unwrap();
+        std::fs::write(place.armada_home.join("recent.jsonl"), "{}\n").unwrap();
+
+        let data = data(
+            &run(
+                &Answers {
+                    divergence: "0\t0\n",
+                    remote: false,
+                },
+                &place,
+            )
+            .unwrap(),
+        );
+        let row = find(&data, "~/.armada", "nothing has set this machine up")
+            .expect("no directories row");
         assert_eq!(row.status, Health::Missing);
         assert_eq!(row.remedy.as_deref(), Some("armada init"));
     }

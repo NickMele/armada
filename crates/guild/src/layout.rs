@@ -93,6 +93,33 @@ pub const NEVER_SYNCS: [&str; 5] = [
 /// The directories a guild is made of, under `guild/`.
 pub const GUILD_DIRECTORIES: [&str; 4] = ["hooks", "skills", "subagents", "workflows"];
 
+/// **Has `armada init` been here?** — asked of the layout rather than of the
+/// directory, and the two are not the same question.
+///
+/// `~/.armada/` existing does not mean this machine was ever set up, because
+/// `init` is not the only thing that writes there. The entrypoint records every
+/// run into `recent.jsonl` and `untried.jsonl` and every failure into
+/// `failures.jsonl`, and all three create the directory on the way past — on
+/// purpose, so that the first failure on a machine is kept rather than lost for
+/// arriving before `init` (`armada_manifest::failures`).
+///
+/// So one ordinary `armada doctor` on a machine that has never seen Armada left
+/// an `~/.armada/` behind, and `armada init` — the very command that `doctor`'s
+/// `→` line had just named — refused it as `bad_invocation: ~/.armada already
+/// exists`. A person was told the command they typed was wrong, about a
+/// directory they never made. Recorded as failure `1988c87d`.
+///
+/// **The answer is the set of things `init` itself creates**, which is
+/// [`DIRECTORIES`] — a whitelist rather than a list of files that do not count,
+/// so a fourth recorder added next year cannot re-open this. `any` rather than
+/// `all`: a machine whose `jobs/` was deleted has still been set up, and its
+/// repair is the `--force` re-run `armada doctor` names.
+pub fn set_up(armada_home: &Path) -> bool {
+    DIRECTORIES
+        .iter()
+        .any(|directory| armada_home.join(directory).is_dir())
+}
+
 /// A tree the guild and `~/.claude/` both hold, named at each end.
 ///
 /// The two names differ once: Claude Code calls them `agents` and Armada calls
@@ -421,6 +448,40 @@ mod tests {
                 "`{directory}` is created and cannot say why it matters"
             );
         }
+    }
+
+    /// **The files the recorders leave are not a machine that has been set
+    /// up**, which is failure `1988c87d`: they create `~/.armada/` before
+    /// `armada init` has ever run, and the directory's existence was being read
+    /// as an answer to a question it does not answer.
+    #[test]
+    fn a_home_holding_only_what_the_recorders_wrote_has_not_been_set_up() {
+        let home = tempfile::tempdir().unwrap();
+        let armada = home.path().join(".armada");
+        assert!(
+            !set_up(&armada),
+            "an absent directory is not a set-up machine"
+        );
+
+        std::fs::create_dir_all(&armada).unwrap();
+        for recorder in ["recent.jsonl", "untried.jsonl", "failures.jsonl"] {
+            std::fs::write(armada.join(recorder), "").unwrap();
+        }
+        assert!(
+            !set_up(&armada),
+            "a run that preceded `armada init` was read as `armada init`"
+        );
+    }
+
+    /// **A machine missing one directory has still been set up**, and its
+    /// repair is the `--force` re-run `armada doctor` names — not a first run
+    /// that would ask the interview again.
+    #[test]
+    fn a_machine_missing_one_directory_has_still_been_set_up() {
+        let home = tempfile::tempdir().unwrap();
+        let armada = home.path().join(".armada");
+        std::fs::create_dir_all(armada.join("guild")).unwrap();
+        assert!(set_up(&armada));
     }
 
     /// **Every tree the guild carries is a directory the guild is made of.** A

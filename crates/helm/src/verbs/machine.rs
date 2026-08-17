@@ -29,7 +29,7 @@ use armada_core::ctx::Run;
 use armada_core::envelope::{Asked, Envelope, Finding, GuildChoice, MachineInitData, Settled};
 use armada_core::error::{ArmadaError, ErrClass, Status};
 use armada_guild::interview::QUESTIONS;
-use armada_guild::layout::{DIRECTORIES, GUILD_DIRECTORIES};
+use armada_guild::layout::{self, DIRECTORIES, GUILD_DIRECTORIES};
 use std::path::Path;
 
 use crate::ask::{Ask, Choice};
@@ -82,12 +82,21 @@ pub fn run(
 ) -> Result<Output, ArmadaError> {
     // **The refusal comes before the preflight**, so a second run against a
     // real `~/.armada/` cannot get as far as touching anything.
-    let existed = place.armada_home.is_dir();
+    //
+    // **It asks whether the machine was set up, not whether the directory is
+    // there**, and asking the second question was failure `1988c87d`: the
+    // entrypoint's recorders create `~/.armada/` after any run at all, so a
+    // person who ran `armada doctor` first — and was told by it to run `armada
+    // init` — got `bad_invocation` for a directory they never made. The class
+    // is right for what is left: a machine that really has been set up needs
+    // `--force`, which is the caller changing the command
+    // (`armada_guild::layout::set_up`).
+    let existed = layout::set_up(&place.armada_home);
     if existed && !options.force {
         return Err(ArmadaError {
             class: ErrClass::BadInvocation,
             r#where: shown(&place.armada_home),
-            message: format!("{} already exists", shown(&place.armada_home)),
+            message: format!("{} is already set up", shown(&place.armada_home)),
             next_action: Some(
                 "`armada doctor` reports what is missing; `armada init --force` re-runs"
                     .to_string(),
@@ -450,6 +459,32 @@ mod tests {
         assert_eq!(error.class, ErrClass::BadInvocation);
         assert_eq!(error.class.exit_code(), 2);
         assert!(error.next_action.unwrap().contains("--force"));
+    }
+
+    /// **The refusal must not fire on a machine that has never been set up**,
+    /// which is failure `1988c87d`. Every dispatched run writes
+    /// `~/.armada/recent.jsonl` through the entrypoint's ring buffer and the
+    /// write creates the directory, so `armada doctor` — whose own `→` line
+    /// says `armada init` — used to make the next `armada init` refuse.
+    #[test]
+    fn a_file_a_previous_run_left_does_not_refuse_the_first_init() {
+        let (_home, place) = scratch();
+        std::fs::create_dir_all(&place.armada_home).unwrap();
+        std::fs::write(place.armada_home.join("recent.jsonl"), "{}\n").unwrap();
+
+        let output = init(&place, &Options::default()).expect("the first init was refused");
+        let data = data(&output);
+
+        assert!(place.guild().exists(), "no guild was built");
+        assert_eq!(
+            data.results.last().unwrap().status,
+            Health::Created,
+            "the layout it did create was reported as already there"
+        );
+        assert!(
+            place.armada_home.join("recent.jsonl").is_file(),
+            "the run it was told about was thrown away"
+        );
     }
 
     /// Re-running with `--force` says `ok` rather than `created`: Armada made

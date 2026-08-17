@@ -298,6 +298,19 @@ impl Machine {
 
     fn command(&self, cwd: &Path, args: &[&str]) -> Command {
         self.seed_machine_yml(args);
+        self.unseeded_command(cwd, args)
+    }
+
+    /// The same command with **nothing written to `~/.armada/` first**.
+    ///
+    /// [`Self::seed_machine_yml`] creates the directory on the way past, which
+    /// is invisible to every test that only cares what a verb answered — and
+    /// fatal to a test whose subject is *which command created the directory*.
+    /// Such a test cannot let the harness be the answer.
+    ///
+    /// The cost is the default port base rather than this machine's block, so
+    /// this is for tests that allocate no ports.
+    fn unseeded_command(&self, cwd: &Path, args: &[&str]) -> Command {
         let mut command = Command::new(armada_binary());
         command
             .args(args)
@@ -336,6 +349,14 @@ impl Machine {
     /// Run to completion.
     pub fn run(&self, cwd: &Path, args: &[&str]) -> Output {
         self.command(cwd, args).output().expect("Armada runs")
+    }
+
+    /// Run to completion against a `~/.armada/` the harness has not touched.
+    /// See [`Self::unseeded_command`].
+    pub fn run_unseeded(&self, cwd: &Path, args: &[&str]) -> Output {
+        self.unseeded_command(cwd, args)
+            .output()
+            .expect("Armada runs")
     }
 
     /// Run with extra variables layered on the deliberately small environment.

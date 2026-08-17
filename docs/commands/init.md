@@ -21,9 +21,16 @@ armada init --bundle <path> [--defaults] [--force] [--json]
 | `--guild <remote>` | git remote URL | — | Skip the prompt and pull an existing guild from this remote. |
 | `--bundle <path>` | file path | — | Skip the prompt and import an existing guild from a bundle. |
 | `--defaults` | flag | off | Take the default answer to every interview question. Leaves a **working** guild, not an empty one, and `armada doctor` reports it as incomplete. |
-| `--force` | flag | off | Re-run against an existing `~/.armada/`, recreating whatever is missing. Refuses without this. |
+| `--force` | flag | off | Re-run against a machine that has already been set up, recreating whatever is missing. Refuses without this. |
 
 `--guild` and `--bundle` are mutually exclusive.
+
+**"Already set up" is the layout, not the directory.** The refusal asks whether `guild/`, `jobs/`
+or `workspaces/` is there — not whether `~/.armada/` is. Armada writes `recent.jsonl`,
+`untried.jsonl` and `failures.jsonl` into that directory from the first command you ever run, so
+one `armada doctor` on a new machine creates it; reading that as *you have already run `init`*
+made this verb refuse the first run on every machine, and told the caller their command was
+wrong for a directory Armada had made itself.
 
 **`--force` never replaces a guild.** A re-run puts back any missing directory and, if a guild is
 already here, does not ask the question and does not write a byte of it — which is what makes
@@ -109,7 +116,7 @@ Depends on **no other Armada command**. This is the first thing you run.
 
 ## Exit codes
 
-`0` ready · `2` `bad_invocation` — `--guild` and `--bundle` together, or `~/.armada/` exists without `--force` · `6` `environment` — a fatal preflight check failed.
+`0` ready · `2` `bad_invocation` — `--guild` and `--bundle` together, or this machine is already set up and `--force` was not given · `6` `environment` — a fatal preflight check failed.
 
 Full table and the one rule behind it: [`reference.md`](reference.md).
 

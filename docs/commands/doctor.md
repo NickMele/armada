@@ -27,9 +27,11 @@ rest.
    `claude --help`, and then the argv itself is run with its prompt replaced by
    `--input-format stream-json` and nothing on stdin, so Claude Code validates every flag,
    starts the session, reaches EOF and exits **without making an API call**.
-3. **`~/.armada`** — the directory exists, with `guild/`, `jobs/` and `workspaces/` inside it.
-   Each missing path is named, along with what writes there, because a directory is worth
-   restoring only if something needs it.
+3. **`~/.armada`** — `guild/`, `jobs/` and `workspaces/` are there. Each missing path is named,
+   along with what writes there, because a directory is worth restoring only if something needs
+   it. A machine with none of the three has never been set up rather than drifted, and is told
+   to run [`init.md`](init.md) rather than to `--force` it — the directory alone proves nothing,
+   since Armada's own run and failure records create it before `init` has ever run.
 4. **Guild drift** — is `~/.armada/guild/` behind, ahead of, or diverged from its remote, and by
    how many commits. This is the check that earns the command: two machines silently diverging
    is the guild's main failure mode ([`PHASES.md`](../PHASES.md) §11).

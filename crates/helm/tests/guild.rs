@@ -309,6 +309,74 @@ fn a_machine_that_has_never_seen_armada_gets_a_working_guild() {
     }
 }
 
+/// **The refusal `armada init` prints on a *second* run must not fire on the
+/// first**, which is failure `1988c87d`:
+///
+/// ```text
+/// class: bad_invocation
+/// where: ~/.armada
+/// error: ~/.armada already exists
+/// ```
+///
+/// The verb refuses a `~/.armada/` that has already been set up, and that is
+/// its whole first-run contract — but the directory is not `init`'s alone to
+/// make. The entrypoint records every dispatched run into
+/// `~/.armada/recent.jsonl` and `untried.jsonl`, and those recorders create the
+/// directory on the way past. So one ordinary command — here `armada doctor`,
+/// the verb whose own `→` line says `armada init` — left an `~/.armada/`
+/// behind, and the first `armada init` this machine had ever seen was refused.
+///
+/// **The class was the other half of the bug.** `bad_invocation` means *the
+/// command itself was wrong*, so a person who typed the one command Armada had
+/// just told them to type was told they had typed it wrong, about a directory
+/// they never made. The class is right for a machine that really has been set
+/// up — `--force` is the caller changing the command — so the fix is the
+/// condition, not the class.
+///
+/// Run unseeded, because the subject is which command created `~/.armada/` and
+/// the harness must not be the answer (`support::Machine::run_unseeded`).
+#[test]
+fn the_first_init_is_not_refused_by_a_directory_a_previous_run_created() {
+    let machine = Machine::new();
+    a_claude_setup(&machine);
+    let outside = machine.outside();
+    let armada = machine.home.path().join(".armada");
+    assert!(
+        !armada.exists(),
+        "the machine did not start out never having seen Armada"
+    );
+
+    // One ordinary run, of the verb `doctor.md` names as safe to put in a
+    // shell prompt. It answers `NEEDS ATTENTION` and `→ armada init`, and it
+    // exits 0 — nothing about it says a machine has been set up.
+    let doctor = machine.run_unseeded(&outside, &["doctor", "--json"]);
+    assert_eq!(doctor.status.code(), Some(0), "doctor: {}", why(&doctor));
+    assert!(
+        armada.is_dir(),
+        "the run that reproduces this no longer leaves the directory behind, \
+         so this test is asserting nothing"
+    );
+    for directory in ["guild", "jobs", "workspaces"] {
+        assert!(
+            !armada.join(directory).is_dir(),
+            "`doctor` set the machine up, which is not the state under test"
+        );
+    }
+
+    let output = machine.run_unseeded(&outside, &["init", "--defaults", "--json"]);
+    assert!(
+        output.status.success(),
+        "the first `armada init` on this machine was refused: {}",
+        why(&output)
+    );
+    let envelope = envelope(&output);
+    assert_eq!(envelope["status"], "READY");
+    assert!(
+        guild_of(&machine).join("voice.md").is_file(),
+        "no guild was built"
+    );
+}
+
 /// **The second half of the done-when**: a second machine pulls, and a `git
 /// diff` in the guild repo shows what changed since the first.
 #[test]
