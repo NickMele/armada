@@ -1992,6 +1992,29 @@ pub struct JobRow {
     pub budget_remaining: crate::fleet::job::Remaining,
     /// Whether it is waiting on you.
     pub needs_attention: bool,
+    /// **The Job whose gate started this one**, and which of its steps this Job
+    /// satisfies — `None` for a Job a person asked for.
+    ///
+    /// **Carried so a listing can be a tree.** `armada fleet ls` and the Bridge
+    /// drew every Job at the top level, so `job-drives-the-drone-plan` sat beside
+    /// `job-drives-the-drone` with similar names and nothing saying one is inside
+    /// the other. Three Jobs and their three sub-Jobs read as six, which made the
+    /// fleet look twice as busy as it was.
+    ///
+    /// **The attempt is part of it.** A review step that failed and is being
+    /// retried has a *new* sub-Job and the first one's record is still on disk, so
+    /// two children of one step are told apart by attempt rather than collapsed
+    /// into one row (`docs/reserved/016`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<crate::fleet::job::Parent>,
+    /// **How deep in the tree this row is drawn**, 0 for a Job nobody started.
+    ///
+    /// **Derived once, where the order is decided.** Both surfaces indent by it
+    /// and `--json` carries it, so the tree a reader sees and the tree an agent
+    /// parses are the same tree — computing it twice at two render sites is how
+    /// they would come to disagree.
+    #[serde(skip_serializing_if = "is_a_root")]
+    pub depth: usize,
     /// What somebody is doing **to** this Job right now, if anything
     /// (`reserved/020` §5).
     ///
@@ -2027,6 +2050,101 @@ pub struct JobRow {
     /// Additive, so `schema_version` stays 1.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acting_for_s: Option<u64>,
+}
+
+/// **A flat listing reordered into the tree it already describes** — every Job
+/// followed by the sub-Jobs its own gates started, depth-first.
+///
+/// **Here, and once.** Both surfaces draw this order and `--json` carries it, so
+/// the tree a reader sees and the tree an agent parses are the same one. Two
+/// render sites each building it from the parent links is how they would come to
+/// disagree about it.
+///
+/// **A child whose parent is not in the listing stays where it was**, at whatever
+/// depth it had — which is the ordinary case for `armada fleet ls` without
+/// `--all`, where a finished parent is filtered out and its running child is
+/// exactly what the reader wants to see. Dropping it because its parent is
+/// missing would hide live work.
+///
+/// **Children are ordered by attempt**, because a retried step's second sub-Job
+/// is the one that matters and the first is history sitting beside it.
+///
+/// Cycles cannot arise — a parent is recorded when a child is minted, so the
+/// link only ever points at an older Job — but a corrupt index could still
+/// describe one, and this walks each row at most once regardless.
+pub fn as_a_tree(rows: Vec<JobRow>) -> Vec<JobRow> {
+    let present: std::collections::HashSet<&str> =
+        rows.iter().map(|row| row.uuid.as_str()).collect();
+    let is_a_root = |row: &JobRow| {
+        row.parent
+            .as_ref()
+            .is_none_or(|parent| !present.contains(parent.uuid.as_str()))
+    };
+
+    let mut children: std::collections::HashMap<&str, Vec<usize>> =
+        std::collections::HashMap::new();
+    for (index, row) in rows.iter().enumerate() {
+        if let Some(parent) = &row.parent {
+            if present.contains(parent.uuid.as_str()) {
+                children
+                    .entry(parent.uuid.as_str())
+                    .or_default()
+                    .push(index);
+            }
+        }
+    }
+    for kin in children.values_mut() {
+        kin.sort_by_key(|index| {
+            rows[*index]
+                .parent
+                .as_ref()
+                .map_or((0, *index), |parent| (parent.attempt, *index))
+        });
+    }
+
+    // Depth-first from each root, in the order the listing already had them.
+    let mut order: Vec<(usize, usize)> = Vec::with_capacity(rows.len());
+    let mut seen = vec![false; rows.len()];
+    let mut stack: Vec<(usize, usize)> = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, row)| is_a_root(row))
+        .map(|(index, _)| (index, 0))
+        .rev()
+        .collect();
+    while let Some((index, depth)) = stack.pop() {
+        if std::mem::replace(&mut seen[index], true) {
+            continue;
+        }
+        order.push((index, depth));
+        if let Some(kin) = children.get(rows[index].uuid.as_str()) {
+            stack.extend(kin.iter().rev().map(|child| (*child, depth + 1)));
+        }
+    }
+    // **Anything the walk did not reach keeps its place.** Only a cycle in a
+    // corrupt index can produce one, and losing a row is worse than drawing it
+    // flat.
+    order.extend(
+        (0..rows.len())
+            .filter(|index| !seen[*index])
+            .map(|index| (index, 0)),
+    );
+
+    let mut rows: Vec<Option<JobRow>> = rows.into_iter().map(Some).collect();
+    order
+        .into_iter()
+        .filter_map(|(index, depth)| {
+            let mut row = rows[index].take()?;
+            row.depth = depth;
+            Some(row)
+        })
+        .collect()
+}
+
+/// Whether a row is a root, for `serde` — a `depth` of zero is the ordinary case
+/// and every flat listing would otherwise carry it on every row.
+fn is_a_root(depth: &usize) -> bool {
+    *depth == 0
 }
 
 impl JobRow {
@@ -3803,6 +3921,142 @@ mod tests {
     }
 
     /// A row in the ordinary case: `RUNNING`, nobody acting on it.
+    /// A row named `name`, optionally a child of `parent`'s `step`.
+    fn kin(name: &str, parent: Option<(&str, &str, u32)>) -> JobRow {
+        JobRow {
+            uuid: format!("uuid-{name}"),
+            name: name.to_string(),
+            parent: parent.map(|(uuid, step, attempt)| crate::fleet::job::Parent {
+                uuid: format!("uuid-{uuid}"),
+                step: step.to_string(),
+                attempt,
+            }),
+            ..a_job_row()
+        }
+    }
+
+    fn shape(rows: &[JobRow]) -> Vec<(String, usize)> {
+        rows.iter()
+            .map(|row| (row.name.clone(), row.depth))
+            .collect()
+    }
+
+    /// **A sub-Job is drawn inside the Job whose step it satisfies**, not beside
+    /// it.
+    ///
+    /// `armada fleet ls` and the Bridge listed every Job at the top level, so
+    /// `command-centre-plan` sat next to `command-centre` with nothing saying one
+    /// *is* a step of the other — and three Jobs with three sub-Jobs read as six,
+    /// which made the fleet look twice as busy as it was.
+    #[test]
+    fn a_listing_is_the_tree_the_records_already_describe() {
+        let rows = as_a_tree(vec![
+            kin("command-centre", None),
+            kin("worktrees-carry", None),
+            kin(
+                "command-centre-review",
+                Some(("command-centre", "review", 1)),
+            ),
+            kin("command-centre-plan", Some(("command-centre", "plan", 1))),
+            kin("worktrees-carry-plan", Some(("worktrees-carry", "plan", 1))),
+        ]);
+
+        assert_eq!(
+            shape(&rows),
+            vec![
+                ("command-centre".to_string(), 0),
+                // **In the listing's own order, not the workflow's.** `review`
+                // came first in the index and this reorders the tree, not the
+                // fleet: a listing that also sorted its children would be making
+                // a second claim, and the one it is asked for is *whose child is
+                // this*.
+                ("command-centre-review".to_string(), 1),
+                ("command-centre-plan".to_string(), 1),
+                ("worktrees-carry".to_string(), 0),
+                ("worktrees-carry-plan".to_string(), 1),
+            ]
+        );
+    }
+
+    /// **Two children of one step are told apart by attempt**, oldest first.
+    ///
+    /// A `review` step that failed and is being retried has a *new* sub-Job, and
+    /// the first one's record is still on disk (`docs/reserved/016`). Collapsing
+    /// them would draw one row for two Jobs, one of which reviewed the diff
+    /// before the fix.
+    #[test]
+    fn a_retried_step_keeps_both_of_its_sub_jobs() {
+        let rows = as_a_tree(vec![
+            kin("parent", None),
+            kin("second-try", Some(("parent", "review", 2))),
+            kin("first-try", Some(("parent", "review", 1))),
+        ]);
+
+        assert_eq!(
+            shape(&rows),
+            vec![
+                ("parent".to_string(), 0),
+                ("first-try".to_string(), 1),
+                ("second-try".to_string(), 1),
+            ]
+        );
+    }
+
+    /// **A child whose parent is not in the listing is a root.**
+    ///
+    /// The ordinary case for `armada fleet ls` without `--all`: the parent
+    /// finished and was filtered out, and its running sub-Job is exactly what the
+    /// reader wants. Dropping it for want of a parent would hide live work, and
+    /// indenting it under nothing would indent it off the tree.
+    #[test]
+    fn a_sub_job_whose_parent_is_not_shown_stands_on_its_own() {
+        let rows = as_a_tree(vec![
+            kin("orphan", Some(("finished-and-filtered", "plan", 1))),
+            kin("ordinary", None),
+        ]);
+
+        assert_eq!(
+            shape(&rows),
+            vec![("orphan".to_string(), 0), ("ordinary".to_string(), 0)]
+        );
+    }
+
+    /// **A cycle loses no row.** Only a corrupt index can describe one — a parent
+    /// is recorded when the child is minted, so the link points at an older Job —
+    /// and drawing two rows flat is better than a listing that silently drops
+    /// them or a walk that never ends.
+    #[test]
+    fn a_cycle_in_a_corrupt_index_still_draws_every_row() {
+        let rows = as_a_tree(vec![
+            kin("a", Some(("b", "plan", 1))),
+            kin("b", Some(("a", "plan", 1))),
+            kin("sane", None),
+        ]);
+
+        assert_eq!(rows.len(), 3);
+        assert!(rows.iter().any(|row| row.name == "a"));
+        assert!(rows.iter().any(|row| row.name == "b"));
+    }
+
+    /// Three generations nest, each one deeper than the last.
+    #[test]
+    fn a_sub_job_of_a_sub_job_is_two_deep() {
+        let rows = as_a_tree(vec![
+            kin("root", None),
+            kin("child", Some(("root", "plan", 1))),
+            kin("grandchild", Some(("child", "verify", 1))),
+        ]);
+
+        assert_eq!(
+            shape(&rows),
+            vec![
+                ("root".to_string(), 0),
+                ("child".to_string(), 1),
+                ("grandchild".to_string(), 2),
+            ]
+        );
+    }
+
     fn a_job_row() -> JobRow {
         JobRow {
             uuid: "c19d0a34-3069-4115-ad92-e81f486ce8b9".to_string(),
@@ -3823,6 +4077,8 @@ mod tests {
                 wall_clock_ms: 1_860_000,
             },
             needs_attention: false,
+            parent: None,
+            depth: 0,
             acting: None,
             acting_for_s: None,
         }

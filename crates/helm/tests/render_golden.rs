@@ -1835,6 +1835,10 @@ fn fleet_ls_matches_its_fixture() {
             needs_attention,
             acting: None,
             acting_for_s: None,
+            // **No parent in these fixtures.** Nesting has a case of its own;
+            // what these measure is one column against one row.
+            parent: None,
+            depth: 0,
         }
     }
 
@@ -1916,6 +1920,134 @@ fn fleet_ls_matches_its_fixture() {
         },
     )));
     assert_render("fleet-ls", &output);
+}
+
+/// **A fleet that is a tree, drawn as one** — a `feature` Job with the sub-Jobs
+/// its own gates started.
+///
+/// `armada fleet ls` and the Bridge listed every Job at the top level, so
+/// `command-centre-plan` sat beside `command-centre` with a similar name and
+/// nothing saying one *is* a step of the other; three Jobs with three sub-Jobs
+/// read as six and the fleet looked twice as busy as it was.
+///
+/// **The retried step is the case that must not collapse.** A `review` that
+/// failed has a new sub-Job and the first one's record is still on disk
+/// (`docs/reserved/016`), so both are here and the second names its attempt —
+/// the first does not, because `#1` on every row is noise.
+///
+/// **The spend is each Job's own share.** `observe` reports `own + kin` so a
+/// ceiling can bound a whole tree, which is right for a ceiling and wrong for a
+/// total: summing every row counted each sub-Job twice, once on itself and once
+/// inside its parent.
+#[test]
+fn a_fleet_of_sub_jobs_is_drawn_as_a_tree() {
+    let parent_uuid = "bafe1e02-4d7a-41c9-9f30-2e8b6c1a5d74";
+    let job =
+        |name: &str, uuid: &str, workflow: &str, state, step: &str, cost_usd, runtime_s| JobRow {
+            uuid: uuid.to_string(),
+            name: name.to_string(),
+            workflow: workflow.to_string(),
+            state,
+            detail: step.to_string(),
+            step: step.to_string(),
+            on_step_s: None,
+            task: "draw the command centre".to_string(),
+            runtime_s,
+            cost_usd,
+            tokens: 0,
+            turns: 0,
+            budget_remaining: Remaining {
+                attempts: 2,
+                cost_usd: 8.0,
+                wall_clock_ms: 1_800_000,
+            },
+            needs_attention: false,
+            acting: None,
+            acting_for_s: None,
+            parent: None,
+            depth: 0,
+        };
+    let under = |step: &str, attempt: u32| armada_core::fleet::job::Parent {
+        uuid: parent_uuid.to_string(),
+        step: step.to_string(),
+        attempt,
+    };
+
+    let mut plan = job(
+        "command-centre-plan",
+        "28e048ca-91b6-4f02-8d17-5c93af2e6b08",
+        "plan",
+        JobState::Done,
+        "approve",
+        4.52,
+        3_600,
+    );
+    plan.parent = Some(under("plan", 1));
+    let mut first_review = job(
+        "command-centre-review",
+        "bd8762f3-2a45-4e91-b7c8-0f61d3958ea2",
+        "review",
+        JobState::Aborted,
+        "read",
+        2.28,
+        900,
+    );
+    first_review.parent = Some(under("review", 1));
+    let mut second_review = job(
+        "command-centre-review",
+        "0e5047b0-77c1-4a83-95de-6b2f8c41097d",
+        "review",
+        JobState::Running,
+        "read",
+        1.10,
+        300,
+    );
+    second_review.parent = Some(under("review", 2));
+
+    let results = armada_core::envelope::as_a_tree(vec![
+        job(
+            "command-centre",
+            parent_uuid,
+            "feature",
+            JobState::Paused,
+            "review",
+            2.50,
+            7_200,
+        ),
+        plan,
+        first_review,
+        second_review,
+    ]);
+    let output = Output::FleetLs(Box::new(Envelope::ok(
+        "fleet ls",
+        None,
+        Status::Running,
+        FleetLsData {
+            needs_you: 0,
+            // Each Job's own share, which is what the verb now sums.
+            spent_usd: results.iter().map(|row| row.cost_usd).sum(),
+            results,
+            windows: Vec::new(),
+        },
+    )));
+    assert_render("fleet-ls-nested", &output);
+
+    // **The nesting must not widen the table past the terminal.** `fleet ls`
+    // came to exactly eighty columns before this and has no shedding, so the
+    // first prefix tried — `└ review: `, with the step's name in it — took it to
+    // eighty-seven. A golden alone would have recorded that as the new truth;
+    // this states the rule instead (`render/term.rs`: no listing in Armada is
+    // wider than the terminal it is drawn in).
+    for (audience, style, terminal) in audiences() {
+        let drawn = render::human(&output, style, terminal);
+        for line in drawn.lines() {
+            let wide = strip_ansi(line).chars().count();
+            assert!(
+                wide <= WIDTH,
+                "the {audience} render is {wide} columns wide at {WIDTH}: {line}"
+            );
+        }
+    }
 }
 
 /// `armada fleet inbox` — **the table `001` is about, with the id it lacked.**
@@ -2195,6 +2327,10 @@ fn a_whole_frame() -> Output {
             needs_attention,
             acting: None,
             acting_for_s: None,
+            // **No parent in these fixtures.** Nesting has a case of its own;
+            // what these measure is one column against one row.
+            parent: None,
+            depth: 0,
         }
     }
 
@@ -2329,6 +2465,8 @@ fn bridge_filtered_matches_its_fixture() {
         acting: None,
         acting_for_s: None,
         needs_attention: false,
+        parent: None,
+        depth: 0,
     }];
 
     let output = Output::Bridge(Box::new(Envelope::ok(
@@ -3883,6 +4021,8 @@ fn aborting_row() -> JobRow {
             wall_clock_ms: 1_860_000,
         },
         needs_attention: false,
+        parent: None,
+        depth: 0,
         acting: None,
         acting_for_s: None,
     }

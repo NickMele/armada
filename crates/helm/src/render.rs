@@ -716,8 +716,10 @@ fn fleet_ls(envelope: &Envelope<FleetLsData>, style: Style, width: usize) -> Str
     for row in &data.results {
         table = table.row(vec![
             job_status(row),
-            // Naval blue is what the palette reserves for a Job identifier.
-            Cell::painted(row.name.clone(), Role::NavalBlue),
+            // Naval blue is what the palette reserves for a Job identifier, and
+            // [`nested`] puts a sub-Job under the Job whose step it satisfies —
+            // the same tree the Bridge's JOBS panel draws, from the same order.
+            Cell::painted(nested(row), Role::NavalBlue),
             // **Muted, because it is the fallback and not the handle.** A name
             // is what a person types on an ordinary day; the id is what they
             // type on the day two Jobs share one.
@@ -1039,6 +1041,57 @@ pub fn command_centre(
     lines
 }
 
+/// A Job's name, **indented under the Job that started it**.
+///
+/// **The glyph is what says "inside".** `armada fleet ls` and the Bridge drew
+/// every Job at the top level, so `job-drives-the-drone-plan` sat beside
+/// `job-drives-the-drone` with a similar name and nothing saying one *is* a step
+/// of the other — and three Jobs with three sub-Jobs read as six, which made the
+/// fleet look twice as busy as it was.
+///
+/// **The attempt is here and the step's name is not**, and that is a width
+/// decision rather than a preference. `armada fleet ls`'s table came to exactly
+/// eighty columns before this, so `└ review: ` took it to eighty-seven — wider
+/// than the terminal, which is the one thing no listing in Armada may be
+/// (`render/term.rs`). The glyph alone leaves four columns of slack; the step's
+/// name needs eleven.
+///
+/// **The attempt spends three of those four**, because it is the half that cannot
+/// be inferred: a `review` that failed and is being tried again has a *new*
+/// sub-Job and the first one's record is still on disk (`docs/reserved/016`), so
+/// two rows carry one name and only the attempt tells them apart. It is drawn
+/// from the second onwards — `#1` on every row would be noise.
+///
+/// The step itself is on the row for anything with room to say it: `--json`
+/// carries `parent.step`, `armada fleet show` names it, and in `fleet ls` the
+/// child's own `WORKFLOW` column is the step's name in every workflow Armada
+/// ships, since a sub-Job runs the workflow its parent's step asked for.
+///
+/// **The name is kept whole rather than shortened against the parent's.** A
+/// sub-Job is named `<parent>-<step>`, so `command-centre-plan` under
+/// `command-centre` could be drawn as `└ plan` and read perfectly — but the name
+/// is what a person types at `armada fleet show`, and a listing that shows a
+/// fragment invites one that does not resolve.
+fn nested(row: &armada_core::envelope::JobRow) -> String {
+    let Some(parent) = &row.parent else {
+        return row.name.clone();
+    };
+    if row.depth == 0 {
+        // Its parent is not in this listing — `--all` off and a finished parent
+        // hidden. Nothing to indent under, so it stands on its own.
+        return row.name.clone();
+    }
+    let attempt = match parent.attempt {
+        0 | 1 => String::new(),
+        attempt => format!(" #{attempt}"),
+    };
+    format!(
+        "{}└ {}{attempt}",
+        "  ".repeat(row.depth.saturating_sub(1)),
+        row.name
+    )
+}
+
 /// The Bridge's table, described once for both surfaces.
 ///
 /// **One table, two emitters** — the same split `render/live.rs` uses for the
@@ -1171,7 +1224,7 @@ fn bridge_columns(
                 true => Cell::painted(style.caret(), Role::SignalAmber),
                 false => Cell::empty(),
             },
-            Cell::painted(row.name.clone(), Role::NavalBlue),
+            Cell::painted(nested(row), Role::NavalBlue),
             job_status(row),
             // **Muted, because it is the fallback and not the handle** — the
             // same words and the same colour `fleet ls` uses for it.

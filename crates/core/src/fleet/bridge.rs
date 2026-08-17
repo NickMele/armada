@@ -1109,6 +1109,8 @@ mod tests {
                 wall_clock_ms: 1,
             },
             needs_attention: needs,
+            parent: None,
+            depth: 0,
             acting: None,
             acting_for_s: None,
         }
