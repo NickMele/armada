@@ -334,6 +334,12 @@ blocker (`stuck`). The Job will verify the work and advance or retry based on th
 - `mcp__armada__fleet_ask_human` — only for a judgement that is genuinely the person's. Write \
 the question in full: it is read out of context, possibly hours later, by somebody who has not \
 seen your work.
+- `mcp__armada__fleet_check` — run this workspace's checks in your worktree. **This is the \
+same command the gate runs to decide whether your step passed, so run it before you report \
+`done`.** A failure here is a failure there. Pass `fix: true` to run each check's fixing form \
+instead, which is how formatting is repaired — do that rather than reaching for a formatter by \
+hand. `armada` and `arm` on the shell are denied to you and always will be: the CLI writes the \
+machine-global store and this tool is your route to the same checks without it.
 
 You cannot spawn Jobs. If the task needs decomposing, say so with `mcp__armada__fleet_ask_human`.";
 
@@ -556,7 +562,7 @@ pub const MODES: [&str; 6] = [
 /// The **client's** spelling, not the server's: Claude Code exposes
 /// `fleet.report` as `mcp__armada__fleet_report`, and the dotted name matches
 /// nothing the model can call (`docs/traps.md`).
-pub const ALLOW: [&str; 13] = [
+pub const ALLOW: [&str; 14] = [
     "Read",
     "Glob",
     "Grep",
@@ -570,6 +576,7 @@ pub const ALLOW: [&str; 13] = [
     "mcp__armada__fleet_verdict",
     "mcp__armada__fleet_ask_human",
     "mcp__armada__fleet_propose",
+    "mcp__armada__fleet_check",
 ];
 
 /// What a Drone may not do however broadly [`ALLOW`] grants — **the things
@@ -610,6 +617,12 @@ pub const DENY: [&str; 16] = [
     "Bash(git branch:*)",
     "Bash(sudo:*)",
     "Bash(gh:*)",
+    // **Denied, and `manifest.check` on the toolbelt is why it can stay.** The
+    // CLI writes the machine-global `~/.armada/`, which a Job's own record must
+    // never reach. Until the tool existed this deny also removed the only route
+    // to `armada manifest check` — the command the `check_passes` gate judges
+    // every Drone by — so a Drone was told to run a verb it could not run and
+    // judged on a result it could never obtain first.
     "Bash(armada:*)",
     "Bash(claude:*)",
     "Bash(npm publish:*)",

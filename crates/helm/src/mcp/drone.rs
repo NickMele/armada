@@ -39,10 +39,24 @@ use crate::verbs::fleet;
 /// not a widening of what a Drone may *do*: it writes an inbox entry and changes
 /// nothing. The rule the list is built on is unchanged — a Drone acts on its own
 /// Job and can name no other.
-pub const TOOLS: [&str; 4] = [
+/// **`fleet.check` is the fifth, and it closes a contradiction rather than
+/// widening anything.** `Bash(armada:*)` is on the Drone's deny list — the CLI
+/// writes the machine-global `~/.armada/` and a Drone must never reach it
+/// ([`crate::verbs::fleet`], `docs/reserved/011`) — and until this tool existed
+/// there was no other route either. So a Drone had no way at all to run
+/// `armada manifest check`, while every task brief ended by telling it to, and
+/// the `check_passes` gate ran that exact command from Fleet and judged the
+/// Drone on a result it could never have obtained first. Work, be judged by a
+/// command you may not run, be handed a one-line failure, guess.
+///
+/// The deny stays and the tool is why it can: this runs the check **in the
+/// Job's own worktree and nowhere else**, so the store stays out of reach by
+/// construction rather than by an allowlist pattern somebody has to get right.
+pub const TOOLS: [&str; 5] = [
     "fleet.report",
     "fleet.ask_human",
     "fleet.propose",
+    "fleet.check",
     "fleet.verdict",
 ];
 
@@ -84,6 +98,25 @@ impl Toolbelt {
                 next_action: Some("this toolbelt is served to a Drone only".to_string()),
             })
     }
+}
+
+/// `fleet.check`, as a Drone calls it.
+///
+/// **No `path`, unlike Helm's.** Helm may check any workspace it can reach; a
+/// Drone checks its own worktree and has no business naming another. The
+/// directory is taken from the Job's record rather than from an argument, which
+/// is the same rule every other tool here follows: a Drone acts on its own Job
+/// and can name no other.
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+pub struct DroneCheckArgs {
+    /// Which checks, as `component:check` with `*` allowed — `api:*`,
+    /// `*:lint`. Omit for every check.
+    #[serde(default)]
+    pub selector: Option<String>,
+    /// Run the fixing form of every check that declares one, instead of the
+    /// checking form. `armada.yml`'s `fix:` — a formatter, usually.
+    #[serde(default)]
+    pub fix: bool,
 }
 
 /// `fleet.report`.
@@ -230,6 +263,65 @@ impl Toolbelt {
     }
 
     /// Report step completion or blockage.
+    /// `armada manifest check`, in this Job's own worktree.
+    ///
+    /// **Named `fleet.check` rather than `manifest.check`, and the two belts
+    /// stay disjoint because they are genuinely different tools.** Helm's
+    /// `manifest.check` checks any workspace it is pointed at; this checks the
+    /// Job's own worktree and takes no path. Sharing a name would imply a
+    /// shared capability and need a runtime filter to tell them apart, which is
+    /// the thing `mcp/mod.rs`'s disjointness test exists to refuse.
+    #[tool(
+        name = "fleet.check",
+        description = "Run this Job's workspace checks and report each one's verdict, duration \
+                       and log. This is the same command the gate runs to decide whether your \
+                       step passed, so run it before you say you are done — a failure here is a \
+                       failure there. It runs in your worktree and takes no path: you cannot \
+                       check anywhere else. Pass fix: true to run each check's fixing form \
+                       instead, which is how formatting is repaired. A real run can last well \
+                       past ten minutes."
+    )]
+    async fn fleet_check(&self, Parameters(args): Parameters<DroneCheckArgs>) -> CallToolResult {
+        let world = self.world.clone();
+        let job = match self.job() {
+            Ok(job) => job,
+            Err(error) => return super::answer::from("check", Err(error)),
+        };
+        run("check", move || {
+            // **The worktree comes off the record, never off an argument.** A
+            // `path` a Drone could fill is a Drone able to run checks in a
+            // workspace that is not its own, which is the containment
+            // `docs/reserved/011` is about — and the reason `Bash(armada:*)`
+            // can stay denied while this tool exists.
+            let place = world.place();
+            let record = place.store().find(&job)?;
+            let worktree = place.expand(&record.worktree).display().to_string();
+            let mut app = super::helm::app(&world, Some(&worktree))?;
+            crate::verbs::check::run(
+                &mut app,
+                &crate::args::Check {
+                    json: true,
+                    dry_run: false,
+                    selector: args.selector,
+                    component: None,
+                    files: Vec::new(),
+                    all_files: false,
+                    fix: args.fix,
+                    jobs: None,
+                    wait: false,
+                    detach: false,
+                    status: false,
+                    run: None,
+                },
+                // **Silent, because nobody is watching a Drone's terminal.**
+                // The verdict comes back in the envelope; a progress renderer
+                // would be drawing to a pipe.
+                &mut crate::render::progress::Silent,
+            )
+        })
+        .await
+    }
+
     #[tool(
         name = "fleet.verdict",
         description = "Record whether you finished your work (`done`) or hit a blocker (`stuck`). \
