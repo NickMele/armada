@@ -72,6 +72,16 @@ fn seed_bug_workflow(machine: &Machine) {
         )
         .unwrap();
     }
+
+    // **And projected**, because a Drone reads `~/.claude/`, not the guild, and
+    // `fleet spawn` refuses when the two have diverged. A guild edited and not
+    // projected is a change no Drone will ever see.
+    armada_guild::projector::project(
+        &armada_guild::layout::Guild::at(&machine.home.path().join(".armada")),
+        &machine.home.path().join(".claude"),
+        &machine.home.path().join(".armada"),
+    )
+    .unwrap();
 }
 
 /// **The whole feature in one test.** A sentence goes in, an id comes back, and
