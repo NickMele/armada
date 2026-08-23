@@ -291,3 +291,43 @@ pub fn no_bloated_claude_md(root: &Path) -> Report {
     }
     report
 }
+
+// ------------------------------------------------------------- rule eight
+
+/// The v1 harvest has an index, and the index knows every note.
+///
+/// v1 exists only as a tag now, so the harvest is the last time anything about
+/// it gets written down while somebody still remembers why it mattered. An
+/// unindexed note is one nobody finds, which makes it the same as one nobody
+/// wrote.
+///
+/// The check runs both ways, like the source manifest: a note missing from the
+/// index fails, and so does an index entry pointing at a note that is not there.
+pub fn the_v1_harvest_has_an_index(root: &Path) -> Report {
+    let mut report = Report::new("the v1 harvest has an index, and it knows every note");
+    let dir = root.join("docs/v1-learnings");
+    let index = dir.join("INDEX.md");
+    let Ok(index_text) = fs::read_to_string(&index) else {
+        report.fail("docs/v1-learnings/INDEX.md — the harvest index (M0 step 10 writes it)");
+        return report;
+    };
+
+    for note in files_with_ext(root, &dir, &["md"]) {
+        let name = note.rsplit('/').next().unwrap_or(&note);
+        if name == "INDEX.md" {
+            continue;
+        }
+        if !index_text.contains(name) {
+            report.fail(format!("{note} is a harvest note the index does not mention"));
+        }
+    }
+
+    for line in index_text.lines() {
+        for token in line.split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.')) {
+            if token.ends_with(".md") && token != "INDEX.md" && !dir.join(token).is_file() {
+                report.fail(format!("the index names {token}, which is not in docs/v1-learnings/"));
+            }
+        }
+    }
+    report
+}
