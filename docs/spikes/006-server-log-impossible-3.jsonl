@@ -1,0 +1,3 @@
+{"t": 1787490196.4442282, "kind": "request", "payload": {"method": "initialize", "id": 0}}
+{"t": 1787490196.469101, "kind": "request", "payload": {"method": "notifications/initialized", "id": null}}
+{"t": 1787490196.4692612, "kind": "request", "payload": {"method": "tools/list", "id": 1}}
