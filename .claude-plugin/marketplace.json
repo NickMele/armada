@@ -1,0 +1,13 @@
+{
+  "name": "armada",
+  "description": "Armada's own development harness, versioned with the code it polices.",
+  "owner": { "name": "Nick Mele" },
+  "plugins": [
+    {
+      "name": "armada-dev",
+      "description": "The harness Armada is built with: agents, hooks and MCP config.",
+      "version": "0.1.0",
+      "source": "./"
+    }
+  ]
+}

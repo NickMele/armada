@@ -1,0 +1,9 @@
+{
+  "name": "armada-dev",
+  "description": "The harness Armada is built with: the agents, hooks and MCP config that enforce this repository's rules mechanically rather than by asking nicely.",
+  "version": "0.1.0",
+  "author": { "name": "Nick Mele" },
+  "repository": "https://github.com/NickMele/armada",
+  "license": "MIT",
+  "keywords": ["armada", "gate", "enforcement"]
+}

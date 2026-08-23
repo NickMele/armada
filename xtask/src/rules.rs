@@ -155,6 +155,9 @@ pub fn no_untyped_json_outside_store_and_ipc(root: &Path) -> Report {
     let allowed = ["crates/store/", "crates/ipc/"];
     for source_root in SOURCE_ROOTS {
         for path in files_with_ext(root, &root.join(source_root), &["rs"]) {
+            // The gate names the pattern it forbids, so it always matches
+            // itself. `guard_write.py` carries the same exemption for the same
+            // reason, and the two must not drift.
             if allowed.iter().any(|a| path.starts_with(a)) || path.starts_with("xtask/") {
                 continue;
             }
