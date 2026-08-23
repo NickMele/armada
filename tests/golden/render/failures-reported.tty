@@ -1,5 +1,0 @@
-  [1m[38;2;156;163;175mSTATUS[0m  [1m[38;2;156;163;175mID[0m        [1m[38;2;156;163;175mDETAIL[0m                                                  [1m[38;2;156;163;175mTIME[0m
-  [38;2;255;180;84mOPEN[0m    [38;2;76;159;232m6d40b1e9[0m  [38;2;156;163;175mreported, the dry-run said CREATED worktree and made …[0m    [38;2;156;163;175m4m[0m
-  [38;2;255;180;84mOPEN[0m    [38;2;76;159;232ma91f0c37[0m  [38;2;156;163;175menvironment x4, `armada manifest clean` could not be …[0m    [38;2;156;163;175m9m[0m
-
-[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m1 failure · 1 reported · 2 open · armada failures show <id>[0m

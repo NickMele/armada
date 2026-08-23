@@ -1,3 +1,0 @@
-# uv writes this. `backend/` resolves its own dependencies, which is what
-# tells a separate product from a member of somebody else's workspace.
-version = 1

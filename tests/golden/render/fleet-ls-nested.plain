@@ -1,7 +1,0 @@
-  STATUS   JOB                         ID        WORKFLOW  DETAIL   SPENT  TIME
-  PAUSED   command-centre              bafe1e02  feature   review   $2.50    2h
-  DONE     └ command-centre-plan       28e048ca  plan      approve  $4.52    1h
-  ABORTED  └ command-centre-review     bd8762f3  review    read     $2.28   15m
-  RUNNING  └ command-centre-review #2  0e5047b0  review    read     $1.10    5m
-
-RUNNING  4 jobs, $10.40 today

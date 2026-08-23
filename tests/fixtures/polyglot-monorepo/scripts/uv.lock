@@ -1,3 +1,0 @@
-# The second Python product. Two directories with the same manager is not a
-# duplicate — it is two things that are versioned apart.
-version = 1

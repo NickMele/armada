@@ -1,3 +1,0 @@
-[alias]
-# `cargo xtask doclint` — no interpreter, no venv, works wherever cargo does.
-xtask = "run --quiet --package xtask --"

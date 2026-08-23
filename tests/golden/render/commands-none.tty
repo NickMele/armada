@@ -1,6 +1,0 @@
-[1m[38;2;255;169;64marmada[0m  [38;2;156;163;175m3d9cc7ba[0m
-
-[1m[38;2;61;220;132mOK[0m  [38;2;156;163;175m0 commands[0m
-
-[38;2;156;163;175mNo commands: block in armada.yml, so this repository declares no verbs.[0m
-[38;2;156;163;175mAn entry is a name, a cmd: to run, and a help: line saying what it is for.[0m

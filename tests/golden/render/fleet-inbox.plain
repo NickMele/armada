@@ -1,6 +1,0 @@
-  STATUS       ID        JOB            DETAIL                              TIME
-  NEEDS_HUMAN  4f2a91c8  nightly-flake  raise the CI timeout to 90s, or d…    1h
-  BLOCKED      b83e7a15  rate-limit     the staging database is not reach…   22m
-  NEEDS_HUMAN  7d1c5e02  rate-limit     which of the two ports should the…    3h
-
-OK  2 open, armada fleet answer <id> "…"

@@ -1,7 +1,0 @@
-  STEP      STATUS      DETAIL                           TIME
-  workflow  CLASSIFIED  feature, confidence 0.91         0.8s
-  worktree  CREATED     ~/.armada/workspaces/rate-limit  0.3s
-  ports     CLAIMED     5470-5479                           -
-  drone     STARTED     job 8f2a, plan step                 -
-
-RUNNING  rate-limit, armada fleet board rate-limit to take over

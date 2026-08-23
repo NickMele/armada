@@ -1,9 +1,0 @@
-run 01M00WRY00CYTZ44                                                    4 checks
-
-  CHECK              STATUS  DETAIL  TIME
-  armada:boundaries  PASS    -       0.3s
-  armada:docs        PASS    -       0.5s
-  armada:fmt         PASS    -       0.3s
-  armada:lint        PASS    -       2.6s
-
-PASS  4 passed, 0 failed

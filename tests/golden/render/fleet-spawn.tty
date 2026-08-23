@@ -1,7 +1,0 @@
-  [1m[38;2;156;163;175mSTEP[0m      [1m[38;2;156;163;175mSTATUS[0m      [1m[38;2;156;163;175mDETAIL[0m                           [1m[38;2;156;163;175mTIME[0m
-  workflow  [38;2;61;220;132mCLASSIFIED[0m  [38;2;156;163;175mfeature, confidence 0.91[0m         [38;2;156;163;175m0.8s[0m
-  worktree  [38;2;61;220;132mCREATED[0m     [38;2;156;163;175m~/.armada/workspaces/rate-limit[0m  [38;2;156;163;175m0.3s[0m
-  ports     [38;2;61;220;132mCLAIMED[0m     [38;2;156;163;175m5470–5479[0m                           [38;2;156;163;175m—[0m
-  drone     [38;2;61;220;132mSTARTED[0m     [38;2;156;163;175mjob 8f2a, plan step[0m                 [38;2;156;163;175m—[0m
-
-[1m[38;2;255;169;64mRUNNING[0m  [38;2;156;163;175mrate-limit · armada fleet board rate-limit to take over[0m
