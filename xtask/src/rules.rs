@@ -213,3 +213,49 @@ pub fn no_vendor_literal_outside_adapters(root: &Path) -> Report {
     }
     report
 }
+
+// -------------------------------------------------------------- rule seven
+
+/// Thresholds for a `CLAUDE.md`. Far below the general source ceiling, because
+/// these files are read by an agent at the start of every task rather than by a
+/// person looking something up.
+const CLAUDE_MD_FAIL: usize = 50;
+const CLAUDE_MD_WARN: usize = 30;
+
+/// No `CLAUDE.md` over fifty lines.
+///
+/// **A CLAUDE.md routes; it does not explain.** Anything longer than a pointer
+/// belongs in a practice doc, a skill, or Notion — one of which is already the
+/// authority on it, so a copy in a CLAUDE.md can only drift downward while
+/// being read more often than the original.
+///
+/// v1's single agent file reached 328 lines by accretion, one reasonable-looking
+/// paragraph at a time. No individual addition was wrong, which is exactly why a
+/// ceiling is the only thing that stops it.
+pub fn no_bloated_claude_md(root: &Path) -> Report {
+    let mut report = Report::new("no CLAUDE.md over 50 lines, warn at 30");
+    let mut found = Vec::new();
+    walk(root, &mut |path| {
+        if path.file_name().and_then(|n| n.to_str()) == Some("CLAUDE.md") {
+            found.push(path.to_path_buf());
+        }
+    });
+    found.sort();
+    for path in found {
+        let Ok(text) = fs::read_to_string(&path) else { continue };
+        let rel = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let lines = text.lines().count();
+        if lines > CLAUDE_MD_FAIL {
+            report.fail(format!(
+                "{rel} is {lines} lines, over {CLAUDE_MD_FAIL} — move the explanation, keep the pointer"
+            ));
+        } else if lines > CLAUDE_MD_WARN {
+            report.warn(format!("{rel} is {lines} lines, over {CLAUDE_MD_WARN}"));
+        }
+    }
+    report
+}

@@ -69,6 +69,7 @@ fn verify_foundations() -> ExitCode {
         rules::every_source_file_is_in_the_manifest(&root),
         rules::no_untyped_json_outside_store_and_ipc(&root),
         rules::no_vendor_literal_outside_adapters(&root),
+        rules::no_bloated_claude_md(&root),
     ];
 
     let mut out = String::new();

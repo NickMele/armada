@@ -23,6 +23,12 @@ import sys
 WARN_LINES = 500
 FAIL_LINES = 900
 
+# A CLAUDE.md is read by an agent at the start of every task, so it earns a far
+# tighter ceiling than source does. `xtask/src/rules.rs` carries the same two
+# numbers and the reasoning; the two must not drift.
+CLAUDE_MD_WARN = 30
+CLAUDE_MD_FAIL = 50
+
 # Untyped JSON is allowed exactly where bytes enter the process — plus the
 # gate itself, which names the pattern it forbids and so always matches itself.
 # `xtask/src/rules.rs` carries the same exemption; the two must not drift.
@@ -88,8 +94,23 @@ def main() -> None:
                        "belongs to `store` and `ipc`, the two places bytes enter "
                        "the process; everywhere else a value arrives typed.")
 
-    # ---- rule: 500 warns and needs acknowledgment, 900 fails -------------
+    # ---- rule: a CLAUDE.md routes, it does not explain -------------------
     lines = projected_lines(root, rel, tool_input)
+    if rel.endswith("CLAUDE.md") and lines is not None:
+        if lines > CLAUDE_MD_FAIL:
+            answer("deny", f"{rel} would be about {lines} lines, over "
+                           f"{CLAUDE_MD_FAIL}. A CLAUDE.md routes; it does not "
+                           "explain. Move the explanation to a practice doc, a "
+                           "skill or Notion and leave the pointer. v1's agent "
+                           "file reached 328 lines one reasonable paragraph at "
+                           "a time.")
+        if lines > CLAUDE_MD_WARN:
+            answer("ask", f"{rel} would be about {lines} lines, over "
+                          f"{CLAUDE_MD_WARN}. Is this a pointer, or an "
+                          "explanation that belongs somewhere it can be found "
+                          "on purpose?")
+
+    # ---- rule: 500 warns and needs acknowledgment, 900 fails -------------
     if lines is not None:
         if lines > FAIL_LINES:
             answer("deny", f"{rel} would be about {lines} lines, over {FAIL_LINES}. "
