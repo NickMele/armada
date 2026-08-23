@@ -1,0 +1,10 @@
+# The version of the Fleet <-> Bridge IPC protocol.
+#
+# Fleet and Bridge ship as a pair and version together, so one number governs
+# both sides. `crates/ipc/build.rs` reads this file and emits the constant the
+# Rust side compares against; the TypeScript side reads the same file.
+#
+# Bump this when the wire shape changes in a way an older peer cannot read.
+# A peer that sees a version it does not know refuses the connection rather
+# than guessing.
+version = 1

@@ -1,0 +1,12 @@
+{
+  "name": "armada",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "description": "Dispatch coding agents against git repositories.",
+  "packageManager": "pnpm@11.6.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "gate": "cargo xtask verify-ground-zero"
+  }
+}

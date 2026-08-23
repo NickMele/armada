@@ -1,0 +1,6 @@
+# The TypeScript half of the repo, beside the Cargo workspace rather than
+# under it. Fleet and Bridge ship as a pair and version together, so they live
+# in one repository and one commit moves both.
+packages:
+  - "apps/*"
+  - "packages/*"
