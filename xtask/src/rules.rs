@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 use crate::{crate_dirs, files_with_ext, walk, Report};
 
@@ -16,24 +17,55 @@ const SOURCE_ROOTS: &[&str] = &["crates", "apps", "packages", "xtask"];
 
 /// The acceptance test exists and fails.
 ///
-/// **The gate cannot yet run it.** M0 step 9 writes the test and is what
-/// decides how it is invoked; until it lands there is nothing to invoke, so
-/// this rule fails on absence and names the directory it is looking in. When
-/// step 9 lands the test it also wires the run here — a rule that only checks
-/// for a file would go green on an empty `#[test] fn it_works() {}`, which is
-/// the exact shape this milestone exists to refuse.
+/// **Failing is the passing condition.** The test is written before the code it
+/// tests, and it must fail for the whole of M0 — so this rule is satisfied by a
+/// non-zero exit and violated by a green one.
+///
+/// It reports *which kind* of failure, because they are not the same signal and
+/// conflating them is how a milestone ends with a test nobody ever ran. "Does
+/// not compile" means the API it names does not exist yet, which is the expected
+/// state until the remaining crates land. "Failed an assertion" means it builds
+/// and the behaviour is wrong, which is the expected state after that.
+///
+/// The invocation is `cargo test -p acceptance`, which is what M0 step 8's Stop
+/// hook runs too — the gate and the hook must agree on what they are watching.
 pub fn acceptance_test_exists_and_fails(root: &Path) -> Report {
     let mut report = Report::new("the acceptance test exists and fails");
-    let dir = root.join("tests/acceptance");
-    let found = files_with_ext(root, &dir, &["rs"]);
-    if found.is_empty() {
-        report.fail("tests/acceptance/ — no acceptance test (M0 step 9 writes it)");
-    } else {
-        report.fail(format!(
-            "the run — {} present, and step 9 must wire how this gate invokes them",
-            found.len()
-        ));
+
+    if !root.join("crates/acceptance/Cargo.toml").is_file() {
+        report.fail("crates/acceptance — the package holding the acceptance test");
+        return report;
     }
+    let tests = files_with_ext(root, &root.join("crates/acceptance/tests"), &["rs"]);
+    if tests.is_empty() {
+        report.fail("crates/acceptance/tests/ — no test in the acceptance package");
+        return report;
+    }
+
+    let run = Command::new("cargo")
+        .args(["test", "--package", "acceptance", "--quiet"])
+        .current_dir(root)
+        .output();
+    let Ok(run) = run else {
+        report.fail("the run — `cargo test -p acceptance` could not be started");
+        return report;
+    };
+
+    if run.status.success() {
+        report.fail(
+            "a failing acceptance test — it passed. Green is a build failure in \
+             M0: something was stubbed, weakened or made to pass",
+        );
+        return report;
+    }
+
+    let stderr = String::from_utf8_lossy(&run.stderr);
+    let kind = if stderr.contains("error[E") || stderr.contains("could not compile") {
+        "does not compile — the API it names does not exist yet"
+    } else {
+        "failed an assertion — it builds, and the behaviour is not there yet"
+    };
+    report.warn(format!("the acceptance test {kind}"));
     report
 }
 

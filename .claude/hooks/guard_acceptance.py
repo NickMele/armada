@@ -15,7 +15,7 @@ import os
 import subprocess
 import sys
 
-ACCEPTANCE_DIR = "tests/acceptance"
+ACCEPTANCE_DIR = "crates/acceptance/tests"
 ACCEPTANCE_PACKAGE = "acceptance"
 
 
@@ -50,9 +50,7 @@ def main() -> None:
         block(
             f"{ACCEPTANCE_DIR}/ holds an acceptance test and there is no "
             f"`{ACCEPTANCE_PACKAGE}` package to run it with, so this hook cannot "
-            "establish that it failed. M0 step 9 owns wiring how the test is "
-            "invoked — here and in `xtask/src/rules.rs`, which has the same gap. "
-            "Blocking rather than assuming."
+            "establish that it failed. Blocking rather than assuming."
         )
 
     result = subprocess.run(

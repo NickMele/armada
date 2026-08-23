@@ -1,0 +1,26 @@
+[package]
+name = "acceptance"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# The acceptance test is hermetic: no process spawned, no repo touched, no
+# network opened. Everything it drives arrives through a fake in `testkit`.
+#
+# **`fleet` is deliberately not declared here.** A path dependency on a crate
+# that does not exist is a manifest error, and cargo refuses the whole workspace
+# over one — which would take the gate down with it. The test names `fleet`
+# anyway and the compiler reports it unresolved, which is the same signal
+# without breaking every other crate's build.
+#
+# The three below do exist and are empty, so the test's imports from them are
+# unresolved too. Both kinds of error are the list of what M0 step 11 and M1
+# must provide.
+[dev-dependencies]
+core-model = { path = "../core-model" }
+adapter-traits = { path = "../adapter-traits" }
+testkit = { path = "../testkit" }
