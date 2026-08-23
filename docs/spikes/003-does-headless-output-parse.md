@@ -114,3 +114,12 @@ assumed structured output needs to change. Two things do:
 
 1. **The gate cannot read `result` as a verdict.** Success is reported for a run that did nothing.
 2. **A spawned Drone does not start from a clean toolset.** It starts from the operator's.
+
+## A note on the transcripts
+
+**The captures are byte-for-byte except in one place.** The `init` event's
+inventory of the operator's own tooling — connected MCP servers, plugins,
+skills, subagents, and the tool list naming them all again — is replaced by a
+count, and the home path by `user`. This repository is public and that inventory
+is personal; the count is what the findings above actually rest on, so nothing
+they claim has been weakened. Every other event is exactly as it arrived.

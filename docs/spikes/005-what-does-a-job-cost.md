@@ -169,3 +169,12 @@ At mean $0.099 per small feature Job on Sonnet, and Opus 5 at 2.5× Sonnet's lis
 such Jobs is roughly $10 on Sonnet or $25 on Opus of *notional* spend — and zero actual spend on a
 Max subscription until the five-hour window says otherwise. The number that will stop a fleet is the
 window, and the only warning it gives is late.
+
+## A note on the transcripts
+
+**The captures are byte-for-byte except in one place.** The `init` event's
+inventory of the operator's own tooling — connected MCP servers, plugins,
+skills, subagents, and the tool list naming them all again — is replaced by a
+count, and the home path by `user`. This repository is public and that inventory
+is personal; the count is what the findings above actually rest on, so nothing
+they claim has been weakened. Every other event is exactly as it arrived.

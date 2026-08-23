@@ -331,3 +331,70 @@ pub fn the_v1_harvest_has_an_index(root: &Path) -> Report {
     }
     report
 }
+
+// -------------------------------------------------------------- rule nine
+
+/// Nothing committed here names a person or a machine.
+///
+/// This repository is public, and **documentation is the larger leak surface,
+/// not code**. v1 learned that the expensive way: its privacy gate was written
+/// after every reference that had to be scrubbed turned out to live in `docs/`,
+/// a README and an agent file, none of which the code-only grep covered.
+///
+/// The rule is a convention rather than a guess at what a real username looks
+/// like: **the only user in a committed path is `user`.** A capture from a real
+/// machine gets its home path rewritten to that before it lands, which makes an
+/// unrewritten one visible instead of plausible.
+///
+/// No allowlist. A gate with exemptions is a gate whose exemptions grow.
+pub fn nothing_names_a_person_or_a_machine(root: &Path) -> Report {
+    let mut report = Report::new("nothing committed names a person or a machine");
+
+    // Credential shapes. Prefixes only — a gate that tries to recognise a secret
+    // by entropy fails on both sides.
+    const SECRETS: &[(&str, &str)] = &[
+        ("sk-ant-", "an API key"),
+        ("gho_", "a token"),
+        ("ghp_", "a token"),
+        ("github_pat_", "a token"),
+        ("xoxb-", "a token"),
+        ("AKIA", "an access key"),
+        ("BEGIN RSA PRIVATE KEY", "a private key"),
+        ("BEGIN OPENSSH PRIVATE KEY", "a private key"),
+    ];
+
+    walk(root, &mut |path| {
+        let Ok(text) = fs::read_to_string(path) else { return };
+        let rel = path
+            .strip_prefix(root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        // The gate names the shapes it forbids, so it always matches itself.
+        if rel.starts_with("xtask/") {
+            return;
+        }
+        for (n, line) in text.lines().enumerate() {
+            let at = n + 1;
+            for prefix in ["/Users/", "/home/"] {
+                if let Some(rest) = line.split(prefix).nth(1) {
+                    let name: String = rest
+                        .chars()
+                        .take_while(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+                        .collect();
+                    if !name.is_empty() && name != "user" {
+                        report.fail(format!(
+                            "{rel}:{at} — a home directory naming `{name}`. Committed paths use `user`"
+                        ));
+                    }
+                }
+            }
+            for (shape, what) in SECRETS {
+                if line.contains(shape) {
+                    report.fail(format!("{rel}:{at} — {what}, by its prefix `{shape}`"));
+                }
+            }
+        }
+    });
+    report
+}

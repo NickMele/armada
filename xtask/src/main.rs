@@ -71,6 +71,7 @@ fn verify_foundations() -> ExitCode {
         rules::no_vendor_literal_outside_adapters(&root),
         rules::no_bloated_claude_md(&root),
         rules::the_v1_harvest_has_an_index(&root),
+        rules::nothing_names_a_person_or_a_machine(&root),
     ];
 
     let mut out = String::new();

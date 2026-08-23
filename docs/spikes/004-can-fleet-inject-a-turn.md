@@ -82,3 +82,12 @@ The gate's outcome-as-injected-turn design survives — the Drone is idle at exa
 gate speaks. The kill-and-respawn fallback is not needed. What does not survive is the assumption
 that the poke reaches a Drone in any state: it reaches an idle Drone and a Drone between tool calls,
 and it queues behind whatever the Drone is currently running.
+
+## A note on the transcripts
+
+**The captures are byte-for-byte except in one place.** The `init` event's
+inventory of the operator's own tooling — connected MCP servers, plugins,
+skills, subagents, and the tool list naming them all again — is replaced by a
+count, and the home path by `user`. This repository is public and that inventory
+is personal; the count is what the findings above actually rest on, so nothing
+they claim has been weakened. Every other event is exactly as it arrived.
