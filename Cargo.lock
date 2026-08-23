@@ -3,5 +3,17 @@
 version = 4
 
 [[package]]
+name = "adapter-traits"
+version = "0.0.0"
+
+[[package]]
+name = "core-model"
+version = "0.0.0"
+
+[[package]]
+name = "testkit"
+version = "0.0.0"
+
+[[package]]
 name = "xtask"
 version = "0.0.0"

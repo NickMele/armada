@@ -1,12 +1,10 @@
 # Armada v2 — Cargo workspace.
 #
-# `crates/*` is deliberately absent until the crates exist: this file is written
-# in the same commit as `cargo xtask verify-ground-zero`, which is written
-# before any crate (M0 step 7). The gate reports those crates missing; adding
-# them to the members list is what step 7's second half does.
+# Three crates, in build order: `core-model`, then `adapter-traits`, then
+# `testkit`. The remaining nine land in M0 step 11, after the acceptance test.
 [workspace]
 resolver = "2"
-members = ["xtask"]
+members = ["xtask", "crates/*"]
 
 [workspace.package]
 edition = "2021"

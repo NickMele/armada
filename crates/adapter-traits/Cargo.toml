@@ -1,0 +1,13 @@
+[package]
+name = "adapter-traits"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# Same rule as core-model, for the same reason: this is the seam every adapter
+# implements, so what it pulls in every adapter inherits.
+[dependencies]
