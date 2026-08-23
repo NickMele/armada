@@ -1,6 +1,6 @@
 # docs/
 
-Written documentation. Read `/armada-voice` before writing here — it holds the
+Written documentation. Read `.claude/skills/armada-voice/SKILL.md` before writing here — it holds the
 lexicon, the prose rules and the retired terms.
 
 - Never use `§`. Write "M0 step 4".

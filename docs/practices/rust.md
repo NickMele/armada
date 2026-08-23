@@ -7,7 +7,7 @@ which exists elsewhere and does not need re-stating here.
 The workspace today is three crates: `core-model`, `adapter-traits`, `testkit`,
 plus `xtask`. Both `core-model` and `adapter-traits` are deliberately empty —
 they exist to fix a dependency shape before there is anything to put inside it.
-The remaining nine crates of the twelve `agents/rust-engineer.md` describes are
+The remaining nine crates of the twelve `.claude/agents/rust-engineer.md` describes are
 not built. Three of them are named elsewhere in this repo, in doc comments and
 in `xtask`'s own rules, and are referenced below as `store`, `ipc` and
 `adapters` because that's what the code that already exists calls them. The
@@ -32,7 +32,7 @@ green; read what each failing rule says is missing.
 
 `core-model` and `adapter-traits` sit under every other crate, which is exactly
 why they're empty and gated hardest: a dependency added there is a dependency
-added everywhere. The rule as stated in `agents/rust-engineer.md` — `cargo
+added everywhere. The rule as stated in `.claude/agents/rust-engineer.md` — `cargo
 tree` must show no `tokio`, no `git2`, no `reqwest` under either — is currently
 **not** one of the six rules in `xtask/src/rules.rs`. Run `cargo tree -p
 core-model` and `cargo tree -p adapter-traits` yourself before you add a
@@ -66,7 +66,7 @@ compiler enforced it. The fix generalizes: before adding a runtime check
 narrower type removes the call from the call site entirely. A check can be
 skipped by a future caller in a hurry; a method that doesn't exist can't be.
 
-Three concrete shapes, all named in `agents/rust-engineer.md`:
+Three concrete shapes, all named in `.claude/agents/rust-engineer.md`:
 
 **A Drone's VCS handle has no push method.** The type a Drone is handed is
 scoped to what a Drone is allowed to do — commit and diff inside its own
@@ -384,7 +384,7 @@ isn't this document's job:
   established how much of its four-minute cold build was compilation, linking or
   the forced reinstall.
 - The `cargo tree` check on `core-model` and `adapter-traits` is stated as
-  gated in `agents/rust-engineer.md` but isn't one of the six rules in
+  gated in `.claude/agents/rust-engineer.md` but isn't one of the six rules in
   `xtask/src/rules.rs` yet. Run it by hand until someone adds it.
 - No crate has any dependency yet, so whether error enums in this workspace
   standardize on `thiserror`, `anyhow` at any boundary, or hand-written

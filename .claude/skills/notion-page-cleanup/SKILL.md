@@ -25,7 +25,7 @@ Say "I need to check" rather than stating a resolution you have not read.
 **1. Stale sweep, first.** A stale reference may be attached to a section a later
 step would otherwise preserve, so find them before deciding what to keep. Sweep
 for archived structure (Ground Zero, Phase 0 through 6, numbered implementation
-steps), retired terminology (see `armada-voice`), counts stated in prose, self-
+steps), retired terminology (see `.claude/skills/armada-voice/SKILL.md`), counts stated in prose, self-
 links and broken links, and places the page disagrees with itself two sections
 apart.
 

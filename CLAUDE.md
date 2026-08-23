@@ -12,13 +12,10 @@ Notion wins. Never assert a decision from memory — read its Resolution field.
 
 | Looking for | Go to |
 |---|---|
-| Working a milestone step | `/milestone-step` |
-| A workflow | `/feature` `/bug` `/refactor` `/code-review` `/design-plan` `/investigation` `/prototype` |
-| Lexicon, prose rules, status grammar | `/armada-voice` |
-| Editing a Notion page | `/notion-page-cleanup` |
+| Working a milestone step, a workflow, the voice, a Notion edit | `.claude/skills/` |
 | Rust, Bridge, or the seam between them | `docs/practices/` |
 | What was measured, and what was not | `docs/spikes/` |
-| Subagents | `agents/` |
+| Subagents | `.claude/agents/` |
 
 **A CLAUDE.md routes. It does not explain.** Anything longer than a pointer
 belongs in a practice doc, a skill, or Notion — each already the authority, so a
