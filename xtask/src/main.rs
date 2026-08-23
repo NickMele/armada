@@ -72,6 +72,7 @@ fn verify_foundations() -> ExitCode {
         rules::no_bloated_claude_md(&root),
         rules::the_v1_harvest_has_an_index(&root),
         rules::nothing_names_a_person_or_a_machine(&root),
+        rules::nothing_writes_its_own_log_format(&root),
     ];
 
     let mut out = String::new();

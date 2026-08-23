@@ -1,0 +1,253 @@
+//! The field contract every log line carries.
+//!
+//! Armada emits from three independent places — Fleet, Bridge and a Drone —
+//! into three sinks that already exist. Nothing else guarantees a line from one
+//! can be joined to a line from another. This is that guarantee.
+//!
+//! # Why this exists in M0 rather than when logging is written
+//!
+//! Retrofitting a line shape after five crates are already logging is a rewrite
+//! of all five. And `actor` is the field that cannot be reconstructed
+//! afterwards at all: **a line that did not record who caused it never will.**
+//!
+//! # What this module does not own
+//!
+//! Sink paths, retention and redaction. `Redactor` runs *after* an envelope is
+//! assembled, never before, and nothing here is exempt from it — `fields` is
+//! where a leaked credential would most plausibly land.
+
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+
+/// A ULID.
+///
+/// **Lexicographic sort is chronological**, which is the whole reason it is not
+/// a UUIDv4: merging three emitters' lines into one ordered view costs a string
+/// sort and nothing else.
+///
+/// There is no constructor that mints one here, and that is deliberate.
+/// **Fleet is the sole ID authority** — Bridge and Drones echo what they were
+/// handed, which is what makes the join reliable rather than best-effort. A
+/// minting function in the shared crate would let either of them invent an id
+/// that joins to nothing.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Ulid(String);
+
+impl Ulid {
+    /// Carry an id that something else minted.
+    pub fn carried(value: impl Into<String>) -> Self {
+        Ulid(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// RFC3339, UTC, millisecond precision.
+///
+/// A newtype rather than a formatted `String`, so the one place that formats a
+/// clock reading is the one place that has to agree with the rest of them.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Timestamp(String);
+
+impl Timestamp {
+    pub fn from_rfc3339(value: impl Into<String>) -> Self {
+        Timestamp(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Lowercase, always.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Level {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+/// Emitter identity. **A closed set** — a new emitter is a decision, not a
+/// string somebody passed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Component {
+    Fleet,
+    BridgeMain,
+    BridgeUi,
+    Drone,
+}
+
+/// Who caused the line. Three ways, and the separation is baked in now because
+/// adding it later is a schema migration over recorded history.
+///
+/// Verification source is orthogonal to this and is null for a human.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Actor {
+    Human,
+    Fleet,
+    Drone,
+}
+
+/// A value inside [`Envelope::fields`].
+///
+/// Deliberately small. `fields` is for structured data, and a type that can
+/// hold anything is a type that ends up holding a formatted sentence.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FieldValue {
+    Str(String),
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    List(Vec<FieldValue>),
+}
+
+/// One line, from any emitter.
+///
+/// # The absent-versus-null rule
+///
+/// A key is either present with a value or absent. **Never present and null.**
+/// Every conditional field below is an `Option`, and a sink writing one must
+/// omit the key rather than write a null — because `workspace` being absent is
+/// itself the signal that a line is Job-scoped rather than workspace-scoped,
+/// and a null would say something different from nothing.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Envelope {
+    // Always present. These four are constructor arguments rather than fields
+    // you can forget, so "always" is a fact about the type.
+    ts: Timestamp,
+    level: Level,
+    component: Component,
+    /// The Fleet process instance. Changes on every restart, which is what
+    /// makes a restart visible in the log without anything announcing it.
+    run_id: Ulid,
+    /// Never carries an interpolated id. Ids are fields, and any query targets a
+    /// field — nothing greps `msg`. Same discipline as `store` being the only
+    /// crate that deserializes: the structured path is the only path.
+    msg: String,
+
+    // Present under a stated condition, absent otherwise.
+    job_id: Option<Ulid>,
+    /// A retry is a second `drone_id` under one `job_id`.
+    drone_id: Option<Ulid>,
+    /// From the WorkflowDef, never generated.
+    step_id: Option<String>,
+    /// **Single-valued, and omitted when the line is not scoped to one
+    /// workspace.** A Convoy-spanning line carries `job_id` and no `workspace`;
+    /// the full set a Job spans is recorded once at Job creation and persisted
+    /// in `job_manifests`.
+    ///
+    /// An array was rejected: it taxes every query on a hot-path field forever,
+    /// and most lines concern one workspace or none.
+    workspace: Option<String>,
+    /// `fleet` only. Supplied by its tracing layer.
+    target: Option<String>,
+    /// `fleet` only. Supplied by its tracing layer.
+    span: Option<String>,
+    /// All structured data. **Nothing structured belongs at the top level.**
+    fields: BTreeMap<String, FieldValue>,
+}
+
+impl Envelope {
+    /// The four fields that are always present, and nothing else.
+    pub fn new(ts: Timestamp, level: Level, component: Component, run_id: Ulid, msg: impl Into<String>) -> Self {
+        Envelope {
+            ts,
+            level,
+            component,
+            run_id,
+            msg: msg.into(),
+            job_id: None,
+            drone_id: None,
+            step_id: None,
+            workspace: None,
+            target: None,
+            span: None,
+            fields: BTreeMap::new(),
+        }
+    }
+
+    /// The correlation spine.
+    pub fn in_job(mut self, job_id: Ulid) -> Self {
+        self.job_id = Some(job_id);
+        self
+    }
+
+    pub fn by_drone(mut self, drone_id: Ulid) -> Self {
+        self.drone_id = Some(drone_id);
+        self
+    }
+
+    pub fn at_step(mut self, step_id: impl Into<String>) -> Self {
+        self.step_id = Some(step_id.into());
+        self
+    }
+
+    /// Scope the line to exactly one workspace. A line that spans several does
+    /// not call this.
+    pub fn in_workspace(mut self, workspace: impl Into<String>) -> Self {
+        self.workspace = Some(workspace.into());
+        self
+    }
+
+    pub fn with_field(mut self, key: impl Into<String>, value: FieldValue) -> Self {
+        self.fields.insert(key.into(), value);
+        self
+    }
+
+    pub fn ts(&self) -> &Timestamp {
+        &self.ts
+    }
+    pub fn level(&self) -> Level {
+        self.level
+    }
+    pub fn component(&self) -> Component {
+        self.component
+    }
+    pub fn run_id(&self) -> &Ulid {
+        &self.run_id
+    }
+    pub fn msg(&self) -> &str {
+        &self.msg
+    }
+    pub fn job_id(&self) -> Option<&Ulid> {
+        self.job_id.as_ref()
+    }
+    pub fn drone_id(&self) -> Option<&Ulid> {
+        self.drone_id.as_ref()
+    }
+    pub fn step_id(&self) -> Option<&str> {
+        self.step_id.as_deref()
+    }
+    pub fn workspace(&self) -> Option<&str> {
+        self.workspace.as_deref()
+    }
+    pub fn fields(&self) -> &BTreeMap<String, FieldValue> {
+        &self.fields
+    }
+}
+
+/// The audit sink's line: an envelope plus who caused it.
+///
+/// `actor` lives here rather than on [`Envelope`] because only one of the three
+/// sinks carries it, and a field that is meaningful in one place and absent in
+/// two is a field people forget to set in the two.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AuditLine {
+    pub envelope: Envelope,
+    pub actor: Actor,
+}
+
+/// The names a Drone receives its spine under.
+///
+/// Set in the spawn configuration, so hooks and transcripts carry the join
+/// without anything parsing a prompt.
+pub mod env_keys {
+    pub const JOB_ID: &str = "ARMADA_JOB_ID";
+    pub const DRONE_ID: &str = "ARMADA_DRONE_ID";
+    pub const STEP_ID: &str = "ARMADA_STEP_ID";
+}

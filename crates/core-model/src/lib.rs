@@ -12,12 +12,23 @@
 //! untyped JSON belongs to `store` and `ipc`, which are the two places bytes
 //! enter the process.
 //!
-//! # Why it is empty
+//! # What is here, and what is not
 //!
-//! M0 step 7 creates this crate and names its dependency rule; it does not say
-//! what types it holds, and the things that would fill it are owned elsewhere —
-//! the Job record and its transition machine are M1 step 1, and the escalation
-//! trigger enum is a Notion database that is still the source of truth. The
-//! acceptance test is written against this crate before it is filled, on
-//! purpose: a test written against a finished skeleton gets shaped by the code
-//! it finds.
+//! The log envelope is here, because a line shape retrofitted after five crates
+//! are already logging is a rewrite of all five — and `actor` cannot be
+//! reconstructed afterwards at all.
+//!
+//! The Job record and its transition machine are not. M1 step 1 owns them by
+//! name, and the acceptance test is written against this crate before it is
+//! filled on purpose: a test written against a finished skeleton gets shaped by
+//! the code it finds.
+
+#![no_std]
+
+extern crate alloc;
+
+mod envelope;
+
+pub use envelope::{
+    env_keys, Actor, AuditLine, Component, Envelope, FieldValue, Level, Timestamp, Ulid,
+};

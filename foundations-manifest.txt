@@ -5,6 +5,7 @@ crates/adapters/src/lib.rs
 crates/api/src/lib.rs
 crates/checks-runner/src/lib.rs
 crates/config/src/lib.rs
+crates/core-model/src/envelope.rs
 crates/core-model/src/lib.rs
 crates/fleet-bin/src/lib.rs
 crates/fleet/src/lib.rs

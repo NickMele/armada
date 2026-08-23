@@ -398,3 +398,45 @@ pub fn nothing_names_a_person_or_a_machine(root: &Path) -> Report {
     });
     report
 }
+
+// --------------------------------------------------------------- rule ten
+
+/// Everything logs through the envelope. No crate writes its own format.
+///
+/// The envelope only guarantees a join if every line has one. A `println!` in
+/// the middle of `fleet` produces a line that no query reaches, no sink
+/// redacts, and nothing can correlate to the Job that caused it — and it is the
+/// easiest thing in the world to add while debugging and forget.
+///
+/// `fleet-bin` is exempt: it is the composition root and `fleet-bin doctor
+/// --json` writes to stdout on purpose, which is a CLI answering a question
+/// rather than a component logging.
+pub fn nothing_writes_its_own_log_format(root: &Path) -> Report {
+    let mut report = Report::new("everything logs through the envelope");
+    const MACROS: &[&str] = &["println!", "eprintln!", "print!", "eprint!"];
+
+    for dir in crate_dirs(root) {
+        let name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name == "fleet-bin" {
+            continue;
+        }
+        for path in files_with_ext(root, &dir.join("src"), &["rs"]) {
+            let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+            for (n, line) in text.lines().enumerate() {
+                let code = line.trim_start();
+                if code.starts_with("//") {
+                    continue;
+                }
+                for macro_name in MACROS {
+                    if code.contains(macro_name) {
+                        report.fail(format!(
+                            "{path}:{} — `{macro_name}` writes a line the envelope does not carry",
+                            n + 1
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    report
+}
