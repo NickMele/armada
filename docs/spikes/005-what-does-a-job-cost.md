@@ -135,6 +135,25 @@ own quota by this route.
 question: it is no longer *"can the number be known"* — it can, continuously, both windows — but
 *"which pipe does Armada read it from."*
 
+### Decided 2026-08-23 — Armada does not gate on quota
+
+**The owner's call, made on this evidence: leave quota out, gate on dollar cost.** None of the three
+routes is cheap enough to be worth building against a third-party surface that may expose the number
+properly in a later release. If Claude Code ever puts `used_percentage` in the headless stream, this
+becomes a small change; until then Armada does not read quota at all.
+
+**What that decision costs, stated so it is not a surprise later.** The five-hour window is the thing
+that will actually stop a fleet on a subscription — dollars stop nothing, because nothing is billed
+per token. So the fleet will meet its real limit as a **hard failure with no approach warning**: Jobs
+running normally, then `status` leaving `allowed` and work dying mid-flight. v1 has a recorded
+instance of exactly this — a Job dead at 03:55 on `rejected`, an overnight run lost. Armada should
+expect that shape rather than design against it, and `rate_limit_event` is still worth recording on
+the Job timeline as the post-mortem evidence even though it cannot gate.
+
+**And the dollar gate has to be wide.** Three identical successful runs of one Job priced across a
+2.31× range on cache warmth alone. A dollar ceiling tight enough to catch a runaway Drone will also
+kill healthy Jobs that happened to start cold. Pair it with turns and wall-clock, which held steady.
+
 ## The finding the step did not ask for
 
 **A per-Job dollar budget mostly measures cache warmth.** Three identical, equally successful runs of
