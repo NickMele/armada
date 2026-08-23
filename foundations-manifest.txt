@@ -1,4 +1,14 @@
 crates/acceptance/src/lib.rs
 crates/adapter-traits/src/lib.rs
+crates/adapter-traits/src/secret.rs
+crates/adapters/src/lib.rs
+crates/api/src/lib.rs
+crates/checks-runner/src/lib.rs
+crates/config/src/lib.rs
 crates/core-model/src/lib.rs
+crates/fleet-bin/src/lib.rs
+crates/fleet/src/lib.rs
+crates/ipc/src/lib.rs
+crates/store/src/lib.rs
 crates/testkit/src/lib.rs
+crates/verification/src/lib.rs

@@ -1,0 +1,29 @@
+[package]
+name = "fleet-bin"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+core-model = { path = "../core-model" }
+adapter-traits = { path = "../adapter-traits" }
+store = { path = "../store" }
+config = { path = "../config" }
+ipc = { path = "../ipc" }
+verification = { path = "../verification" }
+checks-runner = { path = "../checks-runner" }
+adapters = { path = "../adapters" }
+fleet = { path = "../fleet" }
+api = { path = "../api" }
+
+# **Declared dev-only, against the crate table, deliberately.** The table lists
+# `testkit` among fleet-bin's dependencies, and fleet-bin is the composition
+# root of the shipping binary — a normal dependency there puts the fake harness,
+# the fake VCS and the fake secrets provider inside the product. Recorded as a
+# deviation rather than followed silently.
+[dev-dependencies]
+testkit = { path = "../testkit" }
