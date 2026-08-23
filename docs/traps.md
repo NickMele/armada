@@ -1407,7 +1407,7 @@ Measured 2026-08-15 against git 2.39.5 (`rust:1-bookworm`) and git 2.54.0 (darwi
 # $HOME points at an empty directory, so there is no .gitconfig to read.
 # darwin, hostname Nicks-MacBook-Pro.local
 env -i HOME=$scratch PATH=$PATH git commit -m x
--> exit 0, author "Nick Mele <nickmele@Nicks-MacBook-Pro.local>"
+-> exit 0, author "Nick Mele <user@Nicks-MacBook-Pro.local>"
 
 # Linux container, hostname a hex id that does not canonicalise
 -> exit 128, "Author identity unknown"
