@@ -1,10 +1,11 @@
 # Spike 5 — What does a real Job cost, and can quota be read?
 
 **Cost: about $0.10 on Sonnet for a small feature Job, and the figure is arithmetically exact.**
-**Quota: no, not as a number you can gate on.** The stream reports *whether you are allowed* and
-*when the window resets*, and nothing about how much is left — until you are already near the limit.
-Budget gating is therefore a post-hoc counter, not a gate, which is the outcome the step named in
-advance.
+**Quota: the percentage exists, but not on the channel a headless Drone can read.** The NDJSON
+stream reports *whether you are allowed* and *when the window resets*, and no quantity. The number
+itself — `five_hour` and `seven_day` utilization — is live in Claude Code on every request and is
+handed to the **statusline**, which does not run in `-p` mode. See *Where the number actually lives*
+below: this is a plumbing problem, not an absent measurement.
 
 Measured 2026-08-23 against Claude Code **2.1.241**, `claude-sonnet-5`, on a Max subscription.
 
@@ -87,11 +88,52 @@ gate.**
 
 | Mechanism | Verdict |
 |---|---|
-| Quota-percent floor gate ("don't dispatch below 20% remaining") | **Cannot be built.** At 80% remaining the number does not exist. It appears only once you are near the limit, which is after the gate needed it |
+| Quota-percent floor gate ("don't dispatch below 20% remaining") | **Buildable, but not from the Drone's stream.** The number is live on every request; reaching it needs one of the three routes below |
 | Hard stop on exhaustion | **Works.** `status` leaving `allowed`, and `resetsAt` for when to resume. Binary, not proportional |
 | Budget gating in dollars | Works as a counter over `total_cost_usd`, on a notional figure that no invoice will match |
-| Fan-out cap | **Cannot be derived from headroom**, because headroom is unreadable. It has to come from concurrency or wall-clock instead |
+| Fan-out cap | Derivable from headroom **only once a route to the percentage is chosen**; otherwise from concurrency or wall-clock |
 | Judge call-count ceiling | Unaffected — it counts calls, not quota |
+
+## Where the number actually lives
+
+The first version of this write-up concluded the percentage was unavailable. That was wrong — it
+concluded from one channel. Corrected 2026-08-23, same day, by inspecting Claude Code 2.1.241 itself.
+
+**The service sends it on every response.** The binary carries a family of
+`anthropic-ratelimit-unified-*` headers — `-status`, `-reset`, `-overage-utilization`,
+`-slow-budget-utilization`, and the per-window `…-<window>-utilization` that v1's archived
+`drone.rs` comment names.
+
+**Claude Code keeps it in process and gives it to the statusline.** The payload builder reads an
+internal store and emits:
+
+```
+rate_limits: {
+  five_hour:  { used_percentage: utilization * 100, resets_at },
+  seven_day:  { used_percentage: utilization * 100, resets_at },
+}
+```
+
+That is exactly what this machine's own statusline reads —
+`.rate_limits.five_hour.used_percentage` and `.rate_limits.seven_day.used_percentage`. Both windows,
+a real percentage, continuously, with no warning threshold involved.
+
+**But the statusline does not run headless.** Tested directly: a `-p` run with
+`--settings '{"statusLine":{"type":"command","command":"…"}}'` pointing at a script that dumps stdin
+to a file. The run exited 0 and **the script never fired**. So a Drone cannot be asked to report its
+own quota by this route.
+
+### Three routes, and what is known about each
+
+| Route | Status |
+|---|---|
+| Read `rate_limit_event` from the Drone's stream | **Measured. Insufficient** — carries status, window kind, reset and overage flags; no quantity until a warning threshold |
+| Harvest the statusline payload from a session Fleet runs for that purpose | **Plausible, untested.** The payload has both windows. Needs a session type where the statusline fires — `-p` does not |
+| Put a proxy in front of the Drone (`ANTHROPIC_BASE_URL`) and read the headers | **Untested, and the honest unknown is auth** — whether subscription OAuth traffic survives a redirected base URL. The binary also ships a `claude gateway` subcommand for enterprise auth/telemetry, which is the same idea supported |
+
+**None of these is measured end to end, so none is a design decision yet.** What changed is the
+question: it is no longer *"can the number be known"* — it can, continuously, both windows — but
+*"which pipe does Armada read it from."*
 
 ## The finding the step did not ask for
 
