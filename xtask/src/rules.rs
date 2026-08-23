@@ -87,7 +87,7 @@ pub fn no_file_too_long(root: &Path) -> Report {
 
 // --------------------------------------------------------------- rule four
 
-/// Every file under `crates/*/src/` is in `ground-zero-manifest.txt`.
+/// Every file under `crates/*/src/` is in `foundations-manifest.txt`.
 ///
 /// The manifest is the answer to "was this file meant to be here" — one
 /// repo-relative path per line, sorted, no globs and no comments, so a file
@@ -96,9 +96,9 @@ pub fn no_file_too_long(root: &Path) -> Report {
 /// file that no longer exists.
 pub fn every_source_file_is_in_the_manifest(root: &Path) -> Report {
     let mut report = Report::new("every file under crates/*/src/ is in the manifest");
-    let manifest_path = root.join("ground-zero-manifest.txt");
+    let manifest_path = root.join("foundations-manifest.txt");
     let Ok(manifest_text) = fs::read_to_string(&manifest_path) else {
-        report.fail("ground-zero-manifest.txt — the manifest itself");
+        report.fail("foundations-manifest.txt — the manifest itself");
         return report;
     };
     let listed: BTreeSet<String> = manifest_text
@@ -137,7 +137,7 @@ pub fn every_source_file_is_in_the_manifest(root: &Path) -> Report {
     if as_written.iter().map(|s| s.to_string()).collect::<Vec<_>>()
         != sorted.iter().map(|s| s.to_string()).collect::<Vec<_>>()
     {
-        report.fail("ground-zero-manifest.txt — sorted order");
+        report.fail("foundations-manifest.txt — sorted order");
     }
     report
 }

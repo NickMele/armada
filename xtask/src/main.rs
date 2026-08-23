@@ -1,6 +1,6 @@
 //! Armada's repository gate.
 //!
-//! `cargo xtask verify-ground-zero` is **written before any crate it checks**
+//! `cargo xtask verify-foundations` is **written before any crate it checks**
 //! and is red from that moment until the last subject lands. There is no
 //! pending state: a rule whose subject does not exist yet fails, and says what
 //! is missing. A gate that goes green before the milestone is finished is the
@@ -46,21 +46,21 @@ impl Report {
 fn main() -> ExitCode {
     let task = std::env::args().nth(1);
     match task.as_deref() {
-        Some("verify-ground-zero") => verify_ground_zero(),
+        Some("verify-foundations") => verify_foundations(),
         Some(other) => {
             eprintln!("xtask: unknown task `{other}`");
-            eprintln!("tasks: verify-ground-zero");
+            eprintln!("tasks: verify-foundations");
             ExitCode::FAILURE
         }
         None => {
             eprintln!("xtask: no task given");
-            eprintln!("tasks: verify-ground-zero");
+            eprintln!("tasks: verify-foundations");
             ExitCode::FAILURE
         }
     }
 }
 
-fn verify_ground_zero() -> ExitCode {
+fn verify_foundations() -> ExitCode {
     let root = repo_root();
     let reports = vec![
         rules::acceptance_test_exists_and_fails(&root),
@@ -92,11 +92,11 @@ fn verify_ground_zero() -> ExitCode {
     print!("{out}");
 
     if fails > 0 {
-        println!("\nverify-ground-zero: RED — {fails} failing, {warns} warning");
+        println!("\nverify-foundations: RED — {fails} failing, {warns} warning");
         println!("Red is the expected state until M0 is finished. Each line above names its subject.");
         ExitCode::FAILURE
     } else {
-        println!("\nverify-ground-zero: green — {warns} warning");
+        println!("\nverify-foundations: green — {warns} warning");
         ExitCode::SUCCESS
     }
 }

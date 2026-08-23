@@ -50,7 +50,7 @@ So the figure is not a guess and Armada can recompute or re-price it from `usage
 **What it means: no.** `claude auth status` reports `authMethod: "claude.ai"`,
 `subscriptionType: "max"`, and spike 3 recorded `apiKeySource: "none"`. **Nothing here is billed per
 token.** `total_cost_usd` is what the run *would* have cost at API list price. That is the likely
-explanation for Phase 0's note that v1's dollar figures read as inflated in real use: they were not
+explanation for the v1 audit's note that its dollar figures read as inflated in real use: they were not
 wrong, they were denominated in a currency this account does not spend.
 
 ## Can quota be read?
