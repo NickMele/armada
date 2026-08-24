@@ -3,8 +3,8 @@
 A macOS app that dispatches coding agents against git repositories and verifies
 their work before advancing them. Rust daemon, Electron app, one repo.
 
-**The plan lives in Notion.** This repo is the build; Notion is the design, and
-Notion wins. Never assert a decision from memory — read its Resolution field.
+Procedures govern how you work on it — read before starting, not when stuck:
+https://app.notion.com/p/3c0173a35eb9800a9da2e6b7f1403ab1
 
 - `cargo xtask verify-foundations` is **red on purpose** until M0 is finished.
 - **The acceptance test must fail** for all of M0. A Stop hook enforces it.
