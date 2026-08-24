@@ -72,6 +72,19 @@ Not against your impression of it. Walk the "How" bullets one at a time and say,
 for each, what satisfies it. Then the definition of done, if the step states one.
 A bullet you skipped is reported as skipped.
 
+**If the step added work to the milestone, add the gate rule that makes it
+visible.** `verify-foundations` going green means *every subject a rule names has
+landed* — it is not a claim about the milestone, because the gate only knows what
+someone wrote a rule for. A step that ships work no rule watches has quietly
+narrowed the gate's coverage. This has already happened once.
+
+**A definition of done must be satisfiable by doing the step.** Where a step's
+own stated DoD names something it does not control — the gate's overall colour,
+another step's behaviour — that clause is out of scope regardless of whether it
+is true, and the question to ask is *does this belong to this step*, not *is this
+accurate*. Asking accuracy first is how a stale clause gets edited on the
+authority of whatever made it stale.
+
 ### 5. Record
 
 Two places, and they are different audiences.

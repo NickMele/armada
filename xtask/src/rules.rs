@@ -71,9 +71,24 @@ pub fn acceptance_test_exists_and_fails(root: &Path) -> Report {
 
 // ---------------------------------------------------------------- rule two
 
-/// Every Drone compliance failure mode named on the Workflow concept has a
-/// fixture. The five modes are Workflow's own table, in its order; the file
-/// names are the testkit Fixture Specs' own slugs.
+/// Every fixture the spec's assertions need exists.
+///
+/// Two groups, and the second was missing until 24 Aug 2026.
+///
+/// **The five failure modes** are Workflow's own table, in its order, and the
+/// file names are the Fixture Specs' slugs.
+///
+/// **The three that make those five testable.** Three of the five assertions
+/// describe something one stream cannot express, and the gate did not notice
+/// because it only counted the failure modes:
+///
+/// - `thrashing` asserts the Judge is **not** invoked for a well-behaved Drone.
+///   That needs a well-behaved stream to assert against.
+/// - `silence` asserts a Drone answering a poke resumes and does **not**
+///   escalate. Without it, a detector that escalates every quiet Drone passes.
+/// - `claims-done-no-evidence` asserts a clarification round capped at two or
+///   three, and escalation on exhausting it. A single terminated stream has no
+///   cap in it.
 const FAILURE_MODES: &[(&str, &str)] = &[
     ("silence", "Silence / Stalled"),
     ("claims-done-no-evidence", "Claims done, no evidence artifact"),
@@ -82,13 +97,20 @@ const FAILURE_MODES: &[(&str, &str)] = &[
     ("evidence-gaming", "Evidence gaming"),
 ];
 
+/// The control and the negative cases, each named with the assertion it serves.
+const SUPPORTING: &[(&str, &str)] = &[
+    ("happy-path", "the control — thrashing's negative assertion needs it"),
+    ("silence-poke-answered", "a poke answered, so quiet alone cannot escalate"),
+    ("clarification-exhausted", "the capped clarification loop, exhausted"),
+];
+
 pub fn every_failure_mode_has_a_fixture(root: &Path) -> Report {
-    let mut report = Report::new("every Drone compliance failure mode has a fixture");
+    let mut report = Report::new("every fixture the assertions need exists");
     let dir = root.join("crates/testkit/fixtures/ndjson");
-    for (slug, mode) in FAILURE_MODES {
+    for (slug, why) in FAILURE_MODES.iter().chain(SUPPORTING) {
         if !dir.join(format!("{slug}.ndjson")).is_file() {
             report.fail(format!(
-                "crates/testkit/fixtures/ndjson/{slug}.ndjson — {mode}"
+                "crates/testkit/fixtures/ndjson/{slug}.ndjson — {why}"
             ));
         }
     }
