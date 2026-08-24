@@ -108,13 +108,25 @@ gets broken most often, because filing feels like finishing.
 | What you found | Where it goes |
 |---|---|
 | A gap a later step should close | Appended to **that step's page**, under a heading saying it was carried in |
-| An undecided design question | A row in **Armada Questions**, with `Home` set, and `Blocks Capability` or `Blocks Milestone` wherever true |
+| An undecided design question | **Propose it and wait for an explicit yes.** Then a row in **Armada Questions**, with `Home` set, and `Blocks Capability` or `Blocks Milestone` wherever true |
 | Work nothing owns | A new **Step**, in the milestone, ordered so nothing is renumbered |
 | Stale vocabulary | Fixed under the **Page Cleanup Procedure**, not find-and-replaced |
 
 Where a mapping is genuinely ambiguous, leave the field empty **deliberately** and
 say why. Naming a milestone to fill a blank pre-answers the question the row
 exists to ask.
+
+**No question is filed without the owner's explicit yes.** This is the Page
+Cleanup Procedure's standing rule — *propose, wait for an explicit yes, then
+write* — and it applies hardest here, because filing feels like diligence and is
+often the opposite.
+
+Before proposing one, answer it. Read the concept page, the step that owns the
+subject, and the doc that governs it. **Two questions filed in one session were
+already answered in documents that had been read, and one in a document written
+earlier the same day.** A subagent asking a question is not a finding: it saw one
+file and no context, and checking costs a minute. A row that could have been
+closed makes the genuinely open ones harder to see.
 
 ### 7. Report
 
