@@ -14,10 +14,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod capabilities;
 mod docs;
 mod rules;
 mod rules_design;
 mod rules_docs;
+mod roadmap;
 mod tokens;
 mod tokens_emit;
 
@@ -56,18 +58,19 @@ fn main() -> ExitCode {
             let write = std::env::args().any(|a| a == "--write");
             verify_tokens(write)
         }
+        Some("verify-roadmap") => verify_roadmap(),
         Some("verify-docs") => {
             let write = std::env::args().any(|a| a == "--write");
             regenerate("verify-docs", docs::outputs, write)
         }
         Some(other) => {
             eprintln!("xtask: unknown task `{other}`");
-            eprintln!("tasks: verify-foundations, verify-tokens [--write], verify-docs [--write]");
+            eprintln!("tasks: verify-foundations, verify-tokens [--write], verify-docs [--write], verify-roadmap");
             ExitCode::FAILURE
         }
         None => {
             eprintln!("xtask: no task given");
-            eprintln!("tasks: verify-foundations, verify-tokens [--write], verify-docs [--write]");
+            eprintln!("tasks: verify-foundations, verify-tokens [--write], verify-docs [--write], verify-roadmap");
             ExitCode::FAILURE
         }
     }
@@ -89,6 +92,7 @@ fn verify_foundations() -> ExitCode {
         rules::the_tokens_generate_what_is_checked_in(&root),
         rules_design::no_off_contract_design_value(&root),
         rules_docs::every_open_question_is_collected(&root),
+        capabilities::every_capability_is_bound_and_indexed(&root),
     ];
 
     let mut out = String::new();
@@ -178,6 +182,29 @@ fn regenerate(
 
 fn verify_tokens(write: bool) -> ExitCode {
     regenerate("verify-tokens", tokens::outputs, write)
+}
+
+/// The online half of the capability check. Not a gate rule on purpose — see
+/// the module comment on `roadmap` for why a check that needs GitHub is a
+/// check that must not run in `verify-foundations`.
+fn verify_roadmap() -> ExitCode {
+    match roadmap::verify() {
+        Err(why) => {
+            eprintln!("verify-roadmap: {why}");
+            ExitCode::FAILURE
+        }
+        Ok(problems) if problems.is_empty() => {
+            println!("verify-roadmap: green — every capability has its issue, and every issue its file");
+            ExitCode::SUCCESS
+        }
+        Ok(problems) => {
+            for p in &problems {
+                println!("FAIL  {p}");
+            }
+            println!("\nverify-roadmap: RED — {} unbound", problems.len());
+            ExitCode::FAILURE
+        }
+    }
 }
 
 /// The repository root, found by walking up from this crate's manifest.
