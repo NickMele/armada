@@ -412,12 +412,12 @@
   group = "Action"
   size = "16px"
   status = "Specified"
-  reserved = "Disclosure only. Never an ornament on a label, never a sort or direction indicator, never an accordion chevron on a data row."
+  reserved = "Disclosure only. Never an ornament on a label, and never a sort or direction indicator. Never an inline expander on a row of data — a Job row does not grow a caret. Expanding a nested structure in chrome is disclosure and is the paired use below; the distinction is whether the thing expanding is a record or a tree."
   notes = "Added 2026-08-21 with the split button. 16px in --fg-muted, in its own 28px segment divided from the label by a 1px --border-default rule. The one exception to \"primary and secondary buttons are label-only\": a disclosure caret is the whole content of its own segment, structural rather than decorative, and never sits beside a label."
-  # NOTE (flagged during extraction, not from Notion): the row below
-  # assigns this same glyph to Chrome expand/collapse, which reads
-  # against the `reserved` clause above ("never an accordion chevron
-  # on a data row"). Carried as found; see the extraction report.
+  # The reservation above was first written against the split button and
+  # said "never an accordion chevron on a data row", which read as banning
+  # the Chrome use below. It was wording, not a conflict: a record does not
+  # grow a caret, a tree discloses. Reworded 25 Aug 2026.
 
   [[icons.chevron-down.usage]]
     means = "expand and collapse"

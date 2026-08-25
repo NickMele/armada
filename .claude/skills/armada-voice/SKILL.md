@@ -1,27 +1,28 @@
 ---
 name: armada-voice
-description: How Armada writes — the lexicon, the prose rules and the status grammar. Use before writing any user-facing string, error, status message, commit message or planning page. The contract itself is in Notion; this points at it.
+description: How Armada writes — the lexicon, the prose rules and the status grammar. Use before writing any user-facing string, error, status message, commit message or planning page. The contract is docs/contracts/design-system.md; this says when to read it.
 ---
 
 # How Armada writes
 
-**The Design System owns this and it is in Notion, not here.** Read it before
-writing product copy, a status message, an error, a commit message or a planning
-page — its rules govern internal documentation as well as the product, because
-the docs are read constantly and their conventions leak into the product.
+**The Design System owns this, at `docs/contracts/design-system.md`.** Read it
+before writing product copy, a status message, an error, a commit message or a
+planning document — its rules govern internal documentation as well as the
+product, because the docs are read constantly and their conventions leak into
+the product.
 
-Root page, which lists the contracts: https://app.notion.com/p/3c0173a35eb9800a9da2e6b7f1403ab1
+## Why this skill is a trigger and not a copy
 
-## Why this skill is a pointer and not a copy
-
-The lexicon, the retired terms, the six voice principles and the status grammar
-all change. A copy of them in this repo is a second source that drifts silently
-from the first, and the two would disagree exactly when someone is relying on
-one of them. **Every fact has one owner.**
+The lexicon, the retired terms, the voice principles and the status grammar all
+change. A copy of them here is a second source that drifts silently from the
+first, and the two would disagree exactly when someone is relying on one of
+them. **Every fact has one owner.**
 
 What this skill is for is the trigger: it fires when you are about to write
-something a person reads, so that you go and read the contract instead of
-writing from memory of it.
+something a person reads, so that you open the contract instead of writing from
+memory of it. That mattered more when the contract was somewhere you could not
+grep. Now that it is a file, the trigger is still the point — reading it is
+cheap, and writing from memory is what produced the drift.
 
 ## The one thing worth carrying, because it is about this repo
 
