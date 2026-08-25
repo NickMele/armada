@@ -1,0 +1,32 @@
+/* Ground, foreground and accent.
+   Deep desaturated blue-slate, not near-black: reads as instrument panel
+   rather than terminal, and gives status colour room to sit without vibrating. */
+:root {
+  /* Ground */
+  --bg-base: #0F1419;        /* canvas */
+  --bg-sunken: #0B0F13;      /* wells, code blocks, log panes */
+  --bg-raised: #161C23;      /* cards, table rows, panels */
+  --bg-overlay: #1D242D;     /* dialogs, popovers, dropdowns */
+  --bg-hover: #212A34;       /* row and control hover */
+  --border-subtle: #232B35;  /* table rules, dividers */
+  --border-default: #2E3946; /* card and input edges */
+  --border-strong: #3D4A5A;  /* focus rings, active edges */
+
+  /* Foreground */
+  --fg-default: #E4E9EF;     /* primary text */
+  --fg-muted: #93A1B1;       /* labels, secondary text */
+  --fg-subtle: #7E8CA0;      /* timestamps, metadata, placeholders */
+  --fg-inverse: #0F1419;     /* text on solid accent fills */
+
+  /* Accent — interactive affordance only, never status */
+  --accent: #4A9EDB;
+  --accent-hover: #5FB0E8;
+  --accent-muted: #1C3A52;   /* subtle fills, selected row backgrounds */
+
+  /* Diff */
+  --diff-add-bg: #14301F;
+  --diff-add-fg: #6FD196;
+  --diff-del-bg: #351A1D;
+  --diff-del-fg: #E88A8A;
+  --diff-context: #93A1B1;
+}

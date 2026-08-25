@@ -1,0 +1,122 @@
+/* Status is derived from the Job state machine, one to one. Never chosen.
+   rejected and killed are deliberate human decisions, not system failures,
+   and must not read as errors.
+
+   The escalation sub-reasons all use --status-escalated: they differentiate by
+   label and icon, never by hue. Six oranges would be unreadable. queued's
+   reasons work the same way, on --status-not-started.
+
+   Two statuses mean a person is being waited on — awaiting_approval before the
+   work and awaiting_review after it — and they share one hue. See below. */
+:root {
+  --status-not-started: #8C97A6;        /* dormant, queued */
+  --status-running: #4FB8D9;            /* active, in flight */
+  --status-awaiting-review: #E5A93D;    /* needs you, not urgent */
+  --status-escalated: #EE8450;          /* needs you, urgent */
+  --status-completed-success: #4FAF7C;  /* landed */
+  --status-completed-failed: #E97878;   /* system failure */
+  --status-rejected: #B489DA;           /* you declined it */
+  --status-killed: #9BA3AC;             /* you stopped it */
+
+  /* Accessibility pass, 2026-08-20: every status colour reaches at least
+     4.5:1 as 12px badge text on its own 12% tint over --bg-raised, and
+     --fg-subtle reaches 4.58:1 on the lightest ground. not_started at 4.38:1
+     on --bg-overlay is the single remaining shortfall (badges on floating
+     layers only). Hue and semantic assignment are unchanged — the values were
+     lifted in lightness, never reassigned. */
+
+  /* 12% fills for badges and row tints */
+  --status-not-started-bg: color-mix(in srgb, var(--status-not-started) 12%, transparent);
+  --status-running-bg: color-mix(in srgb, var(--status-running) 12%, transparent);
+  --status-awaiting-review-bg: color-mix(in srgb, var(--status-awaiting-review) 12%, transparent);
+  --status-escalated-bg: color-mix(in srgb, var(--status-escalated) 12%, transparent);
+  --status-completed-success-bg: color-mix(in srgb, var(--status-completed-success) 12%, transparent);
+  --status-completed-failed-bg: color-mix(in srgb, var(--status-completed-failed) 12%, transparent);
+  --status-rejected-bg: color-mix(in srgb, var(--status-rejected) 12%, transparent);
+  --status-killed-bg: color-mix(in srgb, var(--status-killed) 12%, transparent);
+}
+
+/* awaiting_approval — a person is waited on, before the work.
+   Aliased from awaiting_review, not chosen and not a new value: the two are
+   the same claim at two points in a Job's life, one waiting on you before the
+   work and one after. They differentiate by icon and label — user-check
+   against eye — the way same-hue states do everywhere else here.
+
+   Amber therefore means you. Grey means nothing for you to do: queued is
+   dormant whatever its reason, and a reader correctly moves past a grey row.
+
+   It was drawn grey first, on the reasoning that approval was a not_started
+   reason and inherited that group's hue. That was a superseded status set —
+   the approval axis became a status of its own — and grey was wrong twice
+   over: --status-not-started is the same value as --fg-subtle, so a grey badge
+   sits at the system's contrast floor, and the one row in a list that needs a
+   person was both the dormant colour and the weakest badge on screen. */
+:root {
+  --status-awaiting-approval: var(--status-awaiting-review);
+  --status-awaiting-approval-bg: var(--status-awaiting-review-bg);
+}
+
+/* Below Job level, amended 2026-08-20, extended 2026-08-23.
+   Hue below Job level is permitted only where this file declares it, and every
+   value is aliased from its Job counterpart so the mapping is declared rather
+   than borrowed. Everything else below Job level stays neutral: Kit drift
+   states, origin tags, the retry marker and a killed step carry position,
+   surface, weight and glyph.
+
+   Step activity — where the work is. Every value here maps to a job_steps.state,
+   except failed, which renders last_verdict instead. See below. */
+:root {
+  --step-advanced: var(--status-completed-success);
+  --step-running: var(--status-running);
+  --step-waiting: var(--status-awaiting-review);
+  /* retrying and not-started take no hue: --fg-muted and --fg-subtle */
+
+  /* failed — the mark on a step whose Check refused. NOT a job_steps.state value:
+     state carries not_started / running / awaiting_human / retrying / advanced /
+     stopped, and a refusal lands in last_verdict as failed(<reason>). The
+     activity/verdict split is the point — a step retrying after a refusal is
+     running in activity and failed in verdict at the same moment, and one enum
+     cannot say both. So this token renders the verdict, and at M1, where a failed
+     Check ends the Job, the verdict is the last thing the step did.
+
+     Drawn against M1's failed job. The first pass gave it no hue on the grounds
+     that a Check result is measured and measured facts render flatly. Rejected:
+     at M1 a failed Check ends the Job with no retry and no triage, so this row is
+     the entire reason a person opened the screen, and making them find it by
+     weight in a rail of muted rows is the frustration the whole surface exists to
+     avoid. It takes the same aliased treatment as its Job counterpart, and a
+     SURFACE for the same reason stopped has one — a glyph only holds while its row
+     is selected, and the row that ended the Job has to stay findable while you
+     read the Check output beside it. One per rail, because a Job fails in exactly
+     one place.
+
+     The glyph is bare `x`, following `advanced` taking `check`: the same mark as
+     the completed_failed badge, meaning the same thing one level down.
+
+     KILLED gets no hue at step level. It is a human decision rather than a system
+     failure and must not read as an error — a killed step keeps --fg-default. That
+     is what the two treatments distinguish. */
+  --step-failed: var(--status-completed-failed);
+  --step-failed-bg: var(--status-completed-failed-bg);
+
+  /* stopped — retries spent, and a real job_steps.state value. The first of two
+     places step activity takes a SURFACE rather than a glyph hue (see failed):
+     a glyph only holds while its row is selected, and the row that stopped
+     the Job has to stay findable while you read elsewhere. In a rail the
+     background states what the row is and the accent left edge states which
+     row you are on — the surface is constant, selection adds the edge. One
+     per rail, because a Job stops in exactly one place. The flag glyph stays
+     --fg-default: with the surface carrying the warning, a hued glyph would
+     say it twice. */
+  --step-stopped-bg: var(--status-escalated-bg);
+}
+
+/* Judge criterion verdicts — a criterion is met or it is not, and that is a
+   measured fact, so it renders as flatly as one. The red does not claim the
+   Job failed: a refusal is the gate working, and the row's copy says which
+   criterion and why. Verdict hue is per criterion, never summed onto the
+   step or the Job. */
+:root {
+  --verdict-met: var(--status-completed-success);
+  --verdict-not-met: var(--status-completed-failed);
+}

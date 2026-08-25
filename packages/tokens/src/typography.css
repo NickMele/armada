@@ -1,0 +1,22 @@
+/* Tighter than web defaults. This is a dashboard.
+   Mono signals "this is a fact the system reported" and runs one step
+   smaller than adjacent sans at the same optical size.
+
+   Legibility pass, 2026-08-20: the whole ladder was raised ~15% after the
+   11px/13px steps proved hard to read at desk distance. Ratios and roles
+   are unchanged — every step moved together. */
+:root {
+  --text-2xs: 13px;   --leading-2xs: 18px;   /* table metadata, timestamps */
+  --text-xs: 14px;    --leading-xs: 20px;    /* labels, badges, secondary */
+  --text-sm: 15px;    --leading-sm: 22px;    /* BODY DEFAULT */
+  --text-base: 16px;  --leading-base: 24px;  /* emphasis within body */
+  --text-lg: 18px;    --leading-lg: 28px;    /* panel headings */
+  --text-xl: 23px;    --leading-xl: 32px;    /* page titles */
+  --text-2xl: 28px;   --leading-2xl: 36px;   /* the rare hero number */
+
+  --weight-body: 400;
+  --weight-medium: 500;   /* labels and emphasis */
+  --weight-heading: 600;  /* never 700+ */
+
+  --tracking-caps: 0.04em; /* the one legal ALL CAPS: 13px table headers */
+}

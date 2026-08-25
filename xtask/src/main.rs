@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod rules;
+mod tokens;
+mod tokens_emit;
 
 /// One rule's outcome. `Warn` never fails the gate; `Fail` always does.
 pub enum Finding {
@@ -47,14 +49,18 @@ fn main() -> ExitCode {
     let task = std::env::args().nth(1);
     match task.as_deref() {
         Some("verify-foundations") => verify_foundations(),
+        Some("verify-tokens") => {
+            let write = std::env::args().any(|a| a == "--write");
+            verify_tokens(write)
+        }
         Some(other) => {
             eprintln!("xtask: unknown task `{other}`");
-            eprintln!("tasks: verify-foundations");
+            eprintln!("tasks: verify-foundations, verify-tokens [--write]");
             ExitCode::FAILURE
         }
         None => {
             eprintln!("xtask: no task given");
-            eprintln!("tasks: verify-foundations");
+            eprintln!("tasks: verify-foundations, verify-tokens [--write]");
             ExitCode::FAILURE
         }
     }
@@ -73,6 +79,7 @@ fn verify_foundations() -> ExitCode {
         rules::the_v1_harvest_has_an_index(&root),
         rules::nothing_names_a_person_or_a_machine(&root),
         rules::nothing_writes_its_own_log_format(&root),
+        rules::the_tokens_generate_what_is_checked_in(&root),
     ];
 
     let mut out = String::new();
@@ -102,6 +109,57 @@ fn verify_foundations() -> ExitCode {
     } else {
         println!("\nverify-foundations: green — {warns} warning");
         ExitCode::SUCCESS
+    }
+}
+
+/// Regenerate the three token outputs, and either write them or fail on drift.
+///
+/// The check is a diff, not a lint: a hand-edited output is exactly as much a
+/// failure as a stale one, because both mean the checked-in file no longer says
+/// what the CSS says. `--write` is the only way to change one.
+fn verify_tokens(write: bool) -> ExitCode {
+    let root = repo_root();
+    let outputs = match tokens::outputs(&root) {
+        Ok(outputs) => outputs,
+        Err(why) => {
+            eprintln!("verify-tokens: {why}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut stale = Vec::new();
+    for (rel, want) in &outputs {
+        let path = root.join(rel);
+        let have = fs::read_to_string(&path).unwrap_or_default();
+        if &have == want {
+            println!("ok    {rel}");
+            continue;
+        }
+        if write {
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            match fs::write(&path, want) {
+                Ok(()) => println!("wrote {rel}"),
+                Err(e) => {
+                    eprintln!("verify-tokens: cannot write {rel}: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+        } else {
+            println!("STALE {rel}");
+            stale.push(rel.clone());
+        }
+    }
+
+    if stale.is_empty() {
+        println!("\nverify-tokens: green");
+        ExitCode::SUCCESS
+    } else {
+        println!("\nverify-tokens: RED — {} stale", stale.len());
+        println!("The CSS under packages/tokens/src/ is the authority. Run");
+        println!("`cargo xtask verify-tokens --write` and commit what it emits.");
+        ExitCode::FAILURE
     }
 }
 

@@ -1,0 +1,10 @@
+/* Armada uses IBM Plex Sans for interface and IBM Plex Mono for anything
+   machine-derived. Served from Google Fonts here; the app pins the binaries.
+   SUBSTITUTION FLAG: no font binaries were supplied with the design document,
+   so these are the upstream IBM Plex webfonts rather than vendored files. */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+
+:root {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}

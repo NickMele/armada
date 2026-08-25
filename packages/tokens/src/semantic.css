@@ -1,0 +1,33 @@
+/* Semantic aliases. Surfaces come from Ground, text from Foreground,
+   interaction from Accent, and status only from the status tokens. */
+:root {
+  --surface-canvas: var(--bg-base);
+  --surface-card: var(--bg-raised);
+  --surface-row: var(--bg-raised);
+  --surface-row-hover: var(--bg-hover);
+  --surface-row-selected: var(--accent-muted);
+  --surface-well: var(--bg-sunken);
+  --surface-floating: var(--bg-overlay);
+
+  --text-body: var(--fg-default);
+  --text-label: var(--fg-muted);
+  --text-meta: var(--fg-subtle);
+  --text-on-accent: var(--fg-inverse);
+
+  --edge-rule: var(--border-subtle);
+  --edge-card: var(--border-default);
+  --edge-focus: var(--accent);
+
+  /* Focus is a 2px --accent ring, offset 2px. Amended 2026-08-21: it was a 1px
+     --border-strong ring, which collided with the resting edge of a secondary
+     button once secondaries took --border-strong to define their box against a
+     card. A resting edge and a focus ring must differ in colour, width and
+     position, or focus is invisible on exactly the controls that need it.
+     The accent already carries the keyboard focus edge, and row focus is
+     already a 2px accent bar — so control focus now matches row focus. */
+  --focus-ring: 2px solid var(--accent);
+  --focus-ring-offset: 2px;
+
+  /* Keyboard focus on a full-width row does something stronger than a ring */
+  --row-focus-bar: 2px solid var(--accent);
+}

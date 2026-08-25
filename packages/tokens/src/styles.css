@@ -1,0 +1,17 @@
+/* The cascade, and the only place it is declared.
+   Order is load-bearing: a file may only reference tokens declared above it,
+   which is why semantic.css (aliases) follows the files it aliases and
+   base.css (which consumes tokens and declares none) is last.
+
+   `cargo xtask verify-tokens` reads its source list from this file. Adding a
+   token file means adding an @import here and classifying it in
+   xtask/src/tokens.rs — an unclassified file fails the check rather than
+   being picked up silently. */
+@import "./fonts.css";
+@import "./colors.css";
+@import "./status.css";
+@import "./typography.css";
+@import "./spacing.css";
+@import "./motion.css";
+@import "./semantic.css";
+@import "./base.css";

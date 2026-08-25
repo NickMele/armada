@@ -462,3 +462,29 @@ pub fn nothing_writes_its_own_log_format(root: &Path) -> Report {
     }
     report
 }
+
+/// Rule eleven: the checked-in token outputs say what the CSS says.
+///
+/// `verify-tokens` is the task that regenerates them, and this rule is what
+/// makes the gate notice. A step that ships work no rule watches has quietly
+/// narrowed the gate's coverage — the gate only knows what somebody wrote a
+/// rule for, and going green means every subject a rule names has landed.
+pub fn the_tokens_generate_what_is_checked_in(root: &Path) -> Report {
+    let mut report = Report::new("the design tokens generate what is checked in");
+    match crate::tokens::outputs(root) {
+        Err(why) => report.fail(why),
+        Ok(outputs) => {
+            for (rel, want) in outputs {
+                match fs::read_to_string(root.join(&rel)) {
+                    Ok(have) if have == want => {}
+                    Ok(_) => report.fail(format!(
+                        "{rel} — stale or hand-edited. \
+                         Run `cargo xtask verify-tokens --write` and commit what it emits"
+                    )),
+                    Err(_) => report.fail(format!("{rel} — not generated yet")),
+                }
+            }
+        }
+    }
+    report
+}
