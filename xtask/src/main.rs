@@ -193,15 +193,22 @@ fn verify_roadmap() -> ExitCode {
             eprintln!("verify-roadmap: {why}");
             ExitCode::FAILURE
         }
-        Ok(problems) if problems.is_empty() => {
-            println!("verify-roadmap: green — every capability has its issue, and every issue its file");
-            ExitCode::SUCCESS
-        }
-        Ok(problems) => {
-            for p in &problems {
+        Ok(out) => {
+            for (number, title, done, total) in &out.progress {
+                println!("{done}/{total}  #{number}  {title}");
+            }
+            if out.problems.is_empty() {
+                if !out.progress.is_empty() {
+                    println!();
+                }
+                println!("verify-roadmap: green");
+                return ExitCode::SUCCESS;
+            }
+            println!();
+            for p in &out.problems {
                 println!("FAIL  {p}");
             }
-            println!("\nverify-roadmap: RED — {} unbound", problems.len());
+            println!("\nverify-roadmap: RED — {}", out.problems.len());
             ExitCode::FAILURE
         }
     }

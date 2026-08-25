@@ -12,13 +12,18 @@
 //! | Check | Runs | Sees |
 //! |---|---|---|
 //! | `verify-foundations` | always, offline | the file: frontmatter, slug, index |
-//! | `verify-roadmap` | CI and on demand | the issue: that it exists, and that every capability issue has a file |
+//! | `verify-roadmap` | CI and on demand | the issue named by a file, and what a capability's steps add up to |
 //!
 //! Splitting it is the honest shape rather than a compromise. The offline half
 //! catches the mistake somebody makes while writing — a file with no issue
 //! number, a slug that disagrees with its filename — and catches it before the
 //! commit. The online half catches the mistake nobody makes on purpose: an
-//! issue deleted, or a capability tracked in GitHub that never got its prose.
+//! issue deleted, relabelled, or moved to another milestone under a file that
+//! still claims the old one.
+//!
+//! It also does the arithmetic a checkbox would only display: a capability
+//! references its steps by number, and a capability closed while its steps are
+//! open is a failure rather than a rendering.
 
 use std::collections::BTreeMap;
 use std::process::Command;
@@ -31,18 +36,27 @@ struct Tracked {
     number: u64,
     title: String,
     milestone: Option<String>,
-    is_capability: bool,
+    open: bool,
+    /// Every `#N` the body references. On a capability, these are its steps.
+    refs: Vec<u64>,
 }
 
-/// Read every issue labelled `capability` from GitHub.
-fn tracked() -> Result<Vec<Tracked>, String> {
+/// Ask `gh` for one label's issues as tab-separated lines.
+///
+/// `--jq ... @tsv` rather than parsing JSON here: an issue body is arbitrary
+/// text written by whoever filed it, and a hand-rolled scanner over that is a
+/// bug waiting for the first body containing a brace. `@tsv` escapes the
+/// separator, so the split is safe no matter what the prose does.
+fn issues(label: &str) -> Result<Vec<Tracked>, String> {
     let run = Command::new("gh")
         .args([
             "issue", "list",
-            "--label", "capability",
+            "--label", label,
             "--state", "all",
             "--limit", "500",
-            "--json", "number,title,labels,milestone",
+            "--json", "number,title,state,milestone,body",
+            "--jq",
+            r#".[] | [(.number|tostring), .state, (.milestone.title // ""), .title, ((.body // "") | gsub("[\r\n]"; " "))] | @tsv"#,
         ])
         .current_dir(repo_root())
         .output()
@@ -50,52 +64,67 @@ fn tracked() -> Result<Vec<Tracked>, String> {
 
     if !run.status.success() {
         return Err(format!(
-            "`gh issue list` failed: {}",
+            "`gh issue list --label {label}` failed: {}",
             String::from_utf8_lossy(&run.stderr).trim()
         ));
     }
 
-    // No serde here for the same reason there is no serde anywhere in xtask.
-    // The shape is three known keys from one trusted command, so the scan is
-    // small enough to read; anything more structured belongs behind the `store`
-    // and `ipc` boundary where untyped JSON is actually permitted.
     let text = String::from_utf8_lossy(&run.stdout).to_string();
     let mut out = Vec::new();
-    for chunk in text.split("{\"labels\"").skip(1) {
-        let number = field_number(chunk, "\"number\":");
-        let title = field_string(chunk, "\"title\":\"");
-        if let Some(number) = number {
-            out.push(Tracked {
-                number,
-                title: title.unwrap_or_default(),
-                milestone: field_string(chunk, "\"milestone\":{\"description\":")
-                    .and(field_string(chunk, "\"title\":\"")),
-                is_capability: chunk.contains("\"name\":\"capability\""),
-            });
-        }
+    for line in text.lines() {
+        let mut f = line.split('\t');
+        let (Some(number), Some(state), Some(milestone), Some(title)) =
+            (f.next(), f.next(), f.next(), f.next())
+        else {
+            continue;
+        };
+        let Ok(number) = number.parse::<u64>() else { continue };
+        out.push(Tracked {
+            number,
+            title: title.to_string(),
+            milestone: Some(milestone.to_string()).filter(|m| !m.is_empty()),
+            open: state.eq_ignore_ascii_case("OPEN"),
+            refs: issue_refs(f.next().unwrap_or_default()),
+        });
     }
     Ok(out)
 }
 
-fn field_number(chunk: &str, key: &str) -> Option<u64> {
-    let at = chunk.find(key)? + key.len();
-    let digits: String = chunk[at..].chars().take_while(|c| c.is_ascii_digit()).collect();
-    digits.parse().ok()
-}
-
-fn field_string(chunk: &str, key: &str) -> Option<String> {
-    let at = chunk.find(key)? + key.len();
-    let end = chunk[at..].find('"')?;
-    Some(chunk[at..at + end].to_string())
+/// The `#N` references in a body, deduplicated and in order.
+fn issue_refs(body: &str) -> Vec<u64> {
+    let mut out: Vec<u64> = Vec::new();
+    for chunk in body.split('#').skip(1) {
+        let digits: String = chunk.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if digits.is_empty() {
+            continue;
+        }
+        // `#161C23` is a colour, not an issue. A reference ends at the number.
+        if chunk[digits.len()..].starts_with(|c: char| c.is_ascii_alphanumeric()) {
+            continue;
+        }
+        if let Ok(n) = digits.parse() {
+            if !out.contains(&n) {
+                out.push(n);
+            }
+        }
+    }
+    out
 }
 
 /// Compare the two halves and print what disagrees.
-pub fn verify() -> Result<Vec<String>, String> {
+/// What a run found: the problems, and the progress it computed on the way.
+pub struct Outcome {
+    pub problems: Vec<String>,
+    pub progress: Vec<(u64, String, usize, usize)>,
+}
+
+pub fn verify() -> Result<Outcome, String> {
     let root = repo_root();
     let files: Vec<Capability> = capabilities::read(&root)?;
-    let issues = tracked()?;
+    let caps = issues("capability")?;
+    let steps = issues("step")?;
 
-    let by_number: BTreeMap<u64, &Tracked> = issues.iter().map(|t| (t.number, t)).collect();
+    let by_number: BTreeMap<u64, &Tracked> = caps.iter().map(|t| (t.number, t)).collect();
     let mut problems = Vec::new();
 
     for cap in &files {
@@ -104,11 +133,6 @@ pub fn verify() -> Result<Vec<String>, String> {
                 "docs/capabilities/{}.md names issue #{}, which is not a capability issue \
                  in this repo — it was deleted, relabelled, or the number is wrong",
                 cap.slug, cap.issue
-            )),
-            Some(t) if !t.is_capability => problems.push(format!(
-                "docs/capabilities/{}.md names issue #{} (\"{}\"), which has lost its \
-                 `capability` label",
-                cap.slug, cap.issue, t.title
             )),
             Some(t) => {
                 // The file says which milestone claims the capability; the issue
@@ -128,15 +152,52 @@ pub fn verify() -> Result<Vec<String>, String> {
         }
     }
 
-    for t in &issues {
-        if !files.iter().any(|c| c.issue == t.number) {
+    // Capability -> steps, computed rather than displayed.
+    //
+    // A step satisfies as many capabilities as it genuinely serves — M1 step 9
+    // serves five — so a sub-issue link, which has one parent, would have to
+    // pick one and demote four. The capability issue references its steps by
+    // number instead, and the arithmetic lives here where it can fail rather
+    // than in a checkbox that only renders.
+    let step_open: BTreeMap<u64, bool> = steps.iter().map(|s| (s.number, s.open)).collect();
+    for cap in &caps {
+        let mine: Vec<u64> = cap.refs.iter().copied().filter(|n| step_open.contains_key(n)).collect();
+        if mine.is_empty() {
+            continue;
+        }
+        let left = mine.iter().filter(|n| step_open[n]).count();
+        if !cap.open && left > 0 {
             problems.push(format!(
-                "issue #{} (\"{}\") is a capability with no docs/capabilities file — \
-                 the prose an issue body buries when it closes has nowhere to live",
-                t.number, t.title
+                "issue #{} (\"{}\") is closed with {left} of its {} steps still open — \
+                 a capability is not real until the work that makes it real has landed",
+                cap.number,
+                cap.title,
+                mine.len()
             ));
         }
     }
 
-    Ok(problems)
+    // Deliberately NOT the other direction. A capability issue with no
+    // docs/capabilities file is fine and is the normal case: the Notion pages
+    // these came from are properties only, with no body at all, so a file today
+    // would be frontmatter and one sentence. Files arrive when a capability
+    // acquires prose worth keeping, and the check above binds them from that
+    // moment. Requiring one up front would have produced fifty-one pieces of
+    // scaffolding that read as done.
+
+    let mut progress: Vec<(u64, String, usize, usize)> = caps
+        .iter()
+        .filter_map(|cap| {
+            let mine: Vec<u64> =
+                cap.refs.iter().copied().filter(|n| step_open.contains_key(n)).collect();
+            if mine.is_empty() {
+                return None;
+            }
+            let done = mine.iter().filter(|n| !step_open[n]).count();
+            Some((cap.number, cap.title.clone(), done, mine.len()))
+        })
+        .collect();
+    progress.sort_by_key(|(n, _, _, _)| *n);
+
+    Ok(Outcome { problems, progress })
 }
