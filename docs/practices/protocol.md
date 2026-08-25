@@ -279,16 +279,16 @@ of mistake for you.
 
 Naming these rather than deciding them, per this document's brief:
 
-- **What generates the TypeScript from `ipc`.** Hand-rolled build script,
+- **[protocol-codegen]** What generates the TypeScript from `ipc`. Hand-rolled build script,
   `ts-rs`, `specta`, something else — not decided. Whatever it is, it must not
   reach `core-model` or `adapter-traits` (their `cargo tree` is a gate rule:
   no codegen framework belongs under either).
-- **How `cargo xtask verify-protocol` gets wired into `xtask`.** Today
-  `xtask/src/main.rs` only implements `verify-foundations`; there is no
-  `verify-protocol` task and no `ipc` crate for it to check. It needs to exist
+- **[verify-protocol-task]** How `cargo xtask verify-protocol` gets wired into `xtask`. Today `xtask`
+  implements `verify-foundations`, `verify-tokens` and `verify-docs`; there is
+  no `verify-protocol` task and no `ipc` crate for it to check. It needs to exist
   before anything above is enforceable rather than aspirational.
-- **The bounded broadcast channel's capacity**, and whether it's one number
+- **[broadcast-capacity]** The bounded broadcast channel's capacity, and whether it's one number
   for all event types or tuned per event type.
-- **Whether the lifeboat's four routes live inside the same `axum` `Router`
-  as the main protocol or a separate one.** Either can satisfy "no shared
+- **[lifeboat-router]** Whether the lifeboat's four routes live inside the
+  same `axum` `Router` as the main protocol or a separate one. Either can satisfy "no shared
   dependency with the versioned protocol"; which one hasn't been decided.

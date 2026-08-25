@@ -14,8 +14,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod docs;
 mod rules;
 mod rules_design;
+mod rules_docs;
 mod tokens;
 mod tokens_emit;
 
@@ -54,14 +56,18 @@ fn main() -> ExitCode {
             let write = std::env::args().any(|a| a == "--write");
             verify_tokens(write)
         }
+        Some("verify-docs") => {
+            let write = std::env::args().any(|a| a == "--write");
+            regenerate("verify-docs", docs::outputs, write)
+        }
         Some(other) => {
             eprintln!("xtask: unknown task `{other}`");
-            eprintln!("tasks: verify-foundations, verify-tokens [--write]");
+            eprintln!("tasks: verify-foundations, verify-tokens [--write], verify-docs [--write]");
             ExitCode::FAILURE
         }
         None => {
             eprintln!("xtask: no task given");
-            eprintln!("tasks: verify-foundations, verify-tokens [--write]");
+            eprintln!("tasks: verify-foundations, verify-tokens [--write], verify-docs [--write]");
             ExitCode::FAILURE
         }
     }
@@ -82,6 +88,7 @@ fn verify_foundations() -> ExitCode {
         rules::nothing_writes_its_own_log_format(&root),
         rules::the_tokens_generate_what_is_checked_in(&root),
         rules_design::no_off_contract_design_value(&root),
+        rules_docs::every_open_question_is_collected(&root),
     ];
 
     let mut out = String::new();
@@ -114,17 +121,22 @@ fn verify_foundations() -> ExitCode {
     }
 }
 
-/// Regenerate the three token outputs, and either write them or fail on drift.
+/// Regenerate a task's checked-in outputs, and either write them or fail on
+/// drift.
 ///
 /// The check is a diff, not a lint: a hand-edited output is exactly as much a
-/// failure as a stale one, because both mean the checked-in file no longer says
-/// what the CSS says. `--write` is the only way to change one.
-fn verify_tokens(write: bool) -> ExitCode {
+/// failure as a stale one, because both mean the checked-in file no longer
+/// says what its source says. `--write` is the only way to change one.
+fn regenerate(
+    task: &str,
+    outputs: fn(&Path) -> Result<Vec<(String, String)>, String>,
+    write: bool,
+) -> ExitCode {
     let root = repo_root();
-    let outputs = match tokens::outputs(&root) {
+    let outputs = match outputs(&root) {
         Ok(outputs) => outputs,
         Err(why) => {
-            eprintln!("verify-tokens: {why}");
+            eprintln!("{task}: {why}");
             return ExitCode::FAILURE;
         }
     };
@@ -144,7 +156,7 @@ fn verify_tokens(write: bool) -> ExitCode {
             match fs::write(&path, want) {
                 Ok(()) => println!("wrote {rel}"),
                 Err(e) => {
-                    eprintln!("verify-tokens: cannot write {rel}: {e}");
+                    eprintln!("{task}: cannot write {rel}: {e}");
                     return ExitCode::FAILURE;
                 }
             }
@@ -155,14 +167,17 @@ fn verify_tokens(write: bool) -> ExitCode {
     }
 
     if stale.is_empty() {
-        println!("\nverify-tokens: green");
+        println!("\n{task}: green");
         ExitCode::SUCCESS
     } else {
-        println!("\nverify-tokens: RED — {} stale", stale.len());
-        println!("The CSS under packages/tokens/src/ is the authority. Run");
-        println!("`cargo xtask verify-tokens --write` and commit what it emits.");
+        println!("\n{task}: RED — {} stale", stale.len());
+        println!("Run `cargo xtask {task} --write` and commit what it emits.");
         ExitCode::FAILURE
     }
+}
+
+fn verify_tokens(write: bool) -> ExitCode {
+    regenerate("verify-tokens", tokens::outputs, write)
 }
 
 /// The repository root, found by walking up from this crate's manifest.

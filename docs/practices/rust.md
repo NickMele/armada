@@ -384,12 +384,9 @@ cache question gets sharper as Throughput arrives, not softer.
 These are gaps this document found rather than filled, because filling them
 isn't this document's job:
 
-- Whether v2 adopts a compiler cache, and on what measurement. v1 never
-  established how much of its four-minute cold build was compilation, linking or
-  the forced reinstall.
-- The `cargo tree` check on `core-model` and `adapter-traits` is stated as
-  gated in `.claude/agents/rust-engineer.md` but isn't one of the six rules in
-  `xtask/src/rules.rs` yet. Run it by hand until someone adds it.
-- The remaining nine crates (twelve total, six named so far across this repo:
-  `core-model`, `adapter-traits`, `testkit`, `store`, `ipc`, `adapters`)
-  aren't named in anything checked into this repo.
+- **[compiler-cache]** Whether v2 adopts a compiler cache, and on what
+  measurement. v1 never established how much of its four-minute cold build was
+  compilation, linking or the forced reinstall.
+- **[cargo-tree-gate]** The `cargo tree` check on `core-model` and
+  `adapter-traits` is stated as gated in `.claude/agents/rust-engineer.md` but
+  is still not one of the gate's rules. Run it by hand until someone adds it.

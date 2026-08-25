@@ -251,12 +251,13 @@ for anything under `apps/desktop`.
 
 Name these rather than deciding them by writing code that assumes an answer:
 
-- The runtime file's exact path, filename, and on-disk format (JSON? TOML?) —
-  not fixed anywhere in the repo yet.
-- Which HTTP/WebSocket ports Fleet binds to, and whether that's fixed or
-  Fleet-chosen-and-recorded-in-the-runtime-file.
-- The virtualization approach for lists/logs/diffs (a specific library
-  hasn't been chosen).
-- Where styling itself comes from beyond shadcn's own approach (Tailwind is
-  referenced nowhere in the repo yet — don't assume it's there until it's
-  installed).
+- **[runtime-file-format]** The runtime file's exact path, filename, and
+  on-disk format (JSON? TOML?) — not fixed anywhere in the repo yet.
+- **[fleet-ports]** Which HTTP/WebSocket ports Fleet binds to, and whether
+  that's fixed or Fleet-chosen-and-recorded-in-the-runtime-file.
+- **[list-virtualization]** The virtualization approach for lists, logs and
+  diffs. No library chosen.
+- **[shadcn-and-tokens]** How shadcn primitives take their values from the
+  token set. Tailwind 4 is installed and `packages/tokens` is the only
+  spellable scale, but no primitive has been added yet, so nothing has proved
+  the two compose.
