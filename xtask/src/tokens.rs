@@ -139,10 +139,14 @@ pub fn read(root: &Path) -> Result<(Vec<String>, Vec<Token>), String> {
     let styles = fs::read_to_string(src.join("styles.css"))
         .map_err(|_| "packages/tokens/src/styles.css — the cascade is not here".to_string())?;
 
+    // The path an import carries is the design project's, not ours —
+    // `tokens/colors.css` there, a sibling here. Only the file name and the
+    // order matter, and taking the name means a refetch needs no hand edit.
     let mut order = Vec::new();
     for line in styles.lines() {
-        let Some(rest) = line.trim().strip_prefix("@import \"./") else { continue };
-        let Some(name) = rest.split('"').next() else { continue };
+        let Some(rest) = line.trim().strip_prefix("@import \"") else { continue };
+        let Some(path) = rest.split('"').next() else { continue };
+        let Some(name) = path.rsplit('/').next() else { continue };
         order.push(name.to_string());
     }
     if order.is_empty() {

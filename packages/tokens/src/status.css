@@ -36,6 +36,31 @@
   --status-killed-bg: color-mix(in srgb, var(--status-killed) 12%, transparent);
 }
 
+/* The three statuses the CSS was missing, added 2026-08-25 after the M0 token
+   pipeline found rows with no declaration. Hard rule 3: status colour is never
+   chosen, it maps one to one onto the Job state machine. Job declares twelve
+   statuses, so twelve get a token — the absence was a gap in this file, not a
+   set of rows to delete.
+
+   All three alias an existing value. No new hue was introduced, and none was
+   picked: Iconography already settled the rule these follow — a person waited
+   on or working renders amber, a dormant status renders grey, and the glyph
+   carries which one it is. piloted takes terminal, awaiting_attestation takes
+   stamp, superseded takes archive.
+
+   piloted is amber even though the person is ACTING rather than being waited
+   on. That is deliberate and Iconography states it: the label carries the
+   distinction and the hue does not, because what amber means to a reader
+   scanning a list is a person is on this. */
+:root {
+  --status-piloted: var(--status-awaiting-review);
+  --status-piloted-bg: var(--status-awaiting-review-bg);
+  --status-awaiting-attestation: var(--status-awaiting-review);
+  --status-awaiting-attestation-bg: var(--status-awaiting-review-bg);
+  --status-superseded: var(--status-not-started);
+  --status-superseded-bg: var(--status-not-started-bg);
+}
+
 /* awaiting_approval — a person is waited on, before the work.
    Aliased from awaiting_review, not chosen and not a new value: the two are
    the same claim at two points in a Job's life, one waiting on you before the

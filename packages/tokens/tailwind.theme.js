@@ -44,6 +44,8 @@ export default {
     status: {
       'awaiting-approval': 'var(--status-awaiting-approval)',
       'awaiting-approval-bg': 'var(--status-awaiting-approval-bg)',
+      'awaiting-attestation': 'var(--status-awaiting-attestation)',
+      'awaiting-attestation-bg': 'var(--status-awaiting-attestation-bg)',
       'awaiting-review': 'var(--status-awaiting-review)',
       'awaiting-review-bg': 'var(--status-awaiting-review-bg)',
       'completed-failed': 'var(--status-completed-failed)',
@@ -56,10 +58,14 @@ export default {
       'killed-bg': 'var(--status-killed-bg)',
       'not-started': 'var(--status-not-started)',
       'not-started-bg': 'var(--status-not-started-bg)',
+      piloted: 'var(--status-piloted)',
+      'piloted-bg': 'var(--status-piloted-bg)',
       rejected: 'var(--status-rejected)',
       'rejected-bg': 'var(--status-rejected-bg)',
       running: 'var(--status-running)',
       'running-bg': 'var(--status-running-bg)',
+      superseded: 'var(--status-superseded)',
+      'superseded-bg': 'var(--status-superseded-bg)',
     },
     step: {
       advanced: 'var(--step-advanced)',
