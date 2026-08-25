@@ -92,6 +92,7 @@ fn verify_foundations() -> ExitCode {
         rules::the_tokens_generate_what_is_checked_in(&root),
         rules_design::no_off_contract_design_value(&root),
         rules_docs::every_open_question_is_collected(&root),
+        rules_docs::every_document_is_indexed(&root),
         capabilities::every_capability_is_bound_and_indexed(&root),
     ];
 
