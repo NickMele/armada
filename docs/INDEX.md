@@ -24,6 +24,16 @@ Each ends with the questions it found and did not answer.
 - [`practices/protocol.md`](practices/protocol.md) — the one seam between Rust
   and TypeScript: version skew, DTOs, and what survives when the two disagree.
 
+## Contracts
+
+Binding rules, carried out of the design workspace. Read the one that covers
+what you are about to build.
+
+- [`contracts/configuration.md`](contracts/configuration.md) — how a setting is
+  classified, how two layers of configuration combine, and what a Job records
+  about the configuration it ran under. The settings themselves are
+  `crates/config/settings.toml`.
+
 ## Measured
 
 - [`spikes/003-does-headless-output-parse.md`](spikes/003-does-headless-output-parse.md)
