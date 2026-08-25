@@ -104,3 +104,47 @@ pub fn every_document_is_indexed(root: &Path) -> Report {
     }
     report
 }
+
+/// Rule sixteen: nothing in the repository links to the design workspace.
+///
+/// The workspace is one person's, and this repository is public. A link into it
+/// publishes an address to something nobody outside can open — so it leaks and
+/// is useless at the same time, which is how seventy-nine issues ended up
+/// carrying dead links into a private account before anyone looked.
+///
+/// It is a grep, like the vendor-literal ban, and for the same reason: the
+/// alternative is remembering. The needle is assembled rather than written so
+/// this rule does not fail on itself.
+///
+/// **Red is the expected state while the contracts are still moving.** Each
+/// line it names is a document that has not been carried across yet, and the
+/// list shortens as they land.
+pub fn nothing_links_to_the_design_workspace(root: &Path) -> Report {
+    let mut report = Report::new("nothing links to the design workspace");
+    let needle = concat!("notion", ".");
+    const EXTS: &[&str] = &["md", "rs", "toml", "ts", "tsx", "js", "json", "py", "sh", "css", "yaml", "yml"];
+
+    let mut looked = Vec::new();
+    for dir in ["docs", "crates", "apps", "packages", "xtask", ".claude"] {
+        looked.extend(files_with_ext(root, &root.join(dir), EXTS));
+    }
+    looked.push("CLAUDE.md".to_string());
+
+    for path in looked {
+        let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+        for (n, line) in text.lines().enumerate() {
+            let at = line.find(needle);
+            let Some(at) = at else { continue };
+            // The word on its own is the tool being named, which is allowed.
+            // What is banned is an address.
+            let tail = &line[at + needle.len()..];
+            if tail.starts_with("so/") || tail.starts_with("com/") {
+                report.fail(format!(
+                    "{path}:{} links to the design workspace — say what it is, not where",
+                    n + 1
+                ));
+            }
+        }
+    }
+    report
+}

@@ -32,18 +32,17 @@ use crate::{files_with_ext, Report};
 /// An unexplained opt-out is not one: the marker must carry a reason and the
 /// citation must be on the next line, or the file is still checked.
 ///
-/// **Three citation forms are accepted, and the order is deliberate.** A
-/// `[slug]` naming a question in some document's `## Open questions` section is
-/// the one to write — it is the only form the gate can follow, so a question
-/// that gets answered breaks its citations on purpose. A `docs/` path is
-/// accepted for a question that has a whole document to itself. A Notion URL is
-/// accepted because that is where the questions are today, and it stops being
-/// accepted when the last one has moved.
+/// **Two citation forms are accepted.** A `[slug]` naming a question in some
+/// document's `## Open questions` section is the one to write — it is the only
+/// form the gate can follow, so a question that gets answered breaks its
+/// citations on purpose. A `docs/` path is accepted for a question that has a
+/// whole document to itself.
 ///
-/// This originally accepted a Notion URL and nothing else, which would have
-/// failed silently the first time a contract moved into the repo: a correct
-/// opt-out citing a repo path would read as unexplained, and the file would go
-/// back to being checked with nobody told why.
+/// This first accepted a link into the design workspace and nothing else, which
+/// would have failed silently the first time a contract moved into the repo: a
+/// correct opt-out citing a repo path would read as unexplained, and the file
+/// would go back to being checked with nobody told why. That form is gone now
+/// for a second reason — rule sixteen.
 pub fn no_off_contract_design_value(root: &Path) -> Report {
     let mut report = Report::new("no off-contract design value under apps/");
     const MARKER: &str = "armada-allow-off-contract:";
@@ -84,10 +83,10 @@ fn opted_out(text: &str, marker: &str) -> bool {
     })
 }
 
-/// Whether a line names an open question: a `[slug]`, a path under `docs/`, or
-/// a Notion URL. A bare word is not a citation — it has to be findable.
+/// Whether a line names an open question: a `[slug]`, or a path under `docs/`.
+/// A bare word is not a citation — it has to be findable.
 fn cites_a_question(line: &str) -> bool {
-    if line.contains("notion.com/") || line.contains("docs/") {
+    if line.contains("docs/") {
         return true;
     }
     let Some(open) = line.find('[') else { return false };

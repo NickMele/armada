@@ -1,0 +1,443 @@
+# packages/icons/icons.toml
+#
+# The Armada icon registry. AUTHORED HERE, not generated — this file is the
+# authority on which lucide-react glyph means what, and what a glyph may
+# never be reused for. Notion's "Armada Icons" database is retired to
+# history; a page there that disagrees with this file is stale, not right.
+#
+# One [icons.<name>] table per lucide glyph, keyed by its kebab-case
+# lucide-react name. `reserved` is the part that must not be edited
+# casually: it is the reservation rule — what a glyph's silhouette may
+# never be made to mean elsewhere. A glyph used in more than one place in
+# the UI (see `file-cog`, `chevron-down`) carries each context as a
+# `[[icons.<name>.usage]]` entry rather than overwriting the first.
+#
+# `[conventions.*]` tables record cross-cutting rules that name several
+# glyphs at once rather than assigning one glyph its own meaning.
+#
+# Fields:
+#   means    - what the glyph's outline depicts (or, for some rows, the
+#              concept it labels — carried as Notion recorded it)
+#   group    - the badge/UI family this assignment belongs to
+#   size     - "12px", "16px", or "12 and 16px"; absent where Notion left
+#              it unset
+#   status   - Specified | Proposed | Retired | Banned
+#   reserved - what this glyph may never be reused for (absent where
+#              Notion recorded none)
+#   notes    - the reasoning behind the choice (absent where Notion
+#              recorded none)
+[icons.activity]
+  means = "Active jobs"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  notes = "The ECG outline reads cleanly at 16px where it would not at 12px."
+
+[icons.archive]
+  means = "A box with a lid"
+  group = "Job state"
+  size = "12px"
+  status = "Specified"
+  notes = "The work landed outside the Job and the record no longer describes it. A lidded box is a unique outline in the badge set with no interior detail, and it states filed-away rather than succeeded or failed — which is the distinction superseded carries against the other terminals."
+
+[icons.armada-mark]
+  means = "Armada itself. The product, never a state and never an action."
+  group = "Brand"
+  size = "12 and 16px"
+  status = "Proposed"
+  reserved = "Absolute. Nothing else may use this outline, and the mark may not be made to mean anything other than Armada — not home, not app, not a nav destination. It never appears in a Job Board row, a badge, or a button."
+  notes = "The Countersign mark. An open outline (the claim) and a solid block struck across its opening (the countersign), held clear by exactly 2 units. Drawn on the lucide 24 grid at strokeWidth 2, but butt caps and miter joins, not round — round caps overhang 1u at each end and close the clearance the mark is built on. Custom SVG, which hard rule 2 forbids; see the Brand mark amendment on Iconography, added the same day. Group is Brand, an option added 2026-08-24 for this row — it is a category of one and should stay that way. 16px in chrome, 12px only beside badge text, never below 12 — under that the clearance falls under one device pixel and the two marks fuse. Two-tone variant (claim --fg-muted, block --fg-default) at 24px and above only. Accent fill permitted on the macOS app tile alone."
+
+[icons.arrow-up-down]
+  means = "sort"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+
+[icons.arrow-up-to-line]
+  means = "An ascender meeting a hard horizontal line"
+  group = "Escalation reason"
+  size = "12px"
+  status = "Specified"
+  notes = "Added 2026-08-21 with the seventh escalation reason, loop_cap. An ascender meeting a hard horizontal line is literally the semantics: the loop rose until it met its ceiling. Two strokes, no interior detail, so it holds at 12px. Chosen against a loop glyph on purpose — see the page reasoning. Crosses hue groups with `arrow-up-down` (Chrome, sort), which rule 4 permits and which is a different glyph in a different column at a different size."
+
+[icons.ban]
+  means = "A circle with a diagonal bar through it"
+  group = "Job state"
+  size = "12 and 16px"
+  status = "Specified"
+  notes = "Circle and diagonal: you declined it. Not a cross, because this is a decision and not an error."
+
+[icons.bell]
+  means = "Alerts"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  notes = "Escalations interrupt, and the bell is the interrupt metaphor. Deliberately not octagon-alert, which belongs to stalled."
+
+[icons.check]
+  means = "A bare checkmark"
+  group = "Job state"
+  size = "12 and 16px"
+  status = "Specified"
+  notes = "Bare checkmark, nothing is more legible small. Check means yes in both places, which is the point."
+
+[icons.circle-check]
+  means = "A circle with a check inside"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Specified"
+  reserved = "Judge verdicts only. Never a Check result, never a generic success mark, never a completed step — that is bare check in --step-advanced."
+  notes = "Added 2026-08-21. In --verdict-met. circle-* is the Judge's own glyph family, beside shield-* for Checks and file-* for evidence artifacts — a verdict on a criterion is neither a gate nor an artifact, so the silhouette carries hedge-by-source before the label is read. Rendered as \"no objection\" rather than \"accepted\": the Judge declines to refuse, it never grants."
+
+[icons.circle-dot]
+  means = "Two concentric circles"
+  group = "Job state"
+  size = "12px"
+  status = "Specified"
+  notes = "Two concentric primitives, maximum legibility at 12px. Reads live, and unlike play it does not read as a button."
+
+[icons.circle-x]
+  means = "A circle with a cross inside"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Specified"
+  reserved = "Judge verdicts only. Never a failed Check (shield-x), never a Job failure, never a dismiss or close control."
+  notes = "Added 2026-08-21. In --verdict-not-met. A criterion is met or it is not, and that is a measured fact, so it renders as flatly as one. The red does not claim the Job failed: a refusal is the gate working. Verdict hue is per criterion and never sums onto the step or the Job, which is what lets a red cross sit under a running step beneath an escalated badge."
+
+[icons.clipboard-list]
+  means = "Job Board"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+
+[icons.clock]
+  means = "A clock face with two hands — the only time-shaped badge, since hourglass is banned"
+  group = "Job state"
+  size = "12px"
+  status = "Specified"
+  notes = "Unambiguous now that hourglass is banned — no other badge is time-shaped."
+
+[icons.copy]
+  means = "copy an id or a path"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+
+[icons.corner-up-right]
+  means = "Redirect"
+  group = "Action"
+  size = "16px"
+  status = "Specified"
+  notes = "Course correction into a live drone. Survives as: redirected."
+
+[icons.cpu]
+  means = "A square with radiating ticks — unique in the whole system at 12px"
+  group = "Queued reason"
+  size = "12px"
+  status = "Specified"
+  notes = "The square-with-radiating-ticks outline is unique in the system, which is what matters at 12px."
+
+[icons.external-link]
+  means = "open a PR externally"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+
+[icons.eye]
+  means = "An eye — an almond outline around a circle"
+  group = "Job state"
+  size = "12 and 16px"
+  status = "Specified"
+  reserved = "Review. Nothing else may use it."
+  notes = "One glyph, two places, by design. Badge at 12px, navigation at 16px."
+
+[icons.file-cog]
+  status = "Specified"
+  reserved = "Manifest only — the surface and the file. Never a generic settings or config glyph; Kit uses `settings`."
+
+  [[icons.file-cog.usage]]
+    means = "Manifest — Bridge's seventh surface"
+    group = "Navigation"
+    size = "12 and 16px"
+    notes = "Added 2026-08-21 with the Manifest surface (see Run and edit a Manifest). 16px in the rail, --fg-muted at rest and --fg-default when active, never status-coloured. The same glyph already assigned to Manifest in Git and config, reused deliberately: a surface and the thing it edits are one concept, and a second glyph would imply two. Bridge went from six surfaces to seven with this addition."
+
+  [[icons.file-cog.usage]]
+    means = "Manifest"
+    group = "Git and config"
+    size = "12px"
+
+[icons.file-question]
+  means = "A page outline with a question mark"
+  group = "Escalation reason"
+  size = "12px"
+  status = "Specified"
+  reserved = "The file-* family means evidence throughout."
+  notes = "The page outline does the differentiating work alone. lucide ≥ 0.511 renames this file-question-mark."
+
+[icons.filter]
+  means = "filter"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+
+[icons.flag]
+  means = "A pennant on a staff"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Specified"
+  reserved = "Nothing else in Armada may use flag — no flag-for-review, no feature flag."
+  notes = "Added 2026-08-21 with the sixth step-activity value. --fg-default on a --step-stopped-bg row: the surface carries the warning, so a hued glyph would say it twice. A flag marks a position rather than declaring a verdict, which is the correct claim — the verdict is on the criterion rows beneath it and the reason is on the badge above. octagon-x was rejected because the octagon belongs to stalled and a stopped step sits under an escalated badge; a bare attempt count was rejected for sharing a silhouette with a not-started row."
+
+[icons.folder]
+  means = "workspace"
+  group = "Git and config"
+  size = "12px"
+  status = "Specified"
+
+[icons.folder-git-2]
+  means = "repository"
+  group = "Git and config"
+  size = "12px"
+  status = "Specified"
+  notes = "Detail views only, never in a Job Board row. Precedes a mono value in --fg-muted."
+
+[icons.git-branch]
+  means = "branch"
+  group = "Git and config"
+  size = "12px"
+  status = "Specified"
+
+[icons.git-commit-horizontal]
+  means = "commit"
+  group = "Git and config"
+  size = "12px"
+  status = "Specified"
+
+[icons.git-pull-request]
+  means = "pull request"
+  group = "Git and config"
+  size = "12px"
+  status = "Specified"
+
+[icons.hourglass]
+  means = "nothing — banned outright"
+  group = "Banned"
+  status = "Banned"
+  reserved = "Banned."
+  notes = "Removed from stalled because it reads as be patient for the state that most needs to read as wrong. Nothing in Armada may use it."
+
+[icons.layers]
+  means = "convoy"
+  group = "Graph"
+  size = "12px"
+  status = "Specified"
+  notes = "At the approval gate and in the detail header only, never in a Job Board row — the row already says convoy, 3 in text."
+
+[icons.link]
+  means = "Two interlocking chain segments on a diagonal"
+  group = "Queued reason"
+  size = "12px"
+  status = "Specified"
+  notes = "Changed from lock. A lock says you lack permission; nothing is locked, something upstream is unfinished."
+
+[icons.lock]
+  means = "Cannot be skipped, even on retry"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Specified"
+  reserved = "Never a permission, never a security or auth state, never a locked file. Armada has no lock that means access."
+  notes = "Added 2026-08-21 with the hard-prerequisite mark. Sits at the step row's trailing edge in --fg-muted, label only, with no row action behind it — the way past a locked step is Pilot. A hard prerequisite is a property of the workflow definition rather than of this run, so it reads the same on a Job that has not started as on one that stopped."
+
+[icons.message-square]
+  means = "Helm"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  notes = "No nautical iconography. A wheel or compass for Helm is decoration, and metaphor is confined to proper nouns."
+
+[icons.octagon-alert]
+  means = "An octagon with an exclamation mark — the only octagon in the system"
+  group = "Escalation reason"
+  size = "12px"
+  status = "Specified"
+  reserved = "stalled only. Generic warnings use triangle-alert."
+  notes = "Changed from hourglass. The stop-sign polygon is the loudest shape available and the only octagon in the system."
+
+[icons.pause]
+  means = "Freeze dispatch"
+  group = "Action"
+  size = "16px"
+  status = "Specified"
+  notes = "Two bars, the most legible glyph in the set. snowflake rejected as decorative."
+
+[icons.power]
+  means = "A broken ring with an ascender rising through the gap"
+  group = "Job state"
+  size = "12 and 16px"
+  status = "Specified"
+  notes = "The universal deliberate-stop glyph. Pairs against unplug to encode deliberate against accidental."
+
+[icons.refresh-cw]
+  means = "Two arrows chasing each other round a closed loop"
+  group = "Escalation reason"
+  size = "12px"
+  status = "Specified"
+  reserved = "churning only. Refresh and poll controls use rotate-cw."
+  notes = "Two arrows chasing each other is busy-going-nowhere exactly."
+
+[icons.rotate-cw]
+  means = "Redispatch"
+  group = "Action"
+  size = "16px"
+  status = "Specified"
+  notes = "Single arrow, distinct from refresh-cw. Also the proposed step-level retrying mark."
+
+[icons.scroll-text]
+  means = "Activity feed"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  notes = "A log. history was rejected as a clock collision."
+
+[icons.search]
+  means = "search"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+
+[icons.send]
+  means = "Dispatch"
+  group = "Action"
+  size = "16px"
+  status = "Specified"
+  notes = "Survives as: dispatched."
+
+[icons.settings]
+  means = "Kit"
+  group = "Git and config"
+  size = "12px"
+  status = "Specified"
+
+[icons.shield-check]
+  means = "A pointed-base pentagon with a check inside"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Proposed"
+  notes = "Within the shield reservation — the family means gates and checks. Its counterpart shield-x is already spoken for as failed a check."
+
+[icons.shield-minus]
+  means = "A pointed-base pentagon with a minus inside"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Specified"
+  reserved = "Check results only."
+  notes = "Reassigned 2026-08-21. Previously circle-minus; moved when circle-* became the Judge family. Completes the check family rather than damaging it — not reached is a Check state and belongs beside shield-check and shield-x, where it should have been."
+
+[icons.shield-x]
+  means = "A pointed-base pentagon with a cross inside"
+  group = "Escalation reason"
+  size = "12px"
+  status = "Specified"
+  reserved = "The shield-* family means gates and checks throughout."
+  notes = "The pointed-base pentagon is unique and strong small."
+
+[icons.split]
+  means = "One line becoming two"
+  group = "Escalation reason"
+  size = "12px"
+  status = "Specified"
+  notes = "Changed from git-fork, which loses its nodes at 12px. One line becoming two is literally what fanning out means, and it frees git-* for real git operations."
+
+[icons.stamp]
+  means = "A plunger over a base line"
+  group = "Job state"
+  size = "12px"
+  status = "Specified"
+  notes = "A person owes an attestation on the criteria the record names. Chosen for a silhouette no other badge carries — a plunger over a base line — and because attestation is literally what a stamp performs. The human-figure family was rejected here: user-check already carries awaiting approval in the same hue, and two human figures at 12px is the collision rule 4 exists to prevent."
+
+[icons.stethoscope]
+  means = "Doctor"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  notes = "Literal. heart-pulse and activity were rejected as collisions with Active jobs."
+
+[icons.terminal]
+  means = "A window with a prompt caret inside it"
+  group = "Job state"
+  size = "12 and 16px"
+  status = "Specified"
+  reserved = "Pilot only."
+
+[icons.triangle-alert]
+  means = "a check warns"
+  group = "Doctor"
+  size = "16px"
+  status = "Specified"
+  notes = "The one place triangle-alert lives, plus generic warnings in toasts."
+
+[icons.unplug]
+  means = "A plug and socket with a visible gap between the two fragments"
+  group = "Escalation reason"
+  size = "12px"
+  status = "Specified"
+  notes = "The visible gap between two fragments reads as connection lost, which is the precise distinction against killed."
+
+[icons.user-check]
+  means = "A human figure with a check beside it — the only human silhouette in the badge set"
+  group = "Job state"
+  size = "12px"
+  status = "Specified"
+  reserved = "Human required, or actor=human."
+  notes = "The only human figure in the badge set, and a human being required is exactly the semantics."
+
+[icons.waypoints]
+  means = "the graph view toggle"
+  group = "Graph"
+  size = "16px"
+  status = "Specified"
+  notes = "Nodes inside the graph reuse the badge icons at 12px — a graph node and a Job Board row showing the same job must show the same glyph."
+
+[icons.x]
+  means = "A bare cross, two crossed strokes"
+  group = "Job state"
+  size = "12 and 16px"
+  status = "Specified"
+  reserved = "System failure. Never a human decision — that is ban."
+  notes = "Bare cross. As a badge it is system failure only; as chrome it is the shadcn dialog close, unchanged."
+
+[icons.chevron-down]
+  means = "Disclosure — the caret segment of a split button"
+  group = "Action"
+  size = "16px"
+  status = "Specified"
+  reserved = "Disclosure only. Never an ornament on a label, never a sort or direction indicator, never an accordion chevron on a data row."
+  notes = "Added 2026-08-21 with the split button. 16px in --fg-muted, in its own 28px segment divided from the label by a 1px --border-default rule. The one exception to \"primary and secondary buttons are label-only\": a disclosure caret is the whole content of its own segment, structural rather than decorative, and never sits beside a label."
+  # NOTE (flagged during extraction, not from Notion): the row below
+  # assigns this same glyph to Chrome expand/collapse, which reads
+  # against the `reserved` clause above ("never an accordion chevron
+  # on a data row"). Carried as found; see the extraction report.
+
+  [[icons.chevron-down.usage]]
+    means = "expand and collapse"
+    group = "Chrome"
+    size = "16px"
+    status = "Specified"
+    paired_with = "chevron-right"
+
+[icons.chevron-right]
+  means = "expand and collapse"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+  paired_with = "chevron-down"
+
+[conventions.step_activity_borrowing]
+  glyphs = ["circle-dot", "eye", "rotate-cw", "check", "x"]
+  means = "Step activity, borrowed from the Job set"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Specified"
+  notes = "A step may carry the Job glyph that means the same thing one level down. A step and a Job answer the same question at different scales, so a second silhouette for one meaning is the collision this page exists to prevent — a rail row and the badge above it showing the same claim must show the same mark. The rail's activity values take their glyphs this way; the roster is the step-activity table on Iconography, not a list here. Two values are not borrowings and carry their own rows: flag for stopped, and lock for a hard prerequisite. One borrowing differs in treatment rather than glyph — x at step level is hued in --step-failed on a --step-failed-bg row, where the Job badge's x takes the badge's own colour. That sits inside x's reservation rather than widening it: a failed Check is a system failure, not a human decision."
+
