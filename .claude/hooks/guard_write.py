@@ -115,8 +115,17 @@ def main() -> None:
                            "nobody decided on becomes visible as a diff.")
 
     # ---- rule: no serde_json::from_* outside store and ipc ---------------
+    #
+    # Rust source only, matching the gate rule exactly. This checked every file
+    # and the gate checked `.rs` under the source roots, so a contract that
+    # described the ban was refused while the gate would have passed it — and
+    # the document got reworded into something less precise to get past the
+    # hook. A rule its own documentation cannot state is a rule that decays.
     written = tool_input.get("content") or tool_input.get("new_string") or ""
-    if "serde_json::from_" in written and not rel.startswith(JSON_ALLOWED):
+    rust_source = rel.endswith(".rs") and rel.split("/", 1)[0] in (
+        "crates", "apps", "packages", "xtask",
+    )
+    if rust_source and "serde_json::from_" in written and not rel.startswith(JSON_ALLOWED):
         answer("deny", f"{rel} would contain `serde_json::from_*`. Untyped JSON "
                        "belongs to `store` and `ipc`, the two places bytes enter "
                        "the process; everywhere else a value arrives typed.")
