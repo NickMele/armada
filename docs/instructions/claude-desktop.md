@@ -109,7 +109,7 @@ Step and capability bodies do not restate decisions. Acceptance and definition o
 done are phrased as observable behaviour; the content lives on the concept page
 and is named, not copied.
 
-## Questions
+## How a question moves
 
 The open-questions procedure owns how a question is filed and answered. Read it
 before filing one, answering one, or editing any page that carries an

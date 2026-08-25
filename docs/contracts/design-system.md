@@ -1,27 +1,35 @@
 # Design System — UI & Voice
 
 **Kind:** contract. **Governs:** static UI chrome, tokens, and the Voice &
-Copy contract — the parent contract, pasted into every design session, that
-nothing else may contradict.
+Copy contract — pasted into every design session as the parent contract
+that nothing else may contradict.
 
-The single contract handed to Claude Design (or any design tool) before
+Read by Claude Design, or any design tool, before generating an Armada
+screen.
+
+---
+
+The single contract handed to Claude Design, or any design tool, before
 generating an Armada screen. Constraining the input is what makes output
 drop into the Electron app without restyling — this replaces per-screen
-conversion work. Paste this file's contents at the top of a design session;
-design Job Board first, since it is the densest screen and the real test of
-the density and status tokens.
+conversion work.
 
-UI tokens and the Voice & Copy contract are both in force. Two sibling
-documents carry what a design session does not need: the Agent Copy
-Contract (text written at runtime by Drones, Judge and Helm, with its
-surfaces and samples in Armada Copy) and [Voice Contract — Engineering
-Requirements](voice-engineering.md).
+Paste this document's contents at the top of a design session. Design Job
+Board first; it is the densest screen and therefore the real test of the
+density and status tokens.
+
+Complete. UI tokens and the Voice & Copy contract are both in force. Two
+sibling documents carry what a design session does not need: the [Agent
+Copy Contract](agent-copy.md) (text written at runtime by Drones, Judge
+and Helm, with its surfaces and their samples in Armada Copy) and the
+[Voice Contract — Engineering Requirements](voice-engineering.md).
 
 ---
 
 ## Stack
 
-- **Component library:** shadcn/ui — you own the component code, Tailwind-native
+- **Component library:** shadcn/ui — you own the component code,
+  Tailwind-native
 - **Style library:** Tailwind + CSS custom properties as tokens
 - **Icons:** lucide-react, version pinned — 12px in badges, 16px in
   navigation and buttons, strokeWidth 2 throughout. See
@@ -32,38 +40,44 @@ Requirements](voice-engineering.md).
 
 ## The product
 
-Armada dispatches AI coding agents (Drones) against real Git repositories,
-monitors them, and escalates when they misbehave. Single user, local,
-always open on a second monitor across a working day.
+Armada is a personal AI workflow orchestration system. It dispatches AI
+coding agents (Drones) against real Git repositories, monitors them, and
+escalates when they misbehave. Single user, local, always open on a
+second monitor across a working day.
 
 **Surfaces:** Bridge is the operational surface group — Job Board, Active
 Jobs, Alerts, Reviews, Activity Feed, Doctor, Manifest. Helm is a sibling
-conversational surface; the roster lives on Bridge.
+conversational surface. The count is not a contract: a surface earns a
+place in the rail where a journey needs one, and the roster lives on
+Bridge.
 
 **The screen's job:** at a glance, tell one person what is running, what
-needs them, and what broke. This is an instrument panel, not a marketing
-page — no hero sections, no gradients, no decorative iconography, no
-illustration. Density and legibility win over impact.
+needs them, and what broke.
+
+This is an instrument panel, not a marketing page. No hero sections, no
+gradients, no decorative iconography, no illustration. Density and
+legibility win over impact.
 
 ---
 
 ## Hard rules
 
 1. **No Tailwind arbitrary values.** Never `bg-[#3b82f6]`, `p-[13px]`,
-   `text-[15px]`. Every value comes from the token set below. Lint-enforced
-   — arbitrary values fail the build.
+   `text-[15px]`. Every value comes from the token set below.
+   Lint-enforced in the app — arbitrary values fail the build.
 2. **Only shadcn/ui primitives:** button, input, select, checkbox, radio,
    switch, badge, card, table, dialog, sheet, tabs, toast, tooltip,
    dropdown-menu, popover, separator, scroll-area, skeleton, alert,
    **command**. Compose from these; do not invent new base components.
-   `command` (cmdk) backs the command palette. `kbd` is the one non-shadcn
-   primitive — see Keyboard and command palette.
+   `command` (cmdk) backs the command palette. A `kbd` element is the one
+   non-shadcn primitive, specified under Keyboard and command palette.
 3. **Status colors are never chosen.** They map to the Job state machine
-   one to one, never by aesthetic judgment. **Below Job level, hue exists
-   only where `tokens/status.css` declares it**, and every value there
-   aliases its Job counterpart so the mapping is declared rather than
-   inferred — read the file rather than a list here, since an enumeration
-   went stale twice. Anything the file does not declare stays neutral.
+   one to one. Never assign a status color by aesthetic judgment. **Below
+   Job level, hue exists only where `tokens/status.css` declares it**,
+   and every value there aliases its Job counterpart so the mapping is
+   declared rather than inferred. Read the file rather than a list; this
+   rule used to enumerate the cases and went stale twice. Anything the
+   file does not declare stays neutral. See Below Job level under Tokens.
 4. **Dark is primary.** Design dark first. Light exists but is secondary.
 5. **Icons: lucide-react only**, used sparingly. A dashboard dense with
    icons reads as noise.
@@ -72,15 +86,21 @@ illustration. Density and legibility win over impact.
 
 ## Tokens
 
-Mirrored row by row in the Armada Tokens database, with each token's role,
-source file, contrast measurements and revision history. Reference as
-Tailwind classes mapped to CSS variables (`bg-surface-raised`,
+The token set below is mirrored row by row in `packages/tokens/src/*.css`,
+the authority on each value; each token's role, source file, contrast
+measurements and revision history are tracked in the Armada Tokens
+database. Components that consume a token are related to it from Armada
+Components, which also records what is still missing and which journey
+first needs it.
+
+Reference as Tailwind classes mapped to CSS variables (`bg-surface-raised`,
 `text-fg-muted`, `text-status-running`). Never raw hex.
 
 ### Ground
 
-Deep desaturated blue-slate, not near-black — reads as instrument panel
-rather than terminal, and gives status color room to sit without vibrating.
+Deep desaturated blue-slate, not near-black. Reads as instrument panel
+rather than terminal, and gives status color room to sit without
+vibrating.
 
 ```
 --bg-base        #0F1419   canvas
@@ -114,9 +134,10 @@ One accent, used for interactive affordance only — never for status.
 
 ### Status — derived from the state machine
 
-One token per Job state, and the set is the state machine's, not a
-palette. `rejected` and `killed` are **deliberate human decisions**, not
-system failures, and must not read as errors.
+One token per Job state, and the set is the state machine's — not a
+palette. The critical semantic distinction: `rejected` and `killed` are
+**deliberate human decisions**, not system failures, and must not read as
+errors.
 
 ```
 --status-not-started        #8C97A6   dormant, queued
@@ -133,7 +154,8 @@ Each has a `-bg` variant at ~12% opacity for badge and row-tint fills.
 
 **Contrast pass, 2026-08-20.** Five values were lifted in lightness so
 badge text clears 4.5:1 as 12px text on its own 12% tint over
-`--bg-raised`; hue and semantic assignment are unchanged, only brightened.
+`--bg-raised`. Hue and semantic assignment are unchanged — nothing was
+reassigned, only brightened.
 
 | Token | Was | Now | Badge contrast, before → after |
 | --- | --- | --- | --- |
@@ -144,34 +166,51 @@ badge text clears 4.5:1 as 12px text on its own 12% tint over
 | `--status-rejected` | #A97BD1 | #B489DA | 4.48 → 5.12 |
 | `--status-killed` | #6B7684 | #9BA3AC | 3.27 → 5.52 |
 
-`--fg-subtle` no longer equals `--status-not-started`, closing the
-contrast item [Iconography](iconography.md) flagged. One shortfall
-remains: `not_started` badge text on `--bg-overlay` reads 4.38:1, accepted
-since badges rarely appear on floating layers. `--accent` as text on
-`--accent-muted` is 4.06:1, so selected rows keep `--fg-default` text
-(9.68:1) instead.
+`--fg-subtle` no longer equals `--status-not-started`, which closes the
+contrast item Iconography flagged. `running`, `awaiting-review` and
+`completed-success` already passed and were left alone. One shortfall
+remains: `not_started` badge text on `--bg-overlay` reads 4.38:1, and
+badges appear on floating layers rarely enough to accept it. `--accent`
+as text on `--accent-muted` is 4.06:1, so selected rows keep
+`--fg-default` text (9.68:1) rather than accent text.
 
-**Escalation sub-reasons** all use `--status-escalated`, differentiated by
-**label and icon**, never hue — a column of oranges would be unreadable.
-The trigger list lives on Workflow, not here; this document owes the rule,
-not the roster.
+**Escalation sub-reasons** all use `--status-escalated`, differentiated
+by **label and icon**, never by hue — a column of oranges would be
+unreadable. **The trigger list is not enumerated here.** It lives on
+Workflow, it has grown twice, and several triggers are not yet in
+`core-model`'s enum. What this document owes is the rule, not the
+roster; the enum→verb test is what catches a trigger shipping with no
+label.
 
 **The approval axis is a status, not a reason.** `awaiting_approval` and
-`queued` are statuses of their own; `queued`'s reason names the resource,
-with ready as the null. They share `--status-not-started`, differ by label
-and icon; `awaiting_approval` left grey for amber. This closes a real bug:
-a sub-dispatched Job's out-of-headroom case used to compute to an
-unrenderable `pre_approved_queued` under the old four-value field; now it
-enters at `queued` with its reason naming the resource.
+`queued` are statuses of their own, and what remains as `queued`'s reason
+names the resource — with ready becoming the null rather than a value.
+`queued` and its reasons share `--status-not-started` and differ by
+label and icon; `awaiting_approval` left grey for amber. See Job.
+
+**The symptom that forced this is a rendering bug, which is why this
+document carries it.** A sub-dispatched Job inherits its parent's
+approval. Under a single four-value field, one out of headroom computed
+as `pre_approved_queued` and never rendered on the Job Board at all.
+Under the current set it enters at `queued` with its reason naming the
+resource, so no combination computes to an unrenderable label.
+
+> Long-term intent: generate these token names from `core-model`'s Rust
+> enum via the same codegen step that emits the `ipc` TypeScript types,
+> so adding a ninth state fails the build until a token exists for it.
 
 ### Below Job level
 
 Drawn from the workflow rail, which broke the rule that hue stops at the
-Job — a done step, a running step, a Judge criterion verdict all wanted
-it. **Hue below Job level exists only where `tokens/status.css` declares
-it**; this section carries the reasoning and deliberately not the roster,
-since an enumeration here went stale twice. Every value **aliases** its
-Job counterpart rather than introducing a new one.
+Job — a done step, a running step, and a Judge criterion verdict all
+wanted it. **Hue below Job level exists only where `tokens/status.css`
+declares it.** That file is the list; this section carries the
+reasoning, and deliberately does not restate the roster, because an
+enumeration here went stale twice.
+
+Every value **aliases** its Job counterpart rather than introducing a
+new one. The mapping is declared, so a design session reads it instead
+of inferring it.
 
 ```
 --step-advanced    var(--status-completed-success)
@@ -184,43 +223,59 @@ Job counterpart rather than introducing a new one.
 --verdict-not-met  var(--status-completed-failed)
 ```
 
-`retrying` and `not_started` take no hue — `--fg-muted` and `--fg-subtle`.
-A **killed** step takes none either: killing is a human decision, not a
-system failure. The current row keeps its `--accent-muted` tint and 2px
-`--accent` left edge — emphasis, not status.
+**Step activity answers where the work is.** `retrying` and
+`not_started` take no hue — `--fg-muted` and `--fg-subtle`. A **killed**
+step takes none either, and that exclusion is load-bearing: killing is a
+human decision rather than a system failure and must not read as an
+error. The rail's current row keeps its `--accent-muted` tint and 2px
+`--accent` left edge, which is emphasis and not status.
 
-**`failed` reports an outcome, not a position.** A step whose Check
-refused takes `--step-failed` with a bare `x`, the same mark as the
-`completed_failed` badge one level down. It was drawn neutral first, since
-a Check result is measured — reversed, because a failed Check with no
-retry and no triage is the entire reason a person opened the screen, and
-burying it in a muted rail is the frustration the surface exists to
-prevent. The gate row beneath stays neutral: the step's state is hued,
-the Check's exit code is measured.
+**`failed` is the one value that reports an outcome rather than a
+position.** A step whose Check refused takes `--step-failed` with a bare
+`x` glyph, following `advanced` taking `check` — the same mark as the
+`completed_failed` badge, meaning the same thing one level down. It was
+drawn neutral first, on the grounds that a Check result is measured and
+measured facts render flatly. That was reversed: where a failed Check
+ends the Job with no retry and no triage, that row is the entire reason
+a person opened the screen, and making them find it by weight in a rail
+of muted rows is the frustration the surface exists to prevent. **The
+gate row beneath stays neutral** — the step's state is hued, the Check's
+exit code is measured.
 
-**`stopped` and `failed` alone carry a surface, not just a glyph hue.** A
-step whose retries are spent is distinct from `waiting` (a designed human
-gate) and from a dead stop; both need a surface since a glyph only holds
+**Two step values carry a surface rather than a glyph hue alone:
+`stopped` and `failed`.** A step whose retries are spent is its own
+activity value — not retrying, and not waiting on you either, since
+folding it into `waiting` would render a designed human gate and a dead
+stop alike. Both take a surface for the same reason: a glyph only holds
 while its row is selected, and the row that ended the Job has to stay
-findable. They differ in glyph: `stopped`'s `flag` stays `--fg-default`
-since the surface already carries the warning; `failed`'s `x` is hued,
-since failure is an outcome and states it in both channels.
+findable while you read the Check output beside it. **In a rail,
+background states what the row is and the accent left edge states which
+row you are on** — the surface is constant, selection adds the edge. One
+of each per rail, because a Job stops or fails in exactly one place.
+They differ in the glyph: `stopped`'s `flag` stays `--fg-default`,
+because with the surface carrying the warning a hued flag would say it
+twice, while `failed`'s `x` is hued, since failed is an outcome and
+states it in both channels.
 
 **Criterion verdicts are measured facts and render as flatly as one.** A
-criterion is met or it is not; the red does not claim the Job failed — a
-Judge refusal is the gate working. **Verdict hue is per criterion and
-never sums onto the step or the Job**, which is what lets a red cross sit
-under a running step beneath an escalated badge without contradiction.
+criterion is met or it is not. The red does not claim the Job failed: a
+Judge refusal is the gate working, and the row's copy names which
+criterion and why. **Verdict hue is per criterion and never sums onto
+the step or the Job** — that is the rule that lets a red cross sit under
+a running step beneath an escalated badge without any of the three
+contradicting the others.
 
-**Refusals sort first, and every criterion row carries its number** — a
-reordering card would break correspondence with the frozen
-`acceptance_criteria[]` order. This is an open matter: see the open
-question on how criterion verdicts are encoded without status hue.
+**Refusals sort first, and every criterion row carries its number.** A
+card that reorders breaks correspondence with the frozen
+`acceptance_criteria[]` order, so a citation to "criterion 4" would no
+longer sit fourth on screen. Explicit numbering is what lets both hold:
+the rows a person needs are at the top, and the citation still resolves.
+See How are criterion verdicts encoded without status hue?
 
 **Everything else below Job level stays neutral.** A Kit file's drift
-state, an origin tag and the retry marker carry position, surface, weight
-and glyph. Adding a value to `tokens/status.css` is a contract change, not
-a design decision.
+state, an origin tag and the retry marker carry position, surface,
+weight and glyph. Adding a value to `tokens/status.css` is a contract
+change, not a design decision.
 
 ### Diff
 
@@ -238,13 +293,20 @@ a design decision.
 
 **IBM Plex Sans** for interface. **IBM Plex Mono** for anything
 machine-derived — job IDs, file paths, branch names, commands, diffs,
-durations, token counts. Monospace signals *this is a fact the system
-reported*, and makes IDs and paths scannable in a dense table.
+durations, token counts.
 
-Scale is tighter than web defaults. **Legibility pass, 2026-08-20:** the
-whole ladder was raised ~15% after the 11px and 13px steps proved hard to
-read at desk distance. Ratios and roles are unchanged; `tokens/spacing.css`
-is the authority on the heights that hold the larger text.
+That split is a rule, not a style preference: monospace signals *this is
+a fact the system reported*, and it makes IDs and paths scannable in a
+dense table.
+
+Scale is tighter than web defaults. This is a dashboard.
+
+**Legibility pass, 2026-08-20.** The whole ladder was raised ~15% after
+the 11px and 13px steps proved hard to read at desk distance. Ratios and
+roles are unchanged — every step moved together, so nothing about
+hierarchy or the mono-one-step-smaller rule changes. The heights that
+hold the larger text moved with it, and `tokens/spacing.css` is the
+authority on each one.
 
 ```
 --text-2xs   13px / 18px   table metadata, timestamps
@@ -256,19 +318,23 @@ is the authority on the heights that hold the larger text.
 --text-2xl   28px / 36px   the rare hero number
 ```
 
-Weights: 400 body, 500 labels and emphasis, 600 headings. Never 700+. Mono
-runs one step smaller than adjacent sans at the same optical size — 14px
-mono next to 15px sans.
+Weights: 400 body, 500 labels and emphasis, 600 headings. Never 700+.
+Mono runs one step smaller than adjacent sans at the same optical size —
+14px mono next to 15px sans.
 
 ---
 
 ## Spacing and shape
 
 4px base grid: `1`=4, `2`=8, `3`=12, `4`=16, `6`=24, `8`=32, `12`=48.
-Deliberately tight: table rows 36px, header rows 32px, card padding 20px
-(not 24), controls 32px (sm) / 36px (default), section gaps 24px (not 48).
-This window holds a job list, a diff, and a graph view at once. Every
-value is a token in `tokens/spacing.css`, the authority on it.
+Deliberately tight. Table rows 36px, header rows 32px. Card padding
+20px, not 24. Controls 32px (sm) / 36px (default). Section gaps 24px,
+not 48. If it feels slightly cramped against normal web instincts, it is
+correct — this window holds a job list, a diff, and a graph view at
+once.
+
+Every one of those is a token in `tokens/spacing.css`, which is the
+authority on the value. Read it rather than retyping a number from here.
 
 ```
 --radius-sm  3px    badges, small controls
@@ -277,8 +343,8 @@ value is a token in `tokens/spacing.css`, the authority on it.
 ```
 
 No full-round pills except avatars. No shadows on flat surfaces —
-elevation comes from `--bg-raised` / `--bg-overlay`, not blur. Shadows only
-on floating layers (dialog, popover, dropdown).
+elevation comes from `--bg-raised` / `--bg-overlay`, not blur. Shadows
+only on floating layers (dialog, popover, dropdown).
 
 ---
 
@@ -291,37 +357,56 @@ on floating layers (dialog, popover, dropdown).
 --ease            cubic-bezier(0.2, 0, 0, 1)
 ```
 
-No entrance animations on data — a Job Board that animates rows in on
-every poll is unusable. Live-updating values may pulse once on change,
+No entrance animations on data. A Job Board that animates rows in on
+every poll is unusable. Live-updating values may pulse once on change —
 nothing more. Respect `prefers-reduced-motion`.
 
-**One carve-out: the running mark animates continuously**, since only
-motion says a step is still working. **Scope is one animated mark per
-screen, on the most specific mark present.** Job detail has a rail, so
-the rail's current step pulses and the header's Running badge stays
-static. A list has no rail, so the Running badge pulses instead, on the
-**focused row only** — fourteen breathing dots is exactly what this rule
-forbids. The step bar never pulses.
+**One carve-out: the running mark animates continuously.** A hue says
+which step is current; only motion says it is still working, and that
+is the reading a static rail cannot give — it matters most on the step
+that has been running for nine minutes.
 
-Opacity and scale only, at `--duration-pulse`; the ring holds still, so
-nothing reflows. The pulse never carries *which* step is current, only
-*still working*, so it follows focus rather than status. Under
-`prefers-reduced-motion` the pulse stops and `--step-running` carries the
-reading alone.
+**Scope is one animated mark per screen, on the most specific mark
+present, and on the thing being read.** Job detail has a rail, so the
+rail's current step pulses and the header's Running badge stays static —
+the rail names *which* step is working, the badge one line above only
+names the Job's state. A list has no rail, so the Running badge pulses
+there instead, **on the focused row only**: a list carries one running
+mark per Job, and fourteen breathing dots is the thing the first
+sentence of this section forbids. The step bar never pulses — its job is
+where the work got to, which is a static fact, and the badge sits in a
+fixed column on every row so the motion appears in one predictable place
+rather than moving with the workflow's length.
+
+Opacity and scale only, at `--duration-pulse`. The ring holds still, so
+no row shifts and nothing reflows. The scope narrowed three times — per
+rail, then the focused Job, then this — and the reading survived each
+time because the pulse never carried *which* step is current. Hue does
+that, unchanged on every running row. The pulse carries *still working*,
+and that is only asked of the thing being read, which is why it follows
+focus rather than status. Nothing else on a data surface animates on a
+loop. Under `prefers-reduced-motion` the pulse stops and
+`--step-running` carries the reading alone.
 
 ---
 
 ## Window and layout model
 
-One responsive prototype covers all widths.
+One responsive prototype covers all widths — not separate comps per
+breakpoint.
 
-**Window chrome.** Frameless, `titleBarStyle: 'hiddenInset'`, macOS traffic
-lights inset over the sidebar's top region — reclaims ~28px of vertical
-space. Costs a custom drag region: the sidebar header and any empty area
-of a top toolbar are draggable; interactive elements inside them are not.
+### Window chrome
 
-**Sidebar.** Collapsible and resizable, both states designed rather than
-one being an afterthought.
+Frameless, `titleBarStyle: 'hiddenInset'`, macOS traffic lights inset
+over the sidebar's top region. Reclaims ~28px of vertical space and lets
+the sidebar run to the top edge. Costs a custom drag region: the sidebar
+header and any empty area of a top toolbar are draggable; interactive
+elements inside them are not.
+
+### Sidebar
+
+Collapsible and resizable, and both states are designed rather than one
+being an afterthought.
 
 ```
 default     200px
@@ -330,25 +415,55 @@ collapsed   48px icon rail
 persistence width and collapsed state survive app restart
 ```
 
-Two levels, rendered structurally: Bridge is a section label above its
-surfaces, a separator, then Helm as a sibling beneath. **The rail never
-disappears** — 48px is cheap and losing navigation entirely is worse.
-**Nav items do not carry escalation or approval counts** — the status bar
-already carries both.
+**Two levels, rendered structurally.** Bridge is a section label above
+its surfaces, listed on Bridge rather than counted here. A separator,
+then Helm as a sibling beneath — not one more peer in a flat list. This
+is the app/surface-group hierarchy made visible; a flat nav quietly
+contradicts it.
 
-**Content area.** Full-width routes. No inspector pane, no modal for Job
-detail — a detail view holds the escalation payload, the full attempt
-history, per-step evidence and a diff, which a split pane would cramp.
+**The rail never disappears.** 48px is cheap and losing navigation
+entirely is worse than losing 48px, at any width.
 
-**Status bar.** Fixed to the bottom, full window width, spanning
-**beneath** the sidebar rather than inset to the content area. Fixed
-because a healthy state has to say "Fleet running" out loud, and that
-guarantee fails the moment the bar can scroll away. Full width because it
-is app-level, not Bridge-level: it appears on Helm too.
+**Nav items do not carry escalation or approval counts.** The status bar
+already carries both on every surface, by contract. Duplicating them in
+the sidebar creates two places to check and two chances to disagree.
 
-**Responsive behaviour.** 768px hard floor — half of a 1536px display.
-With the rail at 48px that leaves 720px of content. One breakpoint at
-~1100px:
+### Content area
+
+**Full-width routes. No inspector pane, no modal for Job detail.** Board
+and detail are separate destinations.
+
+This follows from what a detail view actually holds: the escalation
+payload, the full attempt history including every prior Judge summary
+rather than the latest, per-step evidence, and a diff. That is not
+inspector content, and a split pane would cramp the thing the page
+exists to show.
+
+**If triage speed suffers in practice**, the fix is prev/next navigation
+within the detail view — staying in the queue without splitting the
+layout. Not an inspector.
+
+### Status bar
+
+Fixed to the bottom, full window width, spanning **beneath** the
+sidebar rather than inset to the content area.
+
+Fixed because a healthy state has to say "Fleet running" out loud, and
+that guarantee fails the moment the bar can scroll away — it is a
+liveness indicator for a daemon that outlives the window. Full width
+because the bar is app-level, not Bridge-level: it appears on Helm too,
+and running it edge to edge makes that claim visible. Inset it and it
+reads as belonging to whatever surface is open.
+
+Token treatment is specified under Component → token mapping.
+
+### Responsive behaviour
+
+**768px hard floor.** Half of a 1536px display, and a normal way to run
+something you glance at beside an editor. With the rail at 48px that
+leaves 720px of content.
+
+**One breakpoint at ~1100px, with one consequence:**
 
 | | ≥ 1100px | < 1100px |
 | --- | --- | --- |
@@ -357,29 +472,56 @@ With the rail at 48px that leaves 720px of content. One breakpoint at
 
 The stacked row is the status grammar's own shape: headline sentence on
 line one (`Job 12 stalled at step 3`), labelled field run on line two
-(`api · 3 pokes · auth/session.rs · 12m · ~$1.80`), badge leading. **No
-field is dropped at any width** — every field exists because a decision
-depends on it, so responsive-hiding would contradict P2. Narrow changes
-the row's *shape*, never its content. **Honest cost:** the stacked row is
-taller, so fewer jobs are visible — accepted deliberately, since Job Board
-and Alerts disagreeing about what a job looks like is what retired the
-two-shape version. Below 1100 the sidebar may still expand manually; it
-overlays rather than compresses the table, a 720px table having no width
-to give back.
+(`api · 3 pokes · auth/session.rs · 12m · ~$1.80`). The badge stays
+leading on line one so status is still the first thing caught.
+
+**No field is dropped at any width.** Every field in the universal row
+exists because a decision depends on it — responsive-hiding them
+contradicts P2, which requires the facts needed to decide to be on
+screen without a click. Narrow changes the row's *shape*, never its
+content. Secondary values truncate with a tooltip carrying the full
+string; they do not vanish.
+
+**Honest cost:** the stacked row is taller than a table row, so fewer
+jobs are visible at once. That is a real loss on a monitoring surface,
+and it was accepted deliberately: the Job Board and Alerts disagreeing
+about what a job looks like is what retired the two-shape version, and
+the row is the most repeated element in the app.
+
+Below 1100 the user may still expand the sidebar manually. It overlays
+the content in that case rather than compressing the table further — a
+720px table has no width to give back.
+
+**Validation:** if the row cannot carry its whole field set at 720px,
+the field set needs revisiting, not the row. No field is dropped, and
+the row does not reshape.
 
 ---
 
 ## Keyboard and command palette
 
-Foundational rather than additive — specified before the first screen.
+Foundational rather than additive. Both change the component inventory
+and the focus model, which is why they are specified before the first
+screen instead of retrofitted onto it.
 
-**Principle: every action reachable by mouse is reachable by keyboard, and
-nothing is keyboard-only.** The palette is a superset of the UI, never a
-substitute. **One artifact, three columns:** every action carries a
-**verb**, an **icon**, and a **shortcut**, generated from one source with a
-test asserting no entry is missing any of the three.
+**Principle: every action reachable by mouse is reachable by keyboard,
+and nothing is keyboard-only.** The palette is a superset of the UI,
+never a substitute for it. A capability that exists only behind a
+shortcut is undiscoverable, and a capability that exists only behind a
+click is unusable at speed.
 
-**Global — modifier-based, work anywhere:**
+### One artifact, three columns
+
+Every action carries a **verb**, an **icon**, and a **shortcut** —
+generated from one source with a test asserting no entry is missing any
+of the three. This is the same discipline already applied to the
+enum→verb map and the icon map, extended one column. A new action cannot
+ship with no shortcut, and a shortcut cannot exist without a label to
+display next to it.
+
+### Two tiers
+
+**Global — modifier-based, work anywhere.**
 
 ```
 ⌘K       command palette
@@ -391,8 +533,9 @@ test asserting no entry is missing any of the three.
 Esc      close overlay, or return to the list from a detail route
 ```
 
-**Contextual — single-key, act on the focused row** (the pattern, not the
-complete map):
+**Contextual — single-key, act on the focused row.** This is what makes
+triage fast: move down the alert queue and act without reaching for a
+modifier.
 
 ```
 j / k    move focus down / up
@@ -403,19 +546,31 @@ x        kill        (confirms)
 /        focus the filter input
 ```
 
-**Safety rules, not suggestions:**
+The list above is the pattern, not the complete map — the full set comes
+from the one artifact above once the action set is final.
 
-- **Destructive keys are never adjacent to navigation keys.** Kill is `x`,
-  never `k`, since `k` sits against `j` and a mistyped navigation keystroke
-  must not be able to end a running job.
-- **Every destructive action confirms**, even from the keyboard. Cancel
-  holds initial focus, `Enter` confirms, `Esc` cancels.
+### Safety rules for single-key actions
+
+These are constraints on the map, not suggestions.
+
+- **Destructive keys are never adjacent to navigation keys.** Kill is
+  `x`, never `k`, because `k` sits against `j` and a mistyped navigation
+  keystroke must not be able to end a running job.
+- **Every destructive action confirms**, even from the keyboard. In the
+  confirmation dialog **Cancel holds initial focus**, `Enter` confirms,
+  `Esc` cancels. A destructive action is never one keystroke from a
+  focused row.
 - **Single-key shortcuts are suppressed whenever a text input holds
-  focus.**
+  focus.** Typing "axe" into a filter box must not approve, kill, and
+  open something.
 - **Pilot is exempt.** Once the terminal has focus, every keystroke
-  belongs to it. Only `Esc Esc` releases it.
+  belongs to the terminal. Only `Esc Esc` releases it.
 
-**Focus model.** Focused and selected are different states and coexist:
+### Focus model
+
+Focused and selected are different states and can coexist. A 1px ring
+around a full-width table row is nearly invisible, so the row does
+something stronger.
 
 ```
 focused row   2px --accent left edge bar + --bg-hover
@@ -424,9 +579,12 @@ focused ctrl  2px --accent ring at 2px offset, per the global focus rule
 ```
 
 Focus is visible at all times during keyboard navigation, not only on
-`:focus-visible` — if driving with `j`/`k`, the ring is the cursor.
+`:focus-visible` heuristics — if the person is driving with `j`/`k`, the
+ring is the cursor.
 
-**Command palette.** A floating layer:
+### Command palette
+
+A floating layer, so `--bg-overlay` and a shadow.
 
 ```
 surface    --bg-overlay · --border-default · --radius-lg · shadow
@@ -440,17 +598,27 @@ active row --bg-hover
 section    --text-2xs · --fg-subtle
 ```
 
-Top-anchored rather than centered because a centered dialog shifts as the
-result count changes, and a target that moves while you type is a target
-you misclick. Contents, in order: actions in context, navigation, jobs by
-id or name, settings. **The palette obeys the lexicon** — displayed labels
-always use the lexicon term (Kill, Drone, Convoy); the search index may
-carry aliases ("terminate" finds Kill) but the alias never renders. It is
-the discovery surface for forty shortcuts, which is why every entry
-displays its binding and no action may exist outside it.
+Top-anchored rather than centered because a centered dialog shifts
+vertically as the result count changes, and a target that moves while
+you type is a target you misclick.
 
-**`kbd`**, the one non-shadcn primitive, in palette rows, dropdown-menu
-items, and tooltips:
+**Contents, in order:** actions available on the current context,
+navigation, jobs by id or name, settings.
+
+**The palette obeys the lexicon.** Displayed labels always use the
+lexicon term — Kill, Drone, Convoy. The search index may carry aliases
+so that "terminate" finds Kill, but the alias never renders. This is
+where the lexicon earns its keep: one vocabulary, searchable, with the
+shortcut shown beside every entry.
+
+**The palette is the discovery surface.** It is how a person learns
+forty shortcuts without a cheat sheet, which is why every entry displays
+its binding and why no action may exist outside it.
+
+### kbd
+
+The one non-shadcn primitive. Used in palette rows, dropdown-menu items,
+and tooltips.
 
 ```
 surface  --bg-sunken · --border-subtle · --radius-sm
@@ -458,26 +626,44 @@ type     --text-2xs mono · --fg-muted
 size     20px height · 4px horizontal padding
 ```
 
-Never `--fg-default`, which would compete with the label. Tooltips and
-dropdown-menu items gain a trailing/right-aligned kbd where bound.
+Never `--fg-default` — a shortcut hint is reference material sitting
+beside the thing it describes, and rendering it at full contrast makes
+it compete with the label.
+
+### Consequences elsewhere in this document
+
+- **Tooltips gain a trailing kbd** where the action has a binding. The
+  400ms delay stands.
+- **Dropdown-menu items gain a right-aligned kbd.** Item height is
+  unchanged by it.
+- **The 48px sidebar rail is more usable than it looks**, because the
+  ⌘-digit bindings reach every surface without labels.
 
 ---
 
 ## Component → token mapping
 
-Without this section a design tool infers which token each primitive
-uses, differently every session. Anything not listed follows the same
-logic: surfaces from Ground, text from Foreground, interaction from
-Accent, status **only** from the status tokens.
+Tokens alone don't determine a screen. Without this section a design
+tool infers which token each primitive uses — plausibly, and differently
+every session, which is a slower version of the drift this contract
+exists to prevent. Below is the binding for the primitives a job list
+needs. Anything not listed follows the same logic: surfaces from Ground,
+text from Foreground, interaction from Accent, and status **only** from
+the status tokens.
 
-**Global.** Focus is a 2px `--accent` ring at 2px offset, no glow — it was
-a 1px `--border-strong` ring until a secondary button took
-`--border-strong` as its resting edge, making the two identical and
-rendering focus as nothing. Disabled is `--fg-subtle` text with hover
-suppressed, never reduced opacity, which muddies status colors. Every
-interactive element transitions on `--duration-fast`.
+**Global.** Focus is a 2px `--accent` ring at 2px offset, no glow. It
+was a 1px `--border-strong` ring; once a secondary button took
+`--border-strong` as its resting edge, the two were the same colour,
+width and position and focus rendered as nothing — a resting edge and a
+focus ring must differ on all three. Control focus now matches row
+focus, and the accent already carried the keyboard focus edge. Disabled
+is `--fg-subtle` text with hover suppressed — never reduced opacity,
+which muddies status colors. Every interactive element transitions on
+`--duration-fast`.
 
-**Table — the Job Board row**, the densest thing in the app:
+### Table — the Job Board row
+
+The densest thing in the app and the reason the spacing scale is tight.
 
 ```
 header row   32px · --bg-base · --text-2xs · --fg-subtle
@@ -493,17 +679,25 @@ metadata     --fg-subtle · --text-2xs   (timestamps, elapsed)
 mono cell    --text-xs mono              (job id, path, branch, duration, cost)
 ```
 
-No zebra striping — at 36px rows it reads as noise, and the row rule
-already separates. Status is a badge in its own column, never a
-row-background tint. **A machine value copies on click** — any mono value
-copies to clipboard and goes `--accent` on hover, with no `copy` glyph
-(the affordance token is the affordance). A toast confirms, since a
-clipboard write is silent by nature. A value that copies does not also
-get a button that copies it.
+No zebra striping. At 36px rows it reads as noise, and the row rule
+already separates. Status appears as a badge in its own column, never as
+a row-background tint — eight tinted rows in a list is unreadable, and
+the tint would fight `--accent-muted` on selection.
 
-**Badge — status**, the one place status tokens are used directly.
-`{state}` is the enum variant; the label comes from the enum→verb table,
-never hand-written:
+**A machine value copies on click.** Anything in mono — a job id, a
+path, a branch name, a command — copies to the clipboard when clicked
+and goes to `--accent` on hover. It carries no `copy` glyph: the
+affordance token is the affordance, and a 12px icon repeated down
+fourteen rows is the noise Iconography's default-to-no-icon rule exists
+to prevent. A toast confirms, because a clipboard write is silent by
+nature and a failed one is otherwise indistinguishable from a dead
+element. A value that copies does not also get a button that copies it.
+
+### Badge — status
+
+The one place status tokens are used directly. `{state}` is the enum
+variant, and the label comes from the enum→verb table in the Voice &
+Copy section, never hand-written.
 
 ```
 background  --status-{state}-bg   (12% opacity variant)
@@ -514,13 +708,16 @@ type        --text-2xs · weight 500 · sentence case
 icon        required, 12px lucide, strokeWidth 2, leading, inherits text color
 ```
 
-Every badge state carries an icon, so hue is never the only channel —
-full specification on [Iconography](iconography.md). 12px rather than
-11px: lucide draws on a 24px grid, so 12px is an exact half-scale and a
-stroke of 2 lands on exactly 1px; 11px scales to 0.917px and antialiases
-into fuzz.
+Icons are how the escalation sub-reasons and the `not_started` axis
+values differentiate, since they share one hue each. Every badge state
+carries an icon, so the column never reads as ragged and hue is never
+the only channel. Full specification on [Iconography](iconography.md).
 
-**Button:**
+12px rather than 11px is deliberate: lucide draws on a 24px grid, so
+12px is an exact half-scale and a stroke of 2 lands on exactly 1px. 11px
+scales to 0.917px and antialiases into fuzz on a dark ground.
+
+### Button
 
 | Variant | Rest | Hover | Use |
 | --- | --- | --- | --- |
@@ -535,12 +732,11 @@ padding  16px default · 8px sm
 type     --text-sm · weight 500 · --radius-md
 ```
 
-Destructive stays outlined: a solid red button reads as an error state
-rather than an action, and `--status-completed-failed` is already spoken
-for as a status. Kill is deliberate, not alarming.
+Destructive stays outlined because a solid red button reads as an error
+state rather than an action, and `--status-completed-failed` is already
+spoken for as a *status*. Kill is deliberate, not alarming.
 
-**Input** (select, checkbox, radio, switch inherit border/focus/height;
-switch uses `--accent` when on, `--border-strong` when off):
+### Input
 
 ```
 background  --bg-sunken        (recessed, opposite of raised)
@@ -551,8 +747,14 @@ invalid     --status-completed-failed border, message below in --text-xs
 height      36px · 8px horizontal padding · --radius-md · --text-sm
 ```
 
-**Dropdown menu**, a floating layer (`--bg-overlay`, one place a shadow is
-legal; sheet and dialog share this treatment at `--radius-lg`):
+Select, checkbox, radio, and switch inherit the same border, focus, and
+height rules. Switch uses `--accent` when on, `--border-strong` when
+off.
+
+### Dropdown menu
+
+A floating layer, so it takes `--bg-overlay` and is the one place a
+shadow is legal.
 
 ```
 surface    --bg-overlay · --border-default · --radius-lg · shadow
@@ -563,7 +765,9 @@ separator  --border-subtle
 label      --text-2xs · --fg-subtle
 ```
 
-**Tooltip:**
+Sheet and dialog use the same surface treatment at `--radius-lg`.
+
+### Tooltip
 
 ```
 surface  --bg-overlay · --border-subtle · --radius-sm · shadow
@@ -571,12 +775,14 @@ type     --text-xs · --fg-default · 8px / 4px padding
 timing   400ms delay in, --duration-fast
 ```
 
-Carries the full value of anything truncated in a row, never an
-explanation the row should have made plain, per the briefing-register
-rule.
+Tooltips carry the full value of anything truncated in a row — a path,
+a branch name, a full timestamp. They never carry an explanation the
+row should have made plain, per the briefing-register rule.
 
-**Status bar**, present on every surface, a primitive rather than a
-screen element:
+### Status bar
+
+Present on every surface, so it is a primitive rather than a screen
+element.
 
 ```
 height     32px · --bg-raised · top rule --border-subtle
@@ -587,12 +793,15 @@ escalation count  --status-escalated, shown only when non-zero
 approval count    --status-awaiting-review, shown only when non-zero
 ```
 
-The two counts are the only status color in the bar; everything else
-stays `--fg-muted`. **Fleet's state is one of three, and the bar names
-which** — a leading 6px dot carries the hue, the one exception to the
-rule above, on the same grounds Doctor's pass/warn/fail reuse the Job
-values. It is not a glyph, so "the status bar carries no icons" is
-unaffected.
+The two counts are the only status color in the bar. Everything else
+stays `--fg-muted`, or the bar becomes a second alert surface and the
+escalations-interrupt / approvals-queue distinction collapses.
+
+**Fleet's state is one of three, and the bar names which.** A leading
+6px dot carries the hue — the one exception to the rule above, on the
+same grounds Doctor's pass, warn and fail reuse the Job values rather
+than inventing a third set. It is not a glyph, so "the status bar
+carries no icons" is unaffected.
 
 ```
 running       --status-completed-success dot
@@ -605,10 +814,27 @@ unreachable   --status-awaiting-review dot
               plus how stale the last read is
 ```
 
-The two failure states differ on the runtime file: Fleet writes port, pid
-and protocol version on startup and removes them on a clean exit, so a
-missing file means Fleet is not there and a live pid with no answer means
-Fleet is wedged.
+The two failure states differ on the runtime file, which is the fact
+that separates them: Fleet writes port, pid and protocol version on
+startup and removes them on a clean exit, so a missing file is a Fleet
+that is not there and a live pid with no answer is a Fleet that is
+wedged. Two different things to do about it, so two sentences rather
+than one timeout message.
+
+### Closed
+
+- **~~Icon set for the escalation sub-reasons and the `not_started` axis
+  values.~~** **Closed.** Specified in full on
+  [Iconography](iconography.md) — every badge state, navigation,
+  actions, Doctor, and the rule for anything unlisted. lucide-react
+  confirmed against Phosphor, Tabler, Radix and Heroicons; hard rule 5
+  stands. The enum→verb test asserts an icon entry in the same pass.
+- **~~Window and layout model~~** **Closed.** Specified in full under
+  Window and layout model above — frameless `hiddenInset` chrome,
+  collapsible/resizable sidebar with Bridge and Helm as two levels,
+  full-width routes with no inspector, bottom-fixed full-width status
+  bar, 768px floor with a single ~1100px breakpoint. Delivered as one
+  responsive prototype rather than per-width comps.
 
 ---
 
@@ -617,67 +843,91 @@ Fleet is wedged.
 ### Typography of reference — applies to docs, not just UI
 
 Unlike the rest of this section, these rules govern **internal
-documentation and planning pages as well as product copy**, since docs
-leak into the product.
+documentation and planning pages as well as product copy**. They exist
+because the docs are read constantly and their conventions leak into the
+product.
 
-- **Never use `§`.** Write "M0 step 4," not "M0 §4." Same reasoning bans
-  `¶`, `cf.`, `ibid.`, `op. cit.`, `viz.`, `q.v.` — write "see," "compare,"
-  or "same source." `e.g.` and `i.e.` are fine.
+- **Never use `§`.** Write "M0 step 4," not "M0 §4." The section sign is
+  legal-brief and academic-citation typography; it reads as affectation
+  in a working document and nobody says it out loud. "Step" is one
+  syllable longer and infinitely more readable.
+- Same reasoning bans `¶`, `cf.`, `ibid.`, `op. cit.`, `viz.`, and
+  `q.v.` Write "see," "compare," or "same source."
+- `e.g.` and `i.e.` are fine — they are common enough to have stopped
+  reading as Latin.
 
-**Citing v1 code.** A bare file path on any Armada document refers to
-**v1**, resolving against branch `v1-archive` / tag `v1-final` — but
-Ground Zero step 1, which orphans `main`, has not run yet, so neither
-exists in the clone. Until it runs, a v1 citation should carry a commit
-hash rather than a line number; after it runs, a hash cited today still
-resolves from `v1-archive`.
+**Citing v1 code.** A bare file path on any Armada page refers to
+**v1**. The convention is that such paths resolve against branch
+`v1-archive` / tag `v1-final` and never `main`, because Ground Zero step
+1 orphans `main` — but **that step has not run**, so neither the branch
+nor the tag exists in the clone. Verified when the v1 port-allocation
+extraction found the files present on `main` and cited a commit hash
+instead.
+
+So, until it runs: v1 paths resolve against `main`, and **a citation
+should carry a commit hash**, because line numbers on a live branch are
+not stable. After it runs: the convention applies as written and
+existing citations need re-anchoring — a commit hash cited today still
+resolves from `v1-archive`, so nothing is lost by citing one now. Line
+numbers stay accurate against `v1-final` once it exists, because a tag
+is frozen.
 
 Approval prompts, status reasons and escalation messages are what you
-read at 11pm deciding whether to kill a drone — the rules below apply to
-product copy, not internal documentation.
+read at 11pm deciding whether to kill a drone. These rules apply to
+product copy, not to internal documentation.
 
-**Scope split.** This contract governs static UI chrome, not
+**Scope split.** This contract governs static UI chrome, which is not
 configurable. The Machine-level **Voice** setting tunes runtime-generated
 prose (Judge summaries, Helm replies, job summaries) within this
-contract — it may adjust length and formality, never override principles,
-lexicon or status grammar. "Terse" and "explanatory" are legal Voice
-values; "playful" is not.
+contract. It may adjust length and formality. It may not override the
+principles, the lexicon or the status grammar. "Terse" and "explanatory"
+are legal Voice values. "Playful" is not.
 
 ### Principles
 
 **P1. Metaphor lives in proper nouns only.** Nautical vocabulary is
 confined to names: Armada, Fleet, Bridge, Helm, Drone, Manifest, Convoy,
-Job Board. Every verb, state, error and instruction is plain English.
-Write "Drone 4 stopped reporting 12 minutes ago", not "Drone 4 has gone
-dark". Pilot is a proper noun; "take the wheel" is not a verb Armada uses.
+Job Board. Kit and Machine are lexicon terms but carry no metaphor —
+they say what they are. Every verb, state, error and instruction is
+plain English. Write "Drone 4 stopped reporting 12 minutes ago", not
+"Drone 4 has gone dark". Pilot is a proper noun; "take the wheel" is not
+a verb Armada uses.
 
 **P2. Briefing register.** A message carries the facts needed to decide,
-on screen, without a click: "Drone 4 stopped reporting 12 minutes ago
-after 3 pokes. Step 2 of 5, last wrote `auth/session.rs`" — not "Drone 4
-stopped reporting. Poke limit reached."
+on screen, without a click. Weak: "Drone 4 stopped reporting. Poke limit
+reached." Correct: "Drone 4 stopped reporting 12 minutes ago after 3
+pokes. Step 2 of 5, last wrote `auth/session.rs`."
 
 **P3. First person is Helm's alone.** Bridge and Fleet never say "I".
-Helm says "I" only for what Helm itself did; reporting a Fleet event, it
-uses Bridge's impersonal phrasing.
+Helm says "I" only for what Helm itself did. Reporting a Fleet event,
+Helm uses the same impersonal phrasing Bridge does.
 
-**P4. Hedge by source.** Three source classes, three registers:
-**Measured** speaks flatly ("Tests passed."). **Estimated** is marked
-approximate (`~$2.40`, never `$2.40` — a derived figure is not a measured
-one). **Judged** is visibly a judgment and names its source ("Judge read
-the evidence as not covering the error path."). Render any two identically
-and one bad value teaches distrust of the other two.
+**P4. Hedge by source.** Three source classes, three registers.
 
-**P5. Event-first, with cause.** The subject of a failure sentence is the
-job or step, never the drone: "Step 3 did not advance. No evidence after
-3 clarification rounds", not "Drone 4 failed to submit evidence". Known
-causes state flatly; hypothesised causes hedge and name their source, and
-only Judge and Helm may produce them.
+- **Measured** speaks flatly. "Tests passed." "`pnpm test` exited 1 on 4
+  assertions."
+- **Estimated** is marked as approximate. `~$2.40`, never `$2.40`. A
+  derived figure is not a measured one, and rendering it with the
+  authority of an exit code trains you to act on a number that may be
+  wrong.
+- **Judged** is visibly a judgment and names its source. "Judge read the
+  evidence as not covering the error path."
+
+Render any two of these identically and one bad value teaches distrust
+of the other two.
+
+**P5. Event-first, with cause.** The subject of a failure sentence is
+the job or step, never the drone. Write "Step 3 did not advance. No
+evidence after 3 clarification rounds", not "Drone 4 failed to submit
+evidence". Known causes state flatly. Hypothesised causes hedge and name
+their source, and only Judge and Helm may produce them.
 
 **P6. Fixed copy is a template; generated copy is a substance
-requirement.** Fleet's own strings are identical every time, since
-uniformity is scannability. Generated text is specified by what it must
-contain, never by what shape it takes — a structural rule produces twenty
-interchangeable paragraphs. A summary that would read plausibly under a
-different job has failed.
+requirement.** Fleet's own strings should be identical every time,
+because uniformity is scannability. Generated text is specified by what
+it must contain, never by what shape it takes, because a structural
+rule produces twenty interchangeable paragraphs. A summary that would
+read plausibly under a different job has failed.
 
 ### Prose rules
 
@@ -686,56 +936,62 @@ different job has failed.
   keep their capitals inside sentence case.
 - **Name things by what the person controls.** "Approve dispatch", not
   "Submit job payload".
-- **No mid-sentence asides.** Targets the reflex, not the character —
-  banning the em dash breeds a colon and banning the colon breeds a
-  trailing negation. A colon separating a field from its value stays
-  legal: "Step 3 stalled: no evidence after 3 rounds."
+- **No mid-sentence asides.** The rule targets the reflex rather than
+  the character, because banning the em dash breeds a colon and banning
+  the colon breeds a trailing negation. A colon separating a field from
+  its value stays legal: "Step 3 stalled: no evidence after 3 rounds."
 - **No adverbs by default.** "Successfully completed" is "Completed".
   "Currently running" is "Running".
-- **No Wh- sentence openers.** They survive as panel headings: "Why this
-  stalled", "What ran", "What changed".
-- **No sentence that survives deletion without loss.**
-- **Errors say what happened and what to do.** Never apologise, never be
-  vague.
-- **An action keeps its name through the flow.** A button that says Kill
-  produces "Killed". The verb table enforces this.
+- **No Wh- sentence openers.** They survive as panel headings: "Why
+  this stalled", "What ran", "What changed".
+- **No sentence that survives deletion without loss.** Remove it and
+  see whether anything was lost.
+- **Errors say what happened and what to do.** Never apologise, never
+  be vague.
+- **An action keeps its name through the flow.** A button that says
+  Kill produces "Killed". The verb table below enforces this.
 
 ### Lexicon
 
 - **Armada** the app. Never the tool, the system.
 - **Fleet** the daemon. Never the backend, the server, the sidecar.
 - **Bridge** the operational surfaces. Never the dashboard, the UI.
-- **Helm** the conversational surface and its agent. Never the assistant,
-  the chat.
-- **Drone** one agent instance. Never the agent, the bot, the AI, Claude.
+- **Helm** the conversational surface and its agent. Never the
+  assistant, the chat.
+- **Drone** one agent instance. Never the agent, the bot, the AI,
+  Claude.
 - **Job** one unit of work. Never task, run, ticket.
-- **Convoy** a multi-workspace job landing as one PR. Never batch, group.
+- **Convoy** a multi-workspace job landing as one PR. Never batch,
+  group.
 - **Job Board** the open queue. Never the queue, the backlog.
-- **Job proposer** the model call that reads a request and proposes a
-  Job: its workflow, its scope, and where the work is several Jobs, the
-  graph. Lowercase, a call rather than a component. Never the classifier,
-  the Job-shape classifier, the shape classifier. What it produces is a
-  **Job proposal**, which the dispatch gate approves.
-- **Kit** the tool set you bring — Skills, MCP, sub agents, Agent files,
-  Plugins, Commands, the allowlist, the models list. Never global
-  settings, preferences. Replaces Guild, retired Aug 2026.
-- **Machine** how this installation behaves — resources, timing, budget,
-  interface, notification routing. Never system settings, environment.
+- **Job proposer** the model call that reads a request — a prompt, a
+  ticket link — and proposes a Job: its workflow, its scope, and where
+  the work is several Jobs, the graph. Lowercase, because it is a call
+  rather than a component. Never the classifier, the Job-shape
+  classifier, the shape classifier. What it produces is a **Job
+  proposal**, and that is what the dispatch gate approves.
+- **Kit** the tool set you bring — Skills, MCP, sub agents, Agent
+  files, Plugins, Commands, the allowlist, the models list. Never
+  global settings, preferences. Replaces Guild, retired Aug 2026.
+- **Machine** how this installation behaves — resources, timing,
+  budget, interface, notification routing. Never system settings,
+  environment.
 - **Manifest** per-project config. Never the config, the yaml.
 - **Judge** the semantic verification layer. Never the auditor, the
   reviewer, AI review.
 - **Evidence** the structured completion report. Never the report,
   output, proof.
 - **Doctor** the health check. Never diagnostics, system status.
-- **Workspace** one unit inside a repo. Never package, module, sub-repo.
+- **Workspace** one unit inside a repo. Never package, module,
+  sub-repo.
 - **Drone transcript** the record of a Drone's turns. Never the Drone
   log, the Drone output.
 - **Judge record** one Judge call and every judge's verdict inside it.
-  Never a transcript — a Judge call is one-shot, and the Judge never reads
-  the Drone's transcript, which is the isolation that makes its verdict
-  worth anything.
-- **Check log** what a Check wrote to stdout and stderr. Never the Check
-  output, the Check results.
+  Never a transcript — a Judge call is one-shot, and the Judge never
+  reads the Drone's transcript, which is the isolation that makes its
+  verdict worth anything.
+- **Check log** what a Check wrote to stdout and stderr. Never the
+  Check output, the Check results.
 
 **Claude is a model name, never an actor.** Write "Drone 4 stalled", not
 "Claude stalled". The word appears only where a model is selected or
@@ -743,153 +999,245 @@ reported.
 
 ### Retired terms
 
-A document still carrying one of these is stale, not merely old-fashioned.
+These were in use and are not any more. A page still carrying one is
+stale, not merely old-fashioned. Search for them when cleaning up a
+page.
 
 | Retired | Now | Note |
 | --- | --- | --- |
-| Guild | **Kit** and **Machine** | A split, not a rename |
+| Guild | **Kit** and **Machine** | A split, not a rename. Tools and the allowlist became Kit; resources, timing, budget, interface and notification routing became Machine. Each site needs judgment about which one it was |
 | Armada Server | **Armada API** | Named for the `api` crate |
-| Job-shape classifier | **Job proposer** | Neither half of the old name survived |
-| Daemon | **Fleet** | A redundant second name for the same process |
+| Job-shape classifier | **Job proposer** | It stopped classifying a shape when shape became derived, and stopped only stating scope when workflow selection joined it. Neither half of the old name survived, and both halves misled — the second reading hid the fact that nothing chose a Job's workflow at all. A page still calling it a classifier is describing a narrower call than the one that exists |
+| Daemon | **Fleet** | Dropped as a redundant second name for the same process |
 | Ground Zero | **M0 — Foundations** | Archived with the phase plan |
-| Phase 0–6, numbered steps | **Milestones** and their **Steps** | Reference only; Steps are disposable |
+| Phase 0 through Phase 6, and numbered implementation steps | **Milestones** and their **Steps** | The nine-phase plan and its ~110 Steps live under "Archive — v2 phase plan" and are reference only. Milestone Steps are disposable and discarded when the milestone is met |
 
-**Casing.** Docs capitalise throughout. UI capitalises the singular named
-things (Armada, Fleet, Bridge, Helm, Doctor, Judge, Kit, Machine, Job
-Board) and lowercases anything countable (job, drone, convoy, manifest,
-workspace, evidence, workflow): "No active jobs. 3 waiting on the Job
-Board."
+**Casing.** Docs capitalise throughout. UI capitalises the singular
+named things (Armada, Fleet, Bridge, Helm, Doctor, Judge, Kit, Machine,
+Job Board) and lowercases anything countable (job, drone, convoy,
+manifest, workspace, evidence, workflow). So: "No active jobs. 3 waiting
+on the Job Board."
 
 ### Status grammar
 
 **Shape: headline plus fields.** A headline sentence, facts as labelled
-fields beneath, machine-derived fields in mono:
+fields beneath. Machine-derived fields render in mono, per the
+typography rule above.
 
 > **Job 12 stalled at step 3**
 > Workspace `api` · 3 pokes · `auth/session.rs` · 12m · ~$1.80
 
 **Verbs are generated from the enum, never written.** `stalled` always
-renders "stalled". For `escalated` and `queued`, the headline verb is the
-reason rather than the state — nobody says "Job 12 escalated at step 3".
-**`queued` takes its reason's verb where one is set**; with none it reads
-queued. A Job out of headroom reads "waiting on resources" rather than
-falling through unrendered, which is what the old two-axis field did.
+renders "stalled", never "went quiet". For `escalated` and `queued`, the
+headline verb is the reason rather than the state, because nobody says
+"Job 12 escalated at step 3". This supplies the labels the token
+section relies on to differentiate escalation reasons and `queued`'s
+reasons by label rather than hue.
 
-**The map is a database, not a table restated here.** Every vocabulary the
-UI renders is one row per variant, grouped by axis, carrying the verb
-alongside the glyph and hue it owes. A row with an empty verb is a variant
-with no sanctioned copy, which is what the test fails on.
+**`queued` takes its reason's verb where one is set.** With no reason it
+reads queued; with one set, the reason supplies the headline and the
+glyph. A Job out of headroom therefore reads "waiting on resources"
+rather than falling through unrendered, which is what the old two-axis
+field did.
 
-**The plain label is what a queue row shows; the raw enum is recoverable,
-never primary.** A row in Alerts carries the verb and nothing else. The
-enum sits back in the **detail view header**, so an engineer can grep
-Fleet's logs with the exact string without the queue reading like a stack
-trace — matters most for `fan_out` and `evidence_suspect`, whose plain
-forms are not guessable back to the enum.
+**The map is a database, not a table on this page.** Every vocabulary
+the UI renders is one row per variant, grouped by axis, carrying the
+verb alongside the glyph and the hue that variant owes. A row with an
+empty verb is a variant with no sanctioned copy, which is what the test
+fails on. Pages needing the labels embed a filtered view; none of them
+restates a verb. The map itself lives in the Armada Enum Verbs database.
 
-`silent` takes no verb of its own — a sub-kind of `stalled`, rendering as
-**stalled**; the difference is only in the suggested action. `thrashing`
-renders as **churning** (busy-but-going-nowhere, since `stalled` owns
-silent). `evidence_suspect` renders as **evidence disputed**, with Judge
-in the source field, keeping attribution out of the headline per P5.
+**The plain label is what a queue row shows. The raw enum is
+recoverable, never primary.** A row in Alerts carries the verb and
+nothing else, matching the voice contract. The enum sits set back in
+the **detail view header**, so an engineer can grep Fleet's logs with
+the exact string without the queue reading like a stack trace. This
+matters most for `fan_out` and `evidence_suspect`, whose plain forms are
+not guessable back to the enum; the triggers named for their condition
+are near-identity and lose little either way.
 
-**Verdict vocabularies are not Job states and sit on their own axes.**
-Step verdict is `workflow_status.last_step_verdict`; a criterion verdict
-lives per criterion inside the Judge record, reading differently by
-verification source — P4's hedging device at its smallest scale. **"No
-objection" rather than "accepted", and the step rather than the Judge** —
-the Judge declines to refuse, it never grants: "Step 3 of 5 verified",
-not "Judge passed". **A criterion attested by a person takes neither
-vocabulary above** — Source Attestation reads **confirmed** ·
-**withheld**, since a person may grant and the Judge may only decline to
-refuse. **Withheld**, not failed or refused: a person who looked and
+`silent` takes no verb of its own. It is a sub-kind of `stalled` and
+renders as **stalled** — the difference is entirely in the suggested
+action on the payload, which is rephrase and redispatch rather than
+plain redispatch. A badge that distinguished them would imply the Job
+behaves differently, and it does not.
+
+`thrashing` renders as **churning**. The enum name is OS jargon, and
+the distinction that has to survive is busy-but-going-nowhere against
+silent, since `stalled` owns silent. `evidence_suspect` renders as
+**evidence disputed**, with Judge in the source field, which keeps
+attribution out of the headline so P5 holds. Avoid "Judge rejected the
+evidence", since `rejected` is already a job state.
+
+The enum-to-verb map is one artifact with a test asserting every
+variant has an entry, so a new reason cannot ship with no copy. Same
+codegen intent already noted for the status tokens.
+
+**The verdict vocabularies are not Job states and sit on their own
+axes**, which is why they group separately above rather than joining
+the status list. Step verdict is `workflow_status.last_step_verdict`; a
+criterion verdict lives per criterion inside the Judge record and reads
+differently by verification source, which is the P4 hedging device
+working at the smallest scale it has.
+
+**"No objection" rather than "accepted", and the step rather than the
+Judge.** The Judge declines to refuse; it never grants. A pass headline
+names the step — "Step 3 of 5 verified" — so attribution stays out of
+the headline and the reader knows where they are in the workflow. Avoid
+"Judge passed", which breaks both rules at once.
+
+**A criterion attested by a person takes neither vocabulary above.**
+Source Attestation reads **confirmed** · **withheld**. Affirmative where
+the Judge's vocabulary is not, because a person may grant and the Judge
+may only decline to refuse — the three registers are measured, hedged
+and vouched, and the words have to carry that before the source field
+is read. **Withheld**, not failed or refused: a person who looked and
 would not put their name to it has done something neither other source
 can do.
 
+All of these belong in the same one-artifact-one-test map as the Job
+states.
+
 **Icons.** The token section differentiates escalation and `not_started`
-values by label and icon; the verb table supplies the labels, and the
-icons — across every badge state — are specified on
-[Iconography](iconography.md). That document supersedes the ten-row table
-this section used to carry: `stalled` moved off `hourglass` (read as be
-patient for the state that most needs to read as wrong, now banned
-outright); `blocked_by_dependency` moved off `lock` (claims a permissions
-problem that does not exist); `fan_out` moved off `git-fork` (loses its
-nodes at 12px); the six base states gained icons they previously lacked.
+values by label and icon. The verb table supplies the labels. The
+icons, across every badge state rather than only these, are specified
+on [Iconography](iconography.md) along with navigation, actions, and
+the rule for anything unlisted. lucide-react only, per hard rule 5.
+
+That document supersedes the ten-row table this section used to carry.
+Four entries changed: `stalled` moved off `hourglass`, which read as be
+patient for the state that most needs to read as wrong and is now
+banned outright; `blocked_by_dependency` moved off `lock`, which claims
+a permissions problem that does not exist; `fan_out` moved off
+`git-fork`, which loses its nodes at 12px; and the six base states
+gained icons they previously lacked.
 
 **Fields: universal in lists, per-state in detail.** The universal row
 carries job identity, workspace (or "convoy, 3"), state, step N of M,
-elapsed, spend so far, verification source, actor. **Spend follows the
-active billing mode.** Personal-machine mode gates on
-quota %, provider-reported and measured. Work-machine mode gates on $
-cost, marked approximate (`~$2.40`) until v1's figures are validated
-against actuals — the visible number is always the gating number. A Judge
-call's spend takes its own line in the same active mode, since priced in
-dollars on a quota-gated machine it would be a permanently visible
-non-gating figure. Spend stays in the row rather than the detail view,
-since it lost the headline at the approval gate on the promise that it is
-always visible. **The spend column is sized for both modes**, since `68%
-quota` and `~$2.40 of $20` are very different widths — a design session
-must size for the wider and confirm the row survives both, and the same
-applies to the status bar's trailing segment.
+elapsed, spend so far, verification source, actor. The detail view
+expands per state and shows only what applies.
+
+**Spend follows the active billing mode.** Personal-machine mode gates
+on the quota % floor, so the row shows quota % remaining, which is
+provider-reported and therefore measured. Work-machine mode gates on
+the $ cost cap, so the row shows dollars, marked approximate (`~$2.40`)
+until v1's figures are validated against actuals. The visible number is
+always the number that gates dispatch. A permanently visible figure
+that is not the gating figure is its own failure.
+
+**Verification spend takes its own line, in the active mode.** A Judge
+call is Job spend and renders like every other spend figure — quota on
+a personal machine, dollars on a work machine. A Judge call priced in
+dollars on a machine that gates on quota is a permanently visible
+non-gating number, which the rule above forbids.
+
+Spend stays in the row rather than moving to the detail view. It lost
+the headline at the approval gate on the promise that it is always
+visible, and removing it from the row breaks that trade.
+
+**Layout consequence — the spend column is sized for both modes, not
+one.** The two billing modes produce strings of very different width
+and shape: `68% quota` against `~$2.40 of $20`. A design session must
+size this column for the wider of the two and confirm the row survives
+both, rather than fitting it to whichever example appears first in this
+document. The same applies to the status bar's trailing segment.
+Neither mode is the default — which one renders depends on the machine,
+and both are first-class.
 
 **Repetition.** A second stall at step 3 reads "stalled at step 3, 2nd
-time", and the detail view surfaces the prior attempt. Presentation only
-for now — recurrence changing behaviour is a separate decision.
+time", and the detail view surfaces the prior attempt. Presentation
+only for now. Recurrence changing behaviour is a separate decision.
 
 ### Register by surface
 
 **Approval gates** stay descriptive: what the job is, which workspaces,
-which workflow, going consequence-forward on blast radius alone — a
-Convoy, auto-merge on, a job touching root `armada.yml`, or a pre-approved
-batch. Cost never triggers it.
+which workflow. They go consequence-forward on blast radius alone,
+meaning a Convoy, auto-merge on, a job touching root `armada.yml`, or a
+pre-approved batch. Cost never triggers it.
 
-**Push alerts** carry facts rather than a ping: "Drone 4 stalled on step 2
-of 5, `auth/session.rs`, 12 min." Kill and Redirect are not notification
-actions.
+**Push alerts** carry facts rather than a ping. "Drone 4 stalled on
+step 2 of 5, `auth/session.rs`, 12 min." Kill and Redirect are not
+notification actions. When the line is cut, identity and verb survive,
+then location, then elapsed.
 
-**Empty states** point at available work: "No active jobs. 3 waiting on
-the Job Board."
+**Empty states** point at available work. "No active jobs. 3 waiting on
+the Job Board." An empty screen is where you have the least
+information, so the one line goes to orientation.
 
-**Helm** answers, then may add a single observation, only after actually
-looking, always flagged as its own inference. No throat-clearing openers.
+**Helm** answers, then may add a single observation, only after
+actually looking, always flagged as its own inference. No
+throat-clearing openers.
 
-**Confirmations** appear on everything destructive: "Kill the drone on
-job 12? Step 3 of 5, 14 minutes in. Evidence carries forward if you
-redispatch." Pilot has no confirmations. **Not configurable** — the Kit →
+**Confirmations** appear on everything destructive and state what
+happens and what survives. "Kill the drone on job 12? Step 3 of 5, 14
+minutes in. Evidence carries forward if you redispatch." Action buttons
+name the action. Pilot has no confirmations, since your hands are
+already on the terminal.
+
+**Not configurable.** Bridge confirmations always appear. The Kit →
 Manifest "destructive-op list" setting governs Drone-initiated
 operations only, not your own clicks.
 
 ### Behaviour rules that shape copy
 
-**Collapsed when healthy, expanded when not.** Collapse the detail, never
-the assertion — a healthy state says "Fleet running" out loud.
+**Collapsed when healthy, expanded when not.** Detail appears in
+proportion to what is wrong. Collapse the detail, never the assertion:
+a healthy state says "Fleet running" out loud, because an empty bar
+reads the same whether Fleet is healthy, loading or dead, and Fleet
+outlives Bridge.
 
 **Escalations interrupt, approvals queue.** Escalations cost money in
-real time; approvals cost latency, so escalations reach your phone and
-approvals never do. **Routing config is bounded by this rule:** the
-loudness order is silent < in-app < OS notification < push. Routing may
-move an event type *down* that order, never up, and an approval may never
-be promoted to push — a product rule about what these events mean, not a
-config-tier rule (notification routing is a Machine setting with one
-value and no merge). It holds because if approvals could reach push, the
-escalation signal stops being trusted.
+real time. Approvals cost latency. Push inherits this, so escalations
+reach your phone and approvals never do.
 
-**Status bar**, present on every surface including Helm: "Fleet running"
-when idle; "Fleet running · 3 jobs · 68% quota left" (personal machine) or
-"Fleet running · 3 jobs · ~$2.40 of $20" (work machine) when working.
-Escalation and approval counts appear only when non-zero. Five items is
+**Routing config is bounded by this rule.** The loudness order is
+silent < in-app < OS notification < push. Routing may move an event
+type *down* that order, never up, and **an approval may never be
+promoted to push.**
+
+**This one is a contract rather than a preference, and it is the only
+"you may not" left in configuration.** It holds because the two event
+classes mean different things. An escalation means work has stopped and
+nothing progresses until a person looks. An approval means work is
+waiting to start and will keep. If approvals could reach push, the
+distinction collapses and the escalation signal stops being trusted —
+which is what the status bar's two counts and the push-alert design
+both rest on. It is a product rule about what these events mean, not a
+config-tier rule: notification routing is a Machine setting with one
+value and no merge, so no Manifest is party to it.
+
+**Status bar**, present on every surface including Helm. "Fleet
+running" when idle. "Fleet running · 3 jobs · 68% quota left" when
+working on a personal machine, or "Fleet running · 3 jobs · ~$2.40 of
+$20" on a work machine. It expands when something is wrong, and
+escalation and approval counts appear only when non-zero. Five items is
 the ceiling.
 
-**Two separate fields, not one.** **Verification source** is the P4
-hedging device — closed vocabulary of three: **Check**, **Judge**,
-**Attestation**. Only a human may set Attestation, never a Drone, Helm,
-or Judge; a Job carrying an attested criterion must not render
-identically to one mechanically verified. **Actor** is audit attribution:
-**human**, **Helm**, **Drone**, **Fleet**. They are orthogonal — a manual
-change during Pilot is actor=human with no verification source; an
-allowlist denial is actor=Fleet with no verification source, since Fleet
-blocking an operation is not a verification result; a failed gate is
-verification source=Check with actor=Drone.
+**Two separate fields, not one.** These do different jobs and a reader
+should not have to guess which.
 
-Open items for this document are tracked in Notion's Open Items database
-and are not reproduced here.
+- **Verification source** is the P4 hedging device and nothing else.
+  Closed vocabulary of three: **Check**, **Judge**, **Attestation**.
+  Only a human may set Attestation — never a Drone, never Helm, never a
+  Judge — and a Job carrying an attested criterion must not render
+  identically to one where everything was mechanically verified. It
+  answers how far to trust a result. **Attestation names the record
+  rather than a verifier**, because there is no third verifier: Check
+  and Judge are things Armada runs, and this is what a person leaves
+  behind.
+- **Actor** is audit attribution, and the field the three-way
+  separation depends on. Vocabulary: **human**, **Helm**, **Drone**,
+  **Fleet**. It answers who did this.
+
+They are orthogonal, and events may carry one, both or neither. A
+manual change during Pilot is actor=human with no verification source.
+An allowlist denial is actor=Fleet with no verification source, since
+Fleet blocking an operation is not a verification result. A failed gate
+is verification source=Check with actor=Drone.
+
+---
+
+## Open questions
+
+Tracked in the Armada Decisions database, filtered to this document, and
+not reproduced here.

@@ -104,8 +104,18 @@ pub fn every_document_is_indexed(root: &Path) -> Report {
     for line in index.lines() {
         for token in line.split(|c: char| c.is_whitespace() || "()[]<>,;\"'`".contains(c)) {
             let token = token.trim_start_matches("./");
-            if token.ends_with(".md") && token != "INDEX.md" && !docs.join(token).is_file() {
-                report.fail(format!("docs/INDEX.md names {token}, which is not under docs/"));
+            // A named document resolves under docs/ or at the repo root —
+            // the index legitimately points at ARCHITECTURE.md and README.md,
+            // and refusing that would push the index into naming them
+            // vaguely rather than by their filename.
+            if token.ends_with(".md")
+                && token != "INDEX.md"
+                && !docs.join(token).is_file()
+                && !root.join(token).is_file()
+            {
+                report.fail(format!(
+                    "docs/INDEX.md names {token}, which is neither under docs/ nor at the root"
+                ));
             }
         }
     }

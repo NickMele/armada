@@ -119,8 +119,8 @@ status earns an icon on those grounds before consistency is considered.
 
 This does not contradict *used sparingly*. The badges are one column
 carrying a fixed 16px prefix, not scattered decoration. Sparingly is
-enforced everywhere else on this page, including several places where the
-answer is no icon at all.
+enforced everywhere else in this document, including several places where
+the answer is no icon at all.
 
 **Label-only was considered and rejected.** The labels are indeed
 distinguishable as text, but that is an argument that the icon is not doing
