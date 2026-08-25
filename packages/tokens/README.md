@@ -22,6 +22,17 @@ cargo xtask verify-tokens          # fails if a generated file is stale or hand-
 cargo xtask verify-tokens --write  # the only way to change one
 ```
 
+## Refetching from the design project
+
+Read the files straight out of the Armada Mockups design project with the
+`DesignSync` MCP (`list_files`, then `get_file` per path) and write them here.
+The signed download URLs a handover script carries expire about an hour after
+they are minted, so a script that worked yesterday deletes the local copy and
+then 404s. That happened twice. The MCP has no expiry.
+
+Check every file, not only the one you were told changed — a half-refetched
+set is a mixed vintage, and nothing downstream can tell.
+
 Adding a token file means adding an `@import` to `styles.css` **and**
 classifying it in `xtask/src/tokens.rs`. An unclassified file, or a token whose
 name matches no entry in the theme table, fails the check rather than being

@@ -70,12 +70,20 @@
   --status-rejected: #B489DA;           /* you declined it */
   --status-killed: #9BA3AC;             /* you stopped it */
 
-  /* Accessibility pass, 2026-08-20: every status colour reaches at least
-     4.5:1 as 12px badge text on its own 12% tint over --bg-raised, and
-     --fg-subtle reaches 4.58:1 on the lightest ground. not_started at 4.38:1
-     on --bg-overlay is the single remaining shortfall (badges on floating
-     layers only). Hue and semantic assignment are unchanged — the values were
-     lifted in lightness, never reassigned. */
+  /* Accessibility, re-measured 2026-08-25 after six statuses gained
+     declarations. Every status reaches at least 4.5:1 as badge text on its own
+     12% tint, on every ground, with one exception: not_started on --bg-overlay
+     is 4.39:1, and superseded shares it by aliasing not_started. Badges on
+     floating layers only. The range runs from there to awaiting_review's
+     5.99:1, which its three aliases inherit.
+
+     --fg-subtle is 4.58:1 on --bg-overlay, the lightest ground. --accent is
+     5.37:1 there and --fg-inverse is 6.35:1 on --accent, so a filled primary
+     holds.
+
+     The 20 Aug lift raised values in lightness and never reassigned a hue.
+     Note it also separated --status-not-started from --fg-subtle, which had
+     been identical: they are now #8C97A6 and #7E8CA0. */
 
   /* 12% fills for badges and row tints */
   --status-not-started-bg: color-mix(in srgb, var(--status-not-started) 12%, transparent);
@@ -124,10 +132,14 @@
 
    It was drawn grey first, on the reasoning that approval was a not_started
    reason and inherited that group's hue. That was a superseded status set —
-   the approval axis became a status of its own — and grey was wrong twice
-   over: --status-not-started is the same value as --fg-subtle, so a grey badge
-   sits at the system's contrast floor, and the one row in a list that needs a
-   person was both the dormant colour and the weakest badge on screen. */
+   the approval axis became a status of its own — and grey was wrong on a
+   second count too: not_started sits near the bottom of the contrast range,
+   so the one row in a list that needs a person was both the dormant colour
+   and among the weakest badges on screen. (That second argument was first
+   written as "--status-not-started is the same value as --fg-subtle". The two
+   diverged at the 20 Aug legibility lift — #8C97A6 against #7E8CA0 — so the
+   claim is corrected here. It was never the load-bearing reason: the status
+   set had already moved.) */
 :root {
   --status-awaiting-approval: var(--status-awaiting-review);
   --status-awaiting-approval-bg: var(--status-awaiting-review-bg);
