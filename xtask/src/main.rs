@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod rules;
+mod rules_design;
 mod tokens;
 mod tokens_emit;
 
@@ -80,6 +81,7 @@ fn verify_foundations() -> ExitCode {
         rules::nothing_names_a_person_or_a_machine(&root),
         rules::nothing_writes_its_own_log_format(&root),
         rules::the_tokens_generate_what_is_checked_in(&root),
+        rules_design::no_off_contract_design_value(&root),
     ];
 
     let mut out = String::new();
@@ -186,15 +188,19 @@ pub fn files_with_ext(root: &Path, dir: &Path, exts: &[&str]) -> BTreeSet<String
     found
 }
 
-/// Depth-first walk. Skips `target`, `node_modules` and dot-directories, which
-/// are build output rather than source and are not the gate's business.
+/// Depth-first walk. Skips build output and dot-directories, which are not the
+/// gate's business. `out` and `dist` are on the list because the design lint
+/// found ninety violations in a compiled stylesheet the moment the app first
+/// built — every rule here reads source, and none of them can tell the
+/// difference on its own.
 pub fn walk(dir: &Path, visit: &mut impl FnMut(&Path)) {
     let Ok(entries) = fs::read_dir(dir) else { return };
     let mut paths: Vec<PathBuf> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
     paths.sort();
     for path in paths {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if name.starts_with('.') || name == "target" || name == "node_modules" {
+        const BUILD_OUTPUT: &[&str] = &["target", "node_modules", "out", "dist"];
+        if name.starts_with('.') || BUILD_OUTPUT.contains(&name) {
             continue;
         }
         if path.is_dir() {

@@ -4,3 +4,12 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Which packages may run install scripts. pnpm blocks them all by default and
+# that default is right: an install script is arbitrary code from the registry,
+# run before anything has been reviewed. These two need theirs — electron
+# fetches its binary, esbuild its platform executable — and a package absent
+# from this list runs nothing.
+allowBuilds:
+  electron: true
+  esbuild: true

@@ -2,7 +2,7 @@
   "name": "@armada/desktop",
   "private": true,
   "version": "0.0.0",
-  "description": "Bridge — the desktop application.",
+  "description": "Bridge \u2014 the desktop application.",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -13,6 +13,11 @@
     "electron": "^40.0.0",
     "electron-vite": "^5.0.0",
     "typescript": "^5.9.0",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "tailwindcss": "^4.3.0",
+    "@tailwindcss/vite": "^4.3.0"
+  },
+  "dependencies": {
+    "@armada/tokens": "workspace:*"
   }
 }

@@ -1,0 +1,17 @@
+/* The renderer's stylesheet. Order is the cascade and is load-bearing.
+ *
+ * tokens.css comes first because fonts.css opens with an `@import url(...)`,
+ * and an @import must precede every rule in the file it lands in. Then the
+ * theme, which turns those tokens into the only spellable Tailwind utilities —
+ * it resets each namespace to `initial`, so bg-slate-800 and h-16 stop
+ * resolving. base.css consumes tokens and declares none, which is why it is
+ * imported rather than generated into either of the other two.
+ *
+ * All three live in packages/tokens; the middle two are written by
+ * `cargo xtask verify-tokens`. Do not edit those, and do not add a fourth
+ * stylesheet holding values.
+ */
+@import "@armada/tokens/tokens.css";
+@import "tailwindcss";
+@import "@armada/tokens/tokens.theme.css";
+@import "@armada/tokens/base.css";

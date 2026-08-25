@@ -5,8 +5,8 @@
   "description": "The design tokens. Authored in src/*.css; everything else is generated.",
   "exports": {
     "./tokens.css": "./tokens.css",
+    "./tokens.theme.css": "./tokens.theme.css",
     "./tokens.json": "./tokens.json",
-    "./tailwind.theme.js": "./tailwind.theme.js",
     "./base.css": "./src/base.css"
   }
 }

@@ -48,77 +48,101 @@ const SOURCES: &[(&str, Source)] = &[
     ("base.css", Source::Stylesheet),
 ];
 
-/// Where a token lands in the Tailwind theme.
+/// Which Tailwind v4 theme namespace a token joins.
 ///
-/// The theme key is the token name, so a class name and a token name are the
-/// same string and a mismatch is unspellable. `CssOnly` is for values that are
-/// not utilities — a composite shorthand, or a constant a layout reads.
+/// v4 has no JS config: the theme IS CSS custom properties, and the namespace
+/// a variable is declared under is what decides which utilities exist. Measured
+/// against 4.3.3 rather than assumed — `--duration-*` and `--delay-*` are NOT
+/// namespaces, and `--spacing-*` drives `p-`, `w-`, `h-`, `min-h-` and `max-w-`
+/// from one entry, so height and padding cannot be separated by declaration.
 pub enum Slot {
-    /// `theme.<group>.<name>`, value `var(--token)`, the key derived from the
-    /// token name by stripping its prefix.
-    Group(&'static str),
-    /// `theme.<group>.<key>`, where the derived key would read badly
-    /// (`shadow-shadow-overlay`) or the token means something the prefix does
-    /// not say (a floor is a `minHeight`, not a `height`).
+    /// `--<ns>-<key>`, value `var(--token)`, key derived by stripping the
+    /// token's own prefix. Right where v4 collapses several properties into one
+    /// namespace: `--h-row` becomes `--spacing-row`, spelled `h-row` when it is
+    /// a height and `min-h-row` when it is a floor, because in v4 that is one
+    /// entry either way.
+    Ns(&'static str),
+    /// `--<ns>-<token name>`, prefix kept. Colours need it: ten groups share
+    /// the `--color-*` namespace, so `--fg-default` and `--border-default`
+    /// would otherwise both claim `default`.
+    NsFull(&'static str),
+    /// The token name is ALREADY a v4 theme variable — `--text-sm`,
+    /// `--radius-md`, `--font-sans` — so the theme cannot alias it: a
+    /// `--text-sm: var(--text-sm)` line is circular, which makes the variable
+    /// guaranteed-invalid and silently unsets every size on the page. These
+    /// carry their literal value instead. They cannot drift, because
+    /// `verify-tokens` regenerates both files from the same source.
+    Literal,
+    /// `--<ns>-<key>` with the key stated, for the one collision derivation
+    /// cannot resolve.
     Named(&'static str, &'static str),
-    /// One half of a `fontSize` tuple, paired with its `--leading-*`.
-    FontSize,
-    /// The other half. Consumed by its `--text-*`, never emitted alone.
+    /// The line-height half of a font size: emitted as
+    /// `--text-<size>--line-height`, never as a utility of its own.
     Leading,
-    /// Reachable from CSS only, with the reason it is not a utility.
+    /// No namespace can carry it. Read from CSS as `var(--token)`, with the
+    /// reason it is not a utility.
     CssOnly(&'static str),
 }
 
-/// Name-to-slot, longest match first. **An exact name beats a prefix**, which
-/// is what resolves the one collision in the set: `--text-sm` is a font size
-/// and `--text-body` is a colour, and no prefix rule can tell them apart.
+/// Name-to-namespace, exact entries before prefixes.
+///
+/// **A derived key that collides with another in the same namespace fails the
+/// check** rather than one silently overwriting the other, so this table only
+/// has to state what derivation cannot work out.
 pub const THEME: &[(&str, Slot)] = &[
-    // Exact names, checked first.
-    ("--text-body", Slot::Group("colors.text")),
-    ("--text-label", Slot::Group("colors.text")),
-    ("--text-meta", Slot::Group("colors.text")),
-    ("--text-on-accent", Slot::Group("colors.text")),
-    ("--accent", Slot::Named("colors.accent", "DEFAULT")),
-    ("--ease", Slot::Named("transitionTimingFunction", "DEFAULT")),
-    ("--tooltip-delay", Slot::Named("transitionDelay", "tooltip")),
-    ("--gap-section", Slot::Named("spacing", "section")),
-    ("--shadow-overlay", Slot::Named("boxShadow", "overlay")),
-    ("--tracking-caps", Slot::Named("letterSpacing", "caps")),
-    ("--palette-width", Slot::Named("maxWidth", "palette")),
-    ("--palette-max-height", Slot::Named("maxHeight", "palette")),
-    // The Job row is padding-driven: 84px is a floor a wrapping title grows
-    // past, so it is a min-height and `h-row-stacked` must not exist.
-    ("--h-row-stacked", Slot::Named("minHeight", "row-stacked")),
-    ("--sidebar-default", Slot::Named("spacing", "sidebar")),
-    ("--sidebar-min", Slot::Named("minWidth", "sidebar")),
-    ("--sidebar-max", Slot::Named("maxWidth", "sidebar")),
-    ("--sidebar-rail", Slot::Named("spacing", "rail")),
-    // Composites and constants. Not classes, on purpose.
+    // Already v4 theme variables. Nothing to map.
+    ("--text-2xs", Slot::Literal),
+    ("--text-xs", Slot::Literal),
+    ("--text-sm", Slot::Literal),
+    ("--text-base", Slot::Literal),
+    ("--text-lg", Slot::Literal),
+    ("--text-xl", Slot::Literal),
+    ("--text-2xl", Slot::Literal),
+    ("--radius-", Slot::Literal),
+    ("--font-sans", Slot::Literal),
+    ("--font-mono", Slot::Literal),
+    ("--shadow-overlay", Slot::Literal),
+    ("--tracking-caps", Slot::Literal),
+    ("--ease", Slot::Named("ease", "base")),
+    ("--leading-", Slot::Leading),
+    // The semantic text colours. `--text-*` is overloaded in the source: a
+    // size in typography.css, a colour in semantic.css. Only an exact entry
+    // can tell them apart.
+    ("--text-body", Slot::NsFull("color")),
+    ("--text-label", Slot::NsFull("color")),
+    ("--text-meta", Slot::NsFull("color")),
+    ("--text-on-accent", Slot::NsFull("color")),
+    ("--weight-", Slot::Ns("font-weight")),
+    // Both are 20px and both derive to `row-stacked`. The floor keeps the
+    // plain key; the padding says what it is.
+    ("--pad-row-stacked", Slot::Named("spacing", "row-stacked-pad")),
+    // Colours.
+    ("--bg-", Slot::NsFull("color")),
+    ("--fg-", Slot::NsFull("color")),
+    ("--border-", Slot::NsFull("color")),
+    ("--accent", Slot::Named("color", "accent")),
+    ("--accent-", Slot::NsFull("color")),
+    ("--diff-", Slot::NsFull("color")),
+    ("--status-", Slot::NsFull("color")),
+    ("--step-", Slot::NsFull("color")),
+    ("--verdict-", Slot::NsFull("color")),
+    ("--surface-", Slot::NsFull("color")),
+    ("--edge-", Slot::NsFull("color")),
+    // Everything sized. One namespace, by v4's design.
+    ("--space-", Slot::Ns("spacing")),
+    ("--h-", Slot::Ns("spacing")),
+    ("--pad-", Slot::Ns("spacing")),
+    ("--gap-", Slot::Ns("spacing")),
+    ("--sidebar-", Slot::Ns("spacing")),
+    ("--palette-", Slot::Ns("spacing")),
+    // No namespace carries these.
+    ("--duration-", Slot::CssOnly("v4 has no --duration-* namespace; read it in CSS")),
+    ("--tooltip-delay", Slot::CssOnly("v4 has no --delay-* namespace; read it in CSS")),
     ("--focus-ring", Slot::CssOnly("an outline shorthand, not a scale value")),
     ("--focus-ring-offset", Slot::CssOnly("paired with --focus-ring")),
     ("--row-focus-bar", Slot::CssOnly("a border shorthand, not a scale value")),
-    ("--window-floor", Slot::CssOnly("the window's hard floor, read by main")),
+    ("--window-floor", Slot::CssOnly("a window bound the main process reads")),
     ("--layout-breakpoint", Slot::CssOnly("a media query bound, not a utility")),
-    // Prefixes.
-    ("--bg-", Slot::Group("colors.bg")),
-    ("--fg-", Slot::Group("colors.fg")),
-    ("--border-", Slot::Group("borderColor")),
-    ("--accent-", Slot::Group("colors.accent")),
-    ("--diff-", Slot::Group("colors.diff")),
-    ("--status-", Slot::Group("colors.status")),
-    ("--step-", Slot::Group("colors.step")),
-    ("--verdict-", Slot::Group("colors.verdict")),
-    ("--surface-", Slot::Group("colors.surface")),
-    ("--edge-", Slot::Group("borderColor")),
-    ("--space-", Slot::Group("spacing")),
-    ("--h-", Slot::Group("height")),
-    ("--pad-", Slot::Group("padding")),
-    ("--radius-", Slot::Group("borderRadius")),
-    ("--text-", Slot::FontSize),
-    ("--leading-", Slot::Leading),
-    ("--weight-", Slot::Group("fontWeight")),
-    ("--font-", Slot::Group("fontFamily")),
-    ("--duration-", Slot::Group("transitionDuration")),
 ];
 
 /// One declared custom property, with the comment that explains it.
@@ -321,7 +345,7 @@ fn first_sentence(line: &str) -> String {
 
 /// The three outputs, as (path, contents).
 pub fn outputs(root: &Path) -> Result<Vec<(String, String)>, String> {
-    use crate::tokens_emit::{tailwind_theme, tokens_css, tokens_json};
+    use crate::tokens_emit::{theme_css, tokens_css, tokens_json};
     let (sources, tokens) = read(root)?;
     if tokens.is_empty() {
         return Err("no tokens parsed — the sources are present and declare nothing".into());
@@ -329,6 +353,6 @@ pub fn outputs(root: &Path) -> Result<Vec<(String, String)>, String> {
     Ok(vec![
         ("packages/tokens/tokens.css".into(), tokens_css(root, &sources)),
         ("packages/tokens/tokens.json".into(), tokens_json(&tokens)),
-        ("packages/tokens/tailwind.theme.js".into(), tailwind_theme(&tokens)?),
+        ("packages/tokens/tokens.theme.css".into(), theme_css(&tokens)?),
     ])
 }
