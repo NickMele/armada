@@ -147,7 +147,19 @@ def main() -> None:
                           "on purpose?")
 
     # ---- rule: 500 warns and needs acknowledgment, 900 fails -------------
-    if lines is not None:
+    #
+    # Source only, matching `no_file_too_long` exactly. This applied to every
+    # file, and the second-largest contract in the repository was compressed by
+    # a quarter to get past it — a real loss, to satisfy a ceiling the gate
+    # would never have applied to a markdown document.
+    #
+    # A hook stricter than the gate is worse than no hook: it is invisible in
+    # CI, it fires at the moment somebody is mid-task, and what it produces is
+    # a workaround rather than a fix. This is the second one found in a day.
+    # If a rule exists in both places, the scopes are part of the rule.
+    if lines is not None and rel.endswith((".rs", ".ts", ".tsx")) and rel.split("/", 1)[0] in (
+        "crates", "apps", "packages", "xtask",
+    ):
         if lines > FAIL_LINES:
             answer("deny", f"{rel} would be about {lines} lines, over {FAIL_LINES}. "
                            "Split it.")
