@@ -82,6 +82,12 @@ required follow-up, not a someday-nice-to-have.
 
 ## DTOs, not domain types
 
+`WireError` is a DTO like any other, and the Error Contract in Notion
+(https://app.notion.com/p/3c7173a35eb98126ad2bf236d9080892) is what specifies it —
+which fields are guaranteed, why `level` and `component` are not among them,
+and why removing an error code is a minor bump. The v0 lifeboat below is
+deliberately outside that contract.
+
 `ipc` speaks its own vocabulary. It does not re-export `core_model::Job` and
 put it on the wire. The conversion is explicit, one direction, and lives at
 the Fleet boundary:

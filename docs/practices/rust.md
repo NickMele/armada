@@ -141,15 +141,19 @@ built it remembered to pass the flag, and wrong the day someone builds a
 
 ## 3. Error handling across a crate boundary
 
+The shape an error takes once it leaves its crate — the wrapping type, the
+correlation ids, the code manifest, the wire form — is fixed by the Error
+Contract, in Notion: https://app.notion.com/p/3c7173a35eb98126ad2bf236d9080892. This section covers only what a crate boundary
+demands of a `Result`; the contract is the authority for everything past it.
+
 A `Result<T, E>` that crosses a crate boundary carries a typed `E` the caller
 can match on — not a `String`, not an opaque boxed error that collapses
 everything to "something went wrong." The caller on the other side of a crate
 boundary is, by construction, code that didn't see how the error happened; a
 string forces it to either parse prose or give up and propagate blindly, which
-is the convention failure again in a different shape. (Whether the workspace
-standardizes on a crate like `thiserror` for defining these enums, or writes
-`impl std::error::Error` by hand, isn't decided — no crate has any dependency
-yet. The shape below holds either way.)
+is the convention failure again in a different shape. (A derive macro defines these
+enums rather than a hand-written `impl std::error::Error` — the contract says
+why, and what it costs in build time. The shape below holds either way.)
 
 **The specific rule: a query function never returns pre-filtered results.**
 If a function reads N records and M of them fail to parse, the function's
@@ -386,9 +390,6 @@ isn't this document's job:
 - The `cargo tree` check on `core-model` and `adapter-traits` is stated as
   gated in `.claude/agents/rust-engineer.md` but isn't one of the six rules in
   `xtask/src/rules.rs` yet. Run it by hand until someone adds it.
-- No crate has any dependency yet, so whether error enums in this workspace
-  standardize on `thiserror`, `anyhow` at any boundary, or hand-written
-  `impl Error` is undecided.
 - The remaining nine crates (twelve total, six named so far across this repo:
   `core-model`, `adapter-traits`, `testkit`, `store`, `ipc`, `adapters`)
   aren't named in anything checked into this repo.
