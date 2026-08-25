@@ -27,10 +27,14 @@ use alloc::vec::Vec;
 /// sort and nothing else.
 ///
 /// There is no constructor that mints one here, and that is deliberate.
-/// **Fleet is the sole ID authority** — Bridge and Drones echo what they were
-/// handed, which is what makes the join reliable rather than best-effort. A
-/// minting function in the shared crate would let either of them invent an id
-/// that joins to nothing.
+/// **Fleet is the sole authority for the ids that name records** — `job_id` and
+/// `drone_id`. Bridge and Drones echo what they were handed, which is what
+/// makes the join reliable rather than best-effort: an id invented by something
+/// that does not own the record joins to nothing.
+///
+/// `run_id` is the exception, because it names the emitter rather than a
+/// record, and each process mints its own. That minting belongs to the process
+/// that knows when it started, not to this crate.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ulid(String);
 
@@ -122,8 +126,14 @@ pub struct Envelope {
     ts: Timestamp,
     level: Level,
     component: Component,
-    /// The Fleet process instance. Changes on every restart, which is what
-    /// makes a restart visible in the log without anything announcing it.
+    /// The **emitting** process's instance, minted by that process at start.
+    ///
+    /// Fleet's changes on every restart, which is what makes a restart visible
+    /// in the log without anything announcing it. Bridge and a Drone mint their
+    /// own — a Drone outlives a Fleet restart under `setsid`, and Bridge runs
+    /// before it has reached Fleet at all, so one Fleet-owned value could not
+    /// describe either. It is the one id an emitter mints for itself; `job_id`
+    /// and `drone_id` name records Fleet owns and are only ever echoed.
     run_id: Ulid,
     /// Never carries an interpolated id. Ids are fields, and any query targets a
     /// field — nothing greps `msg`. Same discipline as `store` being the only
