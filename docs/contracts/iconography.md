@@ -1,0 +1,492 @@
+# Iconography
+
+**Kind:** spec. **Governs:** every badge state, plus navigation, actions and
+Doctor — lucide-react only, holding the shield-\*/file-\* reservation rule.
+
+Every icon in the app is named in `packages/icons/icons.toml`; this document
+carries the rules that put a glyph there and the reasoning behind each one.
+Hand this document to a design tool alongside `packages/icons/icons.toml` and
+the parent [Design System](design-system.md) document, and no icon requires a
+judgment call.
+
+Each glyph is a table in `packages/icons/icons.toml`, keyed by its
+lucide-react name, carrying its meaning, group, size, status and reservation.
+This document carries the reasoning behind each choice and the rules that
+govern anything not yet in that file; `icons.toml` is the lookup that answers
+what a glyph already means and where it may not be reused.
+
+Resolves the Iconography open item. Supersedes the partial 10-icon table
+previously carried in the parent [Design System](design-system.md) document's
+Voice & Copy section.
+
+---
+
+## Library — lucide-react stays
+
+Hard rule 5 stands. No amendment needed. The alternatives were evaluated
+against this product, not in the abstract.
+
+| Library | Verdict | Reason |
+| --- | --- | --- |
+| **lucide-react** | **Keep** | Full concept coverage, ISC, per-icon ESM modules, and already inside every shadcn/ui primitive |
+| Phosphor | Reject, with regret | Genuinely better small-size drawing — 16px design size and a Bold weight. Loses on the shadcn coupling below, not on merit |
+| Tabler | Reject | Broader set, same 24px grid and same small-size behaviour. A lateral move with a migration cost and no gain |
+| Radix Icons | Reject | Drawn on a 15px grid and crisp because of it, but ~300 icons with no git, process, terminal or health coverage. A chrome set, not a domain set |
+| Heroicons | Reject | The 16px micro set is optically correct, but there is no git family at all. Fails the coverage test outright |
+
+**The deciding argument is coupling, not aesthetics.** Hard rule 2 mandates
+shadcn/ui, and shadcn primitives import lucide directly — dialog close,
+select and dropdown chevrons, checkbox check, sheet close. lucide is in the
+bundle whatever else is chosen. Adding Phosphor means two icon languages
+sharing one dense table: Phosphor's rounded terminals next to lucide's
+Feather-derived ones, in the same 32px row. That is precisely the
+mixed-weight failure the brief warns about, arrived at by a different route.
+
+**Coverage was checked, not assumed.** Every concept this app needs exists in
+lucide: `git-branch`, `git-commit-horizontal`, `git-pull-request`,
+`terminal`, `cpu`, `shield-check`, `unplug`, `split`, `waypoints`,
+`stethoscope`, `file-diff`. No gap was found.
+
+**The 11px legibility problem is real but is not a library problem.** It is a
+selection problem and a rendering problem, both solved below. Any library
+mushes if you pick a document-with-a-question-mark and render it at 11px on a
+24px grid.
+
+**What would change this answer:** dropping shadcn/ui. If Armada ever owns
+its primitives outright, Phosphor with per-icon CSR imports and Bold at
+≤12px is the better set on optical grounds and this decision should be
+revisited.
+
+---
+
+## Rendering — two sizes, one stroke, no exceptions
+
+```
+badge icons       12px · strokeWidth 2 · leading · 4px gap
+nav and buttons   16px · strokeWidth 2
+stroke width      2, always. Never tuned per size
+sizes             12 and 16 only. Never 11, 14, 18, 20
+```
+
+**12px, not 11px.** lucide draws on a 24px grid, so 12px is an exact 0.5
+scale: a stroke of 2 lands at exactly 1px and every coordinate falls on a
+whole or half pixel. 11px scales to 0.917px — a sub-pixel stroke that
+antialiases into grey fuzz on a dark ground, which is exactly the symptom the
+brief describes. The icon reads *slightly* larger than the 11px badge label,
+which is optically correct anyway, since a glyph needs to exceed cap height
+to hold equal weight.
+
+**One stroke value.** Tuning `strokeWidth` per size is how a set starts
+looking mixed-weight. 2 everywhere is lint-enforceable and holds the set
+together. Never use `absoluteStrokeWidth` — a 2px stroke inside a 12px box is
+a blob.
+
+**Contrast floor.** Icons never render in `--fg-subtle`. `#5D6B7C` on
+`--bg-raised` is ~3.2:1, which a 1px stroke does not survive. `--fg-muted` is
+the minimum for chrome.
+
+> **Flag for the parent document.** The grey badges are the weakest in the
+> set — `--status-not-started` measures 4.39:1 as badge text on its own tint
+> over `--bg-overlay`, the only status under 4.5:1, and `superseded` shares
+> that by aliasing it. Badges on floating layers only. Every state that asks
+> for a person has since left grey for amber, so the badges that mean *act*
+> are not the weak ones; the remaining greys are dormant states a reader is
+> meant to pass over, which makes the shortfall survivable rather than
+> fixed. If a glyph disappears there under real use, the fix is raising
+> `--status-not-started`, not changing the icon. It is no longer the same
+> value as `--fg-subtle` — the two separated at the 20 Aug legibility lift.
+
+**Version pinning.** lucide renamed a large batch of icons (`alert-triangle`
+→ `triangle-alert`, and similar). Names in `packages/icons/icons.toml` are
+lucide-react ≥ 0.400. Pin the version in `package.json`; do not float.
+
+---
+
+## Every badge carries an icon
+
+**Accepted, and the brief's reasoning is right, but the deciding argument is
+a stronger one.** Column consistency is real — a Job Board column where some
+badges have icons and some do not reads as an oversight rather than a
+system. But that argument is aesthetic and could be argued the other way.
+
+The argument that settles it is redundant encoding. Badges are differentiated
+by **hue alone**, at 11px on 12%-opacity fills, and the palette carries fewer
+hues than there are statuses — several statuses share one and are told apart
+by glyph alone. That is a single-channel encoding of the most important
+distinction in the app, and it fails outright under deuteranopia, on a
+miscalibrated second monitor, and in a screenshot pasted into a ticket. Every
+status earns an icon on those grounds before consistency is considered.
+
+This does not contradict *used sparingly*. The badges are one column
+carrying a fixed 16px prefix, not scattered decoration. Sparingly is
+enforced everywhere else on this page, including several places where the
+answer is no icon at all.
+
+**Label-only was considered and rejected.** The labels are indeed
+distinguishable as text, but that is an argument that the icon is not doing
+the *primary* job — which is true and fine. Its job is being the second
+channel.
+
+---
+
+## Status badge icons
+
+The glyph and the reasoning for each status is in `packages/icons/icons.toml`,
+group `Job state`. That file does not carry labels either — the verb belongs
+to the Armada Enum Verbs database and is not restated here. The icon agrees
+with the verb, not with the enum name, which is why the two are chosen
+separately.
+
+### The statuses — hue is primary, icon is redundancy
+
+Ordered as Job orders them, by who is acting and in what mode. Where statuses
+share a hue they are the same claim at different points in a Job's life, and
+the glyph carries which point. The full enum → icon → hue mapping is
+`packages/icons/icons.toml`, group `Job state`.
+
+**Amber means a person is on it; grey means nobody is.** Every status where a
+person is waited on or working renders amber — `awaiting_approval`,
+`awaiting_review`, `awaiting_attestation` and `piloted` — which is one claim
+at different points in a Job's life. Every dormant status renders grey. Rule
+4 below is what holds each group apart: human figure, eye, stamp and
+terminal box in amber; clock and lidded box in grey.
+
+### `queued`'s reasons — icon differentiates
+
+`queued` renders grey whatever its reason, and a reader is meant to move past
+a grey row. Where a reason is present its glyph replaces `clock` on the
+badge; where the reason is none, `clock` stands. The vocabulary belongs to
+Job and is not restated here. Categorically different outlines: diagonal
+chain, fringed square. The mapping is `packages/icons/icons.toml`, group
+`Queued reason`.
+
+### The escalation reasons — one orange, icon differentiates
+
+The hardest constraint here. Categorically different outlines: octagon,
+closed loop, page, shield, Y-split, broken plug, ascender-to-a-line. None
+depends on interior detail surviving 12px. The mapping is
+`packages/icons/icons.toml`, group `Escalation reason`.
+
+**Why the `loop_cap` row was nearly missed.** `loop_cap` was added to the
+escalation enum on 2026-08-21 and existed for several hours with no glyph,
+because the decision landed on the Workflow and Job pages and nothing pulled
+it through to here. That is what rule 7 below exists to catch, and it is
+worth noting that the rule caught it only because a person asked — the
+codegen test it describes is not built yet. `loop_cap` obviously wants a
+loop, but *closed loop* is already `refresh-cw` for churning, in the same hue
+group and on the reserved list. Those two states are the most semantically
+adjacent pair in the set — both mean "went round and round" — so sharing an
+outline would put the collision exactly where it does the most damage. The
+distinction that matters is that churning is a failure and `loop_cap` is
+not: nothing went wrong, the loop simply did not converge. A ceiling says
+that; a loop does not.
+
+**Cross-group collisions are permitted.** `circle-dot` and `clock` are both
+circular, but they sit in different hue groups where colour already
+separates them. The rule is strict *within* a shared hue and relaxed across
+hues — otherwise the set runs out of distinct outlines for no benefit.
+
+---
+
+## Changes from the earlier proposal
+
+Both problems in the brief are accepted as stated.
+
+- **The hourglass/clock collision is real, and the deeper fault is worse
+  than the collision.** `hourglass` reads *be patient* for a state that
+  means a drone went silent and something is wrong. It is removed, and
+  `hourglass` is now banned from Armada entirely — nothing may use it.
+  `clock` keeps `queued` and becomes unambiguous by that removal.
+- **A per-column split is not defensible.** Resolved to every badge, on
+  redundant-encoding grounds above.
+- Two further changes were made beyond the two flagged: `lock` → `link` and
+  `git-fork` → `split`, each justified in `packages/icons/icons.toml`.
+
+---
+
+## Step activity — the rail
+
+The marks a rail row can take, distinct from the Job badge states. Six of
+these are `job_steps.state` values; `failed` is not — a refusal lands in
+`last_verdict` as `failed(<reason>)`, and the activity/verdict split is why:
+a step retrying after a refusal is `running` in activity and `failed` in
+verdict at the same moment, so one column cannot say both. A step may carry
+the Job glyph that means the same thing one level down — a step and a Job
+answer the same question at different scales, so a second silhouette for one
+meaning is the collision this document exists to prevent, and a rail row
+must show the same mark as the badge above it when both state the same
+claim. What a step may not do is reuse a badge glyph in a sense the badge
+does not carry.
+
+The common rail values borrow their glyph from the Job badge one level down
+— `advanced` (check), `running` (circle-dot), `waiting` (clock), `retrying`
+(rotate-cw, no hue). The full mapping is `packages/icons/icons.toml`, under
+`[conventions.step_activity_borrowing]`.
+
+Two values carry more than a borrowed glyph:
+
+- **`stopped`** takes `flag`, reserved to this state alone (see
+  `packages/icons/icons.toml`). It marks a position rather than a verdict —
+  the verdict sits on the criterion rows beneath it and the reason on the
+  badge above — so it stays `--fg-default` on a `--step-stopped-bg` row
+  rather than taking a hue that would say the warning twice. `octagon-x` was
+  rejected because the octagon belongs to `stalled`; a bare attempt count
+  was rejected for reading like a not-started row.
+- **`failed`** takes the same bare `x` as the `completed_failed` badge,
+  meaning the same thing one level down, hued in `--step-failed` on a
+  `--step-failed-bg` row. It was drawn without a hue first, on the grounds
+  that a measured Check result should render flatly — reversed, because a
+  failed Check with no retry and no triage is the entire reason a person
+  opened the screen, and a muted rail buries it. `stopped` and `failed`
+  differ in treatment though not in kind: `stopped`'s glyph stays neutral
+  because its surface already carries the warning, while `failed`'s `x` is
+  hued, since failure is an outcome and states it in both channels. The gate
+  row beneath either stays neutral — the step's state is hued, the Check's
+  exit code is measured.
+
+**An ungated step says so in words.** A step carrying no Check is ordinary
+rather than exceptional, so the gate row beneath one reads `no check on this
+step` in sans, in `--fg-subtle`. An empty slot where a gate row would sit
+reads as a gate that failed to render rather than one that is absent.
+
+### Judge criterion verdicts
+
+`met` and `not_met` take `circle-check` and `circle-x` — see
+`packages/icons/icons.toml`, group `Step and Verdict`.
+
+**The Judge owns `circle-*`, decided 2026-08-21.** Three families, one per
+verification source: `shield-*` for Checks, `file-*` for evidence artifacts,
+`circle-*` for Judge verdicts. A verdict on a criterion is neither a gate nor
+an evidence artifact, so borrowing either family would misstate what
+produced it — the silhouette carries hedge-by-source before the label is
+read.
+
+**Knock-on, resolved in the same turn:** `circle-minus` was carrying Check's
+`not reached`. It moves to `shield-minus`, which completes the check family
+rather than damaging it. Bare `check` and `x` are out of criterion rows
+entirely — `check` already means `advanced` in step activity, so a criterion
+and a finished step were reading alike.
+
+**Reserved:** nothing outside a Judge verdict may use `circle-check` or
+`circle-x`.
+
+**A criterion attested by a person carries no glyph here.** Source
+Attestation reads `confirmed` and `withheld`, and every verdict family is
+reserved to one of the other two sources. Which glyph it takes, or whether
+it deliberately takes none, is an open question.
+
+---
+
+## Navigation
+
+16px, `--fg-muted` at rest, `--fg-default` when active. Never
+status-coloured. The full mapping (Job Board, Active Jobs, Alerts, Reviews,
+Doctor, Activity Feed, Manifest, Helm) is `packages/icons/icons.toml`, group
+`Navigation` — `eye` and `file-cog` are shared assignments, carried under
+their own primary groups with a `Navigation` usage entry.
+
+**No nautical iconography.** A ship's wheel or compass for Helm is the exact
+failure P1 legislates against — metaphor confined to proper nouns. Helm is a
+name; a wheel is decoration, and decorative iconography is banned outright by
+the parent document.
+
+---
+
+## Actions
+
+16px. Text buttons carry no icon — primary and secondary buttons are
+label-only. Icons appear on **ghost and icon-only row actions**, in
+confirmation dialogs, and in toolbars. Per the voice contract an action
+keeps its name through the flow, so the glyph must survive both the button
+and the resulting past-tense state. The full mapping (Approve, Reject,
+Dispatch, Kill, Redirect, Redispatch, Pilot, Freeze dispatch) is
+`packages/icons/icons.toml` — several of these glyphs are shared with a Job
+badge state (`check`, `ban`, `power`, `terminal`) under group `Job state`;
+the rest are under group `Action`.
+
+---
+
+## Everywhere else
+
+### Doctor — health grid
+
+**No glyphs.** Amended 2026-08-21 from the design of Check System Health. A
+result is the word, in the status colour, at `--text-2xs` in mono.
+
+```
+pass   — no glyph —   --status-completed-success
+warn   — no glyph —   --status-awaiting-review
+fail   — no glyph —   --status-completed-failed
+```
+
+Three reasons, in order of weight. **The glyphs were already taken:**
+`circle-check` and `circle-x` are reserved to Judge criterion verdicts, and
+two surfaces cannot own one family. **A column of words scans better than a
+column of glyphs** — ten rows reading `pass` are read in one movement, and
+rule 1 below is to default to no icon. **The word survives greyscale**,
+which colour alone does not. Dropping the glyph resolves the collision
+without inventing a fourth family or taking anything back from the Judge,
+and it makes the circle-wrap argument moot: a lowercase word cannot be
+mistaken for a Job badge.
+
+**Colour is still shared with Job states.** Three dedicated Doctor tokens
+were rejected and stay rejected — a health grid rendering green, amber and
+red in values nobody else uses makes a problem harder to spot, not easier.
+
+**`triangle-alert` is released.** It was reserved to Doctor and Doctor now
+draws no glyphs, so it is free for generic warnings — which is what
+`octagon-alert` was kept out of them to protect. Full reasoning is on the
+Doctor document.
+
+### DAG / graph view
+
+`waypoints` at 16px is the view toggle — see `packages/icons/icons.toml`,
+group `Graph`. Nodes inside the graph reuse the badge icons at 12px — a
+graph node and a Job Board row showing the same job must show the same
+glyph.
+
+### Convoy
+
+`layers` at 12px, at the approval gate and in the detail header only —
+never in a Job Board row. Convoy is blast-radius information that matters
+when deciding, and the row already says "convoy, 3" in text. See
+`packages/icons/icons.toml`.
+
+### Chrome
+
+The full chrome mapping — expand/collapse, sort, filter, search, copy an id
+or path, open PR externally, dismiss dialog — is `packages/icons/icons.toml`,
+group `Chrome`.
+
+### Git and config — detail views only
+
+Never in a Job Board row. Precedes a mono value at 12px, in `--fg-muted`.
+The full mapping (repository, workspace, branch, commit, pull request,
+Manifest) is `packages/icons/icons.toml`, group `Git and config`.
+
+### Where the answer is no icon
+
+Stated explicitly, because each is somewhere an icon would plausibly be
+reached for.
+
+- **Verification source and actor.** Closed vocabularies of three and four
+  words. "Check", "Judge", "Attestation", "human", "Helm", "Drone", "Fleet"
+  are already shorter and more precise as text than any glyph, and P4
+  depends on the reader distinguishing them exactly. An icon here trades
+  precision for width. This is the source field only — a criterion verdict
+  does carry a glyph, one family per source.
+- **Diff views.** The diff tokens and the `+`/`-` gutter do the whole job.
+  No icon.
+- **Empty states.** No large centred icon, no illustration. The parent
+  document gives empty states one line pointing at available work; a grey
+  ghost glyph above it adds nothing and reads as a consumer app.
+- **Spend, quota, elapsed, step N of M.** Numbers in mono. No gauge, no
+  coin, no timer.
+- **Status bar.** Text only. The escalation and approval counts are the
+  only colour in the bar, and an icon beside them would make it a second
+  alert surface.
+
+---
+
+## Reserved glyphs
+
+One meaning each. These may not be reused for anything else, ever.
+
+```
+refresh-cw     churning only. Refresh controls use rotate-cw
+octagon-alert  stalled only. Generic warnings use triangle-alert
+file-*         evidence only
+shield-*       gates and checks only
+circle-*       Judge criterion verdicts only. circle-check and circle-x may
+               not be reused — not for Doctor results, not as generic
+               success/failure marks
+human figure   human required, or actor=human
+eye            review
+terminal       Pilot only. The action and the piloted status, which are one
+               concept at two points in a flow
+hourglass      BANNED. Nothing may use it
+flag           stopped step only. A step whose retries are spent
+chevron-down   disclosure only. The caret segment of a split button, and the
+               one exception to "primary and secondary buttons are label-only"
+               — it is the whole content of its own divided segment, structural
+               rather than decorative, and never sits beside a label
+triangle-alert RELEASED 2026-08-21. Was reserved to Doctor; Doctor now draws
+               no glyphs, so this is free for generic warnings and toasts
+```
+
+---
+
+## The rule for anything not listed
+
+**Listed means: has a table in `packages/icons/icons.toml`.** A glyph with
+no table has not been decided, whatever it looks like in a mockup.
+
+1. **Default to no icon.** If the label alone is unambiguous, ship the
+   label. Most new things need nothing.
+2. If an icon is needed it comes from **lucide-react**, at **12 or 16px**,
+   **strokeWidth 2**, inheriting text colour. No second library, no emoji,
+   no illustration, no custom SVG. **One exception exists, and only one** —
+   see Brand mark below.
+3. Choose on **outline, not detail**. At 12px only the silhouette survives.
+   If the meaning lives inside the shape, the icon is wrong.
+4. The outline must differ from every other icon **sharing its hue**.
+   Across hue groups, collisions are fine.
+5. Never reuse a reserved glyph above.
+6. Never render an icon in `--fg-subtle`, and never let an icon carry colour
+   independently of its badge.
+7. **A new enum variant must add a table here.** The codegen test asserting
+   every variant has a verb asserts it has an icon in the same pass, so a
+   new reason cannot ship iconless.
+
+---
+
+## Brand mark — the one custom glyph
+
+**Amendment to hard rule 2, added 2026-08-24.** Rule 2 says no custom SVG. It
+now carries exactly one exception, and it is named here so that the next
+person to read the rule does not delete the component on sight.
+
+`armada-mark` is the Countersign identity mark. **It is not an icon and does
+not compete with lucide.** An icon names a state or an action inside the
+app; this names the app. That distinction is the whole basis of the
+exception and also its limit — the moment the mark is used to mean *home*,
+*app*, or a nav destination, it has become an icon and rule 2 applies again.
+
+Its construction — the 24-unit grid, the butt caps and miter joins instead
+of lucide's round, the filled element, the size floor, the reserved status —
+is recorded in full in `packages/icons/icons.toml` under `armada-mark`, so it
+is not restated here. Full specification of the mark itself — construction,
+clear space, the size floor, colour, and six misuses drawn rather than
+described — is a separate Armada Identity document, not migrated here.
+
+Its entry in `packages/icons/icons.toml` is Proposed, under the Brand group
+added 2026-08-24. Brand is a category of one and should stay that way — a
+second row in it means rule 2 has quietly stopped holding.
+
+---
+
+## Amendments to the parent Design System document
+
+Both amendments are applied. Verified against [Design
+System](design-system.md) on 20 Aug 2026.
+
+- **Hard rule 5: no change.** lucide-react stands.
+- **Badge spec: applied.** The parent document's Badge specification now
+  reads `icon required, 12px lucide, strokeWidth 2, leading, inherits text
+  color`, carrying both the size change and the optional-to-required change.
+- **Voice & Copy icon table: applied.** The 10-row table is gone. That
+  section now points here and records the four entries that changed.
+
+---
+
+## Open questions
+Step-level and criterion-verdict glyphs are settled as of 2026-08-21 — see
+Step activity above. `packages/icons/icons.toml` currently lists
+`circle-check` as Proposed and `circle-x`/`shield-minus` as Specified; its
+status vocabulary (Specified, Proposed, Retired, Banned) has no analogue to
+"Decided", so the file and the settled-as-of-2026-08-21 claim do not fully
+line up — worth a person's attention rather than something this document
+should paper over.
+
+Open items for this document are tracked in Notion's Open Items database and
+are not reproduced here.

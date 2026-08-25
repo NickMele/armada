@@ -142,9 +142,10 @@ built it remembered to pass the flag, and wrong the day someone builds a
 ## 3. Error handling across a crate boundary
 
 The shape an error takes once it leaves its crate — the wrapping type, the
-correlation ids, the code manifest, the wire form — is fixed by the Error
-Contract, in Notion: https://app.notion.com/p/3c7173a35eb98126ad2bf236d9080892. This section covers only what a crate boundary
-demands of a `Result`; the contract is the authority for everything past it.
+correlation ids, the code manifest, the wire form — is fixed by
+`docs/contracts/error-contract.md`. This section covers only what a crate
+boundary demands of a `Result`; the contract is the authority for everything
+past it.
 
 A `Result<T, E>` that crosses a crate boundary carries a typed `E` the caller
 can match on — not a `String`, not an opaque boxed error that collapses

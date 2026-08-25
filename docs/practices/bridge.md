@@ -228,8 +228,8 @@ renderer code from main or vice versa, that want is a sign the code belongs in
 
 **What Bridge does with a failure is not decided here.** The wire fields it can
 rely on, the unknown-code fallback, and the rule that where a message appears is
-chosen by blast radius rather than severity all live in the Error Contract, in
-Notion: https://app.notion.com/p/3c7173a35eb98126ad2bf236d9080892.
+chosen by blast radius rather than severity all live in
+`docs/contracts/error-contract.md`.
 
 **`protocol-version.toml` at the repo root is the one number both sides check**,
 Rust and TypeScript alike (`crates/ipc/build.rs` on Fleet's side, a generated

@@ -38,6 +38,13 @@ pub fn every_open_question_is_collected(root: &Path) -> Report {
         }
     }
 
+    for (path, line, found) in docs::near_miss_headings(root) {
+        report.fail(format!(
+            "{path}:{line} heads its questions `{found}` — the walk reads `## Open questions` \
+             exactly, so these are invisible and the check above passes while they sit there"
+        ));
+    }
+
     let questions = docs::read(root);
     for (slug, file, line) in docs::citations(root) {
         if !questions.iter().any(|q| q.slug.as_deref() == Some(slug.as_str())) {
