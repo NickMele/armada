@@ -21,16 +21,29 @@ use crate::{files_with_ext, Report};
 /// system is a second definition of one rule, and two definitions drift. This
 /// is the same grep shape as the vendor-literal ban.
 ///
-/// **The escape hatch is one line in the file**, naming a reason and linking
-/// the Armada Question that justifies it:
+/// **The escape hatch is two lines in the file** — a reason, then a citation
+/// of the open question that justifies it:
 ///
 /// ```text
 /// // armada-allow-off-contract: the diff viewer needs pixel parity with git
-/// // https://app.notion.com/p/<the question row>
+/// // [diff-gutter-parity]
 /// ```
 ///
 /// An unexplained opt-out is not one: the marker must carry a reason and the
-/// link must be on the next line, or the file is still checked.
+/// citation must be on the next line, or the file is still checked.
+///
+/// **Three citation forms are accepted, and the order is deliberate.** A
+/// `[slug]` naming a question in some document's `## Open questions` section is
+/// the one to write — it is the only form the gate can follow, so a question
+/// that gets answered breaks its citations on purpose. A `docs/` path is
+/// accepted for a question that has a whole document to itself. A Notion URL is
+/// accepted because that is where the questions are today, and it stops being
+/// accepted when the last one has moved.
+///
+/// This originally accepted a Notion URL and nothing else, which would have
+/// failed silently the first time a contract moved into the repo: a correct
+/// opt-out citing a repo path would read as unexplained, and the file would go
+/// back to being checked with nobody told why.
 pub fn no_off_contract_design_value(root: &Path) -> Report {
     let mut report = Report::new("no off-contract design value under apps/");
     const MARKER: &str = "armada-allow-off-contract:";
@@ -59,7 +72,7 @@ pub fn no_off_contract_design_value(root: &Path) -> Report {
 }
 
 /// An opt-out counts only when the marker carries a reason and the line under
-/// it carries the link. Either half alone is an unexplained opt-out.
+/// it cites something. Either half alone is an unexplained opt-out.
 fn opted_out(text: &str, marker: &str) -> bool {
     let lines: Vec<&str> = text.lines().collect();
     lines.iter().enumerate().any(|(i, line)| {
@@ -67,8 +80,22 @@ fn opted_out(text: &str, marker: &str) -> bool {
         if reason.trim().len() < 12 {
             return false;
         }
-        lines.get(i + 1).is_some_and(|next| next.contains("notion.com/"))
+        lines.get(i + 1).is_some_and(|next| cites_a_question(next))
     })
+}
+
+/// Whether a line names an open question: a `[slug]`, a path under `docs/`, or
+/// a Notion URL. A bare word is not a citation — it has to be findable.
+fn cites_a_question(line: &str) -> bool {
+    if line.contains("notion.com/") || line.contains("docs/") {
+        return true;
+    }
+    let Some(open) = line.find('[') else { return false };
+    let Some(close) = line[open..].find(']') else { return false };
+    let slug = &line[open + 1..open + close];
+    !slug.is_empty()
+        && slug.len() <= 60
+        && slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// Everything off-contract on one line. All of them, not the first: a line
