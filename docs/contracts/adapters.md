@@ -195,11 +195,13 @@ site, invisible to Guild, to Manifest and to Doctor.
 - **Whether `Secrets provider selection` should ever become `Guild →
   Manifest`.** It is Guild-only today on the tiering rule (a machine
   constraint). A repo that needs a different vault is the case that would
-  force the move, and a tier move is expensive — see the Configuration
-  Settings database's `Narrowing rule` for why a scalar that moves tiers
-  needs a narrowing rule invented for it before it can move.
+  force the move, and a tier move is expensive. `peer_polarity` in
+  `crates/config/settings.toml` is where that lives now — see
+  `configuration.md` for why the field was renamed from `Narrowing rule` when
+  the config direction rule was withdrawn.
 
-Two inline blocks closed the Notion page and are not reproduced here: one
-listed live open questions from the Armada Decisions database, filtered to
-that page; the other pointed at a database that has since been deleted in
-Notion, and its former contents are not recoverable.
+Two embedded lists closed the original and are not reproduced here. One was
+live open questions from the decision record, filtered to this subject; those
+stay in the workspace. The other was the settings list, which is now
+`crates/config/settings.toml` — the crate that reads them owns it, and
+`configuration.md` holds the rules they obey.

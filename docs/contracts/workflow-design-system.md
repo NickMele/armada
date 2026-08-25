@@ -364,8 +364,7 @@ dispatched, but that does not make the setup a workflow.
 
 # Open Items Carried Forward
 
-Live open items from the Armada Decisions database, filtered to `Home =
-Workflow`, are tracked there rather than here — decided items stay in that
-list and carry their reasoning in the Resolution field. A second embed on
-the Notion page pointed at a database that has since been deleted there;
-its former contents are not recoverable.
+Live open items for this subject are tracked in the decision record rather
+than here — decided items stay in that list and carry their reasoning with
+them. A second embedded list was the settings list, which is now
+`crates/config/settings.toml`.

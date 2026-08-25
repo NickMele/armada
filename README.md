@@ -69,10 +69,13 @@ routes stays available so you can still see what is running and stop it.
 armada/
 ├── crates/          the Rust workspace — Fleet, the domain, the adapters
 ├── apps/desktop/    Bridge
-├── packages/        shared: design tokens, and what more than one surface reads
+├── packages/        shared: design tokens, icons, and what surfaces both read
 ├── xtask/           the build gate
-└── docs/            practices, spikes, and what v1 taught
+└── docs/            contracts, practices, spikes, and what v1 taught
 ```
+
+**[`ARCHITECTURE.md`](ARCHITECTURE.md) is the map** — the process topology, the
+crate graph, and the rules that hold everywhere, with diagrams.
 
 ## Building it
 
@@ -126,12 +129,12 @@ Work is tracked as GitHub issues, grouped two ways.
 
 ## Contributing
 
-Not yet. Armada is one person's project and the foundations are still moving
-underneath it — an outside change today would be built on something that
-changes next week.
+Not yet — see [`CONTRIBUTING.md`](CONTRIBUTING.md). Issues and questions are
+welcome; there is nothing to review.
 
-Issues and questions are welcome. If something here is interesting, say so and
-that is useful; there is nothing to review yet.
+Security: [`SECURITY.md`](SECURITY.md). Armada brokers credentials and runs
+commands a repository declares, so the interesting constraints are listed
+there.
 
 ## Prior art, and a deleted first attempt
 
