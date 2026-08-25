@@ -19,6 +19,7 @@ mod docs;
 mod rules;
 mod rules_design;
 mod rules_docs;
+mod rules_icons;
 mod roadmap;
 mod tokens;
 mod tokens_emit;
@@ -95,6 +96,7 @@ fn verify_foundations() -> ExitCode {
         rules_docs::every_document_is_indexed(&root),
         rules_docs::nothing_links_to_the_design_workspace(&root),
         capabilities::every_capability_is_bound_and_indexed(&root),
+        rules_icons::every_glyph_in_use_is_registered(&root),
     ];
 
     let mut out = String::new();
