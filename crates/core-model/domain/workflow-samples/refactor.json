@@ -1,7 +1,7 @@
 {
   "workflow_id": "refactor",
   "version": 1,
-  "structure": "linear",
+  "structure": "loop",
   "default_gate_policy": {
     "retry_limit": 3,
     "iteration_cap": 5,

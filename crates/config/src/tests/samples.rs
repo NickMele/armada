@@ -1,32 +1,21 @@
-//! The seven WorkflowDefs checked into this repository, run through this
-//! parser.
+//! Every workflow sample, read by the M1 parser.
 //!
-//! **A validator that cannot reject the samples in its own repository is not a
-//! validator.** These files are the full schema, verbatim as the design work
-//! wrote them, and every one of them is refused here — which is the correct
-//! outcome and worth stating rather than discovering: M1 implements two of the
-//! `armada.yml` sections and five of the nine step fields, so a file carrying
-//! all nine cannot load and must not be made to.
+//! **These are real definitions, not fixtures.** `workflows.toml` says the
+//! definitions themselves are the JSON beside it, so a sample that does not
+//! load is a defect in the sample rather than a test asset.
 //!
-//! **Nothing under `workflow-samples/` is edited to make this pass.** The
-//! registry's own README says the source disagrees with itself and that
-//! repairing it here would destroy the finding. These tests are that finding,
-//! written as assertions.
+//! Four of them once declared `structure: "linear"` while routing a review
+//! back to an earlier step, which is a loop. They were authored where nothing
+//! validated them, and the mislabel was invisible until a parser existed.
+//! `structure` was the field that was wrong — the routing is the behaviour
+//! somebody designed, and deleting it to satisfy the label would have removed
+//! a step rather than corrected one.
 //!
-//! # The audit the milestone step asked to be confirmed
-//!
-//! Four of the seven — `bug`, `feature`, `refactor`, `revert` — declare
-//! `structure: "linear"` and carry `verdict_routing` on their review step,
-//! which the `structure` field's own rule rejects at config load. That is
-//! confirmed here: those four and only those four produce a
-//! [`Fault::ContradictsStructure`]. `code_review` and `prototype` are linear
-//! and carry none; `design_plan` is the one `loop`, where the same
-//! `verdict_routing` is legal and the structure value is what M1 refuses.
-//!
-//! JSON is read by the YAML parser because YAML is a superset of it. That is
-//! not a workaround: the samples are JSON because that is how the design work
-//! recorded them, and an `armada.yml` is YAML because that is what a repo
-//! authors. One reader covers both.
+//! **Every sample is still refused, and that is not the same claim.** M1 carries
+//! `linear` only, so a loop is refused for its structure; the two linear ones
+//! are refused for keys this milestone defers. Refused for a reason a later
+//! milestone removes is different from refused for being wrong, and this file
+//! exists to keep those apart.
 
 use std::path::{Path, PathBuf};
 
@@ -35,19 +24,21 @@ use crate::workflow::WorkflowDef;
 
 /// Every sample, and whether the audit's finding holds against it.
 const SAMPLES: &[(&str, Verdict)] = &[
-    ("bug.json", Verdict::LinearWithRouting),
+    ("bug.json", Verdict::Loop),
     ("code-review.json", Verdict::LinearAndConsistent),
     ("design-plan.json", Verdict::Loop),
-    ("feature.json", Verdict::LinearWithRouting),
+    ("feature.json", Verdict::Loop),
     ("prototype.json", Verdict::LinearAndConsistent),
-    ("refactor.json", Verdict::LinearWithRouting),
-    ("revert.json", Verdict::LinearWithRouting),
+    ("refactor.json", Verdict::Loop),
+    ("revert.json", Verdict::Loop),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Verdict {
-    /// `structure: linear` and a `verdict_routing` somewhere in its steps. The
-    /// contradiction the audit named.
+    /// Held the contradiction the audit named — `structure: linear` carrying a
+    /// routing edge — until the structure was corrected. No sample is this now,
+    /// and the variant stays so the contradiction has a name if one returns.
+    #[allow(dead_code)]
     LinearWithRouting,
     /// `structure: linear` and no routing edge. Refused for the M1 slice only.
     LinearAndConsistent,
@@ -91,23 +82,20 @@ fn every_sample_is_refused_by_the_m1_parser() {
 }
 
 #[test]
-fn the_four_samples_the_audit_named_carry_a_routing_edge_on_a_linear_workflow() {
-    for (name, verdict) in SAMPLES {
+fn no_sample_declares_a_structure_its_own_routing_contradicts() {
+    // Four of these once said `linear` and routed a review back to an earlier
+    // step, which is a loop. They were authored where nothing validated them,
+    // and the mislabel was invisible until a parser existed. `structure` was
+    // the field that was wrong: the routing is the workflow's real behaviour,
+    // and deleting it to satisfy the label would have removed a step somebody
+    // designed.
+    for (name, _) in SAMPLES {
         let refusals = load(name);
         let found = routing_refusals(&refusals);
-        match verdict {
-            Verdict::LinearWithRouting => assert_eq!(
-                found.len(),
-                1,
-                "{name} should carry exactly one routing edge, found {found:?}"
-            ),
-            Verdict::LinearAndConsistent | Verdict::Loop => {
-                assert!(
-                    found.is_empty(),
-                    "{name} should carry none, found {found:?}"
-                );
-            }
-        }
+        assert!(
+            found.is_empty(),
+            "{name} declares a structure its own routing contradicts: {found:?}"
+        );
     }
 }
 
