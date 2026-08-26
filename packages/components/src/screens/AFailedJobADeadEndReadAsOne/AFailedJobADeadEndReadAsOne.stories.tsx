@@ -138,15 +138,6 @@ export const FailedJob: Story = {
           <div className="armada-screen__col">
             <span className="armada-screen__eyebrow">What ran</span>
             <WorkflowRail steps={steps} />
-            <span className="armada-screen__caption" data-muted>
-              The failed step is hued and carries a surface, so the row that ended the Job
-              stays findable while the Check output is read beside it. The gate rows stay
-              neutral — the step&rsquo;s state is hued, a Check&rsquo;s exit code is
-              measured. <span className="armada-screen__mono">Implement</span> carries two
-              checks and both had to pass:{" "}
-              <span className="armada-screen__mono">cargo build</span> succeeds on an empty
-              diff, so the build alone would advance a drone that did nothing.
-            </span>
           </div>
 
           <div className="armada-screen__col" data-loose>
@@ -156,11 +147,6 @@ export const FailedJob: Story = {
                 <span className="armada-screen__tag">exit 1 · 4.2s · tail 12 lines</span>
               </div>
               <pre className="armada-screen__output">{tail}</pre>
-              <span className="armada-screen__caption" data-muted>
-                Readable without opening a log file. Mono throughout, because every line of
-                it is machine output, and the tail is bounded with the full capture one click
-                away.
-              </span>
             </div>
 
             <div className="armada-screen__col">
@@ -203,23 +189,6 @@ export const FailedJob: Story = {
           </div>
         </div>
       </div>
-
-      <p className="armada-screen__note">
-        <span className="armada-screen__strong">No retry, no category, no suggestion.</span>{" "}
-        All three controls take you to the work; none offers to do anything about it. The
-        screen states four things in order — what failed, that the job is over, where the
-        branch is, and where the log is — and the sentence saying nothing happens
-        automatically is written out rather than left to be inferred from an absence of
-        buttons.{" "}
-        <span className="armada-screen__strong">
-          The per-job log is named here because M1 is when everything is broken.
-        </span>{" "}
-        The Check output pane answers what the suite said; the log answers what Fleet, the
-        drone and Bridge each did, joined on{" "}
-        <span className="armada-screen__mono">job_id</span>. Showing the path and the error
-        count means a person can reach it without knowing the sink layout, and it costs one
-        row and one button rather than a viewer.
-      </p>
     </div>
   ),
 };

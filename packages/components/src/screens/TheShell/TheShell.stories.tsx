@@ -87,19 +87,6 @@ export const Shell: Story = {
           />
         </div>
       </div>
-
-      <p className="armada-screen__note">
-        <span className="armada-screen__strong">
-          Not running and unreachable differ on the runtime file.
-        </span>{" "}
-        Fleet writes port, pid and protocol version on startup and removes them on a clean
-        exit, so a missing file is a Fleet that is not there and a live pid with no answer is
-        a Fleet that is wedged — two different things to do about it, so two sentences. The
-        dot takes a status hue on the same grounds Doctor&rsquo;s pass, warn and fail do: a
-        health claim reuses the Job values rather than inventing a third set. Colour beyond
-        that stays out of the bar — there are no escalation or approval counts in M1 to carry
-        it.
-      </p>
     </div>
   ),
 };

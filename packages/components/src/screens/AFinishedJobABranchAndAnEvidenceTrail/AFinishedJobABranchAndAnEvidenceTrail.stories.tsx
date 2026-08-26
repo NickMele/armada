@@ -28,11 +28,6 @@ const NO_GLYPH_IN_REGISTRY = undefined as unknown as LucideIcon;
 const BRANCH_ICON = 16;
 const BRANCH_STROKE = 2;
 
-/* "px" carried as data. Rule twelve greps this package for a digit followed by
-   `px`; the figure below is the drawing's own sentence about a control's
-   height, not a height this file sets. */
-const PX = "px";
-
 const entries = [
   {
     step: "Plan the change",
@@ -125,10 +120,6 @@ export const FinishedJob: Story = {
               <Button ground="sunken">Open the log</Button>
             </div>
           </div>
-          <span className="armada-screen__caption" data-muted>
-            The branch is unpushed and unmerged. Armada does not push and has no merge action
-            — read the diff in your own tools and land it yourself.
-          </span>
         </div>
 
         <div className="armada-screen__col">
@@ -137,36 +128,8 @@ export const FinishedJob: Story = {
             <span className="armada-screen__tag">4 submissions · in order</span>
           </div>
           <EvidenceTrail entries={entries} />
-          <span className="armada-screen__caption" data-muted>
-            One entry per step in submission order, each with its{" "}
-            <span className="armada-screen__mono">evidence_type</span> and the Checks that let
-            it pass.{" "}
-            <span className="armada-screen__strong">
-              The three fields are the schema&rsquo;s, not a layout choice.
-            </span>{" "}
-            A work submission carries <span className="armada-screen__mono">claimed</span> —
-            what the work now does, as an observable —{" "}
-            <span className="armada-screen__mono">shown_by</span>, the artifact demonstrating
-            it, and <span className="armada-screen__mono">not_claimed</span>, which is
-            required and may be empty. It always renders, and an empty one reads{" "}
-            <em>Nothing</em> — a dash would read as no answer, which is the reading the field
-            exists to rule out. Rendering them as a paragraph would let a drone report in
-            prose, which is the failure this milestone is watching for. The trail is the
-            reason to open this screen, so it is the largest element rather than a panel to
-            expand.
-          </span>
         </div>
       </div>
-
-      <p className="armada-screen__note">
-        <span className="armada-screen__strong">
-          The screen hands over a branch name and gets out of the way.
-        </span>{" "}
-        No approve, no reject, no merge, and no in-app diff — the two controls copy a value
-        and open a directory. Both are {`36${PX}`} and neither is filled, because the accent
-        belongs to Approve and dispatch and there is no decision to make here that Armada
-        participates in.
-      </p>
     </div>
   ),
 };

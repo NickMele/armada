@@ -27,12 +27,6 @@ export default meta;
 
 type Story = StoryObj;
 
-/* "px" carried as data. Rule twelve greps this package for a digit followed by
-   `px` and cannot tell prose describing a measurement from a measurement being
-   set, so the unit is joined at render time. The number below is the drawing's
-   own, quoted in a sentence, not a value this file applies to anything. */
-const PX = "px";
-
 const menu = [
   { label: "Copy job id", shortcut: "⌘C" },
   { label: "Kill", shortcut: "x", danger: true },
@@ -194,48 +188,6 @@ export const TheList: Story = {
           action={open}
         />
       </ActiveJobsList>
-
-      <div className="armada-screen__notes">
-        <p className="armada-screen__note">
-          <span className="armada-screen__strong">
-            Ordering carries the trigger, not a control.
-          </span>{" "}
-          The one row that needs a person sorts first; the rest are newest work first. Every
-          row carries one secondary split button and no accent, and the row itself opens the
-          job. M1&rsquo;s field run is workflow or branch, step bar, step, elapsed and spend
-          — five fixed tracks, so the list reads down as well as across. The needs-approval
-          row swaps the first four tracks, because it has no branch, no step and no elapsed
-          yet: a job that has not run has different facts, and the track list belongs to the
-          field set.
-        </p>
-        <p className="armada-screen__note">
-          <span className="armada-screen__strong">
-            A failed segment is loud; a killed one is not.
-          </span>{" "}
-          <span className="armada-screen__mono">--step-failed</span> was added to the token
-          set on 2026-08-23 and aliases its Job counterpart. The first pass gave a failed step
-          no hue, on the grounds that a Check result is measured and measured facts render
-          flatly — rejected, because at M1 a failed Check ends the Job and that row is the
-          entire reason a person opened the screen. Killed keeps{" "}
-          <span className="armada-screen__mono">--fg-default</span> and no hue: it is a human
-          decision rather than a system failure and must not read as an error. That
-          distinction is what the two treatments now carry.
-        </p>
-      </div>
-
-      <p className="armada-screen__note">
-        <span className="armada-screen__strong">
-          On a list row the badge carries the pulse; the bar never does.
-        </span>{" "}
-        Decided 2026-08-23 after both were drawn: the badge is where{" "}
-        <span className="armada-screen__mono">circle-dot</span>&rsquo;s inner dot is
-        documented to pulse, and it sits in the same fixed{" "}
-        {`132${PX}`} column on every row, so the motion appears in one predictable
-        place rather than moving with the workflow&rsquo;s length. The bar&rsquo;s job is
-        where the work got to, which is a static fact. One pulse per screen, on the most
-        specific mark present — so on job detail the rail takes it and this badge goes
-        static.
-      </p>
     </div>
   ),
 };

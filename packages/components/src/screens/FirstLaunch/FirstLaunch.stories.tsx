@@ -34,10 +34,6 @@ export const FirstLaunch: Story = {
               }
             />
           </div>
-          <span className="armada-screen__caption" data-muted>
-            One line and the action. No centred glyph, no illustration — the empty state
-            points at the work available and nothing else.
-          </span>
         </div>
 
         <div className="armada-screen__card" data-width="half">
@@ -53,11 +49,6 @@ export const FirstLaunch: Story = {
               }
             />
           </div>
-          <span className="armada-screen__caption" data-muted>
-            The state a person will actually meet in M1, since Fleet is started by hand. The
-            command is machine-derived, so it is mono, and it is a value to copy rather than
-            a button — Bridge does not start Fleet at this milestone.
-          </span>
         </div>
       </div>
     </div>

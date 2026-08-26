@@ -84,20 +84,6 @@ const steps: WorkflowRailStep[] = [
   },
 ];
 
-const labelled: WorkflowRailStep[] = [
-  { id: "plan", label: "Plan the change", activity: "advanced" },
-  { id: "implement", label: "Implement", activity: "running", current: true },
-  { id: "verify", label: "Run tests", activity: "not_started" },
-  { id: "handoff", label: "Summarise", activity: "not_started" },
-];
-
-const identifiers: WorkflowRailStep[] = [
-  { id: "plan", label: "plan", labelIsAnIdentifier: true, activity: "advanced" },
-  { id: "implement", label: "implement", labelIsAnIdentifier: true, activity: "running", current: true },
-  { id: "verify", label: "verify", labelIsAnIdentifier: true, activity: "not_started" },
-  { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started" },
-];
-
 export const RunningJob: Story = {
   render: () => (
     <div className="armada-screen">
@@ -116,15 +102,6 @@ export const RunningJob: Story = {
           <div className="armada-screen__col">
             <span className="armada-screen__eyebrow">What ran</span>
             <WorkflowRail steps={steps} pulsing />
-            <span className="armada-screen__caption" data-muted>
-              Step names are sans nouns; the Check under each is mono, because a Check is a
-              command. A step carries{" "}
-              <span className="armada-screen__mono">mechanical_checks[]</span> and every entry
-              must pass, which is why <span className="armada-screen__mono">Implement</span>{" "}
-              shows two rows. An ungated step says so in words rather than leaving a gap
-              where a gate row would be — two of the four have no check at all, so a blank
-              would read as a gate that failed to render.
-            </span>
           </div>
 
           <div className="armada-screen__col">
@@ -139,16 +116,6 @@ export const RunningJob: Story = {
                 }
               />
             </div>
-            <span className="armada-screen__caption" data-muted>
-              One entry per step, in order, on the three fields the Evidence MCP tool
-              requires. It is the only record of what the drone claimed, and whether it is
-              worth reading is the finding this milestone is for.{" "}
-              <span className="armada-screen__mono">Plan the change</span> is{" "}
-              <span className="armada-screen__mono">facts_note</span>, so{" "}
-              <span className="armada-screen__mono">shown_by</span> points at files rather
-              than a command.
-            </span>
-
             <span className="armada-screen__eyebrow" data-spaced>
               Log
             </span>
@@ -175,31 +142,6 @@ export const RunningJob: Story = {
         </div>
       </div>
 
-      <div className="armada-screen__row">
-        <div className="armada-screen__card" data-width="rail">
-          <span className="armada-screen__caption">The rail with labels, as drawn above</span>
-          <WorkflowRail steps={labelled} />
-          <span className="armada-screen__caption" data-muted>
-            Nouns naming the artifact, matching the settled rule that step names are labels in
-            sans on every surface.{" "}
-            <span className="armada-screen__mono">WorkflowDef.steps[].label</span> is a
-            required field, so the schema is not the gap — these four values are, and I
-            proposed them.
-          </span>
-        </div>
-        <div className="armada-screen__card" data-dim data-width="rail">
-          <span className="armada-screen__caption">
-            The same rail with the ids alone, for contrast
-          </span>
-          <WorkflowRail steps={identifiers} />
-          <span className="armada-screen__caption">
-            Honest, and useless to scan: four schema identifiers on the surface a person
-            watches. This is what M1 renders if the four{" "}
-            <span className="armada-screen__mono">label</span> values are not written, which
-            is why the field being required is not enough on its own.
-          </span>
-        </div>
-      </div>
     </div>
   ),
 };
