@@ -1,14 +1,24 @@
 //! Every legal edge of the Job status machine, what may accompany it, and the
 //! one error a move can produce.
 //!
-//! # Thirty-four edges, from the registry
+//! # The edges, from the registry
 //!
-//! [`EDGES`] is `domain/job-transitions.toml`, transcribed. The registry's
-//! `on` prose is not carried: it says what fires an edge, which is Fleet's to
-//! know, and a second copy of it here could only drift from the file that owns
-//! it. What *is* carried is `escalation_trigger`, because it constrains what a
-//! caller may pass — and a constraint the type system can hold is worth more
-//! than a sentence.
+//! [`EDGES`] is `domain/job-transitions.toml`, transcribed — one entry per
+//! `[[transitions]]` row, in that file's order. The registry's `on` prose is
+//! not carried: it says what fires an edge, which is Fleet's to know, and a
+//! second copy of it here could only drift from the file that owns it. What
+//! *is* carried is `escalation_trigger`, because it constrains what a caller
+//! may pass — and a constraint the type system can hold is worth more than a
+//! sentence.
+//!
+//! A transcription is a copy, and a copy drifts. The gate's `the transition
+//! registry and the edge table name the same edges` is what holds it: every row
+//! is an entry and every entry is a row, matched on `from` and `to` — which the
+//! registry's own header calls the whole identity of an edge — with the trigger
+//! compared as a value inside a matched pair. No count is written here or
+//! asserted anywhere. A count is a second claim about the set that nothing
+//! keeps true, and the one that stood here agreed with the registry while an
+//! entry could have named the wrong status.
 //!
 //! # The destination and its reason are one value
 //!
@@ -40,8 +50,8 @@ pub struct Edge {
 
 use JobStatus::*;
 
-/// The thirty-four edges of `domain/job-transitions.toml`, in that file's
-/// order. Nothing else in this crate decides what is legal.
+/// The edges of `domain/job-transitions.toml`, in that file's order. Nothing
+/// else in this crate decides what is legal.
 pub static EDGES: &[Edge] = &[
     edge(AwaitingApproval, Killed),
     edge(AwaitingApproval, Queued),

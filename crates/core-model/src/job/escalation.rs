@@ -1,9 +1,12 @@
 //! Why a Job stopped and a person is being asked.
 //!
 //! The vocabulary the `escalated` status stores its reason from, and the one
-//! `last_verdict` draws its `failed(<reason>)` payload from. Thirteen variants,
-//! the thirteen keys of `domain/escalation-triggers.toml`, spelled as that file
-//! spells them.
+//! `last_verdict` draws its `failed(<reason>)` payload from. One variant per key
+//! of `domain/escalation-triggers.toml`, spelled as that file spells them — and
+//! no count written here, because a count is a second claim about the set that
+//! nothing keeps true. The gate's `the domain registries and the enums hold the
+//! same set` compares the two both ways, which is the only statement of the
+//! size that cannot go stale.
 //!
 //! # What this module does not decide
 //!
@@ -16,8 +19,8 @@
 
 use crate::job::status::JobStatus;
 
-/// Why a Job stopped and asked. Thirteen, from
-/// `domain/escalation-triggers.toml`.
+/// Why a Job stopped and asked. The keys of
+/// `domain/escalation-triggers.toml`, one variant each.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EscalationTrigger {
     /// The Drone was refused a tool or command it needed and finished having
@@ -76,9 +79,9 @@ pub enum TriggerKind {
 /// Whether a trigger describes one step or the whole Job.
 ///
 /// `None` is not a default — it is the registry's empty `level` field, which
-/// says the source left it undecided. Four rows carry it, and `last_verdict`
-/// says only step-level triggers may appear in it, so the four cannot be
-/// checked against that rule until somebody decides them.
+/// says the source left it undecided. `last_verdict` says only step-level
+/// triggers may appear in it, so every row carrying the gap is one that cannot
+/// be checked against that rule until somebody decides it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TriggerLevel {
     Step,
@@ -122,7 +125,7 @@ impl EscalationTrigger {
         }
     }
 
-    /// Read a stored value back. `None` where it is not one of the thirteen.
+    /// Read a stored value back. `None` where it is not one of them.
     pub fn from_wire(value: &str) -> Option<EscalationTrigger> {
         EscalationTrigger::ALL
             .iter()
@@ -148,7 +151,7 @@ impl EscalationTrigger {
     }
 
     /// Step or Job, where the registry decided. `None` where its `level` field
-    /// is empty, which is four rows and is a gap rather than a default.
+    /// is empty, which is a gap rather than a default.
     pub fn level(&self) -> Option<TriggerLevel> {
         match self {
             EscalationTrigger::BlockedByPolicy

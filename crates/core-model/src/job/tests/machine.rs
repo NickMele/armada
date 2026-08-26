@@ -1,28 +1,21 @@
 //! What the machine admits, and what it refuses.
 //!
 //! Read against `domain/job-transitions.toml` and `domain/job-statuses.toml`:
-//! the counts, the terminality and the trigger-bound edges are the registry's
-//! claims, asserted here rather than trusted.
+//! the terminality and the trigger-bound edges are the registry's claims,
+//! asserted here rather than trusted.
+//!
+//! # What [`EDGES`] itself holds is not asserted here, and no longer can be
+//!
+//! It was, by `EDGES.len() == 34` — a number this file could compare against
+//! nothing, since a `no_std` crate cannot read the TOML it was transcribed
+//! from. Thirty-four entries with one `from` wrong is still thirty-four, and
+//! the assertion passed on exactly that. The gate's `the transition registry
+//! and the edge table name the same edges` now matches the two sets both ways,
+//! pair by pair, and reports the duplicate and the self-edge that assertion
+//! also carried. Everything below tests what the machine *does* with the table,
+//! which is the half a comparison rule cannot reach.
 
 use super::*;
-
-// ------------------------------------------------------------- the edge table
-
-#[test]
-fn the_edge_table_is_the_registrys_thirty_four_edges() {
-    assert_eq!(EDGES.len(), 34);
-    for (i, edge) in EDGES.iter().enumerate() {
-        for other in &EDGES[i + 1..] {
-            assert!(
-                !(edge.from == other.from && edge.to == other.to),
-                "{} -> {} is in the table twice",
-                edge.from.as_wire(),
-                edge.to.as_wire()
-            );
-        }
-        assert_ne!(edge.from, edge.to, "the registry names no self-edge");
-    }
-}
 
 #[test]
 fn declared_terminality_agrees_with_the_wired_edges() {

@@ -34,6 +34,13 @@
 //! **No `toml` crate**, for the reason [`crate::rules_icons`] has none: the gate
 //! keeps no dependencies. This reads table headers only, and skips `"""` blocks
 //! so a bracket inside a `notes` string is not mistaken for one.
+//!
+//! # The edges are the same comparison one layer up
+//!
+//! [`edges`] holds the half that reads `domain/job-transitions.toml`, whose
+//! rows are not keys but `from`/`to` pairs of them. It shares this module's
+//! spellings and its parsing, and is split out only because both halves in one
+//! file is more than one file's worth.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -97,18 +104,31 @@ const VOCABULARIES: &[&str] = &[
     "criterion_verdict_attested",
 ];
 
-/// Every registry key is a variant, and every variant is a registry key.
-pub fn every_registry_key_is_a_variant(root: &Path) -> Report {
-    let mut report = Report::new("the domain registries and the enums hold the same set");
-
-    let mut spellings: BTreeMap<&str, BTreeMap<String, String>> = BTreeMap::new();
+/// Every enum's `variant -> wire` map, read from the source that declares it.
+///
+/// Shared with [`edges`], which compares the transition registry against
+/// spellings rather than against identifiers for the reason this module's
+/// header gives.
+fn wire_spellings(
+    root: &Path,
+    report: &mut Report,
+) -> BTreeMap<&'static str, BTreeMap<String, String>> {
+    let mut spellings = BTreeMap::new();
     for source in ENUMS {
         let Ok(text) = fs::read_to_string(root.join(source.path)) else {
             report.fail(format!("{} — the source `{}` is declared in", source.path, source.name));
             continue;
         };
-        spellings.insert(source.name, read_enum(&text, source, &mut report));
+        spellings.insert(source.name, read_enum(&text, source, report));
     }
+    spellings
+}
+
+/// Every registry key is a variant, and every variant is a registry key.
+pub fn every_registry_key_is_a_variant(root: &Path) -> Report {
+    let mut report = Report::new("the domain registries and the enums hold the same set");
+
+    let spellings = wire_spellings(root, &mut report);
 
     for pairing in PAIRINGS {
         let path = format!("{DOMAIN}/{}", pairing.registry);
@@ -317,6 +337,8 @@ fn tables(text: &str) -> Vec<(String, usize)> {
     }
     found
 }
+
+pub mod edges;
 
 #[cfg(test)]
 mod tests;
