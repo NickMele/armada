@@ -212,6 +212,10 @@ on purpose and makes the gate name what was waiting.
 - **[pilot-button-placement]** Where does the Pilot button live on the Job surface? Not yet decided.
 - **[assist-coming-soon-copy]** What does the Assist coming-soon copy say without promising a date? Not yet decided. Assist renders disabled rather than hidden, and per the Voice Contract the copy has to say why it is off without committing to a ship date.
 
+## docs/practices/acceptance-tests.md
+
+- **[m2-test-first]** Whether the next milestone's acceptance test is written before its code, and whether a gate rule asserts its failure until the milestone closes. M0 did both, at the cost of a workspace test run that could not include the acceptance crate. Nothing decides that the next one repeats it.
+
 ## docs/practices/bridge.md
 
 - **[runtime-file-format]** The runtime file's exact path, filename, and on-disk format (JSON? TOML?) — not fixed anywhere in the repo yet.

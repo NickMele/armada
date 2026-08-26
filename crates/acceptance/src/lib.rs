@@ -13,13 +13,13 @@
 //! That is over. The code the test named exists, the test was reconciled
 //! against the vocabulary that was actually built, and it passes.
 //!
-//! **Two things still say otherwise and are wrong.** `cargo xtask
-//! verify-foundations` carries a rule asserting that `cargo test -p acceptance`
-//! exits non-zero, and a Stop hook ends the session if it does not. Both were
-//! written for a milestone in which failing was the requirement. Neither was
-//! changed by the step that made this green, because a gate weakened to admit
-//! the thing it was watching for is not a gate — what they should assert
-//! instead is a person's decision and is recorded on that step's issue.
+//! **The two mechanisms that said otherwise are retired.** `cargo xtask
+//! verify-foundations` rule one now asserts that `cargo test -p acceptance`
+//! passes and ran something, and the Stop hook that ended a session on a green
+//! run is deleted. Neither was weakened to admit what it was watching for; the
+//! reasoning they carried — a milestone that can fake itself green proves
+//! nothing — is what rule one still enforces, in the direction the falsehood
+//! now runs. The account of all of it is `docs/practices/acceptance-tests.md`.
 //!
 //! # What the test is, in one line
 //!

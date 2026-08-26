@@ -1,0 +1,75 @@
+# Bug, as M1 runs it. This is the real definition a running Fleet loads.
+#
+# There is a second `bug.json` in this repository, at
+# `crates/core-model/domain/workflow-samples/bug.json`, and the two are not
+# duplicates. Read this before reconciling them:
+#
+#   - **That one is the designed workflow, and it is correct.** Seven steps —
+#     repro, root_cause, fix, regression_verify, review, merge, close — with
+#     judge checks, evidence scopes, gate policy, and a `review` step that
+#     routes `request_changes` back to `fix`. It declares `structure: "loop"`,
+#     which is what that routing makes it. It is the authority on what Bug
+#     becomes, and it lives with the registry that records that decision.
+#
+#   - **This one is M1's reduced form, and it is what runs today.** Four steps,
+#     no Judge, no loop, `advance_gate: auto` throughout. Reducing it is the
+#     only way to have a workflow that dispatches at all right now.
+#
+#   - **The designed one does not load at M1, and that is not a defect in it.**
+#     `crates/config` carries one of the two structures and one of the four
+#     advance gates, because there is no Judge to answer
+#     `auto_if_judge_passes` and no verdict to route a loop on. Its refusal is
+#     `OutsideM1` — a value the schema sanctions that this milestone has not
+#     built. The fix is a later milestone, not an edit to that file.
+#
+# So: do not reconcile them, and do not copy one over the other. When M1's
+# gates grow a Judge and a loop, this file goes away and the designed
+# definition is what a repository ships.
+#
+# A `#` comment is YAML, not JSON. `crates/config` reads both files with a YAML
+# parser — JSON is a subset of YAML — so this loads, but a strict JSON reader
+# will not take it. The extension is kept because the step names this path and
+# because a repository's workflows are the shape `workflow-samples/` already
+# established.
+#
+# Five fields, and no others. `version`, `name`, `structure`, `steps[]`, and
+# within a step `id`, `label`, `evidence_type`, `mechanical_checks[]` and
+# `advance_gate`. Everything else in the schema is refused by name.
+{
+  "version": 1,
+  "name": "bug",
+  "structure": "linear",
+  "steps": [
+    {
+      "id": "plan",
+      "label": "Plan the change",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    },
+    {
+      "id": "implement",
+      "label": "Implement",
+      "evidence_type": "diff",
+      "mechanical_checks": [
+        { "type": "manifest_check", "check": "build", "expect_exit_code": 0 },
+        { "type": "diff_nonempty" }
+      ],
+      "advance_gate": "auto"
+    },
+    {
+      "id": "verify",
+      "label": "Run tests",
+      "evidence_type": "test_suite_run",
+      "mechanical_checks": [
+        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 }
+      ],
+      "advance_gate": "auto"
+    },
+    {
+      "id": "handoff",
+      "label": "Summarise",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    }
+  ]
+}

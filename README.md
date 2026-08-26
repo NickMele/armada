@@ -16,14 +16,20 @@
 **Armada does not work yet. Nothing here runs.**
 
 This repository is the second attempt, started from scratch in August 2026. It
-currently contains a build gate, a design-token pipeline, a failing acceptance
-test, and twelve mostly-empty crates that fix a dependency shape before there is
-anything to put inside them.
+has a build gate, a design-token pipeline, a component library, and a Rust
+workspace that can drive a Job from approval to a finished branch against fake
+adapters.
 
-The acceptance test **fails on purpose**, and a hook enforces that it keeps
-failing. It describes a Job that runs end to end, and it is the definition of
-done for the first milestone — a test that passes early would mean the
-definition had been quietly narrowed.
+**The acceptance test passes**, which is new. It was written before the code it
+tests and could not compile for the whole of the first milestone — deliberately,
+so the compiler's error list was the list of what the remaining crates had to
+provide. It describes a Job that runs end to end, and it is how a milestone
+proves its claim. `docs/practices/acceptance-tests.md` is the arrangement.
+
+**What it does not prove is the interesting part.** It is hermetic — no process
+spawned, no repository touched, no network opened — so it proves the machinery
+and not the merge. Nothing has yet spawned a real agent against a real
+repository.
 
 Watch the [milestones](https://github.com/NickMele/armada/milestones) if you
 want to know when that changes.
@@ -112,8 +118,8 @@ lines, and anything that names a person or a machine.
 ### Tests
 
 ```sh
-cargo nextest run --workspace     # not `cargo test`
-cargo test -p acceptance          # fails on purpose. Do not fix it
+cargo nextest run --workspace --exclude acceptance   # not `cargo test`
+cargo test -p acceptance                            # the milestone's own claim
 ```
 
 ## Roadmap

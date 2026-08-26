@@ -231,10 +231,11 @@ anything where the input and expected output both fit in the test function.
 `core-model`'s state transitions and escalation logic are the obvious tenants
 once M1 fills the crate in.
 
-**Integration tests** live in `tests/acceptance/` at the repo root — the
-directory `xtask` rule one (`acceptance_test_exists_and_fails`) is already
-watching, currently failing because nothing is there yet. These are for
-anything that crosses a crate boundary for real: a Drone's output stream
+**Integration tests** live in `crates/acceptance/tests/` — the directory
+`xtask` rule one (`acceptance_test_exists_and_passes`) watches. What that test
+is and why it is written before the code it tests is
+`docs/practices/acceptance-tests.md`. These are for anything that crosses a
+crate boundary for real: a Drone's output stream
 being parsed by whatever watches it, a Job moving through Fleet, a round trip
 through `store`'s actual SQLite file.
 

@@ -57,6 +57,8 @@ crates/core-model/src/job/transition.rs
 crates/core-model/src/lib.rs
 crates/fleet-bin/src/lib.rs
 crates/fleet-bin/src/main.rs
+crates/fleet-bin/src/setup.rs
+crates/fleet-bin/src/tests.rs
 crates/fleet/src/adrift.rs
 crates/fleet/src/briefing.rs
 crates/fleet/src/clock.rs

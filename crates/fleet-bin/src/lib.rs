@@ -10,6 +10,16 @@
 //! # Where the composition actually is
 //!
 //! `src/main.rs`. This library exists for the parts of the same binary that are
-//! worth testing without starting a process, and today it holds none of them —
-//! the startup sequence is four calls into `fleet` and reads better where it
-//! runs than behind a function that exists to be called once.
+//! worth testing without starting a process, and [`setup`](mod@setup) is the
+//! first of them: reading a repository's `armada.yml` and its one workflow, and
+//! resolving the second against the first, is the part of starting Fleet that
+//! can be wrong on disk. Everything after it needs a port, a store and a
+//! process, and reads better where it runs than behind a function that exists
+//! to be called once.
+
+pub mod setup;
+
+#[cfg(test)]
+mod tests;
+
+pub use setup::{Setup, SetupRefused};

@@ -56,8 +56,10 @@ concrete options and a recommendation.
 One step. Finish it, report, stop. The order is deliberate and several steps
 exist to constrain the ones after them.
 
-- **Green can be a build failure.** The acceptance test must fail for all of M1.
-  If you want to stub something so a test passes, stop and report instead.
+- **A test made to pass is worse than a test failing.** The acceptance test is
+  the milestone's own claim — read `docs/practices/acceptance-tests.md` before
+  touching it. If you want to stub something so a test passes, stop and report
+  instead.
 - **A negative result is a result.** On a spike, "no" is an answer. Write it down
   with the evidence.
 - **Time is injected, never read.** A model that calls the clock cannot be
@@ -77,7 +79,7 @@ faithful conversion has been wrong here twice.
 
 | Check | Command |
 |---|---|
-| Tests | `cargo nextest run --workspace --exclude acceptance` — plain `--workspace` cannot run while the acceptance test must not compile |
+| Tests | `cargo nextest run --workspace --exclude acceptance`, then `cargo test -p acceptance` — the acceptance crate is excluded from the first because it is the milestone's claim rather than a unit test, and is worth reading on its own |
 | The gate | `cargo xtask verify-foundations` — read every line it names |
 | Dependencies | `cargo tree -p core-model` shows only itself |
 

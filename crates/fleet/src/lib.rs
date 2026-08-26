@@ -51,11 +51,22 @@
 //! is invented — every other crate in the workspace refuses both, and the
 //! refusal needs somewhere to bottom out.
 //!
+//! `fleet-bin` now serves this over the listener it binds. What a Fleet is
+//! assembled from comes from the repository it was pointed at — `armada.yml`
+//! at that repository's root and one definition in `.armada/workflows/` beside
+//! it — which is the decision M1 step 13 carries. Nothing on a command line
+//! names either file, so two Fleets over one repository cannot disagree about
+//! it.
+//!
 //! The Job-shape classifier and a second working slot are later milestones, and
-//! neither is stubbed here. Nor is `fleet-bin` wired to serve: constructing a
-//! Fleet needs an `armada.yml` and a workflow resolved from somewhere, and
-//! **which paths those are has not been decided by any step**. A composition
-//! root that guessed would put that decision where nobody would look for it.
+//! neither is stubbed here. **Nor is anything calling [`Fleet::turn`] on an
+//! interval.** `api::Served::by` takes the daemon by value and hands back no
+//! handle, so a composition root that has passed a Fleet to the router has
+//! nothing left to drive it with — a second reference needs `api` to state
+//! `Daemon` for `Arc<D>`, and that is `api`'s to decide rather than something
+//! to work around from here.
+//!
+//! [`Fleet::turn`]: crate::Fleet::turn
 
 pub mod adrift;
 pub mod briefing;

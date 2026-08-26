@@ -54,7 +54,6 @@ use testkit::FakeWorkProduct;
 
 use bench::{a_fix_diff, a_root_cause_note, states, Bench, REPO_ROOT};
 
-
 // ---------------------------------------------------------------------------
 // The run itself
 // ---------------------------------------------------------------------------
@@ -378,7 +377,10 @@ fn the_branch_a_job_writes_is_derived_from_its_id() {
     let spec = WorktreeSpec::for_job(REPO_ROOT, run.job.id().as_str()).expect("a legal spec");
 
     assert_eq!(run.worktree.branch(), spec.branch());
-    assert_eq!(run.worktree.branch(), format!("armada/{}", run.job.id().as_str()));
+    assert_eq!(
+        run.worktree.branch(),
+        format!("armada/{}", run.job.id().as_str())
+    );
     assert_eq!(run.worktree.path(), spec.worktree_path());
     assert!(
         run.worktree.path().starts_with(REPO_ROOT),

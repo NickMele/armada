@@ -86,7 +86,7 @@ fn main() -> ExitCode {
 fn verify_foundations() -> ExitCode {
     let root = repo_root();
     let reports = vec![
-        rules::acceptance_test_exists_and_fails(&root),
+        rules::acceptance_test_exists_and_passes(&root),
         rules::every_failure_mode_has_a_fixture(&root),
         rules::no_file_too_long(&root),
         rules::every_source_file_is_in_the_manifest(&root),

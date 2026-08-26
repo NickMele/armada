@@ -5,7 +5,8 @@ their work before advancing them. Rust daemon, Electron app, one repo.
 
 - `cargo xtask verify-foundations` is **red on purpose** until a milestone is
   finished. Do not chase green — read what each failing line names.
-- **The acceptance test must fail** for all of M0. A Stop hook enforces it.
+- **The acceptance test is a milestone's own claim**, written before the code.
+  `docs/practices/acceptance-tests.md`.
 - **v1 is deleted.** A bare file path in a doc means `git show v1-final:<path>`.
 - **Never write an address into this repository.** It is public and the design
   workspace is not. Name what a thing is, not where it is.

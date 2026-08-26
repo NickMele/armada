@@ -23,6 +23,10 @@ api = { path = "../api" }
 # `net` for the one listener, `signal` because a clean exit is what removes the
 # runtime file and a signal is how a daemon is told to take one.
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+# `api::router` hands back an `axum::Router` and stops there — serving one over
+# a listener is `axum::serve`, and the composition root is where the listener
+# is. It adds no crate to the graph: `api` already brings axum in.
+axum = "0.7"
 
 # **Declared dev-only, against the crate table, deliberately.** The table lists
 # `testkit` among fleet-bin's dependencies, and fleet-bin is the composition

@@ -1,0 +1,53 @@
+# Armada's own Manifest — the real one, read by a running Fleet.
+#
+# This is the file `fleet-bin` loads when it is pointed at this repository. It
+# is not a sample and not a fixture: the two Checks below are the commands this
+# workspace is actually built and tested with, and a Job dispatched here runs
+# them verbatim.
+#
+# Five keys, and no others. `version`, `id`, `checks.<name>.run`,
+# `commands.<name>.run` and `commands.<name>.destructive` are the whole of what
+# `crates/config` reads at M1; every other section the Manifest concept page
+# describes — permissions, secrets, ports, skills, budget, dispatch freeze,
+# setup requirements, auto-merge policy — is refused by name. A key nothing
+# reads is a promise this file would be making that the system does not keep,
+# so each section arrives with the code that honours it.
+
+version: 1
+
+# Minted once, and stable. The Manifest carries its own identity so this
+# workspace can move on disk without dangling the Jobs that ran against it.
+id: 01M0ZNVRJNC89ECG0PV1T8W08Y
+
+# Checks gate advancement. A step's `mechanical_checks` names one of these by
+# name; a name a step asks for and this file does not declare is refused before
+# anything is dispatched.
+checks:
+  build:
+    # `--locked`, because a Check that quietly updates the lockfile is a Check
+    # that changed the thing it was measuring.
+    run: cargo build --workspace --locked
+
+  test:
+    # **`--exclude acceptance` is not a convenience.** The acceptance test is
+    # required to fail for the whole of M1, so a plain `--workspace` run cannot
+    # be this repository's test command — it would report red for the one
+    # reason that is deliberate and drown every reason that is not.
+    #
+    # `nextest` rather than `cargo test`: measured at 3x on v1, 83 seconds
+    # against 27 for the same 2,034 tests, because `cargo test` runs each test
+    # binary to completion before starting the next.
+    run: cargo nextest run --workspace --exclude acceptance
+
+# Commands gate nothing. They are what a Drone is given to run, distinct from
+# the Checks that decide whether it advances — which is why they are a second
+# registry rather than one list with a flag. A name in both is refused.
+commands:
+  fmt:
+    run: cargo fmt --all
+
+  gate:
+    # **Expected to exit non-zero**, and that is not a fault. The gate is red on
+    # purpose until a milestone is finished, so this is a command rather than a
+    # Check: nothing advances or fails on its exit code.
+    run: cargo xtask verify-foundations

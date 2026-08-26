@@ -15,22 +15,29 @@ const SOURCE_ROOTS: &[&str] = &["crates", "apps", "packages", "xtask"];
 
 // ---------------------------------------------------------------- rule one
 
-/// The acceptance test exists and fails.
+/// The acceptance test exists and passes.
 ///
-/// **Failing is the passing condition.** The test is written before the code it
-/// tests, and it must fail for the whole of M0 — so this rule is satisfied by a
-/// non-zero exit and violated by a green one.
+/// **A milestone that can fake itself green proves nothing.** That is why this
+/// rule has always been here; what changed at the end of M0 is the direction the
+/// falsehood would run. Through M0 the test was written before the code it
+/// tested, so a green run meant something had been stubbed, weakened or made to
+/// pass, and the rule was satisfied by a non-zero exit. The code the test names
+/// now exists, so a red run means the milestone's claim is not carried, and the
+/// rule is satisfied by a green one.
 ///
-/// It reports *which kind* of failure, because they are not the same signal and
-/// conflating them is how a milestone ends with a test nobody ever ran. "Does
-/// not compile" means the API it names does not exist yet, which is the expected
-/// state until the remaining crates land. "Failed an assertion" means it builds
-/// and the behaviour is wrong, which is the expected state after that.
+/// It reports *which kind* of failure, because they are not the same signal.
+/// "Does not compile" means the test names an API that moved out from under it,
+/// and reconciling it is a change to what the milestone claims. "Failed an
+/// assertion" means it builds and the behaviour is gone.
 ///
-/// The invocation is `cargo test -p acceptance`, which is what M0 step 8's Stop
-/// hook runs too — the gate and the hook must agree on what they are watching.
-pub fn acceptance_test_exists_and_fails(root: &Path) -> Report {
-    let mut report = Report::new("the acceptance test exists and fails");
+/// **A run of nothing is the same falsehood pointing the other way.** An empty
+/// test binary exits zero, so the rule counts the tests that ran rather than
+/// reading the exit status alone.
+///
+/// The invocation is `cargo test -p acceptance`. What an acceptance test is
+/// here, and what one costs, is `docs/practices/acceptance-tests.md`.
+pub fn acceptance_test_exists_and_passes(root: &Path) -> Report {
+    let mut report = Report::new("the acceptance test exists and passes");
 
     if !root.join("crates/acceptance/Cargo.toml").is_file() {
         report.fail("crates/acceptance — the package holding the acceptance test");
@@ -51,22 +58,44 @@ pub fn acceptance_test_exists_and_fails(root: &Path) -> Report {
         return report;
     };
 
-    if run.status.success() {
-        report.fail(
-            "a failing acceptance test — it passed. Green is a build failure in \
-             M0: something was stubbed, weakened or made to pass",
-        );
+    if !run.status.success() {
+        let stderr = String::from_utf8_lossy(&run.stderr);
+        let kind = if stderr.contains("error[E") || stderr.contains("could not compile") {
+            "does not compile — it names an API that is no longer there. \
+             Reconciling it changes what the milestone claims, and is named as such"
+        } else {
+            "failed an assertion — it builds, and the claim it makes is not carried"
+        };
+        report.fail(format!("a passing acceptance test — it {kind}"));
         return report;
     }
 
-    let stderr = String::from_utf8_lossy(&run.stderr);
-    let kind = if stderr.contains("error[E") || stderr.contains("could not compile") {
-        "does not compile — the API it names does not exist yet"
-    } else {
-        "failed an assertion — it builds, and the behaviour is not there yet"
-    };
-    report.warn(format!("the acceptance test {kind}"));
+    if tests_that_ran(&String::from_utf8_lossy(&run.stdout)) == 0 {
+        report.fail(
+            "a passing acceptance test — it ran none. An empty test binary exits \
+             zero, and green over nothing claims nothing",
+        );
+    }
     report
+}
+
+/// How many tests the run actually executed, read out of libtest's own summary
+/// lines. Every harness in the package reports one, including the ones with
+/// nothing in them, so the counts are summed rather than taken from the first.
+fn tests_that_ran(stdout: &str) -> usize {
+    let mut total = 0;
+    for line in stdout.lines() {
+        let Some(rest) = line.trim().strip_prefix("test result: ") else {
+            continue;
+        };
+        let Some((_, counts)) = rest.split_once(". ") else {
+            continue;
+        };
+        if let Some((passed, _)) = counts.split_once(" passed") {
+            total += passed.trim().parse::<usize>().unwrap_or(0);
+        }
+    }
+    total
 }
 
 // ---------------------------------------------------------------- rule two

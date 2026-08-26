@@ -53,7 +53,11 @@ pub struct Ticking(AtomicU64);
 impl Clock for Ticking {
     fn now(&self) -> Timestamp {
         let tick = self.0.fetch_add(1, Ordering::SeqCst);
-        Timestamp::from_rfc3339(format!("2026-08-26T11:{:02}:{:02}.000Z", tick / 60, tick % 60))
+        Timestamp::from_rfc3339(format!(
+            "2026-08-26T11:{:02}:{:02}.000Z",
+            tick / 60,
+            tick % 60
+        ))
     }
 }
 
@@ -64,7 +68,10 @@ pub struct Counted(AtomicU64);
 
 impl Mint for Counted {
     fn ulid(&self) -> Ulid {
-        Ulid::carried(format!("01BUG{:021}", self.0.fetch_add(1, Ordering::SeqCst)))
+        Ulid::carried(format!(
+            "01BUG{:021}",
+            self.0.fetch_add(1, Ordering::SeqCst)
+        ))
     }
 }
 
@@ -273,7 +280,8 @@ impl Bench {
     /// gate**, called directly, because a hermetic test cannot reach the loop
     /// that ordinarily calls it.
     pub async fn gate(&self, run: &Run, step: &StepId, submitted: &Submission) -> Ruling {
-        let at = AtStep::named(&self.workflow, step, &run.worktree).expect("a step of the workflow");
+        let at =
+            AtStep::named(&self.workflow, step, &run.worktree).expect("a step of the workflow");
         rule_on(at, submitted, &self.work, self.budget).await
     }
 

@@ -7,8 +7,12 @@ name = "acceptance"
 version = "0.0.0"
 dependencies = [
  "adapter-traits",
+ "config",
  "core-model",
+ "fleet",
  "testkit",
+ "tokio",
+ "verification",
 ]
 
 [[package]]
@@ -313,6 +317,7 @@ dependencies = [
  "adapter-traits",
  "adapters",
  "api",
+ "axum",
  "checks-runner",
  "config",
  "core-model",
