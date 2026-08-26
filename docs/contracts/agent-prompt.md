@@ -298,9 +298,8 @@ which is an assembled prompt and therefore governed here.
 | **The Pilot handoff instruction** | Fleet tells the Drone to call `escape_hatch` after a human confirms Pilot | Drafted, not sanctioned |
 | **The hatch-unavailable answer** | A Drone pulled the hatch on a Job Fleet had not marked | Drafted, not sanctioned |
 
-**Every turn Fleet authors now has wording, and none of it is agreed.**
-`redirect_drone` carries a person's words rather than Fleet's, so it has
-none of its own to specify.
+**Every turn Fleet authors now has wording.** `redirect_drone` carries a
+person's words rather than Fleet's, so it has none of its own to specify.
 
 **One Fleet-authored turn is specified and the rest are drafted.** A draft
 is wording somebody can argue with; it is not wording Armada has agreed to
@@ -639,9 +638,23 @@ word chosen there is the most expensive one in the stack to change.
 And the baseline may carry no claim about consequences that is not true —
 an authority nobody has established is exactly such a claim.
 
-The measurement is designed in
-[spike 7](../spikes/007-will-a-drone-take-the-escape-hatch.md), which
-states in advance which result sends the contract down which of the three.
+**The third has now been run.**
+[Spike 7](../spikes/007-will-a-drone-take-the-escape-hatch.md) measured
+the word against a task that cannot be done, on a fixed resolution
+declared before the runs. Framing moved abstention from half to all of
+them, monotonically in the height of the word, at no bail rate the design
+could detect on work that could be done. It cannot separate *legitimate*
+from *sanctioned*, so the milder word is not a choice against evidence.
+
+**The measurement supports the word. It does not sanction it** — that is
+still a person's, and the clause and the poke draft stay marked as drafts
+until one says otherwise. Two things the spike found bear on this section
+directly. The mechanism sentence on its own moved nothing measurable,
+which makes the clause the carrier and the word the payload rather than
+two separable decisions. And [Pilot](../concepts/pilot.md)'s mark now
+turns an unbidden pull into an escalation, so the quantity this section's
+premise is written about — an opt-out rate — is one the mechanism no
+longer produces.
 
 ## The four that moved, and the one deleted
 
