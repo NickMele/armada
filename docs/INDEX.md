@@ -20,6 +20,7 @@ Each ends with the questions it found and did not answer.
 - [`practices/rust.md`](practices/rust.md) — crate boundaries, the
   type-system-first pattern, and why each rule exists rather than what it is.
 - [`practices/bridge.md`](practices/bridge.md) — the three-process split, the
+- [`practices/react.md`](practices/react.md) — how a component is written, and which React advice does not apply to a window that loads from disk
   security posture, and the v1 failure the desktop app exists to escape.
 - [`practices/protocol.md`](practices/protocol.md) — the one seam between Rust
   and TypeScript: version skew, DTOs, and what survives when the two disagree.

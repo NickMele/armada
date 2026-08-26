@@ -226,6 +226,10 @@ on purpose and makes the gate name what was waiting.
 - **[broadcast-capacity]** The bounded broadcast channel's capacity, and whether it's one number for all event types or tuned per event type.
 - **[lifeboat-router]** Whether the lifeboat's four routes live inside the same `axum` `Router` as the main protocol or a separate one. Either can satisfy "no shared dependency with the versioned protocol"; which one hasn't been decided.
 
+## docs/practices/react.md
+
+- **[react-list-virtualization]** At what length does the Job list need windowing rather than a bound, and does windowing survive the rule that a row must not remount while the list reorders? The list is bounded today and names what it left out, which is honest but is not an answer.
+
 ## docs/practices/rust.md
 
 - **[compiler-cache]** Whether v2 adopts a compiler cache, and on what measurement. v1 never established how much of its four-minute cold build was compilation, linking or the forced reinstall.
