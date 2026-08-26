@@ -8,19 +8,26 @@ publish = false
 [lints]
 workspace = true
 
-# The acceptance test is hermetic: no process spawned, no repo touched, no
-# network opened. Everything it drives arrives through a fake in `testkit`.
+# The acceptance test is hermetic: no process spawned, no repository touched,
+# no network opened, no file written. Everything it drives arrives through a
+# fake in `testkit` or through a seam it plants itself.
 #
-# **`fleet` is deliberately not declared here.** A path dependency on a crate
-# that does not exist is a manifest error, and cargo refuses the whole workspace
-# over one — which would take the gate down with it. The test names `fleet`
-# anyway and the compiler reports it unresolved, which is the same signal
-# without breaking every other crate's build.
-#
-# The three below do exist and are empty, so the test's imports from them are
-# unresolved too. Both kinds of error are the list of what M0 step 11 and M1
-# must provide.
+# **`fleet` is declared here now, and was deliberately not before.** Until M1
+# step 11 there was no such crate, and a path dependency on one that does not
+# exist is a manifest error cargo refuses the whole workspace over — which
+# would have taken the gate down with it. What the test reaches for in `fleet`
+# is the gate and the aftermath, both of which are functions over values.
+# **Nothing it calls starts a process**, and `Fleet` itself does not appear
+# below the header of this file: the loop cannot admit a Job without spawning
+# a Drone, so the loop is proven in `fleet`'s own tests and not here.
 [dev-dependencies]
 core-model = { path = "../core-model" }
 adapter-traits = { path = "../adapter-traits" }
+config = { path = "../config" }
+verification = { path = "../verification" }
+fleet = { path = "../fleet" }
 testkit = { path = "../testkit" }
+# `fleet::rule_on` is async because a Manifest Check is a process. This test
+# declares no Manifest Check, so the future it awaits never reaches one — but
+# it is still a future and still needs somewhere to run.
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

@@ -20,13 +20,12 @@ import json
 import os
 import sys
 
-WARN_LINES = 500
+# Only the refusals live here. Both warnings — 500 lines of source, 30 lines of
+# a CLAUDE.md — are the gate's, because a warning is something you read and a
+# hook is something you answer, and a hook's `ask` overrides every permission
+# mode by design. `xtask/src/rules.rs` carries all four numbers and the
+# reasoning; the two files must not drift on the ones they share.
 FAIL_LINES = 900
-
-# A CLAUDE.md is read by an agent at the start of every task, so it earns a far
-# tighter ceiling than source does. `xtask/src/rules.rs` carries the same two
-# numbers and the reasoning; the two must not drift.
-CLAUDE_MD_WARN = 30
 CLAUDE_MD_FAIL = 50
 
 # Untyped JSON is allowed exactly where bytes enter the process — plus the
@@ -140,11 +139,6 @@ def main() -> None:
                            "skill or Notion and leave the pointer. v1's agent "
                            "file reached 328 lines one reasonable paragraph at "
                            "a time.")
-        if lines > CLAUDE_MD_WARN:
-            answer("ask", f"{rel} would be about {lines} lines, over "
-                          f"{CLAUDE_MD_WARN}. Is this a pointer, or an "
-                          "explanation that belongs somewhere it can be found "
-                          "on purpose?")
 
     # ---- rule: 500 warns and needs acknowledgment, 900 fails -------------
     #
@@ -156,6 +150,13 @@ def main() -> None:
     # A hook stricter than the gate is worse than no hook: it is invisible in
     # CI, it fires at the moment somebody is mid-task, and what it produces is
     # a workaround rather than a fix. This is the second one found in a day.
+    #
+    # It also no longer asks, only refuses. A hook's `ask` overrides every
+    # permission mode by design, so the warning at 500 stopped every write of a
+    # large Rust file and no setting could quiet it — while a workspace was
+    # being written from nothing. The gate still warns at 500, where a warning
+    # is read rather than answered, and the hook keeps the refusal at 900 that
+    # a gate run would only catch afterwards.
     # If a rule exists in both places, the scopes are part of the rule.
     if lines is not None and rel.endswith((".rs", ".ts", ".tsx")) and rel.split("/", 1)[0] in (
         "crates", "apps", "packages", "xtask",
@@ -163,10 +164,6 @@ def main() -> None:
         if lines > FAIL_LINES:
             answer("deny", f"{rel} would be about {lines} lines, over {FAIL_LINES}. "
                            "Split it.")
-        if lines > WARN_LINES:
-            answer("ask", f"{rel} would be about {lines} lines, over {WARN_LINES}. "
-                          "A long file is where the reasoning stopped fitting in "
-                          "one place. Say so deliberately, or split it.")
 
     sys.exit(0)
 
