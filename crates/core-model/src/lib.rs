@@ -42,11 +42,11 @@ pub use envelope::{
     env_keys, Actor, AuditLine, Component, Envelope, FieldValue, Level, Timestamp, Ulid,
 };
 pub use job::{
-    AcceptanceCriterion, CriteriaOwed, CriterionId, CriterionSource, DependencyDirection,
-    DependencyEdge, DispatchOrigin, DroneId, Edge, EscalationTrigger, Facts, GateManifest,
-    GateOutcome, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId,
-    ModelName, NewJob, NotRunDisposition, NotRunReason, Origin, PilotReason, RepoPath,
+    AcceptanceCriterion, BlankTitle, CriteriaOwed, CriterionId, CriterionSource,
+    DependencyDirection, DependencyEdge, DispatchOrigin, DroneId, Edge, EscalationTrigger, Facts,
+    GateManifest, GateOutcome, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep,
+    ManifestId, ModelName, NewJob, NotRunDisposition, NotRunReason, Origin, PilotReason, RepoPath,
     ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, StepState, StepVerdict, Subject, Target,
-    TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId,
-    WriteTargets, EDGES,
+    Title, TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel, Urgency,
+    WorkflowId, WriteTargets, EDGES,
 };

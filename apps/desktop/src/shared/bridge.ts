@@ -69,12 +69,15 @@ export type Outcome =
   | { ok: true }
   | { ok: false; why: "not_connected" }
   | { ok: false; why: "empty_brief" }
+  | { ok: false; why: "empty_title" }
   | { ok: false; why: "already_approving" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string };
 
 /** What the create form collects, before it becomes a `ProposeJob`. */
 export type Draft = {
+  /** What the Job is called. Refused empty before the Job is created. */
+  title: string;
   workflowId: string;
   manifestId: string;
   origin: string;

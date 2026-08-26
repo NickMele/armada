@@ -21,9 +21,16 @@ fn id(value: &str) -> Ulid {
     Ulid::carried(value)
 }
 
+/// A title a person could read. Panics on a blank one, which is a fixture bug
+/// rather than a case under test — the case under test is in [`record`].
+fn title(text: &str) -> Title {
+    Title::new(text).expect("a fixture title is never blank")
+}
+
 fn draft() -> NewJob {
     NewJob {
         id: JobId::carried(id("01J0000000000000000000JOB0")),
+        title: title("fix the parser's off-by-one"),
         workflow_id: WorkflowId::carried(id("01J0000000000000000000WF00")),
         owner_manifest_id: ManifestId::carried(id("01J0000000000000000000MAN0")),
         urgency: Urgency::Normal,

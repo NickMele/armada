@@ -1,6 +1,7 @@
 // The list. **Not the Job Board** — that is the Surface milestone's, with its
-// own journey and its own component inventory. This is every Job, its state,
-// the step it is on, and the one decision a person can make from here.
+// own journey and its own component inventory. This is every Job, what it is
+// called, its state, the step it is on, and the one decision a person can make
+// from here.
 //
 // Column identity and order are a module constant, not something derived from
 // the rows that just arrived. Columns flip-flopping between renders was its own
@@ -20,7 +21,7 @@ import { readingOf } from "./reading";
 const DRAWN = 200;
 
 /** Stable across every render. The schema, not the snapshot. */
-const COLUMNS = ["State", "Job", "Step", "Drone", "Workflow", "Model", ""] as const;
+const COLUMNS = ["State", "Title", "Job", "Step", "Drone", "Workflow", "Model", ""] as const;
 
 export type JobsProps = {
   jobs: readonly JobSummary[];
@@ -108,6 +109,8 @@ function Row({
           </span>
         )}
       </TableCell>
+      {/* Not mono: it is a sentence somebody wrote, not an identifier. */}
+      <TableCell>{job.title}</TableCell>
       <TableCell variant="mono">{job.id}</TableCell>
       <TableCell variant="mono">{job.current_step_id ?? ""}</TableCell>
       <TableCell variant="mono">{job.assigned_drone ?? ""}</TableCell>

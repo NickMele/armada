@@ -41,10 +41,13 @@ Doing that by hand means knowing the workflow catalogue and the Workspace graph 
 
 | Output | Detail |
 | --- | --- |
+| `title` | What the Job is called, written from the description or the prompt |
 | `workflow_id` | Which WorkflowDef the work should run under |
 | `write_targets[]` | The paths the Job intends to write |
 | `atomic` | Whether those targets must land as one unit |
 | A graph, where the work is several Jobs | With `atomic` decided per group |
+
+**Naming the Job is part of the same reading**, so nobody types a title for work they have already described — the call has the description in front of it and a [Job](job.md) requires a name.
 
 [Workflow](workflow.md) owns the workflow catalogue. The resolved definition is frozen into the Job at creation, so the proposer chooses which one and the freeze is what stops it moving afterwards. A graph is proposed in one pass — a [Convoy](convoy.md) landing a coupled pair, with a downstream Job consuming it.
 

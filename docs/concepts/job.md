@@ -217,6 +217,22 @@ Empty and absent are different claims: a Drone saying it left nothing behind is 
 
 **`what_changed` exists only on attempts after the first**, as a distinct variant of the record rather than a nullable field, so its absence on a first attempt cannot be read as a Drone omitting it. It is stored rather than derived: comparing consecutive attempts shows what differs, not what the Drone decided to do about the feedback, and a self-report cannot be synthesised.
 
+## Title, subject and Facts
+
+Three fields, three readers, and none of them substitutes for another.
+
+| Field | What it is | Who reads it |
+| --- | --- | --- |
+| `title` | The name a person reads in a list row. One line, required, never frozen | Every surface that lists Jobs |
+| `subject` | A pointer to the thing the work is about — `{kind, ref}`. Neither sequencing nor provenance | A revert, a Code Review's PR, a Design Plan's target |
+| `Facts` | The brief. Free text handed to a model whole, append-only | The Drone, and `get_job` |
+
+**A title is required and is never frozen.** Required because a Job nobody can pick out of a list is a Job nobody can act on, and never frozen because a title is a name and a name can be corrected — correcting one changes nothing that was approved. The fields frozen at creation are frozen because the approval gate's whole content is scope; a title is not scope.
+
+**Facts is redacted from every list and a title is not.** Facts is the likeliest place on the record for a secret to land, which is why it never travels on a list row; a title is the one string on a Job written to be read off a screen. Deriving a row label from the first line of Facts would put the redacted field on the Board instead.
+
+**The [Job proposer](job-proposer.md) generates it**, from the same reading of the request that produces `workflow_id` and `write_targets[]`. Hand entry is the override.
+
 ## Other fields
 
 The complete Job field list is in `crates/core-model/domain/job-fields.toml`.

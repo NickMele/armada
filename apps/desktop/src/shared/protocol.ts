@@ -15,6 +15,8 @@
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
 export type JobSummary = {
   id: string;
+  /** What the Job is called. The one field on a row a person actually reads. */
+  title: string;
   status: string;
   reason?: Reason;
   workflow_id: string;
@@ -49,6 +51,8 @@ export type JobList = {
 
 /** A Job drafted onto the approval gate. The request half of `propose_job`. */
 export type ProposeJob = {
+  /** Required. A proposal without one does not decode on the Rust side. */
+  title: string;
   workflow_id: string;
   owner_manifest_id: string;
   /** One of the four top-level origins. `sub_dispatched` does not deserialise. */

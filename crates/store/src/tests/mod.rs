@@ -1,16 +1,19 @@
 //! What this crate proves about itself.
 //!
-//! Four files, and one of them is the point of the milestone step:
+//! Five files, and one of them is the point of the milestone step:
 //! `reconstruct` writes a Job's whole history, drops every in-memory copy,
 //! reopens the file and rebuilds the same `Job` from the log alone. The others
 //! exist so that test means something — `roundtrip` shows the row survives,
-//! `corrupt` shows a damaged file is refused rather than opened empty.
+//! `corrupt` shows a damaged file is refused rather than opened empty, and
+//! `migrate` shows what the second migration does to a Job the first one
+//! wrote.
 //!
 //! Fixtures here fill **every** optional field. A Job built with `None`
 //! everywhere round-trips through almost no code, and a round-trip test that
 //! passes on an empty record is the kind of green v1 shipped 2,181 of.
 
 mod corrupt;
+mod migrate;
 mod reconstruct;
 mod roundtrip;
 mod tmp;
@@ -19,7 +22,7 @@ use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, DependencyDirection, DependencyEdge,
     DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, ManifestId, ModelName, NewJob,
     NotRunReason, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject,
-    Timestamp, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
+    Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -31,6 +34,12 @@ pub fn ulid(value: &str) -> Ulid {
 
 pub fn job_id(value: &str) -> JobId {
     JobId::carried(ulid(value))
+}
+
+/// A title, or a panic. Blank is a case under test in `core-model` and in
+/// `migrate`, never something a fixture here is asked to carry.
+pub fn title(text: &str) -> Title {
+    Title::new(text).expect("a fixture title is never blank")
 }
 
 pub fn at(value: &str) -> Timestamp {
@@ -51,6 +60,7 @@ pub fn open(dir: &TempDir) -> Store {
 pub fn full_new_job(id: &str) -> NewJob {
     NewJob {
         id: job_id(id),
+        title: title("fix the off-by-one in the log reader"),
         workflow_id: WorkflowId::carried(ulid("01WORKFLOW")),
         owner_manifest_id: ManifestId::carried(ulid("01OWNERMANIFEST")),
         urgency: Urgency::Incident,

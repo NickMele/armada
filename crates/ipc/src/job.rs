@@ -19,6 +19,12 @@
 //! | `acceptance_criteria` | The requester's words. `get_job` returns the Job in full; this is the list |
 //! | `dependencies`, `gate_manifests`, `dispatched_by` | The graph, which the Board does not draw at M1 |
 //!
+//! `title` is the field that goes the other way, and the only free text on the
+//! record that does: `facts` is redacted because it is the likeliest place a
+//! secret lands, and a title is the one string on a Job written to be read off
+//! a screen. A list of ids and statuses with no name on any row is a list
+//! nobody can use.
+//!
 //! # The list carries its failures
 //!
 //! [`JobList`] is not a `Vec<JobSummary>`. `store` hands back the Jobs that
@@ -38,6 +44,16 @@ use crate::enums::{CriterionSource, JobStatus, Origin, TopLevelOrigin, Urgency};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobSummary {
     pub id: JobId,
+    /// The name a person reads in the row. **The reason the list is worth
+    /// looking at** — everything else here is an id, a status or a flag, and
+    /// none of them says what the Job is.
+    ///
+    /// A `String` and not a `Title`: the newtype's guarantee is that it cannot
+    /// be constructed blank, and a DTO is deserialised rather than constructed.
+    /// The refusal belongs where the text is typed and at the Fleet boundary
+    /// where it becomes a Job, not in a wire struct that would carry a second
+    /// copy of the rule.
+    pub title: String,
     pub status: JobStatus,
     /// The qualifying reason the Job's last transition stored, where it stored
     /// one. **Absent is not "no reason"** — `queued` computes its readiness
@@ -73,6 +89,7 @@ impl JobSummary {
     pub fn of(job: &core_model::Job, reason: Option<&core_model::TransitionReason>) -> JobSummary {
         JobSummary {
             id: job.id().into(),
+            title: job.title().as_str().to_string(),
             status: job.status().into(),
             reason: reason.and_then(Reason::of),
             workflow_id: job.workflow_id().into(),
@@ -128,6 +145,10 @@ pub struct UnreadableJob {
 /// waits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProposeJob {
+    /// What the Job is called. **Required, and no `serde(default)`** — a
+    /// proposal without one does not decode, which is what makes the field
+    /// required rather than merely expected.
+    pub title: String,
     pub workflow_id: WorkflowId,
     pub owner_manifest_id: ManifestId,
     /// Which of the four top-level origins the proposer claims. `sub_dispatched`

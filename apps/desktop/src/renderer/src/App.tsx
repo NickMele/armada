@@ -130,6 +130,8 @@ export function App() {
 function said(outcome: Outcome): string {
   if (outcome.ok) return "";
   switch (outcome.why) {
+    case "empty_title":
+      return "A job needs a title. Nothing was created.";
     case "empty_brief":
       return "A job needs a brief. Nothing was created.";
     case "not_connected":

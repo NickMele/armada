@@ -52,7 +52,10 @@ pub use fields::{
     Facts, GateManifest, GateOutcome, NotRunDisposition, NotRunReason, Origin, ScopeRevision,
     ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
-pub use ids::{CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId, WorkflowId};
+pub use ids::{
+    BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId, Title,
+    WorkflowId,
+};
 pub use record::{Job, NewJob, Transitioned};
 pub use status::{JobStatus, StepState};
 pub use step::{JobStep, StepSeed, StepVerdict};

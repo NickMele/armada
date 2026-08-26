@@ -95,6 +95,10 @@ async fn the_six_operations_run_with_no_network() {
     assert_eq!(status, StatusCode::CREATED);
     let proposed: JobSummary = ipc::decode("job summary", &body).expect("a summary");
     assert_eq!(proposed.status.as_wire(), "awaiting_approval");
+    assert_eq!(
+        proposed.title, "fix the off-by-one in the log reader",
+        "the title travels the whole way: proposal, creation, answer"
+    );
 
     // list_jobs again. The proposal is on the Board.
     let (_, body) = call(&app, "GET", "/jobs", "").await;

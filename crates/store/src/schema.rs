@@ -4,9 +4,12 @@
 //!
 //! A schema with no version is a schema nobody can change later: the first
 //! migration has to answer "what is already there?" and, with nothing recorded,
-//! the honest answer is a guess. [`MIGRATIONS`] is therefore an ordered list
-//! with one entry today, and `armada_meta.schema_version` records how many of
-//! them a file has had applied. Adding a migration is appending a `&str`.
+//! the honest answer is a guess. [`MIGRATIONS`] is therefore an ordered list,
+//! and `armada_meta.schema_version` records how many of them a file has had
+//! applied. Adding a migration is appending a `&str`.
+//!
+//! [`V2`] is the first one appended, and what it had to decide is on it: what a
+//! Job written before the column existed is called.
 //!
 //! The table also serves a second purpose that costs nothing: **its presence is
 //! what distinguishes an Armada store from some other database that happens to
@@ -42,7 +45,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1];
+pub const MIGRATIONS: &[&str] = &[V1, V2];
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
@@ -138,5 +141,55 @@ CREATE TRIGGER job_events_are_never_removed
 BEFORE DELETE ON job_events
 BEGIN
     SELECT RAISE(ABORT, 'job_events is append-only: a recorded transition is never removed');
+END;
+"#;
+
+/// Version 2 — a Job has a title.
+///
+/// # What happens to a Job written by version 1
+///
+/// **It is named after itself, visibly.** `Untitled job <job_id>` — computed
+/// per row, so no two migrated Jobs come back carrying the same name and
+/// nothing on a Board reads as though a person typed it. A single backfill
+/// constant would have been shorter and is what this deliberately does not do:
+/// a store where every Job is suddenly called "Untitled" has quietly lost a
+/// distinction, and looks from the outside like one where somebody typed the
+/// same title twelve times.
+///
+/// **Refusing to open was the other honest option, and is worse here.** There
+/// are no production stores, so a refusal protects nothing; what it does is
+/// take a file with real Jobs in it and make every one of them unreachable over
+/// a column that was never written. `open.rs` refuses a file this build cannot
+/// read — and a version 1 Job reads perfectly well, it just has nothing to be
+/// called.
+///
+/// # Why the column carries a `DEFAULT` it must never use
+///
+/// SQLite will not add a `NOT NULL` column without one. The default is `''`,
+/// which is exactly the value a title may not be, so the two triggers close the
+/// hole the `ALTER` opens: an insert or an update that would leave a blank
+/// title aborts. `insert_job` binds the column on every write and
+/// [`Title`](core_model::Title) cannot hold a blank, so nothing in this crate
+/// can trip them — which is the point, the same way `job_events`' append-only
+/// triggers are.
+const V2: &str = r#"
+ALTER TABLE jobs ADD COLUMN title TEXT NOT NULL DEFAULT '';
+
+-- Named after itself rather than after a constant. `job_id` is already on the
+-- row, so the backfill invents nothing and reads no clock.
+UPDATE jobs SET title = 'Untitled job ' || job_id;
+
+CREATE TRIGGER jobs_are_never_written_without_a_title
+BEFORE INSERT ON jobs
+WHEN trim(NEW.title) = ''
+BEGIN
+    SELECT RAISE(ABORT, 'a Job has a title, and blank is not one');
+END;
+
+CREATE TRIGGER jobs_are_never_left_without_a_title
+BEFORE UPDATE ON jobs
+WHEN trim(NEW.title) = ''
+BEGIN
+    SELECT RAISE(ABORT, 'a Job has a title, and blank is not one');
 END;
 "#;

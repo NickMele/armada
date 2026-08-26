@@ -24,8 +24,8 @@
 
 use core_model::{
     Actor, DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, JobStatus, ManifestId,
-    ModelName, NewJob, Origin, RepoPath, StepId, StepSeed, Subject, Timestamp, Ulid, Urgency,
-    WorkflowId, WriteTargets,
+    ModelName, NewJob, Origin, RepoPath, StepId, StepSeed, Subject, Timestamp, Title, Ulid,
+    Urgency, WorkflowId, WriteTargets,
 };
 use rusqlite::Row;
 
@@ -169,6 +169,17 @@ impl Store {
 
         let new = NewJob {
             id: job_id.clone(),
+            // Refused rather than substituted. A blank here is a row the
+            // triggers in V2 do not admit, so it arrived from outside this
+            // crate — and naming the Job "Untitled" on the way past would hide
+            // exactly that.
+            title: Title::new(&string(row, "title")?).map_err(|blank| {
+                RowError::MalformedColumn {
+                    table: "jobs",
+                    column: "title",
+                    detail: blank.to_string(),
+                }
+            })?,
             workflow_id: WorkflowId::carried(Ulid::carried(string(row, "workflow_id")?)),
             owner_manifest_id: ManifestId::carried(Ulid::carried(string(
                 row,

@@ -110,6 +110,7 @@ impl Daemon for FakeDaemon {
         let minted = self.minted.fetch_add(1, Ordering::SeqCst);
         let job = JobSummary {
             id: JobId::carried(format!("01JOB{minted}")),
+            title: proposal.title,
             // The entry status of a top-level Job. Creation is not a
             // transition, so nothing is published for it.
             status: status("awaiting_approval"),
@@ -189,6 +190,7 @@ pub fn running(daemon: &FakeDaemon, id: &str) {
 pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
     daemon.jobs.lock().expect("not poisoned").push(JobSummary {
         id: JobId::carried(id),
+        title: format!("a Job called {id}"),
         status: status(spelling),
         reason: None,
         workflow_id: WorkflowId::carried("01WF"),
@@ -204,6 +206,7 @@ pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
 
 /// A proposal body, as Bridge would send it.
 pub const A_PROPOSAL: &str = r#"{
+    "title": "fix the off-by-one in the log reader",
     "workflow_id": "01WF",
     "owner_manifest_id": "01MF",
     "origin": "manual",

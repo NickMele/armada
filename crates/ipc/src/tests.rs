@@ -8,7 +8,7 @@
 
 use core_model::{
     Actor, CriteriaOwed, CriterionId, DispatchOrigin, Facts, Job, JobId, JobStatus, ManifestId,
-    ModelName, NewJob, StepId, StepSeed, Target, Timestamp, TopLevelOrigin, Ulid, Urgency,
+    ModelName, NewJob, StepId, StepSeed, Target, Timestamp, Title, TopLevelOrigin, Ulid, Urgency,
     WorkflowId,
 };
 
@@ -22,6 +22,7 @@ fn job() -> Job {
     Job::create_top_level(
         NewJob {
             id: JobId::carried(Ulid::carried("01JOB")),
+            title: Title::new("fix the off-by-one").expect("a title"),
             workflow_id: WorkflowId::carried(Ulid::carried("01WF")),
             owner_manifest_id: ManifestId::carried(Ulid::carried("01MF")),
             urgency: Urgency::Normal,
@@ -117,9 +118,30 @@ fn a_queued_transition_carries_no_reason_because_the_log_stores_none() {
     );
 }
 
+/// The field is required on the wire, not merely expected: a proposal that
+/// omits it does not become a `ProposeJob` at all, so nothing downstream has to
+/// decide what an untitled Job is called.
+#[test]
+fn a_proposal_with_no_title_does_not_decode() {
+    let body = br#"{"workflow_id":"01WF","owner_manifest_id":"01MF","origin":"manual",
+        "urgency":"normal","atomic":false,"model":"a-model"}"#;
+    let refused = decode::<ProposeJob>("proposal", body).expect_err("a Job has a title");
+    assert!(refused.to_string().contains("title"), "{refused}");
+}
+
+/// The list is where a title is read, so it is on the summary — and the
+/// redaction the summary exists for still holds around it.
+#[test]
+fn a_summary_carries_the_title_a_person_reads() {
+    let summary = JobSummary::from(&job());
+    assert_eq!(summary.title, "fix the off-by-one");
+    let json = encode(&summary).expect("plain data");
+    assert!(json.contains("\"title\":\"fix the off-by-one\""), "{json}");
+}
+
 #[test]
 fn a_spelling_the_registry_does_not_have_is_refused() {
-    let body = br#"{"workflow_id":"01WF","owner_manifest_id":"01MF","origin":"manual",
+    let body = br#"{"title":"fix the parser","workflow_id":"01WF","owner_manifest_id":"01MF","origin":"manual",
         "urgency":"whenever","atomic":false,"model":"a-model"}"#;
     let refused = decode::<ProposeJob>("proposal", body).expect_err("`whenever` is not an urgency");
     assert!(refused.to_string().contains("whenever"));
@@ -127,7 +149,7 @@ fn a_spelling_the_registry_does_not_have_is_refused() {
 
 #[test]
 fn a_proposal_cannot_claim_to_be_sub_dispatched() {
-    let body = br#"{"workflow_id":"01WF","owner_manifest_id":"01MF","origin":"sub_dispatched",
+    let body = br#"{"title":"fix the parser","workflow_id":"01WF","owner_manifest_id":"01MF","origin":"sub_dispatched",
         "urgency":"normal","atomic":false,"model":"a-model"}"#;
     let refused = decode::<ProposeJob>("proposal", body)
         .expect_err("a peer does not create a sub-dispatched Job");
@@ -138,7 +160,7 @@ fn a_proposal_cannot_claim_to_be_sub_dispatched() {
 fn an_unknown_field_parses_and_is_ignored() {
     // The minor-skew row in one assertion: a newer peer adds a field, an older
     // peer reads the message anyway. `deny_unknown_fields` would fail here.
-    let body = br#"{"workflow_id":"01WF","owner_manifest_id":"01MF","origin":"manual",
+    let body = br#"{"title":"fix the parser","workflow_id":"01WF","owner_manifest_id":"01MF","origin":"manual",
         "urgency":"normal","atomic":false,"model":"a-model","dispatch_budget":12}"#;
     let proposal = decode::<ProposeJob>("proposal", body).expect("unknown fields are ignored");
     assert_eq!(proposal.model, "a-model");
@@ -154,6 +176,7 @@ fn the_summary_of_a_sub_dispatched_job_says_so() {
     let sub = Job::create_sub_dispatched(
         NewJob {
             id: JobId::carried(Ulid::carried("01SUB")),
+            title: Title::new("write the regression test").expect("a title"),
             workflow_id: WorkflowId::carried(Ulid::carried("01WF")),
             owner_manifest_id: ManifestId::carried(Ulid::carried("01MF")),
             urgency: Urgency::Incident,

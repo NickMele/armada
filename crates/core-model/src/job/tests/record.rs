@@ -50,6 +50,38 @@ fn every_step_row_is_written_at_creation_not_started() {
     assert_eq!(job.step(&StepId::new("fix")).map(|r| r.ordinal()), Some(1));
 }
 
+// -------------------------------------------------------------------- title
+
+/// The empty string is a title to the type system and not one to a reader, so
+/// it is refused where the text is typed rather than checked on every write.
+#[test]
+fn a_blank_title_is_not_a_title() {
+    for blank in ["", " ", "\t\n  "] {
+        assert_eq!(
+            Title::new(blank),
+            Err(BlankTitle),
+            "{blank:?} names no Job a person could pick out of a list"
+        );
+    }
+}
+
+/// Trimmed, so two names that read identically are the same value and a list
+/// cell never begins with whitespace nobody typed on purpose.
+#[test]
+fn a_title_is_stored_trimmed() {
+    let padded = Title::new("  fix the parser  ").expect("a title");
+    assert_eq!(padded.as_str(), "fix the parser");
+    assert_eq!(padded, Title::new("fix the parser").expect("a title"));
+}
+
+/// Creation carries it and nothing moves it. There is no setter — a title is
+/// correctable in principle, and the write that corrects one does not exist.
+#[test]
+fn the_title_survives_creation_and_every_transition() {
+    let job = reach(JobStatus::CompletedSuccess);
+    assert_eq!(job.title().as_str(), "fix the parser's off-by-one");
+}
+
 // ----------------------------------------------------------------- the event
 
 #[test]

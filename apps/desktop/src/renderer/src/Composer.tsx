@@ -1,9 +1,13 @@
 // The create form. A Job drafted onto the approval gate, and nothing else —
 // what comes back is a Job at `awaiting_approval`, never a running one.
 //
-// **An empty brief is refused before the Job is created**, here and again in
-// the main process. The check here is what makes the refusal legible; the one
-// behind it is the rule.
+// **An empty title and an empty brief are both refused before the Job is
+// created**, here and again in the main process. The check here is what makes
+// the refusal legible; the one behind it is the rule.
+//
+// A title is typed for now. The Job proposer will generate one from the
+// description, which is the same call that decides the workflow and the write
+// targets — hand entry stays the override rather than the path.
 //
 // Two fields are ids Bridge cannot mint and cannot list. Fleet is the sole
 // authority for the ids that name records, and the served operations are
@@ -36,6 +40,7 @@ export type ComposerProps = {
 };
 
 export function Composer({ workflows, manifests, disabled, onPropose }: ComposerProps) {
+  const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [workflowId, setWorkflowId] = useState("");
   const [manifestId, setManifestId] = useState("");
@@ -43,15 +48,17 @@ export function Composer({ workflows, manifests, disabled, onPropose }: Composer
   const [atomic, setAtomic] = useState(false);
   const [tried, setTried] = useState(false);
 
+  const emptyTitle = title.trim() === "";
   const emptyBrief = brief.trim() === "";
   const emptyWorkflow = workflowId.trim() === "";
   const emptyManifest = manifestId.trim() === "";
-  const refused = emptyBrief || emptyWorkflow || emptyManifest;
+  const refused = emptyTitle || emptyBrief || emptyWorkflow || emptyManifest;
 
   function propose(): void {
     setTried(true);
     if (refused) return;
     onPropose({
+      title: title.trim(),
       workflowId: workflowId.trim(),
       manifestId: manifestId.trim(),
       origin: ORIGIN,
@@ -64,6 +71,7 @@ export function Composer({ workflows, manifests, disabled, onPropose }: Composer
       atomic,
       brief,
     });
+    setTitle("");
     setBrief("");
     setTried(false);
   }
@@ -75,6 +83,13 @@ export function Composer({ workflows, manifests, disabled, onPropose }: Composer
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-4">
+          <Input
+            label="Title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            invalid={tried && emptyTitle}
+            message="A job needs a title. It is what names the row in the list."
+          />
           <Input
             label="Brief"
             value={brief}

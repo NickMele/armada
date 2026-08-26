@@ -102,6 +102,40 @@ fn a_job_rebuilds_from_its_events_after_the_process_that_wrote_it_is_gone() {
     assert_eq!(rebuilt, expected);
 }
 
+/// The title comes back through the fold, not just through the row.
+///
+/// `a_job_rebuilds_from_its_events_after_the_process_that_wrote_it_is_gone`
+/// asserts the whole record and therefore covers this already — it is named
+/// separately because the record is the thing that grows, and a field that
+/// silently stops surviving a rebuild would take a whole-record assertion down
+/// with a message naming no field.
+#[test]
+fn a_title_survives_the_write_the_drop_the_reopen_and_the_fold() {
+    let dir = TempDir::new();
+    let id = job_id("01TITLED");
+
+    {
+        let mut store = open(&dir);
+        let created = top_level("01TITLED");
+        store
+            .insert_job(&created, &crate::tests::created_at())
+            .expect("the job is stored");
+        drive(&mut store, created);
+    }
+
+    let reopened = open(&dir);
+    let rebuilt = reopened.load_job(&id).expect("the job rebuilds");
+    assert_eq!(
+        rebuilt.title().as_str(),
+        "fix the off-by-one in the log reader"
+    );
+    assert_eq!(
+        rebuilt.status(),
+        JobStatus::CompletedSuccess,
+        "and it is the rebuilt Job, not the created one"
+    );
+}
+
 #[test]
 fn the_log_holds_every_transition_with_its_reason_actor_and_time() {
     let dir = TempDir::new();

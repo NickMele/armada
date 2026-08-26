@@ -30,7 +30,7 @@ use crate::job::fields::{
     AcceptanceCriterion, DependencyEdge, DispatchOrigin, Facts, GateManifest, Origin,
     ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
-use crate::job::ids::{DroneId, JobId, ManifestId, ModelName, StepId, WorkflowId};
+use crate::job::ids::{DroneId, JobId, ManifestId, ModelName, StepId, Title, WorkflowId};
 use crate::job::status::JobStatus;
 use crate::job::step::{rows_at_creation, JobStep, StepSeed};
 use crate::job::transition::{admits, IllegalTransition, Target};
@@ -47,6 +47,10 @@ use crate::job::transition::{admits, IllegalTransition, Target};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewJob {
     pub id: JobId,
+    /// The name a person reads in a list row. A [`Title`] and not a `String`,
+    /// so there is no way to hand this constructor a Job nobody could pick out
+    /// of a list — the refusal happens where the text is typed, not here.
+    pub title: Title,
     /// Which WorkflowDef this Job follows. Frozen at creation.
     pub workflow_id: WorkflowId,
     /// Which project this Job belongs to, and the Job Board's scoping key.
@@ -92,6 +96,7 @@ pub struct Transitioned {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Job {
     id: JobId,
+    title: Title,
     status: JobStatus,
     workflow_id: WorkflowId,
     owner_manifest_id: ManifestId,
@@ -145,6 +150,7 @@ impl Job {
         let steps = rows_at_creation(&new.id, new.steps, &at);
         Job {
             id: new.id,
+            title: new.title,
             status: entry,
             workflow_id: new.workflow_id,
             owner_manifest_id: new.owner_manifest_id,
@@ -195,6 +201,13 @@ impl Job {
 
     pub fn id(&self) -> &JobId {
         &self.id
+    }
+    /// The name a person reads. Never frozen — a name can be corrected — but
+    /// there is no setter here either: correcting one is a write nothing owns
+    /// yet, and a `&mut self` added for it would be the first crack in the
+    /// no-setter rule the rest of this file holds.
+    pub fn title(&self) -> &Title {
+        &self.title
     }
     pub fn status(&self) -> JobStatus {
         self.status

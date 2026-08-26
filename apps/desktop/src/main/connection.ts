@@ -236,11 +236,16 @@ export class FleetConnection {
   async proposeJob(draft: Draft): Promise<Outcome> {
     // Refused before the Job is created, and refused here rather than only in
     // the form: the renderer's check is a courtesy, this one is the rule.
+    if (draft.title.trim() === "") return { ok: false, why: "empty_title" };
     if (draft.brief.trim() === "") return { ok: false, why: "empty_brief" };
     const fleet = this.connected();
     if (fleet === null) return { ok: false, why: "not_connected" };
 
     const proposal: ProposeJob = {
+      // Trimmed here as well as in the form: the Rust side stores a `Title`
+      // trimmed, and sending the padding would make the value that comes back
+      // differ from the one that was sent.
+      title: draft.title.trim(),
       workflow_id: draft.workflowId,
       owner_manifest_id: draft.manifestId,
       origin: draft.origin,

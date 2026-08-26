@@ -295,17 +295,16 @@ which is an assembled prompt and therefore governed here.
 | **The force-interrupt directive** | A thrashing verdict | Drafted, not sanctioned |
 | **The refusal reprompt** | A Judge refused a criterion after a mechanical check passed | Specified |
 | **`redirect_drone`** | A structured instruction from a human, or from Helm at rung 1 | A person writes it |
-| **The Pilot handoff instruction** | Fleet tells the Drone to call `escape_hatch` after a human confirms Pilot | Not specified |
+| **The Pilot handoff instruction** | Fleet tells the Drone to call `escape_hatch` after a human confirms Pilot | Drafted, not sanctioned |
 
-**One turn has no wording, and the test fails on it.** The Pilot handoff
-instruction is that gap. `redirect_drone` carries a person's words rather
-than Fleet's, so it has none of its own to specify.
+**Every turn Fleet authors now has wording, and none of it is agreed.**
+`redirect_drone` carries a person's words rather than Fleet's, so it has
+none of its own to specify.
 
-**Three of the four Fleet-authored turns are drafted rather than
-sanctioned.** A draft is wording somebody can argue with; it is not
-wording Armada has agreed to send. One of these turns is the mechanism a
-baseline clause used to describe, which is why that clause moved here in
-section 5.
+**One Fleet-authored turn is specified and the rest are drafted.** A draft
+is wording somebody can argue with; it is not wording Armada has agreed to
+send. One of these turns is the mechanism a baseline clause used to
+describe, which is why that clause moved here in section 5.
 
 **The refusal reprompt and the clarification reprompt are not one turn.**
 Clarification fires on evidence that arrived and was insufficient, and
@@ -474,6 +473,59 @@ Framing on the `escape_hatch` clause is deliberately unspecified in the
 baseline, because opt-out rates move with the authority the option is
 framed through. The same caution applies to this turn.
 
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ TURN ─────────────────────────────────────────
+│ A person is taking over this Job. Stop what
+│ you are doing and call the escape hatch now.
+│
+│ It takes three things, and they are the only
+│ part of the handoff that comes from you:
+│
+│   Trying to    what this part was meant to
+│                produce
+│   Blocked by   the specific thing in your way,
+│                or nothing, if nothing is
+│   Tried        what you attempted, and what
+│                each attempt produced
+│
+│ Name the command, the path or the message. "I
+│ am stuck" leaves nothing to act on, and a
+│ blocker you did not hit leaves less.
+│
+│ Do not submit your work first. This is not a
+│ submission and the handoff does not wait on
+│ one.
+└────────────────────────────────────────────────
+```
+
+**The turn offers nothing, so it frames nothing.** A Drone told to hand
+over is not choosing the hatch, and framing moves an opt-out rate only
+where there is an opt-out. This turn carries the caution section 5 asks
+for by having no authority word in it at all, which is the one thing the
+poke draft could not do.
+
+**Nothing is a legal `blocked_by`.** Two of Pilot's three trigger paths are
+human-initiated and the Drone may be fine. A Drone asked what is blocking
+it when nothing is will name something, and a fabricated blocker is the
+failure the hatch exists to prevent arriving through the hatch itself.
+
+**The three fields are named and the bar for them is not.** `blocked_by`
+is the field a person acts on, so the turn asks for the command, the path
+or the message rather than a characterisation. What the blocker has to
+amount to is left unsaid, the same line the clarification reprompt draws.
+
+**The prohibition is specific.** *Stop* does not stop a Drone carrying a
+baseline that says work it does not submit is work no one sees. *Do not
+submit* does, and it is the move the M1 rendering makes on the parts that
+are not the Drone's.
+
+The tool is described rather than named, as it is in the poke and in the
+baseline clause. And the turn carries no record: nothing observable fired
+it, there is no verdict behind it, and the bundle already holds every fact
+Fleet could put in one.
+
 ---
 
 # 5. The Drone baseline
@@ -530,6 +582,27 @@ falls. "Sanctioned" is the maximal framing available.
 The clause specifies the content; the authority word waits on
 measurement. The poke draft in section 4a reaches for *sanctioned*
 already, which decides in a draft what this section leaves open.
+
+**That is incoherent as it stands, and there are three ways out.** Not
+picked here — a person picks.
+
+| Way out | What it costs |
+| --- | --- |
+| **The poke draft drops the word** | The turn loses its framing at the moment 4a says framing matters most — a Drone gone quiet. Nothing else. Reversible in a line |
+| **The baseline adopts it** | Answers the open question from a draft, at the top of the range, where a Drone bails on work it could have done. Layer 1 is compiled in, so revising it is a build |
+| **The measurement settles it** | Runs, and the time to design them. Blocks nothing while it is pending, provided the draft is not standing in for the answer |
+
+**The contract's own reasoning favours the third, with the first as its
+interim.** Three things in this document point the same way. Section 5
+states the question is open pending measurement, and a draft is not where
+an open question gets answered. Layer 1 is unreachable from config, so a
+word chosen there is the most expensive one in the stack to change.
+And the baseline may carry no claim about consequences that is not true —
+an authority nobody has established is exactly such a claim.
+
+The measurement is designed in
+[spike 7](../spikes/007-will-a-drone-take-the-escape-hatch.md), which
+states in advance which result sends the contract down which of the three.
 
 ## The four that moved, and the one deleted
 

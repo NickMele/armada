@@ -51,17 +51,20 @@ impl Store {
         let inserted = tx
             .execute(
                 "INSERT OR IGNORE INTO jobs (
-                     job_id, status, workflow_id, owner_manifest_id, origin, urgency, atomic,
-                     model, acceptance_criteria, current_step_id, assigned_drone, dependencies,
-                     dispatched_by_job_id, dispatched_by_step_id, redispatched_from,
-                     subject_kind, subject_ref, facts, scope_revisions, write_targets_known,
-                     created_at
+                     job_id, title, status, workflow_id, owner_manifest_id, origin, urgency,
+                     atomic, model, acceptance_criteria, current_step_id, assigned_drone,
+                     dependencies, dispatched_by_job_id, dispatched_by_step_id,
+                     redispatched_from, subject_kind, subject_ref, facts, scope_revisions,
+                     write_targets_known, created_at
                  ) VALUES (
                      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-                     ?16, ?17, ?18, ?19, ?20, ?21
+                     ?16, ?17, ?18, ?19, ?20, ?21, ?22
                  )",
                 rusqlite::params![
                     job.id().as_str(),
+                    // Bound on every write, so the `NOT NULL DEFAULT ''` the
+                    // `ALTER` in V2 had to carry is never the value used.
+                    job.title().as_str(),
                     job.status().as_wire(),
                     job.workflow_id().as_str(),
                     job.owner_manifest_id().as_str(),

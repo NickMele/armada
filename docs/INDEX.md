@@ -105,6 +105,9 @@ approximations.
   result, which is why it is written down.
 - [`spikes/006-will-a-drone-use-the-evidence-tool.md`](spikes/006-will-a-drone-use-the-evidence-tool.md)
   — whether an agent uses a tool it was given without being told it must.
+- [`spikes/007-will-a-drone-take-the-escape-hatch.md`](spikes/007-will-a-drone-take-the-escape-hatch.md)
+  — whether a Drone hands a hopeless task back rather than guessing, and
+  whether the word the option is offered through changes it.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 

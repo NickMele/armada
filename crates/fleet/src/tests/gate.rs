@@ -14,8 +14,8 @@ use adapter_traits::Worktree;
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, Job, JobId, JobStatus,
-    ManifestId, ModelName, NewJob, StepId, StepSeed, Subject, Target, Timestamp, TopLevelOrigin,
-    Ulid, Urgency, WorkflowId,
+    ManifestId, ModelName, NewJob, StepId, StepSeed, Subject, Target, Timestamp, Title,
+    TopLevelOrigin, Ulid, Urgency, WorkflowId,
 };
 use testkit::{FakeWorkProduct, Gate, Sketch};
 use verification::{CheckFailed, NeverRan, Submission};
@@ -39,6 +39,7 @@ fn running_job() -> Job {
     let created = Job::create_top_level(
         NewJob {
             id: job_id(),
+            title: Title::new("make the suite pass").expect("a title"),
             workflow_id: WorkflowId::carried(Ulid::carried("01J0000000000000000000WF00")),
             owner_manifest_id: ManifestId::carried(Ulid::carried("01J0000000000000000000MAN0")),
             urgency: Urgency::Normal,

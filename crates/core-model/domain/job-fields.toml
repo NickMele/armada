@@ -321,6 +321,27 @@ in_code = "Not yet"
 notes = "A revert reads its subject's scope history rather than classifying afresh, which stops a linked-DAG revert of a Convoy leaving the intermediate state the Convoy existed to prevent. See the `completed_success` status row for how a wrong outcome is handled."
 why = "Without this field, a revert, a Code Review's PR, or a Design Plan's target would have nowhere to point — none of them is sequenced against or spawned by what it concerns."
 
+[fields.title]
+type = "string"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "The name a person reads in a list row. One line, always present."
+in_code = "Yes"
+notes = """
+Required, not nullable: a Job without a title is one nobody can find on a list, and every surface that lists Jobs would need copy of its own for the blank.
+
+Never frozen. A title is a name and a name can be corrected — the contrast is `subject`, which is a pointer and would break what points at it, and the fields frozen at creation, which are frozen because the approval gate's whole content is scope. Correcting a title changes nothing anybody approved.
+
+**Three fields, three readers.** `subject` is a pointer to the thing the work is about, read by a revert and by a Code Review's PR; it is `{kind, ref}` and renders as neither prose nor a name. `Facts` is the brief — free text handed to a model whole, and redacted from every list because it is the likeliest place a secret lands. This is the string a person reads in a row, which is why it is the one of the three that travels on `JobSummary`.
+
+Empty is not a title. `core-model` carries a `Title` newtype whose only constructor refuses a blank string, so a Job with no readable name is unconstructable rather than refused on write.
+
+**The Job proposer will generate it** from the description or the prompt, the same call and the same reading that produces `workflow_id` and `write_targets[]`. Hand entry stays the override, as it is for every other output of that call.
+"""
+why = "Deriving a row label from `subject` or from the first line of `Facts` was the alternative: `subject` is null on most Jobs and is a reference rather than a phrase, and a prefix of `Facts` puts redacted text on every Board."
+
 [fields.urgency]
 type = "enum{normal, incident}"
 table = "jobs"
