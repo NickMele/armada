@@ -1,8 +1,9 @@
 # Agent Prompt Contract
 
 **Kind:** contract. **Governs:** text injected into a model — every prompt
-Armada assembles and puts in front of one. The prompts themselves are
-catalogued separately, one entry per prompt. Sibling to the
+Armada assembles and puts in front of one. Each is catalogued here, one
+entry apiece: the invocations in section 2, the injected turns in section
+4a. Sibling to the
 [Agent Copy Contract](agent-copy.md), which governs text coming out. Both
 sit under the [Design System — UI & Voice](design-system.md) contract. Read
 before adding or changing any prompt Armada assembles and sends to a
@@ -34,8 +35,8 @@ whether an invocation carries a toolset. That is a taxonomy question with a
 different answer: a clarification round is not a separate Agent, but it is
 unambiguously a separate assembled prompt.
 
-Every row in Armada Prompts passes this test — the invocations below, plus
-the injected turns in section 4a.
+Every entry catalogued here passes this test — the invocations in section
+2, plus the injected turns in section 4a.
 
 **Not in scope:** what a model writes back — [Agent Copy
 Contract](agent-copy.md). The task text itself, which comes from the Job.
@@ -45,24 +46,90 @@ Model selection and budget, which are per-step configuration.
 
 # 2. The invocations
 
-The invocations are rows in Armada Prompts, filtered to `Kind =
-Invocation`. What each is told and never told is in the row. Three of the
-things [System Architecture](system-architecture.md) section 9 lists are
-not rows here:
+| Prompt | Assembled by | Fires when | Wording |
+| --- | --- | --- | --- |
+| **Drone** | `fleet` | At spawn, post-approval, re-assembled at every step boundary | Specified — section 5 |
+| **Helm** | `fleet` | Per session | Not specified |
+| **Judge** | `verification` | Per criterion, after a mechanical check passed | Not specified |
+| **Job-shape classifier** | `fleet` | At Job creation | Not specified |
+| **Manifest scanner** | `config` | During the setup wizard's Proposal phase | Not specified |
+
+What each is told and never told is below. Three of the things
+[System Architecture](system-architecture.md) section 9 lists are not
+entries here:
 
 | Section 9 lists | Here |
 | --- | --- |
 | Clarification round | **An injected turn** — section 4a. A separate assembled prompt, not a separate invocation |
 | Sub-agents inside a Drone | **Not assembled by Armada.** Claude Code assembles it from Kit and Manifest Sub agent definitions, which are layer 2 and layer 3 content this contract governs. Armada supplies the definition, not the prompt |
-| Denial-pattern suggestion | **Possibly not a model call.** If it is, it is a row. Unresolved on section 9 and inherited here |
+| Denial-pattern suggestion | **Possibly not a model call.** If it is, it is an entry above. Unresolved on section 9 and inherited here |
 
-**Voice generation is not among them**, for the reason below. It used to
-carry a row that said so, which double-counted the thing the row existed
-to exclude.
+**Voice generation is not among them**, for the reason below. An entry
+saying so double-counts the thing it exists to exclude.
 
 **Two carry a toolset.** Drone and Helm are Agents; the Judge and the
 classifier are model calls. The scanner is the open case. See
 [System Architecture](system-architecture.md) section 9.
+
+## What each invocation is told
+
+### Drone
+
+**Told:** the three baseline clauses, the resolved toolset with its
+documentation, Voice, **Way I work**, **Expectations**, the workflow step
+and its criteria, the Evidence Scope policy, `acceptance_criteria[]`.
+
+**Never told:** secrets, other Jobs' context or evidence, anything from a
+Manifest outside its own Job's set, the operator's own MCP servers.
+
+Six layers, assembled in order — section 3. Its wording is section 5.
+
+### Helm
+
+**Told:** a strict subset of the Fleet MCP — all 14 queries, one of 12
+commands. The selected Manifest. Its resolved authority, a Machine setting
+between rung 1 and read-only with no Manifest tier. The obligation to call
+`get_events_since(cursor)` at the start of each turn. Voice.
+
+**Never told:** anything outside the selected Manifest. Secrets.
+
+One of two invocations carrying a toolset.
+
+### Judge
+
+**Told:** the original task text. The resolved Evidence Scope object
+carrying the pre-loaded patch — the diff is delivered, not fetched. The
+Evidence bundle under judgment. `baseline_ref`'s Evidence where
+`gaming_check` is enabled. The deterministic facts. `reference_docs` as
+the yardstick, kept separate from `context_paths` as the target. One
+criterion's question.
+
+**Never told:** the Drone transcript or self-report, per constitutional
+rule 2. The other panel members' verdicts under `panel_size` > 1, per
+rule 5.
+
+`judge_check.prompt_key` references a prompt library that is sited
+nowhere — section 8.
+
+### Job-shape classifier
+
+**Told:** the request text, the Manifest set, the three shapes.
+
+**Never told:** repo contents. It has no toolset.
+
+A model call rather than an Agent. Why the classifier chose as it did is
+recorded nowhere.
+
+### Manifest scanner
+
+**Told:** repo facts gathered by the wizard, or a read-only toolset —
+undecided. Regardless of that answer it is told the target repo, the
+`armada.yml` schema it is proposing against, and that the Proposal phase
+is iterative rather than one-shot.
+
+The open case on whether it carries a toolset, tracked as
+`[manifest-scanner-agent-or-model-call]` in
+[System Architecture](system-architecture.md).
 
 ## Three shapes that differ from the flat Judge row
 
@@ -219,13 +286,26 @@ prompt** — layers 1 to 5 are fixed for the process lifetime.
 **Added Aug 2026** after adversarial review. The first cut said no path
 mutates a running Drone's prompt, dropping the word *system*. The dropped
 word was load-bearing: Fleet injects turns into a live session, each of
-which is an assembled prompt and therefore governed here. The turns are
-rows in Armada Prompts, filtered to `Kind = Injected turn`.
+which is an assembled prompt and therefore governed here.
 
-**A row's Wording column is the gap, and the test fails on it.** That is
-the gap the first cut hid rather than created — and one of these turns is
-the mechanism a baseline clause used to describe, which is why that clause
-moved here in section 5.
+| Turn | Fires when | Wording |
+| --- | --- | --- |
+| **The poke** | Liveness nudge, bounded by `poke_limit` | Drafted, not sanctioned |
+| **The clarification reprompt** | Evidence arrived but was insufficient | Drafted, not sanctioned |
+| **The force-interrupt directive** | A thrashing verdict | Drafted, not sanctioned |
+| **The refusal reprompt** | A Judge refused a criterion after a mechanical check passed | Specified |
+| **`redirect_drone`** | A structured instruction from a human, or from Helm at rung 1 | A person writes it |
+| **The Pilot handoff instruction** | Fleet tells the Drone to call `escape_hatch` after a human confirms Pilot | Not specified |
+
+**One turn has no wording, and the test fails on it.** The Pilot handoff
+instruction is that gap. `redirect_drone` carries a person's words rather
+than Fleet's, so it has none of its own to specify.
+
+**Three of the four Fleet-authored turns are drafted rather than
+sanctioned.** A draft is wording somebody can argue with; it is not
+wording Armada has agreed to send. One of these turns is the mechanism a
+baseline clause used to describe, which is why that clause moved here in
+section 5.
 
 **The refusal reprompt and the clarification reprompt are not one turn.**
 Clarification fires on evidence that arrived and was insufficient, and
@@ -240,6 +320,159 @@ restate context the Drone already has without spending tokens twice. And
 each arrives at a moment the Drone believes it is doing something else, so
 it must be unambiguous about whether the current action continues or
 stops.
+
+## The poke
+
+Fires when nothing structured has arrived at all. `poke_limit` is a
+liveness counter, distinct from the evidence clarification-round cap,
+which checks content sufficiency. Both can end in `stalled`.
+
+The turn cannot tell whether the Drone is working, finished, or stuck, so
+it has to address all three without pressing any of them.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ TURN ─────────────────────────────────────────
+│ Nothing has arrived from you for 12 minutes.
+│
+│ If you are working, keep going. If you are
+│ finished, submit — work you do not submit is work
+│ no one sees. If you are stuck, use the escape
+│ hatch. It is a sanctioned outcome and not a
+│ failure.
+└────────────────────────────────────────────────
+```
+
+Three branches, because the poke cannot tell which one it is in.
+
+The escape-hatch line repeats a baseline clause on purpose: the moment a
+Drone most needs to know the hatch is sanctioned is the moment it has gone
+quiet.
+
+Elapsed time survives where a count would not. Twelve minutes names no
+threshold and hands over no budget. This turn must never become "second of
+two pokes", which would tell a Drone precisely how long it has left to
+look busy.
+
+**This draft decides something section 5 has not.** It uses the word
+*sanctioned*, and framing on the `escape_hatch` clause is deliberately
+unspecified pending measurement, because opt-out rates move with the
+authority the option is framed through. Sanctioned is the maximal framing
+available, and this draft reached for it.
+
+## The clarification reprompt
+
+Asks for the same work, evidenced better. A free round that does not
+consume the retry budget.
+
+The cap has no field name and no counting scope — per Job, per workflow
+step or per loop iteration is undefined. Tracked as
+`[drone-evidence-clarification-cap-scope]` in
+[Drone](../concepts/drone.md), and its value as
+`[evidence-clarification-round-cap]` in
+[Configuration](configuration.md).
+
+The baseline clause that used to describe this mechanism lives here, since
+stating it in advance spends a constant on a case most Jobs never hit.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ TURN ─────────────────────────────────────────
+│ Your submission arrived and there is not enough
+│ in it to check.
+│
+│   Shown by names no artifact. "Tests pass" is not
+│   one. Name the test and the command you ran.
+│
+│ Submit again.
+└────────────────────────────────────────────────
+```
+
+**The turn says nothing about budgets.** Saying a round is free only means
+something to a Drone that knows rounds are counted, and a Drone told
+rounds are counted has a bar to optimise against.
+
+Naming the report format is not naming the bar. Telling a Drone to name
+its test and its command shapes the record. Telling it what the test has
+to prove would shape the work, and that is the line.
+
+## The force-interrupt directive
+
+Stop and report current state now. Failure of that escalates as
+`thrashing`.
+
+The mid-step Judge pass that produces the verdict does not read the Drone
+transcript. It judges the work product as the branch stands against the
+declared scope and the step's intent, so what the turn can carry is an
+observable that has not moved rather than a turn count.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ TURN ─────────────────────────────────────────
+│ Stop and report your current state now.
+│
+│   Expected   A second Job starts on its own path
+│   Produced   worktree path already registered,
+│              unchanged across every approach you
+│              have tried
+│
+│ Submit what you have. Partial work with an
+│ accurate Not claimed is worth more than carrying
+│ on.
+└────────────────────────────────────────────────
+```
+
+The mid-step record is what makes this actionable rather than a scolding.
+"You are thrashing" tells a Drone nothing it can act on. An observable
+that has not moved across every approach tells it which approach to stop
+repeating.
+
+Thrashing is the absence of change in `produced`. The turn count is not
+the finding — it is what makes an unchanged observable mean something —
+and it stays out of the Drone-facing rendering, for the same reason every
+other counter does.
+
+## The refusal reprompt
+
+Carries the Judge record's `expected` and `produced` back to the Drone.
+Never `consequence`, which is written for a person deciding whether to
+care, and never a counter.
+
+The closing line is where `what_changed` on the next work submission comes
+from — [Agent Copy Contract](agent-copy.md).
+
+```
+┌─ TURN ─────────────────────────────────────────
+│ Part 2 did not pass.
+│
+│   Expected   Suite red when a work machine's row
+│              shows 68% quota left
+│   Produced   Suite green on a row rendering no
+│              spend at all
+│
+│ Address this and submit again. Say what changed
+│ since your last submission.
+└────────────────────────────────────────────────
+```
+
+## `redirect_drone`
+
+Human-initiated, so its content comes from a person rather than from a
+verdict. It carries no record.
+
+## The Pilot handoff instruction
+
+Human-initiated. The Drone's only contribution to the handoff is a
+narrative of what it is stuck on, passed as the tool argument; Fleet
+assembles everything else. It lands in the bundle a
+[Pilot](../concepts/pilot.md) session opens with.
+
+Framing on the `escape_hatch` clause is deliberately unspecified in the
+baseline, because opt-out rates move with the authority the option is
+framed through. The same caution applies to this turn.
 
 ---
 
@@ -292,9 +525,11 @@ out rather than staying for tidiness.
 **Framing is deliberately unspecified on the `escape_hatch` clause.** The
 abstention literature finds opt-out rates move materially with the
 authority through which the option is framed, and fall as that authority
-falls. "Sanctioned" is the maximal framing available and the first cut
-reached for it by default. The clause specifies the content; the authority
-word waits on measurement — see Open questions below.
+falls. "Sanctioned" is the maximal framing available.
+
+The clause specifies the content; the authority word waits on
+measurement. The poke draft in section 4a reaches for *sanctioned*
+already, which decides in a draft what this section leaves open.
 
 ## The four that moved, and the one deleted
 
@@ -314,9 +549,166 @@ what deleted the sandbox line.
 
 **A caveat this section must carry about itself.** A baseline written as a
 numbered list of rules is the shape a model pattern-matches and then
-satisfies formally. The list above specifies content, not wording, and
-whether the same content lands better as prose or as worked examples is
-unmeasured.
+satisfies formally. The table above specifies content; the wording is
+below, and whether the same content lands better as prose or as worked
+examples is unmeasured.
+
+## The M1 renderings
+
+**The Kit and Manifest layers are absent, because M1 has neither.** The
+six-layer order in section 3 is unchanged. Four decisions fell out of
+writing these, and each is visible in the text.
+
+**The reporting clause is load-bearing, not a reminder.** Given one MCP
+tool and a task, told nothing about reporting, a Drone fixed the code and
+wrote a tidy sentence saying so — four times out of four, no tool call.
+
+A Drone does not reach for the Evidence tool on its own, so the baseline's
+second paragraph is the difference between a working gate and a Job that
+stalls on every step. Measured in
+[spike 6](../spikes/006-will-a-drone-use-the-evidence-tool.md).
+
+- **The tool is described, not named.** "The evidence submission tool you
+  have been given" — the MCP tool's own description carries its name, so
+  the prompt and the tool cannot drift apart.
+- **"Parts", not "steps".** Deliberate: `step` is Armada's word for a plan
+  artifact, and a Drone that learns the system's vocabulary can reason
+  about the machinery. This orients it without teaching it the schema.
+- **The stop sits inside the list, not after it.** Where the line falls
+  *is* the boundary. Later parts are marked not-yours with the specific
+  prohibition, because "do not run it" prevents a concrete thing that
+  "stop here" does not.
+
+The rule they all serve — that a Drone is never told what the Checks are —
+is on [Drone](../concepts/drone.md), since it governs every Drone-facing
+surface rather than only these samples.
+
+### Bug, part 2 of 4
+
+```
+┌─ BASELINE ──────────────────────────────────────
+│ You are working in a git worktree on a branch of your
+│ own. You cannot push, open a pull request, or run
+│ commands this repository has not declared.
+│
+│ When you have finished the work described below, you
+│ must report it using the evidence submission tool you
+│ have been given. It is the only way to report. Work
+│ you do not submit is work no one sees, and the task
+│ will not move on.
+│
+│ Submitting returns "recorded". That is a receipt, not
+│ a verdict — your work is checked after you submit. If
+│ it does not pass you will be told in a later turn,
+│ with the reason. Wait for that turn.
+└──────────────────────────────────────────────
+┌─ JOB BRIEF ───────────────────────────────────
+│ Repository: armada
+│
+│ Dispatching two Jobs against the same repo leaves the
+│ second one's worktree at a path the first already
+│ registered, and it fails with a message naming neither.
+└──────────────────────────────────────────────
+┌─ WHERE YOU ARE ────────────────────────────────
+│ This task runs in four parts. You are on part 2.
+│
+│   1. Plan the change      ✓ done
+│   2. Implement            ← you are here
+│   ─────────────────────────────────────────────
+│   ▌ STOP. Submit when part 2 is done, then wait.
+│   ─────────────────────────────────────────────
+│   3. Run the suite        ✗ not yours — do not run it
+│   4. Summarise            ✗ not yours — do not write it
+│
+│ What part 1 produced:
+│   "The worktree path is derived from the repo name
+│    alone, so a second Job collides. It should carry
+│    the job id. worktree.rs, add() — the path is built
+│    at line 40."
+│
+│ Parts 3 and 4 happen after you submit, and doing them
+│ yourself does not move this task forward. Leave the
+│ branch in a state they can start from.
+└──────────────────────────────────────────────
+┌─ STEP: Implement ────────────────────────────────
+│ Make the smallest change that addresses the cause
+│ identified in part 1. Do not fix adjacent problems you
+│ notice — say so in your summary instead.
+│
+│ Read before you write. The rust-conventions skill
+│ covers error handling and module layout here.
+│
+│ Your summary should say what you changed and why, not
+│ that you finished.
+└──────────────────────────────────────────────
+```
+
+The step's closing line is where the work submission's `not_claimed` field
+comes from — an adjacent problem noticed and left alone has somewhere to
+land.
+
+### Code Review, part 2 of 3 — the inverted case
+
+The test of the layering, since the diff is the Drone's **input** rather
+than its output.
+
+```
+┌─ BASELINE ──────────────────────────────────────
+│ [identical to the sample above, on every step of
+│  every Job. Mechanics, never task content.]
+└──────────────────────────────────────────────
+┌─ JOB BRIEF ───────────────────────────────────
+│ Repository: armada
+│
+│ Review PR #218, which reworks how worktree paths are
+│ built. It touches the dispatch path, so pay attention
+│ to what happens when two Jobs start at once.
+└──────────────────────────────────────────────
+┌─ WHERE YOU ARE ────────────────────────────────
+│ This task runs in three parts. You are on part 2.
+│
+│   1. Read the changes     ✓ done
+│   2. Assess               ← you are here
+│   ─────────────────────────────────────────────
+│   ▌ STOP. Submit when part 2 is done, then wait.
+│   ─────────────────────────────────────────────
+│   3. Deliver              ✗ not yours — do not post it
+│
+│ What part 1 produced:
+│   "6 files, 340 lines. worktree.rs add() now takes a
+│    job id and builds the path from it. dispatch.rs
+│    passes it through. Three call sites updated, two
+│    tests changed, one added."
+└──────────────────────────────────────────────
+┌─ STEP: Assess ───────────────────────────────────
+│ The changes are below in full. You did not write them
+│ and you are not fixing them — you are reviewing them.
+│
+│ Write your findings to REVIEW.md. Tie every finding to
+│ a specific file and line. A finding that would apply
+│ to any diff is not a finding.
+│
+│ "No issues" is a legitimate conclusion on a small,
+│ clean change. It is not a legitimate conclusion you
+│ reach quickly on a large one.
+│
+│ Do not edit the code you are reviewing.
+└──────────────────────────────────────────────
+┌─ THE CHANGES ──────────────────────────────────
+│ diff --git a/crates/vcs/src/worktree.rs ...
+│ [340 lines, injected]
+└──────────────────────────────────────────────
+```
+
+**What the inverted case forced.** A fifth block — the diff is injected as
+its own section *after* the step instructions, because it is reference
+material rather than an instruction. And `Do not edit the code you are
+reviewing`, which stops a review Job quietly becoming a fix Job: a coding
+Drone's instinct on seeing a diff is to improve it.
+
+Everything above the step block is structurally identical between the two
+samples. Only the step text and the injected material differ, which is the
+layering doing its job.
 
 ---
 
@@ -408,7 +800,7 @@ below.
 | --- | --- |
 | **Tool documentation.** How a Drone is shown its Commands and MCP tools, and with what descriptions. Commands, MCP and Sub agents are frozen at spawn and this contract names no wording for any of them. Tracked separately | 2, 3 |
 | **No token budget** for the assembled prompt. Six layers plus a corpus, unbounded | 3 |
-| **Wording for the injected turns.** Carried per turn in Armada Prompts. A row with no wording is the gap, and the test fails on it | 4a |
+| **Wording for the injected turns.** Three are drafted rather than sanctioned, and the Pilot handoff instruction has none | 4a |
 | **The `Commit/PR message template` collision.** A Manifest template is layer-3 prompt content and it is a shape rule. Section 5 forbids shape rules in the baseline and says nothing about layers 2 to 6. Precedence against the copy lint is undecided | 3, 5 |
 | **Prior-iteration context on loop workflows.** Evidence Scope appends it, which is a further source of prompt content — and for the Judge it sits oddly against "stateless, one-shot, no memory between calls" | 2, 3 |
 | **Helm has no frozen/live story.** Sessions are persistent and per-Manifest; Voice and authority are configurable; Helm has no respawn path. What happens to a live session when the Kit or Machine config changes is unstated | 4 |
@@ -420,6 +812,5 @@ below.
 
 ## Open questions
 - Where does the prompt library live, and is a prompt version recorded on the verdict?
-- What is the actual wording of the Drone baseline prompt?
 
 Also bearing on this document, and written where each belongs: `[manifest-scanner-agent-or-model-call]` in `system-architecture.md`. A question has one home — answering it in two places is how one of them goes stale.
