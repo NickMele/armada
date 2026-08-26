@@ -33,6 +33,9 @@ not override, **spec** is a designed artifact, **reference** is lookup material.
 - [`contracts/system-architecture.md`](contracts/system-architecture.md) —
   *reference.* Topology, trust boundaries and the component taxonomy. The map
   with the why attached; `ARCHITECTURE.md` is the map with the where.
+- [`contracts/technical-writing.md`](contracts/technical-writing.md) —
+  *contract.* The shape of every document here: one mode per page, how a rule
+  is phrased, when prose becomes a table. Read before writing in `docs/`.
 - [`contracts/design-system.md`](contracts/design-system.md) — *contract.*
   Static UI chrome, the tokens, and the Voice and Copy contract. The parent
   nothing else may contradict.
