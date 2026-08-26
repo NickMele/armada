@@ -1,0 +1,5 @@
+{"t": 1787752962.388299, "kind": "request", "payload": {"method": "initialize", "id": 0}}
+{"t": 1787752962.420202, "kind": "request", "payload": {"method": "notifications/initialized", "id": null}}
+{"t": 1787752962.420332, "kind": "request", "payload": {"method": "tools/list", "id": 1}}
+{"t": 1787752995.68368, "kind": "request", "payload": {"method": "tools/call", "id": 2}}
+{"t": 1787752995.683846, "kind": "tool_call", "payload": {"name": "submit_evidence", "arguments": {"summary": "Rewrote slugify in src/lib.rs to lowercase input, keep alphanumeric and underscore characters as-is, and collapse any run of other characters (spaces, punctuation) into a single hyphen while trimming leading/trailing separators. All 5 tests in tests/slug.rs pass; tests/slug.rs was not modified.", "check_command": "cargo test", "exit_code": 0}}}

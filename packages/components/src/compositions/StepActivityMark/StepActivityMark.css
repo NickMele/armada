@@ -1,0 +1,116 @@
+/* Step activity mark — the 16px slot a rail row leads with, holding a 12px
+   glyph or, on a step that has not run, its own number.
+
+   Hue below Job level exists only where `packages/tokens/src/status.css`
+   declares it, and every value there aliases its Job counterpart. Three
+   activity values take one; three take none and carry weight instead. */
+.armada-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 16px slot, 12px glyph — the drawn geometry, and the slot is what keeps a
+     numbered row and a glyphed row on the same left edge. */
+  width: var(--space-4);
+  flex: none;
+}
+
+.armada-step-mark > svg {
+  flex: none;
+}
+
+/* The accessible name. Hue and silhouette are the visible channels; a mark
+   whose only label is its colour says nothing to a screen reader. */
+.armada-step-mark__name {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A step that has not run has no state to depict, so its number stands in.
+   Mono, because a position is machine-derived. */
+.armada-step-mark__ordinal {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1;
+  color: var(--fg-subtle);
+}
+
+/* --- Hue, one line per declared value ------------------------------------- */
+
+.armada-step-mark[data-activity="advanced"] {
+  color: var(--step-advanced);
+}
+
+.armada-step-mark[data-activity="running"] {
+  color: var(--step-running);
+}
+
+.armada-step-mark[data-activity="awaiting_human"] {
+  color: var(--step-waiting);
+}
+
+/* failed states its outcome in both channels: the glyph is hued and the row
+   beneath it carries --step-failed-bg. */
+.armada-step-mark[data-activity="failed"] {
+  color: var(--step-failed);
+}
+
+/* retrying takes no hue. It is a position, not an outcome. */
+.armada-step-mark[data-activity="retrying"] {
+  color: var(--fg-muted);
+}
+
+.armada-step-mark[data-activity="not_started"] {
+  color: var(--fg-subtle);
+}
+
+/* stopped's flag stays --fg-default: with --step-stopped-bg carrying the
+   warning on the row, a hued glyph would say it twice. */
+.armada-step-mark[data-activity="stopped"] {
+  color: var(--fg-default);
+}
+
+/* killed takes no hue either, and that exclusion is load-bearing: killing is a
+   human decision rather than a system failure and must not read as an error. */
+.armada-step-mark[data-activity="killed"] {
+  color: var(--fg-default);
+}
+
+/* --- The pulse ------------------------------------------------------------ */
+
+/* The inner dot of circle-dot, opacity and scale only, at --duration-pulse.
+   The ring holds still, so no row shifts and nothing reflows. Hue says which
+   step is current; motion says it is still working.
+
+   One per screen, on the most specific mark present. Job detail has a rail, so
+   this is where the pulse lands and the header badge goes static. */
+.armada-step-mark[data-pulsing] > svg > circle + circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: armada-step-mark-pulse var(--duration-pulse) var(--ease) infinite;
+}
+
+@keyframes armada-step-mark-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.7);
+  }
+}
+
+/* The pulse stops. --step-running still carries the reading alone. */
+@media (prefers-reduced-motion: reduce) {
+  .armada-step-mark[data-pulsing] > svg > circle + circle {
+    animation: none;
+  }
+}

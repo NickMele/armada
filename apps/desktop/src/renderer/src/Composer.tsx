@@ -17,7 +17,7 @@
 // than inventing one. Reported as a gap, not designed around.
 
 import { useState } from "react";
-import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle, Checkbox, Input, Select } from "@armada/components";
+import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle, Checkbox, Input, Select, Textarea } from "@armada/components";
 
 import { URGENCIES } from "../../shared/generated/vocabulary";
 import type { Draft } from "../../shared/bridge";
@@ -90,7 +90,7 @@ export function Composer({ workflows, manifests, disabled, onPropose }: Composer
             invalid={tried && emptyTitle}
             message="A job needs a title. It is what names the row in the list."
           />
-          <Input
+          <Textarea
             label="Brief"
             value={brief}
             onChange={(event) => setBrief(event.target.value)}

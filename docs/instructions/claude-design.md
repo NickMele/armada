@@ -222,10 +222,10 @@ question rather than a judgement call it should make.
 
 1. **No arbitrary values.** Every color, size, space, radius and duration comes
    from the token set. Never a raw hex, never an off-scale px.
-2. **Only the sanctioned primitives.** button, input, select, checkbox, radio,
-   switch, badge, card, table, dialog, sheet, tabs, toast, tooltip,
-   dropdown-menu, popover, separator, scroll-area, skeleton, alert, command —
-   plus `kbd`, the one non-shadcn primitive. Compose from these. Do not invent a
+2. **Only the sanctioned primitives.** button, input, textarea, select,
+   checkbox, radio, switch, badge, card, table, dialog, sheet, tabs, toast,
+   tooltip, dropdown-menu, popover, separator, scroll-area, skeleton, alert,
+   command — plus `kbd`, the one non-shadcn primitive. Compose from these. Do not invent a
    new base component.
 3. **Status color is never chosen.** It maps one to one onto the Job state
    machine. Never assign a status color by aesthetic judgment. **Below Job level,

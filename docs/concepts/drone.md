@@ -329,8 +329,10 @@ Not to be confused with the **Sub agents** configuration concept (Kit/Manifest â
 
 Every Drone carries one further injected tool, `escape_hatch`, which ends autonomous execution and hands the Job to a person. Full design lives on [Pilot](pilot.md).
 
-- **Drone-initiated.** The Drone calls it on its own as a sanctioned stuck signal, in place of thrashing or claiming a completion it did not reach. It sits alongside the policed failure modes above as the one exit a Drone is allowed to take for itself.
-- **Human-initiated.** Fleet instructs the Drone to call it after the engineer confirms Pilot in Bridge.
+- **Drone-initiated.** The Drone calls it on its own as a stuck signal, in place of thrashing or claiming a completion it did not reach.
+- **Human-initiated.** Fleet marks the Job, then instructs the Drone to call it once the engineer confirms Pilot in Bridge.
+
+**A pull succeeds only on a Job Fleet has marked for the handoff.** An unmarked pull is refused, and the Job escalates as `hatch_unbidden` rather than passing to `piloted`. Why: the stuck signal still reaches a person, by escalation rather than by clean exit.
 
 **A Drone-initiated escape hatch does not count against the repeat counter.** Why: counting a sanctioned exit as a repeat failure penalises the behaviour the mechanism exists to encourage, and the counter drives the escalation payload's suggested action, so a Drone that correctly raised its hand would still be described to the engineer as a repeat failure.
 

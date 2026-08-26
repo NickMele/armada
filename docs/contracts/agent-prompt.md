@@ -296,6 +296,7 @@ which is an assembled prompt and therefore governed here.
 | **The refusal reprompt** | A Judge refused a criterion after a mechanical check passed | Specified |
 | **`redirect_drone`** | A structured instruction from a human, or from Helm at rung 1 | A person writes it |
 | **The Pilot handoff instruction** | Fleet tells the Drone to call `escape_hatch` after a human confirms Pilot | Drafted, not sanctioned |
+| **The hatch-unavailable answer** | A Drone pulled the hatch on a Job Fleet had not marked | Drafted, not sanctioned |
 
 **Every turn Fleet authors now has wording, and none of it is agreed.**
 `redirect_drone` carries a person's words rather than Fleet's, so it has
@@ -525,6 +526,44 @@ The tool is described rather than named, as it is in the poke and in the
 baseline clause. And the turn carries no record: nothing observable fired
 it, there is no verdict behind it, and the bundle already holds every fact
 Fleet could put in one.
+
+## The hatch-unavailable answer
+
+Fires when a Drone calls `escape_hatch` on a Job Fleet has not marked for
+the handoff. The pull does not go through and the Job escalates as
+`hatch_unbidden` — [Pilot](../concepts/pilot.md) owns the mechanism.
+
+**Not the refusal reprompt.** That one carries a Judge verdict on evidence
+that arrived. This one answers a tool call, and no verdict sits behind it.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ TURN ─────────────────────────────────────────
+│ The escape hatch is unavailable.
+│
+│ Submit what you have through the evidence
+│ submission tool you have been given, and say
+│ what you did not reach. Name the command, the
+│ path or the message that stopped you.
+│
+│ Partial work with an accurate Not claimed is
+│ worth more than carrying on.
+└────────────────────────────────────────────────
+```
+
+**The turn says the hatch is unavailable and nothing else.** A refusal
+that explains itself teaches the Drone that a mark exists, and a Drone
+that knows a mark exists has a gate to reason about rather than work to
+do.
+
+**It carries no record and no counter.** Nothing observable fired it — the
+Drone's own tool call did, and the Drone already knows what it tried.
+
+**It asks for the bar `blocked_by` asks for**: the command, the path or
+the message rather than a characterisation. Submission is the action left
+to the Drone, and the closing line is the force-interrupt directive's,
+because what it asks the Drone to do is the same.
 
 ---
 
@@ -873,7 +912,7 @@ below.
 | --- | --- |
 | **Tool documentation.** How a Drone is shown its Commands and MCP tools, and with what descriptions. Commands, MCP and Sub agents are frozen at spawn and this contract names no wording for any of them. Tracked separately | 2, 3 |
 | **No token budget** for the assembled prompt. Six layers plus a corpus, unbounded | 3 |
-| **Wording for the injected turns.** Three are drafted rather than sanctioned, and the Pilot handoff instruction has none | 4a |
+| **Wording for the injected turns.** Every turn Fleet authors is drafted rather than sanctioned, save the refusal reprompt | 4a |
 | **The `Commit/PR message template` collision.** A Manifest template is layer-3 prompt content and it is a shape rule. Section 5 forbids shape rules in the baseline and says nothing about layers 2 to 6. Precedence against the copy lint is undecided | 3, 5 |
 | **Prior-iteration context on loop workflows.** Evidence Scope appends it, which is a further source of prompt content — and for the Judge it sits oddly against "stateless, one-shot, no memory between calls" | 2, 3 |
 | **Helm has no frozen/live story.** Sessions are persistent and per-Manifest; Voice and authority are configurable; Helm has no respawn path. What happens to a live session when the Kit or Machine config changes is unstated | 4 |

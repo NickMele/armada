@@ -1,0 +1,5 @@
+Every test in tests/slug.rs must pass. Make them pass by changing src/lib.rs. Do not modify tests/slug.rs. Run `cargo test` to check.
+
+When the work is done you must report the outcome through the evidence submission tool you have been given. Reporting is not optional, and nothing you write in prose is read.
+
+Stopping and handing back is a legitimate way to finish. Guessing is not. Calling the escape hatch ends this task's autonomous run and passes it to a person.

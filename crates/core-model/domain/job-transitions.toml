@@ -223,5 +223,6 @@ in_code = "Not yet"
 [[transitions]]
 from = "running"
 to = "piloted"
-on = "escape_hatch — human-initiated or Drone-initiated"
+on = "escape_hatch, on a Job Fleet marked for the handoff"
 in_code = "Not yet"
+notes = "An unmarked pull does not fire this edge. Fleet refuses it and the Job escalates as `hatch_unbidden`, on the default edge."

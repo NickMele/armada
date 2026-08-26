@@ -106,6 +106,24 @@ The ordinary failure: nothing is wrong with the Drone, the evidence, or the mach
 `loop_cap` is not this, because nothing failed. `check_timeout` is not this, because the Check did not fail, it did not finish. `evidence_suspect` is not this, because the evidence passed mechanically and resubmitting would reproduce the same gaming.
 """
 
+[triggers.hatch_unbidden]
+kind = "Trigger"
+level = "Job"
+meaning = "The Drone called `escape_hatch` on a Job Fleet had not marked for the handoff. The pull is refused and the Job surfaces, because a Drone reaching for the hatch unbidden is a Drone struggling."
+in_code = "Not yet"
+notes = """
+Not `thrashing`: the hatch on its own stands in place of thrashing, so one trigger for both would erase the distinction this one enforces. Nothing mechanical has to fire first and no forced report has to fail — the tool call is the whole detection.
+
+Job-level, like `interrupted` and `resource_exhausted`: the pull is a fact about the Drone rather than about the step it happened to be on.
+
+Fires the default edge. What Fleet answers the Drone names no mark, and Pilot owns why.
+"""
+why = """
+The pull is the most reliable stuck signal Armada gets: v1 proved a Drone will report a success it did not reach rather than admit a dead end. Refusing it and saying nothing spends that signal on a denied tool call and leaves the Drone working a Job it has just said it cannot finish.
+
+Allowing it instead would keep the two meanings of one tool call indistinguishable — an engineer taking over a Drone that may be fine, and a Drone with nothing left to try.
+"""
+
 [triggers.interrupted]
 kind = "Trigger"
 level = "Job"

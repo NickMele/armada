@@ -1,7 +1,197 @@
 import { jsxs, jsx, Fragment } from "react/jsx-runtime";
-import { TriangleAlert, Stethoscope, UserCheck, Stamp, Eye, X, Check, Power, Terminal, Clock, Link, Cpu, Ban, CircleDot, Archive, OctagonAlert, RefreshCw, FileQuestionMark, ShieldX, Split, Unplug, ArrowUpToLine, RotateCw, Send, CornerUpRight, ClipboardList, Activity, Bell, MessageSquare, Settings, ChevronDown } from "lucide-react";
-import { useState, useRef, useMemo, useEffect, useId, useCallback, createElement } from "react";
+import { X, Power, Flag, Check, RotateCw, Eye, CircleDot, TriangleAlert, Stethoscope, UserCheck, Stamp, Terminal, Clock, Link, Cpu, Ban, Archive, OctagonAlert, RefreshCw, FileQuestionMark, ShieldX, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, ClipboardList, Activity, Bell, MessageSquare, Settings, ChevronDown } from "lucide-react";
+import { useState, useRef, useEffect, useMemo, useId, useCallback, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+const GLYPH = {
+  not_started: void 0,
+  running: CircleDot,
+  awaiting_human: Eye,
+  retrying: RotateCw,
+  advanced: Check,
+  stopped: Flag,
+  killed: Power,
+  failed: X
+};
+const MARK_ICON = 12;
+const MARK_STROKE = 2;
+function StepActivityMark({ activity, label: label2, ordinal, pulsing = false }) {
+  const Icon = GLYPH[activity];
+  const animates = pulsing && activity === "running";
+  return /* @__PURE__ */ jsxs("span", { className: "armada-step-mark", "data-activity": activity, "data-pulsing": animates || void 0, children: [
+    Icon ? /* @__PURE__ */ jsx(Icon, { size: MARK_ICON, strokeWidth: MARK_STROKE, "aria-hidden": true }) : ordinal !== void 0 ? /* @__PURE__ */ jsx("span", { className: "armada-step-mark__ordinal", "aria-hidden": true, children: ordinal }) : null,
+    /* @__PURE__ */ jsx("span", { className: "armada-step-mark__name", children: label2 })
+  ] });
+}
+const meta$q = {
+  title: "Compositions/Step activity mark",
+  component: StepActivityMark
+};
+const NotStarted$2 = {
+  args: { activity: "not_started", label: "Not started", ordinal: 3 }
+};
+const NotStartedWithNoOrdinal = {
+  args: { activity: "not_started", label: "Not started" }
+};
+const Running$2 = {
+  args: { activity: "running", label: "Running" }
+};
+const RunningPulsing$1 = {
+  args: { activity: "running", label: "Running", pulsing: true }
+};
+const AwaitingHuman$1 = {
+  args: { activity: "awaiting_human", label: "Waiting on you" }
+};
+const Retrying = {
+  args: { activity: "retrying", label: "Retrying" }
+};
+const Advanced = {
+  args: { activity: "advanced", label: "Advanced" }
+};
+const Stopped = {
+  args: { activity: "stopped", label: "Stopped" }
+};
+const Killed$3 = {
+  args: { activity: "killed", label: "Killed" }
+};
+const Failed$1 = {
+  args: { activity: "failed", label: "Failed a check" }
+};
+const EveryValue = {
+  render: () => {
+    const values = [
+      ["not_started", "Not started", 3],
+      ["running", "Running"],
+      ["awaiting_human", "Waiting on you"],
+      ["retrying", "Retrying"],
+      ["advanced", "Advanced"],
+      ["stopped", "Stopped"],
+      ["killed", "Killed"],
+      ["failed", "Failed a check"]
+    ];
+    return /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: "var(--space-2)" }, children: values.map(([activity, label2, ordinal]) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "var(--space-2)" }, children: [
+      /* @__PURE__ */ jsx(StepActivityMark, { activity, label: label2, ordinal }),
+      /* @__PURE__ */ jsx("span", { style: { fontFamily: "var(--font-mono)", fontSize: "var(--text-2xs)", color: "var(--fg-subtle)" }, children: activity })
+    ] }, activity)) });
+  }
+};
+const __vite_glob_0_0 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  Advanced,
+  AwaitingHuman: AwaitingHuman$1,
+  EveryValue,
+  Failed: Failed$1,
+  Killed: Killed$3,
+  NotStarted: NotStarted$2,
+  NotStartedWithNoOrdinal,
+  Retrying,
+  Running: Running$2,
+  RunningPulsing: RunningPulsing$1,
+  Stopped,
+  default: meta$q
+}, Symbol.toStringTag, { value: "Module" }));
+function Tooltip({ label: label2, shortcut, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const timer = useRef(void 0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  function readDelay() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--tooltip-delay");
+    return Number.parseInt(raw, 10) || 0;
+  }
+  function show() {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setOpen(true), readDelay());
+  }
+  function hide() {
+    window.clearTimeout(timer.current);
+    setOpen(false);
+  }
+  return /* @__PURE__ */ jsxs(
+    "span",
+    {
+      className: "armada-tooltip",
+      onMouseEnter: show,
+      onMouseLeave: hide,
+      onFocus: show,
+      onBlur: hide,
+      children: [
+        children,
+        open ? /* @__PURE__ */ jsxs("span", { className: "armada-tooltip__bubble", role: "tooltip", children: [
+          /* @__PURE__ */ jsx("span", { className: "armada-tooltip__label", children: label2 }),
+          shortcut ? /* @__PURE__ */ jsx("kbd", { className: "armada-tooltip__kbd", children: shortcut }) : null
+        ] }) : null
+      ]
+    }
+  );
+}
+function StepBar({ total, current, activity = "not_started", label: label2 }) {
+  const segments = Array.from({ length: total }, (_, i) => {
+    const position = i + 1;
+    if (position < current) return "past";
+    if (position === current) return "current";
+    return "remaining";
+  });
+  const bar = /* @__PURE__ */ jsx(
+    "span",
+    {
+      className: "armada-step-bar",
+      role: "img",
+      "aria-label": label2 ?? `Step ${current} of ${total}`,
+      children: segments.map((state, i) => /* @__PURE__ */ jsx(
+        "span",
+        {
+          className: "armada-step-bar__segment",
+          "data-state": state,
+          "data-activity": state === "current" ? activity : void 0
+        },
+        i
+      ))
+    }
+  );
+  return label2 ? /* @__PURE__ */ jsx(Tooltip, { label: label2, children: bar }) : bar;
+}
+const meta$p = {
+  title: "Compositions/Step bar",
+  component: StepBar
+};
+const NotStarted$1 = {
+  args: { total: 4, current: 0, label: "Not started, 4 steps" }
+};
+const Running$1 = {
+  args: { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }
+};
+const RunningLongWorkflow = {
+  args: { total: 7, current: 5, activity: "running", label: "Step 5 of 7" }
+};
+const AwaitingHuman = {
+  args: { total: 4, current: 3, activity: "awaiting_human", label: "Step 3 of 4" }
+};
+const Failed = {
+  args: { total: 4, current: 3, activity: "failed", label: "Step 3 of 4" }
+};
+const Killed$2 = {
+  args: { total: 4, current: 2, activity: "killed", label: "Step 2 of 4" }
+};
+const AllAdvanced = {
+  args: { total: 4, current: 5, activity: "advanced", label: "All 4 of 4 steps advanced" }
+};
+const RunningNeverPulses = {
+  render: () => /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "var(--space-2)", width: "var(--sidebar-rail)" }, children: [
+    /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }),
+    /* @__PURE__ */ jsx(StepBar, { total: 4, current: 3, activity: "running", label: "Step 3 of 4" })
+  ] })
+};
+const __vite_glob_0_1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  AllAdvanced,
+  AwaitingHuman,
+  Failed,
+  Killed: Killed$2,
+  NotStarted: NotStarted$1,
+  Running: Running$1,
+  RunningLongWorkflow,
+  RunningNeverPulses,
+  default: meta$p
+}, Symbol.toStringTag, { value: "Module" }));
 function Alert({ tone = "escalated", title, children, icon, action }) {
   return /* @__PURE__ */ jsxs(
     "div",
@@ -26,7 +216,7 @@ function Alert({ tone = "escalated", title, children, icon, action }) {
     }
   );
 }
-const meta$n = {
+const meta$o = {
   title: "Primitives/Alert",
   component: Alert
 };
@@ -50,11 +240,11 @@ const Neutral = {
     action: /* @__PURE__ */ jsx("button", { type: "button", className: "armada-alert__button", children: "Open Doctor" })
   }
 };
-const __vite_glob_0_0 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Escalated: Escalated$1,
   Neutral,
-  default: meta$n
+  default: meta$o
 }, Symbol.toStringTag, { value: "Module" }));
 const BADGE_ICON = 12;
 const BADGE_STROKE = 2;
@@ -77,7 +267,7 @@ function Badge({ status, icon: Icon, children, pulsing = false }) {
     }
   );
 }
-const meta$m = {
+const meta$n = {
   title: "Primitives/Badge",
   component: Badge
 };
@@ -141,7 +331,7 @@ const EscalationReasons = {
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: ArrowUpToLine, children: "Reached its ceiling" })
   ] })
 };
-const __vite_glob_0_1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AwaitingApproval,
   AwaitingAttestation,
@@ -160,7 +350,7 @@ const __vite_glob_0_1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   Running,
   RunningPulsing,
   Superseded,
-  default: meta$m
+  default: meta$n
 }, Symbol.toStringTag, { value: "Module" }));
 function Button({
   variant = "secondary",
@@ -185,11 +375,11 @@ function Button({
     }
   );
 }
-const meta$l = {
+const meta$m = {
   title: "Primitives/Button",
   component: Button
 };
-function Card$6({ children }) {
+function Card$7({ children }) {
   return /* @__PURE__ */ jsx(
     "div",
     {
@@ -208,47 +398,47 @@ function Card$6({ children }) {
 }
 const Primary = {
   args: { variant: "primary", children: "Dispatch job" },
-  render: (args) => /* @__PURE__ */ jsx(Card$6, { children: /* @__PURE__ */ jsx(Button, { ...args }) })
+  render: (args) => /* @__PURE__ */ jsx(Card$7, { children: /* @__PURE__ */ jsx(Button, { ...args }) })
 };
 const Secondary = {
   args: { variant: "secondary", children: "Cancel" },
-  render: (args) => /* @__PURE__ */ jsx(Card$6, { children: /* @__PURE__ */ jsx(Button, { ...args }) })
+  render: (args) => /* @__PURE__ */ jsx(Card$7, { children: /* @__PURE__ */ jsx(Button, { ...args }) })
 };
 const Ghost = {
   args: { variant: "ghost", children: "Ghost" },
-  render: (args) => /* @__PURE__ */ jsx(Card$6, { children: /* @__PURE__ */ jsx(Button, { ...args }) })
+  render: (args) => /* @__PURE__ */ jsx(Card$7, { children: /* @__PURE__ */ jsx(Button, { ...args }) })
 };
 const Destructive = {
   args: { variant: "destructive", children: "Kill job" },
-  render: (args) => /* @__PURE__ */ jsx(Card$6, { children: /* @__PURE__ */ jsx(Button, { ...args }) })
+  render: (args) => /* @__PURE__ */ jsx(Card$7, { children: /* @__PURE__ */ jsx(Button, { ...args }) })
 };
 const Hover = {
-  render: () => /* @__PURE__ */ jsxs(Card$6, { children: [
+  render: () => /* @__PURE__ */ jsxs(Card$7, { children: [
     /* @__PURE__ */ jsx(Button, { variant: "primary", "data-preview-hover": "", children: "Dispatch job" }),
     /* @__PURE__ */ jsx(Button, { variant: "secondary", "data-preview-hover": "", children: "Cancel" }),
     /* @__PURE__ */ jsx(Button, { variant: "ghost", "data-preview-hover": "", children: "Ghost" }),
     /* @__PURE__ */ jsx(Button, { variant: "destructive", "data-preview-hover": "", children: "Kill job" })
   ] })
 };
-const Focused$6 = {
-  render: () => /* @__PURE__ */ jsx(Card$6, { children: /* @__PURE__ */ jsx(Button, { variant: "secondary", "data-preview-focus": "", children: "Focused" }) })
+const Focused$7 = {
+  render: () => /* @__PURE__ */ jsx(Card$7, { children: /* @__PURE__ */ jsx(Button, { variant: "secondary", "data-preview-focus": "", children: "Focused" }) })
 };
-const Disabled$6 = {
-  render: () => /* @__PURE__ */ jsxs(Card$6, { children: [
+const Disabled$7 = {
+  render: () => /* @__PURE__ */ jsxs(Card$7, { children: [
     /* @__PURE__ */ jsx(Button, { variant: "primary", disabled: true, children: "Dispatch job" }),
     /* @__PURE__ */ jsx(Button, { variant: "secondary", disabled: true, children: "Cancel" }),
     /* @__PURE__ */ jsx(Button, { variant: "destructive", disabled: true, children: "Kill job" })
   ] })
 };
 const Small = {
-  render: () => /* @__PURE__ */ jsxs(Card$6, { children: [
+  render: () => /* @__PURE__ */ jsxs(Card$7, { children: [
     /* @__PURE__ */ jsx(Button, { size: "sm", children: "Review" }),
     /* @__PURE__ */ jsx(Button, { size: "sm", children: "Open diff" }),
     /* @__PURE__ */ jsx(Button, { size: "sm", variant: "ghost", iconOnly: true, "aria-label": "Retry", children: /* @__PURE__ */ jsx(RotateCw, { size: 16, strokeWidth: 2, "aria-hidden": "true" }) })
   ] })
 };
 const Group = {
-  render: () => /* @__PURE__ */ jsxs(Card$6, { children: [
+  render: () => /* @__PURE__ */ jsxs(Card$7, { children: [
     /* @__PURE__ */ jsx(Button, { variant: "primary", children: "Approve" }),
     /* @__PURE__ */ jsx(Button, { variant: "secondary", children: "Open diff" }),
     /* @__PURE__ */ jsx(Button, { variant: "ghost", children: "Redirect" }),
@@ -257,7 +447,7 @@ const Group = {
 };
 const SecondaryOnASunkenGround = {
   render: () => /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "var(--space-4)" }, children: [
-    /* @__PURE__ */ jsx(Card$6, { children: /* @__PURE__ */ jsx(Button, { variant: "secondary", ground: "card", children: "On a card" }) }),
+    /* @__PURE__ */ jsx(Card$7, { children: /* @__PURE__ */ jsx(Button, { variant: "secondary", ground: "card", children: "On a card" }) }),
     /* @__PURE__ */ jsxs(
       "div",
       {
@@ -276,31 +466,31 @@ const SecondaryOnASunkenGround = {
     )
   ] })
 };
-const Light$6 = {
-  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsxs(Card$6, { children: [
+const Light$7 = {
+  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsxs(Card$7, { children: [
     /* @__PURE__ */ jsx(Button, { variant: "primary", children: "Dispatch job" }),
     /* @__PURE__ */ jsx(Button, { variant: "secondary", children: "Cancel" })
   ] }) })
 };
-const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Destructive,
-  Disabled: Disabled$6,
-  Focused: Focused$6,
+  Disabled: Disabled$7,
+  Focused: Focused$7,
   Ghost,
   Group,
   Hover,
-  Light: Light$6,
+  Light: Light$7,
   Primary,
   Secondary,
   SecondaryOnASunkenGround,
   Small,
-  default: meta$l
+  default: meta$m
 }, Symbol.toStringTag, { value: "Module" }));
 function joined$1(base, extra) {
   return extra ? `${base} ${extra}` : base;
 }
-function Card$5({ className, ...rest }) {
+function Card$6({ className, ...rest }) {
   return /* @__PURE__ */ jsx("div", { className: joined$1("armada-card", className), ...rest });
 }
 function CardHeader({ className, ...rest }) {
@@ -318,21 +508,21 @@ function CardContent({ className, ...rest }) {
 function CardFooter({ className, ...rest }) {
   return /* @__PURE__ */ jsx("div", { className: joined$1("armada-card-footer", className), ...rest });
 }
-const meta$k = {
+const meta$l = {
   title: "Primitives/Card",
-  component: Card$5,
+  component: Card$6,
   decorators: [
     (Story) => /* @__PURE__ */ jsx("div", { style: { maxWidth: "56ch" }, children: /* @__PURE__ */ jsx(Story, {}) })
   ]
 };
-const Default$5 = {
-  render: () => /* @__PURE__ */ jsxs(Card$5, { children: [
+const Default$6 = {
+  render: () => /* @__PURE__ */ jsxs(Card$6, { children: [
     /* @__PURE__ */ jsx(CardTitle, { children: "Evidence accepted at step 4 of 5" }),
     /* @__PURE__ */ jsx(CardDescription, { children: "Four criteria resolved. One test added, none removed." })
   ] })
 };
 const WithHeader = {
-  render: () => /* @__PURE__ */ jsxs(Card$5, { children: [
+  render: () => /* @__PURE__ */ jsxs(Card$6, { children: [
     /* @__PURE__ */ jsxs(CardHeader, { children: [
       /* @__PURE__ */ jsx("span", { className: "caps", children: "Evidence" }),
       /* @__PURE__ */ jsx(Badge, { status: "awaiting-review", icon: Eye, children: "Awaiting review" })
@@ -350,17 +540,17 @@ const WithHeader = {
   ] })
 };
 const Dimmed$1 = {
-  render: () => /* @__PURE__ */ jsxs(Card$5, { "data-dimmed": true, children: [
+  render: () => /* @__PURE__ */ jsxs(Card$6, { "data-dimmed": true, children: [
     /* @__PURE__ */ jsx(CardTitle, { children: "Superseded at step 2 of 5" }),
     /* @__PURE__ */ jsx(CardDescription, { children: "The work landed outside this job." })
   ] })
 };
-const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  Default: Default$5,
+  Default: Default$6,
   Dimmed: Dimmed$1,
   WithHeader,
-  default: meta$k
+  default: meta$l
 }, Symbol.toStringTag, { value: "Module" }));
 function Checkbox({ children, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-checkbox", children: [
@@ -369,11 +559,11 @@ function Checkbox({ children, ...rest }) {
     /* @__PURE__ */ jsx("span", { children })
   ] });
 }
-const meta$j = {
+const meta$k = {
   title: "Primitives/Checkbox",
   component: Checkbox
 };
-function Card$4({ children }) {
+function Card$5({ children }) {
   return /* @__PURE__ */ jsx(
     "div",
     {
@@ -391,31 +581,31 @@ function Card$4({ children }) {
   );
 }
 const Unchecked = {
-  render: () => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Checkbox, { children: "Land as a convoy" }) })
+  render: () => /* @__PURE__ */ jsx(Card$5, { children: /* @__PURE__ */ jsx(Checkbox, { children: "Land as a convoy" }) })
 };
 const Checked = {
-  render: () => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, children: "Run Doctor before dispatch" }) })
+  render: () => /* @__PURE__ */ jsx(Card$5, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, children: "Run Doctor before dispatch" }) })
 };
-const Focused$5 = {
-  render: () => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, "data-preview-focus": "", children: "Run Doctor before dispatch" }) })
+const Focused$6 = {
+  render: () => /* @__PURE__ */ jsx(Card$5, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, "data-preview-focus": "", children: "Run Doctor before dispatch" }) })
 };
-const Disabled$5 = {
-  render: () => /* @__PURE__ */ jsxs(Card$4, { children: [
+const Disabled$6 = {
+  render: () => /* @__PURE__ */ jsxs(Card$5, { children: [
     /* @__PURE__ */ jsx(Checkbox, { disabled: true, children: "Land as a convoy" }),
     /* @__PURE__ */ jsx(Checkbox, { disabled: true, defaultChecked: true, children: "Run Doctor before dispatch" })
   ] })
 };
-const Light$5 = {
-  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, children: "Run Doctor before dispatch" }) }) })
+const Light$6 = {
+  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$5, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, children: "Run Doctor before dispatch" }) }) })
 };
-const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Checked,
-  Disabled: Disabled$5,
-  Focused: Focused$5,
-  Light: Light$5,
+  Disabled: Disabled$6,
+  Focused: Focused$6,
+  Light: Light$6,
   Unchecked,
-  default: meta$j
+  default: meta$k
 }, Symbol.toStringTag, { value: "Module" }));
 const DEFAULT_SECTIONS = ["Actions", "Navigation", "Jobs", "Settings"];
 function matches(entry, query) {
@@ -603,7 +793,7 @@ function Dialog({
     ] })
   ] }) });
 }
-const meta$i = {
+const meta$j = {
   title: "Primitives/CommandPalette",
   component: CommandPalette
 };
@@ -737,15 +927,15 @@ const DestructiveEntryConfirms = {
     ] });
   }
 };
-const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AliasFindsTheLexiconTerm,
   DestructiveEntryConfirms,
   NoMatch,
   Resting: Resting$1,
-  default: meta$i
+  default: meta$j
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$h = {
+const meta$i = {
   title: "Primitives/Dialog",
   component: Dialog
 };
@@ -769,11 +959,11 @@ const NeutralConfirm = {
     children: "Ends job 12 and opens a new job on the same workspace and branch. The worktree is kept."
   }
 };
-const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Confirmation,
   NeutralConfirm,
-  default: meta$h
+  default: meta$i
 }, Symbol.toStringTag, { value: "Module" }));
 function DropdownMenu({
   triggerLabel,
@@ -837,7 +1027,7 @@ function DropdownMenu({
     }) }) : null
   ] });
 }
-const meta$g = {
+const meta$h = {
   title: "Primitives/DropdownMenu",
   component: DropdownMenu
 };
@@ -888,14 +1078,14 @@ const AtTheRightEdge$2 = {
 const WithNoRoomBelow$2 = {
   render: () => /* @__PURE__ */ jsx(Frame$2, { edge: "bottom", children: /* @__PURE__ */ jsx(DropdownMenu, { defaultOpen: true, triggerLabel: "More", entries: rowActions }) })
 };
-const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge: AtTheLeftEdge$2,
   AtTheRightEdge: AtTheRightEdge$2,
   RowMenu,
   WithNoRoomBelow: WithNoRoomBelow$2,
   WithSectionLabels,
-  default: meta$g
+  default: meta$h
 }, Symbol.toStringTag, { value: "Module" }));
 function Input({ label: label2, invalid = false, message, mono = false, id, ...rest }) {
   const generated = useId();
@@ -918,11 +1108,11 @@ function Input({ label: label2, invalid = false, message, mono = false, id, ...r
     showMessage && /* @__PURE__ */ jsx("span", { className: "armada-input-field__message", id: messageId, children: message })
   ] });
 }
-const meta$f = {
+const meta$g = {
   title: "Primitives/Input",
   component: Input
 };
-function Card$3({ children }) {
+function Card$4({ children }) {
   return /* @__PURE__ */ jsx(
     "div",
     {
@@ -939,23 +1129,23 @@ function Card$3({ children }) {
     }
   );
 }
-const Default$4 = {
+const Default$5 = {
   args: { label: "Job title", defaultValue: "Refresh the auth token flow" },
-  render: (args) => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsx(Input, { ...args }) })
+  render: (args) => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { ...args }) })
 };
-const Placeholder = {
+const Placeholder$1 = {
   args: { label: "Job title", placeholder: "Refresh the auth token flow" },
-  render: (args) => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsx(Input, { ...args }) })
+  render: (args) => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { ...args }) })
 };
 const Mono = {
   args: { label: "Project location", defaultValue: "~/code/armada", mono: true },
-  render: (args) => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsx(Input, { ...args }) })
+  render: (args) => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { ...args }) })
 };
-const Focused$4 = {
-  render: () => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow", "data-preview-focus": "" }) })
+const Focused$5 = {
+  render: () => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow", "data-preview-focus": "" }) })
 };
-const Invalid$1 = {
-  render: () => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsx(
+const Invalid$2 = {
+  render: () => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(
     Input,
     {
       label: "Branch",
@@ -966,22 +1156,22 @@ const Invalid$1 = {
     }
   ) })
 };
-const Disabled$4 = {
-  render: () => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow", disabled: true }) })
+const Disabled$5 = {
+  render: () => /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow", disabled: true }) })
 };
-const Light$4 = {
-  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow" }) }) })
+const Light$5 = {
+  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow" }) }) })
 };
-const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  Default: Default$4,
-  Disabled: Disabled$4,
-  Focused: Focused$4,
-  Invalid: Invalid$1,
-  Light: Light$4,
+  Default: Default$5,
+  Disabled: Disabled$5,
+  Focused: Focused$5,
+  Invalid: Invalid$2,
+  Light: Light$5,
   Mono,
-  Placeholder,
-  default: meta$f
+  Placeholder: Placeholder$1,
+  default: meta$g
 }, Symbol.toStringTag, { value: "Module" }));
 function Kbd({ className, ...rest }) {
   return /* @__PURE__ */ jsx("kbd", { className: className ? `armada-kbd ${className}` : "armada-kbd", ...rest });
@@ -989,11 +1179,11 @@ function Kbd({ className, ...rest }) {
 function KbdChord({ className, ...rest }) {
   return /* @__PURE__ */ jsx("span", { className: className ? `armada-kbd-chord ${className}` : "armada-kbd-chord", ...rest });
 }
-const meta$e = {
+const meta$f = {
   title: "Primitives/kbd",
   component: Kbd
 };
-const Default$3 = {
+const Default$4 = {
   args: { children: "Esc" }
 };
 const Chord = {
@@ -1013,12 +1203,12 @@ const ContextualKeys = {
     /* @__PURE__ */ jsx(Kbd, { children: "/" })
   ] })
 };
-const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Chord,
   ContextualKeys,
-  Default: Default$3,
-  default: meta$e
+  Default: Default$4,
+  default: meta$f
 }, Symbol.toStringTag, { value: "Module" }));
 function Popover({ trigger: trigger2, children, align = "start", defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -1050,7 +1240,7 @@ function Popover({ trigger: trigger2, children, align = "start", defaultOpen = f
     ) : null
   ] });
 }
-const meta$d = {
+const meta$e = {
   title: "Primitives/Popover",
   component: Popover
 };
@@ -1095,14 +1285,14 @@ const AtTheRightEdge$1 = {
 const WithNoRoomBelow$1 = {
   render: () => /* @__PURE__ */ jsx(Frame$1, { edge: "bottom", children: /* @__PURE__ */ jsx(Popover, { defaultOpen: true, trigger, children: body }) })
 };
-const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AlignedToTheEnd,
   AtTheLeftEdge: AtTheLeftEdge$1,
   AtTheRightEdge: AtTheRightEdge$1,
   Open: Open$1,
   WithNoRoomBelow: WithNoRoomBelow$1,
-  default: meta$d
+  default: meta$e
 }, Symbol.toStringTag, { value: "Module" }));
 function Radio({ children, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-radio", children: [
@@ -1117,11 +1307,11 @@ function RadioGroup({ label: label2, children }) {
     children
   ] });
 }
-const meta$c = {
+const meta$d = {
   title: "Primitives/Radio",
   component: Radio
 };
-function Card$2({ children }) {
+function Card$3({ children }) {
   return /* @__PURE__ */ jsx(
     "div",
     {
@@ -1138,37 +1328,37 @@ function Card$2({ children }) {
     }
   );
 }
-const Default$2 = {
-  render: () => /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsxs(RadioGroup, { label: "Kit source", children: [
+const Default$3 = {
+  render: () => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsxs(RadioGroup, { label: "Kit source", children: [
     /* @__PURE__ */ jsx(Radio, { name: "kit", defaultChecked: true, children: "Import an existing Kit" }),
     /* @__PURE__ */ jsx(Radio, { name: "kit", children: "Start fresh" })
   ] }) })
 };
-const Focused$3 = {
-  render: () => /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsxs(RadioGroup, { label: "Kit source", children: [
+const Focused$4 = {
+  render: () => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsxs(RadioGroup, { label: "Kit source", children: [
     /* @__PURE__ */ jsx(Radio, { name: "kit-focus", defaultChecked: true, "data-preview-focus": "", children: "Import an existing Kit" }),
     /* @__PURE__ */ jsx(Radio, { name: "kit-focus", children: "Start fresh" })
   ] }) })
 };
-const Disabled$3 = {
-  render: () => /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsxs(RadioGroup, { label: "Kit source", children: [
+const Disabled$4 = {
+  render: () => /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsxs(RadioGroup, { label: "Kit source", children: [
     /* @__PURE__ */ jsx(Radio, { name: "kit-disabled", defaultChecked: true, disabled: true, children: "Import an existing Kit" }),
     /* @__PURE__ */ jsx(Radio, { name: "kit-disabled", disabled: true, children: "Start fresh" })
   ] }) })
 };
-const Light$3 = {
-  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsxs(RadioGroup, { label: "Kit source", children: [
+const Light$4 = {
+  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$3, { children: /* @__PURE__ */ jsxs(RadioGroup, { label: "Kit source", children: [
     /* @__PURE__ */ jsx(Radio, { name: "kit-light", defaultChecked: true, children: "Import an existing Kit" }),
     /* @__PURE__ */ jsx(Radio, { name: "kit-light", children: "Start fresh" })
   ] }) }) })
 };
-const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  Default: Default$2,
-  Disabled: Disabled$3,
-  Focused: Focused$3,
-  Light: Light$3,
-  default: meta$c
+  Default: Default$3,
+  Disabled: Disabled$4,
+  Focused: Focused$4,
+  Light: Light$4,
+  default: meta$d
 }, Symbol.toStringTag, { value: "Module" }));
 function joined(base, extra) {
   return extra ? `${base} ${extra}` : base;
@@ -1249,7 +1439,7 @@ function ScrollArea({
     }
   );
 }
-const meta$b = {
+const meta$c = {
   title: "Primitives/ScrollArea",
   component: ScrollArea
 };
@@ -1296,11 +1486,11 @@ const WithinBounds = {
     }
   )
 };
-const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Scrolling,
   WithinBounds,
-  default: meta$b
+  default: meta$c
 }, Symbol.toStringTag, { value: "Module" }));
 function Select({ label: label2, invalid = false, message, id, children, ...rest }) {
   const generated = useId();
@@ -1323,11 +1513,11 @@ function Select({ label: label2, invalid = false, message, id, children, ...rest
     showMessage && /* @__PURE__ */ jsx("span", { className: "armada-select-field__message", id: messageId, children: message })
   ] });
 }
-const meta$a = {
+const meta$b = {
   title: "Primitives/Select",
   component: Select
 };
-function Card$1({ children }) {
+function Card$2({ children }) {
   return /* @__PURE__ */ jsx(
     "div",
     {
@@ -1348,14 +1538,14 @@ const ceilings = /* @__PURE__ */ jsxs(Fragment, { children: [
   /* @__PURE__ */ jsx("option", { children: "4 drones" }),
   /* @__PURE__ */ jsx("option", { children: "8 drones" })
 ] });
-const Default$1 = {
-  render: () => /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", children: ceilings }) })
+const Default$2 = {
+  render: () => /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", children: ceilings }) })
 };
-const Focused$2 = {
-  render: () => /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", "data-preview-focus": "", children: ceilings }) })
+const Focused$3 = {
+  render: () => /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", "data-preview-focus": "", children: ceilings }) })
 };
-const Invalid = {
-  render: () => /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(
+const Invalid$1 = {
+  render: () => /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(
     Select,
     {
       label: "Concurrency ceiling",
@@ -1366,20 +1556,20 @@ const Invalid = {
     }
   ) })
 };
-const Disabled$2 = {
-  render: () => /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", disabled: true, children: ceilings }) })
+const Disabled$3 = {
+  render: () => /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", disabled: true, children: ceilings }) })
 };
-const Light$2 = {
-  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", children: ceilings }) }) })
+const Light$3 = {
+  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", children: ceilings }) }) })
 };
-const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  Default: Default$1,
-  Disabled: Disabled$2,
-  Focused: Focused$2,
-  Invalid,
-  Light: Light$2,
-  default: meta$a
+  Default: Default$2,
+  Disabled: Disabled$3,
+  Focused: Focused$3,
+  Invalid: Invalid$1,
+  Light: Light$3,
+  default: meta$b
 }, Symbol.toStringTag, { value: "Module" }));
 function Separator({
   className,
@@ -1398,7 +1588,7 @@ function Separator({
     }
   );
 }
-const meta$9 = {
+const meta$a = {
   title: "Primitives/Separator",
   component: Separator,
   decorators: [
@@ -1462,12 +1652,12 @@ const Vertical = {
 const Announced = {
   args: { decorative: false }
 };
-const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Announced,
   Horizontal,
   Vertical,
-  default: meta$9
+  default: meta$a
 }, Symbol.toStringTag, { value: "Module" }));
 function Sheet({ open, title, children, side = "right", footer, onClose }) {
   const closeRef = useRef(null);
@@ -1514,7 +1704,7 @@ function Sheet({ open, title, children, side = "right", footer, onClose }) {
     }
   ) });
 }
-const meta$8 = {
+const meta$9 = {
   title: "Primitives/Sheet",
   component: Sheet
 };
@@ -1534,11 +1724,11 @@ const Left = {
     children: "The command tripped the allowlist 5 times and was approved every time. Adding it here stops the prompt."
   }
 };
-const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Left,
   Right,
-  default: meta$8
+  default: meta$9
 }, Symbol.toStringTag, { value: "Module" }));
 function Skeleton({ className, width, style, ...rest }) {
   return /* @__PURE__ */ jsx(
@@ -1570,7 +1760,7 @@ function SkeletonText({
     }
   );
 }
-const meta$7 = {
+const meta$8 = {
   title: "Primitives/Skeleton",
   component: Skeleton,
   decorators: [
@@ -1584,17 +1774,17 @@ const Text = {
   render: () => /* @__PURE__ */ jsx(SkeletonText, {})
 };
 const InACard = {
-  render: () => /* @__PURE__ */ jsxs(Card$5, { children: [
+  render: () => /* @__PURE__ */ jsxs(Card$6, { children: [
     /* @__PURE__ */ jsx(CardTitle, { children: "Evidence" }),
     /* @__PURE__ */ jsx(SkeletonText, { label: "Loading evidence" })
   ] })
 };
-const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   InACard,
   Single,
   Text,
-  default: meta$7
+  default: meta$8
 }, Symbol.toStringTag, { value: "Module" }));
 function SplitButton({
   children,
@@ -1650,7 +1840,7 @@ function SplitButton({
     )) })
   ] });
 }
-const meta$6 = {
+const meta$7 = {
   title: "Primitives/Split button",
   component: SplitButton
 };
@@ -1692,13 +1882,13 @@ const EscalatedRow = {
     }
   ) })
 };
-const Focused$1 = {
+const Focused$2 = {
   render: () => /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "var(--space-4)" }, children: [
     /* @__PURE__ */ jsx("div", { "data-preview-focus": "action", children: /* @__PURE__ */ jsx(Row, { children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, ground: "sunken", children: "Approve" }) }) }),
     /* @__PURE__ */ jsx("div", { "data-preview-focus": "caret", children: /* @__PURE__ */ jsx(Row, { children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, ground: "sunken", children: "Approve" }) }) })
   ] })
 };
-const Disabled$1 = {
+const Disabled$2 = {
   render: () => /* @__PURE__ */ jsx(Row, { children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, ground: "sunken", disabled: true, children: "Approve" }) })
 };
 const PrimaryOnJobDetail = {
@@ -1716,7 +1906,7 @@ const PrimaryOnJobDetail = {
     }
   )
 };
-const Light$1 = {
+const Light$2 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Row, { children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, ground: "sunken", children: "Approve" }) }) })
 };
 const FocusedOnPrimary = {
@@ -1725,17 +1915,17 @@ const FocusedOnPrimary = {
     /* @__PURE__ */ jsx("div", { "data-preview-focus": "caret", children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, variant: "primary", children: "Approve" }) })
   ] })
 };
-const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Closed,
-  Disabled: Disabled$1,
+  Disabled: Disabled$2,
   EscalatedRow,
-  Focused: Focused$1,
+  Focused: Focused$2,
   FocusedOnPrimary,
-  Light: Light$1,
+  Light: Light$2,
   Open,
   PrimaryOnJobDetail,
-  default: meta$6
+  default: meta$7
 }, Symbol.toStringTag, { value: "Module" }));
 function Switch({ children, description, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-switch", "data-described": description !== void 0 || void 0, children: [
@@ -1747,11 +1937,11 @@ function Switch({ children, description, ...rest }) {
     /* @__PURE__ */ jsx("span", { className: "armada-switch__track", "aria-hidden": "true", children: /* @__PURE__ */ jsx("span", { className: "armada-switch__thumb" }) })
   ] });
 }
-const meta$5 = {
+const meta$6 = {
   title: "Primitives/Switch",
   component: Switch
 };
-function Card({ children }) {
+function Card$1({ children }) {
   return /* @__PURE__ */ jsx(
     "div",
     {
@@ -1769,22 +1959,22 @@ function Card({ children }) {
   );
 }
 const On = {
-  render: () => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, children: "Escalate on stall" }) })
+  render: () => /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, children: "Escalate on stall" }) })
 };
 const Off = {
-  render: () => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Switch, { children: "Auto-approve small diffs" }) })
+  render: () => /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Switch, { children: "Auto-approve small diffs" }) })
 };
-const Focused = {
-  render: () => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, "data-preview-focus": "", children: "Escalate on stall" }) })
+const Focused$1 = {
+  render: () => /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, "data-preview-focus": "", children: "Escalate on stall" }) })
 };
-const Disabled = {
-  render: () => /* @__PURE__ */ jsxs(Card, { children: [
+const Disabled$1 = {
+  render: () => /* @__PURE__ */ jsxs(Card$1, { children: [
     /* @__PURE__ */ jsx(Switch, { defaultChecked: true, disabled: true, children: "Escalate on stall" }),
     /* @__PURE__ */ jsx(Switch, { disabled: true, children: "Auto-approve small diffs" })
   ] })
 };
 const WithADescription = {
-  render: () => /* @__PURE__ */ jsxs(Card, { children: [
+  render: () => /* @__PURE__ */ jsxs(Card$1, { children: [
     /* @__PURE__ */ jsx(
       Switch,
       {
@@ -1796,20 +1986,20 @@ const WithADescription = {
     /* @__PURE__ */ jsx(Switch, { description: "Armada reads the config repo each launch. Local edits made since the last push are kept.", children: "Pull the Kit on startup" })
   ] })
 };
-const Light = {
-  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, children: "Escalate on stall" }) }) })
+const Light$1 = {
+  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, children: "Escalate on stall" }) }) })
 };
-const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  Disabled,
-  Focused,
-  Light,
+  Disabled: Disabled$1,
+  Focused: Focused$1,
+  Light: Light$1,
   Off,
   On,
   WithADescription,
-  default: meta$5
+  default: meta$6
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$4 = {
+const meta$5 = {
   title: "Primitives/Table",
   component: Table
 };
@@ -1829,7 +2019,7 @@ function Header() {
     /* @__PURE__ */ jsx(TableHeaderCell, { children: "Checked" })
   ] }) });
 }
-const Default = {
+const Default$1 = {
   render: () => /* @__PURE__ */ jsx(Grid, { children: /* @__PURE__ */ jsxs(Table, { children: [
     /* @__PURE__ */ jsx(Header, {}),
     /* @__PURE__ */ jsx(TableBody, { children: conditions.map((c) => /* @__PURE__ */ jsxs(TableRow, { children: [
@@ -1919,14 +2109,14 @@ const RowsGrowWithContent = {
     ] })
   ] }) })
 };
-const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  Default,
+  Default: Default$1,
   Dimmed,
   FocusedAndSelected,
   MonoValuesCopy,
   RowsGrowWithContent,
-  default: meta$4
+  default: meta$5
 }, Symbol.toStringTag, { value: "Module" }));
 function Tabs({ items, value, defaultValue, onChange }) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
@@ -1963,7 +2153,7 @@ function Tabs({ items, value, defaultValue, onChange }) {
     item.id
   )) });
 }
-const meta$3 = {
+const meta$4 = {
   title: "Primitives/Tabs",
   component: Tabs
 };
@@ -1987,11 +2177,11 @@ const LastActive = {
     ]
   }
 };
-const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   LastActive,
   SectionsOfOneObject,
-  default: meta$3
+  default: meta$4
 }, Symbol.toStringTag, { value: "Module" }));
 function TabsWithCounts({ items, value, defaultValue, onChange }) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
@@ -2031,7 +2221,7 @@ function TabsWithCounts({ items, value, defaultValue, onChange }) {
     item.id
   )) });
 }
-const meta$2 = {
+const meta$3 = {
   title: "Primitives/Tabs with counts",
   component: TabsWithCounts
 };
@@ -2055,10 +2245,104 @@ const Zero = {
     ]
   }
 };
-const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Queues,
   Zero,
+  default: meta$3
+}, Symbol.toStringTag, { value: "Module" }));
+function Textarea({
+  label: label2,
+  invalid = false,
+  message,
+  rows = 3,
+  id,
+  ...rest
+}) {
+  const generated = useId();
+  const textareaId = id ?? generated;
+  const messageId = `${textareaId}-message`;
+  const showMessage = invalid && message !== void 0;
+  return /* @__PURE__ */ jsxs("div", { className: "armada-textarea-field", children: [
+    label2 !== void 0 && /* @__PURE__ */ jsx("label", { className: "armada-textarea-field__label", htmlFor: textareaId, children: label2 }),
+    /* @__PURE__ */ jsx(
+      "textarea",
+      {
+        ...rest,
+        rows,
+        id: textareaId,
+        className: "armada-textarea",
+        "aria-invalid": invalid || void 0,
+        "aria-describedby": showMessage ? messageId : void 0
+      }
+    ),
+    showMessage && /* @__PURE__ */ jsx("span", { className: "armada-textarea-field__message", id: messageId, children: message })
+  ] });
+}
+const meta$2 = {
+  title: "Primitives/Textarea",
+  component: Textarea
+};
+function Card({ children }) {
+  return /* @__PURE__ */ jsx(
+    "div",
+    {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-4)",
+        width: "var(--sidebar-max)",
+        padding: "var(--pad-card)",
+        borderRadius: "var(--radius-md)",
+        background: "var(--bg-raised)"
+      },
+      children
+    }
+  );
+}
+const BRIEF = "A burst of 401s should produce one refresh call, not one per request. Keep the retry ceiling where it is.";
+const Default = {
+  args: { label: "Brief", defaultValue: BRIEF },
+  render: (args) => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { ...args }) })
+};
+const Placeholder = {
+  args: { label: "Brief", placeholder: BRIEF },
+  render: (args) => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { ...args }) })
+};
+const Focused = {
+  render: () => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", defaultValue: BRIEF, "data-preview-focus": "" }) })
+};
+const Invalid = {
+  render: () => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", invalid: true, message: "A job needs a brief. Write what the work is." }) })
+};
+const Disabled = {
+  render: () => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", defaultValue: BRIEF, disabled: true }) })
+};
+const Rows = {
+  render: () => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", rows: 6, defaultValue: BRIEF }) })
+};
+const Overflowing = {
+  render: () => /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(
+    Textarea,
+    {
+      label: "Brief",
+      defaultValue: `${BRIEF} The retry ceiling is three, set where the transport is configured rather than at the call site, and moving it is a separate job. What is in scope is the coalescing: one refresh in flight, every waiter parked on it.`
+    }
+  ) })
+};
+const Light = {
+  render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", defaultValue: BRIEF }) }) })
+};
+const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  Default,
+  Disabled,
+  Focused,
+  Invalid,
+  Light,
+  Overflowing,
+  Placeholder,
+  Rows,
   default: meta$2
 }, Symbol.toStringTag, { value: "Module" }));
 function Toast({ status, children, actionLabel, onAction }) {
@@ -2097,47 +2381,13 @@ const Landed = {
     actionLabel: "View"
   }
 };
-const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Copied,
   Killed,
   Landed,
   default: meta$1
 }, Symbol.toStringTag, { value: "Module" }));
-function Tooltip({ label: label2, shortcut, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen);
-  const timer = useRef(void 0);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-  function readDelay() {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue("--tooltip-delay");
-    return Number.parseInt(raw, 10) || 0;
-  }
-  function show() {
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setOpen(true), readDelay());
-  }
-  function hide() {
-    window.clearTimeout(timer.current);
-    setOpen(false);
-  }
-  return /* @__PURE__ */ jsxs(
-    "span",
-    {
-      className: "armada-tooltip",
-      onMouseEnter: show,
-      onMouseLeave: hide,
-      onFocus: show,
-      onBlur: hide,
-      children: [
-        children,
-        open ? /* @__PURE__ */ jsxs("span", { className: "armada-tooltip__bubble", role: "tooltip", children: [
-          /* @__PURE__ */ jsx("span", { className: "armada-tooltip__label", children: label2 }),
-          shortcut ? /* @__PURE__ */ jsx("kbd", { className: "armada-tooltip__kbd", children: shortcut }) : null
-        ] }) : null
-      ]
-    }
-  );
-}
 const meta = {
   title: "Primitives/Tooltip",
   component: Tooltip
@@ -2176,7 +2426,7 @@ const AtTheRightEdge = {
 const WithNoRoomBelow = {
   render: () => /* @__PURE__ */ jsx(Frame, { edge: "bottom", children: /* @__PURE__ */ jsx(Tooltip, { defaultOpen: true, label: longPath, children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: longPath }) }) })
 };
-const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge,
   AtTheRightEdge,
@@ -2187,30 +2437,33 @@ const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   default: meta
 }, Symbol.toStringTag, { value: "Module" }));
 const stories = /* @__PURE__ */ Object.assign({
-  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_0,
-  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_1,
-  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_2,
-  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_3,
-  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_4,
-  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_5,
-  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_6,
-  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_7,
-  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_8,
-  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_9,
-  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_10,
-  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_11,
-  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_12,
-  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_13,
-  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_14,
-  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_15,
-  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_16,
-  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_17,
-  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_18,
-  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_19,
-  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_20,
-  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_21,
-  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_22,
-  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_23
+  "../src/compositions/StepActivityMark/StepActivityMark.stories.tsx": __vite_glob_0_0,
+  "../src/compositions/StepBar/StepBar.stories.tsx": __vite_glob_0_1,
+  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_2,
+  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_3,
+  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_4,
+  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_5,
+  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_6,
+  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_7,
+  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_8,
+  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_9,
+  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_10,
+  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_11,
+  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_12,
+  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_13,
+  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_14,
+  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_15,
+  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_16,
+  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_17,
+  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_18,
+  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_19,
+  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_20,
+  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_21,
+  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_22,
+  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_23,
+  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_24,
+  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_25,
+  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_26
 });
 function label(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();

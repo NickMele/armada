@@ -1,0 +1,84 @@
+/* Textarea — no section of its own in the design system contract, so every
+ * value here is `### Input`'s. Recessed, the opposite of raised: a field is a
+ * well you type into, so it takes --bg-sunken while the card around it is
+ * --bg-raised.
+ *
+ * Two declarations diverge from Input, and both follow from being multi-line:
+ * padding is symmetric rather than horizontal-only, because there is no
+ * --h-control to centre a single line inside; and height comes from `rows`
+ * rather than a fixed token, so nothing here sets one.
+ *
+ * `[data-preview-focus]` is a Storybook rendering aid, not a design state: it
+ * selects the same declarations as `:focus-visible`, which a static story
+ * cannot reach. */
+
+.armada-textarea-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Labels align with their fields, and no label opens with a Wh- word: the
+ * label is `Brief`, not a question. */
+.armada-textarea-field__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: var(--border-default);
+  background: var(--bg-sunken);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  transition: border-color var(--duration-fast) var(--ease);
+
+  /* The mockup draws a drag handle. A handle is chrome on an instrument panel,
+   * and it lets a person put a field out of alignment with the column it sits
+   * in — the height is the caller's `rows`, not the reader's drag. Content
+   * past that scrolls. */
+  resize: none;
+}
+
+/* Prose, never mono. `Input` carries a `mono` prop for machine-derived
+ * content — a path, a branch, a command — and this control has none: the
+ * reason a textarea is sanctioned at all is that a brief is prose, and mono
+ * for prose is refused outright. */
+
+.armada-textarea::placeholder {
+  color: var(--fg-subtle);
+}
+
+.armada-textarea:focus-visible,
+.armada-textarea[data-preview-focus] {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Invalid takes the --status-completed-failed edge and states why underneath.
+ * The border alone is one channel; the message is the one that says what to
+ * do about it. */
+.armada-textarea[aria-invalid="true"] {
+  border-color: var(--status-completed-failed);
+}
+
+.armada-textarea-field__message {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--status-completed-failed);
+}
+
+/* Disabled is --fg-subtle text with hover suppressed. Never opacity. */
+.armada-textarea:disabled {
+  color: var(--fg-subtle);
+  border-color: var(--border-subtle);
+  cursor: default;
+}

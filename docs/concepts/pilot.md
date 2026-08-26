@@ -39,6 +39,21 @@ Pilot moves a Job from Drone execution to human execution. A single MCP tool, `e
 
 Any path lands the engineer in a confirmation modal that names the three outcomes below. The modal itself, its copy and its placement belong to the Take Over a Job user journey.
 
+## The mark
+
+**A pull succeeds only on a Job Fleet has marked for the handoff.** A person indicates the hatch should be pulled, Fleet marks the Job, and Fleet then prompts the Drone to pull it and wrap up its work.
+
+| Pull | The Job | What happens |
+| --- | --- | --- |
+| Fleet prompted it | Marked | Allowed. The Job goes to `piloted` |
+| The Drone reached for it | Not marked | Refused. The Job escalates as `hatch_unbidden` |
+
+**The mark enforces the distinction the trigger paths table already draws.** Why: a Drone reaching for the hatch unbidden is a Drone struggling, and a struggling Drone belongs in front of a person rather than out through a clean exit.
+
+**Both routes end autonomous execution and pass the Job to a person.** A marked pull does it by clean exit to `piloted`, an unmarked one by escalation. The baseline clause in the [Agent Prompt Contract](../contracts/agent-prompt.md) holds on either.
+
+**The Drone is never told which route it will get.** Why: a refusal that explains itself teaches the Drone to look for the mark. Fleet answers an unmarked pull that the hatch is unavailable, and says nothing further.
+
 ## The three outcomes
 
 | Outcome | Drone | Worktree | Job resumes | v2.0 |

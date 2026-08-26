@@ -1,0 +1,80 @@
+/* Step bar — one segment per step, past / current / remaining.
+
+   GEOMETRY WITH NO TOKEN. The M1 drawing sizes this bar at 72px in a fixed
+   grid track, each segment 4px tall with a 2px gap. Three values, none of them
+   spellable: --w-step-bar, --h-step-bar and a gap token do not exist. They are
+   composed from the spacing scale here so the drawn value is reproduced
+   exactly and changes in one place when the tokens land. Reported. */
+.armada-step-bar {
+  display: flex;
+  align-items: center;
+  /* 2px. Half the base unit, and the smallest gap that reads as a break
+     between two marks 4px tall. */
+  gap: calc(var(--space-1) / 2);
+  /* 72px — the drawn track width. The bar takes the width it is given, and
+     falls back to the drawn value when it stands alone. */
+  width: 100%;
+  max-width: calc(var(--space-12) + var(--space-6));
+}
+
+.armada-step-bar__segment {
+  flex: 1;
+  /* 4px, the base unit. A mark, not a meter. */
+  height: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--border-subtle);
+}
+
+/* Past — neutral. The one stated exception to a step keeping its hue: a rail
+   shows one Job and has room for the reading, a bar does not. */
+.armada-step-bar__segment[data-state="past"] {
+  background: var(--border-strong);
+}
+
+/* Remaining, and every segment on a Job that has not started. */
+.armada-step-bar__segment[data-state="remaining"] {
+  background: var(--border-subtle);
+}
+
+/* The current segment is the only one that takes a hue, and it takes it from
+   the step-activity set — the same declarations `StepActivityMark` reads. */
+.armada-step-bar__segment[data-activity="running"] {
+  background: var(--step-running);
+}
+
+.armada-step-bar__segment[data-activity="awaiting_human"] {
+  background: var(--step-waiting);
+}
+
+.armada-step-bar__segment[data-activity="advanced"] {
+  background: var(--step-advanced);
+}
+
+.armada-step-bar__segment[data-activity="failed"] {
+  background: var(--step-failed);
+}
+
+/* A killed segment takes --fg-default and no hue: a human decision, not a
+   system failure. That distinction is the whole reason the two treatments
+   differ, and it is the same rule the mark follows. */
+.armada-step-bar__segment[data-activity="killed"] {
+  background: var(--fg-default);
+}
+
+/* stopped and retrying take no hue below Job level either. stopped carries a
+   surface in a rail, which a 4px segment has no room for, so on a bar it is
+   the neutral weight of a past segment and the row's badge says the rest. */
+.armada-step-bar__segment[data-activity="retrying"] {
+  background: var(--fg-muted);
+}
+
+.armada-step-bar__segment[data-activity="stopped"] {
+  background: var(--fg-default);
+}
+
+.armada-step-bar__segment[data-activity="not_started"] {
+  background: var(--border-subtle);
+}
+
+/* The bar never animates. Its job is where the work got to, which is a static
+   fact — the badge carries "still working" on a list row. */

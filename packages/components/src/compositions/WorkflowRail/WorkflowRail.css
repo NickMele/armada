@@ -1,0 +1,208 @@
+/* Workflow rail — what ran, on job detail. A well, because it is a record
+   being read rather than a surface being acted on. */
+.armada-rail {
+  display: flex;
+  flex-direction: column;
+  /* 2px between rows: enough to separate two 36px-ish rows without a rule,
+     and no gap token spells it. Reported. */
+  gap: calc(var(--space-1) / 2);
+  padding: var(--space-2);
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  list-style: none;
+}
+
+.armada-rail__step {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+/* A step row. The left edge is --row-focus-bar with its colour dropped to
+   transparent at rest, so the edge adds no width and no row shifts when it
+   appears — the same technique the table row uses. */
+.armada-rail__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+}
+
+/* Background states what the row is. Two activity values carry a surface, and
+   they are the two that end a Job — a glyph only holds while its row is
+   selected, and the row that ended the Job has to stay findable while the
+   Check output is read beside it. One of each per rail. */
+.armada-rail__row[data-activity="failed"] {
+  background: var(--step-failed-bg);
+}
+
+.armada-rail__row[data-activity="stopped"] {
+  background: var(--step-stopped-bg);
+}
+
+/* The accent left edge states which row you are on. The surface is constant;
+   selection adds the edge. --accent-muted is the contract's value for the
+   rail's current row — the M1 drawing uses --bg-hover, which is the table's
+   focus fill and says "your cursor is here" rather than "you are on this
+   step". Contract wins; reported. */
+.armada-rail__row[data-current] {
+  background: var(--accent-muted);
+  border-left-color: var(--accent);
+}
+
+/* A surface plus the edge: the failed row you are also standing on keeps its
+   own surface, because what the row IS outranks where the cursor is. */
+.armada-rail__row[data-current][data-activity="failed"] {
+  background: var(--step-failed-bg);
+}
+
+.armada-rail__row[data-current][data-activity="stopped"] {
+  background: var(--step-stopped-bg);
+}
+
+/* Step names are labels in sans on every surface, the rail included. */
+.armada-rail__name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A step that ran is read, not scanned past. */
+.armada-rail__row[data-activity="advanced"] .armada-rail__name,
+.armada-rail__row[data-activity="retrying"] .armada-rail__name {
+  color: var(--fg-muted);
+}
+
+.armada-rail__row[data-activity="running"] .armada-rail__name,
+.armada-rail__row[data-activity="awaiting_human"] .armada-rail__name,
+.armada-rail__row[data-activity="killed"] .armada-rail__name,
+.armada-rail__row[data-current] .armada-rail__name {
+  color: var(--fg-default);
+}
+
+/* The row that ended the Job carries weight as well as a surface. */
+.armada-rail__row[data-activity="failed"] .armada-rail__name,
+.armada-rail__row[data-activity="stopped"] .armada-rail__name {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+/* Where a workflow supplies no label, the step_id renders instead — mono,
+   because it is machine-derived, and one step smaller than the sans it
+   replaces. Honest, and useless to scan: see [workflow-step-human-label]. */
+.armada-rail__name[data-identifier] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* The activity in words, at the trailing edge. Mono, because it reports a
+   state the system recorded. */
+.armada-rail__status {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-rail__row[data-current] .armada-rail__status {
+  color: var(--fg-default);
+}
+
+/* failed is an outcome, so it states it in both channels — the glyph and this
+   word. stopped does not: its surface already carries the warning. */
+.armada-rail__row[data-activity="failed"] .armada-rail__status {
+  color: var(--step-failed);
+}
+
+/* --- Gate rows ------------------------------------------------------------ */
+
+/* Indented to the step name's left edge: the mark's slot plus the row gap,
+   measured from the step row's own padding. Alignment, not an arbitrary
+   inset. */
+.armada-rail__gates {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  padding: 0 0 0 calc(var(--space-4) + var(--space-2) * 2);
+  margin: 0;
+  list-style: none;
+}
+
+.armada-rail__gate {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  color: var(--fg-muted);
+}
+
+.armada-rail__gate-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-4);
+  flex: none;
+  color: var(--fg-muted);
+}
+
+/* A Check is a command, so it is mono. */
+.armada-rail__gate-command {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The exit code. Measured facts speak flatly, so a gate row stays neutral even
+   beneath a hued step: the step's state is hued, the Check's exit code is
+   measured. */
+.armada-rail__gate-result {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* An ungated step says so in words, in sans — it is a sentence about the
+   workflow rather than a value the system reported. */
+.armada-rail__gate-ungated {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* The accessible name on a gate glyph. */
+.armada-rail__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

@@ -65,10 +65,12 @@ legibility win over impact.
 1. **No Tailwind arbitrary values.** Never `bg-[#3b82f6]`, `p-[13px]`,
    `text-[15px]`. Every value comes from the token set below.
    Lint-enforced in the app — arbitrary values fail the build.
-2. **Only shadcn/ui primitives:** button, input, select, checkbox, radio,
-   switch, badge, card, table, dialog, sheet, tabs, toast, tooltip,
+2. **Only shadcn/ui primitives:** button, input, textarea, select, checkbox,
+   radio, switch, badge, card, table, dialog, sheet, tabs, toast, tooltip,
    dropdown-menu, popover, separator, scroll-area, skeleton, alert,
    **command**. Compose from these; do not invent new base components.
+   `textarea` is sanctioned because a Job's brief is prose a person writes at
+   length, and a single-line input for it is a control that fights its content.
    `command` (cmdk) backs the command palette. A `kbd` element is the one
    non-shadcn primitive, specified under Keyboard and command palette.
 3. **Status colors are never chosen.** They map to the Job state machine

@@ -77,6 +77,7 @@ crates/store/src/open.rs
 crates/store/src/read.rs
 crates/store/src/schema.rs
 crates/store/src/tests/corrupt.rs
+crates/store/src/tests/migrate.rs
 crates/store/src/tests/mod.rs
 crates/store/src/tests/reconstruct.rs
 crates/store/src/tests/roundtrip.rs
