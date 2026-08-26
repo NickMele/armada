@@ -1,12 +1,16 @@
-//! The two writes, and the fact that there are only two.
+//! The three writes, and the fact that there are only three.
 //!
-//! # There is no method here that sets a status
+//! # There is no method here that sets a status, or a step state
 //!
 //! [`Store::record_transition`] takes a [`Transitioned`], and a `Transitioned`
 //! holds a [`JobEvent`](core_model::JobEvent) whose only constructor is
 //! `pub(crate)` inside `core-model`. **Nothing outside `Job::transition` can
 //! produce one.** So "the status column and the event row always agree" is not
 //! a rule this crate follows carefully; it is the only call that exists.
+//!
+//! [`Store::record_step_transition`] is the same shape for the inner machine:
+//! it takes a [`StepTransitioned`], which only `Job::transition_step` mints,
+//! and writes the `job_steps` row, the Job's cursor and the log entry together.
 //!
 //! The alternatives were an `update_status` plus an `append_event`, which makes
 //! forgetting the second the easy path, or one function taking both halves
@@ -26,7 +30,9 @@
 //! argument. A store that timestamped its own writes could not be replayed and
 //! could not be tested.
 
-use core_model::{GateManifest, Job, JobStep, Timestamp, Transitioned, WriteTargets};
+use core_model::{
+    GateManifest, Job, JobStep, StepTransitioned, Timestamp, Transitioned, WriteTargets,
+};
 use rusqlite::Transaction;
 
 use crate::columns;
@@ -140,8 +146,8 @@ impl Store {
 
         tx.execute(
             "INSERT INTO job_events (
-                 job_id, status_from, status_to, reason_kind, reason_value, actor, at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                 kind, job_id, status_from, status_to, reason_kind, reason_value, actor, at
+             ) VALUES ('job_transition', ?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 job_id,
                 event.from().as_wire(),
@@ -158,6 +164,96 @@ impl Store {
         let seq = tx.last_insert_rowid();
         tx.commit()
             .map_err(fault("committing the transition"))
+            .map_err(WriteError::Database)?;
+        Ok(seq)
+    }
+
+    /// Record a step move: the `job_steps` row, the cursor it moved, and the
+    /// log entry all three cache.
+    ///
+    /// Returns the key the store assigned, from the same sequence a status
+    /// transition draws from — which is the point of one log. A step move
+    /// written to a table of its own could not be ordered against the status
+    /// transitions around it, and the fold needs that order to know which
+    /// status the Job stood in when the step moved.
+    ///
+    /// The row's `status_from` and `status_to` are both the status the move
+    /// happened beneath. The Job did not move; saying so is what makes the fold
+    /// able to check the claim rather than believe it.
+    pub fn record_step_transition(&mut self, moved: &StepTransitioned) -> Result<i64, WriteError> {
+        let event = &moved.event;
+        let job_id = event.job_id().as_str();
+        let step_id = event.step_id().as_str();
+        let step = moved.job.step(event.step_id()).ok_or_else(|| {
+            // Unreachable through `transition_step`, which refuses a step the
+            // Job does not have. Named rather than unwrapped, because the value
+            // arrives from outside this crate.
+            WriteError::NoSuchStep {
+                job_id: event.job_id().clone(),
+                step_id: event.step_id().clone(),
+            }
+        })?;
+
+        let tx = self
+            .conn
+            .transaction()
+            .map_err(fault("starting the step transition"))
+            .map_err(WriteError::Database)?;
+
+        let updated = tx
+            .execute(
+                "UPDATE job_steps SET state = ?3, last_verdict = ?4, entered_at = ?5,
+                 updated_at = ?6 WHERE job_id = ?1 AND step_id = ?2",
+                rusqlite::params![
+                    job_id,
+                    step_id,
+                    step.state().as_wire(),
+                    verdict(step),
+                    step.entered_at().as_str(),
+                    step.updated_at().as_str(),
+                ],
+            )
+            .map_err(fault("updating the cached step state"))
+            .map_err(WriteError::Database)?;
+        if updated == 0 {
+            return Err(WriteError::NoSuchStep {
+                job_id: event.job_id().clone(),
+                step_id: event.step_id().clone(),
+            });
+        }
+
+        // The cursor the move left, whether or not this move changed it. It is
+        // read off the Job rather than computed here: which moves it is the
+        // inner machine's rule, and a second copy of that rule in SQL is the
+        // second vocabulary this codebase keeps refusing.
+        tx.execute(
+            "UPDATE jobs SET current_step_id = ?2 WHERE job_id = ?1",
+            rusqlite::params![job_id, moved.job.current_step_id().map(|id| id.as_str())],
+        )
+        .map_err(fault("updating the cached cursor"))
+        .map_err(WriteError::Database)?;
+
+        tx.execute(
+            "INSERT INTO job_events (
+                 kind, job_id, status_from, status_to, reason_kind, reason_value,
+                 step_id, state_from, state_to, actor, at
+             ) VALUES ('step_transition', ?1, ?2, ?2, 'unqualified', NULL, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                job_id,
+                event.under().as_wire(),
+                step_id,
+                event.from().as_wire(),
+                event.to().as_wire(),
+                event.actor().as_wire(),
+                event.at().as_str(),
+            ],
+        )
+        .map_err(fault("appending the step event"))
+        .map_err(WriteError::Database)?;
+
+        let seq = tx.last_insert_rowid();
+        tx.commit()
+            .map_err(fault("committing the step transition"))
             .map_err(WriteError::Database)?;
         Ok(seq)
     }
@@ -186,7 +282,7 @@ fn write_steps(tx: &Transaction<'_>, job: &Job) -> Result<(), WriteError> {
     Ok(())
 }
 
-/// `None` until a gate has ruled on the step, which nothing does yet.
+/// `None` until a gate has ruled on the step. Advancing is what writes one.
 fn verdict(step: &JobStep) -> Option<&'static str> {
     step.last_verdict().map(|verdict| verdict.as_wire())
 }

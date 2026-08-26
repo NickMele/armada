@@ -12,7 +12,23 @@
 //! grouping by surface rather than by capability is the shape that grew v1's
 //! core to 38,470 lines.
 
+//! # What is built so far
+//!
+//! Version control ([`GitVcs`], and the work-product reader beside it), and the
+//! agent harness: [`HeadlessAgent`] renders a confined Drone into a program and
+//! an argument list, [`transcript`](mod@transcript) reads what that Drone says
+//! back, and [`mcp`](mod@mcp) writes the one-server configuration file the two
+//! flags that confine it point at.
+//!
+//! **The harness does not spawn.** Starting a process, detached, is `fleet`'s —
+//! see `adapter_traits::AgentHarness` for the three things that split buys, the
+//! first of which is that every confinement property here is a value a test
+//! reads rather than a process a test has to start.
+
 mod error;
+mod harness;
+mod mcp;
+mod transcript;
 mod work_product;
 mod worktree;
 
@@ -20,4 +36,6 @@ mod worktree;
 mod tests;
 
 pub use error::{CreateWorktreeError, ReadWorkProductError};
+pub use harness::{evidence_server, evidence_tool, HarnessRefused, HeadlessAgent};
+pub use mcp::only_the_evidence_server;
 pub use worktree::GitVcs;

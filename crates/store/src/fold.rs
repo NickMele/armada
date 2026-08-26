@@ -17,6 +17,17 @@
 //! Job that no sequence of legal moves could have reached. That is the
 //! difference between reading the log and trusting it.
 //!
+//! # Both machines, one order
+//!
+//! A step move is a row in the same log, and it goes back through
+//! [`Job::transition_step`] the same way. That is what rebuilds
+//! `current_step_id` and every `job_steps` row, and it is why the log is one
+//! table: the inner machine only advances beneath two of the twelve statuses,
+//! so a step move is replayable only if the fold has already replayed the Job
+//! up to the point it happened. A step row's `status_from` states which status
+//! that was, and it is checked against the fold like any other row rather than
+//! believed — which a separately keyed second log could not have offered.
+//!
 //! # Where the fold starts
 //!
 //! At the `jobs` row, not at the log. Creation is not a transition — it has no
@@ -26,11 +37,15 @@
 //! `core-model` offers, and the rebuild calls the same one.
 
 use core_model::{
-    Actor, CriteriaOwed, EscalationTrigger, Job, JobId, JobStatus, PilotReason, Target, Timestamp,
-    TransitionReason,
+    Actor, CriteriaOwed, EscalationTrigger, Job, JobId, JobStatus, PilotReason, StepId, StepState,
+    StepTarget, Target, Timestamp, TransitionReason, Ulid,
 };
+use rusqlite::Row;
 
-use crate::error::RowError;
+use crate::columns;
+use crate::error::{fault, RowError};
+use crate::open::Store;
+use crate::row::{column, enum_value, maybe, string};
 
 /// One `job_events` row, as stored.
 ///
@@ -43,11 +58,29 @@ use crate::error::RowError;
 pub struct RecordedEvent {
     pub(crate) seq: i64,
     pub(crate) job_id: JobId,
-    pub(crate) from: JobStatus,
-    pub(crate) to: JobStatus,
-    pub(crate) reason: TransitionReason,
+    pub(crate) under: JobStatus,
+    pub(crate) moved: Moved,
     pub(crate) actor: Actor,
     pub(crate) at: Timestamp,
+}
+
+/// What the row says moved. The `kind` column, read back into the two shapes
+/// the schema admits.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Moved {
+    /// The Job left [`RecordedEvent::under`] for `to`.
+    Job {
+        to: JobStatus,
+        reason: TransitionReason,
+    },
+    /// One step moved and the Job did not. Which is why there is no `to`
+    /// status here: `status_from` and `status_to` on the row are the same
+    /// value, and it is [`RecordedEvent::under`].
+    Step {
+        step_id: StepId,
+        from: StepState,
+        to: StepState,
+    },
 }
 
 impl RecordedEvent {
@@ -59,14 +92,14 @@ impl RecordedEvent {
     pub fn job_id(&self) -> &JobId {
         &self.job_id
     }
-    pub fn from(&self) -> JobStatus {
-        self.from
+    /// The status the Job stood in when this happened. For a Job transition
+    /// that is the status it left; for a step move it is the status it stayed
+    /// in.
+    pub fn under(&self) -> JobStatus {
+        self.under
     }
-    pub fn to(&self) -> JobStatus {
-        self.to
-    }
-    pub fn reason(&self) -> &TransitionReason {
-        &self.reason
+    pub fn moved(&self) -> &Moved {
+        &self.moved
     }
     pub fn actor(&self) -> Actor {
         self.actor
@@ -78,35 +111,80 @@ impl RecordedEvent {
 
 /// Replay every event onto a Job rebuilt at its creation state.
 ///
-/// Three ways this refuses, and they are different faults:
+/// Five ways this refuses, and they are different faults:
 ///
-/// - the event does not leave where the fold has got to — an event is missing,
+/// - the row does not stand where the fold has got to — an event is missing,
 ///   or two are out of order;
 /// - the reason does not fit the status it arrives at — `escalated` with no
 ///   trigger, `killed` with one;
-/// - the machine does not admit the move at all.
+/// - a step row does not leave the state the fold has that step in;
+/// - a step row arrives at a state no [`StepTarget`] names, which is a machine
+///   this build does not have;
+/// - either machine does not admit the move at all.
 pub(crate) fn replay(created: Job, events: &[RecordedEvent]) -> Result<Job, RowError> {
     let mut job = created;
     for event in events {
-        if event.from != job.status() {
+        if event.under != job.status() {
             return Err(RowError::EventDiscontinuity {
                 job_id: event.job_id.clone(),
                 seq: event.seq,
                 folded: job.status(),
-                recorded: event.from,
+                recorded: event.under,
             });
         }
-        let target = target(event)?;
-        job = job
-            .transition(target, event.actor, event.at.clone())
-            .map_err(|cause| RowError::IllegalRecordedTransition {
-                job_id: event.job_id.clone(),
-                seq: event.seq,
-                cause,
-            })?
-            .job;
+        job = match &event.moved {
+            Moved::Job { .. } => {
+                job.transition(target(event)?, event.actor, event.at.clone())
+                    .map_err(|cause| RowError::IllegalRecordedTransition {
+                        job_id: event.job_id.clone(),
+                        seq: event.seq,
+                        cause,
+                    })?
+                    .job
+            }
+            Moved::Step { step_id, from, to } => step(&job, event, step_id, *from, *to)?,
+        };
     }
     Ok(job)
+}
+
+/// One step row, put back through the mutator that wrote it.
+///
+/// The state it says it left is checked against the state the fold has the step
+/// in, exactly as a Job row's `status_from` is. Without it a step row could
+/// name any edge in the table and the machine would admit it — the continuity,
+/// not the edge, is what makes a replay a replay.
+fn step(
+    job: &Job,
+    event: &RecordedEvent,
+    step_id: &StepId,
+    from: StepState,
+    to: StepState,
+) -> Result<Job, RowError> {
+    let folded = job.step(step_id).map(|row| row.state());
+    if folded != Some(from) {
+        return Err(RowError::StepEventDiscontinuity {
+            job_id: event.job_id.clone(),
+            seq: event.seq,
+            step_id: step_id.clone(),
+            folded,
+            recorded: from,
+        });
+    }
+    let target = StepTarget::arriving_at(to).ok_or_else(|| RowError::StepStateNotReachable {
+        job_id: event.job_id.clone(),
+        seq: event.seq,
+        step_id: step_id.clone(),
+        state: to,
+    })?;
+    Ok(job
+        .transition_step(step_id, target, event.actor, event.at.clone())
+        .map_err(|cause| RowError::IllegalRecordedStepTransition {
+            job_id: event.job_id.clone(),
+            seq: event.seq,
+            cause,
+        })?
+        .job)
 }
 
 /// The destination and its reason, fused back into the value `transition`
@@ -117,26 +195,30 @@ pub(crate) fn replay(created: Job, events: &[RecordedEvent]) -> Result<Job, RowE
 /// the check the type system does everywhere else has to be paid — once, here,
 /// on the way in.
 fn target(event: &RecordedEvent) -> Result<Target, RowError> {
+    let Moved::Job { to, reason } = &event.moved else {
+        // Only a Job row reaches here: the caller matched on the kind first.
+        unreachable!("a step row has no status target");
+    };
     let fits = |ok: Option<Target>| {
         ok.ok_or_else(|| RowError::ReasonDoesNotFitStatus {
             job_id: event.job_id.clone(),
             seq: event.seq,
-            status: event.to,
-            reason_kind: kind(&event.reason).to_string(),
+            status: *to,
+            reason_kind: kind(reason).to_string(),
         })
     };
-    match event.to {
-        JobStatus::Escalated => fits(escalation(&event.reason).map(Target::Escalated)),
-        JobStatus::Piloted => fits(pilot(&event.reason).map(Target::Piloted)),
+    match to {
+        JobStatus::Escalated => fits(escalation(reason).map(Target::Escalated)),
+        JobStatus::Piloted => fits(pilot(reason).map(Target::Piloted)),
         JobStatus::AwaitingAttestation => {
-            fits(attestation(&event.reason).map(Target::AwaitingAttestation))
+            fits(attestation(reason).map(Target::AwaitingAttestation))
         }
         JobStatus::Queued => {
-            fits(matches!(event.reason, TransitionReason::DerivedAtRead).then_some(Target::Queued))
+            fits(matches!(reason, TransitionReason::DerivedAtRead).then_some(Target::Queued))
         }
-        other => fits(
-            unqualified(other).filter(|_| matches!(event.reason, TransitionReason::Unqualified)),
-        ),
+        other => {
+            fits(unqualified(*other).filter(|_| matches!(reason, TransitionReason::Unqualified)))
+        }
     }
 }
 
@@ -190,4 +272,123 @@ fn kind(reason: &TransitionReason) -> &'static str {
         TransitionReason::Pilot(_) => "pilot",
         TransitionReason::Attestation(_) => "attestation",
     }
+}
+
+// ------------------------------------------------------- reading the rows back
+
+impl Store {
+    /// One Job's history, oldest first — **both machines, in one order.**
+    ///
+    /// Never edited, never removed, and public so that something other than the
+    /// fold can read it: a timeline is one query over this, not a join across
+    /// two logs.
+    pub fn events_for(&self, job_id: &JobId) -> Result<Vec<RecordedEvent>, RowError> {
+        let mut statement = self
+            .conn
+            .prepare(SELECT_EVENTS)
+            .map_err(fault("preparing the event read"))
+            .map_err(RowError::Database)?;
+        let rows = statement
+            .query_map((job_id.as_str(),), |row| Ok(event(row)))
+            .map_err(fault("reading events"))
+            .map_err(RowError::Database)?;
+        let mut events = Vec::new();
+        for row in rows {
+            let row = row
+                .map_err(fault("reading an event"))
+                .map_err(RowError::Database)?;
+            events.push(row?);
+        }
+        Ok(events)
+    }
+}
+
+const SELECT_EVENTS: &str = "SELECT seq, job_id, kind, status_from, status_to, reason_kind,
+                             reason_value, step_id, state_from, state_to, actor, at
+                             FROM job_events WHERE job_id = ?1 ORDER BY seq";
+
+/// One log row, of either kind.
+///
+/// `status_from` is read for both, because both stand beneath a status: a Job
+/// transition leaves it, a step move stays in it. That is what lets the fold run
+/// one continuity check over the whole log.
+fn event(row: &Row<'_>) -> Result<RecordedEvent, RowError> {
+    let actor = string(row, "actor")?;
+    Ok(RecordedEvent {
+        seq: row.get("seq").map_err(column("job_events", "seq"))?,
+        job_id: JobId::carried(Ulid::carried(string(row, "job_id")?)),
+        under: enum_value(
+            JobStatus::from_wire,
+            "job_events",
+            "status_from",
+            &string(row, "status_from")?,
+        )?,
+        moved: moved(row)?,
+        actor: Actor::from_wire(&actor).ok_or(RowError::UnknownEnumValue {
+            table: "job_events",
+            column: "actor",
+            value: actor,
+        })?,
+        at: Timestamp::from_rfc3339(string(row, "at")?),
+    })
+}
+
+/// What the row says moved, read from `kind`.
+///
+/// A column missing for the kind it belongs to is malformed rather than
+/// defaulted. The shape trigger in V3 refuses to write such a row, so one
+/// arriving here came from outside this crate — the same argument the blank
+/// title makes.
+fn moved(row: &Row<'_>) -> Result<Moved, RowError> {
+    let kind = string(row, "kind")?;
+    match kind.as_str() {
+        "job_transition" => {
+            let reason_kind = string(row, "reason_kind")?;
+            let reason_value: Option<String> = maybe(row, "reason_value")?;
+            Ok(Moved::Job {
+                to: enum_value(
+                    JobStatus::from_wire,
+                    "job_events",
+                    "status_to",
+                    &string(row, "status_to")?,
+                )?,
+                reason: columns::read_reason(&reason_kind, reason_value.as_deref()).map_err(
+                    |detail| RowError::MalformedColumn {
+                        table: "job_events",
+                        column: "reason_value",
+                        detail,
+                    },
+                )?,
+            })
+        }
+        "step_transition" => Ok(Moved::Step {
+            step_id: StepId::new(present(row, "step_id")?),
+            from: enum_value(
+                StepState::from_wire,
+                "job_events",
+                "state_from",
+                &present(row, "state_from")?,
+            )?,
+            to: enum_value(
+                StepState::from_wire,
+                "job_events",
+                "state_to",
+                &present(row, "state_to")?,
+            )?,
+        }),
+        _ => Err(RowError::UnknownEnumValue {
+            table: "job_events",
+            column: "kind",
+            value: kind,
+        }),
+    }
+}
+
+/// A column the row's own kind requires. Null is malformed, never a default.
+fn present(row: &Row<'_>, name: &'static str) -> Result<String, RowError> {
+    maybe(row, name)?.ok_or(RowError::MalformedColumn {
+        table: "job_events",
+        column: name,
+        detail: "a step move leaves it null".to_string(),
+    })
 }

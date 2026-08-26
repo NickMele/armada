@@ -16,16 +16,20 @@
 //! inline on the record — a blob on the Job row would rewrite whole on every
 //! append.
 //!
-//! **A writer for the inner machine.** Nothing here advances a step or moves
-//! `current_step_id`. The step machine has no edge table in the registry, and
-//! inventing one under cover of "the Job record" is how a second machine gets
-//! built by accident. A later step owns it, and it must arrive as a named
-//! transition rather than as a setter.
+//! # The inner machine's writer is here now, and it is the second mutator
+//!
+//! [`transition_step`](Job::transition_step) advances a step and moves
+//! `current_step_id`, and it obeys the same rule as
+//! [`transition`](Job::transition): `&self` in, a new [`Job`] out, no field
+//! written outside these two functions. What it may do is narrowed by
+//! [`StepTarget`], which names two destinations of the six states — so the
+//! three M1 cannot reach are not refused at runtime, they cannot be asked for.
 
 use alloc::vec::Vec;
 
 use crate::envelope::{Actor, Timestamp};
 use crate::job::event::JobEvent;
+use crate::job::event::StepEvent;
 use crate::job::fields::{
     AcceptanceCriterion, DependencyEdge, DispatchOrigin, Facts, GateManifest, Origin,
     ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
@@ -33,6 +37,7 @@ use crate::job::fields::{
 use crate::job::ids::{DroneId, JobId, ManifestId, ModelName, StepId, Title, WorkflowId};
 use crate::job::status::JobStatus;
 use crate::job::step::{rows_at_creation, JobStep, StepSeed};
+use crate::job::step_machine::{admits_step, IllegalStepTransition, StepTarget};
 use crate::job::transition::{admits, IllegalTransition, Target};
 
 /// Everything creation decides, and nothing it does not.
@@ -87,6 +92,17 @@ pub struct NewJob {
 pub struct Transitioned {
     pub job: Job,
     pub event: JobEvent,
+}
+
+/// A Job, and the step move that produced it.
+///
+/// The pair travels together for the reason [`Transitioned`] does: the row and
+/// its log entry are written in one transaction, and a signature handing back
+/// only the Job would make forgetting the entry the easy path.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StepTransitioned {
+    pub job: Job,
+    pub event: StepEvent,
 }
 
 /// The record of work to be accomplished. **Data, not an actor.**
@@ -197,6 +213,57 @@ impl Job {
         let mut job = self.clone();
         job.status = arriving;
         Ok(Transitioned { job, event })
+    }
+
+    /// Move one step of the frozen WorkflowDef, or say why it cannot move.
+    ///
+    /// The second and last mutator. Three things can refuse it: the Job has no
+    /// such step, the Job is not in a status the inner machine advances
+    /// beneath, or no edge joins the two states. A fourth refusal is absent
+    /// because it is unrepresentable — [`StepTarget`] names no state a step
+    /// may not be moved to.
+    ///
+    /// **Entering `running` is what moves `current_step_id`, and nothing
+    /// clears it.** `job-fields.toml` says the nested machine is "frozen
+    /// otherwise, never cleared, still rendered", so a Job that advanced its
+    /// last step still points at the step it finished on — which is what a rail
+    /// renders. A cursor cleared on advance would leave a completed Job
+    /// pointing at nothing between steps.
+    ///
+    /// `at` is a parameter and never a clock reading, for the reason
+    /// [`transition`](Job::transition) gives.
+    pub fn transition_step(
+        &self,
+        step_id: &StepId,
+        to: StepTarget,
+        by: Actor,
+        at: Timestamp,
+    ) -> Result<StepTransitioned, IllegalStepTransition> {
+        let index = self
+            .steps
+            .iter()
+            .position(|row| row.step_id() == step_id)
+            .ok_or_else(|| IllegalStepTransition::NoSuchStep {
+                step_id: step_id.clone(),
+            })?;
+        let from = self.steps[index].state();
+        admits_step(self.status, step_id, from, &to)?;
+
+        let event = StepEvent::recorded(
+            self.id.clone(),
+            step_id.clone(),
+            from,
+            to.state(),
+            self.status,
+            by,
+            at.clone(),
+        );
+        let mut job = self.clone();
+        job.steps[index] = self.steps[index].moved_to(&to, at);
+        if matches!(to, StepTarget::Running) {
+            job.current_step_id = Some(step_id.clone());
+        }
+        Ok(StepTransitioned { job, event })
     }
 
     pub fn id(&self) -> &JobId {

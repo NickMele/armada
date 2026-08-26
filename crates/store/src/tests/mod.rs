@@ -1,18 +1,20 @@
 //! What this crate proves about itself.
 //!
-//! Five files, and one of them is the point of the milestone step:
-//! `reconstruct` writes a Job's whole history, drops every in-memory copy,
-//! reopens the file and rebuilds the same `Job` from the log alone. The others
-//! exist so that test means something — `roundtrip` shows the row survives,
-//! `corrupt` shows a damaged file is refused rather than opened empty, and
-//! `migrate` shows what the second migration does to a Job the first one
-//! wrote.
+//! Six files, and two of them are the point of a milestone step: `reconstruct`
+//! writes a Job's whole history, drops every in-memory copy, reopens the file
+//! and rebuilds the same `Job` from the log alone, and `cursor` does the same
+//! for the inner machine — a Job that advanced a step comes back on the step it
+//! advanced to. The others exist so those mean something — `roundtrip` shows
+//! the row survives, `corrupt` shows a damaged file is refused rather than
+//! opened empty, and `migrate` shows what a migration does to a Job an earlier
+//! one wrote.
 //!
 //! Fixtures here fill **every** optional field. A Job built with `None`
 //! everywhere round-trips through almost no code, and a round-trip test that
 //! passes on an empty record is the kind of green v1 shipped 2,181 of.
 
 mod corrupt;
+mod cursor;
 mod migrate;
 mod reconstruct;
 mod roundtrip;

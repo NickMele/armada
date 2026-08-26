@@ -1,4 +1,5 @@
-//! The second migration, and what it does to a Job the first one wrote.
+//! The migrations after the first, and what each does to a Job an earlier one
+//! wrote.
 //!
 //! `MIGRATIONS` was built so a second entry could exist and had never had one.
 //! This is the test of that claim, and of the answer V2 gives to the question a
@@ -9,13 +10,20 @@
 //! running the first migration and nothing else, then writing a row through raw
 //! SQL. Nothing in this crate's API can produce a Job without a title, which is
 //! why a test about one has to go around it.
+//!
+//! **V3 backfills nothing, and that is the claim under test at the bottom of
+//! this file.** Every log row an earlier version could hold is a status
+//! transition, because there was no other kind to write, and every step in
+//! every store is where creation left it, because `read.rs` refused a row that
+//! was not. So the `DEFAULT` on `kind` is not a guess about an old row — it is
+//! the only thing an old row could be.
 
-use core_model::{Actor, Target};
+use core_model::{Actor, JobStatus, Target, TransitionReason};
 use rusqlite::Connection;
 
 use crate::schema::{MIGRATIONS, SCHEMA_VERSION_KEY};
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
-use crate::{RowError, Store, KNOWN_SCHEMA_VERSION};
+use crate::{Moved, RowError, Store, KNOWN_SCHEMA_VERSION};
 
 /// A file at version 1, with `ids` Jobs on it and no title column anywhere.
 fn version_one(dir: &TempDir, ids: &[&str]) {
@@ -200,4 +208,125 @@ fn recorded_version(store: &Store) -> String {
             |row| row.get(0),
         )
         .expect("a version")
+}
+
+// -------------------------------------------------------------- version three
+
+/// A file at version 2, with one Job and one recorded transition on it — a log
+/// row from before there was a second kind of row.
+fn version_two(dir: &TempDir, id: &str) {
+    let conn = Connection::open(dir.db()).expect("a file to put version 2 in");
+    conn.execute_batch(MIGRATIONS[0])
+        .expect("the first migration");
+    conn.execute_batch(MIGRATIONS[1])
+        .expect("the second migration");
+    conn.execute(
+        "INSERT INTO armada_meta (key, value) VALUES (?1, '2')",
+        (SCHEMA_VERSION_KEY,),
+    )
+    .expect("recorded as version 2");
+    conn.execute(
+        "INSERT INTO jobs (
+             job_id, title, status, workflow_id, owner_manifest_id, origin, urgency, atomic,
+             model, acceptance_criteria, dependencies, facts, scope_revisions,
+             write_targets_known, created_at
+         ) VALUES (?1, 'a job from before the step log', 'queued', '01WORKFLOW',
+                   '01OWNERMANIFEST', 'manual', 'normal', 0, 'a-model-name', '[]', '[]', '',
+                   '[]', 0, '2026-08-26T09:00:00.000Z')",
+        (id,),
+    )
+    .expect("a Job as version 2 wrote them");
+    conn.execute(
+        "INSERT INTO job_events (
+             job_id, status_from, status_to, reason_kind, reason_value, actor, at
+         ) VALUES (?1, 'awaiting_approval', 'queued', 'derived_at_read', NULL, 'human',
+                   '2026-08-26T09:30:00.000Z')",
+        (id,),
+    )
+    .expect("a transition as version 2 wrote them");
+    conn.execute(
+        "INSERT INTO job_steps (job_id, step_id, ordinal, state, last_verdict, entered_at,
+                                updated_at)
+         VALUES (?1, 'reproduce', 0, 'not_started', NULL, '2026-08-26T09:00:00.000Z',
+                 '2026-08-26T09:00:00.000Z')",
+        (id,),
+    )
+    .expect("a step row as version 2 wrote them");
+}
+
+/// A log row written before `kind` existed is a status transition, and folds as
+/// one. The column's `DEFAULT` is the whole of the backfill because there is no
+/// distinction among old rows to lose — V2's per-row backfill answered a
+/// question V3 does not have.
+#[test]
+fn a_log_row_from_before_the_step_log_is_still_a_status_transition() {
+    let dir = TempDir::new();
+    version_two(&dir, "01BEFORESTEPS");
+
+    let store = Store::open(&dir.db()).expect("a version 2 file opens and is migrated");
+    assert_eq!(recorded_version(&store), KNOWN_SCHEMA_VERSION.to_string());
+
+    let events = store
+        .events_for(&job_id("01BEFORESTEPS"))
+        .expect("the log reads back");
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].moved(),
+        &Moved::Job {
+            to: JobStatus::Queued,
+            reason: TransitionReason::DerivedAtRead,
+        }
+    );
+
+    let job = store.load_job(&job_id("01BEFORESTEPS")).expect("it folds");
+    assert_eq!(job.status(), JobStatus::Queued);
+    assert_eq!(
+        job.current_step_id(),
+        None,
+        "no step move was ever recorded, so the cursor was never set"
+    );
+}
+
+/// The migration adds columns and a trigger. It must not touch a row.
+#[test]
+fn version_three_leaves_every_existing_row_exactly_as_it_found_it() {
+    let dir = TempDir::new();
+    version_two(&dir, "01UNTOUCHED");
+    let before = row_digest(&dir);
+
+    let store = Store::open(&dir.db()).expect("migrated");
+    drop(store);
+
+    assert_eq!(
+        row_digest(&dir),
+        before,
+        "V3 rewrote a row it should not have"
+    );
+}
+
+/// Every value V3 could have overwritten, as one string.
+fn row_digest(dir: &TempDir) -> String {
+    let conn = Connection::open(dir.db()).expect("the file");
+    let jobs: String = conn
+        .query_row(
+            "SELECT title || '|' || status || '|' || ifnull(current_step_id, '-') FROM jobs",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the job row");
+    let steps: String = conn
+        .query_row(
+            "SELECT state || '|' || ifnull(last_verdict, '-') FROM job_steps",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the step row");
+    let events: String = conn
+        .query_row(
+            "SELECT status_from || '|' || status_to || '|' || reason_kind FROM job_events",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the event row");
+    format!("{jobs}//{steps}//{events}")
 }

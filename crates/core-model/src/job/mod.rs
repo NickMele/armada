@@ -15,19 +15,21 @@
 //!
 //! # The two-level machine, and the half that is here
 //!
-//! [`JobStatus`] is the outer half and [`StepState`] is the inner one. **Only
-//! the outer machine is built.** The registry gives step states no edge table,
-//! so there is nothing to transcribe and nothing here advances a step: rows are
-//! written at creation, all `not_started`, and stay there. The inner machine's
-//! writer is a later step's, and when it arrives it must be a named transition
-//! and not a setter, for the reason this module refuses one.
+//! [`JobStatus`] is the outer half and [`StepState`] is the inner one, and both
+//! are built. The registry gives step states no edge table, so [`step_machine`]
+//! transcribes nothing: it declares the three states M1 reaches and the two
+//! edges it walks, and makes the other three unreachable by giving
+//! [`StepTarget`] no variant that names them. The full edge table stays an
+//! honest gap rather than a guess.
+//!
+//! [`step_machine`]: crate::StepTarget
 //!
 //! # What "no setter" means concretely
 //!
 //! [`Job`]'s fields are private, no method on it takes `&mut self`, and
-//! [`Job::transition`] is the only thing that returns a `Job` whose status
-//! differs from the one it was given. There is no constructor that accepts a
-//! status either — [`Job::create_top_level`] enters at `awaiting_approval` and
+//! [`Job::transition`] and [`Job::transition_step`] are the only things that
+//! return a `Job` differing from the one they were given. There is no
+//! constructor that accepts a status or a step state either — [`Job::create_top_level`] enters at `awaiting_approval` and
 //! [`Job::create_sub_dispatched`] enters at `queued`, and neither takes the
 //! choice from a caller. A test that wanted a Job in some other state has to
 //! transition into it, which is the point: a test that constructs its way there
@@ -40,13 +42,14 @@ mod ids;
 mod record;
 mod status;
 mod step;
+mod step_machine;
 mod transition;
 
 #[cfg(test)]
 mod tests;
 
 pub use escalation::{EscalationTrigger, TriggerKind, TriggerLevel};
-pub use event::JobEvent;
+pub use event::{JobEvent, StepEvent};
 pub use fields::{
     AcceptanceCriterion, CriterionSource, DependencyDirection, DependencyEdge, DispatchOrigin,
     Facts, GateManifest, GateOutcome, NotRunDisposition, NotRunReason, Origin, ScopeRevision,
@@ -56,9 +59,12 @@ pub use ids::{
     BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId, Title,
     WorkflowId,
 };
-pub use record::{Job, NewJob, Transitioned};
+pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use status::{JobStatus, StepState};
 pub use step::{JobStep, StepSeed, StepVerdict};
+pub use step_machine::{
+    IllegalStepTransition, StepEdge, StepTarget, ADVANCING_STATUSES, STEP_EDGES,
+};
 pub use transition::{
     CriteriaOwed, Edge, IllegalTransition, PilotReason, Target, TransitionReason, EDGES,
 };

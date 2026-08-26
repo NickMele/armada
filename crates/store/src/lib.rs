@@ -7,7 +7,8 @@
 //!
 //! # What is authoritative
 //!
-//! **`job_events` is, for `status`. The `jobs` row is, for everything else.**
+//! **`job_events` is, for `status`, for `current_step_id` and for every
+//! `job_steps` row. The `jobs` row is, for everything else.**
 //!
 //! `job-fields.toml` calls the status column "a cache of the fold over
 //! `job_events`", and this crate follows that literally: nothing here returns a
@@ -17,11 +18,17 @@
 //! them. A history the machine would not admit fails to load instead of
 //! producing a Job no legal sequence of moves could reach.
 //!
-//! What that costs: the log carries transitions only, so it can restore
-//! `status` and nothing else. Every other field is authoritative on the row,
-//! and a later writer for one of them needs an event of its own or it will not
-//! survive a restart the way status does. Those fields are checked rather than
-//! assumed — see [`RowError::ColumnNotReconstructable`].
+//! The log carries what a machine moved, and there are two machines: a status
+//! transition and a step move are both rows in it, in one order. A step move
+//! that could not be ordered against the status transitions around it could not
+//! be replayed at all, because the inner machine only advances beneath two of
+//! the twelve statuses.
+//!
+//! What that costs: a field with no machine has no event, so it can only be
+//! authoritative on the row. `assigned_drone` is the one left, and a later
+//! writer for it needs an event of its own or it will not survive a restart the
+//! way the rest does. It is checked rather than assumed — see
+//! [`RowError::ColumnNotReconstructable`].
 //!
 //! # The rule that cost v1 twenty-one Jobs
 //!
@@ -52,6 +59,7 @@ mod error;
 mod fold;
 mod open;
 mod read;
+mod row;
 mod schema;
 mod write;
 
@@ -59,7 +67,7 @@ mod write;
 mod tests;
 
 pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, WriteError};
-pub use fold::RecordedEvent;
+pub use fold::{Moved, RecordedEvent};
 pub use open::Store;
 pub use read::{Loaded, StatusRepair};
 pub use schema::KNOWN_SCHEMA_VERSION;

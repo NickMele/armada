@@ -45,7 +45,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3];
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
@@ -191,5 +191,76 @@ BEFORE UPDATE ON jobs
 WHEN trim(NEW.title) = ''
 BEGIN
     SELECT RAISE(ABORT, 'a Job has a title, and blank is not one');
+END;
+"#;
+
+/// Version 3 — a step move is a row in the same log, not a log of its own.
+///
+/// # Why a kind on `job_events` and not a `job_step_events` table
+///
+/// **Because the two have to be replayed in one order.** `job-fields.toml` says
+/// the inner machine "advances only while the Job is `running` or
+/// `awaiting_review`", so replaying a step move means knowing which status the
+/// Job stood in when it happened. Two tables means two `AUTOINCREMENT`
+/// sequences, and two sequences cannot be interleaved: the fold would have to
+/// take the step row's word for the status, which is a column nothing can
+/// check. One log in one order means the status a step moved under is
+/// `status_from` on its own row, and the fold checks it the same way it checks
+/// every other row — against where it has got to.
+///
+/// A separate table was the tidier schema and would have cost the one property
+/// this whole log exists for.
+///
+/// # What a step row puts in the status columns
+///
+/// The Job's status, in both. They are `NOT NULL` and a step move is honestly
+/// described by them: the Job did not move. That is also what makes the row
+/// checkable. `SQLite` cannot drop a `NOT NULL` without rebuilding the table,
+/// and rebuilding an append-only log means copying it out and dropping the
+/// original past its own triggers — so weakening them was never the cheaper
+/// option either.
+///
+/// # There is no backfill, and the refusal being removed is why
+///
+/// V2 had to name every existing Job per row, because a constant would have
+/// lost a distinction. V3 has no such row to fill: `read.rs` refused a
+/// `job_steps` row that was not `not_started` and refused a non-null
+/// `current_step_id`, so every step in every existing store is at the state
+/// creation wrote and no move has been lost. The `DEFAULT` on `kind` is
+/// therefore not a guess about old rows — it is the only thing an old row could
+/// be, because nothing could write it anything else.
+///
+/// # The shape trigger
+///
+/// One table holding two shapes is one table that can hold a third by accident.
+/// The trigger refuses an insert that is neither shape whole: a job transition
+/// carrying step columns, a step move missing one, a step move claiming the Job
+/// changed status, or a `kind` nobody declared. Same argument as the
+/// append-only triggers — a rule the database holds is not a rule a later query
+/// can quietly break.
+const V3: &str = r#"
+ALTER TABLE job_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'job_transition';
+ALTER TABLE job_events ADD COLUMN step_id TEXT;
+ALTER TABLE job_events ADD COLUMN state_from TEXT;
+ALTER TABLE job_events ADD COLUMN state_to TEXT;
+
+CREATE TRIGGER job_events_hold_one_whole_shape
+BEFORE INSERT ON job_events
+WHEN NOT (
+    (NEW.kind = 'job_transition'
+        AND NEW.step_id IS NULL
+        AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL
+        AND NEW.status_from <> NEW.status_to)
+ OR (NEW.kind = 'step_transition'
+        AND NEW.step_id IS NOT NULL
+        AND NEW.state_from IS NOT NULL
+        AND NEW.state_to IS NOT NULL
+        AND NEW.status_from = NEW.status_to
+        AND NEW.reason_kind = 'unqualified'
+        AND NEW.reason_value IS NULL)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'a job_events row is one whole shape or the other: a job transition with no step columns, or a step move beneath an unchanged status');
 END;
 "#;

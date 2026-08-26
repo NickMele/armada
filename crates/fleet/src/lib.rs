@@ -30,11 +30,15 @@
 //! and nothing in either module accepts a fact from a Drone that gates its own
 //! step.
 //!
-//! [`session`](mod@session) is the seam the outcome leaves through, and it has
-//! no implementation: injecting a turn needs a live session, spawning a Drone
-//! is a later step, and a fake of the trait cannot be written either while
-//! `DroneHandle` is uninhabited. The mechanism itself is measured — see that
-//! module.
+//! And the Drone itself: [`drone`](mod@drone) builds the environment a Drone
+//! gets — from an explicit list, never from Fleet's own — starts it detached
+//! against a harness's rendering, and says what a dead Drone means for its Job.
+//! [`session`](mod@session) is what speaks to a live one: the first turn and
+//! every injected turn go down the same pipe, and every write is checked.
+//!
+//! **The harness renders and Fleet starts.** Nothing in `adapters` spawns, so
+//! `Detached` stays the only way a process begins here, and every confinement
+//! property is a value a test can read rather than a process a test must run.
 //!
 //! Scheduling and the Job-shape classifier are later steps, and neither is
 //! stubbed here.
@@ -45,6 +49,7 @@
 //! a fault, and `api`'s own route table says why that is worse than nothing.
 
 pub mod detach;
+pub mod drone;
 pub mod evidence;
 pub mod gate;
 pub mod process;
@@ -55,6 +60,9 @@ pub mod session;
 mod tests;
 
 pub use detach::Detached;
+pub use drone::{
+    aftermath, environment, Aftermath, DroneNotStarted, Ending, HostPaths, Left, Started,
+};
 pub use evidence::{Call, EvidenceInbox, EvidenceTool, Landed, Recorded};
 pub use gate::{apply, rule_on, AtStep, CheckBudget, CheckOutput, Ruling};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
@@ -62,4 +70,4 @@ pub use runtime::{
     machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,
     Staleness, Vacancy, FILE_NAME, PROVISIONAL_PORT,
 };
-pub use session::LiveSession;
+pub use session::{DroneSession, LiveSession, Turn};

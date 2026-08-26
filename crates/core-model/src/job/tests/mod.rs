@@ -8,7 +8,9 @@
 //! [`Job`] has no constructor that takes a status for such a test to call.
 //!
 //! This module is the scaffolding. [`machine`] tests what the registry says is
-//! legal; [`record`] tests what a Job is made of and what a transition records.
+//! legal for a Job; [`step_machine`] tests the inner half, which has no
+//! registry table to be read against; [`record`] tests what a Job is made of
+//! and what a transition records.
 
 use crate::envelope::{Actor, FieldValue, Timestamp, Ulid};
 use crate::job::*;
@@ -149,3 +151,4 @@ fn reach(status: JobStatus) -> Job {
 
 mod machine;
 mod record;
+mod step_machine;

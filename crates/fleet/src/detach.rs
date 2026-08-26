@@ -40,6 +40,7 @@ use std::io;
 use std::path::Path;
 use std::process::Stdio;
 
+use adapter_traits::{Environment, Launch};
 use tokio::process::{Child, Command};
 
 /// A child that will be spawned into a session of its own.
@@ -61,7 +62,25 @@ impl Detached {
     pub fn program(program: impl AsRef<OsStr>) -> Detached {
         let mut command = Command::new(program);
         detach(&mut command);
+        // Stdin is null unless a caller asks for it, rather than inherited
+        // unless a caller remembers to close it. v1's Drone got the same, and
+        // it is the one part of v1's Drone spawn that needed no change.
+        command.stdin(Stdio::null());
         Detached { command }
+    }
+
+    /// Everything a harness rendered, in one call.
+    ///
+    /// **The four halves go on together or not at all.** A caller that set the
+    /// program and the arguments and forgot the directory would put a Drone in
+    /// Fleet's own working directory; one that forgot the environment would
+    /// hand it Fleet's. Taking a [`Launch`] means neither is a thing to
+    /// remember, and a `Launch` can only be built from a spawn config.
+    pub fn launching(launch: &Launch) -> Detached {
+        Detached::program(launch.program())
+            .args(launch.args())
+            .in_directory(launch.directory())
+            .in_environment(launch.environment())
     }
 
     pub fn arg(mut self, arg: impl AsRef<OsStr>) -> Detached {
@@ -84,14 +103,33 @@ impl Detached {
         self
     }
 
-    pub fn with_env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Detached {
-        self.command.env(key, value);
+    /// The child's whole environment.
+    ///
+    /// **Clears first, always, and there is no method that adds one variable to
+    /// an inherited environment.** `Command::env` layers over the parent's, so
+    /// a builder offering it would make wholesale inheritance the default and
+    /// clearing the thing a caller has to remember — which is exactly what v1
+    /// did, in the one place its Drone spawn was worse than its check spawn: a
+    /// token exported in the operator's shell reached every Drone it started.
+    ///
+    /// The type of the argument is what carries the guarantee. An
+    /// [`Environment`] is built from [`Environment::nothing`] up, so what
+    /// arrives here was named a variable at a time by whoever built it.
+    pub fn in_environment(mut self, environment: &Environment) -> Detached {
+        self.command.env_clear();
+        for (name, value) in environment.vars() {
+            self.command.env(name, value);
+        }
         self
     }
 
-    /// Start from an empty environment rather than inheriting Fleet's.
-    pub fn with_clean_env(mut self) -> Detached {
-        self.command.env_clear();
+    /// Hold the child's input open, so the caller can write to it.
+    ///
+    /// The default is [`Stdio::null`], set in the constructor: a child that
+    /// inherited Fleet's own stdin could read whatever Fleet was given, and a
+    /// detached child has no terminal for it to be anyway.
+    pub fn piping_input(mut self) -> Detached {
+        self.command.stdin(Stdio::piped());
         self
     }
 

@@ -1,4 +1,12 @@
-//! The `job_events` row: one per transition, with its reason, actor and time.
+//! The `job_events` rows: one per move, with its reason, actor and time.
+//!
+//! **Two kinds of move, one log.** [`JobEvent`] records a status transition and
+//! [`StepEvent`] records a step transition, and they share a sequence because
+//! the outer machine gates the inner one: a step move can only be replayed
+//! against the status the Job stood in when it happened, and two logs keyed
+//! independently cannot be interleaved to say what that was. Every `StepEvent`
+//! therefore carries the status it happened *under*, which the fold checks
+//! against where it has got to — the same continuity check a `JobEvent` gets.
 //!
 //! `job-fields.toml` makes this log the authority and the `status` column a
 //! cache of the fold over it — the column stores the fold's result so that
@@ -7,7 +15,7 @@
 //! event land in one SQLite transaction, and Fleet re-folds non-terminal Jobs
 //! at boot and lets the log win.
 //!
-//! Nothing persists one yet. It is defined here because
+//! It is defined here because
 //! [`Job::transition`](crate::Job::transition) has nowhere else to put what it
 //! knows, and because a shape retrofitted after the writers exist is a rewrite
 //! of all of them — the same argument the log envelope was built on.
@@ -17,8 +25,8 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::envelope::{Actor, FieldValue, Timestamp};
-use crate::job::ids::JobId;
-use crate::job::status::JobStatus;
+use crate::job::ids::{JobId, StepId};
+use crate::job::status::{JobStatus, StepState};
 use crate::job::transition::TransitionReason;
 
 /// One transition, recorded.
@@ -112,6 +120,94 @@ impl JobEvent {
                 .collect();
             fields.insert("criteria_owed".to_string(), FieldValue::List(ids));
         }
+        fields
+    }
+}
+
+/// One step move, recorded.
+///
+/// Minted only by [`Job::transition_step`](crate::Job::transition_step), for
+/// the reason [`JobEvent`] is minted only by `Job::transition`: a record of a
+/// move that something other than the machine could have written is not
+/// evidence of anything. It has no id of its own either — `store` assigns the
+/// key.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StepEvent {
+    job_id: JobId,
+    step_id: StepId,
+    from: StepState,
+    to: StepState,
+    under: JobStatus,
+    actor: Actor,
+    at: Timestamp,
+}
+
+impl StepEvent {
+    pub(crate) fn recorded(
+        job_id: JobId,
+        step_id: StepId,
+        from: StepState,
+        to: StepState,
+        under: JobStatus,
+        actor: Actor,
+        at: Timestamp,
+    ) -> Self {
+        StepEvent {
+            job_id,
+            step_id,
+            from,
+            to,
+            under,
+            actor,
+            at,
+        }
+    }
+
+    pub fn job_id(&self) -> &JobId {
+        &self.job_id
+    }
+    pub fn step_id(&self) -> &StepId {
+        &self.step_id
+    }
+    pub fn from(&self) -> StepState {
+        self.from
+    }
+    pub fn to(&self) -> StepState {
+        self.to
+    }
+    /// The Job status this move happened beneath. Always one of
+    /// [`ADVANCING_STATUSES`](crate::ADVANCING_STATUSES), and the Job does not
+    /// leave it here — a step moving is not the Job moving.
+    pub fn under(&self) -> JobStatus {
+        self.under
+    }
+    pub fn actor(&self) -> Actor {
+        self.actor
+    }
+    pub fn at(&self) -> &Timestamp {
+        &self.at
+    }
+
+    /// The move as structured log fields, for the reason [`JobEvent::fields`]
+    /// gives: nothing greps a sentence.
+    pub fn fields(&self) -> BTreeMap<String, FieldValue> {
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "step_id".to_string(),
+            FieldValue::Str(self.step_id.as_str().to_string()),
+        );
+        fields.insert(
+            "step_state_from".to_string(),
+            FieldValue::Str(self.from.as_wire().to_string()),
+        );
+        fields.insert(
+            "step_state_to".to_string(),
+            FieldValue::Str(self.to.as_wire().to_string()),
+        );
+        fields.insert(
+            "job_status".to_string(),
+            FieldValue::Str(self.under.as_wire().to_string()),
+        );
         fields
     }
 }

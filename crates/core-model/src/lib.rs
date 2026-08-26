@@ -19,11 +19,12 @@
 //! are already logging is a rewrite of all five — and `actor` cannot be
 //! reconstructed afterwards at all.
 //!
-//! The Job record and its status machine are here too, built from
-//! `domain/`, which is the authority on both. What is *not* here is the inner
-//! step machine: the registry gives step states no edge table, so `job_steps`
-//! rows are written at creation and nothing yet advances one. [`Job`] and
-//! [`JobStatus`] carry the reasoning.
+//! The Job record and both halves of its machine are here too, built from
+//! `domain/`, which is the authority on the outer one. The registry gives step
+//! states no edge table, so the inner machine declares the three states M1
+//! reaches rather than transcribing a table — [`StepTarget`] carries the
+//! reasoning, and the three it cannot reach are unreachable because no value
+//! names them.
 //!
 //! # `no_std`, except under test
 //!
@@ -44,9 +45,10 @@ pub use envelope::{
 pub use job::{
     AcceptanceCriterion, BlankTitle, CriteriaOwed, CriterionId, CriterionSource,
     DependencyDirection, DependencyEdge, DispatchOrigin, DroneId, Edge, EscalationTrigger, Facts,
-    GateManifest, GateOutcome, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep,
-    ManifestId, ModelName, NewJob, NotRunDisposition, NotRunReason, Origin, PilotReason, RepoPath,
-    ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, StepState, StepVerdict, Subject, Target,
-    Title, TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel, Urgency,
-    WorkflowId, WriteTargets, EDGES,
+    GateManifest, GateOutcome, IllegalStepTransition, IllegalTransition, Job, JobEvent, JobId,
+    JobStatus, JobStep, ManifestId, ModelName, NewJob, NotRunDisposition, NotRunReason, Origin,
+    PilotReason, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepEdge, StepEvent, StepId,
+    StepSeed, StepState, StepTarget, StepTransitioned, StepVerdict, Subject, Target, Title,
+    TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId,
+    WriteTargets, ADVANCING_STATUSES, EDGES, STEP_EDGES,
 };

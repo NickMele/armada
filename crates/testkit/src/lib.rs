@@ -19,6 +19,12 @@
 //!
 //! # The fakes
 //!
+//! [`FakeHarness`] renders a Drone that is a harmless program rather than an
+//! agent, and records what it was asked to render — so a test can start one end
+//! to end and then read back the launch. It does not decode a transcript:
+//! whether a line of a vendor's stream becomes the right event is asserted in
+//! `adapters`, against the real decoder and the captured spike streams.
+//!
 //! [`FakeVcs`] creates a Job's worktree without a repository under it, and
 //! [`FakeWorkProduct`] reads a diff out of one that does not exist. A suite
 //! that needs a real checkout per case is one people stop running, so the cases
@@ -32,10 +38,12 @@
 //! parsing is real, and it is here because a workflow is what every gate test
 //! needs and no test can construct one.
 
+mod harness;
 mod vcs;
 mod work_product;
 mod workflow;
 
+pub use harness::{FakeHarness, FakeHarnessRefused};
 pub use vcs::{FakeVcs, FakeVcsError};
 pub use work_product::{FakeDiffRefused, FakeWorkProduct};
 pub use workflow::{resolved, Gate, Sketch};

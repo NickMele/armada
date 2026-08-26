@@ -26,7 +26,7 @@
 use std::error::Error;
 use std::fmt;
 
-use core_model::{IllegalTransition, JobId, JobStatus, StepId};
+use core_model::{IllegalStepTransition, IllegalTransition, JobId, JobStatus, StepId, StepState};
 
 use crate::read::Loaded;
 
@@ -153,20 +153,45 @@ pub enum RowError {
         status: JobStatus,
         reason_kind: String,
     },
-    /// A `job_steps` row is somewhere the reconstruction cannot put it back.
+    /// A step row does not leave the state the fold has that step in. The
+    /// counterpart of [`EventDiscontinuity`](Self::EventDiscontinuity) for the
+    /// inner machine — a step move is missing, or two are out of order.
     ///
-    /// Nothing advances a step yet, so every row is written `not_started` with
-    /// no verdict and the rebuild produces exactly that. A row holding anything
-    /// else was written by a step machine that does not exist, and quietly
-    /// resetting it to `not_started` would be the data loss this whole step
-    /// exists to prevent.
-    StepStateNotReconstructable {
+    /// `folded` is `None` where the Job has no such step at all, which is a row
+    /// naming a step of some other Job's WorkflowDef.
+    StepEventDiscontinuity {
         job_id: JobId,
+        seq: i64,
         step_id: StepId,
-        state: String,
+        folded: Option<StepState>,
+        recorded: StepState,
     },
-    /// `current_step_id` or `assigned_drone` is set, and the record offers no
-    /// way to put it back. Same argument as the step row above.
+    /// The log records a step arriving at a state no `StepTarget` names.
+    ///
+    /// `awaiting_human` needs a human advance gate, and `retrying` and
+    /// `stopped` need a retry budget; M1 has neither, so no value in this build
+    /// moves a step to one. A row saying a step got there was written by a
+    /// machine this build does not have, and folding it as anything else would
+    /// be the store lying rather than refusing.
+    StepStateNotReachable {
+        job_id: JobId,
+        seq: i64,
+        step_id: StepId,
+        state: StepState,
+    },
+    /// The log records a step move the inner machine does not admit.
+    IllegalRecordedStepTransition {
+        job_id: JobId,
+        seq: i64,
+        cause: IllegalStepTransition,
+    },
+    /// `assigned_drone` is set, and the record offers no way to put it back.
+    ///
+    /// The log carries what a machine moved, and nothing moves this one: there
+    /// is no event for assigning a Drone, so the rebuild would drop the value
+    /// silently. `current_step_id` was here too until a step move became a row
+    /// in the log — which is the shape a writer for this field needs before the
+    /// column can be read back.
     ColumnNotReconstructable {
         job_id: JobId,
         column: &'static str,
@@ -186,6 +211,13 @@ pub enum WriteError {
     /// A transition was recorded against a Job that was never inserted.
     NoSuchJob {
         job_id: JobId,
+    },
+    /// A step move was recorded against a `job_steps` row that is not there.
+    /// The rows are written at creation and never added to, so this is a move
+    /// against a step of some other Job.
+    NoSuchStep {
+        job_id: JobId,
+        step_id: StepId,
     },
 }
 
@@ -299,16 +331,37 @@ display!(RowError, |self, f| match self {
         job_id.as_str(),
         status.as_wire()
     ),
-    RowError::StepStateNotReconstructable {
+    RowError::StepEventDiscontinuity {
         job_id,
+        seq,
+        step_id,
+        folded,
+        recorded,
+    } => write!(
+        f,
+        "job {}: event {seq} leaves step {} at {}, and the log had reached {}",
+        job_id.as_str(),
+        step_id.as_str(),
+        recorded.as_wire(),
+        match folded {
+            Some(state) => state.as_wire(),
+            None => "no such step",
+        }
+    ),
+    RowError::StepStateNotReachable {
+        job_id,
+        seq,
         step_id,
         state,
     } => write!(
         f,
-        "job {} step {} is `{state}`, and nothing yet advances a step",
+        "job {}: event {seq} puts step {} in `{}`, which nothing in this build reaches",
         job_id.as_str(),
-        step_id.as_str()
+        step_id.as_str(),
+        state.as_wire()
     ),
+    RowError::IllegalRecordedStepTransition { job_id, seq, cause } =>
+        write!(f, "job {}: event {seq} records {cause}", job_id.as_str()),
     RowError::ColumnNotReconstructable {
         job_id,
         column,
@@ -325,6 +378,12 @@ display!(WriteError, |self, f| match self {
     WriteError::JobAlreadyExists { job_id } =>
         write!(f, "job {} is already stored", job_id.as_str()),
     WriteError::NoSuchJob { job_id } => write!(f, "job {} was never inserted", job_id.as_str()),
+    WriteError::NoSuchStep { job_id, step_id } => write!(
+        f,
+        "job {} has no step {}",
+        job_id.as_str(),
+        step_id.as_str()
+    ),
 });
 
 display!(LoadJobError, |self, f| match self {

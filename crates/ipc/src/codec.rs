@@ -1,11 +1,18 @@
 //! Bytes in, bytes out. **The only place on the Fleet side that parses JSON
 //! from the wire.**
 //!
-//! Gate rule five refuses `serde_json::from_*` everywhere but `store` and here,
-//! and this module is why `ipc` is on that list: bytes enter the process at
-//! exactly two points, and both are a crate boundary rather than a call site in
-//! the middle of something. A transport crate that parsed its own bodies would
-//! be a third.
+//! Gate rule five refuses the untyped-JSON entry points everywhere but `store`
+//! and here, and this module is why `ipc` is on that list: reading bytes is a
+//! crate boundary rather than a call site in the middle of something. A
+//! transport crate that parsed its own bodies would be another.
+//!
+//! **Three callers now, and the third is not the wire.** `fleet` reads its own
+//! runtime file through [`decode`], and `adapters` reads a Drone's transcript
+//! and writes its MCP configuration through this pair. Neither is Bridge, and
+//! both are a place bytes genuinely arrive from outside — so what this module
+//! is, precisely, is *the* reader and writer of untyped JSON on the Fleet side,
+//! rather than the reader of one particular wire. The DTOs above it are the
+//! wire; this is not.
 //!
 //! # Unknown fields are ignored, on purpose
 //!

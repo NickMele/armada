@@ -31,31 +31,68 @@
 
 extern crate alloc;
 
+mod event;
+mod harness;
 mod secret;
 mod work_product;
 mod worktree;
 
+pub use event::DroneEvent;
+pub use harness::{
+    AmbientServers, DroneHandle, DroneSpawnConfig, Environment, Grant, Launch, McpConfig, Model,
+    Prompt, Prompting, SpawnConfigRefused, Toolbelt,
+};
 pub use secret::Secret;
 pub use work_product::{Changed, WorkProduct};
 pub use worktree::{derived, Worktree, WorktreeSpec, WorktreeSpecRefused};
 
-/// The agent harness: what actually runs a Drone.
+/// The agent harness: what a Drone is started as, and what its output means.
 ///
 /// One headless agent CLI is the only implementation, and the trait exists so
 /// it is not the only *possible* one — and, more immediately, so `testkit` can
-/// drive a whole Job from a scripted NDJSON stream. Which CLI is a question
-/// only `adapters` is allowed to answer.
+/// drive a whole Job from a scripted stream. Which CLI is a question only
+/// `adapters` is allowed to answer.
+///
+/// # Neither method starts a process
+///
+/// [`render`](AgentHarness::render) produces a [`Launch`]; Fleet starts it,
+/// detached, through the one type in the workspace that can start anything. A
+/// harness that spawned could spawn attached, and every confinement property
+/// would then only be checkable by spawning the thing being confined. As it
+/// stands they are assertions on a value.
+///
+/// **A second implementation is not cheap, and the trait is shaped to say so.**
+/// The argument list *is* the permission model: what a Drone may run, what is
+/// refused however broadly the allowlist grants, whether ambient servers are
+/// excluded. A second harness re-expresses every one of those in its own
+/// vocabulary, and the failure mode when it does not is the worst one in the
+/// system — a missing capability does not fail, it waits. So
+/// [`DroneSpawnConfig`] has no escape-hatch constructor: a second
+/// implementation does not compile until it has answered every capability
+/// question the first one answers.
 pub trait AgentHarness {
     /// Errors this harness can raise. Named by the implementation so a caller
     /// matching on them is matching on something real.
     type Error;
 
-    /// Start a Drone against a prepared worktree.
+    /// How this harness would start a Drone against a prepared worktree.
     ///
-    /// The spawn configuration is typed and carries no raw argv builder and no
+    /// The configuration is typed and carries no raw argument builder and no
     /// escape-hatch constructor, so a caller cannot quietly drop the isolation
-    /// flags the configuration exists to guarantee.
-    fn spawn(&self, config: DroneSpawnConfig) -> Result<DroneHandle, Self::Error>;
+    /// the configuration exists to guarantee.
+    fn render(&self, config: &DroneSpawnConfig) -> Result<Launch, Self::Error>;
+
+    /// Read one line of the Drone's output.
+    ///
+    /// **Total, and never empty.** There is no `Result`: a line that does not
+    /// decode comes back as [`DroneEvent::Unreadable`], because a decoder that
+    /// can return an error is a decoder whose caller can drop the line. A line
+    /// this vocabulary has no name for comes back as
+    /// [`DroneEvent::Unrecognised`] for the same reason.
+    ///
+    /// **One line can be more than one event.** A turn carrying two tool calls
+    /// is two, and answering with only the first would drop work the Drone did.
+    fn read(&self, line: &str) -> alloc::vec::Vec<DroneEvent>;
 }
 
 /// Version control, as Fleet uses it.
@@ -149,6 +186,11 @@ mod placeholders {
     //! step 7 replaced them with real types in [`worktree`](super::worktree),
     //! not in `core-model` — the domain crate takes no dependency on a
     //! filesystem layout, and this crate must derive the path without one.
+    //!
+    //! **`DroneSpawnConfig` and `DroneHandle` are gone too**, replaced by M1
+    //! step 8 in [`harness`](super::harness), for the same reason and in the
+    //! same place: what a Drone is confined to is derived from a worktree and a
+    //! toolbelt, and neither is a domain fact.
 
     macro_rules! not_yet {
         ($($name:ident),* $(,)?) => {$(
@@ -157,11 +199,5 @@ mod placeholders {
         )*};
     }
 
-    not_yet!(
-        DroneSpawnConfig,
-        DroneHandle,
-        ModelRequest,
-        ModelResponse,
-        HealthReport,
-    );
+    not_yet!(ModelRequest, ModelResponse, HealthReport);
 }

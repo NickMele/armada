@@ -15,7 +15,16 @@ use core_model::{
 };
 
 use crate::tests::{at, job_id, open, top_level, TempDir};
-use crate::{LoadJobError, Store};
+use crate::{LoadJobError, Moved, RecordedEvent, Store};
+
+/// The reason off a Job row, or a panic — a step row carries none, and every
+/// row this file writes is a Job transition.
+fn reason(event: &RecordedEvent) -> TransitionReason {
+    match event.moved() {
+        Moved::Job { reason, .. } => reason.clone(),
+        Moved::Step { .. } => panic!("this history moves no step"),
+    }
+}
 
 /// The eight moves, with who caused each and when. Four of them carry a reason
 /// the destination stores, which is every kind of reason there is.
@@ -153,22 +162,27 @@ fn the_log_holds_every_transition_with_its_reason_actor_and_time() {
         .expect("the events read back");
 
     assert_eq!(events.len(), 8, "one row per transition, and no more");
-    assert_eq!(events[0].from(), JobStatus::AwaitingApproval);
-    assert_eq!(events[0].to(), JobStatus::Queued);
+    assert_eq!(events[0].under(), JobStatus::AwaitingApproval);
     assert_eq!(events[0].actor(), Actor::Human);
     assert_eq!(events[0].at(), &at("2026-08-26T10:00:00.000Z"));
-    assert_eq!(events[0].reason(), &TransitionReason::DerivedAtRead);
+    assert_eq!(
+        events[0].moved(),
+        &Moved::Job {
+            to: JobStatus::Queued,
+            reason: TransitionReason::DerivedAtRead,
+        }
+    );
 
     assert_eq!(
-        events[3].reason(),
-        &TransitionReason::Escalation(EscalationTrigger::Interrupted),
+        reason(&events[3]),
+        TransitionReason::Escalation(EscalationTrigger::Interrupted),
         "the trigger survives, and it is the only one that edge admits"
     );
     assert_eq!(
-        events[4].reason(),
-        &TransitionReason::Pilot(PilotReason::TakeOver)
+        reason(&events[4]),
+        TransitionReason::Pilot(PilotReason::TakeOver)
     );
-    match events[6].reason() {
+    match reason(&events[6]) {
         TransitionReason::Attestation(owed) => {
             let ids: Vec<&str> = owed.ids().map(CriterionId::as_str).collect();
             assert_eq!(ids, vec!["c1", "c2"], "the criteria owed survive in order");

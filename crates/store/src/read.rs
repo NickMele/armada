@@ -12,27 +12,31 @@
 //!
 //! # What the log is authoritative for, and what it is not
 //!
-//! Only `status`. `job_events` records transitions, and a transition is the
-//! only thing that moves. Every other column on the Job row is the authority
-//! for its own field, because nothing in the log describes it — which is the
-//! cost of caching the fold rather than deriving everything from it. If a
-//! later step gives Fleet a writer for `assigned_drone` or `current_step_id`,
-//! those moves need events of their own or they will not survive a restart the
-//! way status does. **They are checked, not assumed:** a row holding either one
-//! is refused rather than quietly dropped, because the rebuild has no way to
-//! put it back.
+//! `status`, `current_step_id` and every `job_steps` row. `job_events` records
+//! what a machine moved, and there are two machines: a status transition and a
+//! step move are both rows in it, in one order, so both fold back. The
+//! `job_steps` columns and `current_step_id` are caches of that fold in exactly
+//! the sense `status` is, and this file does not read them back.
+//!
+//! Every other column on the Job row is the authority for its own field,
+//! because nothing in the log describes it. `assigned_drone` is the one that
+//! still has no writer and no event, and it is **checked, not assumed:** a row
+//! holding one is refused rather than quietly dropped, because the rebuild has
+//! no way to put it back. That refusal is what `current_step_id` had until a
+//! step move became a row in the log.
 
 use core_model::{
-    Actor, DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, JobStatus, ManifestId,
-    ModelName, NewJob, Origin, RepoPath, StepId, StepSeed, Subject, Timestamp, Title, Ulid,
+    DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, JobStatus, ManifestId, ModelName,
+    NewJob, Origin, RepoPath, StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid,
     Urgency, WorkflowId, WriteTargets,
 };
 use rusqlite::Row;
 
 use crate::columns;
 use crate::error::{fault, LoadAllError, LoadJobError, RowError};
-use crate::fold::{replay, RecordedEvent};
+use crate::fold::replay;
 use crate::open::Store;
+use crate::row::{column, enum_value, malformed, maybe, string};
 
 /// What the boot read produced.
 #[derive(Debug, Default)]
@@ -111,28 +115,6 @@ impl Store {
         }
     }
 
-    /// One Job's history, oldest first. Never edited, never removed, and here
-    /// so that something other than the fold can read it.
-    pub fn events_for(&self, job_id: &JobId) -> Result<Vec<RecordedEvent>, RowError> {
-        let mut statement = self
-            .conn
-            .prepare(SELECT_EVENTS)
-            .map_err(fault("preparing the event read"))
-            .map_err(RowError::Database)?;
-        let rows = statement
-            .query_map((job_id.as_str(),), |row| Ok(event(row)))
-            .map_err(fault("reading events"))
-            .map_err(RowError::Database)?;
-        let mut events = Vec::new();
-        for row in rows {
-            let row = row
-                .map_err(fault("reading an event"))
-                .map_err(RowError::Database)?;
-            events.push(row?);
-        }
-        Ok(events)
-    }
-
     fn rebuild_every_job(&self) -> Result<Vec<Rebuilt>, LoadAllError> {
         let mut statement = self
             .conn
@@ -164,7 +146,9 @@ impl Store {
         )?;
         let created_at = Timestamp::from_rfc3339(string(row, "created_at")?);
 
-        refuse_if_set(&job_id, "current_step_id", maybe(row, "current_step_id")?)?;
+        // `current_step_id` was refused here until a step move became a row in
+        // the log. It is a cache of the fold now, like `status`, and is not
+        // read back. `assigned_drone` still has no event and so still is.
         refuse_if_set(&job_id, "assigned_drone", maybe(row, "assigned_drone")?)?;
 
         let new = NewJob {
@@ -239,31 +223,29 @@ impl Store {
         Ok((replay(created, &events)?, cached))
     }
 
-    /// The `job_steps` rows, as the seeds creation took.
+    /// The `job_steps` rows, as the seeds creation took: which step, and where
+    /// in the order. Nothing about where the step got to, which the log says.
     ///
-    /// Nothing advances a step yet, so the rebuild reproduces `not_started`
-    /// with no verdict — and a row saying anything else is refused, because
-    /// silently returning it as `not_started` is the loss this step exists to
-    /// prevent.
+    /// `state` is read and then thrown away, which is deliberate. The column is
+    /// a cache of the fold and the fold is what the rebuild uses — but a value
+    /// in it that is not one of the six was written by something that did not
+    /// share the enum, and that is worth refusing even though nothing here
+    /// needs the answer.
     fn step_seeds(&self, job_id: &JobId) -> Result<Vec<StepSeed>, RowError> {
         self.collect(
-            "SELECT step_id, ordinal, state, last_verdict FROM job_steps
+            "SELECT step_id, ordinal, state FROM job_steps
              WHERE job_id = ?1 ORDER BY ordinal",
             job_id,
             "reading step rows",
             |row| {
-                let step_id = StepId::new(string(row, "step_id")?);
-                let state = string(row, "state")?;
-                let verdict: Option<String> = maybe(row, "last_verdict")?;
-                if state != "not_started" || verdict.is_some() {
-                    return Err(RowError::StepStateNotReconstructable {
-                        job_id: job_id.clone(),
-                        step_id,
-                        state: verdict.map_or(state.clone(), |v| format!("{state}/{v}")),
-                    });
-                }
+                let _: StepState = enum_value(
+                    StepState::from_wire,
+                    "job_steps",
+                    "state",
+                    &string(row, "state")?,
+                )?;
                 Ok(StepSeed {
-                    step_id,
+                    step_id: StepId::new(string(row, "step_id")?),
                     ordinal: row.get("ordinal").map_err(column("job_steps", "ordinal"))?,
                 })
             },
@@ -342,44 +324,6 @@ impl Store {
 
 const SELECT_JOB: &str = "SELECT * FROM jobs WHERE job_id = ?1";
 const SELECT_ALL_JOBS: &str = "SELECT * FROM jobs ORDER BY job_id";
-const SELECT_EVENTS: &str = "SELECT seq, job_id, status_from, status_to, reason_kind,
-                             reason_value, actor, at FROM job_events
-                             WHERE job_id = ?1 ORDER BY seq";
-
-fn event(row: &Row<'_>) -> Result<RecordedEvent, RowError> {
-    let reason_kind = string(row, "reason_kind")?;
-    let reason_value: Option<String> = maybe(row, "reason_value")?;
-    let actor = string(row, "actor")?;
-    Ok(RecordedEvent {
-        seq: row.get("seq").map_err(column("job_events", "seq"))?,
-        job_id: JobId::carried(Ulid::carried(string(row, "job_id")?)),
-        from: enum_value(
-            JobStatus::from_wire,
-            "job_events",
-            "status_from",
-            &string(row, "status_from")?,
-        )?,
-        to: enum_value(
-            JobStatus::from_wire,
-            "job_events",
-            "status_to",
-            &string(row, "status_to")?,
-        )?,
-        reason: columns::read_reason(&reason_kind, reason_value.as_deref()).map_err(|detail| {
-            RowError::MalformedColumn {
-                table: "job_events",
-                column: "reason_value",
-                detail,
-            }
-        })?,
-        actor: Actor::from_wire(&actor).ok_or(RowError::UnknownEnumValue {
-            table: "job_events",
-            column: "actor",
-            value: actor,
-        })?,
-        at: Timestamp::from_rfc3339(string(row, "at")?),
-    })
-}
 
 fn subject(row: &Row<'_>) -> Result<Option<Subject>, RowError> {
     match (maybe(row, "subject_kind")?, maybe(row, "subject_ref")?) {
@@ -425,44 +369,4 @@ fn refuse_if_set(
             value,
         }),
     }
-}
-
-fn string(row: &Row<'_>, name: &'static str) -> Result<String, RowError> {
-    row.get(name).map_err(column("jobs", name))
-}
-
-fn maybe(row: &Row<'_>, name: &'static str) -> Result<Option<String>, RowError> {
-    row.get(name).map_err(column("jobs", name))
-}
-
-fn column(table: &'static str, name: &'static str) -> impl Fn(rusqlite::Error) -> RowError {
-    move |error| match error {
-        rusqlite::Error::InvalidColumnType(..) => RowError::MalformedColumn {
-            table,
-            column: name,
-            detail: "the column is not the type it was declared".to_string(),
-        },
-        other => RowError::Database(fault("reading a column")(other)),
-    }
-}
-
-fn malformed(name: &'static str) -> impl Fn(String) -> RowError {
-    move |detail| RowError::MalformedColumn {
-        table: "jobs",
-        column: name,
-        detail,
-    }
-}
-
-fn enum_value<T>(
-    from_wire: impl Fn(&str) -> Option<T>,
-    table: &'static str,
-    column: &'static str,
-    value: &str,
-) -> Result<T, RowError> {
-    from_wire(value).ok_or_else(|| RowError::UnknownEnumValue {
-        table,
-        column,
-        value: value.to_string(),
-    })
 }

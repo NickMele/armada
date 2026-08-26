@@ -9,7 +9,7 @@
 //! Job that will not read back is not a reason to refuse every other Job, so
 //! those surface at load rather than at open.
 
-use core_model::{Actor, JobStatus, Target};
+use core_model::{Actor, JobStatus, StepId, StepState, Target};
 use rusqlite::Connection;
 
 use crate::schema::SCHEMA_VERSION_KEY;
@@ -269,13 +269,16 @@ fn an_escalation_with_no_trigger_is_named() {
     }
 }
 
-/// Nothing advances a step yet. A row that says one has was written by a
-/// machine that does not exist, and reading it back as `not_started` would be
-/// the data loss this whole step exists to prevent.
+/// `job_steps.state` is a cache of the fold, in the sense `jobs.status` is.
+///
+/// **This was a refusal until a step move became a row in the log**, and had to
+/// be: the fold could not put a moved step back, so returning the row as
+/// `not_started` would have lost a move. The log can now say where a step got
+/// to, so a scribbled column is simply not the authority any more.
 #[test]
-fn a_step_the_rebuild_cannot_put_back_is_named_rather_than_reset() {
+fn a_scribbled_step_state_loses_to_the_log() {
     let dir = TempDir::new();
-    let store = seeded(&dir, "01ADVANCED");
+    let store = seeded(&dir, "01SCRIBBLED");
     store
         .conn
         .execute(
@@ -284,17 +287,88 @@ fn a_step_the_rebuild_cannot_put_back_is_named_rather_than_reset() {
         )
         .expect("scribbled on");
 
-    match store.load_job(&job_id("01ADVANCED")) {
-        Err(crate::LoadJobError::Unreadable(RowError::StepStateNotReconstructable {
+    let job = store.load_job(&job_id("01SCRIBBLED")).expect("it folds");
+    assert_eq!(
+        job.step(&StepId::new("fix")).expect("the row").state(),
+        StepState::NotStarted,
+        "no event moved it, so it never moved"
+    );
+}
+
+/// A value in the cached column that is not one of the six is still refused,
+/// even though the fold does not need it. A row spelling a state this build
+/// does not have was written by something that did not share the enum.
+#[test]
+fn a_step_state_column_this_build_cannot_spell_is_refused() {
+    let dir = TempDir::new();
+    let store = seeded(&dir, "01MISSPELT");
+    store
+        .conn
+        .execute("UPDATE job_steps SET state = 'advancing'", [])
+        .expect("scribbled on");
+
+    match store.load_job(&job_id("01MISSPELT")) {
+        Err(crate::LoadJobError::Unreadable(RowError::UnknownEnumValue {
+            table, column, ..
+        })) => {
+            assert_eq!((table, column), ("job_steps", "state"));
+        }
+        other => panic!("expected a refusal, found {other:?}"),
+    }
+}
+
+/// The three states M1 cannot reach have no `StepTarget`, so a logged move into
+/// one is a machine this build does not have. Refused, never folded as
+/// something else.
+#[test]
+fn a_logged_step_state_nothing_reaches_is_named_rather_than_folded() {
+    let dir = TempDir::new();
+    let store = seeded(&dir, "01RETRYING");
+    store
+        .conn
+        .execute(
+            "INSERT INTO job_events (
+                 kind, job_id, status_from, status_to, reason_kind, reason_value,
+                 step_id, state_from, state_to, actor, at
+             ) VALUES ('step_transition', '01RETRYING', 'awaiting_approval',
+                 'awaiting_approval', 'unqualified', NULL, 'fix', 'not_started',
+                 'retrying', 'fleet', '2026-08-26T10:00:00.000Z')",
+            [],
+        )
+        .expect("a machine that does not exist, writing");
+
+    match store.load_job(&job_id("01RETRYING")) {
+        Err(crate::LoadJobError::Unreadable(RowError::StepStateNotReachable {
             step_id,
             state,
             ..
         })) => {
             assert_eq!(step_id.as_str(), "fix");
-            assert_eq!(state, "advanced");
+            assert_eq!(state, StepState::Retrying);
         }
         other => panic!("expected a refusal, found {other:?}"),
     }
+}
+
+/// The shape trigger, which is the schema holding a rule rather than a
+/// convention. A step move with no `step_id` is not a row this log admits.
+#[test]
+fn a_log_row_that_is_neither_shape_whole_is_refused_by_the_database() {
+    let dir = TempDir::new();
+    let store = seeded(&dir, "01HALFSHAPE");
+    let refused = store.conn.execute(
+        "INSERT INTO job_events (
+             kind, job_id, status_from, status_to, reason_kind, reason_value,
+             step_id, state_from, state_to, actor, at
+         ) VALUES ('step_transition', '01HALFSHAPE', 'awaiting_approval',
+             'awaiting_approval', 'unqualified', NULL, NULL, 'not_started',
+             'running', 'fleet', '2026-08-26T10:00:00.000Z')",
+        [],
+    );
+    assert!(
+        refused.is_err(),
+        "a step move with no step is not a shape this log holds"
+    );
 }
 
 /// The column is a cache and the log is the authority, so a disagreement is

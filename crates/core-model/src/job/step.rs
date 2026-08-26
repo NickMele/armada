@@ -25,6 +25,7 @@ use crate::envelope::Timestamp;
 use crate::job::escalation::EscalationTrigger;
 use crate::job::ids::{JobId, StepId};
 use crate::job::status::StepState;
+use crate::job::step_machine::StepTarget;
 
 /// The last verdict against a step.
 ///
@@ -75,10 +76,13 @@ pub struct StepSeed {
 
 /// One `job_steps` row.
 ///
-/// Every field is private and there is no setter. What advances a step is the
-/// inner machine, which this step of the milestone does not build: the registry
-/// gives step states no edge table, and inventing one under cover of "the Job
-/// record" is how a second machine gets built by accident.
+/// Every field is private and there is no setter. Two functions in this file
+/// write `state`, and they are the whole inner machine's writing surface:
+/// [`written_at_creation`](JobStep::written_at_creation), which takes no state
+/// and produces `not_started`, and [`moved_to`](JobStep::moved_to), which is
+/// `pub(crate)` and is called from one place —
+/// [`Job::transition_step`](crate::Job::transition_step), after
+/// `admits_step` has ruled on the move.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobStep {
     job_id: JobId,
@@ -104,6 +108,39 @@ impl JobStep {
             state: StepState::NotStarted,
             last_verdict: None,
             entered_at: at.clone(),
+            updated_at: at,
+        }
+    }
+
+    /// The row as the move leaves it. **Never called except by
+    /// [`Job::transition_step`](crate::Job::transition_step)**, which is what
+    /// asks the machine whether the move is admitted; this only writes down
+    /// the answer.
+    ///
+    /// `entered_at` moves only on entering [`Running`](StepTarget::Running),
+    /// because the field is "when this step was entered" and a step is entered
+    /// when it starts being worked. Advancing writes `updated_at` alone, so the
+    /// time a step took stays readable from the pair.
+    ///
+    /// `last_verdict` follows the destination rather than a caller:
+    /// `advanced`'s meaning is "the step passed its advance gate", which is
+    /// what `passed` records. Entering `running` leaves the previous verdict
+    /// standing — the registry is explicit that activity and verdict are
+    /// separate fields, so starting work does not erase the last ruling.
+    pub(crate) fn moved_to(&self, to: &StepTarget, at: Timestamp) -> JobStep {
+        JobStep {
+            job_id: self.job_id.clone(),
+            step_id: self.step_id.clone(),
+            ordinal: self.ordinal,
+            state: to.state(),
+            last_verdict: match to {
+                StepTarget::Running => self.last_verdict,
+                StepTarget::Advanced => Some(StepVerdict::Passed),
+            },
+            entered_at: match to {
+                StepTarget::Running => at.clone(),
+                StepTarget::Advanced => self.entered_at.clone(),
+            },
             updated_at: at,
         }
     }

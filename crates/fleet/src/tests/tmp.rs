@@ -25,6 +25,13 @@ impl TempDir {
         TempDir { path }
     }
 
+    /// The directory itself. A Drone's worktree stands in as one of these: the
+    /// spawn needs a directory that is really there, and nothing about it needs
+    /// to be a checkout.
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
     /// Where the runtime file under test lives.
     pub fn runtime_file(&self) -> PathBuf {
         self.path.join(crate::runtime::FILE_NAME)
