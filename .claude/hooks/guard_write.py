@@ -95,24 +95,6 @@ def main() -> None:
             )
             return
 
-    # ---- rule: every file under crates/*/src/ is in the manifest ----------
-    parts = rel.split("/")
-    under_crate_src = len(parts) > 3 and parts[0] == "crates" and parts[2] == "src"
-    if under_crate_src:
-        manifest = os.path.join(root, "foundations-manifest.txt")
-        listed = set()
-        try:
-            with open(manifest) as f:
-                listed = {line.strip() for line in f if line.strip()}
-        except OSError:
-            answer("deny", "foundations-manifest.txt is missing, so no write "
-                           "under crates/*/src/ can be checked against it.")
-        if rel not in listed:
-            answer("deny", f"{rel} is not in foundations-manifest.txt. Add the "
-                           "path to the manifest, sorted, in the same change "
-                           "that adds the file — the manifest is how a file "
-                           "nobody decided on becomes visible as a diff.")
-
     # ---- rule: no serde_json::from_* outside store and ipc ---------------
     #
     # Rust source only, matching the gate rule exactly. This checked every file

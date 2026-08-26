@@ -80,8 +80,8 @@ the rows that say otherwise.
 
 A value added here is a value some enum must gain, so add it in the change that
 adds the variant, not before and not after. A transition added here needs both
-its ends present first. Nothing under this directory is Rust, nothing is under
-`src/`, and nothing belongs in `foundations-manifest.txt`.
+its ends present first. Nothing under this directory is Rust and nothing is
+under `src/`.
 
 ## Known inconsistencies, not open questions
 

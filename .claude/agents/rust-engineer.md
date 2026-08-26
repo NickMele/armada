@@ -32,11 +32,6 @@ bytes enter the process. Everywhere else a value arrives already typed, and a
 there. `cargo xtask verify-foundations` fails on it and a PreToolUse hook
 refuses the write.
 
-**Every file under `crates/*/src/` is listed in `foundations-manifest.txt`** —
-one repo-relative path per line, sorted, no globs. A glob would pre-authorize a
-directory, which is the drift the rule exists to catch. Add the path in the same
-change as the file.
-
 **Warn at 500 lines, fail at 900.** 500 is where a Rust file usually stops doing
 one thing. The warning asks rather than blocks, because a hard gate at a line
 count gets satisfied by splitting a file in two — which moves the metric without

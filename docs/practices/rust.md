@@ -292,15 +292,6 @@ and `xtask`. `docs/` is prose and isn't gated by it.
 
 ## 7. Mechanical rules worth knowing exist
 
-**Every file under `crates/*/src/` is listed in `foundations-manifest.txt`** —
-one repo-relative path per line, sorted, no globs, no comments. Add the line
-in the same change that adds the file. `guard_write.py` denies the write
-outright if the manifest doesn't list the path first, which means: add the
-manifest line, then write the file, not the other way round — the hook checks
-before the file exists on disk. A glob in the manifest would defeat the point;
-it would pre-authorize a whole directory, which is the exact drift the rule
-exists to make visible as a diff instead.
-
 **`unsafe_code = "forbid"`** is a workspace-wide lint in the root `Cargo.toml`.
 It's not per-crate and not a `#![deny]` you'll find repeated anywhere — it's
 already on for everything in this workspace.

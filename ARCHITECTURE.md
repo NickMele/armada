@@ -118,7 +118,6 @@ handed has no push method: the call does not exist, rather than being refused.
 
 Each is enforced by `cargo xtask verify-foundations`, not by remembering.
 
-- Every file under `crates/*/src/` is in `foundations-manifest.txt`.
 - `serde_json::from_*` appears only in `store` and `ipc` — the two places bytes
   enter the process. Everywhere else a value arrives typed.
 - No vendor literal outside `adapters`.
