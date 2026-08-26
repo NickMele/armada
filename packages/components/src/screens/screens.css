@@ -1,0 +1,592 @@
+/* Screens — the layout the M1 drawing arranges its components into.
+
+   A screen is not a component. It exports nothing, it has no registry row, and
+   nothing imports it: it is an arrangement of built components around fixture
+   data, drawn so the gallery can be held beside the drawing. So the seven
+   screens share one stylesheet the `screens` tree owns, rather than seven
+   copies of the same frame, eyebrow and note rules.
+
+   Every measurement here is the drawing's own, composed from the spacing scale
+   with the drawn value in the comment beside it. Nothing is invented and
+   nothing is a literal. */
+
+.armada-screen {
+  /* 1180px — the drawing's screen width, the same on every screen. */
+  --armada-screen-width: calc(var(--space-12) * 24 + var(--space-6) + var(--space-1));
+  /* 420px — the shell window's height, and the width of the running job's
+     right-hand column. One value, drawn twice. */
+  --armada-screen-shell: calc(var(--space-12) * 8 + var(--space-8) + var(--space-1));
+  /* 580px — half the screen, less the gutter. First launch draws two. */
+  --armada-screen-half: calc(var(--space-12) * 12 + var(--space-1));
+  /* 576px — the running job's two rail cards. */
+  --armada-screen-rail-card: calc(var(--space-12) * 12);
+  /* 376px — a dimmed "not at M1" column on the dispatch screen. */
+  --armada-screen-narrow: calc(var(--space-12) * 7 + var(--space-8) + var(--space-2));
+  /* 440px — a bright column on the dispatch screen. */
+  --armada-screen-card: calc(var(--space-12) * 9 + var(--space-2));
+  /* 480px — the failed job's right-hand column, wider than the running job's
+     because a check's output is machine text and wraps badly. */
+  --armada-screen-aside-wide: calc(var(--space-12) * 10);
+  /* 200px — the empty state's height. */
+  --armada-screen-empty: calc(var(--space-12) * 4 + var(--space-2));
+  /* 340px — the floor a note column may shrink to before it wraps. */
+  --armada-screen-note-min: calc(var(--space-12) * 7 + var(--space-1));
+  /* 80px — the Claimed / Shown by / Not claimed label track. */
+  --armada-screen-label-track: calc(var(--space-12) + var(--space-8));
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: var(--armada-screen-width);
+  max-width: 100%;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+/* ---- the shell ---------------------------------------------------------- */
+
+/* The window: rail, panel, status bar, one edge around all three. */
+.armada-screen__window {
+  display: flex;
+  height: var(--armada-screen-shell);
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-default);
+  background: var(--bg-base);
+  overflow: hidden;
+}
+
+.armada-screen__panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.armada-screen__panel-head {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.armada-screen__titles {
+  display: flex;
+  flex-direction: column;
+  /* 2px: the name and its count sentence are one block. No token spells it. */
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+.armada-screen__title {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+}
+
+.armada-screen__summary {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* Where the list mounts on the shell screen. The drawing draws the region
+   dashed and says which screen fills it, rather than drawing the list twice. */
+.armada-screen__mount {
+  flex: 1;
+  margin: 0 var(--space-4) var(--space-4);
+  border-radius: var(--radius-md);
+  border: var(--border-width) dashed var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-subtle);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* A status bar shown on its own, outside the window it normally spans. The
+   component draws a top rule and no radius, because in the shell it runs the
+   full width beneath the sidebar; standing alone it needs an edge of its own,
+   which the drawing gives it. */
+.armada-screen__bar-frame {
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-default);
+  overflow: hidden;
+}
+
+/* ---- shared furniture --------------------------------------------------- */
+
+/* The label above a region. ALL CAPS at --tracking-caps, which is what the
+   drawing draws for every one of them. */
+.armada-screen__eyebrow {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-subtle);
+}
+
+.armada-screen__eyebrow[data-spaced] {
+  padding-top: var(--space-2);
+}
+
+.armada-screen__note {
+  margin: 0;
+  max-width: 96ch;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+.armada-screen__notes {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.armada-screen__notes > .armada-screen__note {
+  flex: 1;
+  min-width: var(--armada-screen-note-min);
+}
+
+.armada-screen__strong {
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-screen__mono {
+  font-family: var(--font-mono);
+}
+
+.armada-screen__caption {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+.armada-screen__caption[data-muted] {
+  color: var(--fg-muted);
+}
+
+.armada-screen__row {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+/* A framed panel around one drawn comparison. --border-default when the thing
+   inside is M1's, --border-subtle when it is dimmed as "not at M1". */
+.armada-screen__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--pad-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  border: var(--border-width) solid var(--border-default);
+  min-width: 0;
+}
+
+.armada-screen__card[data-dim] {
+  border-color: var(--border-subtle);
+}
+
+.armada-screen__card[data-bright] {
+  border-color: var(--border-strong);
+}
+
+.armada-screen__card[data-width="half"] { width: var(--armada-screen-half); }
+.armada-screen__card[data-width="narrow"] { width: var(--armada-screen-narrow); }
+.armada-screen__card[data-width="card"] { width: var(--armada-screen-card); }
+.armada-screen__card[data-width="rail"] { width: var(--armada-screen-rail-card); }
+
+.armada-screen__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.armada-screen__tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+  flex: none;
+}
+
+.armada-screen__tag[data-dim] {
+  color: var(--fg-subtle);
+}
+
+/* ---- first launch ------------------------------------------------------- */
+
+.armada-screen__empty-slot {
+  height: var(--armada-screen-empty);
+  display: flex;
+}
+
+/* Where an unbuilt region mounts. It keeps the height the drawing gives the
+   thing that belongs there, so the screen around it does not close up and
+   pretend the gap is not one. */
+.armada-screen__slot {
+  display: flex;
+  min-width: 0;
+  min-height: var(--armada-screen-empty);
+}
+
+/* ---- dispatch ----------------------------------------------------------- */
+
+.armada-screen__legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--pad-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  border: var(--border-width) solid var(--border-default);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-screen__legend-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.armada-screen__swatch {
+  /* 24 by 8 — a bar, not a dot: it stands for a whole column's dimming. */
+  width: var(--space-6);
+  height: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--border-strong);
+  flex: none;
+  align-self: center;
+}
+
+.armada-screen__swatch[data-dim] {
+  background: var(--border-subtle);
+}
+
+/* The Job Board queue, drawn dimmed because M1 has no queue to browse. */
+.armada-screen__queue {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.armada-screen__queue-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-sunken);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-subtle);
+  font-weight: var(--weight-medium);
+}
+
+.armada-screen__queue-item {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+}
+
+.armada-screen__queue-item:last-child {
+  border-bottom: 0;
+}
+
+.armada-screen__queue-item > span:last-child {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-screen__fork {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  border: var(--border-width) solid var(--border-subtle);
+  color: var(--fg-subtle);
+}
+
+.armada-screen__fork > span:first-child {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+}
+
+.armada-screen__fork > span:last-child {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-wrap: pretty;
+}
+
+.armada-screen__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ---- job detail --------------------------------------------------------- */
+
+.armada-screen__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--pad-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  border: var(--border-width) solid var(--border-default);
+  min-width: 0;
+}
+
+.armada-screen__ident {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-screen__ident-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.armada-screen__job-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-screen__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* A machine-derived value inside a sentence of facts. */
+.armada-screen__value {
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+}
+
+/* A step name is a label, so it stays sans even beside mono siblings. */
+.armada-screen__value[data-sans] {
+  font-family: var(--font-sans);
+}
+
+/* A value that copies on click, and says so by going to --accent on hover. */
+.armada-screen__copy {
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-screen__copy:hover {
+  color: var(--accent);
+}
+
+.armada-screen__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--armada-screen-shell);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.armada-screen__split[data-wide] {
+  grid-template-columns: minmax(0, 1fr) var(--armada-screen-aside-wide);
+}
+
+.armada-screen__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-screen__col[data-loose] {
+  gap: var(--space-4);
+}
+
+/* A sunken block: why a job stopped, where its work is, what it handed over. */
+.armada-screen__sunken {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+.armada-screen__why {
+  margin: 0;
+  max-width: 88ch;
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+.armada-screen__head-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* A check's tail. Mono throughout, because every line of it is machine
+   output. */
+.armada-screen__output {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  border: var(--border-width) solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.armada-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ---- the finished job's handover --------------------------------------- */
+
+.armada-screen__branch-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.armada-screen__branch {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  color: var(--fg-default);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-screen__branch:hover {
+  color: var(--accent);
+}
+
+.armada-screen__log-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-screen__log-path {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-screen__log-path:hover {
+  color: var(--accent);
+}
+
+.armada-screen__push-right {
+  margin-left: auto;
+  flex: none;
+}
+
+/* A glyph the icon registry has no row for. The mark keeps its column so the
+   rows stay aligned; it just renders empty. */
+.armada-screen__mark {
+  width: var(--space-4);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+}
+
+/* ---- a region whose component is not built ------------------------------ */
+
+/* Named, not blank. A missing thing that renders as an error is a finding; a
+   missing thing that is silently absent is a gap nobody sees — and nine
+   compositions with no screen around them is what silence already cost.
+
+   --status-completed-failed is not a Job's status here. It is the same reuse
+   the contract grants Doctor: a health claim borrows the Job palette rather
+   than inventing a third set, and an unbuilt region is the loudest health
+   claim a screen can make. */
+.armada-screen-absent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: var(--border-width) dashed var(--status-completed-failed);
+  background: var(--status-completed-failed-bg);
+  text-align: center;
+}
+
+.armada-screen-absent__name {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--status-completed-failed);
+}
+
+.armada-screen-absent__why {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  max-width: 60ch;
+  text-wrap: pretty;
+}

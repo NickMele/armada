@@ -87,12 +87,13 @@ export const Queued: Story = {
 };
 
 /**
- * The running row, static. Motion is asked only of the thing being read, so a
- * running row that is not focused carries hue and no pulse — and hue is what
- * carried "which step is current" all along.
+ * The running row, as the list draws it: the badge pulses, and the row is not
+ * focused. The pulse is the Job's state rather than the cursor's position, and
+ * the step bar beside it stays still.
  */
 export const Running: Story = {
   args: {
+    pulsing: true,
     status: "running",
     statusIcon: CircleDot,
     statusLabel: "Running",
@@ -110,13 +111,12 @@ export const Running: Story = {
 };
 
 /**
- * The focused row, and the only pulse on the screen. The badge carries it
- * because it sits in the same fixed column on every row, so the motion appears
- * in one predictable place rather than moving with the workflow's length. The
- * step bar beside it stays still.
+ * The same row with the keyboard cursor on it: a 2px `--accent` left edge and
+ * `--bg-hover`. Focus adds the edge and nothing else — the pulse was already
+ * there.
  */
 export const RunningFocused: Story = {
-  args: { ...Running.args, focused: true, pulsing: true } as never,
+  args: { ...Running.args, focused: true } as never,
 };
 
 /** `--accent-muted` fill. Selected and focused are different states and coexist. */

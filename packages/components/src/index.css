@@ -39,3 +39,8 @@
 @import "./compositions/StatusBar/StatusBar.css";
 @import "./compositions/JobLogReference/JobLogReference.css";
 @import "./compositions/EvidenceTrail/EvidenceTrail.css";
+
+/* Screens. Not components — an arrangement of the above around fixture data,
+   with nothing to export. One stylesheet, owned by the screens tree, because
+   seven copies of one frame is how the seven drift apart. */
+@import "./screens/screens.css";

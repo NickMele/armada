@@ -45,12 +45,15 @@
 }
 
 /* The accent left edge states which row you are on. The surface is constant;
-   selection adds the edge. --accent-muted is the contract's value for the
-   rail's current row — the M1 drawing uses --bg-hover, which is the table's
-   focus fill and says "your cursor is here" rather than "you are on this
-   step". Contract wins; reported. */
+   selection adds the edge.
+
+   --bg-hover, which is what the M1 drawing draws. The contract's step-activity
+   section says the rail's current row keeps an --accent-muted tint; the drawing
+   pairs --bg-hover with the 2px --accent edge, which is the contract's own
+   "focused row" pair. Arrangement is the drawing's, so the drawing wins and the
+   disagreement is reported. */
 .armada-rail__row[data-current] {
-  background: var(--accent-muted);
+  background: var(--bg-hover);
   border-left-color: var(--accent);
 }
 

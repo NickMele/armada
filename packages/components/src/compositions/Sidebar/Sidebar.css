@@ -40,14 +40,20 @@
   min-width: 0;
 }
 
-/* The section label. Sentence case — the one legal ALL CAPS is a table header,
-   and this is not one. The M1 drawing uppercases it; the contract does not
-   permit that, so the contract wins. Reported. */
+/* The section label. ALL CAPS at --tracking-caps, which is what the M1 drawing
+   draws — and what it draws for every eyebrow label on every screen ("What
+   ran", "Evidence so far", "Log", "Check output", "Where the work is",
+   "Evidence"). The contract's typography section calls a 13px table header "the
+   one legal ALL CAPS"; the drawing disagrees in seven places, so the
+   parenthetical is what is stale. The drawing wins and the disagreement is
+   reported. */
 .armada-sidebar__section {
   padding: var(--space-4) var(--space-2) var(--space-1);
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
   color: var(--fg-subtle);
 }
 

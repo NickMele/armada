@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Check, CircleDot, Clock, GitBranch, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Cpu, GitBranch, Power, UserCheck, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { JobRowStacked } from "../JobRowStacked/JobRowStacked";
@@ -20,15 +20,24 @@ export default meta;
 
 type Story = StoryObj<typeof ActiveJobsList>;
 
+/* The first field of a job that has not run: the workflow's id in mono, then
+   how many steps it has in sans. The drawing writes no "Workflow" label — the
+   value names itself. */
+const WORKFLOW = (
+  <>
+    <span style={{ fontFamily: "var(--font-mono)" }}>bug</span>, 4 steps
+  </>
+);
+
 const menu = [
   { label: "Copy job id", shortcut: "⌘C" },
   { label: "Kill", shortcut: "x", danger: true },
 ];
 
 /**
- * Six states, one row shape. The running row is focused, so it carries the one
- * pulse on the screen — fourteen breathing dots is what the motion rules
- * forbid outright.
+ * Six states, one row shape. The one running row carries the one pulse on the
+ * screen, focused or not — there is only ever one, because Fleet runs one
+ * drone at M1, and fourteen breathing dots is what the motion rules forbid.
  */
 export const SixStates: Story = {
   args: {
@@ -36,6 +45,12 @@ export const SixStates: Story = {
     summary: "6 jobs. 1 awaiting approval.",
     action: <Button variant="primary">New job</Button>,
     children: [
+      // "Needs approval" is what `enum-verbs.toml` holds for
+      // `job_status.awaiting_approval`, and its note says the wording is
+      // deliberate: the badge means a person must act, not that time is
+      // passing. The M1 drawing writes "Awaiting approval". A status label is
+      // never written by hand, so the registry wins here where the drawing
+      // wins on arrangement. Reported.
       <JobRowStacked
         key="a"
         status="awaiting-approval"
@@ -44,7 +59,7 @@ export const SixStates: Story = {
         headline="Coalesce concurrent token refreshes"
         jobId="job_7c31"
         fields={[
-          { label: "Workflow", value: "bug, 4 steps", quiet: true },
+          { value: WORKFLOW },
           { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
           { value: "Not started", quiet: true },
           { value: "created 09:12", quiet: true },
@@ -55,12 +70,16 @@ export const SixStates: Story = {
       <JobRowStacked
         key="b"
         status="not-started"
-        statusIcon={Clock}
+        // `cpu`, not `clock`. `enum-verbs.toml` gives job_status.queued the
+        // clock and then says a reason's verb and glyph replace it where one is
+        // set; M1's only queued reason is waiting_on_resources, whose glyph is
+        // cpu. The drawing draws cpu for the same reason.
+        statusIcon={Cpu}
         statusLabel="Queued"
         headline="Retire the legacy poke path"
         jobId="job_8b42"
         fields={[
-          { label: "Workflow", value: "bug, 4 steps", quiet: true },
+          { value: WORKFLOW },
           { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
           { value: "Waiting on a drone", emphasis: true },
           { value: "approved 09:20", quiet: true },
@@ -75,7 +94,6 @@ export const SixStates: Story = {
         statusLabel="Running"
         headline="Split the settings reducer"
         jobId="job_2d90bb"
-        focused
         pulsing
         fields={[
           { value: "fix/settings-split", mono: true, icon: GitBranch, copyValue: "fix/settings-split" },

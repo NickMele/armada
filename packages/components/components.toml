@@ -108,7 +108,7 @@
 [components."Doctor condition strip"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Triage Queue"]
 
 [components.DropdownMenu]
@@ -119,13 +119,13 @@
 [components."Escalation payload"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Monitor Active Work"]
 
 [components."Evidence card"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Triage Queue"]
 
 [components."Evidence trail"]
@@ -143,13 +143,13 @@
 [components."Group and sub-group heading"]
   group = "Data"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Triage Queue"]
 
 [components."Hard prerequisite lock"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   icons = ["lock", "flag"]
   journeys = ["Monitor Active Work"]
 
@@ -172,7 +172,7 @@
 [components."Job detail header actions"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Monitor Active Work"]
 
 [components."Job log reference"]
@@ -189,7 +189,7 @@
 [components."Judge panel row"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Monitor Active Work"]
 
 [components.kbd]
@@ -212,7 +212,7 @@
 [components."Manifest edit form"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Run and edit a Manifest"]
 
 [components."Manifest scope picker"]
@@ -258,13 +258,13 @@
 [components."Registry list — Checks and Commands"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Run and edit a Manifest"]
 
 [components."Run result panel"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Run and edit a Manifest"]
 
 [components.ScrollArea]
@@ -300,7 +300,7 @@
 
 [components."Split button"]
   group = "Core"
-  kind = "Composition"
+  kind = "non-shadcn primitive"
   status = "In the kit"
   journeys = ["Monitor Active Work"]
 
@@ -342,6 +342,12 @@
   status = "In the kit"
   journeys = ["Triage Queue"]
 
+[components.Textarea]
+  group = "Forms"
+  kind = "shadcn primitive"
+  status = "In the kit"
+  journeys = ["Dispatch a Job"]
+
 [components.Toast]
   group = "Overlay"
   kind = "shadcn primitive"
@@ -355,7 +361,7 @@
 [components."Verify panel"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "In the kit"
+  status = "Missing"
   journeys = ["Run and edit a Manifest"]
 
 [components."Workflow graph"]

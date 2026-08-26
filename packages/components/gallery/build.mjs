@@ -32,11 +32,21 @@ const groups = collect();
 // generated output from source — the same way `storybook-static` did.
 mkdirSync(join(here, "dist"), { recursive: true });
 
+/* Every tree under src/ that owns stylesheets, in the order index.css imports
+   them. Primitives alone was the original list, written when primitives were
+   the only tree; every composition rendered here unstyled and the gallery said
+   nothing about it. A screen is an arrangement of compositions, so the same
+   omission would have made every screen unreadable. */
 const css = [readFileSync(join(root, "../tokens/tokens.css"), "utf8")];
-for (const dir of readdirSync(join(root, "src/primitives"))) {
-  const f = join(root, "src/primitives", dir, `${dir}.css`);
-  try { css.push(readFileSync(f, "utf8")); } catch {}
+for (const tree of ["primitives", "compositions"]) {
+  for (const dir of readdirSync(join(root, "src", tree))) {
+    const f = join(root, "src", tree, dir, `${dir}.css`);
+    try { css.push(readFileSync(f, "utf8")); } catch {}
+  }
 }
+/* Screens are stories, not components, so their layout lives in one stylesheet
+   the screens tree owns rather than one file per screen. */
+try { css.push(readFileSync(join(root, "src/screens/screens.css"), "utf8")); } catch {}
 
 const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 

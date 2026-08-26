@@ -23,10 +23,12 @@ import { Badge } from "../../primitives/Badge/Badge";
  * decision would be fourteen accent blocks; urgency is carried by the badge
  * and the ordering, and the accent is spent on job detail.
  *
- * **The badge carries the pulse, on the focused row only.** It sits in the same
+ * **The badge carries the pulse; the bar never does.** It sits in the same
  * fixed column on every row, so the motion appears in one predictable place
- * rather than moving with the workflow's length. The step bar never pulses,
- * and a rail — where one exists — takes the pulse instead.
+ * rather than moving with the workflow's length. Focus has nothing to do with
+ * it: a running row pulses whether or not the cursor is on it. The rule is one
+ * pulse per screen, on the most specific mark present — so on job detail the
+ * rail takes it and this badge goes static, which is what `pulsing` is for.
  */
 
 export type JobRowField = {
