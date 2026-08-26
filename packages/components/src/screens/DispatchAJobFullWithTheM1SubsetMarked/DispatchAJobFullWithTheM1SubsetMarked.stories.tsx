@@ -27,7 +27,6 @@ export const Dispatch: Story = {
     <div className="armada-screen">
       <div className="armada-screen__row">
         <div className="armada-screen__col" data-width="card">
-          <span className="armada-screen__caption">What M1 renders</span>
           <JobComposer
             title="Coalesce concurrent token refreshes"
             brief="A burst of 401s should produce one refresh call, not one per request. Keep the retry ceiling where it is."
@@ -39,12 +38,6 @@ export const Dispatch: Story = {
             ]}
             provenance="Dispatched by you"
           />
-          <span className="armada-screen__caption" data-note>
-            Same card, same order, same button, one field set smaller. The glance strip
-            survives with the two values M1 can measure before dispatch — how long the
-            workflow is and which Checks gate it — because a card whose whole design is a
-            forced glance cannot ship with nothing to glance at.
-          </span>
         </div>
       </div>
     </div>

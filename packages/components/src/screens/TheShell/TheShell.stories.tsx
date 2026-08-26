@@ -57,36 +57,6 @@ export const Shell: Story = {
           />
         </div>
       </div>
-
-      <span className="armada-screen__eyebrow">
-        The status bar says Fleet out loud — three states
-      </span>
-      <div className="armada-screen__col">
-        <div className="armada-screen__bar-frame">
-          <StatusBar
-            fleet="running"
-            fleetLabel="Fleet running"
-            detail="pid 4417 · port 7411 · 1 drone"
-            spend="today ~$4.80"
-          />
-        </div>
-        <div className="armada-screen__bar-frame">
-          <StatusBar
-            fleet="not-running"
-            fleetLabel="Fleet is not running"
-            detail="no runtime file at ~/.armada/fleet.json"
-            advice="Start it from the terminal."
-          />
-        </div>
-        <div className="armada-screen__bar-frame">
-          <StatusBar
-            fleet="unreachable"
-            fleetLabel="Fleet unreachable"
-            detail="pid 4417 alive on port 7411 · no response for 20s"
-            advice="The last job state read is 20s old."
-          />
-        </div>
-      </div>
     </div>
   ),
 };
