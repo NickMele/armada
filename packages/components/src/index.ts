@@ -30,7 +30,11 @@ export * from "./primitives/Tooltip/Tooltip";
 
 // Compositions — what M1 composes its screens from.
 export * from "./compositions/ActiveJobsList/ActiveJobsList";
+export * from "./compositions/BoardEmptyState/BoardEmptyState";
+export * from "./compositions/EvidenceCard/EvidenceCard";
 export * from "./compositions/EvidenceTrail/EvidenceTrail";
+export * from "./compositions/JobComposer/JobComposer";
+export * from "./compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 export * from "./compositions/JobLogReference/JobLogReference";
 export * from "./compositions/JobRowStacked/JobRowStacked";
 export * from "./compositions/Sidebar/Sidebar";

@@ -1,0 +1,93 @@
+/* Evidence card — a well, because it is a record being read rather than a
+   panel offering anything. The same ground the trail takes, so one submission
+   and a whole trail read as the same kind of thing. */
+.armada-evidence-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  font-family: var(--font-sans);
+}
+
+.armada-evidence-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The glyph keeps its column whether or not one is registered, so the step
+   name starts on the same left edge as the labels beneath it. */
+.armada-evidence-card__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-4);
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.armada-evidence-card__step {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+/* The submission time, at the trailing edge. Mono and set back: it is when,
+   not what, and the card is read for what. */
+.armada-evidence-card__time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The three fields on one label track, so they read down as a column of
+   answers rather than three sentences. 80px — the width the drawing gives the
+   longest of the three labels; no token spells it. */
+.armada-evidence-card__field {
+  display: grid;
+  grid-template-columns: calc(var(--space-12) + var(--space-8)) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.armada-evidence-card__label {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-evidence-card__value {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* shown_by names an artifact the system can point at — a file set, a command,
+   a rendered string — so it is mono, one step under the sans beside it. */
+.armada-evidence-card__value[data-mono] {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-evidence-card__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

@@ -140,6 +140,12 @@
   text-wrap: pretty;
 }
 
+/* The annotation under a region, rather than the label over it. The drawing
+   sets it a step brighter, because it is read and the label is only found. */
+.armada-screen__caption[data-note] {
+  color: var(--fg-muted);
+}
+
 .armada-screen__row {
   display: flex;
   gap: var(--space-4);
@@ -174,13 +180,6 @@
   color: var(--fg-muted);
   white-space: nowrap;
   flex: none;
-}
-
-/* ---- first launch ------------------------------------------------------- */
-
-.armada-screen__empty-slot {
-  height: var(--armada-screen-empty);
-  display: flex;
 }
 
 /* Where an unbuilt region mounts. It keeps the height the drawing gives the
@@ -278,6 +277,12 @@
 
 .armada-screen__col[data-loose] {
   gap: var(--space-4);
+}
+
+/* A column holding one card-width region and its annotation, where the screen
+   frames nothing around it — the component draws its own card. */
+.armada-screen__col[data-width="card"] {
+  width: var(--armada-screen-card);
 }
 
 /* A sunken block: why a job stopped, where its work is, what it handed over. */

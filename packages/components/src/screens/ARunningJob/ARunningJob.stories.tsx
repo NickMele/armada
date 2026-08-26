@@ -1,22 +1,21 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { LucideIcon } from "lucide-react";
-import { ShieldMinus } from "lucide-react";
+import { CircleDot, ShieldMinus } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
+import { EvidenceCard } from "../../compositions/EvidenceCard/EvidenceCard";
+import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 import { JobLogReference } from "../../compositions/JobLogReference/JobLogReference";
 import { WorkflowRail, type WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
-import { Absent } from "../absent";
 
 /**
  * Four steps, two of them ungated. No primary action exists on this screen.
  *
- * **The header is `Job detail header actions`, and it is not built.** The
- * drawing names the whole header block — badge, title, job id, the five facts
- * and Kill — as one `data-component`, so the region is named rather than
- * assembled out of a Badge and a Button on the spot.
+ * **The pulse is on the rail, so the header badge is static.** One pulse per
+ * screen, on the most specific mark present: the rail knows which step is
+ * working and the badge only knows the Job is.
  *
- * **`Evidence card` is not built either.** The evidence trail on a finished job
- * is; a single submission rendered while the job is still running is its own
- * row in the registry and has no story.
+ * The header verb comes from the enum→verb map. It is written into the fixture
+ * because that map is not generated into TypeScript yet.
  */
 const meta: Meta = {
   title: "Screens/A running job",
@@ -88,14 +87,25 @@ export const RunningJob: Story = {
   render: () => (
     <div className="armada-screen">
       <div className="armada-screen__detail">
-        <Absent
-          name="Job detail header actions"
-          note={
-            "Holds the Running badge, static, beside the title “Split the settings " +
-            "reducer” and job_2d90bb; then Step 2 of 4 · Branch fix/settings-split · " +
-            "Elapsed 11m 03s · Spend, estimated ~$1.80 · Dispatched by you; and Kill at " +
-            "the trailing edge, outlined in --status-completed-failed and never filled."
-          }
+        <JobDetailHeaderActions
+          status="running"
+          statusIcon={CircleDot}
+          statusLabel="Running"
+          headline="Split the settings reducer"
+          jobId="job_2d90bb"
+          fields={[
+            { label: "Step", value: "2 of 4", mono: true },
+            {
+              label: "Branch",
+              value: "fix/settings-split",
+              mono: true,
+              copyValue: "fix/settings-split",
+            },
+            { label: "Elapsed", value: "11m 03s", mono: true },
+            { label: "Spend, estimated", value: "~$1.80", mono: true },
+            { label: "Dispatched by you" },
+          ]}
+          actions={<Button variant="destructive">Kill</Button>}
         />
 
         <div className="armada-screen__split">
@@ -106,16 +116,15 @@ export const RunningJob: Story = {
 
           <div className="armada-screen__col">
             <span className="armada-screen__eyebrow">Evidence so far</span>
-            <div className="armada-screen__slot">
-              <Absent
-                name="Evidence card"
-                note={
-                  "Holds one submission — Plan the change, 09:14 — on the three fields the " +
-                  "Evidence MCP tool requires: Claimed, Shown by, Not claimed. Plan the " +
-                  "change is facts_note, so shown_by points at files rather than a command."
-                }
-              />
-            </div>
+            <EvidenceCard
+              icon={NO_GLYPH_IN_REGISTRY}
+              iconLabel="Evidence"
+              step="Plan the change"
+              time="09:14"
+              claimed="settings.rs is split into a reducer and a selector module, with no change in behaviour."
+              shownBy="src/settings.rs → src/settings/reducer.rs, src/settings/selectors.rs"
+              notClaimed="Nothing about the settings UI, and no new tests — the existing suite is the only cover."
+            />
             <span className="armada-screen__eyebrow" data-spaced>
               Log
             </span>

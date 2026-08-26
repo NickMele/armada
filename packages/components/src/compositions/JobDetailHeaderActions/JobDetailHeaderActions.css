@@ -1,0 +1,87 @@
+/* Job detail header actions — the identity of the Job on the leading edge, the
+   act at the trailing one. Items align to the top so the button sits on the
+   title's line rather than floating against a two-line block. */
+.armada-job-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  font-family: var(--font-sans);
+}
+
+.armada-job-head__ident {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-job-head__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Panel heading step. Sentence case, like every heading in Armada. */
+.armada-job-head__title {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+/* The job id identifies and does not describe, so it recedes: mono, the
+   smallest step, and --fg-subtle. */
+.armada-job-head__id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The facts, wrapping rather than truncating. No fact is dropped at any width:
+   each one is here because a decision depends on it. */
+.armada-job-head__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-job-head__fact {
+  white-space: nowrap;
+}
+
+.armada-job-head__value {
+  color: var(--fg-default);
+}
+
+/* Mono means machine-derived, and it is already at the smallest step here, so
+   it takes the family alone. */
+.armada-job-head__value[data-mono] {
+  font-family: var(--font-mono);
+}
+
+/* A machine value copies on click and says so by going to --accent on hover.
+   No `copy` glyph: the affordance token is the affordance. */
+.armada-job-head__value[data-copies] {
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-job-head__value[data-copies]:hover {
+  color: var(--accent);
+}
+
+/* Every button in the group is the same height. On a running job there is one,
+   and it is outlined: no primary exists on this screen. */
+.armada-job-head__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex: none;
+}

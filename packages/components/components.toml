@@ -52,7 +52,7 @@
 [components."Board empty state"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "Missing"
+  status = "In the kit"
   journeys = ["Dispatch a Job"]
 
 [components.Button]
@@ -125,7 +125,7 @@
 [components."Evidence card"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "Missing"
+  status = "In the kit"
   journeys = ["Triage Queue"]
 
 [components."Evidence trail"]
@@ -166,13 +166,13 @@
 [components."Job composer"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "Proposed"
+  status = "In the kit"
   journeys = ["Dispatch a Job"]
 
 [components."Job detail header actions"]
   group = "Bridge surface"
   kind = "Composition"
-  status = "Missing"
+  status = "In the kit"
   journeys = ["Monitor Active Work"]
 
 [components."Job log reference"]

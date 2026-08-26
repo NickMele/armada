@@ -1,0 +1,67 @@
+/* Board empty state — a well where the list would be, so the region reads as
+   the list's own ground rather than as a card floating in it.
+
+   Every measurement is the drawing's, composed from the spacing scale. */
+.armada-board-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  /* 200px — the drawn height. A floor, not a cap: the copy can grow. */
+  min-height: calc(var(--space-12) * 4 + var(--space-2));
+  /* Room for the longest line to wrap before it reaches the edge. */
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-subtle);
+  background: var(--bg-sunken);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  text-align: center;
+}
+
+/* The one line. Stated at --fg-default where the state is a fault to act on.
+   `quiet` steps it to --fg-muted where nothing is wrong, so the action beneath
+   is the only thing carrying weight. Dimming is a token, never an alpha. */
+.armada-board-empty__line {
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+.armada-board-empty__line[data-quiet] {
+  color: var(--fg-muted);
+}
+
+/* The command. Mono because it is machine-derived, and a well of its own on
+   --bg-base so it reads as a thing to take rather than a sentence to read.
+   It copies on click and goes to --accent on hover — no `copy` glyph, and no
+   button beside it that copies it. */
+.armada-board-empty__command {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid var(--border-subtle);
+  background: var(--bg-base);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-board-empty__command:hover {
+  color: var(--accent);
+}
+
+/* What to do with the command, and what Bridge does without being asked
+   again. Stated, not implied: a person who does not know Bridge reconnects on
+   its own will sit waiting for a button that does not exist. */
+.armada-board-empty__note {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

@@ -1,0 +1,103 @@
+/* Job composer — the card's own geometry comes from Card: --bg-raised, a
+   --border-default edge, --radius-md, --pad-card and a --space-3 column gap.
+   Only what the card does not answer is spelled here. */
+
+/* The root exists to shrink: the composer is laid out by whatever holds it,
+   and a flex or grid child with no floor refuses to narrow past its content. */
+.armada-job-composer {
+  min-width: 0;
+}
+
+/* Workflow and Project share a row: one is chosen, one is reported, and they
+   are read together as "what will run, and where". */
+.armada-job-composer__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.armada-job-composer__readonly {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The same label step Input and Select draw, so the two columns line up. */
+.armada-job-composer__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* A reported value, not a field: no edge, no fill, and the control height so
+   it sits on the same line as the select beside it. Mono, because a project
+   name is what Armada read off the workspace, and one step under the sans. */
+.armada-job-composer__static {
+  display: flex;
+  align-items: center;
+  height: var(--h-control);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* The glance strip. A well, because it is reported rather than entered — the
+   fields above are things you type, and these are things Armada measured off
+   the workflow you picked. */
+.armada-job-composer__glance {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+.armada-job-composer__field {
+  display: flex;
+  flex-direction: column;
+  /* 2px: a label and its value are one block, not two rows. */
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+.armada-job-composer__field-label {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-job-composer__field-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+/* The footer takes a rule above it: the decision is a different act from
+   filling the form, and the line is what separates them. */
+.armada-job-composer__foot {
+  justify-content: space-between;
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+/* Where the job came from. Plain sans in --fg-subtle — provenance is never a
+   chip, and a bordered pill is a Job state and nothing else. */
+.armada-job-composer__provenance {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Cancel and Approve, in that order, at one height. The accent fill is the
+   only one in the milestone and it sits at the trailing edge, where the
+   reading ends. */
+.armada-job-composer__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
