@@ -97,6 +97,29 @@ pub enum Actor {
     Drone,
 }
 
+impl Actor {
+    /// Every variant. **`domain/` has no row for this one** — the actor
+    /// vocabulary is the log envelope's, not the registry's, so the order is
+    /// the enum's own and there is no key to be verbatim against.
+    pub const ALL: &'static [Actor] = &[Actor::Human, Actor::Fleet, Actor::Drone];
+
+    /// The wire value. `job_events.actor` and `scope_revisions[].approved_by`
+    /// are both stored from here, so the two spellings cannot diverge.
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Actor::Human => "human",
+            Actor::Fleet => "fleet",
+            Actor::Drone => "drone",
+        }
+    }
+
+    /// Read a stored value back. `None` where it is not one of the three,
+    /// which is a row written by something that did not share this enum.
+    pub fn from_wire(value: &str) -> Option<Actor> {
+        Actor::ALL.iter().copied().find(|a| a.as_wire() == value)
+    }
+}
+
 /// A value inside [`Envelope::fields`].
 ///
 /// Deliberately small. `fields` is for structured data, and a type that can

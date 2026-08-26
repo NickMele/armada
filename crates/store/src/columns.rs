@@ -24,12 +24,11 @@
 //! quietly missing it, which is the failure the version number exists for.
 
 use core_model::{
-    AcceptanceCriterion, CriteriaOwed, CriterionId, DependencyEdge, EscalationTrigger, JobId,
-    RepoPath, ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid,
+    AcceptanceCriterion, Actor, CriteriaOwed, CriterionId, CriterionSource, DependencyDirection,
+    DependencyEdge, EscalationTrigger, JobId, PilotReason, RepoPath, ScopeRevision,
+    ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid,
 };
 use serde_json::{json, Map, Value};
-
-use crate::wire;
 
 /// What a decode says when a shape is not what was written.
 type Malformed = String;
@@ -101,7 +100,7 @@ pub fn write_acceptance_criteria(criteria: &[AcceptanceCriterion]) -> String {
             json!({
                 "criterion_id": criterion.criterion_id.as_str(),
                 "text": criterion.text,
-                "source": wire::criterion_source_wire(criterion.source),
+                "source": criterion.source.as_wire(),
             })
         })
         .collect();
@@ -117,7 +116,7 @@ pub fn read_acceptance_criteria(stored: &str) -> Result<Vec<AcceptanceCriterion>
             Ok(AcceptanceCriterion {
                 criterion_id: CriterionId::new(text(entry, "criterion_id")?),
                 text: text(entry, "text")?,
-                source: wire::criterion_source_from_wire(&source)
+                source: CriterionSource::from_wire(&source)
                     .ok_or_else(|| format!("`source` holds `{source}`"))?,
             })
         })
@@ -131,7 +130,7 @@ pub fn write_dependencies(edges: &[DependencyEdge]) -> String {
         .iter()
         .map(|edge| {
             json!({
-                "direction": wire::direction_wire(edge.direction),
+                "direction": edge.direction.as_wire(),
                 "peer": edge.peer.as_str(),
             })
         })
@@ -146,7 +145,7 @@ pub fn read_dependencies(stored: &str) -> Result<Vec<DependencyEdge>, Malformed>
             let entry = object(entry)?;
             let direction = text(entry, "direction")?;
             Ok(DependencyEdge {
-                direction: wire::direction_from_wire(&direction)
+                direction: DependencyDirection::from_wire(&direction)
                     .ok_or_else(|| format!("`direction` holds `{direction}`"))?,
                 peer: JobId::carried(Ulid::carried(text(entry, "peer")?)),
             })
@@ -168,7 +167,7 @@ pub fn write_scope_revisions(revisions: &[ScopeRevision]) -> String {
                 "atomic_after": revision.atomic_after,
                 "rationale": revision.rationale,
                 "outcome": revision.outcome.as_str(),
-                "approved_by": wire::actor_wire(revision.approved_by),
+                "approved_by": revision.approved_by.as_wire(),
                 "at": revision.at.as_str(),
             })
         })
@@ -199,7 +198,7 @@ pub fn read_scope_revisions(stored: &str) -> Result<Vec<ScopeRevision>, Malforme
                 atomic_after: flag(entry, "atomic_after")?,
                 rationale: text(entry, "rationale")?,
                 outcome: ScopeRevisionOutcome::recorded(text(entry, "outcome")?),
-                approved_by: wire::actor_from_wire(&approved_by)
+                approved_by: Actor::from_wire(&approved_by)
                     .ok_or_else(|| format!("`approved_by` holds `{approved_by}`"))?,
                 at: Timestamp::from_rfc3339(text(entry, "at")?),
             })
@@ -242,7 +241,7 @@ pub fn read_reason(kind: &str, value: Option<&str>) -> Result<TransitionReason, 
         ("escalation", Some(trigger)) => EscalationTrigger::from_wire(trigger)
             .map(TransitionReason::Escalation)
             .ok_or_else(|| format!("`{trigger}` is not an escalation trigger")),
-        ("pilot", Some(pilot)) => wire::pilot_reason_from_wire(pilot)
+        ("pilot", Some(pilot)) => PilotReason::from_wire(pilot)
             .map(TransitionReason::Pilot)
             .ok_or_else(|| format!("`{pilot}` is not a pilot reason")),
         ("attestation", Some(owed)) => read_criteria_owed(owed),

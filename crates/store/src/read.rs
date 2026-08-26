@@ -23,9 +23,9 @@
 //! put it back.
 
 use core_model::{
-    DispatchOrigin, Facts, GateManifest, Job, JobId, JobStatus, ManifestId, ModelName, NewJob,
-    Origin, RepoPath, StepId, StepSeed, Subject, Timestamp, Ulid, Urgency, WorkflowId,
-    WriteTargets,
+    Actor, DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, JobStatus, ManifestId,
+    ModelName, NewJob, Origin, RepoPath, StepId, StepSeed, Subject, Timestamp, Ulid, Urgency,
+    WorkflowId, WriteTargets,
 };
 use rusqlite::Row;
 
@@ -33,7 +33,6 @@ use crate::columns;
 use crate::error::{fault, LoadAllError, LoadJobError, RowError};
 use crate::fold::{replay, RecordedEvent};
 use crate::open::Store;
-use crate::wire;
 
 /// What the boot read produced.
 #[derive(Debug, Default)]
@@ -203,7 +202,7 @@ impl Store {
 
         let origin = enum_value(Origin::from_wire, "jobs", "origin", &string(row, "origin")?)?;
         let dispatched_by = dispatched_by(row)?;
-        let created = match wire::top_level_origin(origin) {
+        let created = match origin.top_level() {
             Some(top_level) => {
                 // `dispatched_by` wins where the two disagree, and the
                 // top-level constructor has nowhere to put one. Refused rather
@@ -271,7 +270,7 @@ impl Store {
                 let reason: Option<String> = maybe(row, "not_run_reason")?;
                 Ok(GateManifest {
                     manifest_id: ManifestId::carried(Ulid::carried(string(row, "manifest_id")?)),
-                    outcome: wire::gate_outcome_from_wire(&outcome, reason.as_deref()).ok_or(
+                    outcome: GateOutcome::from_wire(&outcome, reason.as_deref()).ok_or(
                         RowError::UnknownEnumValue {
                             table: "job_manifests",
                             column: "outcome",
@@ -362,7 +361,7 @@ fn event(row: &Row<'_>) -> Result<RecordedEvent, RowError> {
                 detail,
             }
         })?,
-        actor: wire::actor_from_wire(&actor).ok_or(RowError::UnknownEnumValue {
+        actor: Actor::from_wire(&actor).ok_or(RowError::UnknownEnumValue {
             table: "job_events",
             column: "actor",
             value: actor,

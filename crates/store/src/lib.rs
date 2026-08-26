@@ -53,7 +53,6 @@ mod fold;
 mod open;
 mod read;
 mod schema;
-mod wire;
 mod write;
 
 #[cfg(test)]

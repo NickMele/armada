@@ -167,6 +167,25 @@ impl Origin {
     pub fn from_wire(value: &str) -> Option<Origin> {
         Origin::ALL.iter().copied().find(|o| o.as_wire() == value)
     }
+
+    /// The narrowing back to [`TopLevelOrigin`], where there is one.
+    ///
+    /// The inverse of [`From<TopLevelOrigin> for Origin`](TopLevelOrigin), and
+    /// here for the same reason that conversion is: both are statements about
+    /// which origins a top-level Job may claim, and a reader rebuilding a Job
+    /// needs the pair to pick the constructor that made it.
+    ///
+    /// [`SubDispatched`](Self::SubDispatched) returns `None`, which is not a
+    /// failure — it is the caller being told to use the other constructor.
+    pub fn top_level(&self) -> Option<TopLevelOrigin> {
+        match self {
+            Origin::AutoDetected => Some(TopLevelOrigin::AutoDetected),
+            Origin::Manual => Some(TopLevelOrigin::Manual),
+            Origin::HelmDrafted => Some(TopLevelOrigin::HelmDrafted),
+            Origin::WorkflowTriggered => Some(TopLevelOrigin::WorkflowTriggered),
+            Origin::SubDispatched => None,
+        }
+    }
 }
 
 /// The four origins a Job with no `dispatched_by` may claim.
@@ -241,6 +260,34 @@ pub enum CriterionSource {
     Attested,
 }
 
+impl CriterionSource {
+    /// Every variant, in the order `domain/enum-verbs.toml` names the three
+    /// verdict vocabularies keyed by them.
+    pub const ALL: &'static [CriterionSource] = &[
+        CriterionSource::Check,
+        CriterionSource::Judge,
+        CriterionSource::Attested,
+    ];
+
+    /// The wire value, which is also the suffix of the vocabulary key —
+    /// `criterion_verdict_check`, `_judge`, `_attested`.
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            CriterionSource::Check => "check",
+            CriterionSource::Judge => "judge",
+            CriterionSource::Attested => "attested",
+        }
+    }
+
+    /// Read a stored value back. `None` where it is not one of the three.
+    pub fn from_wire(value: &str) -> Option<CriterionSource> {
+        CriterionSource::ALL
+            .iter()
+            .copied()
+            .find(|s| s.as_wire() == value)
+    }
+}
+
 /// What the Job must satisfy to be done, in the requester's words.
 ///
 /// Frozen at creation. [`Job`](crate::Job) offers no method that edits,
@@ -258,6 +305,28 @@ pub struct AcceptanceCriterion {
 pub enum DependencyDirection {
     DependsOn,
     Blocks,
+}
+
+impl DependencyDirection {
+    /// Both variants, in the order `dependencies` names them.
+    pub const ALL: &'static [DependencyDirection] =
+        &[DependencyDirection::DependsOn, DependencyDirection::Blocks];
+
+    /// The wire value, spelled as `job-fields.toml` spells the pair.
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            DependencyDirection::DependsOn => "depends_on",
+            DependencyDirection::Blocks => "blocks",
+        }
+    }
+
+    /// Read a stored value back. `None` where it is neither.
+    pub fn from_wire(value: &str) -> Option<DependencyDirection> {
+        DependencyDirection::ALL
+            .iter()
+            .copied()
+            .find(|d| d.as_wire() == value)
+    }
 }
 
 /// One DAG link, sequencing peer Jobs.
@@ -343,6 +412,32 @@ pub enum NotRunDisposition {
 }
 
 impl NotRunReason {
+    /// Every variant, in the order `not_run_disposition` lists the four.
+    pub const ALL: &'static [NotRunReason] = &[
+        NotRunReason::PathConditionUnmet,
+        NotRunReason::Frozen,
+        NotRunReason::NotDeclared,
+        NotRunReason::ScopeNarrowed,
+    ];
+
+    /// The wire value, which is also the `not_run_disposition` key.
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            NotRunReason::PathConditionUnmet => "path_condition_unmet",
+            NotRunReason::Frozen => "frozen",
+            NotRunReason::NotDeclared => "not_declared",
+            NotRunReason::ScopeNarrowed => "scope_narrowed",
+        }
+    }
+
+    /// Read a stored value back. `None` where it is not one of the four.
+    pub fn from_wire(value: &str) -> Option<NotRunReason> {
+        NotRunReason::ALL
+            .iter()
+            .copied()
+            .find(|r| r.as_wire() == value)
+    }
+
     pub fn disposition(&self) -> NotRunDisposition {
         match self {
             NotRunReason::PathConditionUnmet | NotRunReason::Frozen => NotRunDisposition::Expected,
@@ -357,6 +452,40 @@ pub enum GateOutcome {
     RanAndPassed,
     RanAndFailed,
     DidNotRun(NotRunReason),
+}
+
+impl GateOutcome {
+    /// The outcome, and the reason where the outcome has one.
+    ///
+    /// Two values rather than one, because a did-not-run carries a reason and
+    /// the other two do not — the same absent-versus-null rule the log
+    /// envelope holds. The second is `Some` exactly when there is a reason,
+    /// never as a stand-in for one.
+    ///
+    /// No `ALL`, and so no scan: [`DidNotRun`](Self::DidNotRun) carries a
+    /// payload, and a constant listing every variant could not name it.
+    pub fn as_wire(&self) -> (&'static str, Option<&'static str>) {
+        match self {
+            GateOutcome::RanAndPassed => ("ran_and_passed", None),
+            GateOutcome::RanAndFailed => ("ran_and_failed", None),
+            GateOutcome::DidNotRun(reason) => ("did_not_run", Some(reason.as_wire())),
+        }
+    }
+
+    /// Read the two stored values back. `None` where the outcome is not one of
+    /// the three, **or where the reason disagrees with it** — a
+    /// `ran_and_passed` carrying a reason, or a `did_not_run` without one, is
+    /// a row no writer here produces.
+    pub fn from_wire(outcome: &str, reason: Option<&str>) -> Option<GateOutcome> {
+        match (outcome, reason) {
+            ("ran_and_passed", None) => Some(GateOutcome::RanAndPassed),
+            ("ran_and_failed", None) => Some(GateOutcome::RanAndFailed),
+            ("did_not_run", Some(reason)) => {
+                NotRunReason::from_wire(reason).map(GateOutcome::DidNotRun)
+            }
+            _ => None,
+        }
+    }
 }
 
 /// One Manifest whose Checks must gate this Job, and what they did.

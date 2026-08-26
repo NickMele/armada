@@ -144,7 +144,65 @@ fn every_wire_value_round_trips() {
     for urgency in Urgency::ALL {
         assert_eq!(Urgency::from_wire(urgency.as_wire()), Some(*urgency));
     }
+    for source in CriterionSource::ALL {
+        assert_eq!(CriterionSource::from_wire(source.as_wire()), Some(*source));
+    }
+    for direction in DependencyDirection::ALL {
+        assert_eq!(
+            DependencyDirection::from_wire(direction.as_wire()),
+            Some(*direction)
+        );
+    }
+    for reason in NotRunReason::ALL {
+        assert_eq!(NotRunReason::from_wire(reason.as_wire()), Some(*reason));
+    }
+    for reason in PilotReason::ALL {
+        assert_eq!(PilotReason::from_wire(reason.as_wire()), Some(*reason));
+    }
+    for actor in Actor::ALL {
+        assert_eq!(Actor::from_wire(actor.as_wire()), Some(*actor));
+    }
     assert_eq!(JobStatus::from_wire("in_progress"), None);
+}
+
+/// [`GateOutcome`] has a payload, so it has no `ALL` to scan. The set it round
+/// trips over is built here instead — every variant, and every reason the one
+/// that carries a reason can carry.
+#[test]
+fn every_gate_outcome_round_trips_including_each_reason() {
+    let mut outcomes = vec![GateOutcome::RanAndPassed, GateOutcome::RanAndFailed];
+    outcomes.extend(
+        NotRunReason::ALL
+            .iter()
+            .copied()
+            .map(GateOutcome::DidNotRun),
+    );
+    for outcome in outcomes {
+        let (stored, reason) = outcome.as_wire();
+        assert_eq!(GateOutcome::from_wire(stored, reason), Some(outcome));
+    }
+    // The reason column is `Some` exactly when there is a reason. Neither
+    // mismatch reads back as an outcome.
+    assert_eq!(
+        GateOutcome::from_wire("ran_and_passed", Some("frozen")),
+        None
+    );
+    assert_eq!(GateOutcome::from_wire("did_not_run", None), None);
+    assert_eq!(GateOutcome::from_wire("did_not_run", Some("bored")), None);
+}
+
+/// The narrowing back from [`Origin`], which the rebuild needs to pick a
+/// constructor. Round trips through `From<TopLevelOrigin>` for the four, and
+/// declines for the one written by the other constructor.
+#[test]
+fn every_top_level_origin_narrows_back_to_itself() {
+    for origin in Origin::ALL {
+        match origin.top_level() {
+            Some(top_level) => assert_eq!(Origin::from(top_level), *origin),
+            None => assert_eq!(*origin, Origin::SubDispatched),
+        }
+    }
+    assert!(Origin::SubDispatched.top_level().is_none());
 }
 
 #[test]
@@ -154,6 +212,10 @@ fn the_registrys_counts_are_what_the_enums_hold() {
     assert_eq!(EscalationTrigger::ALL.len(), 13);
     assert_eq!(Origin::ALL.len(), 5);
     assert_eq!(PilotReason::ALL.len(), 3);
+    assert_eq!(CriterionSource::ALL.len(), 3);
+    assert_eq!(DependencyDirection::ALL.len(), 2);
+    assert_eq!(NotRunReason::ALL.len(), 4);
+    assert_eq!(Actor::ALL.len(), 3);
 }
 
 #[test]

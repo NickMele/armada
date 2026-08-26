@@ -45,7 +45,7 @@ pub use job::{
     DependencyEdge, DispatchOrigin, DroneId, Edge, EscalationTrigger, Facts, GateManifest,
     GateOutcome, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId,
     ModelName, NewJob, NotRunDisposition, NotRunReason, Origin, PilotReason, RepoPath,
-    ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, StepState, StepVerdict, Subject,
-    Target, TopLevelOrigin, Transitioned, TransitionReason, TriggerKind, TriggerLevel, Urgency,
-    WorkflowId, WriteTargets, EDGES,
+    ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, StepState, StepVerdict, Subject, Target,
+    TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId,
+    WriteTargets, EDGES,
 };

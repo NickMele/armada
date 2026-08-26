@@ -117,6 +117,15 @@ impl PilotReason {
             PilotReason::Assist => "assist",
         }
     }
+
+    /// Read a stored value back. `None` where it is not one of the three
+    /// `piloted` names as its `reason_vocabulary`.
+    pub fn from_wire(value: &str) -> Option<PilotReason> {
+        PilotReason::ALL
+            .iter()
+            .copied()
+            .find(|r| r.as_wire() == value)
+    }
 }
 
 /// The criteria a Job owes outside Armada. **Never empty.**

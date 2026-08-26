@@ -32,7 +32,6 @@ use rusqlite::Transaction;
 use crate::columns;
 use crate::error::{fault, WriteError};
 use crate::open::Store;
-use crate::wire;
 
 impl Store {
     /// Store a Job as created. **Not an upsert** — a second call with the same
@@ -146,7 +145,7 @@ impl Store {
                 event.to().as_wire(),
                 reason_kind,
                 reason_value,
-                wire::actor_wire(event.actor()),
+                event.actor().as_wire(),
                 event.at().as_str(),
             ],
         )
@@ -214,7 +213,7 @@ fn write_manifests(tx: &Transaction<'_>, job: &Job) -> Result<(), WriteError> {
             manifest_id,
             outcome,
         } = gate;
-        let (outcome, not_run_reason) = wire::gate_outcome_wire(*outcome);
+        let (outcome, not_run_reason) = outcome.as_wire();
         tx.execute(
             "INSERT INTO job_manifests (job_id, ordinal, manifest_id, outcome, not_run_reason)
              VALUES (?1, ?2, ?3, ?4, ?5)",
