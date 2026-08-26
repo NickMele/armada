@@ -115,7 +115,10 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--weight-", Slot::Ns("font-weight")),
     // Both are 20px and both derive to `row-stacked`. The floor keeps the
     // plain key; the padding says what it is.
-    ("--pad-row-stacked", Slot::Named("spacing", "row-stacked-pad")),
+    (
+        "--pad-row-stacked",
+        Slot::Named("spacing", "row-stacked-pad"),
+    ),
     // Colours.
     ("--bg-", Slot::NsFull("color")),
     ("--fg-", Slot::NsFull("color")),
@@ -132,7 +135,10 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--w-", Slot::Ns("spacing")),
     ("--z-", Slot::CssOnly("a stacking order, not a scale value")),
     ("--dot", Slot::Named("spacing", "dot")),
-    ("--edge-active", Slot::CssOnly("a border width read beside --edge-* colours")),
+    (
+        "--edge-active",
+        Slot::CssOnly("a border width read beside --edge-* colours"),
+    ),
     ("--space-", Slot::Ns("spacing")),
     ("--h-", Slot::Ns("spacing")),
     ("--pad-", Slot::Ns("spacing")),
@@ -140,14 +146,38 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--sidebar-", Slot::Ns("spacing")),
     ("--palette-", Slot::Ns("spacing")),
     // No namespace carries these.
-    ("--duration-", Slot::CssOnly("v4 has no --duration-* namespace; read it in CSS")),
-    ("--tooltip-delay", Slot::CssOnly("v4 has no --delay-* namespace; read it in CSS")),
-    ("--border-width", Slot::CssOnly("a hairline every edge reads; not a scale")),
-    ("--focus-ring", Slot::CssOnly("an outline shorthand, not a scale value")),
-    ("--focus-ring-offset", Slot::CssOnly("paired with --focus-ring")),
-    ("--row-focus-bar", Slot::CssOnly("a border shorthand, not a scale value")),
-    ("--window-floor", Slot::CssOnly("a window bound the main process reads")),
-    ("--layout-breakpoint", Slot::CssOnly("a media query bound, not a utility")),
+    (
+        "--duration-",
+        Slot::CssOnly("v4 has no --duration-* namespace; read it in CSS"),
+    ),
+    (
+        "--tooltip-delay",
+        Slot::CssOnly("v4 has no --delay-* namespace; read it in CSS"),
+    ),
+    (
+        "--border-width",
+        Slot::CssOnly("a hairline every edge reads; not a scale"),
+    ),
+    (
+        "--focus-ring",
+        Slot::CssOnly("an outline shorthand, not a scale value"),
+    ),
+    (
+        "--focus-ring-offset",
+        Slot::CssOnly("paired with --focus-ring"),
+    ),
+    (
+        "--row-focus-bar",
+        Slot::CssOnly("a border shorthand, not a scale value"),
+    ),
+    (
+        "--window-floor",
+        Slot::CssOnly("a window bound the main process reads"),
+    ),
+    (
+        "--layout-breakpoint",
+        Slot::CssOnly("a media query bound, not a utility"),
+    ),
 ];
 
 /// One declared custom property, with the comment that explains it.
@@ -173,9 +203,15 @@ pub fn read(root: &Path) -> Result<(Vec<String>, Vec<Token>), String> {
     // order matter, and taking the name means a refetch needs no hand edit.
     let mut order = Vec::new();
     for line in styles.lines() {
-        let Some(rest) = line.trim().strip_prefix("@import \"") else { continue };
-        let Some(path) = rest.split('"').next() else { continue };
-        let Some(name) = path.rsplit('/').next() else { continue };
+        let Some(rest) = line.trim().strip_prefix("@import \"") else {
+            continue;
+        };
+        let Some(path) = rest.split('"').next() else {
+            continue;
+        };
+        let Some(name) = path.rsplit('/').next() else {
+            continue;
+        };
         order.push(name.to_string());
     }
     if order.is_empty() {
@@ -269,7 +305,9 @@ fn parse(text: &str, file: &str) -> Vec<Token> {
                 if !decl.starts_with("--") {
                     continue;
                 }
-                let Some((name, rest)) = decl.split_once(':') else { continue };
+                let Some((name, rest)) = decl.split_once(':') else {
+                    continue;
+                };
                 let value = rest.trim().to_string();
                 if value.is_empty() {
                     continue;
@@ -356,8 +394,14 @@ pub fn outputs(root: &Path) -> Result<Vec<(String, String)>, String> {
         return Err("no tokens parsed — the sources are present and declare nothing".into());
     }
     Ok(vec![
-        ("packages/tokens/tokens.css".into(), tokens_css(root, &sources)),
+        (
+            "packages/tokens/tokens.css".into(),
+            tokens_css(root, &sources),
+        ),
         ("packages/tokens/tokens.json".into(), tokens_json(&tokens)),
-        ("packages/tokens/tokens.theme.css".into(), theme_css(&tokens)?),
+        (
+            "packages/tokens/tokens.theme.css".into(),
+            theme_css(&tokens)?,
+        ),
     ])
 }

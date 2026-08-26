@@ -81,9 +81,10 @@ pub fn the_registry_and_the_edge_table_hold_the_same_edges(root: &Path) -> Repor
     // needs to know is only whether the spellings arrived.
     let mut reading = Report::new("reading the enums");
     let spellings = super::wire_spellings(root, &mut reading);
-    let (Some(statuses), Some(triggers)) =
-        (spellings.get("JobStatus"), spellings.get("EscalationTrigger"))
-    else {
+    let (Some(statuses), Some(triggers)) = (
+        spellings.get("JobStatus"),
+        spellings.get("EscalationTrigger"),
+    ) else {
         report.fail(
             "`JobStatus` and `EscalationTrigger` did not read — see the rule above. \
              Nothing can be compared against spellings that were not found",
@@ -184,8 +185,7 @@ fn check_shape(rows: &[EdgeRow], path: &str, report: &mut Report) {
 
 /// The set both ways, and the trigger inside every pair present on both sides.
 fn compare(registry: &[EdgeRow], table: &[EdgeRow], report: &mut Report) {
-    let wired: BTreeMap<(String, String), &EdgeRow> =
-        table.iter().map(|e| (e.pair(), e)).collect();
+    let wired: BTreeMap<(String, String), &EdgeRow> = table.iter().map(|e| (e.pair(), e)).collect();
     let sanctioned: BTreeMap<(String, String), &EdgeRow> =
         registry.iter().map(|e| (e.pair(), e)).collect();
 
@@ -247,7 +247,9 @@ fn read_registry(text: &str, report: &mut Report) -> Vec<EdgeRow> {
             });
             continue;
         }
-        let Some((key, value)) = assignment(line) else { continue };
+        let Some((key, value)) = assignment(line) else {
+            continue;
+        };
         let Some(row) = rows.last_mut() else { continue };
         match key {
             "from" => row.from = value,
@@ -297,7 +299,10 @@ fn read_table(
         return Vec::new();
     };
     let offset = text[..start].lines().count();
-    let body = text[start + header.len()..].split("];").next().unwrap_or_default();
+    let body = text[start + header.len()..]
+        .split("];")
+        .next()
+        .unwrap_or_default();
 
     let mut rows = Vec::new();
     let (mut pending, mut began) = (String::new(), 0usize);
@@ -351,7 +356,11 @@ fn entry(
     // The trailing comma `rustfmt` leaves on a wrapped entry is punctuation, not
     // an argument. Dropping empties here is what keeps a reformatting from
     // reading as a malformed entry.
-    let args: Vec<&str> = args.split(',').map(str::trim).filter(|a| !a.is_empty()).collect();
+    let args: Vec<&str> = args
+        .split(',')
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .collect();
     let expected = match constructor {
         "edge" => 2,
         "triggered" => 3,
@@ -371,7 +380,12 @@ fn entry(
         Some(arg) => Some(spelled(arg, "EscalationTrigger", triggers, line, report)?),
         None => None,
     };
-    Some(EdgeRow { from, to, trigger, line })
+    Some(EdgeRow {
+        from,
+        to,
+        trigger,
+        line,
+    })
 }
 
 /// A variant identifier as the wire spelling it carries.

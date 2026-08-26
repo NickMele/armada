@@ -16,6 +16,7 @@ use std::process::ExitCode;
 
 mod capabilities;
 mod docs;
+mod roadmap;
 mod rules;
 mod rules_design;
 mod rules_docs;
@@ -23,7 +24,6 @@ mod rules_enums;
 mod rules_icons;
 mod rules_protocol;
 mod rules_unsafe;
-mod roadmap;
 mod tokens;
 mod tokens_emit;
 
@@ -41,7 +41,10 @@ pub struct Report {
 
 impl Report {
     pub fn new(rule: &'static str) -> Self {
-        Report { rule, findings: Vec::new() }
+        Report {
+            rule,
+            findings: Vec::new(),
+        }
     }
     pub fn fail(&mut self, what: impl Into<String>) {
         self.findings.push(Finding::Fail(what.into()));
@@ -129,7 +132,9 @@ fn verify_foundations() -> ExitCode {
 
     if fails > 0 {
         println!("\nverify-foundations: RED — {fails} failing, {warns} warning");
-        println!("Red is the expected state until M0 is finished. Each line above names its subject.");
+        println!(
+            "Red is the expected state until M0 is finished. Each line above names its subject."
+        );
         ExitCode::FAILURE
     } else {
         println!("\nverify-foundations: green — {warns} warning");
@@ -258,7 +263,9 @@ pub fn files_with_ext(root: &Path, dir: &Path, exts: &[&str]) -> BTreeSet<String
 /// this looks like from the inside: it grows once per build tool, always after
 /// the fact, and the alternative is a rule that guesses.
 pub fn walk(dir: &Path, visit: &mut impl FnMut(&Path)) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     let mut paths: Vec<PathBuf> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
     paths.sort();
     for path in paths {

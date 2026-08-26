@@ -59,13 +59,19 @@ pub fn no_off_contract_design_value(root: &Path) -> Report {
     // `apps/` would have stopped watching the files it exists for — silently,
     // and while still reporting green.
     let mut files = files_with_ext(root, &root.join("apps"), &EXT);
-    files.extend(files_with_ext(root, &root.join("packages").join("components"), &EXT));
+    files.extend(files_with_ext(
+        root,
+        &root.join("packages").join("components"),
+        &EXT,
+    ));
     for path in files {
         // The renderer's own stylesheet is where the token files are imported.
         if path.ends_with("styles/index.css") {
             continue;
         }
-        let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+        let Ok(text) = fs::read_to_string(root.join(&path)) else {
+            continue;
+        };
         if opted_out(&text, MARKER) {
             continue;
         }
@@ -84,7 +90,11 @@ pub fn no_off_contract_design_value(root: &Path) -> Report {
                 (None, Some(_)) => false,
                 (None, None) => in_block,
             };
-            if was_in_block || code.starts_with("//") || code.starts_with('*') || code.starts_with("/*") {
+            if was_in_block
+                || code.starts_with("//")
+                || code.starts_with('*')
+                || code.starts_with("/*")
+            {
                 continue;
             }
             for what in off_contract(code) {
@@ -100,7 +110,9 @@ pub fn no_off_contract_design_value(root: &Path) -> Report {
 fn opted_out(text: &str, marker: &str) -> bool {
     let lines: Vec<&str> = text.lines().collect();
     lines.iter().enumerate().any(|(i, line)| {
-        let Some((_, reason)) = line.split_once(marker) else { return false };
+        let Some((_, reason)) = line.split_once(marker) else {
+            return false;
+        };
         if reason.trim().len() < 12 {
             return false;
         }
@@ -114,12 +126,18 @@ fn cites_a_question(line: &str) -> bool {
     if line.contains("docs/") {
         return true;
     }
-    let Some(open) = line.find('[') else { return false };
-    let Some(close) = line[open..].find(']') else { return false };
+    let Some(open) = line.find('[') else {
+        return false;
+    };
+    let Some(close) = line[open..].find(']') else {
+        return false;
+    };
     let slug = &line[open + 1..open + close];
     !slug.is_empty()
         && slug.len() <= 60
-        && slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// Whether a bracket's contents test an attribute rather than name a value —
@@ -128,11 +146,15 @@ fn cites_a_question(line: &str) -> bool {
 /// arbitrary property written with a colon, and none of those shapes is an
 /// identifier followed by `=`.
 fn is_attribute_test(inside: &str) -> bool {
-    let Some((name, _)) = inside.split_once('=') else { return false };
+    let Some((name, _)) = inside.split_once('=') else {
+        return false;
+    };
     let name = name.trim_end_matches(['~', '|', '^', '$', '*']);
     !name.is_empty()
         && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
-        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
 }
 
 /// Everything off-contract on one line. All of them, not the first: a line
@@ -197,14 +219,22 @@ fn off_contract(code: &str) -> Vec<String> {
     for rest in code.split('#').skip(1) {
         let hex: String = rest.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
         if (hex.len() == 3 || hex.len() == 6 || hex.len() == 8) && !code.contains("://") {
-            found.push(format!("`#{hex}` is a colour literal — spell it with a token"));
+            found.push(format!(
+                "`#{hex}` is a colour literal — spell it with a token"
+            ));
         }
     }
     for (i, _) in code.match_indices("px") {
-        let before: String = code[..i].chars().rev().take_while(|c| c.is_ascii_digit()).collect();
+        let before: String = code[..i]
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit())
+            .collect();
         if !before.is_empty() && !code[i + 2..].starts_with(|c: char| c.is_ascii_alphanumeric()) {
             let n: String = before.chars().rev().collect();
-            found.push(format!("`{n}px` is a length literal — spell it with a token"));
+            found.push(format!(
+                "`{n}px` is a length literal — spell it with a token"
+            ));
         }
     }
     found

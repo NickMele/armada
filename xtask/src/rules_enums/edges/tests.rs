@@ -31,10 +31,15 @@ fn table(entries: &[&str]) -> String {
 
 /// The two enums, as the rule reads them from their sources.
 fn statuses() -> BTreeMap<String, String> {
-    [("Running", "running"), ("Killed", "killed"), ("Escalated", "escalated"), ("Queued", "queued")]
-        .into_iter()
-        .map(|(v, w)| (v.to_string(), w.to_string()))
-        .collect()
+    [
+        ("Running", "running"),
+        ("Killed", "killed"),
+        ("Escalated", "escalated"),
+        ("Queued", "queued"),
+    ]
+    .into_iter()
+    .map(|(v, w)| (v.to_string(), w.to_string()))
+    .collect()
 }
 
 fn triggers() -> BTreeMap<String, String> {
@@ -66,8 +71,14 @@ fn run(registry: &str, table: &str) -> Vec<String> {
 #[test]
 fn a_registry_and_a_table_that_agree_report_nothing() {
     let found = run(
-        &registry(&[("running", "killed", None), ("queued", "escalated", Some("interrupted"))]),
-        &table(&["edge(Running, Killed)", "triggered(Queued, Escalated, EscalationTrigger::Interrupted)"]),
+        &registry(&[
+            ("running", "killed", None),
+            ("queued", "escalated", Some("interrupted")),
+        ]),
+        &table(&[
+            "edge(Running, Killed)",
+            "triggered(Queued, Escalated, EscalationTrigger::Interrupted)",
+        ]),
     );
     assert_eq!(found, Vec::<String>::new());
 }
@@ -204,7 +215,12 @@ fn an_entry_that_is_not_edge_or_triggered_is_refused_rather_than_skipped() {
 #[test]
 fn a_table_variant_with_no_wire_spelling_is_named_rather_than_invented() {
     let mut report = Report::new("test");
-    let rows = read_table(&table(&["edge(Running, Hatched)"]), &statuses(), &triggers(), &mut report);
+    let rows = read_table(
+        &table(&["edge(Running, Hatched)"]),
+        &statuses(),
+        &triggers(),
+        &mut report,
+    );
     assert!(rows.is_empty());
     assert!(report.failed());
 }
@@ -226,7 +242,12 @@ fn an_entry_wrapped_across_lines_is_read_as_one() {
 #[test]
 fn a_missing_edges_static_is_reported_rather_than_read_as_an_empty_table() {
     let mut report = Report::new("test");
-    let rows = read_table("pub struct Edge {}\n", &statuses(), &triggers(), &mut report);
+    let rows = read_table(
+        "pub struct Edge {}\n",
+        &statuses(),
+        &triggers(),
+        &mut report,
+    );
     assert!(rows.is_empty());
     assert!(report.failed());
 }

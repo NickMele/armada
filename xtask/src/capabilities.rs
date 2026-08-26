@@ -64,7 +64,9 @@ fn parse(text: &str, path: &str) -> Result<Capability, String> {
     let mut front = BTreeMap::new();
     let mut lines = text.lines();
     if lines.next().map(str::trim) != Some("---") {
-        return Err(format!("{path} has no frontmatter — it needs `capability:` and `issue:`"));
+        return Err(format!(
+            "{path} has no frontmatter — it needs `capability:` and `issue:`"
+        ));
     }
     for line in lines {
         if line.trim() == "---" {
@@ -141,11 +143,16 @@ pub fn every_capability_is_bound_and_indexed(root: &Path) -> Report {
     for cap in &caps {
         let name = format!("{}.md", cap.slug);
         if !index.contains(&name) {
-            report.fail(format!("{} is a capability the index does not mention", cap.path));
+            report.fail(format!(
+                "{} is a capability the index does not mention",
+                cap.path
+            ));
         }
     }
     for line in index.lines() {
-        for token in line.split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.')) {
+        for token in
+            line.split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.'))
+        {
             if token.ends_with(".md") && token != "INDEX.md" && !dir.join(token).is_file() {
                 report.fail(format!(
                     "the capability index names {token}, which is not in docs/capabilities/"

@@ -17,7 +17,13 @@ use crate::tokens::{Slot, Token, THEME};
 fn slot(name: &str) -> Option<&'static Slot> {
     THEME
         .iter()
-        .find(|(pat, _)| if pat.ends_with('-') { name.starts_with(pat) } else { name == *pat })
+        .find(|(pat, _)| {
+            if pat.ends_with('-') {
+                name.starts_with(pat)
+            } else {
+                name == *pat
+            }
+        })
         .map(|(_, s)| s)
 }
 
@@ -30,9 +36,12 @@ pub fn tokens_css(root: &Path, sources: &[String]) -> String {
          \x20  tokens rather than declaring them, and belongs to the renderer. */\n",
     );
     for name in sources {
-        let text = fs::read_to_string(root.join("packages/tokens/src").join(name))
-            .unwrap_or_default();
-        let _ = write!(out, "\n/* ── {name} ─────────────────────────────── */\n{text}");
+        let text =
+            fs::read_to_string(root.join("packages/tokens/src").join(name)).unwrap_or_default();
+        let _ = write!(
+            out,
+            "\n/* ── {name} ─────────────────────────────── */\n{text}"
+        );
         if !text.ends_with('\n') {
             out.push('\n');
         }
@@ -212,7 +221,9 @@ pub fn theme_css(tokens: &[Token]) -> Result<String, String> {
 fn key_for(name: &str) -> String {
     let stripped = name.trim_start_matches("--");
     for (pat, _) in THEME {
-        let Some(prefix) = pat.strip_prefix("--") else { continue };
+        let Some(prefix) = pat.strip_prefix("--") else {
+            continue;
+        };
         if !prefix.ends_with('-') {
             continue;
         }
@@ -224,4 +235,3 @@ fn key_for(name: &str) -> String {
     }
     stripped.to_string()
 }
-

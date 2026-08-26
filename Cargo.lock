@@ -21,6 +21,8 @@ version = "0.0.0"
 dependencies = [
  "adapter-traits",
  "git2",
+ "ipc",
+ "serde",
 ]
 
 [[package]]

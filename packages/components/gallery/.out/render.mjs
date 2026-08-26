@@ -737,17 +737,20 @@ function Select({ label: label2, invalid = false, message, id, children, ...rest
   const showMessage = invalid && message !== void 0;
   return /* @__PURE__ */ jsxs("div", { className: "armada-select-field", children: [
     label2 !== void 0 && /* @__PURE__ */ jsx("label", { className: "armada-select-field__label", htmlFor: selectId, children: label2 }),
-    /* @__PURE__ */ jsx(
-      "select",
-      {
-        ...rest,
-        id: selectId,
-        className: "armada-select",
-        "aria-invalid": invalid || void 0,
-        "aria-describedby": showMessage ? messageId : void 0,
-        children
-      }
-    ),
+    /* @__PURE__ */ jsxs("span", { className: "armada-select-shell", children: [
+      /* @__PURE__ */ jsx(
+        "select",
+        {
+          ...rest,
+          id: selectId,
+          className: "armada-select",
+          "aria-invalid": invalid || void 0,
+          "aria-describedby": showMessage ? messageId : void 0,
+          children
+        }
+      ),
+      /* @__PURE__ */ jsx(ChevronDown, { className: "armada-select__caret", size: 16, strokeWidth: 2, "aria-hidden": true })
+    ] }),
     showMessage && /* @__PURE__ */ jsx("span", { className: "armada-select-field__message", id: messageId, children: message })
   ] });
 }
@@ -4345,24 +4348,20 @@ const meta$3 = {
   title: "Screens/Dispatch a job — full, with the M1 subset marked"
 };
 const Dispatch = {
-  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx("div", { className: "armada-screen__row", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", "data-width": "card", children: [
-    /* @__PURE__ */ jsx("span", { className: "armada-screen__caption", children: "What M1 renders" }),
-    /* @__PURE__ */ jsx(
-      JobComposer,
-      {
-        title: "Coalesce concurrent token refreshes",
-        brief: "A burst of 401s should produce one refresh call, not one per request. Keep the retry ceiling where it is.",
-        workflows: /* @__PURE__ */ jsx("option", { children: "bug — 4 steps" }),
-        project: "armada",
-        glance: [
-          { label: "Steps", value: "4 · 2 gated" },
-          { label: "Checks", value: "build, test" }
-        ],
-        provenance: "Dispatched by you"
-      }
-    ),
-    /* @__PURE__ */ jsx("span", { className: "armada-screen__caption", "data-note": true, children: "Same card, same order, same button, one field set smaller. The glance strip survives with the two values M1 can measure before dispatch — how long the workflow is and which Checks gate it — because a card whose whole design is a forced glance cannot ship with nothing to glance at." })
-  ] }) }) })
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx("div", { className: "armada-screen__row", children: /* @__PURE__ */ jsx("div", { className: "armada-screen__col", "data-width": "card", children: /* @__PURE__ */ jsx(
+    JobComposer,
+    {
+      title: "Coalesce concurrent token refreshes",
+      brief: "A burst of 401s should produce one refresh call, not one per request. Keep the retry ceiling where it is.",
+      workflows: /* @__PURE__ */ jsx("option", { children: "bug — 4 steps" }),
+      project: "armada",
+      glance: [
+        { label: "Steps", value: "4 · 2 gated" },
+        { label: "Checks", value: "build, test" }
+      ],
+      provenance: "Dispatched by you"
+    }
+  ) }) }) })
 };
 const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
@@ -4376,8 +4375,7 @@ const FirstLaunch = {
   render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__row", children: [
     /* @__PURE__ */ jsxs("div", { className: "armada-screen__card", "data-width": "half", children: [
       /* @__PURE__ */ jsx("span", { className: "armada-screen__caption", children: "Fleet running, no jobs" }),
-      /* @__PURE__ */ jsx(BoardEmptyState, { quiet: true, action: /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" }), children: "No jobs. Fleet has been up 6 days." }),
-      /* @__PURE__ */ jsx("span", { className: "armada-screen__caption", children: "One line and the action. No centred glyph, no illustration — the empty state points at the work available and nothing else." })
+      /* @__PURE__ */ jsx(BoardEmptyState, { quiet: true, action: /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" }), children: "No jobs. Fleet has been up 6 days." })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "armada-screen__card", "data-width": "half", children: [
       /* @__PURE__ */ jsx("span", { className: "armada-screen__caption", children: "Fleet is not running" }),
@@ -4388,8 +4386,7 @@ const FirstLaunch = {
           note: "Run that in a terminal. Bridge connects on its own once the runtime file appears.",
           children: "Fleet is not running. Bridge has nothing to read."
         }
-      ),
-      /* @__PURE__ */ jsx("span", { className: "armada-screen__caption", children: "The state a person will actually meet in M1, since Fleet is started by hand. The command is machine-derived, so it is mono, and it is a value to copy rather than a button — Bridge does not start Fleet at this milestone." })
+      )
     ] })
   ] }) })
 };
@@ -4576,46 +4573,32 @@ const meta = {
   title: "Screens/The shell"
 };
 const Shell = {
-  render: () => /* @__PURE__ */ jsxs("div", { className: "armada-screen", children: [
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__window", children: [
-      /* @__PURE__ */ jsx(
-        Sidebar,
-        {
-          appName: "Armada",
-          sectionLabel: "Bridge",
-          activeId: "active",
-          header: /* @__PURE__ */ jsx(Select, { "aria-label": "Project", children: /* @__PURE__ */ jsx("option", { children: "armada" }) }),
-          surfaces: [
-            // The drawing's rail row carries a label and a count and no glyph.
-            // Sidebar requires one, and `activity` is what the registry assigns
-            // to Active jobs, so that is the glyph. Reported.
-            { id: "active", label: "Active jobs", icon: Activity, count: 6 }
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__panel", children: [
-        /* @__PURE__ */ jsxs("div", { className: "armada-screen__panel-head", children: [
-          /* @__PURE__ */ jsxs("div", { className: "armada-screen__titles", children: [
-            /* @__PURE__ */ jsx("span", { className: "armada-screen__title", children: "Active jobs" }),
-            /* @__PURE__ */ jsx("span", { className: "armada-screen__summary", children: "6 jobs. 1 awaiting approval." })
-          ] }),
-          /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" })
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__window", children: [
+    /* @__PURE__ */ jsx(
+      Sidebar,
+      {
+        appName: "Armada",
+        sectionLabel: "Bridge",
+        activeId: "active",
+        header: /* @__PURE__ */ jsx(Select, { "aria-label": "Project", children: /* @__PURE__ */ jsx("option", { children: "armada" }) }),
+        surfaces: [
+          // The drawing's rail row carries a label and a count and no glyph.
+          // Sidebar requires one, and `activity` is what the registry assigns
+          // to Active jobs, so that is the glyph. Reported.
+          { id: "active", label: "Active jobs", icon: Activity, count: 6 }
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__panel", children: [
+      /* @__PURE__ */ jsxs("div", { className: "armada-screen__panel-head", children: [
+        /* @__PURE__ */ jsxs("div", { className: "armada-screen__titles", children: [
+          /* @__PURE__ */ jsx("span", { className: "armada-screen__title", children: "Active jobs" }),
+          /* @__PURE__ */ jsx("span", { className: "armada-screen__summary", children: "6 jobs. 1 awaiting approval." })
         ] }),
-        /* @__PURE__ */ jsx("div", { className: "armada-screen__mount", children: "The list mounts here — 1d" }),
-        /* @__PURE__ */ jsx(
-          StatusBar,
-          {
-            fleet: "running",
-            fleetLabel: "Fleet running",
-            detail: "pid 4417 · port 7411 · 1 drone",
-            spend: "today ~$4.80"
-          }
-        )
-      ] })
-    ] }),
-    /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "The status bar says Fleet out loud — three states" }),
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
-      /* @__PURE__ */ jsx("div", { className: "armada-screen__bar-frame", children: /* @__PURE__ */ jsx(
+        /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" })
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "armada-screen__mount", children: "The list mounts here — 1d" }),
+      /* @__PURE__ */ jsx(
         StatusBar,
         {
           fleet: "running",
@@ -4623,27 +4606,9 @@ const Shell = {
           detail: "pid 4417 · port 7411 · 1 drone",
           spend: "today ~$4.80"
         }
-      ) }),
-      /* @__PURE__ */ jsx("div", { className: "armada-screen__bar-frame", children: /* @__PURE__ */ jsx(
-        StatusBar,
-        {
-          fleet: "not-running",
-          fleetLabel: "Fleet is not running",
-          detail: "no runtime file at ~/.armada/fleet.json",
-          advice: "Start it from the terminal."
-        }
-      ) }),
-      /* @__PURE__ */ jsx("div", { className: "armada-screen__bar-frame", children: /* @__PURE__ */ jsx(
-        StatusBar,
-        {
-          fleet: "unreachable",
-          fleetLabel: "Fleet unreachable",
-          detail: "pid 4417 alive on port 7411 · no response for 20s",
-          advice: "The last job state read is 20s old."
-        }
-      ) })
+      )
     ] })
-  ] })
+  ] }) })
 };
 const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,

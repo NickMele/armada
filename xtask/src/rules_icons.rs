@@ -29,12 +29,29 @@ const STATUSES: &[&str] = &["Specified", "Proposed", "Retired", "Banned"];
 
 /// The keys an entry may carry. An unrecognised key is a typo — the value it
 /// holds is read by nobody, which is the silent half of the failure.
-const KEYS: &[&str] = &["means", "group", "size", "status", "reserved", "notes", "paired_with", "glyphs"];
+const KEYS: &[&str] = &[
+    "means",
+    "group",
+    "size",
+    "status",
+    "reserved",
+    "notes",
+    "paired_with",
+    "glyphs",
+];
 
 /// `lucide-react` exports that are not glyphs. Importing one of these is
 /// ordinary and must not be read as an unregistered icon.
-const NOT_A_GLYPH: &[&str] =
-    &["Icon", "LucideIcon", "LucideProps", "IconNode", "IconNodeChild", "createLucideIcon", "icons", "dynamicIconImports"];
+const NOT_A_GLYPH: &[&str] = &[
+    "Icon",
+    "LucideIcon",
+    "LucideProps",
+    "IconNode",
+    "IconNodeChild",
+    "createLucideIcon",
+    "icons",
+    "dynamicIconImports",
+];
 
 /// One `[icons.<name>]` table, reduced to what the rule asks of it.
 struct Entry {
@@ -91,7 +108,9 @@ pub fn every_glyph_in_use_is_registered(root: &Path) -> Report {
     let mut report = Report::new("every glyph a surface uses is in the icon registry");
 
     let Ok(text) = fs::read_to_string(root.join(REGISTRY)) else {
-        report.fail(format!("{REGISTRY} — the icon registry, which this rule checks against"));
+        report.fail(format!(
+            "{REGISTRY} — the icon registry, which this rule checks against"
+        ));
         return report;
     };
     let entries = read_registry(&text, &mut report);
@@ -122,7 +141,9 @@ pub fn every_glyph_in_use_is_registered(root: &Path) -> Report {
         .map(|(name, _)| name)
         .collect();
     for path in app_sources(root) {
-        let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+        let Ok(text) = fs::read_to_string(root.join(&path)) else {
+            continue;
+        };
         for name in &banned {
             for (n, line) in text.lines().enumerate() {
                 if line.contains(&format!("\"{name}\"")) || line.contains(&format!("'{name}'")) {
@@ -168,7 +189,14 @@ fn read_registry(text: &str, report: &mut Report) -> BTreeMap<String, Entry> {
                             first.line
                         ));
                     } else {
-                        entries.insert(name.clone(), Entry { line: ln, means: false, status: None });
+                        entries.insert(
+                            name.clone(),
+                            Entry {
+                                line: ln,
+                                means: false,
+                                status: None,
+                            },
+                        );
                     }
                     current = Some(name);
                 }
@@ -191,7 +219,9 @@ fn read_registry(text: &str, report: &mut Report) -> BTreeMap<String, Entry> {
         }
 
         let Some((key, value)) = line.split_once(" = ") else {
-            report.fail(format!("{REGISTRY}:{ln} — `{line}` is neither a table header nor `key = value`"));
+            report.fail(format!(
+                "{REGISTRY}:{ln} — `{line}` is neither a table header nor `key = value`"
+            ));
             continue;
         };
         let key = key.trim();
@@ -242,7 +272,10 @@ fn read_registry(text: &str, report: &mut Report) -> BTreeMap<String, Entry> {
             ));
         }
         if entry.status.is_none() {
-            report.fail(format!("{REGISTRY}:{} — `{name}` has no `status`", entry.line));
+            report.fail(format!(
+                "{REGISTRY}:{} — `{name}` has no `status`",
+                entry.line
+            ));
         }
     }
     for (ln, what, name) in references {
@@ -265,10 +298,16 @@ enum Section {
 }
 
 fn section(line: &str) -> Option<Section> {
-    if let Some(rest) = line.strip_prefix("[[icons.").and_then(|r| r.strip_suffix(".usage]]")) {
+    if let Some(rest) = line
+        .strip_prefix("[[icons.")
+        .and_then(|r| r.strip_suffix(".usage]]"))
+    {
         return Some(Section::Usage(rest.to_string()));
     }
-    if let Some(rest) = line.strip_prefix("[icons.").and_then(|r| r.strip_suffix(']')) {
+    if let Some(rest) = line
+        .strip_prefix("[icons.")
+        .and_then(|r| r.strip_suffix(']'))
+    {
         return Some(Section::Icon(rest.to_string()));
     }
     if line.starts_with("[conventions.") && line.ends_with(']') {
@@ -287,7 +326,9 @@ fn check_glyph_name(name: &str, line: usize, report: &mut Report) {
         && name.starts_with(|c: char| c.is_ascii_lowercase())
         && name.ends_with(|c: char| c.is_ascii_alphanumeric())
         && !name.contains("--")
-        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
     if !shaped {
         report.fail(format!(
             "{REGISTRY}:{line} — `{name}` is not shaped like a lucide glyph name, \
@@ -326,7 +367,11 @@ fn array(value: &str) -> Vec<String> {
 fn app_sources(root: &Path) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for dir in ["apps", "packages"] {
-        out.extend(files_with_ext(root, &root.join(dir), &["ts", "tsx", "js", "jsx"]));
+        out.extend(files_with_ext(
+            root,
+            &root.join(dir),
+            &["ts", "tsx", "js", "jsx"],
+        ));
     }
     out
 }
@@ -337,7 +382,9 @@ fn glyphs_in_use(root: &Path, report: &mut Report) -> Vec<Use> {
     let mut found = Vec::new();
 
     for path in app_sources(root) {
-        let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+        let Ok(text) = fs::read_to_string(root.join(&path)) else {
+            continue;
+        };
         for (i, _) in text.match_indices(MODULE) {
             let before = &text[..i];
             // The module has to be quoted. `lucide-react-native` and the word
@@ -351,7 +398,10 @@ fn glyphs_in_use(root: &Path, report: &mut Report) -> Vec<Use> {
             // A deep import names its glyph in the path:
             // `lucide-react/dist/esm/icons/hourglass`.
             if let Some(sub) = after.strip_prefix('/') {
-                let sub: String = sub.chars().take_while(|c| *c != '"' && *c != '\'').collect();
+                let sub: String = sub
+                    .chars()
+                    .take_while(|c| *c != '"' && *c != '\'')
+                    .collect();
                 let leaf = sub.rsplit('/').next().unwrap_or_default();
                 let leaf = leaf.split('.').next().unwrap_or_default();
                 if !leaf.is_empty() {
@@ -370,13 +420,20 @@ fn glyphs_in_use(root: &Path, report: &mut Report) -> Vec<Use> {
 
             // Walk back to the statement that imports it. A `;` in between
             // means the nearest keyword belongs to an earlier statement.
-            let start = [before.rfind("import"), before.rfind("export")].into_iter().flatten().max();
+            let start = [before.rfind("import"), before.rfind("export")]
+                .into_iter()
+                .flatten()
+                .max();
             let Some(start) = start else { continue };
             let stmt = &before[start..];
             if stmt.contains(';') {
                 continue;
             }
-            if stmt.trim_start_matches(|c: char| c.is_alphabetic()).trim_start().starts_with("type ") {
+            if stmt
+                .trim_start_matches(|c: char| c.is_alphabetic())
+                .trim_start()
+                .starts_with("type ")
+            {
                 continue;
             }
 
@@ -391,7 +448,9 @@ fn glyphs_in_use(root: &Path, report: &mut Report) -> Vec<Use> {
             };
             for spec in stmt[open + 1..close].split(',') {
                 let spec = spec.trim();
-                let Some(written) = spec.split_whitespace().next() else { continue };
+                let Some(written) = spec.split_whitespace().next() else {
+                    continue;
+                };
                 // `type Foo`, `Activity as ActivityIcon` — the first word is
                 // the export unless the first word is `type`.
                 let written = if written == "type" { continue } else { written };

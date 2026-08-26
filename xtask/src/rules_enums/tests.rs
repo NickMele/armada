@@ -12,13 +12,17 @@ use crate::Finding;
 
 /// A registry with the three keys named, in the shape the domain files use.
 fn registry(keys: &[&str]) -> String {
-    keys.iter().map(|k| format!("[states.{k}]\nmeaning = \"x\"\n\n")).collect()
+    keys.iter()
+        .map(|k| format!("[states.{k}]\nmeaning = \"x\"\n\n"))
+        .collect()
 }
 
 /// A source file with the variants named, in the shape `status.rs` uses.
 fn source(variants: &[(&str, &str)]) -> String {
-    let all: String =
-        variants.iter().map(|(v, _)| format!("        StepState::{v},\n")).collect();
+    let all: String = variants
+        .iter()
+        .map(|(v, _)| format!("        StepState::{v},\n"))
+        .collect();
     let arms: String = variants
         .iter()
         .map(|(v, w)| format!("            StepState::{v} => \"{w}\",\n"))
@@ -30,10 +34,16 @@ fn source(variants: &[(&str, &str)]) -> String {
     )
 }
 
-const PAIRING: Pairing =
-    Pairing { registry: "step-states.toml", prefix: "states.", enum_name: "StepState" };
+const PAIRING: Pairing = Pairing {
+    registry: "step-states.toml",
+    prefix: "states.",
+    enum_name: "StepState",
+};
 
-const SOURCE: EnumSource = EnumSource { name: "StepState", path: "step.rs" };
+const SOURCE: EnumSource = EnumSource {
+    name: "StepState",
+    path: "step.rs",
+};
 
 /// Every failing line the rule produces for one registry against one source.
 fn run(registry: &str, source: &str) -> Vec<String> {
@@ -149,14 +159,22 @@ fn a_bracket_inside_a_multi_line_string_is_not_a_table() {
     let text = "[states.stopped]\nnotes = \"\"\"\n[states.invented]\n\"\"\"\n[states.running]\n";
     assert_eq!(
         tables(text),
-        vec![("states.stopped".to_string(), 1), ("states.running".to_string(), 5)]
+        vec![
+            ("states.stopped".to_string(), 1),
+            ("states.running".to_string(), 5)
+        ]
     );
 }
 
 #[test]
 fn a_key_declared_twice_is_a_row_read_by_nobody() {
     let mut report = Report::new("test");
-    let keys = keys_under(&registry(&["advanced", "advanced"]), "states.", "f.toml", &mut report);
+    let keys = keys_under(
+        &registry(&["advanced", "advanced"]),
+        "states.",
+        "f.toml",
+        &mut report,
+    );
     assert_eq!(keys.len(), 1);
     assert!(report.failed());
 }

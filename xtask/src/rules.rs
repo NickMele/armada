@@ -91,17 +91,32 @@ pub fn acceptance_test_exists_and_fails(root: &Path) -> Report {
 ///   cap in it.
 const FAILURE_MODES: &[(&str, &str)] = &[
     ("silence", "Silence / Stalled"),
-    ("claims-done-no-evidence", "Claims done, no evidence artifact"),
-    ("plain-text-bypass", "Claims done in plain text, bypasses structured report"),
+    (
+        "claims-done-no-evidence",
+        "Claims done, no evidence artifact",
+    ),
+    (
+        "plain-text-bypass",
+        "Claims done in plain text, bypasses structured report",
+    ),
     ("thrashing", "Thrashing / off-rails"),
     ("evidence-gaming", "Evidence gaming"),
 ];
 
 /// The control and the negative cases, each named with the assertion it serves.
 const SUPPORTING: &[(&str, &str)] = &[
-    ("happy-path", "the control — thrashing's negative assertion needs it"),
-    ("silence-poke-answered", "a poke answered, so quiet alone cannot escalate"),
-    ("clarification-exhausted", "the capped clarification loop, exhausted"),
+    (
+        "happy-path",
+        "the control — thrashing's negative assertion needs it",
+    ),
+    (
+        "silence-poke-answered",
+        "a poke answered, so quiet alone cannot escalate",
+    ),
+    (
+        "clarification-exhausted",
+        "the capped clarification loop, exhausted",
+    ),
 ];
 
 pub fn every_failure_mode_has_a_fixture(root: &Path) -> Report {
@@ -127,7 +142,9 @@ pub fn no_file_too_long(root: &Path) -> Report {
     let mut report = Report::new("no source file over 900 lines, warn at 500");
     for source_root in SOURCE_ROOTS {
         for path in files_with_ext(root, &root.join(source_root), SOURCE_EXTS) {
-            let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+            let Ok(text) = fs::read_to_string(root.join(&path)) else {
+                continue;
+            };
             let lines = text.lines().count();
             if lines > 900 {
                 report.fail(format!("{path} is {lines} lines, over 900"));
@@ -215,7 +232,9 @@ pub fn no_untyped_json_outside_store_and_ipc(root: &Path) -> Report {
             if allowed.iter().any(|a| path.starts_with(a)) || path.starts_with("xtask/") {
                 continue;
             }
-            let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+            let Ok(text) = fs::read_to_string(root.join(&path)) else {
+                continue;
+            };
             for (n, line) in text.lines().enumerate() {
                 if line.contains("serde_json::from_") {
                     report.fail(format!("{path}:{} — serde_json::from_*", n + 1));
@@ -238,8 +257,16 @@ pub fn no_untyped_json_outside_store_and_ipc(root: &Path) -> Report {
 /// and not its vocabulary; these are the vendors Armada actually reaches for.
 /// Adding one is a one-line change and should be made deliberately.
 const VENDOR_LITERALS: &[&str] = &[
-    "anthropic", "claude", "openai", "gpt-4", "gemini", "copilot",
-    "github", "gitlab", "bitbucket", "docker",
+    "anthropic",
+    "claude",
+    "openai",
+    "gpt-4",
+    "gemini",
+    "copilot",
+    "github",
+    "gitlab",
+    "bitbucket",
+    "docker",
     // Libraries, not vendors, and on the list for the same reason: naming one
     // outside the adapter layer means the boundary has already leaked. The
     // adapters contract has said "no `git2` or `gh` literal outside adapters"
@@ -258,7 +285,9 @@ pub fn no_vendor_literal_outside_adapters(root: &Path) -> Report {
             if path.starts_with("crates/adapters/") || path.starts_with("xtask/") {
                 continue;
             }
-            let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+            let Ok(text) = fs::read_to_string(root.join(&path)) else {
+                continue;
+            };
             let lower = text.to_lowercase();
             for vendor in VENDOR_LITERALS {
                 if lower.contains(vendor) {
@@ -303,7 +332,9 @@ pub fn no_bloated_claude_md(root: &Path) -> Report {
     });
     found.sort();
     for path in found {
-        let Ok(text) = fs::read_to_string(&path) else { continue };
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
         let rel = path
             .strip_prefix(root)
             .unwrap_or(&path)
@@ -347,14 +378,20 @@ pub fn the_v1_harvest_has_an_index(root: &Path) -> Report {
             continue;
         }
         if !index_text.contains(name) {
-            report.fail(format!("{note} is a harvest note the index does not mention"));
+            report.fail(format!(
+                "{note} is a harvest note the index does not mention"
+            ));
         }
     }
 
     for line in index_text.lines() {
-        for token in line.split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.')) {
+        for token in
+            line.split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.'))
+        {
             if token.ends_with(".md") && token != "INDEX.md" && !dir.join(token).is_file() {
-                report.fail(format!("the index names {token}, which is not in docs/v1-learnings/"));
+                report.fail(format!(
+                    "the index names {token}, which is not in docs/v1-learnings/"
+                ));
             }
         }
     }
@@ -393,7 +430,9 @@ pub fn nothing_names_a_person_or_a_machine(root: &Path) -> Report {
     ];
 
     walk(root, &mut |path| {
-        let Ok(text) = fs::read_to_string(path) else { return };
+        let Ok(text) = fs::read_to_string(path) else {
+            return;
+        };
         let rel = path
             .strip_prefix(root)
             .unwrap_or(path)
@@ -450,7 +489,9 @@ pub fn nothing_writes_its_own_log_format(root: &Path) -> Report {
             continue;
         }
         for path in files_with_ext(root, &dir.join("src"), &["rs"]) {
-            let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+            let Ok(text) = fs::read_to_string(root.join(&path)) else {
+                continue;
+            };
             for (n, line) in text.lines().enumerate() {
                 let code = line.trim_start();
                 if code.starts_with("//") {

@@ -67,7 +67,9 @@ pub fn near_miss_headings(root: &Path) -> Vec<(String, usize, String)> {
         if SKIP.iter().any(|s| path.starts_with(s)) {
             continue;
         }
-        let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+        let Ok(text) = fs::read_to_string(root.join(&path)) else {
+            continue;
+        };
         for (n, line) in text.lines().enumerate() {
             let t = line.trim_end();
             if !t.starts_with('#') {
@@ -104,7 +106,9 @@ pub fn read(root: &Path) -> Vec<Question> {
         if SKIP.iter().any(|s| path.starts_with(s)) {
             continue;
         }
-        let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+        let Ok(text) = fs::read_to_string(root.join(&path)) else {
+            continue;
+        };
         out.extend(in_one_file(&text, &path));
     }
     out
@@ -130,7 +134,11 @@ fn in_one_file(text: &str, path: &str) -> Vec<Question> {
         let trimmed = line.trim_start();
         if let Some(rest) = trimmed.strip_prefix("- ") {
             let (slug, text) = split_slug(rest);
-            out.push(Question { slug, text, file: path.to_string() });
+            out.push(Question {
+                slug,
+                text,
+                file: path.to_string(),
+            });
         } else if !trimmed.is_empty() {
             if let Some(last) = out.last_mut() {
                 last.text.push(' ');
@@ -153,7 +161,11 @@ fn split_slug(rest: &str) -> (Option<String>, String) {
         return (None, body.to_string());
     };
     let slug = &inner[..end];
-    if slug.is_empty() || !slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+    if slug.is_empty()
+        || !slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
         return (None, body.to_string());
     }
     let after = inner[end + 1..].trim_start_matches("**").trim();
@@ -206,7 +218,9 @@ pub fn outputs(root: &Path) -> Result<Vec<(String, String)>, String> {
 
     let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
     for q in &questions {
-        let Some(slug) = q.slug.as_deref() else { continue };
+        let Some(slug) = q.slug.as_deref() else {
+            continue;
+        };
         if let Some(other) = seen.insert(slug, &q.file) {
             return Err(format!(
                 "[{slug}] is claimed by both {other} and {} — a citation would be \
@@ -229,9 +243,13 @@ pub fn citations(root: &Path) -> Vec<(String, String, usize)> {
     let mut out = Vec::new();
     for dir in ["apps", "crates", "packages", "xtask"] {
         walk(&root.join(dir), &mut |path| {
-            let Ok(rel) = path.strip_prefix(root) else { return };
+            let Ok(rel) = path.strip_prefix(root) else {
+                return;
+            };
             let rel = rel.to_string_lossy().replace('\\', "/");
-            let Ok(text) = fs::read_to_string(path) else { return };
+            let Ok(text) = fs::read_to_string(path) else {
+                return;
+            };
             if !text.contains(MARKER) {
                 return;
             }
@@ -247,12 +265,18 @@ pub fn citations(root: &Path) -> Vec<(String, String, usize)> {
                 if start.starts_with("///") || start.starts_with("//!") {
                     continue;
                 }
-                let Some(next) = lines.get(i + 1) else { continue };
+                let Some(next) = lines.get(i + 1) else {
+                    continue;
+                };
                 let Some(open) = next.find('[') else { continue };
-                let Some(close) = next[open..].find(']') else { continue };
+                let Some(close) = next[open..].find(']') else {
+                    continue;
+                };
                 let slug = &next[open + 1..open + close];
                 if !slug.is_empty()
-                    && slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+                    && slug
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
                 {
                     out.push((slug.to_string(), rel.clone(), i + 2));
                 }

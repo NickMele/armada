@@ -47,7 +47,10 @@ pub fn every_open_question_is_collected(root: &Path) -> Report {
 
     let questions = docs::read(root);
     for (slug, file, line) in docs::citations(root) {
-        if !questions.iter().any(|q| q.slug.as_deref() == Some(slug.as_str())) {
+        if !questions
+            .iter()
+            .any(|q| q.slug.as_deref() == Some(slug.as_str()))
+        {
             report.fail(format!(
                 "{file}:{line} cites [{slug}], which no document asks. \
                  Either the question was answered and this opt-out outlived it, \
@@ -97,7 +100,9 @@ pub fn every_document_is_indexed(root: &Path) -> Report {
             }
         }
         if !index.contains(rel) {
-            report.fail(format!("{path} is a document docs/INDEX.md does not mention"));
+            report.fail(format!(
+                "{path} is a document docs/INDEX.md does not mention"
+            ));
         }
     }
 
@@ -139,7 +144,9 @@ pub fn every_document_is_indexed(root: &Path) -> Report {
 pub fn nothing_links_to_the_design_workspace(root: &Path) -> Report {
     let mut report = Report::new("nothing links to the design workspace");
     let needle = concat!("notion", ".");
-    const EXTS: &[&str] = &["md", "rs", "toml", "ts", "tsx", "js", "json", "py", "sh", "css", "yaml", "yml"];
+    const EXTS: &[&str] = &[
+        "md", "rs", "toml", "ts", "tsx", "js", "json", "py", "sh", "css", "yaml", "yml",
+    ];
 
     let mut looked = Vec::new();
     for dir in ["docs", "crates", "apps", "packages", "xtask", ".claude"] {
@@ -148,7 +155,9 @@ pub fn nothing_links_to_the_design_workspace(root: &Path) -> Report {
     looked.push("CLAUDE.md".to_string());
 
     for path in looked {
-        let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+        let Ok(text) = fs::read_to_string(root.join(&path)) else {
+            continue;
+        };
         for (n, line) in text.lines().enumerate() {
             let at = line.find(needle);
             let Some(at) = at else { continue };
@@ -188,7 +197,14 @@ pub fn nothing_links_to_the_design_workspace(root: &Path) -> Report {
 pub fn every_path_a_document_names_exists(root: &Path) -> Report {
     let mut report = Report::new("every repository path a document names exists");
 
-    const ROOTS: [&str; 6] = ["docs/", "crates/", "apps/", "packages/", "xtask/", ".claude/"];
+    const ROOTS: [&str; 6] = [
+        "docs/",
+        "crates/",
+        "apps/",
+        "packages/",
+        "xtask/",
+        ".claude/",
+    ];
 
     let v1 = std::process::Command::new("git")
         .args(["ls-tree", "-r", "--name-only", "v1-final"])
@@ -206,7 +222,13 @@ pub fn every_path_a_document_names_exists(root: &Path) -> Report {
     };
 
     let mut paths = files_with_ext(root, &root.join("docs"), &["md"]);
-    for name in ["README.md", "ARCHITECTURE.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md"] {
+    for name in [
+        "README.md",
+        "ARCHITECTURE.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "SECURITY.md",
+    ] {
         if root.join(name).is_file() {
             paths.insert(name.to_string());
         }

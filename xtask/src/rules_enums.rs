@@ -57,9 +57,18 @@ struct EnumSource {
 }
 
 const ENUMS: &[EnumSource] = &[
-    EnumSource { name: "JobStatus", path: "crates/core-model/src/job/status.rs" },
-    EnumSource { name: "StepState", path: "crates/core-model/src/job/status.rs" },
-    EnumSource { name: "EscalationTrigger", path: "crates/core-model/src/job/escalation.rs" },
+    EnumSource {
+        name: "JobStatus",
+        path: "crates/core-model/src/job/status.rs",
+    },
+    EnumSource {
+        name: "StepState",
+        path: "crates/core-model/src/job/status.rs",
+    },
+    EnumSource {
+        name: "EscalationTrigger",
+        path: "crates/core-model/src/job/escalation.rs",
+    },
 ];
 
 /// A registry table, and the enum whose wire spellings its keys must be.
@@ -74,14 +83,26 @@ struct Pairing {
 }
 
 const PAIRINGS: &[Pairing] = &[
-    Pairing { registry: "job-statuses.toml", prefix: "statuses.", enum_name: "JobStatus" },
-    Pairing { registry: "step-states.toml", prefix: "states.", enum_name: "StepState" },
+    Pairing {
+        registry: "job-statuses.toml",
+        prefix: "statuses.",
+        enum_name: "JobStatus",
+    },
+    Pairing {
+        registry: "step-states.toml",
+        prefix: "states.",
+        enum_name: "StepState",
+    },
     Pairing {
         registry: "escalation-triggers.toml",
         prefix: "triggers.",
         enum_name: "EscalationTrigger",
     },
-    Pairing { registry: "enum-verbs.toml", prefix: "verbs.job_status.", enum_name: "JobStatus" },
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.job_status.",
+        enum_name: "JobStatus",
+    },
     Pairing {
         registry: "enum-verbs.toml",
         prefix: "verbs.escalation_reason.",
@@ -116,7 +137,10 @@ fn wire_spellings(
     let mut spellings = BTreeMap::new();
     for source in ENUMS {
         let Ok(text) = fs::read_to_string(root.join(source.path)) else {
-            report.fail(format!("{} — the source `{}` is declared in", source.path, source.name));
+            report.fail(format!(
+                "{} — the source `{}` is declared in",
+                source.path, source.name
+            ));
             continue;
         };
         spellings.insert(source.name, read_enum(&text, source, report));
@@ -133,11 +157,16 @@ pub fn every_registry_key_is_a_variant(root: &Path) -> Report {
     for pairing in PAIRINGS {
         let path = format!("{DOMAIN}/{}", pairing.registry);
         let Ok(text) = fs::read_to_string(root.join(&path)) else {
-            report.fail(format!("{path} — the registry `{}` is checked against", pairing.enum_name));
+            report.fail(format!(
+                "{path} — the registry `{}` is checked against",
+                pairing.enum_name
+            ));
             continue;
         };
         let keys = keys_under(&text, pairing.prefix, &path, &mut report);
-        let Some(variants) = spellings.get(pairing.enum_name) else { continue };
+        let Some(variants) = spellings.get(pairing.enum_name) else {
+            continue;
+        };
         if keys.is_empty() {
             report.fail(format!(
                 "{path} has no `[{}<key>]` table at all — nothing to compare `{}` against",
@@ -151,7 +180,9 @@ pub fn every_registry_key_is_a_variant(root: &Path) -> Report {
     let verbs = format!("{DOMAIN}/enum-verbs.toml");
     if let Ok(text) = fs::read_to_string(root.join(&verbs)) {
         for (table, line) in tables(&text) {
-            let Some(vocabulary) = table.strip_prefix("verbs.").and_then(|r| r.split('.').next())
+            let Some(vocabulary) = table
+                .strip_prefix("verbs.")
+                .and_then(|r| r.split('.').next())
             else {
                 continue;
             };
@@ -177,8 +208,10 @@ fn compare(
     report: &mut Report,
 ) {
     let (prefix, name) = (pairing.prefix, pairing.enum_name);
-    let spelled: BTreeMap<&str, &str> =
-        variants.iter().map(|(v, w)| (w.as_str(), v.as_str())).collect();
+    let spelled: BTreeMap<&str, &str> = variants
+        .iter()
+        .map(|(v, w)| (w.as_str(), v.as_str()))
+        .collect();
 
     for (key, line) in keys {
         if !spelled.contains_key(key.as_str()) {
@@ -250,7 +283,9 @@ fn read_enum(text: &str, source: &EnumSource, report: &mut Report) -> BTreeMap<S
 /// The variants listed in `pub const ALL: &'static [Enum] = &[ … ];`.
 fn all_variants(text: &str, name: &str) -> Vec<String> {
     let header = format!("const ALL: &'static [{name}] =");
-    let Some(start) = text.find(&header) else { return Vec::new() };
+    let Some(start) = text.find(&header) else {
+        return Vec::new();
+    };
     let body = &text[start + header.len()..];
     // `rustfmt` puts the `&[` on this line or the next depending on width, so
     // the opening is stripped rather than assumed — leaving it attached hides
@@ -278,8 +313,12 @@ fn wire_arms(text: &str, name: &str) -> Vec<(String, String)> {
     for body in text.split("fn as_wire").skip(1) {
         let body = body.split("\n    }").next().unwrap_or_default();
         for line in body.lines().map(str::trim) {
-            let Some(rest) = line.strip_prefix(&qualified) else { continue };
-            let Some((variant, value)) = rest.split_once(" => ") else { continue };
+            let Some(rest) = line.strip_prefix(&qualified) else {
+                continue;
+            };
+            let Some((variant, value)) = rest.split_once(" => ") else {
+                continue;
+            };
             let Some(wire) = value.strip_prefix('"').and_then(|v| v.split('"').next()) else {
                 continue;
             };
@@ -300,7 +339,9 @@ fn keys_under(
 ) -> BTreeMap<String, usize> {
     let mut found: BTreeMap<String, usize> = BTreeMap::new();
     for (table, line) in tables(text) {
-        let Some(key) = table.strip_prefix(prefix) else { continue };
+        let Some(key) = table.strip_prefix(prefix) else {
+            continue;
+        };
         if key.is_empty() || key.contains('.') {
             continue;
         }

@@ -78,7 +78,9 @@ fn issues(label: &str) -> Result<Vec<Tracked>, String> {
         else {
             continue;
         };
-        let Ok(number) = number.parse::<u64>() else { continue };
+        let Ok(number) = number.parse::<u64>() else {
+            continue;
+        };
         out.push(Tracked {
             number,
             title: title.to_string(),
@@ -161,7 +163,12 @@ pub fn verify() -> Result<Outcome, String> {
     // than in a checkbox that only renders.
     let step_open: BTreeMap<u64, bool> = steps.iter().map(|s| (s.number, s.open)).collect();
     for cap in &caps {
-        let mine: Vec<u64> = cap.refs.iter().copied().filter(|n| step_open.contains_key(n)).collect();
+        let mine: Vec<u64> = cap
+            .refs
+            .iter()
+            .copied()
+            .filter(|n| step_open.contains_key(n))
+            .collect();
         if mine.is_empty() {
             continue;
         }
@@ -188,8 +195,12 @@ pub fn verify() -> Result<Outcome, String> {
     let mut progress: Vec<(u64, String, usize, usize)> = caps
         .iter()
         .filter_map(|cap| {
-            let mine: Vec<u64> =
-                cap.refs.iter().copied().filter(|n| step_open.contains_key(n)).collect();
+            let mine: Vec<u64> = cap
+                .refs
+                .iter()
+                .copied()
+                .filter(|n| step_open.contains_key(n))
+                .collect();
             if mine.is_empty() {
                 return None;
             }
