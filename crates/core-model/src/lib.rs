@@ -18,17 +18,34 @@
 //! are already logging is a rewrite of all five — and `actor` cannot be
 //! reconstructed afterwards at all.
 //!
-//! The Job record and its transition machine are not. M1 step 1 owns them by
-//! name, and the acceptance test is written against this crate before it is
-//! filled on purpose: a test written against a finished skeleton gets shaped by
-//! the code it finds.
+//! The Job record and its status machine are here too, built from
+//! `domain/`, which is the authority on both. What is *not* here is the inner
+//! step machine: the registry gives step states no edge table, so `job_steps`
+//! rows are written at creation and nothing yet advances one. [`Job`] and
+//! [`JobStatus`] carry the reasoning.
+//!
+//! # `no_std`, except under test
+//!
+//! `#![no_std]` is conditional only because the unit test harness needs `std`
+//! to link. Every shipped build of this crate is `no_std` and depends on
+//! nothing.
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
 
 mod envelope;
+mod job;
 
 pub use envelope::{
     env_keys, Actor, AuditLine, Component, Envelope, FieldValue, Level, Timestamp, Ulid,
+};
+pub use job::{
+    AcceptanceCriterion, CriteriaOwed, CriterionId, CriterionSource, DependencyDirection,
+    DependencyEdge, DispatchOrigin, DroneId, Edge, EscalationTrigger, Facts, GateManifest,
+    GateOutcome, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId,
+    ModelName, NewJob, NotRunDisposition, NotRunReason, Origin, PilotReason, RepoPath,
+    ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, StepState, StepVerdict, Subject,
+    Target, TopLevelOrigin, Transitioned, TransitionReason, TriggerKind, TriggerLevel, Urgency,
+    WorkflowId, WriteTargets, EDGES,
 };

@@ -6,6 +6,17 @@ crates/api/src/lib.rs
 crates/checks-runner/src/lib.rs
 crates/config/src/lib.rs
 crates/core-model/src/envelope.rs
+crates/core-model/src/job/escalation.rs
+crates/core-model/src/job/event.rs
+crates/core-model/src/job/fields.rs
+crates/core-model/src/job/mod.rs
+crates/core-model/src/job/record.rs
+crates/core-model/src/job/status.rs
+crates/core-model/src/job/step.rs
+crates/core-model/src/job/tests/machine.rs
+crates/core-model/src/job/tests/mod.rs
+crates/core-model/src/job/tests/record.rs
+crates/core-model/src/job/transition.rs
 crates/core-model/src/lib.rs
 crates/fleet-bin/src/lib.rs
 crates/fleet/src/lib.rs
