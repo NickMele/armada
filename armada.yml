@@ -30,9 +30,11 @@ checks:
 
   test:
     # **`--exclude acceptance` is not a convenience.** The acceptance test is
-    # required to fail for the whole of M1, so a plain `--workspace` run cannot
-    # be this repository's test command — it would report red for the one
-    # reason that is deliberate and drown every reason that is not.
+    # a milestone's own claim rather than a unit test, and it is worth reading
+    # on its own — a Drone that folded it into this run would report one number
+    # covering two different questions. It passes; it is excluded because of
+    # what it is, not because of how it exits.
+    # See `docs/practices/acceptance-tests.md`.
     #
     # `nextest` rather than `cargo test`: measured at 3x on v1, 83 seconds
     # against 27 for the same 2,034 tests, because `cargo test` runs each test
