@@ -1239,5 +1239,25 @@ is verification source=Check with actor=Drone.
 
 ## Open questions
 
-Tracked in the Armada Decisions database, filtered to this document, and
-not reproduced here.
+
+- **[status-bar-loudness]** How loudly do the status bar's escalation and
+  approval counts render, beyond taking their status token?
+  The counts are the only status colour in the bar and show only when
+  non-zero. The constraint is that escalations interrupt and approvals
+  queue — styling an approval count as loudly as a broken drone would undo
+  that distinction and turn the bar into a second alert surface.
+
+- **[status-bar-onboarding]** During the hard-gated first-run sequence,
+  does the status bar read the same three runtime states as everywhere
+  else, or does onboarding get its own reading?
+  The bar states a healthy status out loud rather than implying it, because
+  an empty bar reads the same whether Fleet is healthy or dead — that is
+  settled and gives the three runtime states. But "Fleet is not running" is
+  correct and reads as an error on a new user's first screen, and it was
+  written for someone who already knows what Fleet is. Fleet is started by
+  hand at M1 and becomes reachable partway through onboarding, so the bar
+  changes state mid-journey either way; whether the bar is even present
+  before the first onboarding step completes is part of the same question,
+  since onboarding is not yet a Bridge surface.
+
+Also bearing on this document, and written where each belongs: `[attested-verdict-glyph]` in `iconography.md`; `[verdict-artifact-rows]` in `voice-engineering.md`. A question has one home — answering it in two places is how one of them goes stale.

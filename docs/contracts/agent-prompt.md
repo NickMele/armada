@@ -421,4 +421,5 @@ below.
 ## Open questions
 - Where does the prompt library live, and is a prompt version recorded on the verdict?
 - What is the actual wording of the Drone baseline prompt?
-- Is the Manifest scanner a model call or a third Agent?
+
+Also bearing on this document, and written where each belongs: `[manifest-scanner-agent-or-model-call]` in `system-architecture.md`. A question has one home — answering it in two places is how one of them goes stale.

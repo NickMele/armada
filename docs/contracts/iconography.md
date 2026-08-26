@@ -488,5 +488,35 @@ status vocabulary (Specified, Proposed, Retired, Banned) has no analogue to
 line up — worth a person's attention rather than something this document
 should paper over.
 
-Open items for this document are tracked in Notion's Open Items database and
-are not reproduced here.
+- **[nav-icon-active-fill]** Does the active nav surface change icon fill,
+  or only colour?
+  Navigation icons render at 16px, `--fg-muted` at rest and `--fg-default`
+  when active, never status-coloured. lucide icons are stroke-only outlines
+  with no matched filled variant, so "fill" would mean a background shape
+  behind the icon rather than a swapped glyph — the realistic option, and it
+  matters most in the collapsed 48px rail, where the icon is the whole nav
+  item and a background is the only affordance available. Expanded, the
+  label carries the affordance too, so the answer may differ by sidebar
+  state.
+
+- **[kit-file-icons]** Do the three Kit-file states — in Kit, drifted, not
+  in Kit — get icons, or stay label-only?
+  These are not Job states, so they sit outside the 16-badge table. Under
+  the rule for anything unlisted, the default is no icon, and three
+  unambiguous text labels may not need one — the 16-badge table only needed
+  icons because several escalation reasons shared one hue. Ship label-only
+  unless a real machine's worth of files in the column proves it hard to
+  scan; that cannot be judged without one.
+
+- **[attested-verdict-glyph]** Which glyph, if any, carries a criterion
+  verdict from source Attestation (`confirmed` / `withheld`)?
+  One glyph family per verification source is the settled rule —
+  `shield-*` for Checks, `file-*` for evidence, `circle-*` for Judge — and
+  all three are taken and reserved, so none can be widened without breaking
+  the rule that gives them their meaning. The human-figure family means a
+  person is required, not what a person concluded, and `user-check` already
+  carries `awaiting_approval` in the badge set. The alternative is that
+  Attestation draws no glyph at all, the same way Doctor's health grid
+  dropped its glyphs for words — which would make Attestation the one
+  verdict source that reads as wordless, arguably the right way to mark a
+  verdict a machine did not produce.

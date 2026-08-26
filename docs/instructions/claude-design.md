@@ -1,11 +1,3 @@
-# Claude Design — session contract
-
-This is the canonical copy. The design project's `CLAUDE.md` is pasted from
-here; edit this file first, then paste. A change made only in the design
-project is a change nobody else can find.
-
----
-
 # Armada — design session contract
 
 Read this before designing anything for Armada. It is binding.

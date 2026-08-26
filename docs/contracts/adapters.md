@@ -201,7 +201,35 @@ site, invisible to Guild, to Manifest and to Doctor.
   the config direction rule was withdrawn.
 
 Two embedded lists closed the original and are not reproduced here. One was
-live open questions from the decision record, filtered to this subject; those
-stay in the workspace. The other was the settings list, which is now
+open questions from the decision record, filtered to this subject; the ones
+still open are below. The other was the settings list, which is now
 `crates/config/settings.toml` — the crate that reads them owns it, and
 `configuration.md` holds the rules they obey.
+
+## Open questions
+
+- **[adapter-admission-test]** What test admits something as an Armada
+  adapter?
+  The compose decision added Docker as a fifth adapter, taken unscoped — "the
+  boundary is left open and this decision records no limit" — with its own
+  warning that four adapters was a chosen boundary and five is a precedent
+  for six. Configuration still names four adapters, so the fifth is
+  undocumented as well as unbounded. An adapter is the seam that keeps the
+  daemon core testable with no network; a set that grows on precedent rather
+  than on a test erodes that. A narrower, related question — whether an
+  agent harness must support MCP to count as an adapter — tests one adapter
+  kind, not the seam itself.
+
+- **[platform-differences-layer]** Is there a layer that owns platform
+  differences, and what belongs behind it?
+  The port-ceiling decision reads the platform's ephemeral floor at runtime
+  and records that this is the first place Armada reads a kernel parameter —
+  a small but genuinely new platform dependency that belongs behind
+  whatever handles platform differences rather than at the call site —
+  naming the layer without identifying it. The process-group ownership
+  decision notes that process-group semantics differ across platforms, that
+  v1 was bitten by both a Linux-specific and a BSD-specific regression, and
+  marks itself still open, though that gap appears only in its body, not in
+  its resolution. Armada is macOS single-user today; both dependencies are
+  cheap now and expensive to retrofit if Linux returns. The existing adapter
+  set is a boundary already widened once — see adapter-admission-test above.

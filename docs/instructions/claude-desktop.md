@@ -1,10 +1,3 @@
-# Claude Desktop — project instructions
-
-This is the canonical copy. The Armada project's instructions in the desktop
-app are pasted from here; edit this file first, then paste.
-
----
-
 ## Response format
 
 Every response ends with a "Need from you" block. Nothing after it.

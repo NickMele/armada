@@ -626,3 +626,53 @@ so they are not lost.
 | **Drone Run** is implied as an entity by the Drone split. Needs an ID, a table and a state machine, or an explicit decision that it stays columns on `jobs`. A retry spawns a second run against one Job, which is what argues for the table.<br>**Added Aug 2026:** `drone_runs.worktree_path` is the **only persisted worktree path in the design**, and under the worktree root decision it should not exist. The path is derivable — the Job's Manifest gives the repo, the job id gives the directory — and nothing can change underneath it, since the root is not configurable. Cheap to drop now, a migration later. The counter-argument is auditability: a stored path records where work happened even after the repo moves. But that is `job_events`' job, not a live lookup column's |
 | **Workspace** has no home on any axis. Convoy spans them, `setup.requires` references them, toolset resolution intersects across them, and no Concept, crate or Doctor module names one |
 | **Approval / Denial** and **Alert** may be missing entities. Both carry state that outlives the surface showing it — pattern learning counts denials across Jobs, and an Alert holds read and acted state |
+
+---
+
+## Open questions
+- **[orphaned-drone-on-restart]** On Fleet start, what happens to a Job whose Drone is still alive and orphaned?
+  Reconciliation already flags a Job `interrupted` when its Drone process is
+  gone. The other half is now reachable: `setsid` at Drone spawn is what
+  makes the Drone survive a Fleet restart, and that is also what creates a
+  Drone that outlives the Fleet that spawned it. Two candidates: re-adopt
+  (the Drone already writes to its per-Job log file rather than a pipe, so
+  Fleet could just resume tailing it — a spawn-time design choice, not a
+  recovery-time one) or kill-and-flag `interrupted` (simple and consistent
+  with the other half, but conflicts with "killing is exclusively a human
+  action"). Interacts with the rule that an `interrupted` Job's worktree is
+  never swept — an orphaned-but-alive Drone keeps writing into that
+  worktree while Fleet decides. Resolve alongside the Drone spawn
+  implementation, since "re-adopt" is decided by how the Drone's output is
+  plumbed at spawn time.
+- **[manifest-scanner-agent-or-model-call]** Is the Manifest Setup wizard's scan step a model call or a third Agent?
+  The taxonomy test (section 9) is whether an invocation carries a
+  toolset — Drone and Helm do, Judge, the Job proposer and Voice generation
+  don't, and the scanner is the only one of the nine invocations left
+  unclassified. If the wizard gathers repo facts mechanically and passes
+  them as context, it's a model call living in `config` alongside
+  scan/propose/select/verify. If it gets a read-only toolset and inspects
+  the repo itself, it's a third Agent, needing toolset resolution, a model
+  choice, a budget and a lifetime, and a new member in the Concepts `Kind`
+  vocabulary. Blocked on the Manifest Setup wizard design — the Proposal
+  phase is an iterative loop toward a satisfied `armada.yml`, which leans
+  toward the scanner needing to look again between rounds, but that is an
+  inference, not a decision.
+- **[kit-machine-manifest-resolution-chain]** What is the resolution chain across Kit, Machine and Manifest, and what does `get_manifest` return?
+  `get_manifest` used to return "resolved config after Guild merge"; with
+  Guild split into Kit and Machine, the merge order is unstated. Needs
+  deciding: the tier resolution order and which tiers narrow versus
+  define (the config-direction rule that config may only narrow was
+  withdrawn, so narrowing is no longer the default assumption); whether
+  Machine participates in the resolution `get_manifest` returns at all, or
+  sits outside it as per-install settings a Manifest never sees; and
+  whether a caller receives one merged object or the tiers separately so
+  each value's source stays visible.
+- **[guild-row-concepts-split]** Does the Guild row in the Armada Concepts database become one row or two, now that Guild split into Kit and Machine?
+  The Guild row is currently tagged Entity and named as one concept in
+  section 9's "Filing the concepts" table; Kit already has its own concept
+  page. Needs deciding: whether Machine earns its own Concepts row, or is a
+  Shape/Policy on another entity rather than an entity itself; what happens
+  to the existing Guild row and its inbound relations; and how the concept
+  table's row count changes as a result.
+
+Also bearing on this document, and written where each belongs: `[adapter-admission-test]` in `adapters.md`; `[config-source-enum-values]` in `configuration.md`; `[platform-differences-layer]` in `adapters.md`. A question has one home — answering it in two places is how one of them goes stale.

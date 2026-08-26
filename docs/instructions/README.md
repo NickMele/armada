@@ -11,6 +11,10 @@ approximations of it.
 | `claude-desktop.md` | The Armada project's instructions in the Claude desktop app |
 | `claude-design.md` | `CLAUDE.md` in the Armada Mockups design project |
 
+**Each file is exactly what gets pasted, byte for byte.** No header, no note
+about being canonical — anything in the file would go into the destination
+along with it. That is what this README is for.
+
 **Edit here first, then paste.** A change made only in the app is a change the
 next person cannot find.
 

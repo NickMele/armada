@@ -107,7 +107,7 @@ lint with the checks runner.*
 
 ---
 
-## Open items from the voice contract
+## Open questions
 
 - **Judge rename sweep.** — **Done Aug 2026.** Judge is decided and the
   workspace is consistent. Fixed: Fleet ("Mechanical Check → Judge
@@ -123,5 +123,15 @@ lint with the checks runner.*
   System](design-system.md) lexicon, where "the auditor" is listed as a
   banned alternate and is supposed to appear.
 
-Open items for this document are tracked in Notion's Open Items database
-and are not reproduced here.
+- **[verdict-artifact-rows]** Do the step-verdict and criterion-verdict
+  vocabularies get written into the enum→verb artifact as their own rows?
+  Three vocabularies are decided — step verdict pass reads "Step N of M
+  verified"; Check criterion verdicts read `passed` / `failed` / `not
+  reached`; Judge criterion verdicts read `no objection` / `refused` — but
+  none exists in the artifact yet. Requirement 5 above specifies one
+  artifact with one test covering every vocabulary, not only Job states,
+  so this is that requirement's remaining gap. Left undone, designers
+  hand-write these headlines and the copy rules get broken by omission,
+  which is how "Judge passed" happened.
+
+Also bearing on this document, and written where each belongs: `[status-bar-loudness]` in `design-system.md`. A question has one home — answering it in two places is how one of them goes stale.

@@ -77,3 +77,175 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
 
 - **Owner is the unit that enforces a setting, not the page that documents it.** Six settings moved: `Drone/Job timeout`, `Approval request timeout`, `Job retention` and `Drone heartbeat` were filed under Job and Drone, which are records rather than actors — Fleet enforces all four. `Secrets exposure method` moved from Drone to Fleet for the same reason. Where a setting's documenting page is not a Concept row at all, Owner is deliberately empty: both copy-lint settings, because the Agent Copy Contract is a contract rather than a component.
 - **Fourteen settings were added that code will read and nothing defined.** The Judge — the only tier in the system that measures correctness — had none of the original settings: no model, no threshold, no cost cap, no trigger set. Neither did `ModelClient`, `AgentHarness`'s binary path, the Secrets provider, the VCS host, the worktree root, the Evidence MCP bind address, or `verification`'s `max_context_size`. Each carries a `default` of `undecided` rather than a silent constant.
+
+## Open questions
+
+- **[evidence-clarification-round-cap]** Is the evidence clarification-round
+  cap 2 or 3?
+  The cap is a content-sufficiency counter — evidence arrived through the
+  Evidence MCP tool but was insufficient, so Fleet prompts for more. It is
+  distinct from `poke_limit`, the liveness counter used for silence and
+  plain-text bypass, even though both terminate in a `stalled` escalation.
+  The value is directionally 2-3 rounds; the exact value is a Kit/Manifest
+  config row and needs a shipped default.
+
+- **[root-manifest-default-posture]** What is the schema and surface for the
+  root-Manifest default-posture setting?
+  The Job-shape classifier leans on this setting as a prior — prefer Convoy
+  versus prefer strict per-workspace boundaries. Its existence is agreed;
+  its schema and surface are not. Open: whether it is a two-value toggle or
+  a scale; whether it lives in the root `armada.yml` only or a workspace may
+  override it; where it is edited — Manifest Setup, or a settings surface
+  after the fact; and whether the classifier's proposed shape is shown
+  alongside the posture that produced it, so an unexpected proposal is
+  diagnosable. The step's Definition of Done requires that changing the
+  posture measurably changes the proposed shape for an otherwise-identical
+  prompt, which is untestable until the setting has a schema.
+
+- **[commit-template-vs-copy-lint]** Which wins, a Manifest commit/PR
+  template or the Agent Copy Contract's lint?
+  A Manifest-level commit/PR message template is a per-project convention;
+  the lint is a fixed phrase blocklist. A project template could mandate a
+  format the lint rejects — a required bulleted body, for example.
+  Precedence is undecided: if the lint only warns, the collision is
+  cosmetic; if it gates, a project's own convention can block its own
+  Drones.
+
+- **[manifest-budget-soft-warning]** Does Manifest-level budget need a
+  soft-warning threshold like Helm's?
+  Helm's budget has a soft-warning threshold and no hard cap, deliberately,
+  because talking to Helm is a choice made in real time, while a Drone
+  burning budget unattended is a risk. Manifest-level budget currently has
+  only a hard cap. For: a dispatch blocked at the cap is a surprise, and a
+  warning at 80% is a chance to raise the cap deliberately rather than
+  discovering it mid-session. Against: the budget number is already visible
+  in every Job row and the status bar, so a threshold just makes it louder.
+  The Manifest cap fully overrides the tier above it rather than stacking,
+  so any warning threshold would carry the same override semantics.
+
+- **[job-board-sort-order]** What is the Job Board's default sort order?
+  Not recorded — the question has no body beyond its own title.
+
+- **[helm-budget-warning-threshold]** What is Helm's budget soft-warning
+  threshold value?
+  Helm has a soft-warning threshold and deliberately no hard cap — it is a
+  human-driven tool steered in real time, not autonomous background spend.
+  The config slot exists; the default value does not.
+
+- **[copy-lint-surface-narrowing]** May a Manifest narrow which surfaces the
+  Agent Copy Contract's lint covers?
+  PR descriptions, commit messages and Judge summaries are linted by
+  default; evidence summaries and Helm replies are deliberately excluded.
+  The question originally leaned on the config direction rule — narrower or
+  off is legal, wider is not — but that rule was withdrawn 22 Aug 2026 (see
+  "Polarity is a description, not a legality rule" above), so it no longer
+  settles anything here. Whether the linted set should be narrowable by a
+  Manifest at all is the live question, given that PR and commit text
+  leaves the app permanently once written. A parallel question — whether a
+  Voice setting can widen or narrow the same lint — is tracked separately in
+  Notion.
+
+- **[budget-exhaustion-gate-or-transition]** Is budget exhaustion a gate
+  verdict, or a Job state transition?
+  Raised by the config review, deciding whether verification reads the
+  budget cap at all. If it is a gate verdict, verification reads the
+  per-Job or per-Drone cost cap, and a budget failure counts against the
+  gate-failure retry limit — producing drift already recorded between the
+  retry limit, the clarification-round cap and the Drone/Job timeout, since
+  a Job killed for spending would be recorded as a step that failed three
+  times. If it is a Job state transition, Fleet checks the cap around
+  verification rather than inside it, verification never reads it, and the
+  settings row naming verification as a consumer of budget is wrong. The
+  settings column cannot settle this; the answer decides the column.
+
+- **[judge-prompt-assembly]** Does verification assemble the Judge prompt,
+  or does Fleet assemble it and verification return structured verdicts
+  that Fleet renders?
+  Raised by the config review, deciding whether Voice/tone is an input to
+  verification — Voice governs runtime-generated prose, including Judge
+  summaries. If verification assembles the prompt, it needs Voice, and the
+  settings row listing it as a consumer is right. If Fleet assembles the
+  prompt and verification returns structured verdicts, verification never
+  sees Voice, and that row names a consumer that does not exist. The second
+  shape is the cleaner one and keeps verification free of anything but a
+  `ModelClient` call, so it is the likelier answer. It also determines
+  whether the Agent Copy Contract's lint gates a string verification
+  produced or one Fleet produced.
+
+- **[features-and-limits-settings]** What are the Features and Limits
+  settings?
+  Named in the original concept notes as Guild settings and never defined —
+  too vague to become config rows at the time, and still undefined. They
+  either resolve into concrete rows here, or get dropped explicitly; left as
+  a name with no definition, they quietly evaporate. Whether they are Kit or
+  Machine settings cannot be assigned until the settings themselves are
+  defined — the project-level test has nothing to run against.
+
+- **[merge-strategy-lifetime-enforcement]** Should merge strategy and
+  lifetime be enforced structurally rather than left as documented
+  convention, and if so, when does that land?
+  Both properties exist as columns in the settings list, and every row
+  carries a value today, but nothing prevents a future row leaving either
+  blank — every v1 failure was a convention failure. The structural
+  alternative was costed and not taken: a `Setting` trait with no-default
+  `MERGE` and `LIFETIME` associated constants, polarity newtypes (`Cap`
+  merges by min, `Floor` by max, an allow-shaped list by intersection, a
+  deny-shaped list by union) so `REPLACE` is not constructible for a cap, a
+  `SettingKey` enum with one exhaustive match per owning crate, and two
+  golden tests — a registry-key test against the serde field names of
+  `KitConfig` and `ManifestConfig` under `deny_unknown_fields`, and a
+  snapshot of the descriptor list so a tier move is a reviewable diff.
+  Roughly two days, about ten lines per new setting. Deferred to the commit
+  that first writes a merge function, because a merge function written
+  without polarity is the bug this review was about. Left open: the
+  registry-key test only has two halves — `KitConfig`, `ManifestConfig` — a
+  Machine setting has no corresponding half, so whether a third half exists
+  and what it is called is config-source-enum-values, below.
+
+
+- **[config-source-enum-values]** What are the legal values of the `source`
+  tag Fleet writes on each key of a Job's resolved config record?
+  The record is a flat map of key → (value, source), written once per Job
+  at spawn, with `source` recorded as `kit` / `machine` / `manifest` /
+  `default` today — `guild.yml` itself is retired, replaced by `kit.yml`
+  and `machine.yml`. Whether Machine participates in the resolution
+  `get_manifest` returns, or sits outside it as per-install settings a
+  Manifest never sees, is itself undecided and gates this question — it
+  cannot be answered ahead of that one. Machine has one value, no Manifest
+  tier and no merge, so a Machine-sourced value can never have been
+  overridden — whether `machine` is a fourth source value or a
+  non-participant that never appears in the record is the crux. The
+  tier-moves argument for hard-failing unknown keys was worked through
+  Budget moving from one tier to a two-tier scope; Budget is Machine, and
+  Machine has no second tier, so that move is not possible and the example
+  no longer describes anything — the argument may survive on a different
+  example. The registry-key golden test checks keys against the serde field
+  names of `KitConfig` and `ManifestConfig` under `deny_unknown_fields`; a
+  Machine setting has no corresponding half, so an orphan on the Machine
+  side goes uncaught.
+
+- **[armada-yml-schema]** What is the exact `armada.yml` schema?
+  M1 decided only a subset — `version`, `id`, `checks.<name>.run`,
+  `commands.<name>.run` and `commands.<name>.destructive` — with every
+  other key (`setup`, `permissions`, `knowledge`, `policy`,
+  `checks.*.when`, `checks.*.requires`, `commands.*.description`)
+  hard-failing as unknown until Reach. Beyond that, what is still open: the
+  file syntax for how a Check declares its command; how the Commands
+  registry is structured and relates to the allowlist; how Checks and
+  Commands are told apart on disk; the syntax for a root Check's path
+  condition (its meaning — root paths are the paths no workspace claims —
+  is already settled); and how a Manifest declares its own values for
+  two-tier Kit settings. A design pass proposes a concrete schema —
+  sections for `version`, `id`, `checks`, `commands`, `setup`,
+  `permissions`, `knowledge` and `policy`, with `permissions` intersecting
+  across a Convoy and `knowledge` unioning — tested against the Armada Job
+  Scenarios, but is explicitly not a decision: scenarios it cannot express
+  (a Workspace created mid-Job becoming a gate; a workspace depending on a
+  sibling workspace's output) are named, and further gaps are filed as
+  their own open items, including a Drone's ability to weaken its own gate
+  by editing the file that defines it, and no tombstone for a deleted
+  Manifest's `id`. Position validation, the VCS-root walk, one schema
+  validated by position, exit-code-only Checks, and Commands as their own
+  ungated grant are already decided and not open for re-litigation.
+
+Also bearing on this document, and written where each belongs: `[adapter-admission-test]` in `adapters.md`. A question has one home — answering it in two places is how one of them goes stale.

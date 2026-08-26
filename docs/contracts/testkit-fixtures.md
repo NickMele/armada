@@ -390,3 +390,26 @@ CLI's wire format — the same signal-vs-reality gap, relocated.
   right after a CLI upgrade), nightly via cron, and as a release gate.
   **Never on every PR** — it needs the real CLI, network, and nonzero
   cost.
+
+---
+
+## Open questions
+- **[requires-diff-milestone-owner]** Which milestone owns `requires_diff` and denial-correlation escalation?
+  The old plan staged fixture 6's fix across four steps, with the third
+  being `requires_diff` becoming a per-WorkflowDef flag — never global,
+  since an Investigation or Spike Job legitimately produces no diff — plus
+  correlation escalation, where a Job reaching `completed_failed` or
+  tripping `requires_diff` with denials present escalates carrying them as
+  the likely cause. The phase-to-milestone mapping splits detection work
+  to Trust, unstick-and-retry work to Recovery, and parallelism to
+  Throughput, and doesn't resolve which owns this: `requires_diff` reads
+  as a gate assertion evaluated at the same moment the advance gate runs
+  (M1, which already owns the gate), while correlation escalation reads as
+  inference over the stream (Trust). Splitting is possible — the fixture's
+  `requires_diff: true`/`false` half is testable without any denial
+  correlation, but the with-denials-versus-without half is not — but it
+  means fixture 6 goes partly green in one milestone and fully green in
+  another. Blocks running a mechanical Check on a step, since a Check
+  reading only an exit code can't fail a Job for producing nothing, and
+  blocks writing fixture 6 itself. Does not block M0, since fixture 6 is
+  not one of the five the M0 gate checks.
