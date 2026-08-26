@@ -72,8 +72,7 @@ pub trait Daemon: Send + Sync + 'static {
     ///
     /// Legal from every non-terminal status, including those with no Drone
     /// under them, which is why it cannot be spelled as [`Daemon::kill_drone`].
-    fn kill_job(&self, job_id: JobId)
-        -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+    fn kill_job(&self, job_id: JobId) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 }
 
 /// A request the daemon would not serve.
@@ -107,9 +106,9 @@ impl Refusal {
 
     pub fn error(&self) -> &WireError {
         match self {
-            Refusal::NoSuchJob(error)
-            | Refusal::IllegalMove(error)
-            | Refusal::Fault(error) => error,
+            Refusal::NoSuchJob(error) | Refusal::IllegalMove(error) | Refusal::Fault(error) => {
+                error
+            }
         }
     }
 }

@@ -102,10 +102,7 @@ pub enum Presence {
     /// No file. Fleet has never started here, or it exited cleanly.
     NotRunning,
     /// A file, and the process it names is not the one that wrote it.
-    Stale {
-        found: RuntimeFile,
-        why: Staleness,
-    },
+    Stale { found: RuntimeFile, why: Staleness },
     /// A file whose pid is held by the same process that wrote it. The port is
     /// worth connecting to; whether anything answers is the next question.
     Running(RuntimeFile),
@@ -178,9 +175,7 @@ impl Vacancy {
 pub fn read(path: &Path) -> Result<Presence, ReadError> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
-            return Ok(Presence::NotRunning)
-        }
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(Presence::NotRunning),
         Err(cause) => {
             return Err(ReadError::Unreadable {
                 path: path.to_path_buf(),
@@ -269,7 +264,10 @@ impl RuntimeFile {
 /// Where the file is assembled before it is renamed into place. A sibling, so
 /// the rename stays on one filesystem and stays atomic.
 fn staging_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap_or(FILE_NAME.as_ref()).to_os_string();
+    let mut name = path
+        .file_name()
+        .unwrap_or(FILE_NAME.as_ref())
+        .to_os_string();
     name.push(".writing");
     path.with_file_name(name)
 }
@@ -340,7 +338,10 @@ impl std::error::Error for NoHome {}
 /// folding a failed read into it tells a caller Fleet is down on no evidence.
 #[derive(Debug)]
 pub enum ReadError {
-    Unreadable { path: PathBuf, cause: io::Error },
+    Unreadable {
+        path: PathBuf,
+        cause: io::Error,
+    },
     Undecodable {
         path: PathBuf,
         cause: ipc::Undecodable,
@@ -352,13 +353,15 @@ impl std::fmt::Display for ReadError {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ReadError::Unreadable { path, .. } => {
-                write!(out, "the runtime file at {} could not be read", path.display())
+                write!(
+                    out,
+                    "the runtime file at {} could not be read",
+                    path.display()
+                )
             }
-            ReadError::Undecodable { path, .. } => write!(
-                out,
-                "{} is not a runtime file Armada wrote",
-                path.display()
-            ),
+            ReadError::Undecodable { path, .. } => {
+                write!(out, "{} is not a runtime file Armada wrote", path.display())
+            }
             ReadError::ProbeFailed(_) => {
                 out.write_str("the process named by the runtime file could not be checked")
             }
@@ -379,15 +382,22 @@ impl std::error::Error for ReadError {
 /// Why the runtime file could not be published.
 #[derive(Debug)]
 pub enum PublishError {
-    Unwritable { path: PathBuf, cause: io::Error },
+    Unwritable {
+        path: PathBuf,
+        cause: io::Error,
+    },
     ProbeFailed(ProbeFailed),
     /// The running process cannot see itself. Not reachable in practice, and
     /// named rather than unwrapped because a panic here is a daemon that dies
     /// at startup with no line saying why.
-    OwnPidNotHeld { pid: u32 },
+    OwnPidNotHeld {
+        pid: u32,
+    },
     /// Four scalars would not serialise. Carried as text because there is no
     /// typed fault under it worth reconstructing.
-    Unencodable { cause: String },
+    Unencodable {
+        cause: String,
+    },
 }
 
 impl std::fmt::Display for PublishError {

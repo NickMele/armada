@@ -18,7 +18,9 @@ use core_model::{
     TopLevelOrigin, Ulid, Urgency, WorkflowId,
 };
 use testkit::{FakeWorkProduct, Gate, Sketch};
-use verification::{CheckFailed, NeverRan, Submission};
+use verification::{
+    CheckFailed, Claimed, NeverRan, NotASubmission, NotClaimed, ShownBy, Submission,
+};
 
 use crate::evidence::{Call, EvidenceInbox, EvidenceTool};
 use crate::gate::{apply, rule_on, AtStep, CheckBudget, Ruling};
@@ -112,13 +114,35 @@ fn worktree() -> Worktree {
 }
 
 fn diff_evidence() -> Submission {
-    Submission::submitted(EvidenceType::Diff, "Replaced the loop with a fold.", None)
-        .expect("a legal submission")
+    Submission::submitted(
+        EvidenceType::Diff,
+        Claimed("The loop is a fold."),
+        ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
+        NotClaimed(""),
+        None,
+    )
+    .expect("a legal submission")
 }
 
 fn note_evidence() -> Submission {
-    Submission::submitted(EvidenceType::FactsNote, "Summary.", Some("The note."))
-        .expect("a legal submission")
+    Submission::submitted(
+        EvidenceType::FactsNote,
+        Claimed("The path is derived from the repo name."),
+        ShownBy("`worktree.rs:40`"),
+        NotClaimed(""),
+        Some("The note."),
+    )
+    .expect("a legal submission")
+}
+
+fn diff_call<'a>() -> Call<'a> {
+    Call {
+        evidence_type: EvidenceType::Diff,
+        claimed: Claimed("The loop is a fold."),
+        shown_by: ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
+        not_claimed: NotClaimed(""),
+        note: None,
+    }
 }
 
 fn budget() -> CheckBudget {
@@ -131,16 +155,7 @@ fn budget() -> CheckBudget {
 fn the_tool_returns_recorded_and_nothing_else() {
     let inbox = EvidenceInbox::new();
     let tool = EvidenceTool::for_job(job_id(), &inbox);
-    let receipt = tool
-        .submit(
-            Call {
-                evidence_type: EvidenceType::Diff,
-                summary: "Done.",
-                note: None,
-            },
-            at(NOW),
-        )
-        .expect("a legal call");
+    let receipt = tool.submit(diff_call(), at(NOW)).expect("a legal call");
     assert_eq!(receipt.word(), "recorded");
 }
 
@@ -151,20 +166,30 @@ fn the_tool_returns_recorded_and_nothing_else() {
 fn submitting_decides_nothing_and_leaves_the_evidence_waiting() {
     let inbox = EvidenceInbox::new();
     let tool = EvidenceTool::for_job(job_id(), &inbox);
-    tool.submit(
-        Call {
-            evidence_type: EvidenceType::Diff,
-            summary: "Done.",
-            note: None,
-        },
-        at(NOW),
-    )
-    .expect("a legal call");
+    tool.submit(diff_call(), at(NOW)).expect("a legal call");
 
     assert_eq!(inbox.waiting(), 1);
     let landed = inbox.take().expect("the submission");
     assert_eq!(landed.job, job_id());
-    assert_eq!(landed.submission.summary(), "Done.");
+    assert_eq!(landed.submission.claimed(), "The loop is a fold.");
+    assert_eq!(inbox.waiting(), 0);
+}
+
+/// "Tests pass" is not an artifact and no string at all is less than one. The
+/// tool refuses it, and refusing means nothing reaches the inbox — a Drone that
+/// evidenced nothing has not queued a gate run.
+#[test]
+fn a_call_naming_no_artifact_records_nothing() {
+    let inbox = EvidenceInbox::new();
+    let tool = EvidenceTool::for_job(job_id(), &inbox);
+    let refused = tool.submit(
+        Call {
+            shown_by: ShownBy(""),
+            ..diff_call()
+        },
+        at(NOW),
+    );
+    assert_eq!(refused, Err(NotASubmission::ShownByEmpty));
     assert_eq!(inbox.waiting(), 0);
 }
 
@@ -175,8 +200,8 @@ fn a_malformed_call_records_nothing() {
     let refused = tool.submit(
         Call {
             evidence_type: EvidenceType::FactsNote,
-            summary: "Done.",
             note: None,
+            ..diff_call()
         },
         at(NOW),
     );

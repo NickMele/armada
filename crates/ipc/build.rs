@@ -22,8 +22,12 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", source.display());
 
-    let text = fs::read_to_string(&source)
-        .unwrap_or_else(|e| panic!("{} is the source of truth for the protocol version and could not be read: {e}", source.display()));
+    let text = fs::read_to_string(&source).unwrap_or_else(|e| {
+        panic!(
+            "{} is the source of truth for the protocol version and could not be read: {e}",
+            source.display()
+        )
+    });
 
     let version = text
         .lines()
@@ -36,6 +40,9 @@ fn main() {
 
     let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"))
         .join("protocol_version.rs");
-    fs::write(&out, format!("pub const PROTOCOL_VERSION: u32 = {version};\n"))
-        .expect("OUT_DIR is writable");
+    fs::write(
+        &out,
+        format!("pub const PROTOCOL_VERSION: u32 = {version};\n"),
+    )
+    .expect("OUT_DIR is writable");
 }

@@ -74,7 +74,11 @@ fn a_transition_becomes_an_event_with_its_reason() {
         .transition(Target::Queued, Actor::Human, at("2026-08-26T09:01:00.000Z"))
         .expect("awaiting_approval -> queued is an edge")
         .job
-        .transition(Target::Running, Actor::Fleet, at("2026-08-26T09:02:00.000Z"))
+        .transition(
+            Target::Running,
+            Actor::Fleet,
+            at("2026-08-26T09:02:00.000Z"),
+        )
         .expect("queued -> running is an edge")
         .job
         .transition(
@@ -87,7 +91,10 @@ fn a_transition_becomes_an_event_with_its_reason() {
     let event = crate::JobStateChanged::from(&moved.event);
     assert_eq!(event.from.domain(), JobStatus::Running);
     assert_eq!(event.to.domain(), JobStatus::AwaitingAttestation);
-    let reason = event.reason.clone().expect("an attestation debt is a reason");
+    let reason = event
+        .reason
+        .clone()
+        .expect("an attestation debt is a reason");
     assert_eq!(reason.named, None, "a debt is references, not a name");
     assert_eq!(reason.criteria_owed.len(), 1);
 

@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use ipc::{
-    Actor, Event, Instant, JobId, JobList, JobStateChanged, JobStatus, JobSummary,
-    ManifestId, Origin, ProposeJob, RunId, UnreadableJob, Urgency, WorkflowId,
+    Actor, Event, Instant, JobId, JobList, JobStateChanged, JobStatus, JobSummary, ManifestId,
+    Origin, ProposeJob, RunId, UnreadableJob, Urgency, WorkflowId,
 };
 
 use crate::{Broadcaster, Daemon, Refusal};
@@ -49,10 +49,13 @@ impl FakeDaemon {
 
     /// A row the store could not read back, which the list must still carry.
     pub fn with_unreadable(self, fault: &str) -> FakeDaemon {
-        self.unreadable.lock().expect("not poisoned").push(UnreadableJob {
-            job_id: None,
-            fault: fault.to_string(),
-        });
+        self.unreadable
+            .lock()
+            .expect("not poisoned")
+            .push(UnreadableJob {
+                job_id: None,
+                fault: fault.to_string(),
+            });
         self
     }
 
@@ -68,7 +71,13 @@ impl FakeDaemon {
     }
 
     /// Move a Job, publish the transition, and answer with where it now is.
-    fn move_to(&self, job_id: &JobId, from: &str, to: &str, actor: &str) -> Result<JobSummary, Refusal> {
+    fn move_to(
+        &self,
+        job_id: &JobId,
+        from: &str,
+        to: &str,
+        actor: &str,
+    ) -> Result<JobSummary, Refusal> {
         let mut jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter_mut().find(|job| job.id == *job_id) else {
             return Err(self.no_such_job(job_id));

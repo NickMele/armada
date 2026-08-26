@@ -1,4 +1,4 @@
-//! What a Drone hands over, and the three things it may say.
+//! What a Drone hands over, and the things it may say.
 //!
 //! # There is no `source` field, and that is the whole guarantee
 //!
@@ -13,13 +13,50 @@
 //! on, so a Drone naming one could only agree with Fleet or disagree with it,
 //! and the disagreeing case would need a rule. There is no parameter.
 //!
-//! # Three fields, and only one of them gates anything
+//! # The record: `claimed`, `shown_by`, `not_claimed`
 //!
-//! `evidence_type` says what kind of work product this is. `summary` is
-//! markdown for a person to read and **gates nothing** — no rule reads it, and
-//! nothing in this crate looks at its contents. `note` is required exactly
-//! where the type is `facts_note`, which is the one type that hands over
-//! something the Drone produced rather than something Fleet derives for itself.
+//! These are the field names the Agent Copy Contract defines and the Drone
+//! prompts already ask for by name — the clarification reprompt says "Shown by
+//! names no artifact", and the force-interrupt directive says partial work with
+//! an accurate Not claimed is worth more than carrying on. A tool taking any
+//! other vocabulary would instruct a Drone in one language and hand it a form
+//! in another.
+//!
+//! | Field | Holds |
+//! |---|---|
+//! | `claimed` | What the work now does, as an observable — behaviour, never a description of the change |
+//! | `shown_by` | The artifact demonstrating it — a named test, a command and exit code, a rendered string |
+//! | `not_claimed` | Everything the claim does not assert — the gap, and the side effect |
+//!
+//! **Empty is legal, absent is not**, and that distinction is a type rather
+//! than a check: [`NotClaimed`] is not an `Option`, so a Drone saying it left
+//! nothing behind is expressible and a Drone declining to answer is not.
+//! `claimed` and `shown_by` are refused when empty, because a record whose
+//! claim or whose artifact is blank has evidenced nothing.
+//!
+//! **Nothing here gates.** No rule in this crate reads any of the three: the
+//! Judge never reads a work submission and the mechanical tier does not parse
+//! one. Their only reader is a person, which is exactly why padding
+//! `not_claimed` buys nothing.
+//!
+//! # Three prose fields, and two of them are interchangeable to a compiler
+//!
+//! `claimed` and `shown_by` are both prose about the same work, so a call
+//! passing them the wrong way round would type-check and produce a record that
+//! reads backwards — and the contract's first rule about this record is that
+//! the two are not the same kind of thing. [`Claimed`], [`ShownBy`] and
+//! [`NotClaimed`] exist so that swap is a compile error rather than a
+//! convention.
+//!
+//! # `note` survives, because `facts_note` has no artifact outside the call
+//!
+//! Every other evidence type points at something Fleet can reach for itself —
+//! the diff is in the worktree, the test run is its own run, the document is on
+//! disk. `facts_note` is the one type whose work product **is** the submission,
+//! and folding it into `shown_by` would make that field hold an artifact
+//! instead of naming one, which is the circularity the contract rules out.
+//! So `note` stays: required exactly where the type is `facts_note`, refused
+//! everywhere else.
 //!
 //! # Why the vocabulary is `config`'s and not this crate's
 //!
@@ -30,6 +67,26 @@
 //! read the same enum.
 
 use config::EvidenceType;
+
+/// What the work now does, as an observable.
+///
+/// A newtype so that it cannot be passed where [`ShownBy`] is expected. It
+/// validates nothing — whether a claim is behaviour rather than a description
+/// of the change is a person's reading, and Armada does not parse.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Claimed<'a>(pub &'a str);
+
+/// The artifact demonstrating the claim — a named test, a command and its exit
+/// code, a rendered string.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShownBy<'a>(pub &'a str);
+
+/// Everything the claim does not assert — the gap, and the side effect.
+///
+/// **Not an `Option`.** Empty is a legal value and absent is not a value at
+/// all, so the two cannot be confused at a call site.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NotClaimed<'a>(pub &'a str);
 
 /// Why a submission was refused before it reached the gate.
 ///
@@ -46,9 +103,16 @@ pub enum NotASubmission {
     /// misled, and a field nothing reads is a promise the call makes and the
     /// system does not keep.
     NoteNotRead { evidence_type: EvidenceType },
-    /// The summary is empty or whitespace. It gates nothing, but it is what a
-    /// person reads on the Board, and an empty one is a blank row.
-    SummaryEmpty,
+    /// `claimed` is empty or whitespace. It gates nothing, but it is the record
+    /// — a submission asserting nothing is a blank row a reviewer cannot act
+    /// on.
+    ClaimedEmpty,
+    /// `shown_by` is empty or whitespace. The contract's wording is that it
+    /// names an artifact, and no string at all names none.
+    ///
+    /// This is the one refusal a Drone is likeliest to earn, and the
+    /// clarification reprompt is written for it.
+    ShownByEmpty,
 }
 
 impl core::fmt::Display for NotASubmission {
@@ -62,7 +126,8 @@ impl core::fmt::Display for NotASubmission {
                 "a note was given on a {:?} submission, where nothing reads one",
                 evidence_type
             ),
-            NotASubmission::SummaryEmpty => write!(f, "the summary is empty"),
+            NotASubmission::ClaimedEmpty => write!(f, "the submission claims nothing"),
+            NotASubmission::ShownByEmpty => write!(f, "shown by names no artifact"),
         }
     }
 }
@@ -79,51 +144,80 @@ impl std::error::Error for NotASubmission {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Submission {
     evidence_type: EvidenceType,
-    summary: String,
+    claimed: String,
+    shown_by: String,
+    /// Required, and legitimately empty. Whitespace-only arrives here as `""`,
+    /// so "nothing left behind" has one representation and a reader's empty
+    /// check is total.
+    not_claimed: String,
     /// `Some` exactly when [`Submission::evidence_type`] is
-    /// [`EvidenceType::FactsNote`]. Both refusals above exist to hold that.
+    /// [`EvidenceType::FactsNote`]. [`NotASubmission::NoteRequired`] and
+    /// [`NotASubmission::NoteNotRead`] exist to hold that.
     note: Option<String>,
 }
 
 impl Submission {
-    /// The only way to make one: the three fields the tool takes.
+    /// The only way to make one: the fields the tool takes.
     ///
     /// Every argument is one the Drone supplied. Nothing else is accepted,
     /// because nothing else is a field.
     pub fn submitted(
         evidence_type: EvidenceType,
-        summary: &str,
+        claimed: Claimed<'_>,
+        shown_by: ShownBy<'_>,
+        not_claimed: NotClaimed<'_>,
         note: Option<&str>,
     ) -> Result<Submission, NotASubmission> {
-        if summary.trim().is_empty() {
-            return Err(NotASubmission::SummaryEmpty);
+        if claimed.0.trim().is_empty() {
+            return Err(NotASubmission::ClaimedEmpty);
         }
+        if shown_by.0.trim().is_empty() {
+            return Err(NotASubmission::ShownByEmpty);
+        }
+        let not_claimed = if not_claimed.0.trim().is_empty() {
+            ""
+        } else {
+            not_claimed.0
+        };
         let note = note.filter(|text| !text.trim().is_empty());
-        match (evidence_type, note) {
-            (EvidenceType::FactsNote, None) => Err(NotASubmission::NoteRequired),
-            (EvidenceType::FactsNote, Some(note)) => Ok(Submission {
-                evidence_type,
-                summary: summary.to_string(),
-                note: Some(note.to_string()),
-            }),
-            (other, Some(_)) => Err(NotASubmission::NoteNotRead {
-                evidence_type: other,
-            }),
-            (other, None) => Ok(Submission {
-                evidence_type: other,
-                summary: summary.to_string(),
-                note: None,
-            }),
-        }
+        let note = match (evidence_type, note) {
+            (EvidenceType::FactsNote, None) => return Err(NotASubmission::NoteRequired),
+            (EvidenceType::FactsNote, Some(note)) => Some(note.to_string()),
+            (other, Some(_)) => {
+                return Err(NotASubmission::NoteNotRead {
+                    evidence_type: other,
+                })
+            }
+            (_, None) => None,
+        };
+        Ok(Submission {
+            evidence_type,
+            claimed: claimed.0.to_string(),
+            shown_by: shown_by.0.to_string(),
+            not_claimed: not_claimed.to_string(),
+            note,
+        })
     }
 
     pub fn evidence_type(&self) -> EvidenceType {
         self.evidence_type
     }
 
-    /// Markdown, for a person. **Nothing routes on it.**
-    pub fn summary(&self) -> &str {
-        &self.summary
+    /// What the work now does. **Nothing routes on it.**
+    pub fn claimed(&self) -> &str {
+        &self.claimed
+    }
+
+    /// The artifact demonstrating the claim. **Nothing routes on it** — naming
+    /// an artifact is not the same as Armada reading one.
+    pub fn shown_by(&self) -> &str {
+        &self.shown_by
+    }
+
+    /// What the claim does not assert. Empty means the Drone left nothing
+    /// behind, which is an answer.
+    pub fn not_claimed(&self) -> &str {
+        &self.not_claimed
     }
 
     /// The note, present exactly on a `facts_note`.
@@ -139,17 +233,26 @@ mod tests {
     /// A compile-time property, written down so that removing it is a visible
     /// act. There is no `source` field on [`Submission`], no step id, no exit
     /// code and no file list — so this body is the whole assertion: the fields
-    /// a Drone can reach are exactly the three the tool takes, and adding a
-    /// fourth stops this pattern compiling.
+    /// a Drone can reach are exactly the ones the tool takes, and adding
+    /// another stops this pattern compiling.
     ///
     /// It lives beside the type rather than in `tests/` because the fields are
     /// private to this module, which is the property it is asserting about.
     #[test]
     fn a_drone_has_no_field_in_which_to_attest_its_own_evidence() {
-        let submitted = Submission::submitted(EvidenceType::Diff, "Done.", None).unwrap();
+        let submitted = Submission::submitted(
+            EvidenceType::Diff,
+            Claimed("The loop is gone."),
+            ShownBy("`cargo test -p vcs` exit 0"),
+            NotClaimed(""),
+            None,
+        )
+        .unwrap();
         let Submission {
             evidence_type: _,
-            summary: _,
+            claimed: _,
+            shown_by: _,
+            not_claimed: _,
             note: _,
         } = submitted;
     }

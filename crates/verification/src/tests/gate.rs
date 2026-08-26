@@ -7,17 +7,29 @@ use config::EvidenceType;
 
 use crate::gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
 use crate::mechanical::{CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran};
-use crate::submission::Submission;
+use crate::submission::{Claimed, NotClaimed, ShownBy, Submission};
 use crate::tests::{gated, ungated, workflow};
 
 fn diff_evidence() -> Submission {
-    Submission::submitted(EvidenceType::Diff, "Replaced the loop with a fold.", None)
-        .expect("a legal submission")
+    Submission::submitted(
+        EvidenceType::Diff,
+        Claimed("The loop is a fold."),
+        ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
+        NotClaimed(""),
+        None,
+    )
+    .expect("a legal submission")
 }
 
 fn note_evidence() -> Submission {
-    Submission::submitted(EvidenceType::FactsNote, "Summary.", Some("The note."))
-        .expect("a legal submission")
+    Submission::submitted(
+        EvidenceType::FactsNote,
+        Claimed("The path is derived from the repo name."),
+        ShownBy("`worktree.rs:40`"),
+        NotClaimed(""),
+        Some("The note."),
+    )
+    .expect("a legal submission")
 }
 
 const PASSED: Observed = Observed::Command(Exit::Code(0));
@@ -215,8 +227,14 @@ fn a_step_expecting_a_non_zero_code_passes_on_that_code() {
     let step = &workflow.steps()[0];
     let ran = Ran::of(step, &[Observed::Command(Exit::Code(1))]).expect("the check ran");
     assert!(ran.all_passed());
-    let evidence =
-        Submission::submitted(EvidenceType::FailingTest, "The test fails.", None).unwrap();
+    let evidence = Submission::submitted(
+        EvidenceType::FailingTest,
+        Claimed("A second Job dies at worktree registration."),
+        ShownBy("`test_concurrent_dispatch` fails; `cargo test -p vcs` exit 1"),
+        NotClaimed(""),
+        None,
+    )
+    .unwrap();
     let accepted = Accepted::of(step, &evidence).expect("the right kind of evidence");
     assert_eq!(decide(accepted, &ran), Verdict::Advance);
 }

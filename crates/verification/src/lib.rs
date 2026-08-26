@@ -21,7 +21,7 @@
 //! |---|---|---|
 //! | [`Verdict::Advance`] | [`decide`] | An [`Accepted`] and a [`Ran`] |
 //! | [`Accepted`] | [`Accepted::of`] | A [`Submission`] |
-//! | [`Submission`] | [`Submission::submitted`] | The three fields of the tool call |
+//! | [`Submission`] | [`Submission::submitted`] | The fields of the tool call |
 //! | [`Ran`] | [`Ran::of`] | One observation per check the step declared |
 //!
 //! Nothing in that chain accepts a message, a turn, a transcript or a claim.
@@ -30,9 +30,14 @@
 //!
 //! Only `facts_note` hands over something the Drone produced. Every other
 //! gating artifact is Fleet's own reading: the diff is in the worktree and the
-//! Check result is its own run. So [`Submission`] carries no exit code, no file
-//! list and no diff — a Drone cannot report a fact that gates its own step,
-//! because there is no field to report it in.
+//! Check result is its own run. So [`Submission`] carries no typed exit code,
+//! no file list and no diff — a Drone cannot report a fact that gates its own
+//! step, because there is no field to report it in.
+//!
+//! `shown_by` is not that field. It **names** an artifact, in prose, for a
+//! person who will go and look; nothing in this crate reads it, and a Drone
+//! writing "exit 0" into it has moved no check. The artifact and the report of
+//! the artifact are different objects, and only the first one gates.
 //!
 //! # Why the diff computation lives behind this crate
 //!
@@ -51,4 +56,4 @@ mod tests;
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
 pub use mechanical::{CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran};
 pub use outcome::OutcomeTurn;
-pub use submission::{NotASubmission, Submission};
+pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};

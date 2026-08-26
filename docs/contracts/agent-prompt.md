@@ -758,12 +758,12 @@ surface rather than only these samples.
 ┌─ STEP: Implement ────────────────────────────────
 │ Make the smallest change that addresses the cause
 │ identified in part 1. Do not fix adjacent problems you
-│ notice — say so in your summary instead.
+│ notice — say so under Not claimed instead.
 │
 │ Read before you write. The rust-conventions skill
 │ covers error handling and module layout here.
 │
-│ Your summary should say what you changed and why, not
+│ What you claim should be what the work now does, not
 │ that you finished.
 └──────────────────────────────────────────────
 ```

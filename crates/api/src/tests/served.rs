@@ -12,7 +12,7 @@ use http_body_util::BodyExt;
 use ipc::{JobList, JobSummary, StreamMessage, WireError};
 use tower::ServiceExt;
 
-use crate::tests::fake::{at, running, run_id, FakeDaemon, A_PROPOSAL};
+use crate::tests::fake::{at, run_id, running, FakeDaemon, A_PROPOSAL};
 use crate::{router, Broadcaster, Next, Served, Subscription, SERVED};
 
 fn wired(daemon: FakeDaemon, events: Broadcaster) -> Router {
@@ -195,7 +195,11 @@ async fn a_body_that_does_not_parse_is_the_callers_fault_and_says_so() {
     assert_eq!(status, StatusCode::BAD_REQUEST, "not a 500: nothing failed");
     let error: WireError = ipc::decode("wire error", &body).expect("an error body");
     assert_eq!(error.code, "api.undecodable_request");
-    assert_eq!(error.run_id.as_str(), "01RUN", "the emitting process, always");
+    assert_eq!(
+        error.run_id.as_str(),
+        "01RUN",
+        "the emitting process, always"
+    );
     assert!(!error.chain.is_empty(), "the chain is always present");
 }
 
@@ -206,7 +210,10 @@ async fn a_command_against_a_job_that_is_not_there_is_a_404() {
     let (status, body) = call(&app, "POST", "/jobs/01NOTHING/kill_drone", "").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     let error: WireError = ipc::decode("wire error", &body).expect("an error body");
-    assert_eq!(error.job_id.map(|id| id.as_str().to_string()), Some("01NOTHING".to_string()));
+    assert_eq!(
+        error.job_id.map(|id| id.as_str().to_string()),
+        Some("01NOTHING".to_string())
+    );
 }
 
 #[tokio::test]

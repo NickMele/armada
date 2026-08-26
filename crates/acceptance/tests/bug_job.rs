@@ -65,7 +65,11 @@ fn a_bug_job_runs_from_not_started_to_completed_success() {
     assert_eq!(job.step(), StepId::new("root_cause"));
 
     // root_cause — a note, judged as a deliverable.
-    fleet.script(Script::step("root_cause").artifact("root_cause_note").evidence_submitted());
+    fleet.script(
+        Script::step("root_cause")
+            .artifact("root_cause_note")
+            .evidence_submitted(),
+    );
     fleet.tick(&mut job);
     assert_eq!(job.step(), StepId::new("fix"));
 
@@ -75,7 +79,11 @@ fn a_bug_job_runs_from_not_started_to_completed_success() {
     assert_eq!(job.step(), StepId::new("regression_verify"));
 
     // regression_verify — the suite goes green.
-    fleet.script(Script::step("regression_verify").test_exits(0).evidence_submitted());
+    fleet.script(
+        Script::step("regression_verify")
+            .test_exits(0)
+            .evidence_submitted(),
+    );
     fleet.tick(&mut job);
     assert_eq!(job.step(), StepId::new("review"));
 
@@ -135,7 +143,8 @@ fn every_state_change_went_through_the_transition_machine() {
     let states: Vec<JobState> = job.transitions().map(|t| t.to).collect();
     assert_eq!(states, vec![JobState::Running]);
     assert!(
-        job.transitions().all(|t| t.recorded_by_transition_machine()),
+        job.transitions()
+            .all(|t| t.recorded_by_transition_machine()),
         "a state reached any other way is a state nothing verified"
     );
 }
@@ -232,7 +241,11 @@ fn a_retry_and_a_loop_return_move_different_counters() {
     let iterations = job.counter(Counter::Iteration);
 
     // regression_verify fails: `on_fail` sends it back to `fix`. That is a retry.
-    fleet.script(Script::step("regression_verify").test_exits(1).evidence_submitted());
+    fleet.script(
+        Script::step("regression_verify")
+            .test_exits(1)
+            .evidence_submitted(),
+    );
     fleet.tick(&mut job);
     assert_eq!(job.step(), StepId::new("fix"));
     assert_eq!(job.counter(Counter::Retry), retries + 1);

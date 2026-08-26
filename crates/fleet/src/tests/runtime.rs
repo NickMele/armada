@@ -71,7 +71,9 @@ fn the_file_carries_the_port_that_was_actually_bound() {
     // file must never do.
     let listener =
         TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).expect("loopback binds");
-    let bound = listener.local_addr().expect("a bound listener has an address");
+    let bound = listener
+        .local_addr()
+        .expect("a bound listener has an address");
 
     let published =
         RuntimeFile::publish(vacancy_at(&path), bound.port(), VERSION).expect("it publishes");
@@ -196,7 +198,9 @@ fn a_stale_file_is_replaced_by_the_next_start() {
         1,
     );
     let presence = runtime::read(&path).expect("it reads");
-    let vacancy = presence.vacancy(&path).expect("a stale file yields a vacancy");
+    let vacancy = presence
+        .vacancy(&path)
+        .expect("a stale file yields a vacancy");
     assert!(matches!(
         vacancy.replacing(),
         Some(Staleness::PidHeldByAnother { .. })
@@ -233,7 +237,10 @@ fn a_file_that_does_not_parse_is_refused_rather_than_read_as_not_running() {
     std::fs::write(&path, b"{ this is not a runtime file").expect("it writes");
 
     let why = runtime::read(&path).expect_err("a file Fleet did not write is refused");
-    assert!(matches!(why, runtime::ReadError::Undecodable { .. }), "{why:?}");
+    assert!(
+        matches!(why, runtime::ReadError::Undecodable { .. }),
+        "{why:?}"
+    );
     // The chain is traversable rather than a sentence: there is a cause under
     // the refusal, and it belongs to the codec.
     assert!(std::error::Error::source(&why).is_some());

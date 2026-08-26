@@ -15,12 +15,23 @@
 //! and no step id: Fleet knows the current step, and a Drone naming one could
 //! only agree or disagree, and the disagreeing case would need a rule.
 //!
-//! # Three fields, and adding a fourth is a compile error
+//! # The fields are the ones the Drone prompt already names
+//!
+//! `claimed`, `shown_by` and `not_claimed` — the Agent Copy Contract's Work
+//! submission fields, spelled here exactly as the Drone is asked for them. A
+//! tool taking a different vocabulary would instruct a Drone in one language
+//! and hand it a form in another.
 //!
 //! [`Call`]'s fields are public and it has no `Default`, so every construction
-//! writes all three out. There is no `source`, and its absence is the guarantee
-//! that a Drone cannot mark its own evidence human-attested — see
-//! `verification`'s `Submission`, which this is the wire-facing half of.
+//! writes all of them out and adding one is a compile error at every call site.
+//! There is no `source`, and its absence is the guarantee that a Drone cannot
+//! mark its own evidence human-attested — see `verification`'s `Submission`,
+//! which this is the wire-facing half of.
+//!
+//! The field types come from `verification` rather than being `&str` here.
+//! Three adjacent strings are three the compiler cannot tell apart, and the
+//! contract's first rule about this record is that `claimed` and `shown_by`
+//! are not the same kind of thing.
 //!
 //! # What is not built here
 //!
@@ -37,7 +48,7 @@ use std::sync::Mutex;
 
 use config::EvidenceType;
 use core_model::{JobId, Timestamp};
-use verification::{NotASubmission, Submission};
+use verification::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};
 
 /// The receipt. **One word, and no way to make it say anything else.**
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,16 +65,24 @@ impl Recorded {
     }
 }
 
-/// The three arguments the tool takes.
+/// The arguments the tool takes.
 ///
-/// Public fields and no `Default`: a caller writes each one out, and a fourth
+/// Public fields and no `Default`: a caller writes each one out, and another
 /// would fail to compile at every call site rather than default to something.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Call<'a> {
     pub evidence_type: EvidenceType,
-    /// Markdown, for a person. **Gates nothing.**
-    pub summary: &'a str,
-    /// Required only where `evidence_type` is `facts_note`.
+    /// What the work now does, as an observable. **Gates nothing.**
+    pub claimed: Claimed<'a>,
+    /// The artifact demonstrating it. **Named, and still gates nothing** — the
+    /// artifact gates, the name of it does not.
+    pub shown_by: ShownBy<'a>,
+    /// The gap and the side effect. **Required, and legitimately empty** —
+    /// which is why it is not an `Option`: a Drone that left nothing behind
+    /// has answered, and there is no way to spell declining to.
+    pub not_claimed: NotClaimed<'a>,
+    /// Required only where `evidence_type` is `facts_note`, which is the one
+    /// type whose work product is the call itself.
     pub note: Option<&'a str>,
 }
 
@@ -141,14 +160,20 @@ impl<'a> EvidenceTool<'a> {
     /// Record a submission and return the receipt.
     ///
     /// `at` is Fleet's reading of the clock, taken by the caller and passed in.
-    /// It is not one of the tool's three fields and a Drone does not supply it.
+    /// It is not one of the tool's fields and a Drone does not supply it.
     ///
     /// The error is a malformed call — a `facts_note` with no note, an empty
-    /// summary. **It is not a gate failure**: nothing was verified, the step
+    /// `shown_by`. **It is not a gate failure**: nothing was verified, the step
     /// has neither advanced nor failed, and what the Drone is told is to submit
     /// again.
     pub fn submit(&self, call: Call<'_>, at: Timestamp) -> Result<Recorded, NotASubmission> {
-        let submission = Submission::submitted(call.evidence_type, call.summary, call.note)?;
+        let submission = Submission::submitted(
+            call.evidence_type,
+            call.claimed,
+            call.shown_by,
+            call.not_claimed,
+            call.note,
+        )?;
         self.inbox.accept(Landed {
             job: self.job.clone(),
             submission,

@@ -59,7 +59,7 @@ pub use evidence::{Call, EvidenceInbox, EvidenceTool, Landed, Recorded};
 pub use gate::{apply, rule_on, AtStep, CheckBudget, CheckOutput, Ruling};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
 pub use runtime::{
-    machine_path, provisional_address, Presence, Published, PublishError, ReadError, RuntimeFile,
+    machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,
     Staleness, Vacancy, FILE_NAME, PROVISIONAL_PORT,
 };
 pub use session::LiveSession;

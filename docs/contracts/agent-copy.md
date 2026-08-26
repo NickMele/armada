@@ -238,7 +238,7 @@ added" describes the change and evidences nothing.
 | Not claimed | The test dispatches two Jobs, not three |
 
 **Bug · fix.** Where the Drone prompt's "do not fix adjacent problems you
-notice — say so in your summary instead" lands.
+notice — say so under Not claimed instead" lands.
 
 | | |
 | --- | --- |

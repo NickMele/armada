@@ -187,7 +187,13 @@ pub struct Envelope {
 
 impl Envelope {
     /// The four fields that are always present, and nothing else.
-    pub fn new(ts: Timestamp, level: Level, component: Component, run_id: Ulid, msg: impl Into<String>) -> Self {
+    pub fn new(
+        ts: Timestamp,
+        level: Level,
+        component: Component,
+        run_id: Ulid,
+        msg: impl Into<String>,
+    ) -> Self {
         Envelope {
             ts,
             level,
