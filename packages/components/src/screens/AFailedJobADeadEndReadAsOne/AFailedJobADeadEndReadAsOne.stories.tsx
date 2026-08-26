@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { LucideIcon } from "lucide-react";
 import { Folder, GitBranch, ShieldCheck, ShieldX, X } from "lucide-react";
-import { Badge } from "../../primitives/Badge/Badge";
 import { Button } from "../../primitives/Button/Button";
+import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 import { JobLogReference } from "../../compositions/JobLogReference/JobLogReference";
 import { WorkflowRail, type WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
 
@@ -10,9 +10,13 @@ import { WorkflowRail, type WorkflowRailStep } from "../../compositions/Workflow
  * Journey · Read a failed Job. The screen states four things in order — what
  * failed, that the job is over, where the branch is, and where the log is.
  *
- * The header here carries no `data-component` in the drawing, so it is composed
- * from a Badge and text rather than named absent — unlike the running job's,
- * which the drawing names as `Job detail header actions`.
+ * The header is `Job detail header actions`, the same component the running job
+ * renders. The drawing tags it only there, but the block is the same one — a
+ * badge, a title, a job id and a run of facts — and a second hand-built copy
+ * could only drift from it. What changes with the state is the field run and
+ * the trailing action: a failed job reports where it stopped and carries no
+ * action here at all, because the acts on a dead end are about its branch and
+ * its log and sit beside those below.
  */
 const meta: Meta = {
   title: "Screens/A failed job — a dead end, read as one",
@@ -102,28 +106,22 @@ export const FailedJob: Story = {
   render: () => (
     <div className="armada-screen">
       <div className="armada-screen__detail">
-        <div className="armada-screen__ident">
-          <div className="armada-screen__ident-line">
-            <Badge status="completed-failed" icon={X}>
-              Failed
-            </Badge>
-            <span className="armada-screen__title">Cache the manifest read</span>
-            <span className="armada-screen__job-id">job_91ab</span>
-          </div>
-          <div className="armada-screen__meta">
-            <span>
-              Stopped at <span className="armada-screen__value" data-sans>Run tests</span>,
-              step <span className="armada-screen__value">3 of 4</span>
-            </span>
-            <span>
-              Ran <span className="armada-screen__value">22m 41s</span>
-            </span>
-            <span>
-              Spend, estimated <span className="armada-screen__value">~$2.10</span>
-            </span>
-            <span>Dispatched by you</span>
-          </div>
-        </div>
+        <JobDetailHeaderActions
+          status="completed-failed"
+          statusIcon={X}
+          statusLabel="Failed"
+          headline="Cache the manifest read"
+          jobId="job_91ab"
+          fields={[
+            // A step name is a label, so it stays sans beside its mono
+            // siblings, and the two halves are one fact joined by a comma.
+            { label: "Stopped at", value: "Run tests" },
+            { label: "step", value: "3 of 4", mono: true, continues: true },
+            { label: "Ran", value: "22m 41s", mono: true },
+            { label: "Spend, estimated", value: "~$2.10", mono: true },
+            { label: "Dispatched by you" },
+          ]}
+        />
 
         <div className="armada-screen__sunken">
           <span className="armada-screen__eyebrow">Why this stopped</span>

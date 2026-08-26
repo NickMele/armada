@@ -1,11 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Check, CircleDot } from "lucide-react";
+import { Check, CircleDot, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { JobDetailHeaderActions } from "./JobDetailHeaderActions";
 
 /**
- * The header on a job that is working, and on one that has stopped well — the
- * two act shapes the drawing gives it: one destructive control, or none.
+ * The header on every state job detail reaches: working, stopped badly, stopped
+ * well. One story each, because the three are only comparable side by side —
+ * this block was hand-built three times before it was converged, and the copies
+ * had drifted on wrapping, on shrink order and on whether mono was the default.
+ *
+ * The act shape is the same on both terminals: none. A destructive control
+ * exists only while the job is still running.
  *
  * **The labels come from the enum→verb map**, `crates/core-model/domain/
  * enum-verbs.toml`, sentence-cased, and the glyphs from the same rows. They
@@ -48,6 +53,31 @@ export const ARunningJob: Story = {
       { label: "Dispatched by you" },
     ],
     actions: <Button variant="destructive">Kill</Button>,
+  },
+};
+
+/**
+ * A failed job. `Stopped at Run tests, step 3 of 4` is one fact, not two — the
+ * comma joins them, and the step name stays sans beside its mono sibling
+ * because a step name is a label and not a machine-derived value.
+ *
+ * No action here either. What you can do with a dead end is read its log and
+ * its worktree, and those sit beside the branch further down the screen.
+ */
+export const AFailedJob: Story = {
+  args: {
+    status: "completed-failed",
+    statusIcon: X,
+    statusLabel: "Failed",
+    headline: "Cache the manifest read",
+    jobId: "job_91ab",
+    fields: [
+      { label: "Stopped at", value: "Run tests" },
+      { label: "step", value: "3 of 4", mono: true, continues: true },
+      { label: "Ran", value: "22m 41s", mono: true },
+      { label: "Spend, estimated", value: "~$2.10", mono: true },
+      { label: "Dispatched by you" },
+    ],
   },
 };
 

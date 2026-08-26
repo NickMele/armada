@@ -1,6 +1,6 @@
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Folder, OctagonAlert, Clock, MessageSquare, ClipboardList, Activity, Bell, Eye, ScrollText, Stethoscope, FileCog, Flag, RotateCw, ShieldCheck, ShieldX, ShieldMinus, Lock, TriangleAlert, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
-import { useState, useCallback, useRef, useEffect, useId, useMemo, createElement } from "react";
+import { useState, useCallback, useRef, useEffect, useId, Fragment as Fragment$1, useMemo, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 function Button({
   variant = "secondary",
@@ -870,6 +870,12 @@ function JobDetailHeaderActions({
     },
     [onCopied]
   );
+  const runs = [];
+  for (const field of fields) {
+    const previous = runs[runs.length - 1];
+    if (field.continues && previous) previous.push(field);
+    else runs.push([field]);
+  }
   return /* @__PURE__ */ jsxs("div", { className: "armada-job-head", children: [
     /* @__PURE__ */ jsxs("div", { className: "armada-job-head__ident", children: [
       /* @__PURE__ */ jsxs("div", { className: "armada-job-head__line", children: [
@@ -877,7 +883,8 @@ function JobDetailHeaderActions({
         /* @__PURE__ */ jsx("span", { className: "armada-job-head__title", children: headline }),
         jobId ? /* @__PURE__ */ jsx("span", { className: "armada-job-head__id", children: jobId }) : null
       ] }),
-      /* @__PURE__ */ jsx("div", { className: "armada-job-head__facts", children: fields.map((field, i) => /* @__PURE__ */ jsxs("span", { className: "armada-job-head__fact", children: [
+      /* @__PURE__ */ jsx("div", { className: "armada-job-head__facts", children: runs.map((run, i) => /* @__PURE__ */ jsx("span", { className: "armada-job-head__fact", children: run.map((field, j) => /* @__PURE__ */ jsxs(Fragment$1, { children: [
+        j > 0 ? ", " : null,
         field.label ? /* @__PURE__ */ jsxs(Fragment, { children: [
           field.label,
           field.value !== void 0 ? " " : null
@@ -896,7 +903,7 @@ function JobDetailHeaderActions({
           " ",
           field.suffix
         ] }) : null
-      ] }, i)) })
+      ] }, j)) }, i)) })
     ] }),
     actions ? /* @__PURE__ */ jsx("div", { className: "armada-job-head__actions", children: actions }) : null
   ] });
@@ -927,6 +934,22 @@ const ARunningJob = {
     actions: /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill" })
   }
 };
+const AFailedJob = {
+  args: {
+    status: "completed-failed",
+    statusIcon: X,
+    statusLabel: "Failed",
+    headline: "Cache the manifest read",
+    jobId: "job_91ab",
+    fields: [
+      { label: "Stopped at", value: "Run tests" },
+      { label: "step", value: "3 of 4", mono: true, continues: true },
+      { label: "Ran", value: "22m 41s", mono: true },
+      { label: "Spend, estimated", value: "~$2.10", mono: true },
+      { label: "Dispatched by you" }
+    ]
+  }
+};
 const AFinishedJob = {
   args: {
     status: "completed-success",
@@ -944,6 +967,7 @@ const AFinishedJob = {
 };
 const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AFailedJob,
   AFinishedJob,
   ARunningJob,
   default: meta$D
@@ -4009,30 +4033,25 @@ const tail = [
 ].join("\n");
 const FailedJob = {
   render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__ident", children: [
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__ident-line", children: [
-        /* @__PURE__ */ jsx(Badge, { status: "completed-failed", icon: X, children: "Failed" }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__title", children: "Cache the manifest read" }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__job-id", children: "job_91ab" })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__meta", children: [
-        /* @__PURE__ */ jsxs("span", { children: [
-          "Stopped at ",
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__value", "data-sans": true, children: "Run tests" }),
-          ", step ",
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__value", children: "3 of 4" })
-        ] }),
-        /* @__PURE__ */ jsxs("span", { children: [
-          "Ran ",
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__value", children: "22m 41s" })
-        ] }),
-        /* @__PURE__ */ jsxs("span", { children: [
-          "Spend, estimated ",
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__value", children: "~$2.10" })
-        ] }),
-        /* @__PURE__ */ jsx("span", { children: "Dispatched by you" })
-      ] })
-    ] }),
+    /* @__PURE__ */ jsx(
+      JobDetailHeaderActions,
+      {
+        status: "completed-failed",
+        statusIcon: X,
+        statusLabel: "Failed",
+        headline: "Cache the manifest read",
+        jobId: "job_91ab",
+        fields: [
+          // A step name is a label, so it stays sans beside its mono
+          // siblings, and the two halves are one fact joined by a comma.
+          { label: "Stopped at", value: "Run tests" },
+          { label: "step", value: "3 of 4", mono: true, continues: true },
+          { label: "Ran", value: "22m 41s", mono: true },
+          { label: "Spend, estimated", value: "~$2.10", mono: true },
+          { label: "Dispatched by you" }
+        ]
+      }
+    ),
     /* @__PURE__ */ jsxs("div", { className: "armada-screen__sunken", children: [
       /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Why this stopped" }),
       /* @__PURE__ */ jsxs("p", { className: "armada-screen__why", children: [
@@ -4148,29 +4167,24 @@ const entries = [
 ];
 const FinishedJob = {
   render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__ident", children: [
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__ident-line", children: [
-        /* @__PURE__ */ jsx(Badge, { status: "completed-success", icon: Check, children: "Done" }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__title", children: "Add a retry ceiling to the poke loop" }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__job-id", children: "job_4f10" })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__meta", children: [
-        /* @__PURE__ */ jsxs("span", { children: [
-          "All ",
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__value", children: "4 of 4" }),
-          " steps advanced"
-        ] }),
-        /* @__PURE__ */ jsxs("span", { children: [
-          "Ran ",
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__value", children: "18m 22s" })
-        ] }),
-        /* @__PURE__ */ jsxs("span", { children: [
-          "Spend, estimated ",
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__value", children: "~$2.40" })
-        ] }),
-        /* @__PURE__ */ jsx("span", { children: "Dispatched by you" })
-      ] })
-    ] }),
+    /* @__PURE__ */ jsx(
+      JobDetailHeaderActions,
+      {
+        status: "completed-success",
+        statusIcon: Check,
+        statusLabel: "Done",
+        headline: "Add a retry ceiling to the poke loop",
+        jobId: "job_4f10",
+        fields: [
+          // The fact reads as a sentence around its value, which is what
+          // `suffix` is for: `All 4 of 4 steps advanced`.
+          { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
+          { label: "Ran", value: "18m 22s", mono: true },
+          { label: "Spend, estimated", value: "~$2.40", mono: true },
+          { label: "Dispatched by you" }
+        ]
+      }
+    ),
     /* @__PURE__ */ jsxs("div", { className: "armada-screen__sunken", children: [
       /* @__PURE__ */ jsxs("div", { className: "armada-screen__branch-line", children: [
         /* @__PURE__ */ jsx("span", { className: "armada-screen__mark", children: /* @__PURE__ */ jsx(GitBranch, { size: BRANCH_ICON, strokeWidth: BRANCH_STROKE, "aria-hidden": true }) }),

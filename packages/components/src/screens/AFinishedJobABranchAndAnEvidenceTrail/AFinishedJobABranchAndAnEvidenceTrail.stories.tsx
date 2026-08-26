@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { LucideIcon } from "lucide-react";
 import { Check, GitBranch } from "lucide-react";
-import { Badge } from "../../primitives/Badge/Badge";
 import { Button } from "../../primitives/Button/Button";
 import { EvidenceTrail } from "../../compositions/EvidenceTrail/EvidenceTrail";
+import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 
 /**
  * Journey · Read the work and merge by hand. The screen hands over a branch
@@ -12,6 +12,11 @@ import { EvidenceTrail } from "../../compositions/EvidenceTrail/EvidenceTrail";
  *
  * The trail is the reason to open this screen, so it is the largest element
  * rather than a panel to expand.
+ *
+ * The header is `Job detail header actions`, the same component the running and
+ * failed jobs render. A finished job reports what it ran rather than what step
+ * it is on, and carries no action in the header: the branch and the log each
+ * carry their own, in the panel that names them.
  */
 const meta: Meta = {
   title: "Screens/A finished job — a branch and an evidence trail",
@@ -77,27 +82,21 @@ export const FinishedJob: Story = {
   render: () => (
     <div className="armada-screen">
       <div className="armada-screen__detail">
-        <div className="armada-screen__ident">
-          <div className="armada-screen__ident-line">
-            <Badge status="completed-success" icon={Check}>
-              Done
-            </Badge>
-            <span className="armada-screen__title">Add a retry ceiling to the poke loop</span>
-            <span className="armada-screen__job-id">job_4f10</span>
-          </div>
-          <div className="armada-screen__meta">
-            <span>
-              All <span className="armada-screen__value">4 of 4</span> steps advanced
-            </span>
-            <span>
-              Ran <span className="armada-screen__value">18m 22s</span>
-            </span>
-            <span>
-              Spend, estimated <span className="armada-screen__value">~$2.40</span>
-            </span>
-            <span>Dispatched by you</span>
-          </div>
-        </div>
+        <JobDetailHeaderActions
+          status="completed-success"
+          statusIcon={Check}
+          statusLabel="Done"
+          headline="Add a retry ceiling to the poke loop"
+          jobId="job_4f10"
+          fields={[
+            // The fact reads as a sentence around its value, which is what
+            // `suffix` is for: `All 4 of 4 steps advanced`.
+            { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
+            { label: "Ran", value: "18m 22s", mono: true },
+            { label: "Spend, estimated", value: "~$2.40", mono: true },
+            { label: "Dispatched by you" },
+          ]}
+        />
 
         <div className="armada-screen__sunken">
           <div className="armada-screen__branch-line">

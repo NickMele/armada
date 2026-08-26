@@ -205,45 +205,9 @@
   min-width: 0;
 }
 
-.armada-screen__ident {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.armada-screen__ident-line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.armada-screen__job-id {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
-}
-
-.armada-screen__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-muted);
-}
-
-/* A machine-derived value inside a sentence of facts. */
-.armada-screen__value {
-  font-family: var(--font-mono);
-  color: var(--fg-default);
-}
-
-/* A step name is a label, so it stays sans even beside mono siblings. */
-.armada-screen__value[data-sans] {
-  font-family: var(--font-sans);
-}
+/* The job detail header is `Job detail header actions` on all three states, so
+   the identity block, the job id and the fact run live in that component's own
+   stylesheet. The rules that stood here were a second copy of it. */
 
 /* A value that copies on click, and says so by going to --accent on hover. */
 .armada-screen__copy {
