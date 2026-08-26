@@ -151,17 +151,6 @@ finds it by inspecting a window either side of the suspected boundary and
 ---
 
 ## Open questions
-- **[manifest-narrow-copy-lint-surfaces]** May a Manifest narrow which surfaces the copy lint covers?
-  PR descriptions, commit messages and Judge summaries are linted by
-  default; Evidence summaries and Helm replies are deliberately excluded.
-  The config-direction rule — a setting may narrow, never widen — permits
-  narrowing in principle, but whether the linted set should be narrowable
-  at all is the actual question, given PR and commit text leaves the app
-  permanently. The Voice-interaction half of this is separate and already
-  settled: Voice cannot widen or narrow the lint in either direction (see
-  the [Agent Prompt Contract](agent-prompt.md), section 2) — the lint now
-  hard-gates commit messages and PR descriptions, so a widening Voice would
-  let a tone setting weaken a gate.
 - **[copy-rubric-scoring]** Should generated text be scored against a rubric by a cheap model?
   Scoring against directness, density and specificity is named as the
   right eventual answer to queue-level sameness — invisible one message at
