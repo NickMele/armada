@@ -70,12 +70,22 @@ section { margin-bottom: var(--space-12); }
 h2 { font-size: var(--text-lg); font-weight: var(--weight-heading); margin: 0 0 var(--space-4); padding-bottom: var(--space-2); border-bottom: var(--border-width) solid var(--border-subtle); }
 figure { margin: 0 0 var(--space-4); }
 figcaption { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--fg-subtle); margin-bottom: var(--space-2); }
-.stage { background: var(--bg-raised); border: var(--border-width) solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-4); overflow: auto; position: relative; }
+.stage { background: var(--bg-raised); border: var(--border-width) solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-4); position: relative; }
+/* No overflow on the stage. A menu, a popover and a tooltip all resolve inside
+   it and reach past its edge on purpose, and any overflow value but visible
+   clips them — including \`overflow-x\` alone, which forces the other axis to
+   auto. Wide content scrolls with the page instead. */
+.stage { overflow: visible; }
 /* A dialog, sheet, toast or palette is position:fixed, which ignores every
-   ancestor and covers the page. \`contain\` makes the stage a containing block
-   for them, so each overlay renders inside its own box. Without it the command
-   palette opens over everything and the page is unusable. */
-.stage { contain: layout paint; }
+   ancestor and covers the page. Layout containment makes the stage a containing
+   block for them, so each overlay renders inside its own box.
+   Not \`paint\`: paint containment also clips to the padding box, which cut the
+   dropdowns off inside their card and squashed the dialogs. Containing where an
+   overlay resolves against and clipping what escapes are two different things,
+   and only the first is wanted here. */
+.stage { contain: layout; }
+/* An overlay resolving against the stage needs the stage to have room. */
+.stage:has([class*="scrim"]), .stage:has([class*="-layer"]), .stage:has([class*="-region"]) { min-height: 320px; }
 .stage > * { max-width: 100%; }
 /* The scrim is a full-viewport wash; inside a stage it should tint the stage. */
 .stage [style*="position:fixed"], .stage [class*="scrim"], .stage [class*="backdrop"] { position: absolute; }

@@ -289,6 +289,7 @@ dependencies = [
  "core-model",
  "ipc",
  "libc",
+ "serde",
  "store",
  "tokio",
  "verification",
@@ -308,6 +309,7 @@ dependencies = [
  "ipc",
  "store",
  "testkit",
+ "tokio",
  "verification",
 ]
 
@@ -1085,6 +1087,9 @@ dependencies = [
 [[package]]
 name = "testkit"
 version = "0.0.0"
+dependencies = [
+ "adapter-traits",
+]
 
 [[package]]
 name = "thiserror"

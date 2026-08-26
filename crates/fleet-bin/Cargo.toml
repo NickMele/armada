@@ -19,6 +19,10 @@ checks-runner = { path = "../checks-runner" }
 adapters = { path = "../adapters" }
 fleet = { path = "../fleet" }
 api = { path = "../api" }
+# The composition root owns the runtime, and it is the only crate that does.
+# `net` for the one listener, `signal` because a clean exit is what removes the
+# runtime file and a signal is how a daemon is told to take one.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 
 # **Declared dev-only, against the crate table, deliberately.** The table lists
 # `testkit` among fleet-bin's dependencies, and fleet-bin is the composition
