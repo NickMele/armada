@@ -1,7 +1,13 @@
 crates/acceptance/src/lib.rs
 crates/adapter-traits/src/lib.rs
 crates/adapter-traits/src/secret.rs
+crates/adapter-traits/src/worktree.rs
+crates/adapters/src/error.rs
 crates/adapters/src/lib.rs
+crates/adapters/src/tests/mod.rs
+crates/adapters/src/tests/repo.rs
+crates/adapters/src/tests/worktree.rs
+crates/adapters/src/worktree.rs
 crates/api/src/daemon.rs
 crates/api/src/lib.rs
 crates/api/src/routes.rs
@@ -36,7 +42,16 @@ crates/core-model/src/job/tests/record.rs
 crates/core-model/src/job/transition.rs
 crates/core-model/src/lib.rs
 crates/fleet-bin/src/lib.rs
+crates/fleet-bin/src/main.rs
+crates/fleet/src/detach.rs
 crates/fleet/src/lib.rs
+crates/fleet/src/process.rs
+crates/fleet/src/runtime.rs
+crates/fleet/src/tests/detach.rs
+crates/fleet/src/tests/mod.rs
+crates/fleet/src/tests/process.rs
+crates/fleet/src/tests/runtime.rs
+crates/fleet/src/tests/tmp.rs
 crates/ipc/src/codec.rs
 crates/ipc/src/enums.rs
 crates/ipc/src/error.rs
@@ -59,4 +74,5 @@ crates/store/src/tests/roundtrip.rs
 crates/store/src/tests/tmp.rs
 crates/store/src/write.rs
 crates/testkit/src/lib.rs
+crates/testkit/src/vcs.rs
 crates/verification/src/lib.rs

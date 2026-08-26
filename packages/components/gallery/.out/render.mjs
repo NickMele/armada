@@ -6,7 +6,14 @@ function Alert({ tone = "escalated", title, children, icon, action }) {
   return /* @__PURE__ */ jsxs(
     "div",
     {
-      className: tone === "neutral" ? "armada-alert armada-alert--neutral" : "armada-alert armada-alert--escalated",
+      className: [
+        "armada-alert",
+        tone === "neutral" ? "armada-alert--neutral" : "armada-alert--escalated",
+        // A headline makes the copy a block, and the glyph belongs beside its
+        // first line. Without one there is a single line to sit against, and
+        // aligning to its top reads as a mistake rather than as alignment.
+        title ? "armada-alert--stacked" : "armada-alert--single"
+      ].join(" "),
       role: "status",
       children: [
         icon ? /* @__PURE__ */ jsx("span", { className: "armada-alert__glyph", children: icon }) : null,

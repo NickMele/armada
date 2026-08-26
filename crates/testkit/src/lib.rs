@@ -11,8 +11,19 @@
 //! Fixtures live in `fixtures/ndjson/`, one file per failure mode, beside the
 //! pinned real capture the format-drift contract test compares against.
 //!
-//! # Why it is empty
+//! # Why the fixtures are not here yet
 //!
 //! The five fixtures are the gate's subjects and are not written by M0 step 7 —
 //! the gate names them missing, which is the gate working. This crate is the
 //! place they will land.
+//!
+//! # The fakes
+//!
+//! One so far: [`FakeVcs`], which creates a Job's worktree without a git
+//! repository under it. A suite that needs a real checkout per case is one
+//! people stop running, so the cases that genuinely need git's own opinion stay
+//! in `adapters` and everything else fakes the seam.
+
+mod vcs;
+
+pub use vcs::{FakeVcs, FakeVcsError};

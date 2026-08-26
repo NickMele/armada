@@ -11,3 +11,4 @@ workspace = true
 # testkit is allowed to depend on whatever a test needs. It is never a
 # dependency of anything that ships.
 [dependencies]
+adapter-traits = { path = "../adapter-traits" }

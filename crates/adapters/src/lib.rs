@@ -11,3 +11,12 @@
 //! A dedicated health crate was rejected: no measurement backs the seam, and
 //! grouping by surface rather than by capability is the shape that grew v1's
 //! core to 38,470 lines.
+
+mod error;
+mod worktree;
+
+#[cfg(test)]
+mod tests;
+
+pub use error::CreateWorktreeError;
+pub use worktree::GitVcs;

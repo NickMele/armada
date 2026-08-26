@@ -240,6 +240,13 @@ pub fn no_untyped_json_outside_store_and_ipc(root: &Path) -> Report {
 const VENDOR_LITERALS: &[&str] = &[
     "anthropic", "claude", "openai", "gpt-4", "gemini", "copilot",
     "github", "gitlab", "bitbucket", "docker",
+    // Libraries, not vendors, and on the list for the same reason: naming one
+    // outside the adapter layer means the boundary has already leaked. The
+    // adapters contract has said "no `git2` or `gh` literal outside adapters"
+    // since it was written, and nothing was checking it — found when a step
+    // built a worktree behind the VCS trait and went looking for the rule that
+    // was supposed to have stopped it going anywhere else.
+    "git2",
 ];
 
 pub fn no_vendor_literal_outside_adapters(root: &Path) -> Report {

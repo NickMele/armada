@@ -2,16 +2,9 @@
  * floating layer. The escalated tone takes the Job token and its 12% tint; the
  * neutral tone takes no hue, because a module is not a Job state.
  *
- * MISSING TOKEN on the line below.
- * --armada-hairline: no border-width token exists in packages/tokens.
  */
 .armada-alert {
-  --armada-hairline: var(--border-width);
-}
-
-.armada-alert {
   display: flex;
-  align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-md);
@@ -22,19 +15,34 @@
 
 .armada-alert--escalated {
   background: var(--status-escalated-bg);
-  border: var(--armada-hairline) solid var(--status-escalated);
+  border: var(--border-width) solid var(--status-escalated);
 }
 
 .armada-alert--neutral {
   background: var(--bg-sunken);
-  border: var(--armada-hairline) solid var(--border-default);
+  border: var(--border-width) solid var(--border-default);
+}
+
+/* Stacked: the glyph aligns with the headline, not with the block's midpoint,
+   because the headline is what it labels. The nudge is the optical difference
+   between a 16px glyph's box and a line box of body text. */
+.armada-alert--stacked {
+  align-items: flex-start;
+}
+
+.armada-alert--stacked .armada-alert__glyph {
+  margin-top: var(--space-1);
+}
+
+/* Single line: there is one line to sit against, so sit against it. */
+.armada-alert--single {
+  align-items: center;
 }
 
 .armada-alert__glyph {
   flex: none;
   display: inline-flex;
   align-items: center;
-  margin-top: var(--space-1);
 }
 
 .armada-alert--escalated .armada-alert__glyph {
@@ -79,7 +87,7 @@
 .armada-alert__button {
   height: var(--h-control);
   padding: 0 var(--space-3);
-  border: var(--armada-hairline) solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--fg-muted);

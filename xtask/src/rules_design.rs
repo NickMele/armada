@@ -69,9 +69,22 @@ pub fn no_off_contract_design_value(root: &Path) -> Report {
         if opted_out(&text, MARKER) {
             continue;
         }
+        // A block comment's continuation lines carry no marker of their own, so
+        // a per-line test reads them as code. This rule reported a comment
+        // explaining why a glyph is nudged — for the `16px` in the explanation.
+        let mut in_block = false;
         for (n, line) in text.lines().enumerate() {
             let code = line.trim_start();
-            if code.starts_with("//") || code.starts_with('*') || code.starts_with("/*") {
+            let opened = line.rfind("/*");
+            let closed = line.rfind("*/");
+            let was_in_block = in_block;
+            in_block = match (opened, closed) {
+                (Some(o), Some(c)) => o > c,
+                (Some(_), None) => true,
+                (None, Some(_)) => false,
+                (None, None) => in_block,
+            };
+            if was_in_block || code.starts_with("//") || code.starts_with('*') || code.starts_with("/*") {
                 continue;
             }
             for what in off_contract(code) {

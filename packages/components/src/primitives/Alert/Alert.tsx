@@ -30,11 +30,14 @@ export type AlertProps = {
 export function Alert({ tone = "escalated", title, children, icon, action }: AlertProps) {
   return (
     <div
-      className={
-        tone === "neutral"
-          ? "armada-alert armada-alert--neutral"
-          : "armada-alert armada-alert--escalated"
-      }
+      className={[
+        "armada-alert",
+        tone === "neutral" ? "armada-alert--neutral" : "armada-alert--escalated",
+        // A headline makes the copy a block, and the glyph belongs beside its
+        // first line. Without one there is a single line to sit against, and
+        // aligning to its top reads as a mistake rather than as alignment.
+        title ? "armada-alert--stacked" : "armada-alert--single",
+      ].join(" ")}
       role="status"
     >
       {icon ? <span className="armada-alert__glyph">{icon}</span> : null}

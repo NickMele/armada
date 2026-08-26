@@ -18,13 +18,21 @@
 //! because the seam is a trait: `fleet` must never reach for the real CLI
 //! directly, anywhere.
 
-#![no_std]
+//! # `no_std`, except under test
+//!
+//! Conditional for the one reason `core-model`'s is: the unit test harness
+//! needs `std` to link. Every shipped build of this crate is `no_std` and
+//! depends on nothing, which is what `cargo tree -p adapter-traits` shows.
+
+#![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
 
 mod secret;
+mod worktree;
 
 pub use secret::Secret;
+pub use worktree::{derived, Worktree, WorktreeSpec, WorktreeSpecRefused};
 
 /// The agent harness: what actually runs a Drone.
 ///
@@ -45,15 +53,46 @@ pub trait AgentHarness {
     fn spawn(&self, config: DroneSpawnConfig) -> Result<DroneHandle, Self::Error>;
 }
 
-/// Version control. **This is the Drone-facing shape and it has no push
-/// method**, so a Drone cannot push because the call does not exist rather than
-/// because a check refuses it.
+/// Version control, as Fleet uses it.
+///
+/// # It has no push method, and that is not the only thing missing
+///
+/// **No push.** A Drone commits locally inside its own worktree; push, pull
+/// request and merge are Fleet's, with credentials Fleet holds. A capability
+/// absent from the type cannot be reached by a Drone that reasons its way
+/// around a denial. What a Drone itself is handed is a narrower type again,
+/// which is not this trait.
+///
+/// **No removal, and no way to ask for one.** Removal is driven by Job
+/// retention, never by a process ending — so the caller that would decide is
+/// the retention pass, and there is no retention in M1. Rather than shipping a
+/// method nothing may call yet, the method does not exist: a worktree survives
+/// every terminal state because nothing in the workspace can delete one, not
+/// because everybody remembered not to. Worktrees accumulate and a person
+/// removes them by hand, which is the evidence M1 is collecting. The method
+/// arrives with the pass that is allowed to call it.
+///
+/// **No "does it already exist" query.** Creation answers that itself, by
+/// refusing; a separate probe would be a check-then-act that two Jobs can
+/// interleave.
 pub trait Vcs {
+    /// Errors this implementation can raise. Named by the implementation, so a
+    /// caller matching a branch collision against a disk failure is matching on
+    /// something real rather than on a rendered sentence.
     type Error;
 
-    fn add_worktree(&self, spec: WorktreeSpec) -> Result<WorktreePath, Self::Error>;
-    fn remove_worktree(&self, path: &WorktreePath) -> Result<(), Self::Error>;
-    fn has_uncommitted_work(&self, path: &WorktreePath) -> Result<bool, Self::Error>;
+    /// Create a Job's worktree on its own new branch.
+    ///
+    /// Called at approval, **before any Drone exists**. A failure here is a
+    /// failed Job with nothing spawned, which is why the error type is the
+    /// caller's to match on rather than something to log.
+    ///
+    /// The branch is derived from the Job id and is **new**: an existing branch
+    /// of that name is refused, never checked out. v1 discovered why on a real
+    /// machine — a worktree added onto an existing branch interleaves two Jobs'
+    /// commits, and git's own refusal names the operation rather than the
+    /// reason.
+    fn create_worktree(&self, spec: &WorktreeSpec) -> Result<Worktree, Self::Error>;
 }
 
 /// Credential access, brokered. A Drone never holds a secret directly, and what
@@ -93,13 +132,18 @@ pub use placeholders::*;
 
 #[doc(hidden)]
 mod placeholders {
-    //! **Not the design.** These five names are what the traits above take and
+    //! **Not the design.** These names are what the traits above take and
     //! return, and they belong in `core-model` beside the rest of the domain.
     //! They are not written yet because M1 step 1 owns the Job record and its
     //! neighbours, and fixing their shape here would settle that by accident.
     //!
     //! They exist as uninhabited types so the traits compile and the seam is
     //! readable. Replace them, do not grow them.
+    //!
+    //! **`WorktreeSpec` and `WorktreePath` were two of them and are gone.** M1
+    //! step 7 replaced them with real types in [`worktree`](super::worktree),
+    //! not in `core-model` — the domain crate takes no dependency on a
+    //! filesystem layout, and this crate must derive the path without one.
 
     macro_rules! not_yet {
         ($($name:ident),* $(,)?) => {$(
@@ -111,8 +155,6 @@ mod placeholders {
     not_yet!(
         DroneSpawnConfig,
         DroneHandle,
-        WorktreeSpec,
-        WorktreePath,
         ModelRequest,
         ModelResponse,
         HealthReport,
