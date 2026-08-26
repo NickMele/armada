@@ -58,8 +58,9 @@ Cleanup still keys off the repo name, so a killed Job now
 leaves a directory the sweeper does not match. Not fixed here.
 ```
 
-The second paragraph is the whole value. **Carry what you changed that nobody
-asked for, and what you left broken** — the next person to touch the sweeper
+The second paragraph is the whole value, and it comes from `not_claimed` on the
+work submission. **Carry what you changed that nobody asked for, and what you
+left broken** — the next person to touch the sweeper
 needs it, and nothing else will tell them.
 
 ## A small change
