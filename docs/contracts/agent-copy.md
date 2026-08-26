@@ -159,3 +159,5 @@ finds it by inspecting a window either side of the suspected boundary and
   Deferred on a stated trigger rather than rejected: it costs a model call
   per artifact, and comparing a PR description against the last thirty
   requires thirty to exist first. Revisit once the corpus does.
+
+Also bearing on this document, and written where it belongs: `[copy-lint-surface-narrowing]` in `configuration.md` — whether a Manifest may narrow which surfaces this lint covers. It lives there because the answer turns on the config direction rule, which that document records as withdrawn.
