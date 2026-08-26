@@ -1,15 +1,20 @@
 import { useId } from "react";
 import type { ReactNode, SelectHTMLAttributes } from "react";
+import { ChevronDown } from "lucide-react";
 
 /**
  * A one-of-many field. Select inherits the input's border, focus and height
  * rules, so the two line up in a column of fields.
  *
- * It renders a native `select` and lets the platform draw its own indicator.
- * The icon registry reserves `chevron-down` to disclosure and forbids it as a
- * direction indicator, and no registered glyph means "this list opens" — so
- * borrowing one would be inventing an assignment the icon contract has not
- * made.
+ * The indicator is `chevron-down` rather than the platform's own. A native
+ * select draws its arrow at a fixed inset from the border box, which no amount
+ * of padding moves — so the gap between the glyph and the edge is whatever the
+ * engine decided, and on this one it is too tight.
+ *
+ * The registry reserves `chevron-down` to disclosure and forbids it as a sort
+ * or direction indicator, as an ornament on a label, and as an expander on a
+ * row of data. A list of options opening in chrome is none of those; it is
+ * disclosure, which is the reservation rather than an exception to it.
  */
 export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   /** Sentence case, no Wh- opener. */
@@ -32,6 +37,7 @@ export function Select({ label, invalid = false, message, id, children, ...rest 
           {label}
         </label>
       )}
+      <span className="armada-select-shell">
       <select
         {...rest}
         id={selectId}
@@ -41,6 +47,8 @@ export function Select({ label, invalid = false, message, id, children, ...rest 
       >
         {children}
       </select>
+        <ChevronDown className="armada-select__caret" size={16} strokeWidth={2} aria-hidden />
+      </span>
       {showMessage && (
         <span className="armada-select-field__message" id={messageId}>
           {message}

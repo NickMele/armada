@@ -7,8 +7,11 @@
  * only rendering that does not reach for a glyph the icon contract has not
  * granted.
  *
- * Right padding is one step wider than left so the platform indicator has
- * room, which is how the component sheet draws it.
+ * The caret is drawn rather than left to the platform. A native select places
+ * its arrow at a fixed inset from the border box that padding does not move,
+ * so the gap between glyph and edge was the engine's to choose and it chose
+ * badly. Drawn, it sits `--space-3` from the edge like every other trailing
+ * mark, and the field's right padding leaves room for it plus that gap.
  */
 
 .armada-select-field {
@@ -23,11 +26,29 @@
   color: var(--fg-muted);
 }
 
+.armada-select-shell {
+  position: relative;
+  display: block;
+}
+
+/* Non-interactive: the click belongs to the select underneath it. */
+.armada-select__caret {
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  transform: translateY(-50%);
+  color: var(--fg-muted);
+  pointer-events: none;
+}
+
 .armada-select {
+  appearance: none;
   box-sizing: border-box;
   width: 100%;
   height: var(--h-control);
-  padding: 0 var(--space-3) 0 var(--space-2);
+  /* Right: the caret's own width, its gap from the edge, and a gap from the
+     value — so a long option truncates before it reaches the glyph. */
+  padding: 0 calc(var(--space-4) + var(--space-3) + var(--space-2)) 0 var(--space-2);
   border-radius: var(--radius-md);
   border-style: solid;
   border-width: var(--border-width);
