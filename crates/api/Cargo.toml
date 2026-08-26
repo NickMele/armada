@@ -9,10 +9,22 @@ publish = false
 workspace = true
 
 [dependencies]
-core-model = { path = "../core-model" }
+# No `core-model`, and no `fleet`. This crate speaks the wire vocabulary only —
+# a domain type it cannot name is a domain type it cannot leak.
 ipc = { path = "../ipc" }
 axum = { version = "0.7", features = ["ws"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+serde = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 
 [dev-dependencies]
+# The tests drive the router with no socket at all: `tower` calls it as the
+# service it is, and the WebSocket half runs over an in-memory duplex pipe. A
+# loopback listener would be a smaller lie than a real network, but still a lie
+# about what this crate needs in order to be exercised.
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 tokio-tungstenite = "0.24"
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "io-util", "time"] }

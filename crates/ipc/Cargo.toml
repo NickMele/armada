@@ -11,3 +11,6 @@ workspace = true
 [dependencies]
 core-model = { path = "../core-model" }
 serde = { version = "1", features = ["derive"] }
+# The wire is JSON, and this is one of the two crates where bytes enter the
+# process. Gate rule five names it by name for that reason.
+serde_json = "1"

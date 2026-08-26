@@ -20,6 +20,7 @@ mod rules;
 mod rules_design;
 mod rules_docs;
 mod rules_icons;
+mod rules_protocol;
 mod roadmap;
 mod tokens;
 mod tokens_emit;
@@ -98,6 +99,7 @@ fn verify_foundations() -> ExitCode {
         rules_docs::every_path_a_document_names_exists(&root),
         capabilities::every_capability_is_bound_and_indexed(&root),
         rules_icons::every_glyph_in_use_is_registered(&root),
+        rules_protocol::the_router_serves_what_the_inventory_names(&root),
     ];
 
     let mut out = String::new();
